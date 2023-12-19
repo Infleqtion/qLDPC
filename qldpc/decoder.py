@@ -15,7 +15,6 @@
    limitations under the License.
 """
 import cvxpy
-
 import ldpc
 import numpy as np
 import numpy.typing as npt

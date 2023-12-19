@@ -573,7 +573,7 @@ class CSSCode(QubitCode):
         # return the Hamming weight of the logical operator
         return candidate_logical_op.sum()
 
-    @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: pauli)
+    @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
     def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
         """Exact X-distance or Z-distance of this code."""
         # minimize the weight of logical X-type or Z-type operators
