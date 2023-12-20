@@ -8,11 +8,12 @@ This package requires Python>=3.10, and can be installed from PyPI with
 ```
 pip install qldpc
 ```
-To install from source:
+To install a local version from source:
 ```
-git clone https://github.com/Infleqtion/qLDPC.git
+git clone git@github.com:Infleqtion/qLDPC.git
 pip install -e qLDPC
 ```
+You can also `pip install -e 'qLDPC[dev]'` to additionally install some development tools.
 
 ## 🚀 Features
 
