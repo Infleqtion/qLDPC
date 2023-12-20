@@ -1,4 +1,4 @@
-"""Unit tests for codes.py and decoder.py
+"""Unit tests for codes.py
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -18,7 +18,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from qldpc import abstract, codes, decoder
+from qldpc import abstract, codes
 
 
 def test_pauli() -> None:
@@ -122,7 +122,7 @@ def test_CSS_shifts(
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
-    """Shift Pauli operators addressing some qubits in a CSS code."""
+    """Apply Pauli deformations to a CSS code."""
     code_a = codes.BitCode.random(*bits_checks_a)
     code_b = codes.BitCode.random(*bits_checks_b)
     matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
@@ -280,27 +280,27 @@ def test_cayley_complex() -> None:
     group = abstract.CyclicGroup(3)
     shift = group.generators[0]
     subset_a = [shift, ~shift]
-    cplex = codes.CayleyComplex(subset_a)
-    assert cplex.rank == 2
-    assert_valid_complex(cplex)
+    cayplex = codes.CayleyComplex(subset_a)
+    assert cayplex.rank == 2
+    assert_valid_complex(cayplex)
 
     # rank-1 complex
     group = abstract.CyclicGroup(6)
     shift = group.generators[0]
     subset_a = [shift, shift**2, ~shift, (~shift) ** 2]
     subset_b = [shift**3]
-    cplex = codes.CayleyComplex(subset_a, subset_b)
-    assert cplex.rank == 1
-    assert_valid_complex(cplex)
+    cayplex = codes.CayleyComplex(subset_a, subset_b)
+    assert cayplex.rank == 1
+    assert_valid_complex(cayplex)
 
     # rank-0 complex
     group = abstract.Group.product(abstract.CyclicGroup(2), abstract.CyclicGroup(5))
     shift_x, shift_y = group.generators
     subset_a = [shift_x * shift_y, ~(shift_x * shift_y)]
     subset_b = [shift_x * shift_y**2, ~(shift_x * shift_y**2)]
-    cplex = codes.CayleyComplex(subset_a, subset_b)
-    assert cplex.rank == 0
-    assert_valid_complex(cplex)
+    cayplex = codes.CayleyComplex(subset_a, subset_b)
+    assert cayplex.rank == 0
+    assert_valid_complex(cayplex)
 
     # test setting rank manually
     trivial_group = abstract.TrivialGroup()
@@ -312,27 +312,37 @@ def test_cayley_complex() -> None:
     shift = group.generators[0]
     subset_a = [shift, shift**2]
     with pytest.raises(ValueError, match="Cannot set CayleyComplex rank"):
-        cplex = codes.CayleyComplex(subset_a, rank=0)
+        cayplex = codes.CayleyComplex(subset_a, rank=0)
 
 
-def assert_valid_complex(cplex: codes.CayleyComplex) -> None:
+def assert_valid_complex(cayplex: codes.CayleyComplex) -> None:
     """Run various sanity checks on a Cayley complex."""
     # assert that the complex has the right number of vertices, edges, and faces
-    size_g = cplex.group.order()
-    size_a = len(cplex.subset_a)
-    size_b = len(cplex.subset_b)
-    assert cplex.graph.number_of_nodes() == size_g
-    assert cplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
-    assert len(cplex.faces) == size_g * size_a * size_b // 4
+    size_g = cayplex.group.order()
+    size_a = len(cayplex.subset_a)
+    size_b = len(cayplex.subset_b)
+    assert cayplex.graph.number_of_nodes() == size_g
+    assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
+    assert len(cayplex.faces) == size_g * size_a * size_b // 4
 
     # check that the subgraphs have the correct number of checks
-    for graph in [cplex.subgraph_0, cplex.subgraph_1]:
+    for graph in [cayplex.subgraph_0, cayplex.subgraph_1]:
         sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
         assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
 
 
-def test_toric_code() -> None:
-    """Rotated toric code as a quantum Tanner code."""
+def test_toric_hgp_code() -> None:
+    """The toric code as a hypergraph product code."""
+    bit_code = codes.BitCode.ring(3)
+    code = codes.HGPCode(bit_code)
+    assert code.get_code_params() == (18, 2, 3)
+
+
+def test_toric_tanner_code() -> None:
+    """Rotated toric code as a quantum Tanner code.
+
+    This construction only works for cyclic groups of even order.
+    """
     group = abstract.Group.product(abstract.CyclicGroup(4), repeat=2)
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
@@ -345,14 +355,3 @@ def test_toric_code() -> None:
     assert code.get_distance(lower=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
-
-
-def test_decoding_error() -> None:
-    """Trying to solve an invalid optimization problem."""
-    matrix = np.ones((2, 2), dtype=int)
-    syndrome = np.array([0, 1], dtype=int)
-    with pytest.raises(ValueError, match="could not be found"):
-        decoder.decode(matrix, syndrome, exact=True)
-
-    # pass custom decoder
-    decoder.decode(matrix, syndrome, decoder=lambda matrix, syndrome: None)
