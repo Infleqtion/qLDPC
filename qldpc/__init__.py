@@ -1,6 +1,6 @@
 import pkg_resources
 
-from . import abstract, codes, decoder
+from . import abstract, codes, decoder, objects
 
 decode = decoder.decode
 
@@ -13,4 +13,5 @@ __all__ = [
     "codes",
     "decode",
     "decoder",
+    "objects",
 ]

@@ -1,4 +1,4 @@
-"""Method for decoding syndromes with a parity check matrix
+"""Decoding a syndrome with a parity check matrix
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
