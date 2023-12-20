@@ -19,7 +19,6 @@ import numpy as np
 import pytest
 
 from qldpc import abstract, codes
-from qldpc.objects import Node, Pauli
 
 
 def test_dual_code(bits: int = 5, checks: int = 3) -> None:
