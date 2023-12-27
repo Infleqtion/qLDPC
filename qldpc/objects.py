@@ -135,8 +135,8 @@ class CayleyComplex:
     - b --> (b,1),
     where (a,1) acts on (g,i) as (a,1) * (g,i) = (ag,i+1), and similarly (b,1) * (g,i) = (gb,i+1).
 
-    If requirement [2] is not satisfied, then we can construct a "rank-2" complex that enforces [1]
-    and [2] by taking the quadruple cover of G and modifying members of A and B as:
+    If requirement [1] is not satisfied, then we can construct a "rank-2" complex that enforces both
+    [1] and [2] by taking the quadruple cover of G and modifying members of A and B as:
     - G -->  G ⊗ {0,1} ⊗ {0,1},
     - a --> (a,1,0), and
     - b --> (b,0,1),
