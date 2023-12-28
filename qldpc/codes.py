@@ -14,6 +14,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+from __future__ import annotations
+
 import abc
 import functools
 import itertools
@@ -74,7 +76,7 @@ class BitCode(AbstractCode):
     words must satisfy.  A bitstring x is a code word iff H @ x = 0 mod 2.
     """
 
-    def __init__(self, matrix: "BitCode | IntegerMatrix") -> None:
+    def __init__(self, matrix: BitCode | IntegerMatrix) -> None:
         """Construct a classical code from a parity check matrix."""
         if isinstance(matrix, BitCode):
             self._matrix = matrix.matrix
@@ -126,7 +128,7 @@ class BitCode(AbstractCode):
         """Random code word: a sum all generators with random (0/1) coefficients."""
         return np.random.randint(2, size=self.generator.shape[0]) @ self.generator % 2
 
-    def dual(self) -> "BitCode":
+    def dual(self) -> BitCode:
         """Dual to this code.
 
         The dual code ~C is the set of bitstrings orthogonal to C:
@@ -135,12 +137,12 @@ class BitCode(AbstractCode):
         """
         return BitCode(self.generator)
 
-    def __invert__(self) -> "BitCode":
+    def __invert__(self) -> BitCode:
         """Dual to this code."""
         return self.dual()
 
     @classmethod
-    def tensor_product(cls, code_a: "BitCode", code_b: "BitCode") -> "BitCode":
+    def tensor_product(cls, code_a: BitCode, code_b: BitCode) -> BitCode:
         """Tensor product C_a ⊗ C_b of two codes C_a and C_b.
 
         Let G_a and G_b respectively denote the generators C_a and C_b.
@@ -191,7 +193,7 @@ class BitCode(AbstractCode):
         return self.num_bits, self.num_logical_bits, self.get_distance()
 
     @classmethod
-    def random(cls, bits: int, checks: int) -> "BitCode":
+    def random(cls, bits: int, checks: int) -> BitCode:
         """Construct a random classical code with the given number of bits and checks."""
         rows, cols = checks, bits
         matrix = np.random.randint(2, size=(rows, cols))
@@ -204,17 +206,17 @@ class BitCode(AbstractCode):
         return BitCode(matrix)
 
     @classmethod
-    def repetition(cls, num_bits: int) -> "BitCode":
+    def repetition(cls, num_bits: int) -> BitCode:
         """Construct a repetition code on the given number of bits."""
         return BitCode(ldpc.codes.rep_code(num_bits))
 
     @classmethod
-    def ring(cls, num_bits: int) -> "BitCode":
+    def ring(cls, num_bits: int) -> BitCode:
         """Construct a repetition code with periodic boundary conditions."""
         return BitCode(ldpc.codes.ring_code(num_bits))
 
     @classmethod
-    def hamming(cls, rank: int) -> "BitCode":
+    def hamming(cls, rank: int) -> BitCode:
         """Construct a hamming code of a given rank."""
         return BitCode(ldpc.codes.hamming_code(rank))
 

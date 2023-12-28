@@ -14,18 +14,17 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+from __future__ import annotations
+
 import dataclasses
 import enum
 import itertools
-from typing import TYPE_CHECKING
+from collections.abc import Collection
+from typing import Literal
 
 import networkx as nx
 
 from qldpc import abstract
-
-if TYPE_CHECKING:
-    from collections.abc import Collection
-    from typing import Literal
 
 
 class Pauli(enum.Enum):
@@ -36,11 +35,11 @@ class Pauli(enum.Enum):
     X = (1, 0)
     Y = (1, 1)
 
-    def __invert__(self) -> "Pauli":
+    def __invert__(self) -> Pauli:
         """Hadamard-transform this Pauli operator."""
         return Pauli((self.value[1], self.value[0]))
 
-    def __mul__(self, other: "Pauli") -> "Pauli":
+    def __mul__(self, other: Pauli) -> Pauli:
         """Product of two Pauli operators."""
         val_x = (self.value[0] + other.value[0]) % 2
         val_z = (self.value[1] + other.value[1]) % 2
@@ -79,7 +78,7 @@ class Node:
     def __hash__(self) -> int:
         return hash((self.index, self.is_data))
 
-    def __lt__(self, other: "Node") -> bool:
+    def __lt__(self, other: Node) -> bool:
         if self.is_data == other.is_data:
             return self.index < other.index
         return self.is_data  # data bits "precede" check bits
@@ -168,8 +167,8 @@ class CayleyComplex:
 
     def __init__(
         self,
-        subset_a: "Collection[abstract.GroupMember]",
-        subset_b: "Collection[abstract.GroupMember] | None" = None,
+        subset_a: Collection[abstract.GroupMember],
+        subset_b: Collection[abstract.GroupMember] | None = None,
         *,
         rank: int | None = None,
     ) -> None:
@@ -231,9 +230,9 @@ class CayleyComplex:
     def get_min_rank(
         cls,
         group: abstract.Group,
-        subset_a: "Collection[abstract.GroupMember]",
-        subset_b: "Collection[abstract.GroupMember]",
-    ) -> "Literal[0, 1, 2]":
+        subset_a: Collection[abstract.GroupMember],
+        subset_b: Collection[abstract.GroupMember],
+    ) -> Literal[0, 1, 2]:
         """Minimum rank of a Cayley complex built out of the given generating data."""
         if not CayleyComplex.satisfies_total_no_conjugacy(group, subset_a, subset_b):
             return 2
@@ -246,8 +245,8 @@ class CayleyComplex:
     def satisfies_total_no_conjugacy(
         cls,
         group: abstract.Group,
-        subset_a: "Collection[abstract.GroupMember]",
-        subset_b: "Collection[abstract.GroupMember]",
+        subset_a: Collection[abstract.GroupMember],
+        subset_b: Collection[abstract.GroupMember],
     ) -> bool:
         """Check the Total No-Conjugacy condition: aa gg != gg bb for all gg, aa, bb."""
         return all(
@@ -259,8 +258,8 @@ class CayleyComplex:
     def get_cayley_graphs(
         cls,
         group: abstract.Group,
-        subset_a: "Collection[abstract.GroupMember]",
-        subset_b: "Collection[abstract.GroupMember]",
+        subset_a: Collection[abstract.GroupMember],
+        subset_b: Collection[abstract.GroupMember],
     ) -> tuple[nx.Graph, nx.Graph]:
         """Cayley graphs for the left- and right-acting subsets."""
         edges_a = [(gg, aa * gg) for gg in group.generate() for aa in subset_a]

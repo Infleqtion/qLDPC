@@ -65,7 +65,7 @@ extend-ignore = [
   "I201",
   "I202",
 ] # these errors conflict with black and/or isort
-# type_checking_exempt_modules = ["collections.abc"] # REPO-SPECIFIC CONFIG
+type_checking_exempt_modules = ["collections.abc"]
 
 [tool.mypy]
 ignore_missing_imports = true
