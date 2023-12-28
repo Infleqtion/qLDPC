@@ -59,14 +59,13 @@ statistics = true
 count = true
 enable-extensions = ["TC", "TC1"]
 extend-ignore = [
-  "MDA",  # REPO-SPECIFIC CONFIG
   "E203",
   "I100",
   "I101",
   "I201",
   "I202",
 ] # these errors conflict with black and/or isort
-type_checking_exempt_modules = ["collections.abc"]
+# type_checking_exempt_modules = ["collections.abc"] # REPO-SPECIFIC CONFIG
 
 [tool.mypy]
 ignore_missing_imports = true

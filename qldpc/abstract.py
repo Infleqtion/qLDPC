@@ -38,7 +38,8 @@ unitary, then p.T is equal to the inverse ~p = p**-1.
 import collections
 import functools
 import itertools
-from typing import TYPE_CHECKING, Callable, Iterator, Optional, Sequence, TypeVar, Union
+from collections.abc import Callable, Iterator, Sequence
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -111,7 +112,7 @@ class Group:
     _group: PermutationGroup
     _lift: Lift
 
-    def __init__(self, group: PermutationGroup, lift: Optional[Lift] = None) -> None:
+    def __init__(self, group: PermutationGroup, lift: Lift | None = None) -> None:
         self._group = group
         self._lift = lift if lift is not None else default_lift
 
@@ -179,7 +180,7 @@ class Group:
     def from_table(
         cls,
         table: IntegerArray | Sequence[Sequence[int]],
-        integer_lift: Optional[IntegerLift] = None,
+        integer_lift: IntegerLift | None = None,
     ) -> "Group":
         """Construct a group from a multiplication (Cayley) table."""
 
@@ -195,7 +196,7 @@ class Group:
         return Group(PermutationGroup(*members.keys()), lift)
 
     @classmethod
-    def from_generators(cls, *generators: GroupMember, lift: Optional[Lift] = None) -> "Group":
+    def from_generators(cls, *generators: GroupMember, lift: Lift | None = None) -> "Group":
         """Construct a group from generators."""
         return Group(PermutationGroup(*generators), lift)
 
@@ -239,7 +240,7 @@ class Element:
     def __iter__(self) -> Iterator[tuple[GroupMember, "ModularInteger"]]:
         yield from self._vec.items()
 
-    def __add__(self, other: Union[GroupMember, "Element"]) -> "Element":
+    def __add__(self, other: "GroupMember | Element") -> "Element":
         new_element = self.zero()
         new_element._vec = self._vec.copy()
 
@@ -255,7 +256,7 @@ class Element:
     def __radd__(self, other: GroupMember) -> "Element":
         return self + other
 
-    def __mul__(self, other: Union[int, GroupMember, "Element"]) -> "Element":
+    def __mul__(self, other: "int | GroupMember | Element") -> "Element":
         new_element = self.zero()
 
         if isinstance(other, int):
@@ -338,7 +339,7 @@ class Protograph:
 
     _matrix: npt.NDArray[np.object_]
 
-    def __init__(self, matrix: Union["Protograph", ObjectMatrix]) -> None:
+    def __init__(self, matrix: "Protograph | ObjectMatrix") -> None:
         if isinstance(matrix, Protograph):
             self._matrix = matrix.matrix
         else:

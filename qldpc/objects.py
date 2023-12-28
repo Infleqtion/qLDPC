@@ -17,11 +17,15 @@
 import dataclasses
 import enum
 import itertools
-from typing import Collection, Literal, Optional
+from typing import TYPE_CHECKING
 
 import networkx as nx
 
 from qldpc import abstract
+
+if TYPE_CHECKING:
+    from collections.abc import Collection
+    from typing import Literal
 
 
 class Pauli(enum.Enum):
@@ -164,10 +168,10 @@ class CayleyComplex:
 
     def __init__(
         self,
-        subset_a: Collection[abstract.GroupMember],
-        subset_b: Optional[Collection[abstract.GroupMember]] = None,
+        subset_a: "Collection[abstract.GroupMember]",
+        subset_b: "Collection[abstract.GroupMember] | None" = None,
         *,
-        rank: Optional[int] = None,
+        rank: int | None = None,
     ) -> None:
         """Construct a left-right Cayley complex."""
         assert not rank or 0 <= rank <= 2
@@ -227,9 +231,9 @@ class CayleyComplex:
     def get_min_rank(
         cls,
         group: abstract.Group,
-        subset_a: Collection[abstract.GroupMember],
-        subset_b: Collection[abstract.GroupMember],
-    ) -> Literal[0, 1, 2]:
+        subset_a: "Collection[abstract.GroupMember]",
+        subset_b: "Collection[abstract.GroupMember]",
+    ) -> "Literal[0, 1, 2]":
         """Minimum rank of a Cayley complex built out of the given generating data."""
         if not CayleyComplex.satisfies_total_no_conjugacy(group, subset_a, subset_b):
             return 2
@@ -242,8 +246,8 @@ class CayleyComplex:
     def satisfies_total_no_conjugacy(
         cls,
         group: abstract.Group,
-        subset_a: Collection[abstract.GroupMember],
-        subset_b: Collection[abstract.GroupMember],
+        subset_a: "Collection[abstract.GroupMember]",
+        subset_b: "Collection[abstract.GroupMember]",
     ) -> bool:
         """Check the Total No-Conjugacy condition: aa gg != gg bb for all gg, aa, bb."""
         return all(
@@ -255,8 +259,8 @@ class CayleyComplex:
     def get_cayley_graphs(
         cls,
         group: abstract.Group,
-        subset_a: Collection[abstract.GroupMember],
-        subset_b: Collection[abstract.GroupMember],
+        subset_a: "Collection[abstract.GroupMember]",
+        subset_b: "Collection[abstract.GroupMember]",
     ) -> tuple[nx.Graph, nx.Graph]:
         """Cayley graphs for the left- and right-acting subsets."""
         edges_a = [(gg, aa * gg) for gg in group.generate() for aa in subset_a]

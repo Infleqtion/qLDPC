@@ -17,7 +17,8 @@
 import abc
 import functools
 import itertools
-from typing import Collection, Literal, Optional, Sequence, Union
+from collections.abc import Collection, Sequence
+from typing import Literal
 
 import cachetools
 import ldpc.code_util
@@ -73,7 +74,7 @@ class BitCode(AbstractCode):
     words must satisfy.  A bitstring x is a code word iff H @ x = 0 mod 2.
     """
 
-    def __init__(self, matrix: Union["BitCode", IntegerMatrix]) -> None:
+    def __init__(self, matrix: "BitCode | IntegerMatrix") -> None:
         """Construct a classical code from a parity check matrix."""
         if isinstance(matrix, BitCode):
             self._matrix = matrix.matrix
@@ -292,18 +293,18 @@ class CSSCode(QubitCode):
 
     code_x: BitCode  # X-type parity checks, measuring Z-type errors
     code_z: BitCode  # Z-type parity checks, measuring X-type errors
-    conjugate: Optional[slice | Sequence[int]]
-    shifts: Optional[dict[int, int]]
+    conjugate: slice | Sequence[int] | None
+    shifts: dict[int, int] | None
     self_dual: bool
 
-    _logical_ops: Optional[npt.NDArray[np.int_]] = None
+    _logical_ops: npt.NDArray[np.int_] | None = None
 
     def __init__(
         self,
         code_x: BitCode | IntegerMatrix,
         code_z: BitCode | IntegerMatrix,
-        qubits_to_conjugate: Optional[slice | Sequence[int]] = None,
-        qubit_shifts: Optional[dict[int, int]] = None,
+        qubits_to_conjugate: slice | Sequence[int] | None = None,
+        qubit_shifts: dict[int, int] | None = None,
         self_dual: bool = False,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks."""
@@ -358,7 +359,7 @@ class CSSCode(QubitCode):
         return self.code_x.num_logical_bits + self.code_z.num_logical_bits - self.num_qubits
 
     def get_code_params(
-        self, *, lower: bool = False, upper: Optional[int] = None, **decoder_args: object
+        self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
     ) -> tuple[int, int, int]:
         """Compute the parameters of this code: [[n,k,d]].
 
@@ -374,10 +375,10 @@ class CSSCode(QubitCode):
 
     def get_distance(
         self,
-        pauli: Optional[Literal[Pauli.X, Pauli.Z]] = None,
+        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
         lower: bool = False,
-        upper: Optional[int] = None,
+        upper: int | None = None,
         **decoder_args: object,
     ) -> int:
         """Distance of the this code: minimum weight of a nontrivial logical operator.
@@ -628,7 +629,7 @@ class GBCode(CSSCode):
     def __init__(
         self,
         matrix_a: IntegerMatrix,
-        matrix_b: Optional[IntegerMatrix] = None,
+        matrix_b: IntegerMatrix | None = None,
         *,
         conjugate: bool = False,
     ) -> None:
@@ -667,7 +668,7 @@ class QCCode(GBCode):
         self,
         dims: Sequence[int],
         terms_a: Collection[tuple[int, int]],
-        terms_b: Optional[Collection[tuple[int, int]]] = None,
+        terms_b: Collection[tuple[int, int]] | None = None,
         *,
         conjugate: bool = False,
     ) -> None:
@@ -747,7 +748,7 @@ class HGPCode(CSSCode):
     def __init__(
         self,
         code_a: BitCode | IntegerMatrix,
-        code_b: Optional[BitCode | IntegerMatrix] = None,
+        code_b: BitCode | IntegerMatrix | None = None,
         *,
         conjugate: bool = False,
         self_dual: bool = False,
@@ -778,7 +779,7 @@ class HGPCode(CSSCode):
         code_b: BitCode | IntegerMatrix,
         *,
         conjugate: bool = False,
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], Optional[slice]]:
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], slice | None]:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
         The parity check matrices of the hypergraph product code are:
@@ -879,7 +880,7 @@ class LPCode(CSSCode):
     def __init__(
         self,
         protograph_a: abstract.Protograph | ObjectMatrix,
-        protograph_b: Optional[abstract.Protograph | ObjectMatrix] = None,
+        protograph_b: abstract.Protograph | ObjectMatrix | None = None,
         *,
         conjugate: bool = False,
         self_dual: bool = False,
@@ -916,7 +917,7 @@ class LPCode(CSSCode):
         protograph_b: abstract.Protograph | ObjectMatrix,
         *,
         conjugate: bool = False,
-    ) -> tuple[abstract.Protograph, abstract.Protograph, Optional[slice]]:
+    ) -> tuple[abstract.Protograph, abstract.Protograph, slice | None]:
         """Same hypergraph product as in the HGPCode, but with protographs.
 
         There is one crucial subtlety when computing the hypergraph product of protographs.  When
@@ -1041,9 +1042,9 @@ class QTCode(CSSCode):
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember],
         code_a: BitCode | IntegerMatrix,
-        code_b: Optional[BitCode | IntegerMatrix] = None,
+        code_b: BitCode | IntegerMatrix | None = None,
         *,
-        rank: Optional[int] = None,
+        rank: int | None = None,
         conjugate: Sequence[int] = (),
         self_dual: bool = False,
     ) -> None:
