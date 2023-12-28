@@ -14,10 +14,13 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+from __future__ import annotations
+
 import dataclasses
 import enum
 import itertools
-from typing import Collection, Literal, Optional
+from collections.abc import Collection
+from typing import Literal
 
 import networkx as nx
 
@@ -32,11 +35,11 @@ class Pauli(enum.Enum):
     X = (1, 0)
     Y = (1, 1)
 
-    def __invert__(self) -> "Pauli":
+    def __invert__(self) -> Pauli:
         """Hadamard-transform this Pauli operator."""
         return Pauli((self.value[1], self.value[0]))
 
-    def __mul__(self, other: "Pauli") -> "Pauli":
+    def __mul__(self, other: Pauli) -> Pauli:
         """Product of two Pauli operators."""
         val_x = (self.value[0] + other.value[0]) % 2
         val_z = (self.value[1] + other.value[1]) % 2
@@ -75,7 +78,7 @@ class Node:
     def __hash__(self) -> int:
         return hash((self.index, self.is_data))
 
-    def __lt__(self, other: "Node") -> bool:
+    def __lt__(self, other: Node) -> bool:
         if self.is_data == other.is_data:
             return self.index < other.index
         return self.is_data  # data bits "precede" check bits
@@ -165,9 +168,9 @@ class CayleyComplex:
     def __init__(
         self,
         subset_a: Collection[abstract.GroupMember],
-        subset_b: Optional[Collection[abstract.GroupMember]] = None,
+        subset_b: Collection[abstract.GroupMember] | None = None,
         *,
-        rank: Optional[int] = None,
+        rank: int | None = None,
     ) -> None:
         """Construct a left-right Cayley complex."""
         assert not rank or 0 <= rank <= 2

@@ -35,10 +35,13 @@ for identifying the "transpose" a group member p with respect to a representatio
 transpose is defined as the group member p.T for which L(p.T) = L(p).T: if the representation is
 unitary, then p.T is equal to the inverse ~p = p**-1.
 """
+from __future__ import annotations
+
 import collections
 import functools
 import itertools
-from typing import TYPE_CHECKING, Callable, Iterator, Optional, Sequence, TypeVar, Union
+from collections.abc import Callable, Iterator, Sequence
+from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 import numpy.typing as npt
@@ -71,10 +74,10 @@ class GroupMember(comb.Permutation):
             return other.__radd__(self)
         return NotImplemented  # pragma: no cover
 
-    def __lt__(self, other: "GroupMember") -> bool:
+    def __lt__(self, other: GroupMember) -> bool:
         return self.rank() < other.rank()
 
-    def __matmul__(self, other: "GroupMember") -> "GroupMember":
+    def __matmul__(self, other: GroupMember) -> GroupMember:
         """Take the "tensor product" of two permutations."""
         return GroupMember(self.array_form + [val + self.size for val in other.array_form])
 
@@ -111,14 +114,14 @@ class Group:
     _group: PermutationGroup
     _lift: Lift
 
-    def __init__(self, group: PermutationGroup, lift: Optional[Lift] = None) -> None:
+    def __init__(self, group: PermutationGroup, lift: Lift | None = None) -> None:
         self._group = group
         self._lift = lift if lift is not None else default_lift
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Group) and self._group == other._group
 
-    def __mul__(self, other: "Group") -> "Group":
+    def __mul__(self, other: Group) -> Group:
         """Direct product of two groups."""
         permutation_group = self._group * other._group
 
@@ -153,7 +156,7 @@ class Group:
         return GroupMember(self._group.identity.array_form)
 
     @classmethod
-    def product(cls, *groups: "Group", repeat: int = 1) -> "Group":
+    def product(cls, *groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
         return functools.reduce(cls.__mul__, groups * repeat)
 
@@ -179,8 +182,8 @@ class Group:
     def from_table(
         cls,
         table: IntegerArray | Sequence[Sequence[int]],
-        integer_lift: Optional[IntegerLift] = None,
-    ) -> "Group":
+        integer_lift: IntegerLift | None = None,
+    ) -> Group:
         """Construct a group from a multiplication (Cayley) table."""
 
         if integer_lift is None:
@@ -195,7 +198,7 @@ class Group:
         return Group(PermutationGroup(*members.keys()), lift)
 
     @classmethod
-    def from_generators(cls, *generators: GroupMember, lift: Optional[Lift] = None) -> "Group":
+    def from_generators(cls, *generators: GroupMember, lift: Lift | None = None) -> Group:
         """Construct a group from generators."""
         return Group(PermutationGroup(*generators), lift)
 
@@ -213,7 +216,7 @@ class Element:
 
     _group: Group
     _field: FiniteField
-    _vec: collections.defaultdict[GroupMember, "ModularInteger"]
+    _vec: collections.defaultdict[GroupMember, ModularInteger]
 
     def __init__(
         self,
@@ -236,10 +239,10 @@ class Element:
             and all(self._vec[member] == other._vec[member] for member in other._vec)
         )
 
-    def __iter__(self) -> Iterator[tuple[GroupMember, "ModularInteger"]]:
+    def __iter__(self) -> Iterator[tuple[GroupMember, ModularInteger]]:
         yield from self._vec.items()
 
-    def __add__(self, other: Union[GroupMember, "Element"]) -> "Element":
+    def __add__(self, other: GroupMember | Element) -> Element:
         new_element = self.zero()
         new_element._vec = self._vec.copy()
 
@@ -252,10 +255,10 @@ class Element:
             new_element._vec[member] += val
         return new_element
 
-    def __radd__(self, other: GroupMember) -> "Element":
+    def __radd__(self, other: GroupMember) -> Element:
         return self + other
 
-    def __mul__(self, other: Union[int, GroupMember, "Element"]) -> "Element":
+    def __mul__(self, other: int | GroupMember | Element) -> Element:
         new_element = self.zero()
 
         if isinstance(other, int):
@@ -274,7 +277,7 @@ class Element:
             new_element._vec[aa * bb] += x_a * y_b
         return new_element
 
-    def __rmul__(self, other: int | GroupMember) -> "Element":
+    def __rmul__(self, other: int | GroupMember) -> Element:
         if isinstance(other, int):
             return self * other
 
@@ -284,7 +287,7 @@ class Element:
             new_element._vec[other * member] = val
         return new_element
 
-    def __pow__(self, power: int) -> "Element":
+    def __pow__(self, power: int) -> Element:
         return functools.reduce(Element.__mul__, [self] * power, self.one())
 
     @property
@@ -304,16 +307,16 @@ class Element:
             start=np.zeros((self._group.lift_dim,) * 2, dtype=int),
         )
 
-    def zero(self) -> "Element":
+    def zero(self) -> Element:
         """Zero (additive identity) element."""
         return Element(self._group, field=self._field)
 
-    def one(self) -> "Element":
+    def one(self) -> Element:
         """One (multiplicative identity) element."""
         return Element(self._group, self._group.identity, field=self._field)
 
     @property
-    def T(self) -> "Element":
+    def T(self) -> Element:
         """Transpose of this element.
 
         If this element is x = sum_{g in G) x_g g, return x.T = sum_{g in G} x_g g.T, where g.T is
@@ -338,7 +341,7 @@ class Protograph:
 
     _matrix: npt.NDArray[np.object_]
 
-    def __init__(self, matrix: Union["Protograph", ObjectMatrix]) -> None:
+    def __init__(self, matrix: Protograph | ObjectMatrix) -> None:
         if isinstance(matrix, Protograph):
             self._matrix = matrix.matrix
         else:
@@ -347,10 +350,10 @@ class Protograph:
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Protograph) and np.array_equal(self._matrix, other._matrix)
 
-    def __rmul__(self, val: int) -> "Protograph":
+    def __rmul__(self, val: int) -> Protograph:
         return Protograph(self._matrix * val)
 
-    def __mul__(self, val: int) -> "Protograph":
+    def __mul__(self, val: int) -> Protograph:
         return val * self
 
     @property
@@ -377,13 +380,13 @@ class Protograph:
         return tensor.reshape((rows, cols))
 
     @property
-    def T(self) -> "Protograph":
+    def T(self) -> Protograph:
         """Transpose of this protograph, which also transposes every matrix entry."""
         entries = [entry.T for entry in self._matrix.ravel()]
         return Protograph(np.array(entries).reshape(self._matrix.shape).T)
 
     @classmethod
-    def build(cls, group: Group, matrix: ObjectMatrix, *, field: int = 2) -> "Protograph":
+    def build(cls, group: Group, matrix: ObjectMatrix, *, field: int = 2) -> Protograph:
         """Construct a protograph.
 
         The constructed protograph is built from (i) a group, and (ii) a matrix populated by group
