@@ -59,6 +59,7 @@ statistics = true
 count = true
 enable-extensions = ["TC", "TC1"]
 extend-ignore = [
+  "MDA",  # REPO-SPECIFIC CONFIG
   "E203",
   "I100",
   "I101",
