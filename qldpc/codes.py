@@ -230,9 +230,9 @@ class QubitCode(AbstractCode):
     with an X-type or Z-type Pauli operator.  If a stabilizer S addresses qubit q with a Pauli-Y
     operator, that is treated as S addressing q with both Pauli-X and Pauli-Z.
 
-    The Tanner graph of a qubit code nearly identical to that of a classical code, with the only
-    difference being that the edge (c, b) is now tagged by (i.e., has an attribute to indicate) the
-    Pauli operator with which check qubit c addresses data qubit b.
+    The Tanner graph of a qubit code is nearly identical to that of a classical code, with the only
+    difference being that the edge (c, b) has an attribute to indicate the Pauli operator with which
+    check qubit c addresses data qubit b.
     """
 
     @classmethod
