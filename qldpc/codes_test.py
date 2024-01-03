@@ -238,8 +238,14 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_toric_hgp_code() -> None:
-    """The toric code as a hypergraph product code."""
+def test_surface_hgp_code() -> None:
+    """The surface and toric code as hypergraph product codes."""
+    # surface code
+    bit_code = codes.BitCode.repetition(3)
+    code = codes.HGPCode(bit_code)
+    assert code.get_code_params() == (13, 1, 3)
+
+    # toric code
     bit_code = codes.BitCode.ring(3)
     code = codes.HGPCode(bit_code)
     assert code.get_code_params() == (18, 2, 3)
