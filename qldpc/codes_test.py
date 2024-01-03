@@ -239,7 +239,7 @@ def test_tanner_code() -> None:
 
 
 def test_surface_hgp_code() -> None:
-    """The surface and toric code as hypergraph product codes."""
+    """The surface and toric codes as hypergraph product codes."""
     # surface code
     bit_code = codes.BitCode.repetition(3)
     code = codes.HGPCode(bit_code)
