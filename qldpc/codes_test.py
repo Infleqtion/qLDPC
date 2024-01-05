@@ -37,7 +37,7 @@ def test_tensor_product(
     code_a = codes.BitCode.random(*bits_checks_a)
     code_b = codes.BitCode.random(*bits_checks_b)
     code_ab = codes.BitCode.tensor_product(code_a, code_b)
-    basis = code_ab.generator_gal
+    basis = code_ab.generator
     basis.shape = (-1, code_a.num_bits, code_b.num_bits)
     assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
 
@@ -57,7 +57,7 @@ def test_bit_codes() -> None:
         assert code.num_bits == num_bits
         assert code.num_logical_bits == 1
         assert code.get_distance() == num_bits
-        assert not np.any(code.matrix @ code.get_random_word_gal().T)
+        assert not np.any(code.matrix @ code.get_random_word())
 
 
 def test_classical_conversion(bits: int = 10, checks: int = 8) -> None:
@@ -98,7 +98,7 @@ def test_CSS_shifts(
     num_qubits = matrix_x.shape[-1]
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    code = codes.CSSCode(matrix_x, matrix_z, 2, conjugate, shifts)
+    code = codes.CSSCode(matrix_x, matrix_z, conjugate, shifts)
 
     edges = nx.get_edge_attributes(code.graph, codes.Pauli).items()
     for (check_node, qubit_node), pauli in sorted(edges):
