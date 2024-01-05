@@ -540,7 +540,7 @@ class CSSCode(QubitCode):
             word = self.get_random_logical_op(pauli_z, ensure_nontrivial=ensure_nontrivial)
 
             # support of a candidate pauli-type logical operator
-            effective_check_matrix = np.vstack([np.array(code_z.matrix), word])
+            effective_check_matrix = np.vstack([np.array(code_z.matrix), np.array(word)])
             candidate_logical_op = qldpc.decode(
                 effective_check_matrix, effective_syndrome, exact=False, **decoder_args
             )
@@ -641,7 +641,7 @@ class CSSCode(QubitCode):
         assert 0 <= logical_qubit_index < self.num_logical_qubits
         code = self.code_z if pauli == Pauli.X else self.code_x
         word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
-        effective_check_matrix = np.vstack([np.array(code.matrix), word])
+        effective_check_matrix = np.vstack([np.array(code.matrix), np.array(word)])
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
         logical_op = qldpc.decode(
