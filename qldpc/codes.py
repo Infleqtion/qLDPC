@@ -818,7 +818,6 @@ class HGPCode(CSSCode):
         code_a: BitCode | IntegerMatrix,
         code_b: BitCode | IntegerMatrix,
         *,
-        field: int = 2,
         conjugate: bool = False,
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], slice | None]:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
