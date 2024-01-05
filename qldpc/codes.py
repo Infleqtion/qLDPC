@@ -122,8 +122,7 @@ class BitCode(AbstractCode):
         for row, col in zip(*np.where(matrix)):
             node_c = Node(index=int(row), is_data=False)
             node_d = Node(index=int(col), is_data=True)
-            edge_data = dict(val=matrix[row, col])
-            graph.add_edge(node_c, node_d, edge_data)
+            graph.add_edge(node_c, node_d, val=matrix[row, col])
         return graph
 
     @classmethod
@@ -144,6 +143,11 @@ class BitCode(AbstractCode):
         """
         return self.matrix.null_space()
 
+    def words(self) -> list[galois.FieldArray]:
+        """Code words of this code."""
+        vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
+        return self.field(list(vectors)) @ self.generator
+
     def get_random_word(self) -> galois.FieldArray:
         """Random code word: a sum all generators with random field coefficients."""
         return (
@@ -157,7 +161,7 @@ class BitCode(AbstractCode):
         ~C = { x : x @ y = 0 for all y in C }.
         The parity check matrix of ~C is equal to the generator of C.
         """
-        return BitCode(self.generator)
+        return BitCode(self.generator, self._field_order)
 
     def __invert__(self) -> BitCode:
         """Dual to this code."""
@@ -230,7 +234,7 @@ class BitCode(AbstractCode):
         for col in range(matrix.shape[1]):
             if not matrix[:, col].any():
                 matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
-        return BitCode(matrix)
+        return BitCode(matrix, field)
 
     @classmethod
     def repetition(cls, num_bits: int) -> BitCode:
@@ -249,7 +253,7 @@ class BitCode(AbstractCode):
 
 
 # TODO: factor out conjugation and local Pauli transformations to a separate method
-# TODO: let people construct codes with field > 2, but throw errors all over the place for unsupported functionality
+# TODO: let people construct codes with field > 2, but throw errors for unsupported functionality
 class QubitCode(AbstractCode):
     """Template class for a qubit-based quantum error-correcting code.
 
@@ -665,14 +669,13 @@ class GBCode(CSSCode):
         matrix_a: IntegerMatrix,
         matrix_b: IntegerMatrix | None = None,
         *,
-        field: int = 2,
         conjugate: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
         if matrix_b is None:
             matrix_b = matrix_a  # pragma: no cover
-        matrix_a = BitCode(matrix_a)
-        matrix_b = BitCode(matrix_b)
+        matrix_a = np.array(matrix_a)
+        matrix_b = np.array(matrix_b)
         assert np.array_equal(matrix_a @ matrix_b.T, matrix_b.T @ matrix_a)
 
         matrix_x = np.block([matrix_a, matrix_b.T])
@@ -943,7 +946,6 @@ class LPCode(CSSCode):
             self,
             protograph_x.lift(),
             protograph_z.lift(),
-            field=field,
             qubits_to_conjugate=qubits_to_conjugate,
             self_dual=self_dual,
         )

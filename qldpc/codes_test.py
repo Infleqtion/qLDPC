@@ -21,12 +21,12 @@ import pytest
 from qldpc import abstract, codes
 
 
-def test_dual_code(bits: int = 5, checks: int = 3) -> None:
+def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
-    code = codes.BitCode.random(bits, checks)
+    code = codes.BitCode.random(bits, checks, field)
     words_a = code.words()
     words_b = code.dual().words()
-    assert all(word_a @ word_b % 2 == 0 for word_a in words_a for word_b in words_b)
+    assert all(word_a @ word_b == 0 for word_a in words_a for word_b in words_b)
 
 
 def test_tensor_product(
