@@ -924,7 +924,6 @@ class LPCode(CSSCode):
         *,
         conjugate: bool = False,
         self_dual: bool = False,
-        field: int = 2,
     ) -> None:
         """Construct a lifted product code."""
         if protograph_b is None:
