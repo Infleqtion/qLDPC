@@ -55,7 +55,7 @@ def test_bit_codes() -> None:
     num_bits = 5
     for code in [codes.BitCode.repetition(num_bits), codes.BitCode.ring(num_bits)]:
         assert code.num_bits == num_bits
-        assert code.num_logical_bits == 1
+        assert code.dimension == 1
         assert code.get_distance() == num_bits
         assert not np.any(code.matrix @ code.get_random_word())
 

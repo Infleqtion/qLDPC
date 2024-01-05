@@ -203,7 +203,7 @@ class BitCode(AbstractCode):
         return np.linalg.matrix_rank(self._matrix)
 
     @property
-    def num_logical_bits(self) -> int:
+    def dimension(self) -> int:
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
@@ -222,7 +222,7 @@ class BitCode(AbstractCode):
         - k is the number of encoded ("logical") bits
         - d is the code distance
         """
-        return self.num_bits, self.num_logical_bits, self.get_distance()
+        return self.num_bits, self.dimension, self.get_distance()
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> BitCode:
@@ -398,7 +398,7 @@ class CSSCode(QubitCode):
     @property
     def num_logical_qubits(self) -> int:
         """Number of logical qubits encoded by this code."""
-        return self.code_x.num_logical_bits + self.code_z.num_logical_bits - self.num_qubits
+        return self.code_x.dimension + self.code_z.dimension - self.num_qubits
 
     def get_code_params(
         self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
