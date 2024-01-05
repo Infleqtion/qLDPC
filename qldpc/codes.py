@@ -170,7 +170,7 @@ class BitCode(AbstractCode):
         G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
         We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
         """
-        generator_ab = np.kron(code_a.generator_gal, code_b.generator_gal)
+        generator_ab = np.kron(code_a.generator, code_b.generator)
         return ~BitCode(generator_ab)
 
     @property
@@ -568,8 +568,8 @@ class CSSCode(QubitCode):
             return self._logical_ops
 
         # identify candidate X-type and Z-type operators
-        candidates_x = list(np.array(self.code_z.generator_gal))
-        candidates_z = list(np.array(self.code_x.generator_gal))
+        candidates_x = list(np.array(self.code_z.generator))
+        candidates_z = list(np.array(self.code_x.generator))
 
         # collect logical operators sequentially
         logicals_x = []
