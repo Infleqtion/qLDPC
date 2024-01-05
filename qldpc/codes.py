@@ -127,12 +127,12 @@ class BitCode(AbstractCode):
 
     @classmethod
     def graph_to_matrix(cls, graph: nx.Graph) -> npt.NDArray[np.int_]:
-        """Convert a directed Tanner graph into a parity check matrix."""
+        """Convert a Tanner graph into a parity check matrix."""
         num_bits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_bits
         matrix = np.zeros((num_checks, num_bits), dtype=int)
-        for check_node, bit_node in graph.edges():
-            matrix[check_node.index, bit_node.index] = 1
+        for node_c, node_b, data in graph.edges(data=True):
+            matrix[node_c.index, node_b.index] = data.get("val", 1)
         return matrix
 
     @functools.cached_property
@@ -791,8 +791,8 @@ class HGPCode(CSSCode):
         if code_b is None:
             code_b = code_a
             self_dual = True
-        code_a = BitCode(code_a,)
-        code_b = BitCode(code_b,)
+        code_a = BitCode(code_a)
+        code_b = BitCode(code_b)
 
         # identify the number of qubits in each sector
         self.sector_size = np.outer(
