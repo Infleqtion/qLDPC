@@ -211,9 +211,9 @@ class BitCode(AbstractCode):
     @functools.cache
     def get_distance(self) -> int:
         """The distance of this code."""
-        if self._field_order != 2:
-            raise ValueError("Code distance not implemented for field orders greater than 2")
-        return ldpc.code_util.compute_code_distance(np.array(self._matrix))
+        if self._field_order == 2:
+            return ldpc.code_util.compute_code_distance(np.array(self._matrix))
+        raise ValueError("Code distance not implemented for field orders greater than 2")
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].
