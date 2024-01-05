@@ -51,7 +51,7 @@ class AbstractCode(abc.ABC):
     _field_order: int
 
     @property
-    def field(self) -> galois.FieldArray:
+    def field(self) -> galois.FieldArrayMeta:
         """Base field over which the linear code is defined."""
         return galois.GF(self._field_order)
 
@@ -94,9 +94,10 @@ class BitCode(AbstractCode):
         """
         if isinstance(matrix, BitCode):
             self._field_order = matrix.field.order
-            if not (field is None or field == self._field):
+            if not (field is None or field == self._field_order):
                 raise ValueError(
-                    f"Field argument {field} is inconsistent with the given code (over F_{self._field})!"
+                    f"Field argument {field} is inconsistent with the given code, which is defined"
+                    " over F_{self._field_order}!"
                 )
             self._matrix = matrix.matrix
         else:
@@ -145,7 +146,9 @@ class BitCode(AbstractCode):
 
     def get_random_word(self) -> galois.FieldArray:
         """Random code word: a sum all generators with random field coefficients."""
-        return self.field.Random(self.generator.shape[0]) @ self.generator
+        return (
+            self.field.Random(self.generator.shape[0]) @ self.generator  # type:ignore[attr-defined]
+        )
 
     def dual(self) -> BitCode:
         """Dual to this code.
@@ -170,8 +173,10 @@ class BitCode(AbstractCode):
         G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
         We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
         """
-        generator_ab = np.kron(code_a.generator, code_b.generator)
-        return ~BitCode(generator_ab)
+        if not code_a._field_order == code_b._field_order:
+            raise ValueError("Cannot take tensor product of codes over different fields!")
+        generator_ab = np.kron(np.matrix(code_a.generator), np.matrix(code_b.generator))
+        return ~BitCode(generator_ab, field=code_a._field_order)
 
     @property
     def num_checks(self) -> int:
@@ -325,8 +330,6 @@ class CSSCode(QubitCode):
 
     _logical_ops: npt.NDArray[np.int_] | None = None
 
-    # todo: be consistent about argument order in __init__ methods
-    # also consistency with keyword arguments
     def __init__(
         self,
         code_x: BitCode | IntegerMatrix,
@@ -343,13 +346,11 @@ class CSSCode(QubitCode):
         self.self_dual = self_dual
 
         assert self.code_x.matrix.ndim == self.code_z.matrix.ndim == 2
-        assert self.code_x.num_bits == self.code_z.num_bits
-        assert not np.any(self.code_x.matrix @ self.code_z.matrix.T)
-
-    @functools.cached_property
-    def field(self):
-        """Base field of this code."""
-        return self.field
+        if not (
+            self.code_x.num_bits == self.code_z.num_bits
+            or np.any(self.code_x.matrix @ self.code_z.matrix.T)
+        ):
+            raise ValueError("The sub-codes provided for this CSSCode are incompatible!")
 
     @functools.cached_property
     def matrix(self) -> npt.NDArray[np.int_]:
