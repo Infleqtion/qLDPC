@@ -23,7 +23,7 @@ from collections.abc import Collection, Sequence
 from typing import Literal
 
 import cachetools
-import galois as gal
+import galois
 import ldpc.code_util
 import ldpc.codes
 import ldpc.mod2
@@ -85,17 +85,18 @@ class BitCode(AbstractCode):
 
     def __init__(self, matrix: BitCode | IntegerMatrix, field: int = 2) -> None:
         """Construct a classical code from a parity check matrix.
-        Default base field is taken to be GF(2).
+
+        The base field is taken to be GF(2) by default.
         """
         if isinstance(matrix, BitCode):
             self._matrix = matrix.matrix
             self._field = matrix.field
         else:
-            self._field = gal.GF(field)
+            self._field = galois.GF(field)
             self._matrix = self._field(matrix)
 
     @property
-    def matrix(self) -> gal.FieldArray:
+    def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
         return self._field(self._matrix)
 
@@ -379,7 +380,7 @@ class CSSCode(QubitCode):
         self.conjugate = qubits_to_conjugate
         self.shifts = qubit_shifts
         self.self_dual = self_dual
-        self.field = gal.GF(field)
+        self.field = galois.GF(field)
 
         assert self.code_x.matrix.ndim == self.code_z.matrix.ndim == 2
         assert self.code_x.num_bits == self.code_z.num_bits
@@ -706,7 +707,7 @@ class GBCode(CSSCode):
         conjugate: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
-        GF = gal.GF(field)
+        GF = galois.GF(field)
         if matrix_b is None:
             matrix_b = matrix_a  # pragma: no cover
         matrix_a = GF(matrix_a)
