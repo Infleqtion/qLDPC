@@ -61,18 +61,18 @@ class AbstractCode(abc.ABC):
         """Parity check matrix of this code."""
 
     @functools.cached_property
-    def graph(self) -> nx.Graph:
+    def graph(self) -> nx.DiGraph:
         """Tanner graph of this code."""
         return self.matrix_to_graph(self.matrix)
 
     @classmethod
     @abc.abstractmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.Graph:
+    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
 
     @classmethod
     @abc.abstractmethod
-    def graph_to_matrix(cls, graph: nx.Graph) -> npt.NDArray[np.int_]:
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> npt.NDArray[np.int_]:
         """Convert a Tanner graph into a parity check matrix."""
 
 
@@ -110,7 +110,7 @@ class BitCode(AbstractCode):
         return self._matrix
 
     @classmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.Graph:
+    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix H into a Tanner graph.
 
         The Tanner graph is a bipartite graph with (num_checks, num_bits) vertices, respectively
@@ -118,7 +118,7 @@ class BitCode(AbstractCode):
         share an edge iff c addresses b; that is, edge (c, b) is in the graph iff H[c, b] != 0.
         """
         matrix = np.array(matrix)
-        graph = nx.Graph()
+        graph = nx.DiGraph()
         for row, col in zip(*np.where(matrix)):
             node_c = Node(index=int(row), is_data=False)
             node_d = Node(index=int(col), is_data=True)
@@ -126,7 +126,7 @@ class BitCode(AbstractCode):
         return graph
 
     @classmethod
-    def graph_to_matrix(cls, graph: nx.Graph) -> npt.NDArray[np.int_]:
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> npt.NDArray[np.int_]:
         """Convert a Tanner graph into a parity check matrix."""
         num_bits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_bits
@@ -238,11 +238,13 @@ class BitCode(AbstractCode):
                 matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
         return BitCode(matrix, field)
 
+    # TODO: generalize to other fields
     @classmethod
     def repetition(cls, num_bits: int) -> BitCode:
         """Construct a repetition code on the given number of bits."""
         return BitCode(ldpc.codes.rep_code(num_bits))
 
+    # TODO: generalize to other fields
     @classmethod
     def ring(cls, num_bits: int) -> BitCode:
         """Construct a repetition code with periodic boundary conditions."""
@@ -271,9 +273,9 @@ class QubitCode(AbstractCode):
     """
 
     @classmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.Graph:
+    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
-        graph = nx.Graph()
+        graph = nx.DiGraph()
         for row, col_xz, col in zip(*np.where(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qubit = Node(index=int(col), is_data=True)
@@ -284,7 +286,7 @@ class QubitCode(AbstractCode):
         return graph
 
     @classmethod
-    def graph_to_matrix(cls, graph: nx.Graph) -> nx.Graph:
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> nx.DiGraph:
         """Convert a Tanner graph into a parity check matrix."""
         num_qubits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qubits
@@ -851,16 +853,16 @@ class HGPCode(CSSCode):
     @classmethod
     def get_graph_product(
         cls,
-        graph_a: nx.Graph,
-        graph_b: nx.Graph,
+        graph_a: nx.DiGraph,
+        graph_b: nx.DiGraph,
         *,
         conjugate: bool = False,
-    ) -> nx.Graph:
+    ) -> nx.DiGraph:
         """Hypergraph product of two Tanner graphs."""
         graph_product = nx.cartesian_product(graph_a, graph_b)
 
         # fix edge orientation and tag each edge with a Pauli operator
-        graph = nx.Graph()
+        graph = nx.DiGraph()
         for node_fst, node_snd in graph_product.edges:
             # identify check vs. qubit nodes
             if node_fst[0].is_data == node_fst[1].is_data:

@@ -60,9 +60,9 @@ def test_bit_codes() -> None:
         assert not np.any(code.matrix @ code.get_random_word())
 
 
-def test_classical_conversion(bits: int = 10, checks: int = 8) -> None:
+def test_classical_conversion(bits: int = 10, checks: int = 8, field: int = 3) -> None:
     """Conversion between matrix and graph representations of a classical code."""
-    code = codes.BitCode.random(bits, checks)
+    code = codes.BitCode.random(bits, checks, field)
     graph = codes.BitCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.BitCode.graph_to_matrix(graph))
 
@@ -100,9 +100,9 @@ def test_CSS_shifts(
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
     code = codes.CSSCode(matrix_x, matrix_z, conjugate, shifts)
 
-    edges = nx.get_edge_attributes(code.graph, codes.Pauli).items()
-    for (check_node, qubit_node), pauli in sorted(edges):
-        assert (code.matrix[check_node.index, np.where(pauli.value), qubit_node.index] == 1).all()
+    for check_node, qubit_node, data in code.graph.edges(data=True):
+        pauli_index = np.where(data[codes.Pauli])
+        assert (code.matrix[check_node.index, pauli_index, qubit_node.index] == 1).all()
 
 
 @pytest.mark.parametrize("conjugate", [False, True])
