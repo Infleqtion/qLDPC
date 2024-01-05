@@ -23,6 +23,7 @@ from collections.abc import Collection, Sequence
 from typing import Literal
 
 import cachetools
+import galois as gal
 import ldpc.code_util
 import ldpc.codes
 import ldpc.mod2
@@ -45,7 +46,13 @@ ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
 class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
-    @abc.abstractproperty
+    @property
+    @abc.abstractmethod
+    def field(self) -> int:
+        """Base field over which the linear code is defined."""
+
+    @property
+    @abc.abstractmethod
     def matrix(self) -> npt.NDArray[np.int_]:
         """Parity check matrix of this code."""
 
@@ -66,27 +73,53 @@ class AbstractCode(abc.ABC):
 
 
 class BitCode(AbstractCode):
-    """Classical (binary, linear) error-correcting code.
+    """Classical linear error-correcting code over a finite field F_q.
 
     A classical binary code C = {x} is a set of bitstings x, called code words.  We consider only
     linear codes here, for which any linear combination of code words is also code word.
 
     Operationally, we define a classical code by a parity check matrix H with dimensions
     (num_checks, num_bits).  Each row of H represents a linear constraint (a "check") that code
-    words must satisfy.  A bitstring x is a code word iff H @ x = 0 mod 2.
+    words must satisfy.  A vector x is a code word iff H @ x = 0 mod q.
     """
 
-    def __init__(self, matrix: BitCode | IntegerMatrix) -> None:
-        """Construct a classical code from a parity check matrix."""
+    def __init__(self, matrix: BitCode | IntegerMatrix, field: int = 2) -> None:
+        """Construct a classical code from a parity check matrix.
+        Default base field is taken to be GF(2).
+        """
         if isinstance(matrix, BitCode):
             self._matrix = matrix.matrix
+            self._field = matrix.field
         else:
-            self._matrix = np.array(matrix)
+            self._field = gal.GF(field)
+            self._matrix = self._field(matrix)
 
     @property
-    def matrix(self) -> npt.NDArray[np.int_]:
+    def matrix(self) -> gal.FieldArray:
         """Parity check matrix of this code."""
-        return self._matrix
+        return self._field(self._matrix)
+
+    @property
+    def field(self):
+        """Base field of this code."""
+        return self._field
+
+    @classmethod
+    def matrix_to_ugraph(cls, matrix: IntegerMatrix) -> nx.Graph:
+        """Convert a parity check matrix H into an undirected Tanner graph.
+
+        The Tanner graph is a bipartite graph with (num_checks, num_bits) vertices, respectively
+        identified with the checks and bits of the code.  The check vertex c and the bit vertex b
+        share an edge iff c addresses b; that is, edge (c, b) is in the graph iff H[c, b] == 1.
+        """
+        num_checks, num_bits = np.array(matrix).shape
+        adj_matrix = np.block(
+            [
+                [np.zeros((num_checks, num_checks)), np.array(matrix)],
+                [np.array(matrix).T, np.zeros((num_bits, num_bits))],
+            ]
+        )
+        return nx.from_numpy_array(adj_matrix)
 
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
@@ -104,7 +137,7 @@ class BitCode(AbstractCode):
 
     @classmethod
     def graph_to_matrix(cls, graph: nx.DiGraph) -> npt.NDArray[np.int_]:
-        """Convert a Tanner graph into a parity check matrix."""
+        """Convert a directed Tanner graph into a parity check matrix."""
         num_bits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_bits
         matrix = np.zeros((num_checks, num_bits), dtype=int)
@@ -120,22 +153,39 @@ class BitCode(AbstractCode):
         """
         return ldpc.code_util.construct_generator_matrix(self._matrix)
 
+    @functools.cached_property
+    def generator_gal(self) -> npt.NDArray[np.int_]:
+        """Generator of this code.
+        The generator of a code C is a matrix whose rows form a basis for C.
+        This implementation uses the function from the Galois package rather than the ldpc one
+        """
+        return self.matrix.null_space()
+
     def words(self) -> npt.NDArray[np.int_]:
         """Code words of this code."""
+        return ldpc.code_util.codewords(self._matrix)
+
+    def words_gal(self) -> npt.NDArray[np.int_]:
+        """Code words of this code.
+        TODO implement a loop to generate codewords. is it needed?
+        """
         return ldpc.code_util.codewords(self._matrix)
 
     def get_random_word(self) -> npt.NDArray[np.int_]:
         """Random code word: a sum all generators with random (0/1) coefficients."""
         return np.random.randint(2, size=self.generator.shape[0]) @ self.generator % 2
 
+    def get_random_word_gal(self):
+        """Random code word: a sum all generators with random field coefficients."""
+        return self._field.Random((1, self.generator.shape[0])) @ self.generator_gal
+
     def dual(self) -> BitCode:
         """Dual to this code.
-
         The dual code ~C is the set of bitstrings orthogonal to C:
         ~C = { x : x @ y = 0 for all y in C }.
         The parity check matrix of ~C is equal to the generator of C.
         """
-        return BitCode(self.generator)
+        return BitCode(self.generator_gal)
 
     def __invert__(self) -> BitCode:
         """Dual to this code."""
@@ -151,7 +201,7 @@ class BitCode(AbstractCode):
         G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
         We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
         """
-        generator_ab = np.kron(code_a.generator, code_b.generator)
+        generator_ab = np.kron(code_a.generator_gal, code_b.generator_gal)
         return ~BitCode(generator_ab)
 
     @property
@@ -170,7 +220,7 @@ class BitCode(AbstractCode):
 
         Equivalently, the number of linearly independent parity checks in this code.
         """
-        return ldpc.mod2.rank(self._matrix)
+        return np.linalg.matrix_rank(self._matrix)
 
     @property
     def num_logical_bits(self) -> int:
@@ -180,7 +230,7 @@ class BitCode(AbstractCode):
     @functools.cache
     def get_distance(self) -> int:
         """The distance of this code."""
-        return ldpc.code_util.compute_code_distance(self._matrix)
+        return ldpc.code_util.compute_code_distance(np.array(self._matrix))
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].
@@ -203,6 +253,19 @@ class BitCode(AbstractCode):
         for col in range(matrix.shape[1]):
             if not matrix[:, col].any():
                 matrix[np.random.randint(rows), col] = 1  # pragma: no cover
+        return BitCode(matrix)
+
+    @classmethod
+    def random_gal(cls, bits: int, checks: int) -> BitCode:
+        """Construct a random classical code with the given number of bits and checks."""
+        rows, cols = checks, bits
+        matrix = cls._field.Random((rows, cols))
+        for row in range(matrix.shape[0]):
+            if not matrix[row, :].any():
+                matrix[row, np.random.randint(cols)] = cls._field.Random(low=1)  # pragma: no cover
+        for col in range(matrix.shape[1]):
+            if not matrix[:, col].any():
+                matrix[np.random.randint(rows), col] = cls._field.Random(low=1)  # pragma: no cover
         return BitCode(matrix)
 
     @classmethod
@@ -305,20 +368,27 @@ class CSSCode(QubitCode):
         self,
         code_x: BitCode | IntegerMatrix,
         code_z: BitCode | IntegerMatrix,
+        field: int = 2,
         qubits_to_conjugate: slice | Sequence[int] | None = None,
         qubit_shifts: dict[int, int] | None = None,
         self_dual: bool = False,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks."""
-        self.code_x = BitCode(code_x)
-        self.code_z = BitCode(code_z)
+        self.code_x = BitCode(code_x, field)
+        self.code_z = BitCode(code_z, field)
         self.conjugate = qubits_to_conjugate
         self.shifts = qubit_shifts
         self.self_dual = self_dual
+        self.field = gal.GF(field)
 
         assert self.code_x.matrix.ndim == self.code_z.matrix.ndim == 2
         assert self.code_x.num_bits == self.code_z.num_bits
-        assert not np.any(self.code_x.matrix @ self.code_z.matrix.T % 2)
+        assert not np.any(self.code_x.matrix @ self.code_z.matrix.T)
+
+    @functools.cached_property
+    def field(self):
+        """Base field of this code."""
+        return self.field
 
     @functools.cached_property
     def matrix(self) -> npt.NDArray[np.int_]:
@@ -500,7 +570,7 @@ class CSSCode(QubitCode):
             word = self.get_random_logical_op(pauli_z, ensure_nontrivial=ensure_nontrivial)
 
             # support of a candidate pauli-type logical operator
-            effective_check_matrix = np.vstack([code_z.matrix, word])
+            effective_check_matrix = np.vstack([np.array(code_z.matrix), word])
             candidate_logical_op = qldpc.decode(
                 effective_check_matrix, effective_syndrome, exact=False, **decoder_args
             )
@@ -537,8 +607,8 @@ class CSSCode(QubitCode):
             return self._logical_ops
 
         # identify candidate X-type and Z-type operators
-        candidates_x = list(self.code_z.generator)
-        candidates_z = list(self.code_x.generator)
+        candidates_x = list(np.array(self.code_z.generator_gal))
+        candidates_z = list(np.array(self.code_x.generator_gal))
 
         # collect logical operators sequentially
         logicals_x = []
@@ -601,7 +671,7 @@ class CSSCode(QubitCode):
         assert 0 <= logical_qubit_index < self.num_logical_qubits
         code = self.code_z if pauli == Pauli.X else self.code_x
         word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
-        effective_check_matrix = np.vstack([code.matrix, word])
+        effective_check_matrix = np.vstack([np.array(code.matrix), word])
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
         logical_op = qldpc.decode(
@@ -632,20 +702,21 @@ class GBCode(CSSCode):
         self,
         matrix_a: IntegerMatrix,
         matrix_b: IntegerMatrix | None = None,
-        *,
+        field: int = 2,
         conjugate: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
+        GF = gal.GF(field)
         if matrix_b is None:
             matrix_b = matrix_a  # pragma: no cover
-        matrix_a = np.array(matrix_a)
-        matrix_b = np.array(matrix_b)
-        assert np.array_equal(matrix_a @ matrix_b.T % 2, matrix_b.T @ matrix_a % 2)
+        matrix_a = GF(matrix_a)
+        matrix_b = GF(matrix_b)
+        assert np.array_equal(matrix_a @ matrix_b.T, matrix_b.T @ matrix_a)
 
-        matrix_x = np.block([matrix_a, matrix_b.T])
-        matrix_z = np.block([matrix_b, matrix_a.T])
+        matrix_x = GF(np.block([matrix_a, matrix_b.T]))
+        matrix_z = GF(np.block([matrix_b, matrix_a.T]))
         qubits_to_conjugate = slice(matrix_a.shape[0], None) if conjugate else None
-        CSSCode.__init__(self, matrix_x, matrix_z, qubits_to_conjugate, self_dual=True)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, qubits_to_conjugate, self_dual=True)
 
 
 class QCCode(GBCode):
@@ -671,7 +742,7 @@ class QCCode(GBCode):
         dims: Sequence[int],
         terms_a: Collection[tuple[int, int]],
         terms_b: Collection[tuple[int, int]] | None = None,
-        *,
+        field: int = 2,
         conjugate: bool = False,
     ) -> None:
         """Construct a quasi-cyclic code."""
@@ -685,7 +756,7 @@ class QCCode(GBCode):
         members_b = [group.generators[factor] ** power for factor, power in terms_b]
         matrix_a = abstract.Element(group, *members_a).lift()
         matrix_b = abstract.Element(group, *members_b).lift()
-        GBCode.__init__(self, matrix_a, matrix_b, conjugate=conjugate)
+        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
 
 
 ################################################################################
@@ -752,6 +823,7 @@ class HGPCode(CSSCode):
         code_a: BitCode | IntegerMatrix,
         code_b: BitCode | IntegerMatrix | None = None,
         *,
+        field: int = 2,
         conjugate: bool = False,
         self_dual: bool = False,
     ) -> None:
@@ -759,8 +831,8 @@ class HGPCode(CSSCode):
         if code_b is None:
             code_b = code_a
             self_dual = True
-        code_a = BitCode(code_a)
-        code_b = BitCode(code_b)
+        code_a = BitCode(code_a, field)
+        code_b = BitCode(code_b, field)
 
         # identify the number of qubits in each sector
         self.sector_size = np.outer(
@@ -772,7 +844,7 @@ class HGPCode(CSSCode):
         matrix_x, matrix_z, qubits_to_conjugate = HGPCode.get_hyper_product(
             code_a.matrix, code_b.matrix, conjugate=conjugate
         )
-        CSSCode.__init__(self, matrix_x, matrix_z, qubits_to_conjugate, self_dual=self_dual)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, qubits_to_conjugate, self_dual=self_dual)
 
     @classmethod
     def get_hyper_product(
@@ -780,6 +852,7 @@ class HGPCode(CSSCode):
         code_a: BitCode | IntegerMatrix,
         code_b: BitCode | IntegerMatrix,
         *,
+        field: int = 2,
         conjugate: bool = False,
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], slice | None]:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
@@ -795,8 +868,8 @@ class HGPCode(CSSCode):
         If `conjugate is True`, we hadamard-transform the data qubits in sector (1, 1), which are
         addressed by the second block of matrix_x and marix_z above.
         """
-        matrix_a = BitCode(code_a).matrix
-        matrix_b = BitCode(code_b).matrix
+        matrix_a = BitCode(code_a, field).matrix
+        matrix_b = BitCode(code_b, field).matrix
 
         # construct the nontrivial blocks in the matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
@@ -886,6 +959,7 @@ class LPCode(CSSCode):
         *,
         conjugate: bool = False,
         self_dual: bool = False,
+        field: int = 2,
     ) -> None:
         """Construct a lifted product code."""
         if protograph_b is None:
@@ -908,6 +982,7 @@ class LPCode(CSSCode):
             self,
             protograph_x.lift(),
             protograph_z.lift(),
+            field,
             qubits_to_conjugate,
             self_dual=self_dual,
         )
@@ -1046,6 +1121,7 @@ class QTCode(CSSCode):
         code_a: BitCode | IntegerMatrix,
         code_b: BitCode | IntegerMatrix | None = None,
         *,
+        field: int = 2,
         rank: int | None = None,
         conjugate: Sequence[int] = (),
         self_dual: bool = False,
@@ -1054,8 +1130,8 @@ class QTCode(CSSCode):
         if code_b is None:
             code_b = code_a
             self_dual = True
-        code_a = BitCode(code_a)
-        code_b = BitCode(code_b)
+        code_a = BitCode(code_a, field)
+        code_b = BitCode(code_b, field)
         self.complex = CayleyComplex(subset_a, subset_b, rank=rank)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
@@ -1064,4 +1140,4 @@ class QTCode(CSSCode):
         subcode_z = ~BitCode.tensor_product(~code_a, ~code_b)
         matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
         matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
-        CSSCode.__init__(self, matrix_x, matrix_z, conjugate, self_dual=self_dual)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate, self_dual=self_dual)
