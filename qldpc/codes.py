@@ -179,7 +179,7 @@ class BitCode(AbstractCode):
         """
         if not code_a._field_order == code_b._field_order:
             raise ValueError("Cannot take tensor product of codes over different fields!")
-        generator_ab = np.kron(np.matrix(code_a.generator), np.matrix(code_b.generator))
+        generator_ab = np.kron(np.array(code_a.generator), np.array(code_b.generator))
         return ~BitCode(generator_ab, field=code_a._field_order)
 
     @property

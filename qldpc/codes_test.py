@@ -101,7 +101,7 @@ def test_CSS_shifts(
     code = codes.CSSCode(matrix_x, matrix_z, conjugate, shifts)
 
     for check_node, qubit_node, data in code.graph.edges(data=True):
-        pauli_index = np.where(data[codes.Pauli])
+        pauli_index = np.where(data[codes.Pauli].value)
         assert (code.matrix[check_node.index, pauli_index, qubit_node.index] == 1).all()
 
 
