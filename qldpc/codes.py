@@ -97,7 +97,7 @@ class BitCode(AbstractCode):
             if not (field is None or field == self._field_order):
                 raise ValueError(
                     f"Field argument {field} is inconsistent with the given code, which is defined"
-                    " over F_{self._field_order}!"
+                    " over F_{self._field_order}"
                 )
             self._matrix = matrix.matrix
         else:
@@ -178,7 +178,7 @@ class BitCode(AbstractCode):
         We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
         """
         if not code_a._field_order == code_b._field_order:
-            raise ValueError("Cannot take tensor product of codes over different fields!")
+            raise ValueError("Cannot take tensor product of codes over different fields")
         generator_ab = np.kron(np.array(code_a.generator), np.array(code_b.generator))
         return ~BitCode(generator_ab, field=code_a._field_order)
 
@@ -207,6 +207,7 @@ class BitCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
+    # TODO: compute distance for fields > 2
     @functools.cache
     def get_distance(self) -> int:
         """The distance of this code."""
@@ -358,7 +359,7 @@ class CSSCode(QubitCode):
             self.code_x.num_bits == self.code_z.num_bits
             or np.any(self.code_x.matrix @ self.code_z.matrix.T)
         ):
-            raise ValueError("The sub-codes provided for this CSSCode are incompatible!")
+            raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
     @functools.cached_property
     def matrix(self) -> npt.NDArray[np.int_]:
