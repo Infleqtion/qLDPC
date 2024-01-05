@@ -948,7 +948,7 @@ class LPCode(CSSCode):
             self,
             protograph_x.lift(),
             protograph_z.lift(),
-            qubits_to_conjugate=qubits_to_conjugate,
+            qubits_to_conjugate,
             self_dual=self_dual,
         )
 
