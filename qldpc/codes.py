@@ -206,13 +206,12 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
-    # TODO: compute distance for fields > 2
     @functools.cache
     def get_distance(self) -> int:
         """The distance of this code."""
         if self._field_order == 2:
             return ldpc.code_util.compute_code_distance(self._matrix)
-        raise ValueError("Code distance not implemented for field orders greater than 2")
+        return np.min(self.words().astype(bool).sum(axis=1))
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].
