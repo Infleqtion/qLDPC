@@ -14,6 +14,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+import warnings
+
 import cvxpy
 import ldpc
 import numpy as np
@@ -39,6 +41,10 @@ def decode(
     """
     # if a custom decoder was provided, use it
     if callable(custom_decoder := decoder_args.pop("decoder", None)):
+        if exact:
+            warnings.warn(
+                "Exact decoding was reqested, but cannot be guaranteed with a custom decoder"
+            )
         return custom_decoder(matrix, syndrome, **decoder_args)
 
     if not exact:

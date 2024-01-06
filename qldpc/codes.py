@@ -263,7 +263,10 @@ class ClassicalCode(AbstractCode):
         """Construct a hamming code of a given rank."""
         return ClassicalCode(ldpc.codes.hamming_code(rank))
 
+    # TODO: add more codes, particularly from code families that are useful for good quantum codes
 
+
+# TODO: generalize QubitCode --> QuditCode
 class QubitCode(AbstractCode):
     """Template class for a qubit-based quantum error-correcting code.
 
@@ -303,8 +306,8 @@ class QubitCode(AbstractCode):
         return matrix
 
 
-# TODO(?): factor out conjugation and local Pauli transformations to a separate method
-# TODO: let people construct codes with field > 2, but throw errors for unsupported functionality
+# TODO: factor out conjugation and local Pauli transformations to a separate method
+# TODO: allow construction of codes with field > 2, but throw errors for unsupported functionality
 class CSSCode(QubitCode):
     """CSS qubit code, with separate X-type and Z-type parity checks.
 
@@ -462,12 +465,13 @@ class CSSCode(QubitCode):
 
         if upper is not None:
             # compute an upper bound to the distance with a decoder
-            return self.get_distance_upper_bound(pauli, upper, **decoder_args)
+            return self.get_distance_upper_bound(
+                pauli, upper, **decoder_args  # type:ignore[arg-type]
+            )
 
         # exact distance with an integer linear program
         return self.get_distance_exact(pauli, **decoder_args)
 
-    @functools.cache
     def get_distance_upper_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
@@ -662,6 +666,9 @@ class CSSCode(QubitCode):
 
 ################################################################################
 # bicycle and quasi-cyclic codes
+
+
+# TODO: add special/simpler cases of code distance calculations, where available
 
 
 class GBCode(CSSCode):
@@ -871,6 +878,7 @@ class HGPCode(CSSCode):
         qubits_to_conjugate = slice(mat_H1_In2.shape[1], None) if conjugate else None
         return matrix_x, matrix_z, qubits_to_conjugate
 
+    # TODO: eliminate this method
     @classmethod
     def get_graph_product(
         cls,
@@ -901,6 +909,8 @@ class HGPCode(CSSCode):
 
         return nx.relabel_nodes(graph, HGPCode.get_product_node_map(graph_a.nodes, graph_b.nodes))
 
+    # TODO: replace this method by one that builds the reverse dictionary, which allows identifying
+    #       HPG qubits with their "origin" in the seed codes that are used to construct an HGPCode
     @classmethod
     def get_product_node_map(
         cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
