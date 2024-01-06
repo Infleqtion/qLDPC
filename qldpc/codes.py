@@ -211,7 +211,8 @@ class ClassicalCode(AbstractCode):
     @functools.cache
     def get_distance(self) -> int:
         """The distance of this code."""
-        return np.min(np.count_nonzero(np.array(self.words())[1:, :], axis=1))
+        words = self.words().view(np.ndarray)
+        return np.min(np.count_nonzero(words[1:], axis=1))
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].
