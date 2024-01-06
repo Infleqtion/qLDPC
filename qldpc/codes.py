@@ -265,8 +265,6 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(ldpc.codes.hamming_code(rank))
 
 
-# TODO: factor out conjugation and local Pauli transformations to a separate method
-# TODO: let people construct codes with field > 2, but throw errors for unsupported functionality
 class QubitCode(AbstractCode):
     """Template class for a qubit-based quantum error-correcting code.
 
@@ -306,6 +304,8 @@ class QubitCode(AbstractCode):
         return matrix
 
 
+# TODO(?): factor out conjugation and local Pauli transformations to a separate method
+# TODO: let people construct codes with field > 2, but throw errors for unsupported functionality
 class CSSCode(QubitCode):
     """CSS qubit code, with separate X-type and Z-type parity checks.
 
@@ -360,14 +360,13 @@ class CSSCode(QubitCode):
         """Construct a CSS code from X-type and Z-type parity checks."""
         self.code_x = ClassicalCode(code_x)
         self.code_z = ClassicalCode(code_z)
-        self.conjugate = qubits_to_conjugate
-        self.shifts = qubit_shifts
-        self.self_dual = self_dual
-
         if not self.code_x.num_bits == self.code_z.num_bits or np.any(
             self.code_x.matrix @ self.code_z.matrix.T
         ):
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
+        self.conjugate = qubits_to_conjugate
+        self.shifts = qubit_shifts
+        self.self_dual = self_dual
 
     @functools.cached_property
     def matrix(self) -> npt.NDArray[np.int_]:
