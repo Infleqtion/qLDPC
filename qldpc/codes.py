@@ -97,7 +97,7 @@ class ClassicalCode(AbstractCode):
             if not (field is None or field == self._field_order):
                 raise ValueError(
                     f"Field argument {field} is inconsistent with the given code, which is defined"
-                    " over F_{self._field_order}"
+                    f" over F_{self._field_order}"
                 )
             self._matrix = matrix.matrix
         else:
