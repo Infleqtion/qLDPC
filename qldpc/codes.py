@@ -76,23 +76,23 @@ class AbstractCode(abc.ABC):
         """Convert a Tanner graph into a parity check matrix."""
 
 
-class BitCode(AbstractCode):
+class ClassicalCode(AbstractCode):
     """Classical linear error-correcting code over a finite field F_q.
 
-    A classical binary code C = {x} is a set of bitstings x, called code words.  We consider only
-    linear codes here, for which any linear combination of code words is also code word.
+    A classical binary code C = {x} is a set of vectors x (with entries in F_q) called code words.
+    We consider only linear codes, for which any linear combination of code words is also code word.
 
     Operationally, we define a classical code by a parity check matrix H with dimensions
     (num_checks, num_bits).  Each row of H represents a linear constraint (a "check") that code
     words must satisfy.  A vector x is a code word iff H @ x = 0 mod q.
     """
 
-    def __init__(self, matrix: BitCode | IntegerMatrix, field: int | None = None) -> None:
+    def __init__(self, matrix: ClassicalCode | IntegerMatrix, field: int | None = None) -> None:
         """Construct a classical code from a parity check matrix.
 
         The base field is taken to be F_2 by default.
         """
-        if isinstance(matrix, BitCode):
+        if isinstance(matrix, ClassicalCode):
             self._field_order = matrix.field.order
             if not (field is None or field == self._field_order):
                 raise ValueError(
@@ -154,21 +154,21 @@ class BitCode(AbstractCode):
             self.field.Random(self.generator.shape[0]) @ self.generator  # type:ignore[attr-defined]
         )
 
-    def dual(self) -> BitCode:
+    def dual(self) -> ClassicalCode:
         """Dual to this code.
 
         The dual code ~C is the set of bitstrings orthogonal to C:
         ~C = { x : x @ y = 0 for all y in C }.
         The parity check matrix of ~C is equal to the generator of C.
         """
-        return BitCode(self.generator, self._field_order)
+        return ClassicalCode(self.generator, self._field_order)
 
-    def __invert__(self) -> BitCode:
+    def __invert__(self) -> ClassicalCode:
         """Dual to this code."""
         return self.dual()
 
     @classmethod
-    def tensor_product(cls, code_a: BitCode, code_b: BitCode) -> BitCode:
+    def tensor_product(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
         """Tensor product C_a ⊗ C_b of two codes C_a and C_b.
 
         Let G_a and G_b respectively denote the generators C_a and C_b.
@@ -180,7 +180,7 @@ class BitCode(AbstractCode):
         if not code_a._field_order == code_b._field_order:
             raise ValueError("Cannot take tensor product of codes over different fields")
         generator_ab = np.kron(np.array(code_a.generator), np.array(code_b.generator))
-        return ~BitCode(generator_ab, field=code_a._field_order)
+        return ~ClassicalCode(generator_ab, field=code_a._field_order)
 
     @property
     def num_checks(self) -> int:
@@ -226,7 +226,7 @@ class BitCode(AbstractCode):
         return self.num_bits, self.dimension, self.get_distance()
 
     @classmethod
-    def random(cls, bits: int, checks: int, field: int | None = None) -> BitCode:
+    def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
         """Construct a random classical code with the given number of bits and checks."""
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         rows, cols = checks, bits
@@ -237,32 +237,32 @@ class BitCode(AbstractCode):
         for col in range(matrix.shape[1]):
             if not matrix[:, col].any():
                 matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
-        return BitCode(matrix, field)
+        return ClassicalCode(matrix, field)
 
     @classmethod
-    def repetition(cls, num_bits: int, field: int | None = None) -> BitCode:
+    def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code on the given number of bits."""
         field = field or DEFAULT_FIELD_ORDER
         matrix = np.zeros((num_bits - 1, num_bits), dtype=int)
         for row in range(num_bits - 1):
             matrix[row, row] = 1
             matrix[row, row + 1] = -1
-        return BitCode(matrix % field, field)
+        return ClassicalCode(matrix % field, field)
 
     @classmethod
-    def ring(cls, num_bits: int, field: int | None = None) -> BitCode:
+    def ring(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code with periodic boundary conditions."""
         field = field or DEFAULT_FIELD_ORDER
         matrix = np.zeros((num_bits, num_bits), dtype=int)
         for row in range(num_bits):
             matrix[row, row] = 1
             matrix[row, (row + 1) % num_bits] = -1
-        return BitCode(matrix % field, field)
+        return ClassicalCode(matrix % field, field)
 
     @classmethod
-    def hamming(cls, rank: int) -> BitCode:
+    def hamming(cls, rank: int) -> ClassicalCode:
         """Construct a hamming code of a given rank."""
-        return BitCode(ldpc.codes.hamming_code(rank))
+        return ClassicalCode(ldpc.codes.hamming_code(rank))
 
 
 # TODO: factor out conjugation and local Pauli transformations to a separate method
@@ -340,8 +340,8 @@ class CSSCode(QubitCode):
     addressing a qubit by sqrt(X) and sqrt(Z) rotations.
     """
 
-    code_x: BitCode  # X-type parity checks, measuring Z-type errors
-    code_z: BitCode  # Z-type parity checks, measuring X-type errors
+    code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
+    code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
     conjugate: slice | Sequence[int] | None
     shifts: dict[int, int] | None
     self_dual: bool
@@ -350,15 +350,15 @@ class CSSCode(QubitCode):
 
     def __init__(
         self,
-        code_x: BitCode | IntegerMatrix,
-        code_z: BitCode | IntegerMatrix,
+        code_x: ClassicalCode | IntegerMatrix,
+        code_z: ClassicalCode | IntegerMatrix,
         qubits_to_conjugate: slice | Sequence[int] | None = None,
         qubit_shifts: dict[int, int] | None = None,
         self_dual: bool = False,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks."""
-        self.code_x = BitCode(code_x)
-        self.code_z = BitCode(code_z)
+        self.code_x = ClassicalCode(code_x)
+        self.code_z = ClassicalCode(code_z)
         self.conjugate = qubits_to_conjugate
         self.shifts = qubit_shifts
         self.self_dual = self_dual
@@ -797,8 +797,8 @@ class HGPCode(CSSCode):
 
     def __init__(
         self,
-        code_a: BitCode | IntegerMatrix,
-        code_b: BitCode | IntegerMatrix | None = None,
+        code_a: ClassicalCode | IntegerMatrix,
+        code_b: ClassicalCode | IntegerMatrix | None = None,
         *,
         conjugate: bool = False,
         self_dual: bool = False,
@@ -807,8 +807,8 @@ class HGPCode(CSSCode):
         if code_b is None:
             code_b = code_a
             self_dual = True
-        code_a = BitCode(code_a)
-        code_b = BitCode(code_b)
+        code_a = ClassicalCode(code_a)
+        code_b = ClassicalCode(code_b)
 
         # identify the number of qubits in each sector
         self.sector_size = np.outer(
@@ -825,8 +825,8 @@ class HGPCode(CSSCode):
     @classmethod
     def get_hyper_product(
         self,
-        code_a: BitCode | IntegerMatrix,
-        code_b: BitCode | IntegerMatrix,
+        code_a: ClassicalCode | IntegerMatrix,
+        code_b: ClassicalCode | IntegerMatrix,
         *,
         conjugate: bool = False,
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], slice | None]:
@@ -843,8 +843,8 @@ class HGPCode(CSSCode):
         If `conjugate is True`, we hadamard-transform the data qubits in sector (1, 1), which are
         addressed by the second block of matrix_x and marix_z above.
         """
-        matrix_a = BitCode(code_a).matrix
-        matrix_b = BitCode(code_b).matrix
+        matrix_a = ClassicalCode(code_a).matrix
+        matrix_b = ClassicalCode(code_b).matrix
 
         # construct the nontrivial blocks in the matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
@@ -1013,7 +1013,7 @@ class LPCode(CSSCode):
 # classical and quantum Tanner codes
 
 
-class TannerCode(BitCode):
+class TannerCode(ClassicalCode):
     """Classical Tanner code, as described in DOI:10.1109/TIT.1981.1056404.
 
     A Tanner code T(G,C) is constructed from:
@@ -1036,9 +1036,9 @@ class TannerCode(BitCode):
     """
 
     subgraph: nx.DiGraph
-    subcode: BitCode
+    subcode: ClassicalCode
 
-    def __init__(self, subgraph: nx.DiGraph, subcode: BitCode) -> None:
+    def __init__(self, subgraph: nx.DiGraph, subcode: ClassicalCode) -> None:
         """Construct a classical Tanner code."""
         self.subgraph = subgraph
         self.subcode = subcode
@@ -1053,7 +1053,7 @@ class TannerCode(BitCode):
             checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
             bits = [sink_indices[sink] for sink in self._get_sorted_children(source)]
             matrix[np.ix_(checks, bits)] = subcode.matrix
-        BitCode.__init__(self, matrix)
+        ClassicalCode.__init__(self, matrix)
 
     def _get_sorted_children(self, source: object) -> Sequence[object]:
         """Sorted children of the given source node."""
@@ -1091,8 +1091,8 @@ class QTCode(CSSCode):
         self,
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember],
-        code_a: BitCode | IntegerMatrix,
-        code_b: BitCode | IntegerMatrix | None = None,
+        code_a: ClassicalCode | IntegerMatrix,
+        code_b: ClassicalCode | IntegerMatrix | None = None,
         *,
         rank: int | None = None,
         conjugate: Sequence[int] = (),
@@ -1102,14 +1102,14 @@ class QTCode(CSSCode):
         if code_b is None:
             code_b = code_a
             self_dual = True
-        code_a = BitCode(code_a)
-        code_b = BitCode(code_b)
+        code_a = ClassicalCode(code_a)
+        code_b = ClassicalCode(code_b)
         self.complex = CayleyComplex(subset_a, subset_b, rank=rank)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 
-        subcode_x = ~BitCode.tensor_product(code_a, code_b)
-        subcode_z = ~BitCode.tensor_product(~code_a, ~code_b)
+        subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
+        subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
         matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
         CSSCode.__init__(self, matrix_x, matrix_z, conjugate, self_dual=self_dual)

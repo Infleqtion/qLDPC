@@ -23,28 +23,28 @@ from qldpc import abstract, codes
 
 def test_bit_codes() -> None:
     """Construction of a few classical codes."""
-    assert codes.BitCode.random(5, 3).num_bits == 5
-    assert codes.BitCode.hamming(3).get_distance() == 3
+    assert codes.ClassicalCode.random(5, 3).num_bits == 5
+    assert codes.ClassicalCode.hamming(3).get_distance() == 3
 
     num_bits = 5
-    for code in [codes.BitCode.repetition(num_bits), codes.BitCode.ring(num_bits)]:
+    for code in [codes.ClassicalCode.repetition(num_bits), codes.ClassicalCode.ring(num_bits)]:
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
         assert not np.any(code.matrix @ code.get_random_word())
 
-    assert codes.BitCode.repetition(3).rank == codes.BitCode.repetition(3, 3).rank
+    assert codes.ClassicalCode.repetition(3).rank == codes.ClassicalCode.repetition(3, 3).rank
 
     with pytest.raises(ValueError, match="inconsistent"):
-        codes.BitCode(codes.BitCode.random(2, 2, field=2), field=3)
+        codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
 
     with pytest.raises(ValueError, match="not implemented"):
-        codes.BitCode.random(2, 2, 3).get_distance()
+        codes.ClassicalCode.random(2, 2, 3).get_distance()
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
-    code = codes.BitCode.random(bits, checks, field)
+    code = codes.ClassicalCode.random(bits, checks, field)
     words_a = code.words()
     words_b = code.dual().words()
     assert all(word_a @ word_b == 0 for word_a in words_a for word_b in words_b)
@@ -55,9 +55,9 @@ def test_tensor_product(
     bits_checks_b: tuple[int, int] = (4, 2),
 ) -> None:
     """Tensor product of classical codes."""
-    code_a = codes.BitCode.random(*bits_checks_a)
-    code_b = codes.BitCode.random(*bits_checks_b)
-    code_ab = codes.BitCode.tensor_product(code_a, code_b)
+    code_a = codes.ClassicalCode.random(*bits_checks_a)
+    code_b = codes.ClassicalCode.random(*bits_checks_b)
+    code_ab = codes.ClassicalCode.tensor_product(code_a, code_b)
     basis = code_ab.generator
     basis.shape = (-1, code_a.num_bits, code_b.num_bits)
     assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
@@ -68,22 +68,22 @@ def test_tensor_product(
     assert (n_ab, k_ab, d_ab) == (n_a * n_b, k_a * k_b, d_a * d_b)
 
     with pytest.raises(ValueError, match="Cannot take tensor product"):
-        code_b = codes.BitCode.random(*bits_checks_b, field=3)
-        codes.BitCode.tensor_product(code_a, code_b)
+        code_b = codes.ClassicalCode.random(*bits_checks_b, field=3)
+        codes.ClassicalCode.tensor_product(code_a, code_b)
 
 
 def test_classical_conversion(bits: int = 10, checks: int = 8, field: int = 3) -> None:
     """Conversion between matrix and graph representations of a classical code."""
-    code = codes.BitCode.random(bits, checks, field)
-    graph = codes.BitCode.matrix_to_graph(code.matrix)
-    assert np.array_equal(code.matrix, codes.BitCode.graph_to_matrix(graph))
+    code = codes.ClassicalCode.random(bits, checks, field)
+    graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
+    assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
 
 
 def test_CSS_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
     with pytest.raises(ValueError, match="incompatible"):
-        code_x = codes.BitCode.random(3, 2)
-        code_z = codes.BitCode.random(4, 2)
+        code_x = codes.ClassicalCode.random(3, 2)
+        code_z = codes.ClassicalCode.random(4, 2)
         codes.CSSCode(code_x, code_z)
 
 
@@ -94,11 +94,11 @@ def test_hyper_product(
     bits_checks_b: tuple[int, int] = (7, 3),
 ) -> None:
     """Equivalency of matrix-based and graph-based hypergraph products."""
-    code_a = codes.BitCode.random(*bits_checks_a)
-    code_b = codes.BitCode.random(*bits_checks_b)
+    code_a = codes.ClassicalCode.random(*bits_checks_a)
+    code_b = codes.ClassicalCode.random(*bits_checks_b)
 
-    graph_a = codes.BitCode.matrix_to_graph(code_a.matrix)
-    graph_b = codes.BitCode.matrix_to_graph(code_b.matrix)
+    graph_a = codes.ClassicalCode.matrix_to_graph(code_a.matrix)
+    graph_b = codes.ClassicalCode.matrix_to_graph(code_b.matrix)
 
     code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
     graph = codes.HGPCode.get_graph_product(graph_a, graph_b, conjugate=conjugate)
@@ -111,8 +111,8 @@ def test_CSS_shifts(
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Apply Pauli deformations to a CSS code."""
-    code_a = codes.BitCode.random(*bits_checks_a)
-    code_b = codes.BitCode.random(*bits_checks_b)
+    code_a = codes.ClassicalCode.random(*bits_checks_a)
+    code_b = codes.ClassicalCode.random(*bits_checks_b)
     matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
 
     num_qubits = matrix_x.shape[-1]
@@ -132,8 +132,8 @@ def test_trivial_lift(
     bits_checks_b: tuple[int, int] = (7, 3),
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
-    code_a = codes.BitCode.random(*bits_checks_a)
-    code_b = codes.BitCode.random(*bits_checks_b)
+    code_a = codes.ClassicalCode.random(*bits_checks_a)
+    code_b = codes.ClassicalCode.random(*bits_checks_b)
     code_HP = codes.HGPCode(code_a, code_b, conjugate=conjugate)
 
     protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
@@ -179,9 +179,9 @@ def test_twisted_XZZX(width: int = 3) -> None:
     num_qubits = 2 * width**2
 
     # construct check matrix directly
-    ring = codes.BitCode.ring(width).matrix
+    ring = codes.ClassicalCode.ring(width).matrix
     mat_1 = np.kron(ring, np.eye(width, dtype=int))
-    mat_2 = codes.BitCode.ring(num_qubits // 2).matrix
+    mat_2 = codes.ClassicalCode.ring(num_qubits // 2).matrix
     zero_0 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_1 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
     zero_2 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
@@ -243,7 +243,7 @@ def test_tanner_code() -> None:
     build a directed bipartite graph G' with vertex sets (V,E).  The edges in G' have the form
     (v, {v,w}), where v is in V and {v,w} is in E.
     """
-    subcode = codes.BitCode.random(10, 5)
+    subcode = codes.ClassicalCode.random(10, 5)
     graph = nx.random_regular_graph(subcode.num_bits, subcode.num_bits * 2 + 2)
     subgraph = nx.DiGraph()
     for edge in graph.edges:
@@ -261,12 +261,12 @@ def test_tanner_code() -> None:
 def test_surface_hgp_code() -> None:
     """The surface and toric codes as hypergraph product codes."""
     # surface code
-    bit_code = codes.BitCode.repetition(3)
+    bit_code = codes.ClassicalCode.repetition(3)
     code = codes.HGPCode(bit_code)
     assert code.get_code_params() == (13, 1, 3)
 
     # toric code
-    bit_code = codes.BitCode.ring(3)
+    bit_code = codes.ClassicalCode.ring(3)
     code = codes.HGPCode(bit_code)
     assert code.get_code_params() == (18, 2, 3)
 
@@ -280,7 +280,7 @@ def test_toric_tanner_code() -> None:
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode = codes.BitCode.repetition(2)
+    subcode = codes.ClassicalCode.repetition(2)
     code = codes.QTCode(subset_a, subset_b, subcode)
 
     # check that this is a [[16, 2, 4]] code
