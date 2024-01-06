@@ -142,7 +142,7 @@ class ClassicalCode(AbstractCode):
         """
         return self.matrix.null_space()
 
-    def words(self) -> list[galois.FieldArray]:
+    def words(self) -> galois.FieldArray:
         """Code words of this code."""
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
         return self.field(list(vectors)) @ self.generator
@@ -209,9 +209,7 @@ class ClassicalCode(AbstractCode):
     @functools.cache
     def get_distance(self) -> int:
         """The distance of this code."""
-        if self._field_order == 2:
-            return ldpc.code_util.compute_code_distance(self._matrix)
-        return np.min(self.words().astype(bool).sum(axis=1))
+        return np.min(np.count_nonzero(np.array(self.words())[1:, :], axis=1))
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].

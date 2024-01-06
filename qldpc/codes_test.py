@@ -27,7 +27,10 @@ def test_bit_codes() -> None:
     assert codes.ClassicalCode.hamming(3).get_distance() == 3
 
     num_bits = 5
-    for code in [codes.ClassicalCode.repetition(num_bits), codes.ClassicalCode.ring(num_bits)]:
+    for code in [
+        codes.ClassicalCode.repetition(num_bits, field=3),
+        codes.ClassicalCode.ring(num_bits, field=4),
+    ]:
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
@@ -37,9 +40,6 @@ def test_bit_codes() -> None:
 
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
-
-    with pytest.raises(ValueError, match="not implemented"):
-        codes.ClassicalCode.random(2, 2, 3).get_distance()
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
