@@ -84,7 +84,7 @@ class Node:
         return self.is_data  # data bits "precede" check bits
 
     def __str__(self) -> str:
-        tag = "q" if self.is_data else "a"
+        tag = "d" if self.is_data else "c"
         return f"{tag}_{self.index}"
 
 

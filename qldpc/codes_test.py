@@ -21,12 +21,33 @@ import pytest
 from qldpc import abstract, codes
 
 
-def test_dual_code(bits: int = 5, checks: int = 3) -> None:
+def test_bit_codes() -> None:
+    """Construction of a few classical codes."""
+    assert codes.BitCode.random(5, 3).num_bits == 5
+    assert codes.BitCode.hamming(3).get_distance() == 3
+
+    num_bits = 5
+    for code in [codes.BitCode.repetition(num_bits), codes.BitCode.ring(num_bits)]:
+        assert code.num_bits == num_bits
+        assert code.dimension == 1
+        assert code.get_distance() == num_bits
+        assert not np.any(code.matrix @ code.get_random_word())
+
+    assert codes.BitCode.repetition(3).rank == codes.BitCode.repetition(3, 3).rank
+
+    with pytest.raises(ValueError, match="inconsistent"):
+        codes.BitCode(codes.BitCode.random(2, 2, field=2), field=3)
+
+    with pytest.raises(ValueError, match="not implemented"):
+        codes.BitCode.random(2, 2, 3).get_distance()
+
+
+def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
-    code = codes.BitCode.random(bits, checks)
+    code = codes.BitCode.random(bits, checks, field)
     words_a = code.words()
     words_b = code.dual().words()
-    assert all(word_a @ word_b % 2 == 0 for word_a in words_a for word_b in words_b)
+    assert all(word_a @ word_b == 0 for word_a in words_a for word_b in words_b)
 
 
 def test_tensor_product(
@@ -39,32 +60,31 @@ def test_tensor_product(
     code_ab = codes.BitCode.tensor_product(code_a, code_b)
     basis = code_ab.generator
     basis.shape = (-1, code_a.num_bits, code_b.num_bits)
-    assert all(not (code_a.matrix @ word @ code_b.matrix.T % 2).any() for word in basis)
+    assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
 
     n_a, k_a, d_a = code_a.get_code_params()
     n_b, k_b, d_b = code_b.get_code_params()
     n_ab, k_ab, d_ab = code_ab.get_code_params()
     assert (n_ab, k_ab, d_ab) == (n_a * n_b, k_a * k_b, d_a * d_b)
 
-
-def test_bit_codes() -> None:
-    """Construction of a few classical codes."""
-    assert codes.BitCode.random(5, 3).num_bits == 5
-    assert codes.BitCode.hamming(3).get_distance() == 3
-
-    num_bits = 5
-    for code in [codes.BitCode.repetition(num_bits), codes.BitCode.ring(num_bits)]:
-        assert code.num_bits == num_bits
-        assert code.num_logical_bits == 1
-        assert code.get_distance() == num_bits
-        assert not np.any(code.matrix @ code.get_random_word() % 2)
+    with pytest.raises(ValueError, match="Cannot take tensor product"):
+        code_b = codes.BitCode.random(*bits_checks_b, field=3)
+        codes.BitCode.tensor_product(code_a, code_b)
 
 
-def test_classical_conversion(bits: int = 10, checks: int = 8) -> None:
+def test_classical_conversion(bits: int = 10, checks: int = 8, field: int = 3) -> None:
     """Conversion between matrix and graph representations of a classical code."""
-    code = codes.BitCode.random(bits, checks)
+    code = codes.BitCode.random(bits, checks, field)
     graph = codes.BitCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.BitCode.graph_to_matrix(graph))
+
+
+def test_CSS_code() -> None:
+    """Miscellaneous CSS code tests and coverage."""
+    with pytest.raises(ValueError, match="incompatible"):
+        code_x = codes.BitCode.random(3, 2)
+        code_z = codes.BitCode.random(4, 2)
+        codes.CSSCode(code_x, code_z)
 
 
 @pytest.mark.parametrize("conjugate", [False, True])
@@ -100,9 +120,9 @@ def test_CSS_shifts(
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
     code = codes.CSSCode(matrix_x, matrix_z, conjugate, shifts)
 
-    edges = nx.get_edge_attributes(code.graph, codes.Pauli).items()
-    for (check_node, qubit_node), pauli in sorted(edges):
-        assert (code.matrix[check_node.index, np.where(pauli.value), qubit_node.index] == 1).all()
+    for node_check, node_qubit, data in code.graph.edges(data=True):
+        pauli_index = np.where(data[codes.Pauli].value)
+        assert (code.matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
 
 
 @pytest.mark.parametrize("conjugate", [False, True])

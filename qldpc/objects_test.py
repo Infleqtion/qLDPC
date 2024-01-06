@@ -49,7 +49,7 @@ def test_node() -> None:
     node_d2 = objects.Node(2, is_data=True)
     node_c1 = objects.Node(1, is_data=False)
     assert node_d1 < node_d2 < node_c1
-    assert str(node_d1) == "q_1"
+    assert str(node_d1) == "d_1"
     assert hash(node_c1) != hash(node_d1) != hash(node_d2)
 
 
