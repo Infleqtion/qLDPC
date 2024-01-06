@@ -239,17 +239,25 @@ class BitCode(AbstractCode):
                 matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
         return BitCode(matrix, field)
 
-    # TODO: generalize to other fields
     @classmethod
-    def repetition(cls, num_bits: int) -> BitCode:
+    def repetition(cls, num_bits: int, field: int | None = None) -> BitCode:
         """Construct a repetition code on the given number of bits."""
-        return BitCode(ldpc.codes.rep_code(num_bits))
+        field = field or DEFAULT_FIELD_ORDER
+        matrix = np.zeros((num_bits - 1, num_bits), dtype=int)
+        for row in range(num_bits - 1):
+            matrix[row, row] = 1
+            matrix[row, row + 1] = -1
+        return BitCode(matrix % field, field)
 
-    # TODO: generalize to other fields
     @classmethod
-    def ring(cls, num_bits: int) -> BitCode:
+    def ring(cls, num_bits: int, field: int | None = None) -> BitCode:
         """Construct a repetition code with periodic boundary conditions."""
-        return BitCode(ldpc.codes.ring_code(num_bits))
+        field = field or DEFAULT_FIELD_ORDER
+        matrix = np.zeros((num_bits, num_bits), dtype=int)
+        for row in range(num_bits):
+            matrix[row, row] = 1
+            matrix[row, (row + 1) @ num_bits] = -1
+        return BitCode(matrix % field, field)
 
     @classmethod
     def hamming(cls, rank: int) -> BitCode:
@@ -354,10 +362,8 @@ class CSSCode(QubitCode):
         self.shifts = qubit_shifts
         self.self_dual = self_dual
 
-        assert self.code_x.matrix.ndim == self.code_z.matrix.ndim == 2
-        if not (
-            self.code_x.num_bits == self.code_z.num_bits
-            or np.any(self.code_x.matrix @ self.code_z.matrix.T)
+        if not self.code_x.num_bits == self.code_z.num_bits or np.any(
+            self.code_x.matrix @ self.code_z.matrix.T
         ):
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
