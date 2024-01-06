@@ -210,7 +210,7 @@ class ClassicalCode(AbstractCode):
 
     @functools.cache
     def get_distance(self) -> int:
-        """The distance of this code."""
+        """The distance of this code, or equivalently the minimal weight of a nonzero code word."""
         words = self.words().view(np.ndarray)
         return np.min(np.count_nonzero(words[1:], axis=1))
 
