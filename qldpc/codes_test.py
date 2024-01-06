@@ -118,7 +118,12 @@ def test_CSS_shifts(
     num_qubits = matrix_x.shape[-1]
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    code = codes.CSSCode(matrix_x, matrix_z, conjugate, shifts)
+    code = codes.CSSCode(
+        matrix_x,
+        matrix_z,
+        qubits_to_conjugate=conjugate,
+        qubit_shifts=shifts,
+    )
 
     for node_check, node_qubit, data in code.graph.edges(data=True):
         pauli_index = np.where(data[codes.Pauli].value)

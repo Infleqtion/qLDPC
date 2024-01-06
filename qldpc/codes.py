@@ -352,6 +352,7 @@ class CSSCode(QubitCode):
         self,
         code_x: ClassicalCode | IntegerMatrix,
         code_z: ClassicalCode | IntegerMatrix,
+        *,
         qubits_to_conjugate: slice | Sequence[int] | None = None,
         qubit_shifts: dict[int, int] | None = None,
         self_dual: bool = False,
@@ -693,7 +694,13 @@ class GBCode(CSSCode):
         matrix_x = np.block([matrix_a, matrix_b.T])
         matrix_z = np.block([matrix_b, matrix_a.T])
         qubits_to_conjugate = slice(matrix_a.shape[0], None) if conjugate else None
-        CSSCode.__init__(self, matrix_x, matrix_z, qubits_to_conjugate, self_dual=True)
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            qubits_to_conjugate=qubits_to_conjugate,
+            self_dual=True,
+        )
 
 
 class QCCode(GBCode):
@@ -820,7 +827,13 @@ class HGPCode(CSSCode):
         matrix_x, matrix_z, qubits_to_conjugate = HGPCode.get_hyper_product(
             code_a.matrix, code_b.matrix, conjugate=conjugate
         )
-        CSSCode.__init__(self, matrix_x, matrix_z, qubits_to_conjugate, self_dual=self_dual)
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            qubits_to_conjugate=qubits_to_conjugate,
+            self_dual=self_dual,
+        )
 
     @classmethod
     def get_hyper_product(
@@ -956,7 +969,7 @@ class LPCode(CSSCode):
             self,
             protograph_x.lift(),
             protograph_z.lift(),
-            qubits_to_conjugate,
+            qubits_to_conjugate=qubits_to_conjugate,
             self_dual=self_dual,
         )
 
@@ -1112,4 +1125,10 @@ class QTCode(CSSCode):
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
         matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
-        CSSCode.__init__(self, matrix_x, matrix_z, conjugate, self_dual=self_dual)
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            qubits_to_conjugate=conjugate,
+            self_dual=self_dual,
+        )
