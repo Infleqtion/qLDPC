@@ -256,7 +256,7 @@ class BitCode(AbstractCode):
         matrix = np.zeros((num_bits, num_bits), dtype=int)
         for row in range(num_bits):
             matrix[row, row] = 1
-            matrix[row, (row + 1) @ num_bits] = -1
+            matrix[row, (row + 1) % num_bits] = -1
         return BitCode(matrix % field, field)
 
     @classmethod
@@ -300,8 +300,9 @@ class QubitCode(AbstractCode):
         num_qubits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qubits
         matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
-        for (check_node, bit_node), pauli in nx.get_edge_attributes(graph, Pauli).items():
-            matrix[check_node.index, pauli.index, bit_node.index] = 1
+        for node_check, node_qubit, data in graph.edges(data=True):
+            pauli_index = np.where(data[Pauli].value)
+            matrix[node_check.index, pauli_index, node_qubit.index] = 1
         return matrix
 
 

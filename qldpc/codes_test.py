@@ -120,9 +120,9 @@ def test_CSS_shifts(
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
     code = codes.CSSCode(matrix_x, matrix_z, conjugate, shifts)
 
-    for check_node, qubit_node, data in code.graph.edges(data=True):
+    for node_check, node_qubit, data in code.graph.edges(data=True):
         pauli_index = np.where(data[codes.Pauli].value)
-        assert (code.matrix[check_node.index, pauli_index, qubit_node.index] == 1).all()
+        assert (code.matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
 
 
 @pytest.mark.parametrize("conjugate", [False, True])
