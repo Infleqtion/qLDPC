@@ -38,7 +38,6 @@ from qldpc.objects import CayleyComplex, Node, Pauli
 IntegerMatrix = npt.NDArray[np.int_] | Sequence[Sequence[int]] | galois.FieldArray
 ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
 
-
 DEFAULT_FIELD_ORDER = 2
 
 ################################################################################
@@ -242,22 +241,22 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code on the given number of bits."""
-        field = field or DEFAULT_FIELD_ORDER
+        minus_one = galois.GF(field or DEFAULT_FIELD_ORDER).characteristic - 1
         matrix = np.zeros((num_bits - 1, num_bits), dtype=int)
         for row in range(num_bits - 1):
             matrix[row, row] = 1
-            matrix[row, row + 1] = -1
-        return ClassicalCode(matrix % field, field)
+            matrix[row, row + 1] = minus_one
+        return ClassicalCode(matrix, field)
 
     @classmethod
     def ring(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code with periodic boundary conditions."""
-        field = field or DEFAULT_FIELD_ORDER
+        minus_one = galois.GF(field or DEFAULT_FIELD_ORDER).characteristic - 1
         matrix = np.zeros((num_bits, num_bits), dtype=int)
         for row in range(num_bits):
             matrix[row, row] = 1
-            matrix[row, (row + 1) % num_bits] = -1
-        return ClassicalCode(matrix % field, field)
+            matrix[row, (row + 1) % num_bits] = minus_one
+        return ClassicalCode(matrix, field)
 
     @classmethod
     def hamming(cls, rank: int) -> ClassicalCode:
