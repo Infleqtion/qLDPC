@@ -102,7 +102,7 @@ class ClassicalCode(AbstractCode):
             self._matrix = matrix.matrix
         else:
             self._field_order = field or DEFAULT_FIELD_ORDER
-            self._matrix = self.field(matrix)
+            self._matrix = self.field(matrix, dtype=int)
 
     @property
     def matrix(self) -> galois.FieldArray:
@@ -212,7 +212,7 @@ class ClassicalCode(AbstractCode):
     def get_distance(self) -> int:
         """The distance of this code."""
         if self._field_order == 2:
-            return ldpc.code_util.compute_code_distance(np.array(self._matrix))
+            return ldpc.code_util.compute_code_distance(self._matrix)
         raise ValueError("Code distance not implemented for field orders greater than 2")
 
     def get_code_params(self) -> tuple[int, int, int]:
