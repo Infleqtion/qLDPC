@@ -90,7 +90,7 @@ class BitCode(AbstractCode):
     def __init__(self, matrix: BitCode | IntegerMatrix, field: int | None = None) -> None:
         """Construct a classical code from a parity check matrix.
 
-        The base field is taken to be GF(2) by default.
+        The base field is taken to be F_2 by default.
         """
         if isinstance(matrix, BitCode):
             self._field_order = matrix.field.order
