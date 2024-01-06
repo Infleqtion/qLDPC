@@ -178,8 +178,10 @@ class ClassicalCode(AbstractCode):
         """
         if not code_a._field_order == code_b._field_order:
             raise ValueError("Cannot take tensor product of codes over different fields")
-        generator_ab = np.kron(np.array(code_a.generator), np.array(code_b.generator))
-        return ~ClassicalCode(generator_ab, field=code_a._field_order)
+        gen_a = code_a.generator.view(np.ndarray)
+        gen_b = code_b.generator.view(np.ndarray)
+        generator_ab = np.kron(gen_a, gen_b)
+        return ~ClassicalCode(generator_ab, field=code_a._field_order)  # type:ignore[arg-type]
 
     @property
     def num_checks(self) -> int:
@@ -535,6 +537,7 @@ class CSSCode(QubitCode):
         """
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
+        matrix_z = code_z.matrix.view(np.ndarray)
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
         # construct the effective syndrome
@@ -544,10 +547,10 @@ class CSSCode(QubitCode):
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=ensure_nontrivial)
+            word = self.get_random_logical_op(pauli_z, ensure_nontrivial).view(np.ndarray)
 
             # support of a candidate pauli-type logical operator
-            effective_check_matrix = np.vstack([np.array(code_z.matrix), np.array(word)])
+            effective_check_matrix = np.vstack([matrix_z, word])
             candidate_logical_op = qldpc.decode(
                 effective_check_matrix, effective_syndrome, exact=False, **decoder_args
             )
@@ -584,8 +587,8 @@ class CSSCode(QubitCode):
             return self._logical_ops
 
         # identify candidate X-type and Z-type operators
-        candidates_x = list(np.array(self.code_z.generator))
-        candidates_z = list(np.array(self.code_x.generator))
+        candidates_x = list(self.code_z.generator.view(np.ndarray))
+        candidates_z = list(self.code_x.generator.view(np.ndarray))
 
         # collect logical operators sequentially
         logicals_x = []
@@ -647,8 +650,9 @@ class CSSCode(QubitCode):
         """
         assert 0 <= logical_qubit_index < self.num_logical_qubits
         code = self.code_z if pauli == Pauli.X else self.code_x
-        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
-        effective_check_matrix = np.vstack([np.array(code.matrix), np.array(word)])
+        matrix = code.matrix.view(np.ndarray)
+        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index].view(np.ndarray)
+        effective_check_matrix = np.vstack([matrix, word])
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
         logical_op = qldpc.decode(
