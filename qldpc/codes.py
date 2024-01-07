@@ -264,10 +264,11 @@ class ClassicalCode(AbstractCode):
         """Construct a hamming code of a given rank."""
         field = field or DEFAULT_FIELD_ORDER
         if field == 2:
-            # columns = all nonzero bitstrings
+            # parity check matrix: columns = all nonzero bitstrings
             bitstrings = list(itertools.product([0, 1], repeat=rank))
             return ClassicalCode(np.array(bitstrings[1:]).T)
-        # more generally, columns = all nonzero strings with a 1 as the first nonzero entry
+        # More generally, columns = maximal set of nonzero, linearly independent strings.
+        # This is achieved by collecting together all strings whose first nonzero element is a 1.
         strings = [
             (0,) * top_row + (1,) + rest
             for top_row in range(rank - 1, -1, -1)
