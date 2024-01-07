@@ -257,10 +257,20 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(matrix, field)
 
     @classmethod
-    def hamming(cls, rank: int) -> ClassicalCode:
+    def hamming(cls, rank: int, field: int | None = None) -> ClassicalCode:
         """Construct a hamming code of a given rank."""
-        bitstrings = np.array(list(itertools.product([0, 1], repeat=rank)), dtype=int)
-        return ClassicalCode(bitstrings[1:].T)
+        field = field or DEFAULT_FIELD_ORDER
+        if field == 2:
+            # columns = all nonzero bitstrings
+            bitstrings = list(itertools.product([0, 1], repeat=rank))
+            return ClassicalCode(np.array(bitstrings[1:]).T)
+        # more generally, columns = all nonzero strings with a 1 as the first nonzero entry
+        strings = [
+            (0,) * top_row + (1,) + rest
+            for top_row in range(rank - 1, -1, -1)
+            for rest in itertools.product(range(field), repeat=rank - top_row - 1)
+        ]
+        return ClassicalCode(np.array(strings).T, field=field)
 
     # TODO: add more codes, particularly from code families that are useful for good quantum codes
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
