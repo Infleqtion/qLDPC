@@ -24,7 +24,6 @@ from typing import Literal
 
 import cachetools
 import galois
-import ldpc.codes
 import ldpc.mod2
 import networkx as nx
 import numpy as np
@@ -260,7 +259,8 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def hamming(cls, rank: int) -> ClassicalCode:
         """Construct a hamming code of a given rank."""
-        return ClassicalCode(ldpc.codes.hamming_code(rank))
+        bitstrings = np.array(list(itertools.product([0, 1], repeat=rank)), dtype=int)
+        return ClassicalCode(bitstrings[1:].T)
 
     # TODO: add more codes, particularly from code families that are useful for good quantum codes
 
