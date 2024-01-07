@@ -266,6 +266,7 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(bitstrings[1:].T)
 
     # TODO: add more codes, particularly from code families that are useful for good quantum codes
+    # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 
 
 # TODO: generalize QubitCode --> QuditCode
