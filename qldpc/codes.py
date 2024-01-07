@@ -24,7 +24,6 @@ from typing import Literal
 
 import cachetools
 import galois
-import ldpc.code_util
 import ldpc.codes
 import ldpc.mod2
 import networkx as nx
