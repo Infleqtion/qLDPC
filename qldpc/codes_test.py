@@ -33,7 +33,9 @@ def test_bit_codes() -> None:
         assert code.get_distance() == num_bits
         assert not np.any(code.matrix @ code.get_random_word())
 
+    # test that rank of repetition and hamming codes is independent of the field
     assert codes.ClassicalCode.repetition(3).rank == codes.ClassicalCode.repetition(3, 3).rank
+    assert codes.ClassicalCode.hamming(3).rank == codes.ClassicalCode.hamming(3, 3).rank
 
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
