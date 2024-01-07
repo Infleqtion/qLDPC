@@ -141,7 +141,7 @@ class ClassicalCode(AbstractCode):
         """
         return self.matrix.null_space()
 
-    def words(self) -> list[galois.FieldArray]:
+    def words(self) -> galois.FieldArray:
         """Code words of this code."""
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
         return self.field(list(vectors)) @ self.generator
