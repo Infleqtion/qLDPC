@@ -140,15 +140,15 @@ def test_trivial_lift(
     """The lifted product code with a trivial lift reduces to the HGP code."""
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
-    code_HP = codes.HGPCode(code_a, code_b, conjugate=conjugate)
+    code_HGP = codes.HGPCode(code_a, code_b, conjugate=conjugate)
 
     protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
     protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix)
     code_LP = codes.LPCode(protograph_a, protograph_b, conjugate=conjugate)
 
-    assert np.array_equal(code_HP.matrix, code_LP.matrix)
-    assert nx.utils.graphs_equal(code_HP.graph, code_LP.graph)
-    assert np.array_equal(code_HP.sector_size, code_LP.sector_size)
+    assert np.array_equal(code_HGP.matrix, code_LP.matrix)
+    assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)
+    assert np.array_equal(code_HGP.sector_size, code_LP.sector_size)
 
 
 def test_lift() -> None:
