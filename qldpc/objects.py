@@ -26,6 +26,7 @@ import networkx as nx
 
 from qldpc import abstract
 
+
 # TODO: A generalized Pauli for qudits
 class Pauli(enum.Enum):
     """Pauli operators."""
