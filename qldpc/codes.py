@@ -315,6 +315,88 @@ class QubitCode(AbstractCode):
             pauli_index = np.where(data[Pauli].value)
             matrix[node_check.index, pauli_index, node_qubit.index] = 1
         return matrix
+    
+
+class QuditCode(AbstractCode):
+    """Template class for a qudit-based quantum error-correcting code.
+
+    The parity check matrix, H, of a qubit code is organized into an array with dimensions
+    (num_checks, 2 * num_qubits). For qudit-codes, there is a Pauli basis indexed by X(r), Z(r) where r ranges over the finite field.
+    The parity check then is a block matrix H = [H_X | H_Z], where each of H_X,H_Z has dimensions (num_checks, num_qubits) 
+    If the entry  H_X (i,j) = r, then stabilizer i acts by the operator X(r) on the qudit j.
+
+    The Tanner graph of a qubit code is nearly identical to that of a classical code, with the only
+    difference being that the edge (c, b) has an attribute to indicate the Pauli operator with which
+    check qudit c addresses data qudit b.
+    """
+    def __init__(self, matrix: QuditCode | IntegerMatrix, field: int | None = None) -> None:
+        """Define a stabilize qudit code from a parity check matrix over a given field.
+
+        The base field is taken to be F_2 by default.
+        """
+        if isinstance(matrix, QuditCode):
+            self._field_order = matrix.field.order
+            if not (field is None or field == self._field_order):
+                raise ValueError(
+                    f"Field argument {field} is inconsistent with the given code, which is defined"
+                    f" over F_{self._field_order}"
+                )
+            self._matrix = matrix.matrix
+        else:
+            self._field_order = field or DEFAULT_FIELD_ORDER
+            self._matrix = self.field(matrix, dtype=int)
+
+    @property
+    def matrix(self) -> galois.FieldArray:
+        """Parity check matrix of this code."""
+        return self._matrix
+    
+    # TODO : To implement this.
+    @classmethod
+    def is_CSS(self) -> bool:
+        """ Check if the qubit code is a CSS code (not sure if works for general fields)
+        
+        Implements the algorithm from https://quantumcomputing.stackexchange.com/questions/15432/
+        """
+        return None         
+    
+    @classmethod
+    def matrix_to_stabilizers(cls, matrix: IntegerMatrix) -> list:
+        """Output a list of generating stabilizers of the code."""
+        stab = list()
+        num_checks, num_qudits = matrix.shape
+        if not (num_qudits%2 == 0):
+                raise ValueError(
+                    f"Parity check matrix has odd columns"
+                )
+        num_qudits = num_qudits/2
+        for row in range(num_checks):
+            gen = ""
+            for col in range(num_qudits):
+                this_qubit = "I" 
+                if not ( matrix[row,col] ==0):
+                    this_qubit = 'X(' + str(matrix[row,col]) + ')'
+                if not ( matrix[row,col + num_qudits] ==0):
+                    if this_qubit == 'I':
+                        this_qubit = 'Z(' + str(matrix[row,col + num_qudits]) + ')'
+                    else:
+                        this_qubit = this_qubit + 'Z(' + str(matrix[row,col + num_qudits]) + ')'
+                gen = gen + this_qubit 
+            stab.append(gen)
+        return stab
+    
+    @classmethod
+    def standard_to_check(list) -> IntegerMatrix:
+        """Arrange a standard form for stabilizer codes into a check matrix."""
+        pass
+        return None
+    
+    # TODO: Implement this 
+    @classmethod
+    def check_to_standard(cls, matrix:IntegerMatrix) -> list:
+        """Convert a check matrix into the standard form."""
+        pass
+        return None
 
 
 # TODO: factor out conjugation and local Pauli transformations to a separate method
