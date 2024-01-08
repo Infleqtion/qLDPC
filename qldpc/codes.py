@@ -1087,15 +1087,15 @@ class TannerCode(ClassicalCode):
         matrix = np.zeros((num_checks, num_bits), dtype=int)
         for idx, source in enumerate(sorted(sources)):
             checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
-            bits = [sink_indices[sink] for sink in self._get_sorted_children(source)]
+            bits = [sink_indices[sink] for sink in self._get_sorted_neighbors(source)]
             matrix[np.ix_(checks, bits)] = subcode.matrix
         ClassicalCode.__init__(self, matrix)
 
-    def _get_sorted_children(self, source: object) -> Sequence[object]:
-        """Sorted children of the given source node."""
+    def _get_sorted_neighbors(self, node: object) -> Sequence[object]:
+        """Sorted neighbors of the given node."""
         return sorted(
-            self.subgraph.neighbors(source),
-            key=lambda neighbor: self.subgraph[source][neighbor].get("sort", neighbor),
+            self.subgraph.neighbors(node),
+            key=lambda neighbor: self.subgraph[node][neighbor].get("sort", neighbor),
         )
 
 
