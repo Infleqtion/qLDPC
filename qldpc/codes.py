@@ -24,7 +24,6 @@ from typing import Literal
 
 import cachetools
 import galois
-import ldpc.code_util
 import ldpc.mod2
 import networkx as nx
 import numpy as np
@@ -207,13 +206,11 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
-    # TODO: compute distance for fields > 2
     @functools.cache
     def get_distance(self) -> int:
-        """The distance of this code."""
-        if self._field_order == 2:
-            return ldpc.code_util.compute_code_distance(self._matrix)
-        raise ValueError("Code distance not implemented for field orders greater than 2")
+        """The distance of this code, or equivalently the minimal weight of a nonzero code word."""
+        words = self.words().view(np.ndarray)
+        return np.min(np.count_nonzero(words[1:], axis=1))
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].
