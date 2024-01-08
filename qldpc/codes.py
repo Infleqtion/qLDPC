@@ -1089,7 +1089,7 @@ class TannerCode(ClassicalCode):
             checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
             bits = [sink_indices[sink] for sink in self._get_sorted_neighbors(source)]
             matrix[np.ix_(checks, bits)] = subcode.matrix
-        ClassicalCode.__init__(self, matrix)
+        ClassicalCode.__init__(self, matrix, subcode._field_order)
 
     def _get_sorted_neighbors(self, node: object) -> Sequence[object]:
         """Sorted neighbors of the given node."""
