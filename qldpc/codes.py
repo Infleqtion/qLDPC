@@ -1054,16 +1054,18 @@ class TannerCode(ClassicalCode):
     """Classical Tanner code, as described in DOI:10.1109/TIT.1981.1056404.
 
     A Tanner code T(G,C) is constructed from:
-    [1] A (k,n)-regular directed bipartite graph G.  That is, a graph...
+    [1] A bipartite "half-regular" graph G.  That is, a graph...
         ... with two sets of nodes, V and W.
-        ... in which all edges are directed from a node in V to a node in W.
-        ... in which all nodes in V have degree k, and all nodes in W have degree n.
+        ... in which all nodes in W have degree n.
     [2] A classical code C on n bits.
+
+    For convenience, we make G directed, with edges directed from V to W.  The node sets V and W can
+    then be identified, respectively, by the sources and sinks of G.
 
     The Tanner code T(G,C) is defined on |W| bits.  A |W|-bit string x is a code word of T(G,C) iff,
     for every node v in V, the bits of x incident to v are a code word of C.
 
-    This construction requires an ordering the edges E(v) adjacent to each vertex v.  This method
+    This construction requires an ordering the edges E(v) adjacent to each vertex v.  This class
     sorts E(v) by the value of the "sort" attribute attached to each edge.  If there is no "sort"
     attribute, its value is treated as corresponding neighbor of v.
 
