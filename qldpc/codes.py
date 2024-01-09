@@ -763,7 +763,7 @@ class CSSCode(QubitCode):
 
 # TODO: factor out conjugation and local Pauli transformations to a separate method
 # TODO: allow construction of codes with field > 2, but throw errors for unsupported functionality
-class CSSCode_gen(QubitCode):
+class CSSCode_gen(QuditCode):
     """CSS qudit code, with separate X-type and Z-type parity checks.
 
     In order for the X-type and Z-type parity checks to be "compatible", the X-type stabilizers must
@@ -817,16 +817,6 @@ class CSSCode_gen(QubitCode):
                 [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
             ]
         ).reshape((self.num_checks, 2, -1))
-
-        if self.shifts:
-            # identify qubits to shift up or down along the table of Pauli pairs
-            shifts_up = tuple(qubit for qubit, shift in self.shifts.items() if shift % 3 == 1)
-            shifts_dn = tuple(qubit for qubit, shift in self.shifts.items() if shift % 3 == 2)
-            # For qubits shifting up, any stabilizer addressing a qubit with a Z should now also
-            # address that qubit with X, so copy Z to X.  Likewise for shifting down and X to Z.
-            matrix[:, Pauli.X.index, shifts_up] |= matrix[:, Pauli.Z.index, shifts_up]
-            matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
-
         return matrix
 
     @property
