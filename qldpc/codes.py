@@ -786,7 +786,7 @@ class CSSCode_gen(QuditCode):
         self,
         code_x: ClassicalCode | IntegerMatrix,
         code_z: ClassicalCode | IntegerMatrix,
-        field: int | None,
+        field: int = None,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks."""
 

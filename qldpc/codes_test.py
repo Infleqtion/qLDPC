@@ -88,6 +88,14 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z)
 
 
+def test_CSSgen_code() -> None:
+    """Miscellaneous CSS code tests and coverage."""
+    with pytest.raises(ValueError, match="incompatible"):
+        code_x = codes.ClassicalCode.random(3, 2, 3)
+        code_z = codes.ClassicalCode.random(4, 2, 3)
+        codes.CSSCode_gen(code_x, code_z, 3)
+
+
 @pytest.mark.parametrize("conjugate", [False, True])
 def test_hyper_product(
     conjugate: bool,
@@ -129,6 +137,27 @@ def test_CSS_shifts(
     for node_check, node_qubit, data in code.graph.edges(data=True):
         pauli_index = np.where(data[codes.Pauli].value)
         assert (code.matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
+
+
+def test_CSSgen_shifts(
+    bits_checks_a: tuple[int, int] = (5, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
+) -> None:
+    """Apply Pauli deformations to a CSS code."""
+    code_a = codes.ClassicalCode.random(*bits_checks_a)
+    code_b = codes.ClassicalCode.random(*bits_checks_b)
+    matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
+
+    num_qubits = matrix_x.shape[-1]
+    code = codes.CSSCode_gen(matrix_x, matrix_z)
+    conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
+    shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
+    transformed_matrix = codes.CSScode_gen.conjugate(code.matrix, conjugate)
+    transformed_matrix = codes.CSScode_gen.shift(transformed_matrix, shifts)
+
+    for node_check, node_qubit, data in code.graph.edges(data=True):
+        pauli_index = np.where(data[codes.Pauli].value)
+        assert (transformed_matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
 
 
 @pytest.mark.parametrize("conjugate", [False, True])
