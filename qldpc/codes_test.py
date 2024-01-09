@@ -176,6 +176,18 @@ def test_Qudit_stabs(
     return
 
 
+def test_Qudit_graph(
+    bits_checks_a: tuple[int, int] = (5, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
+) -> None:
+    code_a = codes.ClassicalCode.random(*bits_checks_a)
+    code_b = codes.ClassicalCode.random(*bits_checks_b)
+    matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
+    code = codes.CSSCode_gen(matrix_x, matrix_z)
+    assert np.array_equal(code.graph_to_matrix(code.graph), code.matrix)
+    return
+
+
 @pytest.mark.parametrize("conjugate", [False, True])
 def test_trivial_lift(
     conjugate: bool,
@@ -339,3 +351,6 @@ def test_toric_tanner_code() -> None:
     assert code.get_distance(lower=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
+
+
+test_Qudit_graph()

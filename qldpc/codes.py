@@ -405,15 +405,20 @@ class QuditCode(AbstractCode):
         """Convert a check matrix into the standard form."""
         return NotImplemented
 
+    # TODO: Generalize it for other fields
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
         graph = nx.DiGraph()
-        for row, col_xz, col in zip(*np.where(matrix)):
+        num_checks, num_qudits = matrix.shape
+        if not (num_qudits % 2 == 0):
+            raise ValueError("Parity check matrix has odd columns")
+        num_qudits = num_qudits // 2
+        for row, col in zip(*np.where(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qubit = Node(index=int(col), is_data=True)
             graph.add_edge(node_check, node_qubit)
-            pauli = Pauli.X if col_xz == Pauli.X.index else Pauli.Z
+            pauli = Pauli.X if col < num_qudits else Pauli.Z
             old_pauli = graph[node_check][node_qubit].get(Pauli, Pauli.I)
             graph[node_check][node_qubit][Pauli] = old_pauli * pauli
         return graph
@@ -423,10 +428,9 @@ class QuditCode(AbstractCode):
         """Convert a Tanner graph into a parity check matrix."""
         num_qubits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qubits
-        matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
-        for node_check, node_qubit, data in graph.edges(data=True):
-            pauli_index = np.where(data[Pauli].value)
-            matrix[node_check.index, pauli_index, node_qubit.index] = 1
+        matrix = np.zeros((num_checks, num_qubits), dtype=int)
+        for node_check, node_qubit, _ in graph.edges(data=True):
+            matrix[node_check.index, node_qubit.index] = 1
         return matrix
 
 
