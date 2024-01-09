@@ -108,9 +108,6 @@ jobs:
   coverage:
     name: Pytest and Coverage check
     if: github.event.pull_request.draft == false
-    strategy:
-      matrix:
-        python-version: [ '3.11' ]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
