@@ -369,10 +369,10 @@ class QuditCode(AbstractCode):
         """
         return None
 
-    def matrix_to_stabilizers(self) -> list[...]:
+    def matrix_to_stabilizers(self) -> list:
         """Output a list of generating stabilizers of the code."""
         stab = list()
-        num_checks, num_qudits = matrix.shape
+        num_checks, num_qudits = self.matrix.shape
         if not (num_qudits % 2 == 0):
             raise ValueError("Parity check matrix has odd columns")
         num_qudits = num_qudits // 2
@@ -380,26 +380,21 @@ class QuditCode(AbstractCode):
             gen = ""
             for col in range(num_qudits):
                 this_qubit = " I "
-                if not (matrix[row, col] == 0):
-                    this_qubit = " X(" + str(matrix[row, col]) + ") "
-                if not (matrix[row, col + num_qudits] == 0):
+                if not (self.matrix[row, col] == 0):
+                    this_qubit = " X(" + str(self.matrix[row, col]) + ") "
+                if not (self.matrix[row, col + num_qudits] == 0):
                     if this_qubit == " I ":
-                        this_qubit = " Z(" + str(matrix[row, col + num_qudits]) + ") "
+                        this_qubit = " Z(" + str(self.matrix[row, col + num_qudits]) + ") "
                     else:
-                        this_qubit = this_qubit + "Z(" + str(matrix[row, col + num_qudits]) + ")"
+                        this_qubit = (
+                            this_qubit + "Z(" + str(self.matrix[row, col + num_qudits]) + ")"
+                        )
                 gen = gen + this_qubit
             stab.append(gen)
         return stab
-    
-    @classmethod
-    def stabilizers_to_matrix(cls, stabs: list) -> IntegerMatrix:
-        """Output a list of generating stabilizers of the code."""
-        num_checks = len(stabs)
-        pass
-    
 
     @classmethod
-    def from_stabilizers(cls, stabilizers: ...) -> Quditode:
+    def from_stabilizers(cls, stabilizers: list) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         # TODO: implement
         return NotImplemented
@@ -408,9 +403,8 @@ class QuditCode(AbstractCode):
     @classmethod
     def check_to_standard(cls, matrix: IntegerMatrix) -> list:
         """Convert a check matrix into the standard form."""
-        pass
-        return None
-    
+        return NotImplemented
+
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""

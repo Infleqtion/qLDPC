@@ -168,10 +168,11 @@ def test_Qudit_stabs(
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
     code = codes.CSSCode_gen(matrix_x, matrix_z)
-    stabs = code.matrix_to_stabilizers(code.matrix)
-    #for stab in stabs :
+    stabs = code.matrix_to_stabilizers()
+    assert len(stabs) == code.num_checks
+    # for stab in stabs :
     #    print(stab)
-    #print(code.matrix)
+    # print(code.matrix)
     return
 
 
@@ -338,6 +339,3 @@ def test_toric_tanner_code() -> None:
     assert code.get_distance(lower=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
-
-
-#test_Qudit_stabs()
