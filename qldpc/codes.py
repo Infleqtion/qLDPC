@@ -357,10 +357,12 @@ class QuditCode(AbstractCode):
 
     # TODO : To implement this.
     @classmethod
-    def is_CSS(self) -> bool:
+    def is_CSS(cls, matrix: IntegerMatrix) -> bool:
         """Check if the qubit code is a CSS code (not sure if works for general fields)
 
         Implements the algorithm from https://quantumcomputing.stackexchange.com/questions/15432/
+
+        Perhaps also add functionality to return H_X, H_Z if CSS
         """
         return None
 
@@ -504,6 +506,399 @@ class CSSCode(QubitCode):
     def num_logical_qubits(self) -> int:
         """Number of logical qubits encoded by this code."""
         return self.code_x.dimension + self.code_z.dimension - self.num_qubits
+
+    def get_code_params(
+        self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
+    ) -> tuple[int, int, int]:
+        """Compute the parameters of this code: [[n,k,d]].
+
+        Here:
+        - n is the number of data qubits
+        - k is the number of encoded ("logical") qubits
+        - d is the code distance
+
+        Keyword arguments are passed to the calculation of code distance.
+        """
+        distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
+        return self.num_qubits, self.num_logical_qubits, distance
+
+    def get_distance(
+        self,
+        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        *,
+        lower: bool = False,
+        upper: int | None = None,
+        **decoder_args: object,
+    ) -> int:
+        """Distance of the this code: minimum weight of a nontrivial logical operator.
+
+        If provided a Pauli as an argument, compute the minimim weight of an nontrivial logical
+        operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
+
+        If `lower is True`, compute a lower bound: for the X-distance, compute the distance of the
+        classical Z-type subcode that corrects X-type errors.  Vice versa with the Z-distance.
+
+        If `upper is not None`, compute an upper bound using a randomized algorithm described in
+        arXiv:2308.07915, minimizing over `upper` random trials.  For a detailed explanation, see
+        `CSSCode.get_distance_upper_bound` and `CSSCode.get_one_distance_upper_bound`.
+
+        If `lower is False` and `upper is None`, compute an exact code distance with integer linear
+        programming.  Warning: this is an exponentially scaling (NP-complete) problem.
+
+        All remaining keyword arguments are passed to a decoder in `decode`.
+        """
+        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert lower is False or upper is None
+        if pauli is None:
+            # minimize over X-distance and Z-distance
+            return min(
+                self.get_distance(Pauli.X, lower=lower, upper=upper, **decoder_args),
+                self.get_distance(Pauli.Z, lower=lower, upper=upper, **decoder_args),
+            )
+
+        if lower:
+            # distance of the Z-type subcode correcting X-type errors, or vice versa
+            return self.code_z.get_distance() if pauli == Pauli.X else self.code_x.get_distance()
+
+        if upper is not None:
+            # compute an upper bound to the distance with a decoder
+            return self.get_distance_upper_bound(
+                pauli, upper, **decoder_args  # type:ignore[arg-type]
+            )
+
+        # exact distance with an integer linear program
+        return self.get_distance_exact(pauli, **decoder_args)
+
+    def get_distance_upper_bound(
+        self,
+        pauli: Literal[Pauli.X, Pauli.Z],
+        num_trials: int,
+        *,
+        ensure_nontrivial: bool = True,
+        **decoder_args: object,
+    ) -> int:
+        """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
+
+        All keyword arguments are passed to `CSSCode.get_one_distance_upper_bound`.
+        """
+        return min(
+            self.get_one_distance_upper_bound(
+                pauli, ensure_nontrivial=ensure_nontrivial, **decoder_args
+            )
+            for _ in range(num_trials)
+        )
+
+    def get_one_distance_upper_bound(
+        self,
+        pauli: Literal[Pauli.X, Pauli.Z],
+        *,
+        ensure_nontrivial: bool = True,
+        **decoder_args: object,
+    ) -> int:
+        """Single upper bound to the X-distance or Z-distance of this code.
+
+        This method uses a randomized algorithm described in arXiv:2308.07915 (and also below).
+
+        Args:
+            pauli: Pauli operator choosing whether to compute an X-distance or Z-distance bound.
+            ensure_nontrivial: When we generate a random logical operator, should we ensure that
+                this operator is nontrivial?  (default: True)
+            decoder_args: Keyword arguments are passed to a decoder in `decode`.
+        Returns:
+            An upper bound on the X-distance or Z-distance.
+
+        For ease of language, we henceforth assume that we are computing an X-distance.
+
+        Pick a random Z-type logical operator Z(w_z) whose support is indicated by the bistring w_z.
+        If `ensure_nontrivial is True`, ensure that Z(w_z) is a nontrivial logical operator,
+        although doing so is not strictly necessary.
+
+        We now wish to find a low-weight Pauli-X string X(w_x) that
+            (a) has a trivial syndrome, and
+            (b) anti-commutes with Z(w_z),
+        which together would imply that X(w_x) is a nontrivial X-type logical operator.
+        Mathematically, these conditions are equivalent to requiring that
+            (a) H_z @ w_x = 0, and
+            (b) w_z @ w_x = 1,
+        where H_z is the parity check matrix of the Z-type subcode that witnesses X-type errors.
+
+        Conditions (a) and (b) can be combined into the single block-matrix equation
+            ⌈ H_z   ⌉         ⌈ 0 ⌉
+            ⌊ w_z.T ⌋ @ w_x = ⌊ 1 ⌋,
+        where the "0" on the top right is interpreted as a zero vector.  This equation can be solved
+        by decoding the syndrome [ 0, 0, ..., 0, 1 ].T for the parity check matrix [ H_z.T, w_z ].T.
+
+        We solve the above decoding problem with a decoder in `decode`.  If the decoder fails to
+        find a solution, try again with a new initial random operator Z(w_z).  If the decoder
+        succeeds in finding a solution w_x, this solution corresponds to a logical X-type operator
+        X(w_x) -- and presumably one of low Hamming weight, since decoders try to find low-weight
+        solutions.  Return the Hamming weight |w_x|.
+        """
+        # define code_z and pauli_z as if we are computing X-distance
+        code_z = self.code_z if pauli == Pauli.X else self.code_x
+        matrix_z = code_z.matrix.view(np.ndarray)
+        pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
+
+        # construct the effective syndrome
+        effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
+        effective_syndrome[-1] = 1
+
+        logical_op_found = False
+        while not logical_op_found:
+            # support of pauli string with a trivial syndrome
+            word = self.get_random_logical_op(pauli_z, ensure_nontrivial).view(np.ndarray)
+
+            # support of a candidate pauli-type logical operator
+            effective_check_matrix = np.vstack([matrix_z, word])
+            candidate_logical_op = qldpc.decode(
+                effective_check_matrix, effective_syndrome, exact=False, **decoder_args
+            )
+
+            # check whether the decoding was successful
+            actual_syndrome = effective_check_matrix @ candidate_logical_op % 2
+            logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
+
+        # return the Hamming weight of the logical operator
+        return candidate_logical_op.sum()
+
+    @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
+    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
+        """Exact X-distance or Z-distance of this code."""
+        # minimize the weight of logical X-type or Z-type operators
+        for logical_qubit_index in range(self.num_logical_qubits):
+            self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
+
+        # return the minimum weight of logical X-type or Z-type operators
+        return self.get_logical_ops()[pauli.index].sum(-1).min()
+
+    def get_logical_ops(self) -> npt.NDArray[np.int_]:
+        """Complete basis of nontrivial X-type and Z-type logical operators for this code.
+
+        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
+        (2, k, n), where k and n are respectively the numbers of logical and physical qubits in this
+        code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
+        physical qubits addressed nontrivially) by the logical Pauli-X operator on logical qubit 4.
+
+        Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
+        procedure described in arXiv:0903.5256.
+        """
+        if self._logical_ops is not None:
+            return self._logical_ops
+
+        # identify candidate X-type and Z-type operators
+        candidates_x = list(self.code_z.generator.view(np.ndarray))
+        candidates_z = list(self.code_x.generator.view(np.ndarray))
+
+        # collect logical operators sequentially
+        logicals_x = []
+        logicals_z = []
+
+        # iterate over all candidate X-type operators
+        while candidates_x:
+            op_x = candidates_x.pop()
+            found_logical_pair = False
+
+            # check whether op_x anti-commutes with any of the candidate Z-type operators
+            for zz, op_z in enumerate(candidates_z):
+                if op_x @ op_z % 2:
+                    # op_x and op_z anti-commute, so they are conjugate pair of logical operators!
+                    found_logical_pair = True
+                    logicals_x.append(op_x)
+                    logicals_z.append(op_z)
+                    del candidates_z[zz]
+                    break
+
+            if found_logical_pair:
+                # If any other candidate X-type operators anti-commute with op_z, it's because they
+                # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
+                for xx, other_x in enumerate(candidates_x):
+                    if other_x @ op_z % 2:
+                        candidates_x[xx] = (other_x + op_x) % 2
+                for zz, other_z in enumerate(candidates_z):
+                    if other_z @ op_x % 2:
+                        candidates_z[zz] = (other_z + op_z) % 2
+
+        assert len(logicals_x) == self.num_logical_qubits
+        self._logical_ops = np.stack([logicals_x, logicals_z]).astype(int)
+        return self._logical_ops
+
+    def get_random_logical_op(
+        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool
+    ) -> npt.NDArray[np.int_]:
+        """Return a random logical operator of a given type.
+
+        A random logical operator may be trivial, which is to say that it may be equal to the
+        identity modulo stabilizers.  If `ensure_nontrivial is True`, ensure that the logical
+        operator we return is nontrivial.
+        """
+        if ensure_nontrivial:
+            random_logical_qubit_index = np.random.randint(self.num_logical_qubits)
+            return self.get_logical_ops()[pauli.index, random_logical_qubit_index]
+        return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
+
+    def _minimize_weight_of_logical_op(
+        self,
+        pauli: Literal[Pauli.X, Pauli.Z],
+        logical_qubit_index: int,
+        **decoder_args: object,
+    ) -> None:
+        """Minimize the weight of a logical operator.
+
+        This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound,
+        but exactly with integer linear programming (which has exponential complexity).
+        """
+        assert 0 <= logical_qubit_index < self.num_logical_qubits
+        code = self.code_z if pauli == Pauli.X else self.code_x
+        matrix = code.matrix.view(np.ndarray)
+        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index].view(np.ndarray)
+        effective_check_matrix = np.vstack([matrix, word])
+        effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
+        effective_syndrome[-1] = 1
+        logical_op = qldpc.decode(
+            effective_check_matrix, effective_syndrome, exact=True, **decoder_args
+        )
+        assert self._logical_ops is not None
+        self._logical_ops[pauli.index, logical_qubit_index] = logical_op
+
+
+# TODO: factor out conjugation and local Pauli transformations to a separate method
+# TODO: allow construction of codes with field > 2, but throw errors for unsupported functionality
+class CSSCode_gen(QubitCode):
+    """CSS qudit code, with separate X-type and Z-type parity checks.
+
+    In order for the X-type and Z-type parity checks to be "compatible", the X-type stabilizers must
+    commute with the Z-type stabilizers.  Mathematically, this requirement can be written as
+
+    H_x @ H_z.T == 0,
+
+    where H_x and H_z are, respectively, the parity check matrices of the classical codes that
+    define the X-type and Z-type stabilizers of the CSS code.
+
+    """
+
+    code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
+    code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
+    field_order: int    # The order of the field over which the CSS code is defined
+
+    #_logical_ops: npt.NDArray[np.int_] | None = None
+
+    def __init__(
+        self,
+        code_x: ClassicalCode | IntegerMatrix,
+        code_z: ClassicalCode | IntegerMatrix,
+        field: int | None
+    ) -> None:
+        """Construct a CSS code from X-type and Z-type parity checks."""
+        
+        if field is None:
+            if isinstance(code_x, ClassicalCode):
+                self.field_order = self.code_x._field_order
+            elif isinstance(code_z, ClassicalCode):
+                self.field_order = self.code_z._field_order
+            else:
+                self.field_order = DEFAULT_FIELD_ORDER
+        
+        self.code_x = ClassicalCode(code_x, self.field_order)
+        self.code_z = ClassicalCode(code_z, self.field_order)
+        #if not self.code_x._field_order == self.code_z._field_order :
+        #    raise ValueError("The sub-codes provided for this CSSCode are over different fields")
+
+
+        if not self.code_x.num_bits == self.code_z.num_bits or np.any(
+            self.code_x.matrix @ self.code_z.matrix.T
+        ):
+            raise ValueError("The sub-codes provided for this CSSCode are incompatible")
+       
+
+    @functools.cached_property
+    def matrix(self) -> npt.NDArray[np.int_]:
+        """Overall parity check matrix."""
+        matrix = np.block(
+            [
+                [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
+                [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
+            ]
+        ).reshape((self.num_checks, 2, -1))
+
+        
+
+        if self.shifts:
+            # identify qubits to shift up or down along the table of Pauli pairs
+            shifts_up = tuple(qubit for qubit, shift in self.shifts.items() if shift % 3 == 1)
+            shifts_dn = tuple(qubit for qubit, shift in self.shifts.items() if shift % 3 == 2)
+            # For qubits shifting up, any stabilizer addressing a qubit with a Z should now also
+            # address that qubit with X, so copy Z to X.  Likewise for shifting down and X to Z.
+            matrix[:, Pauli.X.index, shifts_up] |= matrix[:, Pauli.Z.index, shifts_up]
+            matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
+
+        return matrix
+
+    @property
+    def num_checks(self) -> int:
+        """Number of parity checks."""
+        return self.code_x.matrix.shape[0] + self.code_z.matrix.shape[0]
+
+    @property
+    def num_qubits(self) -> int:
+        """Number of data qubits in this code."""
+        return self.code_x.matrix.shape[1]
+
+    @property
+    def num_logical_qubits(self) -> int:
+        """Number of logical qubits encoded by this code."""
+        return self.code_x.dimension + self.code_z.dimension - self.num_qubits
+    
+    """
+    Code tranformation methods — Conjugation and Shifting.
+
+    (i) Conjugation — A CSSCode can specify which data qubits should be hadamard-transformed before/after
+    syndrome extraction, thereby transforming the operators that address a specified data qubit as
+    (X,Y,Z) <--> (Z,Y,X).
+
+    (ii) Shifting — For completion, a CSSCode can also "shift" the Pauli operators on a qubit, moving vertically
+    along the following table:
+
+    ―――――――――――
+    | XY | YX |
+    ―――――――――――
+    | XZ | ZX |
+    ―――――――――――
+    | YZ | ZY |
+    ―――――――――――
+
+    Qubit shifts are specified by a dictionary mapping qubit_index --> shift_index, where
+    shift_index = +1, 0, and -1 mod 3 respectively refer to the top, middle, and bottom rows of the
+    table.
+
+    Physically, a shift of +1 and -1 respectively correspond to conjugating the Pauli operators
+    addressing a qubit by sqrt(X) and sqrt(Z) rotations.
+    """
+
+    # Given a parity check matrix, swap X and Z operators on the qubits to conjugate.
+    # TODO: Does this this work for general stabilizer code (over F_2)? If so, move to QuditCode class? 
+    def conjugate(cls, matrix: IntegerMatrix | None, conj: slice | Sequence[int]) -> IntegerMatrix:
+        matrix[:, :, conj] = np.roll(matrix[:, :, conjugate], 1, axis=1)
+        return matrix
+    
+    def shift(cls, matrix: IntegerMatrix | None, shifts: dict[int, int]) -> IntegerMatrix:
+        # identify qubits to shift up or down along the table of Pauli pairs
+        shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
+        shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)
+        # For qubits shifting up, any stabilizer addressing a qubit with a Z should now also
+        # address that qubit with X, so copy Z to X.  Likewise for shifting down and X to Z.
+        matrix[:, Pauli.X.index, shifts_up] |= matrix[:, Pauli.Z.index, shifts_up]
+        matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
+        return matrix
+
+    """
+    Code Paramenter Computation methods 
+    
+    (i) Calculating distance, both exactly and upper bounds
+
+    (ii) Obtaining Logical operators (remove?)
+    
+    """
+
 
     def get_code_params(
         self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
