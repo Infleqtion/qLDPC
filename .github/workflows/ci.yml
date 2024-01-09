@@ -19,7 +19,7 @@ jobs:
     name: Format check
     if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11
@@ -42,7 +42,7 @@ jobs:
     name: Lint check
     if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11
@@ -65,7 +65,7 @@ jobs:
     name: Flake8 check
     if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
     runs-on: ubuntu-latest
-    timeout-minutes: 7
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11
@@ -88,7 +88,7 @@ jobs:
     name: Type check
     if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python 3.11
@@ -114,7 +114,7 @@ jobs:
       matrix:
         python-version: [ '3.11' ]
     runs-on: ubuntu-latest
-    timeout-minutes: 11
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
       - name: Set up Python
