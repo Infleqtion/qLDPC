@@ -334,7 +334,7 @@ class QuditCode(AbstractCode):
     """
 
     def __init__(self, matrix: QuditCode | IntegerMatrix, field: int | None = None) -> None:
-        """Define a stabilize qudit code from a parity check matrix over a given field.
+        """Define a stabilizer qudit code from a parity check matrix over a given field.
 
         The base field is taken to be F_2 by default.
         """
@@ -356,8 +356,11 @@ class QuditCode(AbstractCode):
         return self._matrix
 
     # TODO : To implement this.
-    @classmethod
-    def is_CSS(cls, matrix: IntegerMatrix) -> bool:
+    @functools.cached_property
+    def is_CSS(self) -> bool:
+        ...
+        # TODO: implement
+        return NotImplemented
         """Check if the qubit code is a CSS code (not sure if works for general fields)
 
         Implements the algorithm from https://quantumcomputing.stackexchange.com/questions/15432/
@@ -366,8 +369,7 @@ class QuditCode(AbstractCode):
         """
         return None
 
-    @classmethod
-    def matrix_to_stabilizers(cls, matrix: IntegerMatrix) -> list:
+    def matrix_to_stabilizers(self) -> list[...]:
         """Output a list of generating stabilizers of the code."""
         stab = list()
         num_checks, num_qudits = matrix.shape
@@ -397,10 +399,10 @@ class QuditCode(AbstractCode):
     
 
     @classmethod
-    def standard_to_check(list) -> IntegerMatrix:
-        """Arrange a standard form for stabilizer codes into a check matrix."""
-        pass
-        return None
+    def from_stabilizers(cls, stabilizers: ...) -> Quditode:
+        """Construct a QuditCode from the provided stabilizers."""
+        # TODO: implement
+        return NotImplemented
 
     # TODO: Implement this
     @classmethod
