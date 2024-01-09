@@ -15,7 +15,7 @@ on:
 jobs:
   format:
     name: Format check
-    if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -38,7 +38,7 @@ jobs:
 
   lint:
     name: Lint check
-    if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -61,7 +61,7 @@ jobs:
 
   flake8:
     name: Flake8 check
-    if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -84,7 +84,7 @@ jobs:
 
   mypy:
     name: Type check
-    if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
+    if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
@@ -107,7 +107,7 @@ jobs:
 
   coverage:
     name: Pytest and Coverage check
-    if: github.event.pull_request.draft == false  #  don't automatically trigger for draft PR--use manual trigger
+    if: github.event.pull_request.draft == false
     strategy:
       matrix:
         python-version: [ '3.11' ]
