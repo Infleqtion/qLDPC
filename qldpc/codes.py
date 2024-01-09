@@ -778,18 +778,18 @@ class CSSCode_gen(QubitCode):
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
-    field_order: int    # The order of the field over which the CSS code is defined
+    field_order: int  # The order of the field over which the CSS code is defined
 
-    #_logical_ops: npt.NDArray[np.int_] | None = None
+    # _logical_ops: npt.NDArray[np.int_] | None = None
 
     def __init__(
         self,
         code_x: ClassicalCode | IntegerMatrix,
         code_z: ClassicalCode | IntegerMatrix,
-        field: int | None
+        field: int | None,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks."""
-        
+
         if field is None:
             if isinstance(code_x, ClassicalCode):
                 self.field_order = self.code_x._field_order
@@ -797,18 +797,16 @@ class CSSCode_gen(QubitCode):
                 self.field_order = self.code_z._field_order
             else:
                 self.field_order = DEFAULT_FIELD_ORDER
-        
+
         self.code_x = ClassicalCode(code_x, self.field_order)
         self.code_z = ClassicalCode(code_z, self.field_order)
-        #if not self.code_x._field_order == self.code_z._field_order :
+        # if not self.code_x._field_order == self.code_z._field_order :
         #    raise ValueError("The sub-codes provided for this CSSCode are over different fields")
-
 
         if not self.code_x.num_bits == self.code_z.num_bits or np.any(
             self.code_x.matrix @ self.code_z.matrix.T
         ):
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
-       
 
     @functools.cached_property
     def matrix(self) -> npt.NDArray[np.int_]:
@@ -819,8 +817,6 @@ class CSSCode_gen(QubitCode):
                 [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
             ]
         ).reshape((self.num_checks, 2, -1))
-
-        
 
         if self.shifts:
             # identify qubits to shift up or down along the table of Pauli pairs
@@ -847,15 +843,15 @@ class CSSCode_gen(QubitCode):
     def num_logical_qubits(self) -> int:
         """Number of logical qubits encoded by this code."""
         return self.code_x.dimension + self.code_z.dimension - self.num_qubits
-    
+
     """
     Code tranformation methods — Conjugation and Shifting.
 
-    (i) Conjugation — A CSSCode can specify which data qubits should be hadamard-transformed before/after
-    syndrome extraction, thereby transforming the operators that address a specified data qubit as
-    (X,Y,Z) <--> (Z,Y,X).
+    (i) Conjugation — A CSSCode can specify which data qubits should be hadamard-transformed
+    before/after syndrome extraction, thereby transforming the operators
+    that address a specified data qubit as (X,Y,Z) <--> (Z,Y,X).
 
-    (ii) Shifting — For completion, a CSSCode can also "shift" the Pauli operators on a qubit, moving vertically
+    (ii) Shifting — A CSSCode can also "shift" the Pauli operators on a qubit, moving vertically
     along the following table:
 
     ―――――――――――
@@ -875,11 +871,11 @@ class CSSCode_gen(QubitCode):
     """
 
     # Given a parity check matrix, swap X and Z operators on the qubits to conjugate.
-    # TODO: Does this this work for general stabilizer code (over F_2)? If so, move to QuditCode class? 
+    # TODO: Does this work for general stabilizer code (over F_2)? If so, move to QuditCode class?
     def conjugate(cls, matrix: IntegerMatrix | None, conj: slice | Sequence[int]) -> IntegerMatrix:
-        matrix[:, :, conj] = np.roll(matrix[:, :, conjugate], 1, axis=1)
+        matrix[:, :, conj] = np.roll(matrix[:, :, conj], 1, axis=1)
         return matrix
-    
+
     def shift(cls, matrix: IntegerMatrix | None, shifts: dict[int, int]) -> IntegerMatrix:
         # identify qubits to shift up or down along the table of Pauli pairs
         shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
@@ -890,15 +886,12 @@ class CSSCode_gen(QubitCode):
         matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
         return matrix
 
-    """
-    Code Paramenter Computation methods 
-    
-    (i) Calculating distance, both exactly and upper bounds
+    """Code Paramenter Computation methods
 
-    (ii) Obtaining Logical operators (remove?)
-    
-    """
+        (i) Calculating distance, both exactly and upper bounds.
 
+        (ii) Obtaining Logical operators (remove?).
+    """
 
     def get_code_params(
         self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
