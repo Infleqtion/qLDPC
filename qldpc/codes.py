@@ -370,19 +370,20 @@ class QuditCode(AbstractCode):
     def matrix_to_stabilizers(cls, matrix: IntegerMatrix) -> list:
         """Output a list of generating stabilizers of the code."""
         stab = list()
+        print(matrix.shape)
         num_checks, num_qudits = matrix.shape
         if not (num_qudits % 2 == 0):
             raise ValueError("Parity check matrix has odd columns")
-        num_qudits = num_qudits / 2
+        num_qudits = num_qudits // 2
         for row in range(num_checks):
             gen = ""
             for col in range(num_qudits):
-                this_qubit = "I"
+                this_qubit = " I "
                 if not (matrix[row, col] == 0):
-                    this_qubit = "X(" + str(matrix[row, col]) + ")"
+                    this_qubit = " X(" + str(matrix[row, col]) + ") "
                 if not (matrix[row, col + num_qudits] == 0):
-                    if this_qubit == "I":
-                        this_qubit = "Z(" + str(matrix[row, col + num_qudits]) + ")"
+                    if this_qubit == " I ":
+                        this_qubit = " Z(" + str(matrix[row, col + num_qudits]) + ") "
                     else:
                         this_qubit = this_qubit + "Z(" + str(matrix[row, col + num_qudits]) + ")"
                 gen = gen + this_qubit
@@ -401,6 +402,30 @@ class QuditCode(AbstractCode):
         """Convert a check matrix into the standard form."""
         pass
         return None
+    
+    @classmethod
+    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
+        """Convert a parity check matrix into a Tanner graph."""
+        graph = nx.DiGraph()
+        for row, col_xz, col in zip(*np.where(matrix)):
+            node_check = Node(index=int(row), is_data=False)
+            node_qubit = Node(index=int(col), is_data=True)
+            graph.add_edge(node_check, node_qubit)
+            pauli = Pauli.X if col_xz == Pauli.X.index else Pauli.Z
+            old_pauli = graph[node_check][node_qubit].get(Pauli, Pauli.I)
+            graph[node_check][node_qubit][Pauli] = old_pauli * pauli
+        return graph
+
+    @classmethod
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> nx.DiGraph:
+        """Convert a Tanner graph into a parity check matrix."""
+        num_qubits = sum(1 for node in graph.nodes() if node.is_data)
+        num_checks = len(graph.nodes()) - num_qubits
+        matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
+        for node_check, node_qubit, data in graph.edges(data=True):
+            pauli_index = np.where(data[Pauli].value)
+            matrix[node_check.index, pauli_index, node_qubit.index] = 1
+        return matrix
 
 
 # TODO: factor out conjugation and local Pauli transformations to a separate method
@@ -813,10 +838,10 @@ class CSSCode_gen(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
                 [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
+                [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
             ]
-        ).reshape((self.num_checks, 2, -1))
+        )
         return matrix
 
     @property
