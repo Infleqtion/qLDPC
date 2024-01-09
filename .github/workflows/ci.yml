@@ -6,8 +6,6 @@ name: Python application
 on:
   push:
     branches: [ main ]
-    paths-ignore:
-      - 'superstaq/_version.py'
   pull_request:
     types: [ opened, synchronize, reopened, ready_for_review ]  # these are the defaults, plus ready_for_review
     branches: [ main ]
