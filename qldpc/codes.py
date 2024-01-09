@@ -370,7 +370,6 @@ class QuditCode(AbstractCode):
     def matrix_to_stabilizers(cls, matrix: IntegerMatrix) -> list:
         """Output a list of generating stabilizers of the code."""
         stab = list()
-        print(matrix.shape)
         num_checks, num_qudits = matrix.shape
         if not (num_qudits % 2 == 0):
             raise ValueError("Parity check matrix has odd columns")
@@ -389,6 +388,13 @@ class QuditCode(AbstractCode):
                 gen = gen + this_qubit
             stab.append(gen)
         return stab
+    
+    @classmethod
+    def stabilizers_to_matrix(cls, stabs: list) -> IntegerMatrix:
+        """Output a list of generating stabilizers of the code."""
+        num_checks = len(stabs)
+        pass
+    
 
     @classmethod
     def standard_to_check(list) -> IntegerMatrix:
