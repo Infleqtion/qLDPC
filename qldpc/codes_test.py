@@ -83,17 +83,9 @@ def test_classical_conversion(bits: int = 10, checks: int = 8, field: int = 3) -
 def test_CSS_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
     with pytest.raises(ValueError, match="incompatible"):
-        code_x = codes.ClassicalCode.random(3, 2)
-        code_z = codes.ClassicalCode.random(4, 2)
-        codes.CSSCode(code_x, code_z)
-
-
-def test_CSSgen_code() -> None:
-    """Miscellaneous CSS code tests and coverage."""
-    with pytest.raises(ValueError, match="incompatible"):
         code_x = codes.ClassicalCode.random(3, 2, 3)
         code_z = codes.ClassicalCode.random(4, 2, 3)
-        codes.CSSCode_gen(code_x, code_z, 3)
+        codes.CSSCode(code_x, code_z, 3)
 
 
 @pytest.mark.parametrize("conjugate", [False, True])
@@ -122,38 +114,14 @@ def test_CSS_shifts(
     """Apply Pauli deformations to a CSS code."""
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
-
+    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
     num_qubits = matrix_x.shape[-1]
+    code = codes.CSSCode(matrix_x, matrix_z)
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    code = codes.CSSCode(
-        matrix_x,
-        matrix_z,
-        qubits_to_conjugate=conjugate,
-        qubit_shifts=shifts,
-    )
-
-    for node_check, node_qubit, data in code.graph.edges(data=True):
-        pauli_index = np.where(data[codes.Pauli].value)
-        assert (code.matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
-
-
-def test_CSSgen_shifts(
-    bits_checks_a: tuple[int, int] = (5, 3),
-    bits_checks_b: tuple[int, int] = (3, 2),
-) -> None:
-    """Apply Pauli deformations to a CSS code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
-
-    num_qubits = matrix_x.shape[-1]
-    code = codes.CSSCode_gen(matrix_x, matrix_z)
-    conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
-    shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    transformed_matrix = codes.CSScode_gen.conjugate(code.matrix, conjugate)
-    transformed_matrix = codes.CSScode_gen.shift(transformed_matrix, shifts)
+    print(conjugate)
+    transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
+    transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
 
     for node_check, node_qubit, data in code.graph.edges(data=True):
         pauli_index = np.where(data[codes.Pauli].value)
@@ -167,7 +135,7 @@ def test_Qudit_stabs(
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
-    code = codes.CSSCode_gen(matrix_x, matrix_z)
+    code = codes.CSSCode(matrix_x, matrix_z)
     stabs = code.matrix_to_stabilizers()
     assert len(stabs) == code.num_checks
     # for stab in stabs :
@@ -183,14 +151,13 @@ def test_Qudit_graph(
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
-    code = codes.CSSCode_gen(matrix_x, matrix_z)
+    code = codes.CSSCode(matrix_x, matrix_z)
     assert np.array_equal(code.graph_to_matrix(code.graph), code.matrix)
     return
 
 
 @pytest.mark.parametrize("conjugate", [False, True])
 def test_trivial_lift(
-    conjugate: bool,
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
     field: int = 2,
@@ -202,7 +169,7 @@ def test_trivial_lift(
 
     protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
     protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix)
-    code_LP = codes.LPCode(protograph_a, protograph_b, conjugate=conjugate)
+    code_LP = codes.LPCode(protograph_a, protograph_b)
 
     assert np.array_equal(code_HGP.matrix, code_LP.matrix)
     assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)
@@ -261,7 +228,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     shift = abstract.Element(group, group.generators[0])
     element_a = unit + shift**width
     element_b = unit + shift
-    code = codes.LPCode([[element_a]], [[element_b]], conjugate=True)
+    code = codes.LPCode([[element_a]], [[element_b]])
     assert np.array_equal(np.block(matrix).ravel(), code.matrix.ravel())
 
 
