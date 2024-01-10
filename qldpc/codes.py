@@ -371,7 +371,7 @@ class QuditCode(AbstractCode):
             val_x, val_z = 0, 0
             for factor in op_string.split("*"):
                 pauli = factor[0]
-                val = int(op_string[2:-1])
+                val = int(factor[2:-1])
                 if pauli == "X":
                     val_x = val
                 elif pauli == "Z":
