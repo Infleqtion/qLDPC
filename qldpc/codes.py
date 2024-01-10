@@ -369,29 +369,26 @@ class QuditCode(AbstractCode):
         # TODO: implement
         return NotImplemented
 
-    def matrix_to_stabilizers(self) -> list[str]:
+    def get_stabilizers(self) -> list[str]:
         """Output a list of generating stabilizers of the code."""
-        stab = list()
-        num_checks, num_qudits = self.matrix.shape
-        if not (num_qudits % 2 == 0):
-            raise ValueError("Parity check matrix has odd columns")
-        num_qudits = num_qudits // 2
-        for row in range(num_checks):
-            gen = ""
-            for col in range(num_qudits):
-                this_qubit = " I "
-                if not (self.matrix[row, col] == 0):
-                    this_qubit = " X(" + str(self.matrix[row, col]) + ") "
-                if not (self.matrix[row, col + num_qudits] == 0):
-                    if this_qubit == " I ":
-                        this_qubit = " Z(" + str(self.matrix[row, col + num_qudits]) + ") "
-                    else:
-                        this_qubit = (
-                            this_qubit + "Z(" + str(self.matrix[row, col + num_qudits]) + ")"
-                        )
-                gen = gen + this_qubit
-            stab.append(gen)
-        return stab
+        matrix = self.matrix
+        num_checks, _, num_qudits = matrix.shape
+        stabilizers = list()
+        for check in range(num_checks):
+            ops = []
+            for qudit in range(num_qudits):
+                val_Z = matrix[check, Pauli.Z, qudit]
+                val_X = matrix[check, Pauli.X, qudit]
+                if not val_Z and not val_X:
+                    ops.append("I")
+                elif val_Z == val_X:
+                    ops.append(f"Y({val_Z})")
+                else:
+                    op_Z = f"Z({val_Z})" if val_Z else ""
+                    op_X = f"X({val_X})" if val_X else ""
+                    ops.append(op_Z + op_X)
+            stabilizers.append("".join(ops))
+        return stabilizers
 
     @classmethod
     def from_stabilizers(cls, stabilizers: Sequence[str]) -> QuditCode:
