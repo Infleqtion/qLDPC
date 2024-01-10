@@ -457,13 +457,13 @@ class CSSCode(QuditCode):
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
     _field_order: int  # The order of the field over which the CSS code is defined
 
-    # _logical_ops: npt.NDArray[np.int_] | None = None
+    _logical_ops: npt.NDArray[np.int_] | None = None
 
     def __init__(
         self,
         code_x: ClassicalCode | IntegerMatrix,
         code_z: ClassicalCode | IntegerMatrix,
-        field: int = None,
+        field: int | None = None,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks."""
         self.code_x = ClassicalCode(code_x, field)
@@ -478,7 +478,7 @@ class CSSCode(QuditCode):
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
     @functools.cached_property
-    def matrix(self) -> npt.NDArray[np.int_]:
+    def matrix(self) -> galois.FieldArray:
         """Overall parity check matrix."""
         matrix = np.block(
             [
@@ -486,7 +486,7 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
             ]
         )
-        return matrix
+        return galois.GF(self._field_order)(matrix)
 
     @property
     def num_checks(self) -> int:
@@ -536,12 +536,12 @@ class CSSCode(QuditCode):
     # Given a parity check matrix, swap X and Z operators on the qubits to conjugate.
     # TODO: Does this work for general stabilizer code (over F_2)? If so, move to QuditCode class?
     @classmethod
-    def conjugate(cls, matrix: IntegerMatrix | None, conj: slice | Sequence[int]) -> IntegerMatrix:
+    def conjugate(cls, matrix: IntegerMatrix, conj: slice | Sequence[int]) -> IntegerMatrix:
         matrix[:, :, conj] = np.roll(matrix[:, :, conj], 1, axis=1)
         return matrix
 
     @classmethod
-    def shift(cls, matrix: IntegerMatrix | None, shifts: dict[int, int]) -> IntegerMatrix:
+    def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> IntegerMatrix:
         # identify qubits to shift up or down along the table of Pauli pairs
         shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
         shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)

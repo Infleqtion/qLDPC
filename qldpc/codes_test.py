@@ -133,9 +133,9 @@ def test_Qudit_stabs(
 ) -> None:
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
+    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
     code = codes.CSSCode(matrix_x, matrix_z)
-    stabs = code.matrix_to_stabilizers()
+    stabs = code.get_stabilizers()
     assert len(stabs) == code.num_checks
     # for stab in stabs :
     #    print(stab)
@@ -149,7 +149,7 @@ def test_Qudit_graph(
 ) -> None:
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
+    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
     code = codes.CSSCode(matrix_x, matrix_z)
     assert np.array_equal(code.graph_to_matrix(code.graph), code.matrix)
     return
