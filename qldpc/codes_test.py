@@ -160,7 +160,7 @@ def test_Qudit_graph(
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
-    field: int = 2,
+    field: int = 3,
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field)
