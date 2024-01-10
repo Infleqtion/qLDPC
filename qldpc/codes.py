@@ -375,6 +375,7 @@ class QuditCode(AbstractCode):
         num_checks, _, num_qudits = matrix.shape
 
         def _op_to_string(val_z: galois.FieldArray, val_x: galois.FieldArray) -> str:
+            """Build a string representation of the operator Z(val_z) * X(val_x)."""
             if not val_z and not val_x:
                 return "I"
             elif val_z == val_x:
