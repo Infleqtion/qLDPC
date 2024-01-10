@@ -103,6 +103,8 @@ jobs:
           python3 -m pip install '.[dev]'
       - name: Type check
         run: |
+          ls
+          pwd
           checks/mypy_.py
 
   coverage:
