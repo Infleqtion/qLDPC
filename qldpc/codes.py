@@ -370,23 +370,28 @@ class QuditCode(AbstractCode):
         return NotImplemented
 
     def get_stabilizers(self) -> list[str]:
-        """Output a list of generating stabilizers of the code."""
+        """Stabilizers (checks) of the code, represented by strings."""
         matrix = self.matrix
         num_checks, _, num_qudits = matrix.shape
+
+        def _op_to_string(val_z: galois.FieldArray, val_x: galois.FieldArray) -> str:
+            if not val_z and not val_x:
+                return "I"
+            elif val_z == val_x:
+                return "Y" if self._field_order == 2 else f"Y({val_z})"
+            if self._field_order == 2:
+                return "Z" if val_z else "X"
+            op_z = f"Z({val_z})" if val_z else ""
+            op_x = f"X({val_x})" if val_x else ""
+            return "·".join([op_z, op_x])
+
         stabilizers = []
         for check in range(num_checks):
             ops = []
             for qudit in range(num_qudits):
-                val_Z = matrix[check, Pauli.Z, qudit]
-                val_X = matrix[check, Pauli.X, qudit]
-                if not val_Z and not val_X:
-                    ops.append("I")
-                elif val_Z == val_X:
-                    ops.append(f"Y({val_Z})")
-                else:
-                    op_Z = f"Z({val_Z})" if val_Z else ""
-                    op_X = f"X({val_X})" if val_X else ""
-                    ops.append(f"{op_Z}·{op_X}")
+                val_z = matrix[check, Pauli.Z, qudit]
+                val_x = matrix[check, Pauli.X, qudit]
+                ops.append(_op_to_string(val_z, val_x))
             stabilizers.append(" ".join(ops))
         return stabilizers
 
