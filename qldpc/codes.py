@@ -1239,8 +1239,7 @@ class QCCode(GBCode):
         dims: Sequence[int],
         terms_a: Collection[tuple[int, int]],
         terms_b: Collection[tuple[int, int]] | None = None,
-        *,
-        conjugate: bool = False,
+        field: int | None = None,
     ) -> None:
         """Construct a quasi-cyclic code."""
         if terms_b is None:
@@ -1253,7 +1252,7 @@ class QCCode(GBCode):
         members_b = [group.generators[factor] ** power for factor, power in terms_b]
         matrix_a = abstract.Element(group, *members_a).lift()
         matrix_b = abstract.Element(group, *members_b).lift()
-        GBCode.__init__(self, matrix_a, matrix_b, conjugate=conjugate)
+        GBCode.__init__(self, matrix_a, matrix_b, field)
 
 
 ################################################################################
