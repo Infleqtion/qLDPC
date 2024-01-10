@@ -1180,7 +1180,7 @@ class CSSCode_gen(QuditCode):
 # TODO: add special/simpler cases of code distance calculations, where available
 
 
-class GBCode(CSSCode):
+class GBCode(CSSCode_gen):
     """Generalized bicycle (GB) code.
 
     A GBCode code is built out of two square matrices A and B, which are combined as
@@ -1198,7 +1198,7 @@ class GBCode(CSSCode):
         matrix_a: IntegerMatrix,
         matrix_b: IntegerMatrix | None = None,
         *,
-        conjugate: bool = False,
+        field: int | None = None,
     ) -> None:
         """Construct a generalized bicycle code."""
         if matrix_b is None:
@@ -1209,14 +1209,11 @@ class GBCode(CSSCode):
 
         matrix_x = np.block([matrix_a, matrix_b.T])
         matrix_z = np.block([matrix_b, matrix_a.T])
-        qubits_to_conjugate = slice(matrix_a.shape[0], None) if conjugate else None
-        CSSCode.__init__(
-            self,
-            matrix_x,
-            matrix_z,
-            qubits_to_conjugate=qubits_to_conjugate,
-            self_dual=True,
-        )
+
+        if field is None:
+            field = DEFAULT_FIELD_ORDER
+
+        CSSCode_gen.__init__(self, matrix_x, matrix_z, field)
 
 
 class QCCode(GBCode):
