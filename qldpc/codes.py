@@ -400,7 +400,7 @@ class QuditCode(AbstractCode):
         return NotImplemented
 
     @classmethod
-    def check_to_standard(cls, matrix: IntegerMatrix) -> list:
+    def check_to_standard(cls, matrix: IntegerMatrix) -> list[galois.FieldArray]:
         """Convert a check matrix into the standard form."""
         # TODO: implement https://arxiv.org/abs/1101.1519
         return NotImplemented
@@ -409,11 +409,12 @@ class QuditCode(AbstractCode):
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
-        graph = nx.DiGraph()
+        matrix = np.array(matrix)
         num_qudits = matrix.shape[1]
         if not (num_qudits % 2 == 0):
             raise ValueError("Parity check matrix has odd columns")
         num_qudits = num_qudits // 2
+        graph = nx.DiGraph()
         for row, col in zip(*np.where(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qubit = Node(index=int(col), is_data=True)
