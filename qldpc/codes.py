@@ -865,6 +865,10 @@ class CSSCode_gen(QuditCode):
         """Number of logical qubits encoded by this code."""
         return self.code_x.dimension + self.code_z.dimension - self.num_qubits
 
+    def _assert_qubit_code(self) -> None:
+        if self._field_order != 2:
+            raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
+
     """
     Code tranformation methods — Conjugation and Shifting.
 
@@ -929,6 +933,7 @@ class CSSCode_gen(QuditCode):
         distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
         return self.num_qubits, self.num_logical_qubits, distance
 
+    # TODO: Generalize to other fields
     def get_distance(
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
