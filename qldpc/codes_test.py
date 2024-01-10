@@ -118,7 +118,7 @@ def test_CSS_shifts(
     code = codes.CSSCode(matrix_x, matrix_z)
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    print(conjugate)
+    # print(conjugate)
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
 
@@ -315,5 +315,6 @@ def test_toric_tanner_code() -> None:
     # check that this is a [[16, 2, 4]] code
     assert code.get_code_params() == (16, 2, 4)
     assert code.get_distance(lower=True) == 4
+    assert code.min_weight_brute() == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4

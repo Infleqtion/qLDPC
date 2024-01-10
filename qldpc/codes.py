@@ -776,6 +776,21 @@ class CSSCode(QuditCode):
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_qubit_index] = logical_op
 
+    def min_weight_brute(self) -> int:
+        """Brute Force computation of minweight of non trivial codewords."""
+        words_x = self.code_x.words()
+        # non_triv = words_x @ self.code_z
+        distance_X = np.inf
+        for word in words_x.tolist():
+            if np.any(self.field(word) @ self.code_z.matrix.T.column_space().T):
+                distance_X = min(distance_X, np.count_nonzero(word))
+        words_z = self.code_z.words()
+        distance_Z = np.inf
+        for word in words_z.tolist():
+            if np.any(self.field(word) @ self.code_x.matrix.T.column_space().T):
+                distance_Z = min(distance_Z, np.count_nonzero(word))
+        return int(min(distance_X, distance_Z))
+
 
 ################################################################################
 # bicycle and quasi-cyclic codes
