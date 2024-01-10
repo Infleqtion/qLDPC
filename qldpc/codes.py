@@ -277,46 +277,6 @@ class ClassicalCode(AbstractCode):
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 
 
-# TODO: generalize QubitCode --> QuditCode
-class QubitCode(AbstractCode):
-    """Template class for a qubit-based quantum error-correcting code.
-
-    The parity check matrix of a qubit code is organized into an array with dimensions
-    (num_checks, 2, num_qubits).  The first and last dimensions respectively index a stabilizer and
-    a qubit, while the middle dimension indexes whether a given stabilizer addresses a given qubit
-    with an X-type or Z-type Pauli operator.  If a stabilizer S addresses qubit q with a Pauli-Y
-    operator, that is treated as S addressing q with both Pauli-X and Pauli-Z.
-
-    The Tanner graph of a qubit code is nearly identical to that of a classical code, with the only
-    difference being that the edge (c, b) has an attribute to indicate the Pauli operator with which
-    check qubit c addresses data qubit b.
-    """
-
-    @classmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
-        """Convert a parity check matrix into a Tanner graph."""
-        graph = nx.DiGraph()
-        for row, col_xz, col in zip(*np.where(matrix)):
-            node_check = Node(index=int(row), is_data=False)
-            node_qubit = Node(index=int(col), is_data=True)
-            graph.add_edge(node_check, node_qubit)
-            pauli = Pauli.X if col_xz == Pauli.X.index else Pauli.Z
-            old_pauli = graph[node_check][node_qubit].get(Pauli, Pauli.I)
-            graph[node_check][node_qubit][Pauli] = old_pauli * pauli
-        return graph
-
-    @classmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> nx.DiGraph:
-        """Convert a Tanner graph into a parity check matrix."""
-        num_qubits = sum(1 for node in graph.nodes() if node.is_data)
-        num_checks = len(graph.nodes()) - num_qubits
-        matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
-        for node_check, node_qubit, data in graph.edges(data=True):
-            pauli_index = np.where(data[Pauli].value)
-            matrix[node_check.index, pauli_index, node_qubit.index] = 1
-        return matrix
-
-
 class QuditCode(AbstractCode):
     """Template class for a qudit-based quantum error-correcting code.
 

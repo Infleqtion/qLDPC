@@ -102,7 +102,7 @@ def test_hyper_product(
 
     code = codes.HGPCode(code_a, code_b, field)
     graph = codes.HGPCode.get_graph_product(graph_a, graph_b)
-    assert np.array_equal(code.matrix, codes.QubitCode.graph_to_matrix(graph))
+    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
     assert nx.utils.graphs_equal(code.graph, graph)
 
 
