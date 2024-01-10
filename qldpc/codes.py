@@ -369,7 +369,7 @@ class QuditCode(AbstractCode):
         # TODO: implement
         return NotImplemented
 
-    def matrix_to_stabilizers(self) -> list:
+    def matrix_to_stabilizers(self) -> list[str]:
         """Output a list of generating stabilizers of the code."""
         stab = list()
         num_checks, num_qudits = self.matrix.shape
@@ -394,15 +394,15 @@ class QuditCode(AbstractCode):
         return stab
 
     @classmethod
-    def from_stabilizers(cls, stabilizers: list) -> QuditCode:
+    def from_stabilizers(cls, stabilizers: Sequence[str]) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         # TODO: implement
         return NotImplemented
 
-    # TODO: Implement this
     @classmethod
     def check_to_standard(cls, matrix: IntegerMatrix) -> list:
         """Convert a check matrix into the standard form."""
+        # TODO: implement https://arxiv.org/abs/1101.1519
         return NotImplemented
 
     # TODO: Generalize it for other fields
@@ -451,7 +451,7 @@ class CSSCode(QuditCode):
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
-    field_order: int  # The order of the field over which the CSS code is defined
+    _field_order: int  # The order of the field over which the CSS code is defined
 
     # _logical_ops: npt.NDArray[np.int_] | None = None
 
@@ -462,21 +462,13 @@ class CSSCode(QuditCode):
         field: int = None,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks."""
+        self.code_x = ClassicalCode(code_x, field)
+        self.code_z = ClassicalCode(code_z, field)
+        if field is None and self.code_x._field_order != self.code_z._field_order:
+            raise ValueError("The sub-codes provided for this CSSCode are over different fields")
+        self._field_order = self.code_x._field_order
 
-        if field is None:
-            if isinstance(code_x, ClassicalCode):
-                self.field_order = self.code_x._field_order
-            elif isinstance(code_z, ClassicalCode):
-                self.field_order = self.code_z._field_order
-            else:
-                self.field_order = DEFAULT_FIELD_ORDER
-
-        self.code_x = ClassicalCode(code_x, self.field_order)
-        self.code_z = ClassicalCode(code_z, self.field_order)
-        # if not self.code_x._field_order == self.code_z._field_order :
-        #    raise ValueError("The sub-codes provided for this CSSCode are over different fields")
-
-        if not self.code_x.num_bits == self.code_z.num_bits or np.any(
+        if self.code_x.num_bits != self.code_z.num_bits or np.any(
             self.code_x.matrix @ self.code_z.matrix.T
         ):
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
@@ -578,6 +570,10 @@ class CSSCode(QuditCode):
         return self.num_qubits, self.num_logical_qubits, distance
 
     # TODO: Generalize to other fields
+    # if qubit: do what we currently do
+    # otherwise:
+    #     if exact: brute force
+    #     otherwise: raise error
     def get_distance(
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
@@ -1252,9 +1248,8 @@ class QTCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-
-        if field is None:
-            field = code_a._field_order
+        if field is None and code_a._field_order != code_a._field_order:
+            raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
         self.complex = CayleyComplex(subset_a, subset_b)
         assert code_a.num_bits == len(self.complex.subset_a)
@@ -1264,9 +1259,4 @@ class QTCode(CSSCode):
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
         matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
-        CSSCode.__init__(
-            self,
-            matrix_x,
-            matrix_z,
-            field,
-        )
+        CSSCode.__init__(self, matrix_x, matrix_z, field)

@@ -88,7 +88,6 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z, 3)
 
 
-@pytest.mark.parametrize("conjugate", [False, True])
 def test_hyper_product(
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
@@ -156,7 +155,6 @@ def test_Qudit_graph(
     return
 
 
-@pytest.mark.parametrize("conjugate", [False, True])
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
