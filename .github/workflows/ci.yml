@@ -105,6 +105,7 @@ jobs:
         run: |
           ls
           pwd
+          mypy .
           checks/mypy_.py
 
   coverage:
