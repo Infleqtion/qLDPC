@@ -373,7 +373,7 @@ class QuditCode(AbstractCode):
         """Output a list of generating stabilizers of the code."""
         matrix = self.matrix
         num_checks, _, num_qudits = matrix.shape
-        stabilizers = list()
+        stabilizers = []
         for check in range(num_checks):
             ops = []
             for qudit in range(num_qudits):
@@ -386,8 +386,8 @@ class QuditCode(AbstractCode):
                 else:
                     op_Z = f"Z({val_Z})" if val_Z else ""
                     op_X = f"X({val_X})" if val_X else ""
-                    ops.append(op_Z + op_X)
-            stabilizers.append("".join(ops))
+                    ops.append(f"{op_Z}·{op_X}")
+            stabilizers.append(" ".join(ops))
         return stabilizers
 
     @classmethod
