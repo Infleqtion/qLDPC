@@ -798,12 +798,12 @@ class CSSCode(QuditCode):
         # non_triv = words_x @ self.code_z
         distance_X = np.inf
         for word in words_x.tolist():
-            if np.any(self.field(word) @ self.code_z.matrix.T.column_space().T):
+            if np.any(self.field(word) @ self.code_z.matrix.null_space().T):
                 distance_X = min(distance_X, np.count_nonzero(word))
         words_z = self.code_z.words()
         distance_Z = np.inf
         for word in words_z.tolist():
-            if np.any(self.field(word) @ self.code_x.matrix.T.column_space().T):
+            if np.any(self.field(word) @ self.code_x.matrix.null_space().T):
                 distance_Z = min(distance_Z, np.count_nonzero(word))
         return int(min(distance_X, distance_Z))
 
