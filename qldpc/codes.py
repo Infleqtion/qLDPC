@@ -344,7 +344,7 @@ class QuditCode(AbstractCode):
                 return "Z" if val_z else "X"
             op_z = f"Z({val_z})" if val_z else ""
             op_x = f"X({val_x})" if val_x else ""
-            return "·".join([op_z, op_x])
+            return "*".join([op_z, op_x])
 
         stabilizers = []
         for check in range(num_checks):
@@ -357,10 +357,26 @@ class QuditCode(AbstractCode):
         return stabilizers
 
     @classmethod
-    def from_stabilizers(cls, stabilizers: Sequence[str]) -> QuditCode:
+    def from_stabilizers(cls, stabilizers: Sequence[str], field: int | None = None) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
-        # TODO: implement
-        return NotImplemented
+        field = field or DEFAULT_FIELD_ORDER
+
+        def _string_to_vals(string: str) -> tuple[int, int]:
+            raise NotImplementedError()
+
+        check_ops = [stabilizer.split() for stabilizer in stabilizers]
+
+        num_qudits = len(check_ops[0])
+        matrix = np.zeros(len(check_ops), 2, num_qudits)
+        for check, check_op in enumerate(check_ops):
+            if len(check_op) != num_qudits:
+                raise ValueError(f"Stabilizers 1 and {check} have different lengths")
+            for qudit, op in enumerate(check_op.split()):
+                val_z, val_x = _string_to_vals(op)
+                matrix[check, Pauli.Z, qudit] = val_z
+                matrix[check, Pauli.X, qudit] = val_x
+
+        return QuditCode(matrix, field)
 
     @classmethod
     def check_to_standard(cls, matrix: IntegerMatrix) -> list[galois.FieldArray]:
