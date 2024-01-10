@@ -1197,7 +1197,6 @@ class GBCode(CSSCode_gen):
         self,
         matrix_a: IntegerMatrix,
         matrix_b: IntegerMatrix | None = None,
-        *,
         field: int | None = None,
     ) -> None:
         """Construct a generalized bicycle code."""
@@ -1259,7 +1258,7 @@ class QCCode(GBCode):
 # hypergraph and lifted product codes
 
 
-class HGPCode(CSSCode):
+class HGPCode(CSSCode_gen):
     """Hypergraph product (HGP) code.
 
     A hypergraph product code AB is constructed from two classical codes, A and B.
@@ -1318,16 +1317,19 @@ class HGPCode(CSSCode):
         self,
         code_a: ClassicalCode | IntegerMatrix,
         code_b: ClassicalCode | IntegerMatrix | None = None,
-        *,
-        conjugate: bool = False,
-        self_dual: bool = False,
+        field: int | None = None,
     ) -> None:
         """Construct a hypergraph product code."""
         if code_b is None:
             code_b = code_a
-            self_dual = True
         code_a = ClassicalCode(code_a)
         code_b = ClassicalCode(code_b)
+        assert code_a._field_order == code_a._field_order
+
+        if field is None:
+            field = code_a._field_order
+        else:
+            assert code_a._field_order == field
 
         # identify the number of qubits in each sector
         self.sector_size = np.outer(
@@ -1336,25 +1338,13 @@ class HGPCode(CSSCode):
         )
 
         # construct the parity check matrices of this code
-        matrix_x, matrix_z, qubits_to_conjugate = HGPCode.get_hyper_product(
-            code_a.matrix, code_b.matrix, conjugate=conjugate
-        )
-        CSSCode.__init__(
-            self,
-            matrix_x,
-            matrix_z,
-            qubits_to_conjugate=qubits_to_conjugate,
-            self_dual=self_dual,
-        )
+        matrix_x, matrix_z = HGPCode.get_hyper_product(code_a.matrix, code_b.matrix)
+        CSSCode_gen.__init__(self, matrix_x, matrix_z, field)
 
     @classmethod
     def get_hyper_product(
-        self,
-        code_a: ClassicalCode | IntegerMatrix,
-        code_b: ClassicalCode | IntegerMatrix,
-        *,
-        conjugate: bool = False,
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], slice | None]:
+        self, code_a: ClassicalCode | IntegerMatrix, code_b: ClassicalCode | IntegerMatrix
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
         The parity check matrices of the hypergraph product code are:
@@ -1370,6 +1360,7 @@ class HGPCode(CSSCode):
         """
         matrix_a = ClassicalCode(code_a).matrix
         matrix_b = ClassicalCode(code_b).matrix
+        # assert ClassicalCode(code_a)._field_order == ClassicalCode(code_b)._field_order
 
         # construct the nontrivial blocks in the matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
@@ -1380,8 +1371,8 @@ class HGPCode(CSSCode):
         # construct the parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
-        qubits_to_conjugate = slice(mat_H1_In2.shape[1], None) if conjugate else None
-        return matrix_x, matrix_z, qubits_to_conjugate
+        # qubits_to_conjugate = slice(mat_H1_In2.shape[1], None) if conjugate else None
+        return matrix_x, matrix_z
 
     # TODO: eliminate this method
     @classmethod

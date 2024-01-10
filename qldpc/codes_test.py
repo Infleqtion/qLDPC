@@ -98,9 +98,9 @@ def test_CSSgen_code() -> None:
 
 @pytest.mark.parametrize("conjugate", [False, True])
 def test_hyper_product(
-    conjugate: bool,
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
+    field: int = 2,
 ) -> None:
     """Equivalency of matrix-based and graph-based hypergraph products."""
     code_a = codes.ClassicalCode.random(*bits_checks_a)
@@ -109,8 +109,8 @@ def test_hyper_product(
     graph_a = codes.ClassicalCode.matrix_to_graph(code_a.matrix)
     graph_b = codes.ClassicalCode.matrix_to_graph(code_b.matrix)
 
-    code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
-    graph = codes.HGPCode.get_graph_product(graph_a, graph_b, conjugate=conjugate)
+    code = codes.HGPCode(code_a, code_b, field)
+    graph = codes.HGPCode.get_graph_product(graph_a, graph_b)
     assert np.array_equal(code.matrix, codes.QubitCode.graph_to_matrix(graph))
     assert nx.utils.graphs_equal(code.graph, graph)
 
@@ -193,11 +193,12 @@ def test_trivial_lift(
     conjugate: bool,
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
+    field: int = 2,
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    code_HGP = codes.HGPCode(code_a, code_b, conjugate=conjugate)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field)
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field)
+    code_HGP = codes.HGPCode(code_a, code_b, field)
 
     protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
     protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix)
