@@ -19,7 +19,7 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Literal
 
 import cachetools
@@ -334,35 +334,51 @@ class QuditCode(AbstractCode):
         matrix = self.matrix
         num_checks, _, num_qudits = matrix.shape
 
-        def _op_to_string(val_z: galois.FieldArray, val_x: galois.FieldArray) -> str:
-            """Build a string representation of the operator Z(val_z) * X(val_x)."""
-            if not val_z and not val_x:
+        def _op_to_string(val_x: galois.FieldArray, val_z: galois.FieldArray) -> str:
+            """Build a string representation of the operator X(val_x)*Z(val_z)."""
+            if not val_x and not val_z:
                 return "I"
-            elif val_z == val_x:
-                return "Y" if self._field_order == 2 else f"Y({val_z})"
             if self._field_order == 2:
-                return "Z" if val_z else "X"
-            op_z = f"Z({val_z})" if val_z else ""
+                return str(Pauli((val_x, val_z)))
+            if val_x == val_z:
+                return f"Y({val_z})"
             op_x = f"X({val_x})" if val_x else ""
-            return "*".join([op_z, op_x])
+            op_z = f"Z({val_z})" if val_z else ""
+            return "*".join([op_x, op_z])
 
         stabilizers = []
         for check in range(num_checks):
             ops = []
             for qudit in range(num_qudits):
-                val_z = matrix[check, Pauli.Z, qudit]
                 val_x = matrix[check, Pauli.X, qudit]
+                val_z = matrix[check, Pauli.Z, qudit]
                 ops.append(_op_to_string(val_z, val_x))
             stabilizers.append(" ".join(ops))
         return stabilizers
 
     @classmethod
-    def from_stabilizers(cls, stabilizers: Sequence[str], field: int | None = None) -> QuditCode:
+    def from_stabilizers(cls, stabilizers: Iterable[str], field: int | None = None) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
 
-        def _string_to_vals(string: str) -> tuple[int, int]:
-            raise NotImplementedError()
+        def _string_to_vals(op_string: str) -> tuple[int, int]:
+            """Extract parity check matrix entries."""
+            if op_string == "I":
+                return 0, 0
+            if field == 2:
+                return Pauli.from_string(op_string).value
+
+            val_x, val_z = 0, 0
+            for factor in op_string.split("*"):
+                pauli = factor[0]
+                val = int(op_string[2:-1])
+                if pauli == "X":
+                    val_x = val
+                elif pauli == "Z":
+                    val_z = val
+                else:  # pauli == "Y"
+                    val_x = val_z = val
+            return val_x, val_z
 
         check_ops = [stabilizer.split() for stabilizer in stabilizers]
 
@@ -370,11 +386,11 @@ class QuditCode(AbstractCode):
         matrix = np.zeros(len(check_ops), 2, num_qudits)
         for check, check_op in enumerate(check_ops):
             if len(check_op) != num_qudits:
-                raise ValueError(f"Stabilizers 1 and {check} have different lengths")
+                raise ValueError(f"Stabilizers 0 and {check} have different lengths")
             for qudit, op in enumerate(check_op.split()):
                 val_z, val_x = _string_to_vals(op)
-                matrix[check, Pauli.Z, qudit] = val_z
                 matrix[check, Pauli.X, qudit] = val_x
+                matrix[check, Pauli.Z, qudit] = val_z
 
         return QuditCode(matrix, field)
 

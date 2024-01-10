@@ -64,6 +64,19 @@ class Pauli(enum.Enum):
             return "X"
         return "Y"
 
+    @classmethod
+    def from_string(string: str) -> Pauli:
+        """Build a Pauli operator from a string."""
+        if string == "I":
+            return Pauli.I
+        elif string == "Z":
+            return Pauli.Z
+        elif string == "X":
+            return Pauli.X
+        elif string == "Y":
+            return Pauli.Y
+        raise ValueError(f"Invalid Pauli operator: {string}")
+
 
 @dataclasses.dataclass
 class Node:
