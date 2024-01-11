@@ -28,6 +28,7 @@ import ldpc.mod2
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+from typing_extensions import Self
 
 import qldpc
 from qldpc import abstract
@@ -47,15 +48,36 @@ class AbstractCode(abc.ABC):
 
     _field_order: int
 
+    def __init__(self, matrix: Self | IntegerMatrix, field: int | None = None) -> None:
+        """Construct a code from a parity check matrix over a given field.
+
+        The base field is taken to be F_2 by default.
+        """
+        self._matrix: galois.FieldArray
+        if isinstance(matrix, type(self)):
+            self._field_order = matrix.field.order
+            if not (field is None or field == self._field_order):
+                raise ValueError(
+                    f"Field argument {field} is inconsistent with the given code, which is defined"
+                    f" over F_{self._field_order}"
+                )
+            self._matrix = matrix.matrix
+        elif isinstance(matrix, galois.FieldArray):
+            self._field_order = type(matrix).order
+            self._matrix = matrix
+        else:
+            self._field_order = field or DEFAULT_FIELD_ORDER
+            self._matrix = self.field(matrix, dtype=int)
+
     @property
     def field(self) -> galois.FieldArrayMeta:
         """Base field over which the linear code is defined."""
         return galois.GF(self._field_order)
 
     @property
-    @abc.abstractmethod
-    def matrix(self) -> npt.NDArray[np.int_]:
+    def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
+        return self._matrix
 
     @functools.cached_property
     def graph(self) -> nx.DiGraph:
@@ -84,23 +106,6 @@ class ClassicalCode(AbstractCode):
     words must satisfy.  A vector x is a code word iff H @ x = 0 mod q.
     """
 
-    def __init__(self, matrix: ClassicalCode | IntegerMatrix, field: int | None = None) -> None:
-        """Construct a classical code from a parity check matrix.
-
-        The base field is taken to be F_2 by default.
-        """
-        if isinstance(matrix, ClassicalCode):
-            self._field_order = matrix.field.order
-            if not (field is None or field == self._field_order):
-                raise ValueError(
-                    f"Field argument {field} is inconsistent with the given code, which is defined"
-                    f" over F_{self._field_order}"
-                )
-            self._matrix = matrix.matrix
-        else:
-            self._field_order = field or DEFAULT_FIELD_ORDER
-            self._matrix = self.field(matrix, dtype=int)
-
     @property
     def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
@@ -114,7 +119,8 @@ class ClassicalCode(AbstractCode):
         identified with the checks and bits of the code.  The check vertex c and the bit vertex b
         share an edge iff c addresses b; that is, edge (c, b) is in the graph iff H[c, b] != 0.
         """
-        matrix = np.array(matrix)
+        if not isinstance(matrix, np.ndarray):
+            matrix = np.array(matrix)
         graph = nx.DiGraph()
         for row, col in zip(*np.where(matrix)):
             node_c = Node(index=int(row), is_data=False)
@@ -293,26 +299,6 @@ class QuditCode(AbstractCode):
     check qudit c addresses data qudit b.
     """
 
-    def __init__(self, matrix: QuditCode | IntegerMatrix, field: int | None = None) -> None:
-        """Define a stabilizer qudit code from a parity check matrix over a given field.
-
-        The base field is taken to be F_2 by default.
-        """
-        if isinstance(matrix, QuditCode):
-            self._field_order = matrix.field.order
-            if not (field is None or field == self._field_order):
-                raise ValueError(
-                    f"Field argument {field} is inconsistent with the given code, which is defined"
-                    f" over F_{self._field_order}"
-                )
-            self._matrix = matrix.matrix
-        elif isinstance(matrix, galois.FieldArray):
-            self._field_order = type(matrix).order
-            self._matrix = matrix
-        else:
-            self._field_order = field or DEFAULT_FIELD_ORDER
-            self._matrix = self.field(matrix, dtype=int)
-
     @property
     def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
@@ -410,7 +396,8 @@ class QuditCode(AbstractCode):
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
-        matrix = np.array(matrix)
+        if not isinstance(matrix, np.ndarray):
+            matrix = np.array(matrix)
         num_qudits = matrix.shape[1]
         if not (num_qudits % 2 == 0):
             raise ValueError("Parity check matrix has odd columns")
@@ -426,7 +413,7 @@ class QuditCode(AbstractCode):
         return graph
 
     @classmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> nx.DiGraph:
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> npt.NDArray[np.int_]:
         """Convert a Tanner graph into a parity check matrix."""
         num_qubits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qubits
