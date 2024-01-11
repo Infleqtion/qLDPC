@@ -39,6 +39,8 @@ ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
 
 DEFAULT_FIELD_ORDER = 2
 
+# TODO: fix all comments to generalize fields: Z_2 --> Z_q
+
 ################################################################################
 # template error correction code classes
 
@@ -106,11 +108,6 @@ class ClassicalCode(AbstractCode):
     words must satisfy.  A vector x is a code word iff H @ x = 0 mod q.
     """
 
-    @property
-    def matrix(self) -> galois.FieldArray:
-        """Parity check matrix of this code."""
-        return self._matrix
-
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix H into a Tanner graph.
@@ -126,14 +123,17 @@ class ClassicalCode(AbstractCode):
             node_c = Node(index=int(row), is_data=False)
             node_d = Node(index=int(col), is_data=True)
             graph.add_edge(node_c, node_d, val=matrix[row, col])
+        if isinstance(matrix, galois.FieldArray):
+            graph.order = type(matrix).order
         return graph
 
     @classmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> npt.NDArray[np.int_]:
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
         num_bits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_bits
-        matrix = np.zeros((num_checks, num_bits), dtype=int)
+        field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
+        matrix = galois.GF(field).Zeros((num_checks, num_bits))
         for node_c, node_b, data in graph.edges(data=True):
             matrix[node_c.index, node_b.index] = data.get("val", 1)
         return matrix
@@ -300,11 +300,6 @@ class QuditCode(AbstractCode):
     """
 
     @property
-    def matrix(self) -> galois.FieldArray:
-        """Parity check matrix of this code."""
-        return self._matrix
-
-    @property
     def num_checks(self) -> int:
         """Number of stabilizers in this code."""
         return self.matrix.shape[0]
@@ -318,6 +313,7 @@ class QuditCode(AbstractCode):
         if self._field_order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
 
+    # TODO: use 2D matrix layout, and only convert to 3D internally
     @classmethod
     def _standardize_matrix(
         cls, matrix: IntegerMatrix, field: int | None = None
@@ -826,6 +822,7 @@ class CSSCode(QuditCode):
 
 
 # TODO: add special/simpler cases of code distance calculations, where available
+# TODO: add "conjugation" as a natural deformation, where applicable
 
 
 class GBCode(CSSCode):
