@@ -225,7 +225,9 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
         """Construct a random classical code with the given number of bits and checks."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        if field is None:
+            field = DEFAULT_FIELD_ORDER
+        code_field = galois.GF(field)
         rows, cols = checks, bits
         matrix = code_field.Random((rows, cols))
         for row in range(matrix.shape[0]):
@@ -537,6 +539,8 @@ class CSSCode(QuditCode):
     def conjugate(cls, matrix: IntegerMatrix, conj: slice | Sequence[int]) -> npt.NDArray[np.int_]:
         if not isinstance(matrix, np.ndarray):
             matrix = np.array(matrix)
+        if matrix.ndim == 2:
+            matrix = matrix.reshape((matrix.shape[0], 2, -1))
         matrix[:, :, conj] = np.roll(matrix[:, :, conj], 1, axis=1)
         return matrix
 
@@ -544,6 +548,8 @@ class CSSCode(QuditCode):
     def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> npt.NDArray[np.int_]:
         if not isinstance(matrix, np.ndarray):
             matrix = np.array(matrix)
+        if matrix.ndim == 2:
+            matrix = matrix.reshape((matrix.shape[0], 2, -1))
         # identify qubits to shift up or down along the table of Pauli pairs
         shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
         shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)
@@ -999,12 +1005,15 @@ class HGPCode(CSSCode):
         )
 
         # construct the parity check matrices of this code
-        matrix_x, matrix_z = HGPCode.get_hyper_product(code_a.matrix, code_b.matrix)
+        matrix_x, matrix_z = HGPCode.get_hyper_product(code_a.matrix, code_b.matrix, field)
         CSSCode.__init__(self, matrix_x, matrix_z, field)
 
     @classmethod
     def get_hyper_product(
-        self, code_a: ClassicalCode | IntegerMatrix, code_b: ClassicalCode | IntegerMatrix
+        self,
+        code_a: ClassicalCode | IntegerMatrix,
+        code_b: ClassicalCode | IntegerMatrix,
+        field: int = 2,
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
@@ -1019,13 +1028,13 @@ class HGPCode(CSSCode):
         If `conjugate is True`, we hadamard-transform the data qubits in sector (1, 1), which are
         addressed by the second block of matrix_x and marix_z above.
         """
-        matrix_a = ClassicalCode(code_a).matrix
-        matrix_b = ClassicalCode(code_b).matrix
+        matrix_a = ClassicalCode(code_a, field).matrix
+        matrix_b = ClassicalCode(code_b, field).matrix
         # assert ClassicalCode(code_a)._field_order == ClassicalCode(code_b)._field_order
 
         # construct the nontrivial blocks in the matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
+        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b) * (field - 1)
         mat_H1_Im2_T = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b.T)
 
@@ -1111,7 +1120,7 @@ class LPCode(CSSCode):
         self,
         protograph_a: abstract.Protograph | ObjectMatrix,
         protograph_b: abstract.Protograph | ObjectMatrix | None = None,
-        field: int | None = None,
+        field: int = DEFAULT_FIELD_ORDER,
     ) -> None:
         """Construct a lifted product code."""
         if protograph_b is None:
@@ -1125,15 +1134,19 @@ class LPCode(CSSCode):
             protograph_b.shape[::-1],
         )
 
+        GF = galois.GF(field)
         # construct the parity check matrices of this code
-        protograph_x, protograph_z = LPCode.get_hyper_product(protograph_a, protograph_b)
-        CSSCode.__init__(self, protograph_x.lift(), protograph_z.lift(), field)
+        protograph_x, protograph_z = LPCode.get_hyper_product(protograph_a, protograph_b, field)
+        print(protograph_x.lift())
+        print(protograph_z.lift())
+        CSSCode.__init__(self, GF(protograph_x.lift()), GF(protograph_z.lift()), field)
 
     @classmethod
     def get_hyper_product(
         self,
         protograph_a: abstract.Protograph | ObjectMatrix,
         protograph_b: abstract.Protograph | ObjectMatrix,
+        field: int = DEFAULT_FIELD_ORDER,
     ) -> tuple[abstract.Protograph, abstract.Protograph]:
         """Same hypergraph product as in the HGPCode, but with protographs.
 
@@ -1149,6 +1162,7 @@ class LPCode(CSSCode):
         this reason, we need to take the transpose of a protograph "manually" when using it for the
         hypergraph product.
         """
+        # GF = galois.GF(field)
         protograph_a = abstract.Protograph(protograph_a)
         protograph_b = abstract.Protograph(protograph_b)
         matrix_a = protograph_a.matrix

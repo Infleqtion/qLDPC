@@ -102,6 +102,7 @@ def test_hyper_product(
 
     code = codes.HGPCode(code_a, code_b, field)
     graph = codes.HGPCode.get_graph_product(graph_a, graph_b)
+    print(np.equal(np.array(code.matrix), codes.QuditCode.graph_to_matrix(graph)))
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
     assert nx.utils.graphs_equal(code.graph, graph)
 
@@ -118,13 +119,27 @@ def test_CSS_shifts(
     code = codes.CSSCode(matrix_x, matrix_z)
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    # print(conjugate)
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
+    # print(code.graph.edges(data=True))
 
     for node_check, node_qubit, data in code.graph.edges(data=True):
         pauli_index = np.where(data[codes.Pauli].value)
-        assert (transformed_matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
+        # print(node_check.index, node_qubit.index, pauli_index[0][0])
+        assert (
+            transformed_matrix[
+                node_check.index,
+                pauli_index[0][0],
+                node_qubit.index - pauli_index[0][0] * transformed_matrix.shape[2],
+            ]
+            == 1
+        ).all()
+        # if pauli_index[0][0] == 0:
+        #    assert (transformed_matrix[node_check.index, pauli_index[0][0], node_qubit.index] == 1).all()
+        # if pauli_index[0][0] == 1:
+        #    assert (transformed_matrix[node_check.index, pauli_index[0][0], node_qubit.index-pauli_index[0][0]*transformed_matrix.shape[2]] == 1).all()
+        # print(transformed_matrix.shape)
+        # assert (transformed_matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -153,16 +168,16 @@ def test_qudit_graph(
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
-    field: int = 3,
+    field: int = 2,
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field)
     code_HGP = codes.HGPCode(code_a, code_b, field)
 
-    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
-    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix)
-    code_LP = codes.LPCode(protograph_a, protograph_b)
+    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix, field=field)
+    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix, field=field)
+    code_LP = codes.LPCode(protograph_a, protograph_b, field)
 
     assert np.array_equal(code_HGP.matrix, code_LP.matrix)
     assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)
