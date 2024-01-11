@@ -544,7 +544,7 @@ class CSSCode(QuditCode):
             ]
         )
         shape = (self.num_checks, 2, -1)
-        return galois.GF(self._field_order)(matrix).reshape(shape)
+        return galois.GF(self._field_order)(matrix.reshape(shape))
 
     @property
     def num_checks(self) -> int:
@@ -1049,8 +1049,6 @@ class HGPCode(CSSCode):
         cls,
         graph_a: nx.DiGraph,
         graph_b: nx.DiGraph,
-        *,
-        conjugate: bool = False,
     ) -> nx.DiGraph:
         """Hypergraph product of two Tanner graphs."""
         graph_product = nx.cartesian_product(graph_a, graph_b)
@@ -1068,8 +1066,6 @@ class HGPCode(CSSCode):
             # by default, this edge is Pauli-Z if the check qubit is in the (0, 1) sector
             pauli = Pauli.Z if node_check[0].is_data else Pauli.X
             # flip Z <--> X if `conjugate is True` and the data qubit is in the (1, 1) sector
-            if conjugate and not node_qubit[0].is_data:
-                pauli = ~pauli
             graph[node_check][node_qubit][Pauli] = pauli
 
         return nx.relabel_nodes(graph, HGPCode.get_product_node_map(graph_a.nodes, graph_b.nodes))
