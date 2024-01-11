@@ -334,30 +334,36 @@ class QuditCode(AbstractCode):
             f"The given parity check matrix has {matrix.ndim} dimensions (should be 2 or 3)"
         )
 
-    # TODO: generalize to other fields
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
+        matrix = cls._standardize_matrix(matrix)
         graph = nx.DiGraph()
         for row, col_xz, col in zip(*np.where(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qubit = Node(index=int(col), is_data=True)
             graph.add_edge(node_check, node_qubit)
-            pauli = Pauli.X if col_xz == Pauli.X.index else Pauli.Z
-            old_pauli = graph[node_check][node_qubit].get(Pauli, Pauli.I)
-            graph[node_check][node_qubit][Pauli] = old_pauli * pauli
+            vals = [0, 0]
+            vals[col_xz] = int(matrix[row, col_xz, col])
+            old_op = graph[node_check][node_qubit].get(QuditOperator, QuditOperator())
+            new_op_value = (old_op.value[0] + vals[0], old_op.value[1] + vals[1])
+            new_op = QuditOperator(new_op_value)
+            graph[node_check][node_qubit][QuditOperator] = new_op
+        if isinstance(matrix, galois.FieldArray):
+            graph.order = type(matrix).order
         return graph
 
-    # TODO: generalize to other fields
     @classmethod
     def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
         num_qubits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qubits
-        matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
+        field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
+        matrix = galois.GF(field).Zeros((num_checks, 2, num_qubits))
         for node_check, node_qubit, data in graph.edges(data=True):
-            pauli_index = np.where(data[Pauli].value)
-            matrix[node_check.index, pauli_index, node_qubit.index] = 1
+            op_value = data[QuditOperator].value
+            matrix[node_check.index, 0, node_qubit.index] = op_value[0]
+            matrix[node_check.index, 1, node_qubit.index] = op_value[1]
         return matrix
 
     @classmethod

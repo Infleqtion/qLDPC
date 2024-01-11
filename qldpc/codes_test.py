@@ -105,8 +105,9 @@ def test_deformations(bits: int = 5, checks: int = 3) -> None:
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
 
     for node_check, node_qubit, data in code.graph.edges(data=True):
-        pauli_index = np.where(data[codes.Pauli].value)
-        assert np.all(transformed_matrix[node_check.index, pauli_index, node_qubit.index] == 1)
+        vals = data[codes.QuditOperator].value
+        assert transformed_matrix[node_check.index, 0, node_qubit.index] == vals[0]
+        assert transformed_matrix[node_check.index, 1, node_qubit.index] == vals[1]
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -121,8 +122,8 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 
 
 def test_trivial_lift(
-    bits_checks_a: tuple[int, int] = (10, 8),
-    bits_checks_b: tuple[int, int] = (7, 3),
+    bits_checks_a: tuple[int, int] = (4, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
     field: int = 2,  # TODO: make this work with field = 3
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
@@ -132,7 +133,7 @@ def test_trivial_lift(
 
     protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
     protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix)
-    code_LP = codes.LPCode(protograph_a, protograph_b)
+    code_LP = codes.LPCode(protograph_a, protograph_b, field)
 
     assert np.array_equal(code_HGP.matrix, code_LP.matrix)
     assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)

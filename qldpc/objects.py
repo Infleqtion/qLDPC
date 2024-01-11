@@ -80,8 +80,11 @@ class Pauli(enum.Enum):
 class QuditOperator:
     """A qudit operator of the form X(val_x)*Z(val_z)."""
 
-    def __init__(self, value: tuple[int, int]) -> None:
+    def __init__(self, value: tuple[int, int] = (0, 0)) -> None:
         self.value = value
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, QuditOperator) and self.value == other.value
 
     def __invert__(self) -> QuditOperator:
         """Swap the X and Z operators."""
