@@ -304,6 +304,64 @@ class QuditCode(AbstractCode):
         """Parity check matrix of this code."""
         return self._matrix
 
+    def _assert_qubit_code(self) -> None:
+        if self._field_order != 2:
+            raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
+
+    @classmethod
+    def _standardize_matrix(
+        cls, matrix: IntegerMatrix, field: int | None = None
+    ) -> npt.NDArray[np.int_]:
+        field = field or DEFAULT_FIELD_ORDER
+        if not isinstance(matrix, galois.FieldArray):
+            matrix = galois.GF(field)(matrix)
+        if matrix.ndim == 3:
+            return matrix
+        if matrix.ndim == 2:
+            if matrix.shape[1] % 2:
+                raise ValueError(
+                    "The given quantum parity check matrix has an odd number of columns"
+                    " (which is invalid)"
+                )
+            return matrix.reshape((matrix.shape[0], 2, -1))
+        raise ValueError(
+            f"The given parity check matrix has {matrix.ndim} dimensions (should be 2 or 3)"
+        )
+
+    # TODO: generalize to other fields
+    # NOTE: requires first generalizing the Pauli class
+    @classmethod
+    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
+        """Convert a parity check matrix into a Tanner graph."""
+        graph = nx.DiGraph()
+        for row, col_xz, col in zip(*np.where(matrix)):
+            node_check = Node(index=int(row), is_data=False)
+            node_qubit = Node(index=int(col), is_data=True)
+            graph.add_edge(node_check, node_qubit)
+            pauli = Pauli.X if col_xz == Pauli.X.index else Pauli.Z
+            old_pauli = graph[node_check][node_qubit].get(Pauli, Pauli.I)
+            graph[node_check][node_qubit][Pauli] = old_pauli * pauli
+        return graph
+
+    # TODO: generalize to other fields
+    # NOTE: requires first generalizing the Pauli class
+    @classmethod
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> nx.DiGraph:
+        """Convert a Tanner graph into a parity check matrix."""
+        num_qubits = sum(1 for node in graph.nodes() if node.is_data)
+        num_checks = len(graph.nodes()) - num_qubits
+        matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
+        for node_check, node_qubit, data in graph.edges(data=True):
+            pauli_index = np.where(data[Pauli].value)
+            matrix[node_check.index, pauli_index, node_qubit.index] = 1
+        return matrix
+
+    @classmethod
+    def random(cls, qubits: int, checks: int, field: int | None = None) -> QuditCode:
+        """Construct a random qudit code with the given number of bits and checks."""
+        matrix = ClassicalCode.random(2 * qubits, checks, field).matrix
+        return QuditCode(matrix.reshape(checks, 2, qubits))
+
     # TODO : To implement this.
     """Check if the qubit code is a CSS code (not sure if works for general fields)
 
@@ -392,34 +450,48 @@ class QuditCode(AbstractCode):
         # TODO: implement https://arxiv.org/abs/1101.1519
         return NotImplemented
 
-    # TODO: Generalize it for other fields
-    @classmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
-        """Convert a parity check matrix into a Tanner graph."""
-        if not isinstance(matrix, np.ndarray):
-            matrix = np.array(matrix)
-        num_qudits = matrix.shape[1]
-        if not (num_qudits % 2 == 0):
-            raise ValueError("Parity check matrix has odd columns")
-        num_qudits = num_qudits // 2
-        graph = nx.DiGraph()
-        for row, col in zip(*np.where(matrix)):
-            node_check = Node(index=int(row), is_data=False)
-            node_qubit = Node(index=int(col), is_data=True)
-            graph.add_edge(node_check, node_qubit)
-            pauli = Pauli.X if col < num_qudits else Pauli.Z
-            old_pauli = graph[node_check][node_qubit].get(Pauli, Pauli.I)
-            graph[node_check][node_qubit][Pauli] = old_pauli * pauli
-        return graph
+    """
+    Code tranformation methods — Conjugation and Shifting.
+
+    (i) Conjugation — A QuditCode can specify which data qubits should be hadamard-transformed
+    before/after syndrome extraction, thereby transforming the operators
+    that address a specified data qubit as (X,Y,Z) <--> (Z,Y,X).
+
+    (ii) Shifting — A QuditCode  can also "shift" the Pauli operators on a qubit, moving vertically
+    along the following table:
+
+    ―――――――――――
+    | XY | YX |
+    ―――――――――――
+    | XZ | ZX |
+    ―――――――――――
+    | YZ | ZY |
+    ―――――――――――
+
+    Qubit shifts are specified by a dictionary mapping qubit_index --> shift_index, where
+    shift_index = +1, 0, and -1 mod 3 respectively refer to the top, middle, and bottom rows of the
+    table.
+
+    Physically, a shift of +1 and -1 respectively correspond to conjugating the Pauli operators
+    addressing a qubit by sqrt(X) and sqrt(Z) rotations.
+    """
 
     @classmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> npt.NDArray[np.int_]:
-        """Convert a Tanner graph into a parity check matrix."""
-        num_qubits = sum(1 for node in graph.nodes() if node.is_data)
-        num_checks = len(graph.nodes()) - num_qubits
-        matrix = np.zeros((num_checks, num_qubits), dtype=int)
-        for node_check, node_qubit, _ in graph.edges(data=True):
-            matrix[node_check.index, node_qubit.index] = 1
+    def conjugate(cls, matrix: IntegerMatrix, conj: slice | Sequence[int]) -> npt.NDArray[np.int_]:
+        matrix = cls._standardize_matrix(matrix)
+        matrix[:, :, conj] = np.roll(matrix[:, :, conj], 1, axis=1)
+        return matrix
+
+    @classmethod
+    def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> npt.NDArray[np.int_]:
+        matrix = cls._standardize_matrix(matrix)
+        # identify qubits to shift up or down along the table of Pauli pairs
+        shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
+        shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)
+        # For qubits shifting up, any stabilizer addressing a qubit with a Z should now also
+        # address that qubit with X, so copy Z to X.  Likewise for shifting down and X to Z.
+        matrix[:, Pauli.X.index, shifts_up] |= matrix[:, Pauli.Z.index, shifts_up]
+        matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
         return matrix
 
 
@@ -471,7 +543,8 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
             ]
         )
-        return galois.GF(self._field_order)(matrix)
+        shape = (self.num_checks, 2, -1)
+        return galois.GF(self._field_order)(matrix).reshape(shape)
 
     @property
     def num_checks(self) -> int:
@@ -487,58 +560,6 @@ class CSSCode(QuditCode):
     def num_logical_qubits(self) -> int:
         """Number of logical qubits encoded by this code."""
         return self.code_x.dimension + self.code_z.dimension - self.num_qubits
-
-    def _assert_qubit_code(self) -> None:
-        if self._field_order != 2:
-            raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
-
-    """
-    Code tranformation methods — Conjugation and Shifting.
-
-    (i) Conjugation — A CSSCode can specify which data qubits should be hadamard-transformed
-    before/after syndrome extraction, thereby transforming the operators
-    that address a specified data qubit as (X,Y,Z) <--> (Z,Y,X).
-
-    (ii) Shifting — A CSSCode can also "shift" the Pauli operators on a qubit, moving vertically
-    along the following table:
-
-    ―――――――――――
-    | XY | YX |
-    ―――――――――――
-    | XZ | ZX |
-    ―――――――――――
-    | YZ | ZY |
-    ―――――――――――
-
-    Qubit shifts are specified by a dictionary mapping qubit_index --> shift_index, where
-    shift_index = +1, 0, and -1 mod 3 respectively refer to the top, middle, and bottom rows of the
-    table.
-
-    Physically, a shift of +1 and -1 respectively correspond to conjugating the Pauli operators
-    addressing a qubit by sqrt(X) and sqrt(Z) rotations.
-    """
-
-    # Given a parity check matrix, swap X and Z operators on the qubits to conjugate.
-    # TODO: Does this work for general stabilizer code (over F_2)? If so, move to QuditCode class?
-    @classmethod
-    def conjugate(cls, matrix: IntegerMatrix, conj: slice | Sequence[int]) -> npt.NDArray[np.int_]:
-        if not isinstance(matrix, np.ndarray):
-            matrix = np.array(matrix)
-        matrix[:, :, conj] = np.roll(matrix[:, :, conj], 1, axis=1)
-        return matrix
-
-    @classmethod
-    def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> npt.NDArray[np.int_]:
-        if not isinstance(matrix, np.ndarray):
-            matrix = np.array(matrix)
-        # identify qubits to shift up or down along the table of Pauli pairs
-        shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
-        shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)
-        # For qubits shifting up, any stabilizer addressing a qubit with a Z should now also
-        # address that qubit with X, so copy Z to X.  Likewise for shifting down and X to Z.
-        matrix[:, Pauli.X.index, shifts_up] |= matrix[:, Pauli.Z.index, shifts_up]
-        matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
-        return matrix
 
     """Code Paramenter Computation methods
 

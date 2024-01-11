@@ -73,11 +73,30 @@ def test_tensor_product(
         codes.ClassicalCode.tensor_product(code_a, code_b)
 
 
-def test_classical_conversion(bits: int = 10, checks: int = 8, field: int = 3) -> None:
-    """Conversion between matrix and graph representations of a classical code."""
+def test_conversions(bits: int = 10, checks: int = 8, field: int = 3) -> None:
+    """Conversions between matrix and graph representations of a code."""
+    code: codes.ClassicalCode | codes.QuditCode
+
     code = codes.ClassicalCode.random(bits, checks, field)
     graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
+
+    # TODO: test with field
+    code = codes.QuditCode.random(bits, checks)
+    graph = codes.QuditCode.matrix_to_graph(code.matrix)
+    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+
+
+def test_qudit_graph(
+    bits_checks_a: tuple[int, int] = (5, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
+) -> None:
+    """Conversion between matrix and graph representations of a quantum code."""
+    code_a = codes.ClassicalCode.random(*bits_checks_a)
+    code_b = codes.ClassicalCode.random(*bits_checks_b)
+    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
+    code = codes.CSSCode(matrix_x, matrix_z)
+    assert np.array_equal(code.graph_to_matrix(code.graph), code.matrix)
 
 
 def test_CSS_code() -> None:
@@ -89,9 +108,8 @@ def test_CSS_code() -> None:
 
 
 def test_hyper_product(
-    bits_checks_a: tuple[int, int] = (10, 8),
-    bits_checks_b: tuple[int, int] = (7, 3),
-    field: int = 2,
+    bits_checks_a: tuple[int, int] = (5, 4),
+    bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Equivalency of matrix-based and graph-based hypergraph products."""
     code_a = codes.ClassicalCode.random(*bits_checks_a)
@@ -100,7 +118,7 @@ def test_hyper_product(
     graph_a = codes.ClassicalCode.matrix_to_graph(code_a.matrix)
     graph_b = codes.ClassicalCode.matrix_to_graph(code_b.matrix)
 
-    code = codes.HGPCode(code_a, code_b, field)
+    code = codes.HGPCode(code_a, code_b)
     graph = codes.HGPCode.get_graph_product(graph_a, graph_b)
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
     assert nx.utils.graphs_equal(code.graph, graph)
@@ -114,8 +132,8 @@ def test_CSS_shifts(
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
-    num_qubits = matrix_x.shape[-1]
     code = codes.CSSCode(matrix_x, matrix_z)
+    num_qubits = code.num_qubits
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
@@ -123,7 +141,7 @@ def test_CSS_shifts(
 
     for node_check, node_qubit, data in code.graph.edges(data=True):
         pauli_index = np.where(data[codes.Pauli].value)
-        assert (transformed_matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
+        assert np.all(transformed_matrix[node_check.index, pauli_index, node_qubit.index] == 1)
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -135,18 +153,6 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
     assert np.array_equal(code_a.matrix, code_b.matrix)
     assert stabilizers == code_b.get_stabilizers()
-
-
-def test_qudit_graph(
-    bits_checks_a: tuple[int, int] = (5, 3),
-    bits_checks_b: tuple[int, int] = (3, 2),
-) -> None:
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
-    code = codes.CSSCode(matrix_x, matrix_z)
-    assert np.array_equal(code.graph_to_matrix(code.graph), code.matrix)
-    return
 
 
 def test_trivial_lift(
