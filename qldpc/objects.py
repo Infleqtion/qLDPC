@@ -27,7 +27,6 @@ import networkx as nx
 from qldpc import abstract
 
 
-# TODO: A generalized Pauli for qudits
 class Pauli(enum.Enum):
     """Pauli operators."""
 
@@ -36,24 +35,15 @@ class Pauli(enum.Enum):
     X = (1, 0)
     Y = (1, 1)
 
-    def __invert__(self) -> Pauli:
-        """Hadamard-transform this Pauli operator."""
-        return Pauli((self.value[1], self.value[0]))
-
     def __mul__(self, other: Pauli) -> Pauli:
         """Product of two Pauli operators."""
         val_x = (self.value[0] + other.value[0]) % 2
         val_z = (self.value[1] + other.value[1]) % 2
         return Pauli((val_x, val_z))
 
-    @property
-    def index(self) -> int:
-        """Numerical index for Pauli operators."""
-        if self == Pauli.X:
-            return 0
-        if self == Pauli.Z:
-            return 1
-        raise AttributeError(f"No index for {self}.")
+    def __invert__(self) -> Pauli:
+        """Hadamard-transform this Pauli operator."""
+        return Pauli(self.value[::-1])
 
     def __str__(self) -> str:
         if self == Pauli.I:
@@ -76,6 +66,69 @@ class Pauli(enum.Enum):
         elif string == "Y":
             return Pauli.Y
         raise ValueError(f"Invalid Pauli operator: {string}")
+
+    @property
+    def index(self) -> int:
+        """Numerical index for Pauli operators."""
+        if self == Pauli.X:
+            return 0
+        if self == Pauli.Z:
+            return 1
+        raise AttributeError(f"No index for {self}.")
+
+
+class QuditOperator:
+    """A qudit operator of the form X(val_x)*Z(val_z)."""
+
+    def __init__(self, value: tuple[int, int]) -> None:
+        self.value = value
+
+    def __invert__(self) -> QuditOperator:
+        """Swap the X and Z operators."""
+        return QuditOperator(self.value[::-1])
+
+    def __str__(self) -> str:
+        val_x, val_z = self.value
+        if not val_x and not val_z:
+            return "I"
+        if val_x == val_z:
+            return f"Y({val_z})"
+        ops = []
+        if val_x:
+            ops.append(f"X({val_x})")
+        if val_z:
+            ops.append(f"Z({val_z})")
+        return "*".join(ops)
+
+    @classmethod
+    def from_string(cls, string: str) -> QuditOperator:
+        """Build a qudit operator from its string representation."""
+        if string == "I":
+            return QuditOperator((0, 0))
+
+        invalid_op = f"Invalid qudit operator: {string}"
+
+        val_x, val_z = 0, 0
+        factors = string.split("*")
+        if len(factors) > 2:
+            raise ValueError(invalid_op)
+
+        for factor in factors:
+            pauli = factor[0]
+            val_str = factor[2:-1]
+            _factor = f"{pauli}({val_str})"
+            if pauli not in "XYZ" or not val_str.isnumeric() or factor != _factor:
+                raise ValueError(invalid_op)
+
+            val = int(val_str)
+            if pauli == "X":
+                val_x = val
+            elif pauli == "Z":
+                val_z = val
+            else:  # pauli == "Y"
+                val_x = val_z = val
+
+        return QuditOperator((val_x, val_z))
 
 
 @dataclasses.dataclass

@@ -32,7 +32,7 @@ from typing_extensions import Self
 
 import qldpc
 from qldpc import abstract
-from qldpc.objects import CayleyComplex, Node, Pauli
+from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
 
 IntegerMatrix = npt.NDArray[np.int_] | Sequence[Sequence[int]]
 ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
@@ -339,7 +339,6 @@ class QuditCode(AbstractCode):
         )
 
     # TODO: generalize to other fields
-    # NOTE: requires first generalizing the Pauli class
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
@@ -354,7 +353,6 @@ class QuditCode(AbstractCode):
         return graph
 
     # TODO: generalize to other fields
-    # NOTE: requires first generalizing the Pauli class
     @classmethod
     def graph_to_matrix(cls, graph: nx.DiGraph) -> nx.DiGraph:
         """Convert a Tanner graph into a parity check matrix."""
@@ -390,29 +388,17 @@ class QuditCode(AbstractCode):
         """Stabilizers (checks) of the code, represented by strings."""
         matrix = self.matrix
         num_checks, _, num_qudits = matrix.shape
-
-        def _op_to_string(val_x: galois.FieldArray, val_z: galois.FieldArray) -> str:
-            """Build a string representation of the operator X(val_x)*Z(val_z)."""
-            if not val_x and not val_z:
-                return "I"
-            if self._field_order == 2:
-                return str(Pauli((val_x, val_z)))
-            if val_x == val_z:
-                return f"Y({val_z})"
-            ops = []
-            if val_x:
-                ops.append(f"X({val_x})")
-            if val_z:
-                ops.append(f"Z({val_z})")
-            return "*".join(ops)
-
         stabilizers = []
         for check in range(num_checks):
             ops = []
             for qudit in range(num_qudits):
                 val_x = matrix[check, Pauli.X.index, qudit]
                 val_z = matrix[check, Pauli.Z.index, qudit]
-                ops.append(_op_to_string(val_z, val_x))
+                vals_xz = (val_x, val_z)
+                if self._field_order == 2:
+                    ops.append(str(Pauli(vals_xz)))
+                else:
+                    ops.append(str(QuditOperator(vals_xz)))
             stabilizers.append(" ".join(ops))
         return stabilizers
 
@@ -420,26 +406,6 @@ class QuditCode(AbstractCode):
     def from_stabilizers(cls, stabilizers: Iterable[str], field: int | None = None) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
-
-        def _string_to_vals(op_string: str) -> tuple[int, int]:
-            """Extract parity check matrix entries."""
-            if op_string == "I":
-                return 0, 0
-            if field == 2:
-                return Pauli.from_string(op_string).value
-
-            val_x, val_z = 0, 0
-            for factor in op_string.split("*"):
-                pauli = factor[0]
-                val = int(factor[2:-1])
-                if pauli == "X":
-                    val_x = val
-                elif pauli == "Z":
-                    val_z = val
-                else:  # pauli == "Y"
-                    val_x = val_z = val
-            return val_x, val_z
-
         check_ops = [stabilizer.split() for stabilizer in stabilizers]
 
         num_qudits = len(check_ops[0])
@@ -448,7 +414,10 @@ class QuditCode(AbstractCode):
             if len(check_op) != num_qudits:
                 raise ValueError(f"Stabilizers 0 and {check} have different lengths")
             for qudit, op in enumerate(check_op):
-                val_z, val_x = _string_to_vals(op)
+                if field == 2:
+                    val_x, val_z = Pauli.from_string(op).value
+                else:
+                    val_x, val_z = QuditOperator.from_string(op).value
                 matrix[check, Pauli.X.index, qudit] = val_x
                 matrix[check, Pauli.Z.index, qudit] = val_z
 
