@@ -1060,28 +1060,6 @@ class LPCode(CSSCode):
         protograph_b: abstract.Protograph | ObjectMatrix | None = None,
         field: int | None = None,
     ) -> None:
-        """Construct a lifted product code."""
-        if protograph_b is None:
-            protograph_b = protograph_a
-        protograph_a = abstract.Protograph(protograph_a)
-        protograph_b = abstract.Protograph(protograph_b)
-
-        # identify the number of qubits in each sector
-        self.sector_size = protograph_a.group.lift_dim * np.outer(
-            protograph_a.shape[::-1],
-            protograph_b.shape[::-1],
-        )
-
-        # construct the parity check matrices of this code
-        protograph_x, protograph_z = LPCode.get_hyper_product(protograph_a, protograph_b)
-        CSSCode.__init__(self, protograph_x.lift(), protograph_z.lift(), field)
-
-    @classmethod
-    def get_hyper_product(
-        self,
-        protograph_a: abstract.Protograph | ObjectMatrix,
-        protograph_b: abstract.Protograph | ObjectMatrix,
-    ) -> tuple[abstract.Protograph, abstract.Protograph]:
         """Same hypergraph product as in the HGPCode, but with protographs.
 
         There is one crucial subtlety when computing the hypergraph product of protographs.  When
@@ -1096,8 +1074,18 @@ class LPCode(CSSCode):
         this reason, we need to take the transpose of a protograph "manually" when using it for the
         hypergraph product.
         """
+        if protograph_b is None:
+            protograph_b = protograph_a
         protograph_a = abstract.Protograph(protograph_a)
         protograph_b = abstract.Protograph(protograph_b)
+
+        # identify the number of qubits in each sector
+        self.sector_size = protograph_a.group.lift_dim * np.outer(
+            protograph_a.shape[::-1],
+            protograph_b.shape[::-1],
+        )
+
+        # identify sub-matrices and their transposes
         matrix_a = protograph_a.matrix
         matrix_b = protograph_b.matrix
         matrix_a_T = protograph_a.T.matrix
@@ -1112,15 +1100,7 @@ class LPCode(CSSCode):
         # construct the parity check matrices
         protograph_x = abstract.Protograph(np.block([mat_H1_In2, mat_Im1_H2_T]))
         protograph_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T]))
-
-        # identify the qubits to conjugate
-        # if conjugate:
-        #    sector_boundary = protograph_a.group.lift_dim * mat_H1_In2.shape[1]
-        #    qubits_to_conjugate = slice(sector_boundary, None)
-        # else:
-        #    qubits_to_conjugate = None
-
-        return protograph_x, protograph_z
+        CSSCode.__init__(self, protograph_x.lift(), protograph_z.lift(), field)
 
 
 ################################################################################
