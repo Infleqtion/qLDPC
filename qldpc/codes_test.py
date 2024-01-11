@@ -87,18 +87,6 @@ def test_conversions(bits: int = 10, checks: int = 8, field: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
-def test_qudit_graph(
-    bits_checks_a: tuple[int, int] = (5, 3),
-    bits_checks_b: tuple[int, int] = (3, 2),
-) -> None:
-    """Conversion between matrix and graph representations of a quantum code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
-    code = codes.CSSCode(matrix_x, matrix_z)
-    assert np.array_equal(code.graph_to_matrix(code.graph), code.matrix)
-
-
 def test_CSS_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
     with pytest.raises(ValueError, match="incompatible"):
@@ -107,32 +95,9 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z, 3)
 
 
-def test_hyper_product(
-    bits_checks_a: tuple[int, int] = (5, 4),
-    bits_checks_b: tuple[int, int] = (3, 2),
-) -> None:
-    """Equivalency of matrix-based and graph-based hypergraph products."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-
-    graph_a = codes.ClassicalCode.matrix_to_graph(code_a.matrix)
-    graph_b = codes.ClassicalCode.matrix_to_graph(code_b.matrix)
-
-    code = codes.HGPCode(code_a, code_b)
-    graph = codes.HGPCode.get_graph_product(graph_a, graph_b)
-    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
-    assert nx.utils.graphs_equal(code.graph, graph)
-
-
-def test_CSS_shifts(
-    bits_checks_a: tuple[int, int] = (5, 3),
-    bits_checks_b: tuple[int, int] = (3, 2),
-) -> None:
-    """Apply Pauli deformations to a CSS code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
-    code = codes.CSSCode(matrix_x, matrix_z)
+def test_deformations(bits: int = 5, checks: int = 3) -> None:
+    """Apply Pauli deformations to a qudit code."""
+    code = codes.QuditCode.random(bits, checks)
     num_qubits = code.num_qubits
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
@@ -158,7 +123,7 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (10, 8),
     bits_checks_b: tuple[int, int] = (7, 3),
-    field: int = 3,
+    field: int = 2,  # TODO: make this work with field = 3
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field)

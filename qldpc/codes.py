@@ -304,6 +304,16 @@ class QuditCode(AbstractCode):
         """Parity check matrix of this code."""
         return self._matrix
 
+    @property
+    def num_checks(self) -> int:
+        """Number of stabilizers in this code."""
+        return self.matrix.shape[0]
+
+    @property
+    def num_qubits(self) -> int:
+        """Number of data qubits in this code."""
+        return self.matrix.shape[-1]
+
     def _assert_qubit_code(self) -> None:
         if self._field_order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
@@ -548,7 +558,7 @@ class CSSCode(QuditCode):
 
     @property
     def num_checks(self) -> int:
-        """Number of parity checks."""
+        """Number of stabilizers in this code."""
         return self.code_x.matrix.shape[0] + self.code_z.matrix.shape[0]
 
     @property
@@ -988,32 +998,6 @@ class HGPCode(CSSCode):
         code_b: ClassicalCode | IntegerMatrix | None = None,
         field: int | None = None,
     ) -> None:
-        """Construct a hypergraph product code."""
-        if code_b is None:
-            code_b = code_a
-        code_a = ClassicalCode(code_a)
-        code_b = ClassicalCode(code_b)
-        assert code_a._field_order == code_a._field_order
-
-        if field is None:
-            field = code_a._field_order
-        else:
-            assert code_a._field_order == field
-
-        # identify the number of qubits in each sector
-        self.sector_size = np.outer(
-            [code_a.num_bits, code_a.num_checks],
-            [code_b.num_bits, code_b.num_checks],
-        )
-
-        # construct the parity check matrices of this code
-        matrix_x, matrix_z = HGPCode.get_hyper_product(code_a.matrix, code_b.matrix)
-        CSSCode.__init__(self, matrix_x, matrix_z, field)
-
-    @classmethod
-    def get_hyper_product(
-        self, code_a: ClassicalCode | IntegerMatrix, code_b: ClassicalCode | IntegerMatrix
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
         The parity check matrices of the hypergraph product code are:
@@ -1023,15 +1007,24 @@ class HGPCode(CSSCode):
 
         Here (H1, H2) == (matrix_a, matrix_b), and I[m/n][1/2] are identity matrices,
         with (m1, n1) = H1.shape and (m2, n2) = H2.shape.
-
-        If `conjugate is True`, we hadamard-transform the data qubits in sector (1, 1), which are
-        addressed by the second block of matrix_x and marix_z above.
         """
+        if code_b is None:
+            code_b = code_a
+        code_a = ClassicalCode(code_a, field)
+        code_b = ClassicalCode(code_b, field)
+        if field is None:
+            assert code_a._field_order == code_b._field_order
+            field = code_a._field_order
+
+        # identify the number of qubits in each sector
+        self.sector_size = np.outer(
+            [code_a.num_bits, code_a.num_checks],
+            [code_b.num_bits, code_b.num_checks],
+        )
+
+        # construct the nontrivial blocks of the parity check matrices
         matrix_a = ClassicalCode(code_a).matrix
         matrix_b = ClassicalCode(code_b).matrix
-        # assert ClassicalCode(code_a)._field_order == ClassicalCode(code_b)._field_order
-
-        # construct the nontrivial blocks in the matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
         mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
         mat_H1_Im2_T = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
@@ -1040,57 +1033,7 @@ class HGPCode(CSSCode):
         # construct the parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
-        # qubits_to_conjugate = slice(mat_H1_In2.shape[1], None) if conjugate else None
-        return matrix_x, matrix_z
-
-    # TODO: eliminate this method
-    @classmethod
-    def get_graph_product(
-        cls,
-        graph_a: nx.DiGraph,
-        graph_b: nx.DiGraph,
-    ) -> nx.DiGraph:
-        """Hypergraph product of two Tanner graphs."""
-        graph_product = nx.cartesian_product(graph_a, graph_b)
-
-        # fix edge orientation and tag each edge with a Pauli operator
-        graph = nx.DiGraph()
-        for node_fst, node_snd in graph_product.edges:
-            # identify check vs. qubit nodes
-            if node_fst[0].is_data == node_fst[1].is_data:
-                node_qubit, node_check = node_fst, node_snd
-            else:
-                node_qubit, node_check = node_snd, node_fst
-            graph.add_edge(node_check, node_qubit)
-
-            # by default, this edge is Pauli-Z if the check qubit is in the (0, 1) sector
-            pauli = Pauli.Z if node_check[0].is_data else Pauli.X
-            # flip Z <--> X if `conjugate is True` and the data qubit is in the (1, 1) sector
-            graph[node_check][node_qubit][Pauli] = pauli
-
-        return nx.relabel_nodes(graph, HGPCode.get_product_node_map(graph_a.nodes, graph_b.nodes))
-
-    # TODO: replace this method by one that builds the reverse dictionary, which allows identifying
-    #       HPG qubits with their "origin" in the seed codes that are used to construct an HGPCode
-    @classmethod
-    def get_product_node_map(
-        cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
-    ) -> dict[tuple[Node, Node], Node]:
-        """Map (dictionary) that re-labels nodes in the hypergraph product of two codes."""
-        index_qubit = 0
-        index_check = 0
-        node_map = {}
-        for node_a, node_b in itertools.product(sorted(nodes_a), sorted(nodes_b)):
-            if node_a.is_data == node_b.is_data:
-                # this is a data qubit in sector (0, 0) or (1, 1)
-                node = Node(index=index_qubit, is_data=True)
-                index_qubit += 1
-            else:
-                # this is a check qubit in sector (0, 1) or (1, 0)
-                node = Node(index=index_check, is_data=False)
-                index_check += 1
-            node_map[node_a, node_b] = node
-        return node_map
+        CSSCode.__init__(self, matrix_x, matrix_z, field)
 
 
 class LPCode(CSSCode):
