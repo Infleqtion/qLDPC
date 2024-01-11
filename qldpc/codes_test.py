@@ -118,7 +118,6 @@ def test_CSS_shifts(
     code = codes.CSSCode(matrix_x, matrix_z)
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    # print(conjugate)
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
 
