@@ -33,7 +33,7 @@ import qldpc
 from qldpc import abstract
 from qldpc.objects import CayleyComplex, Node, Pauli
 
-IntegerMatrix = npt.NDArray[np.int_] | Sequence[Sequence[int]] | galois.FieldArray
+IntegerMatrix = npt.NDArray[np.int_] | Sequence[Sequence[int]]
 ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
 
 DEFAULT_FIELD_ORDER = 2
@@ -176,10 +176,10 @@ class ClassicalCode(AbstractCode):
         """
         if not code_a._field_order == code_b._field_order:
             raise ValueError("Cannot take tensor product of codes over different fields")
-        gen_a = code_a.generator.view(np.ndarray)
-        gen_b = code_b.generator.view(np.ndarray)
+        gen_a: npt.NDArray[np.int_] = code_a.generator.view(np.ndarray)
+        gen_b: npt.NDArray[np.int_] = code_b.generator.view(np.ndarray)
         generator_ab = np.kron(gen_a, gen_b)
-        return ~ClassicalCode(generator_ab, field=code_a._field_order)  # type:ignore[arg-type]
+        return ~ClassicalCode(generator_ab, field=code_a._field_order)
 
     @property
     def num_checks(self) -> int:
@@ -534,12 +534,16 @@ class CSSCode(QuditCode):
     # Given a parity check matrix, swap X and Z operators on the qubits to conjugate.
     # TODO: Does this work for general stabilizer code (over F_2)? If so, move to QuditCode class?
     @classmethod
-    def conjugate(cls, matrix: IntegerMatrix, conj: slice | Sequence[int]) -> IntegerMatrix:
+    def conjugate(cls, matrix: IntegerMatrix, conj: slice | Sequence[int]) -> npt.NDArray[np.int_]:
+        if not isinstance(matrix, np.ndarray):
+            matrix = np.array(matrix)
         matrix[:, :, conj] = np.roll(matrix[:, :, conj], 1, axis=1)
         return matrix
 
     @classmethod
-    def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> IntegerMatrix:
+    def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> npt.NDArray[np.int_]:
+        if not isinstance(matrix, np.ndarray):
+            matrix = np.array(matrix)
         # identify qubits to shift up or down along the table of Pauli pairs
         shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
         shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)
