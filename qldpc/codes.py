@@ -93,7 +93,7 @@ class AbstractCode(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> npt.NDArray[np.int_]:
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
 
 
@@ -350,7 +350,7 @@ class QuditCode(AbstractCode):
 
     # TODO: generalize to other fields
     @classmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> nx.DiGraph:
+    def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
         num_qubits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qubits
