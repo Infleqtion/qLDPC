@@ -127,23 +127,18 @@ def test_CSS_shifts(
         assert (transformed_matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
 
 
-def test_Qudit_stabs(
-    bits_checks_a: tuple[int, int] = (5, 3),
-    bits_checks_b: tuple[int, int] = (3, 2),
-) -> None:
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z = codes.HGPCode.get_hyper_product(code_a, code_b)
-    code = codes.CSSCode(matrix_x, matrix_z)
-    stabs = code.get_stabilizers()
-    assert len(stabs) == code.num_checks
-    # for stab in stabs :
-    #    print(stab)
-    # print(code.matrix)
-    return
+@pytest.mark.parametrize("field", [2, 3])
+def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
+    random_code = codes.ClassicalCode.random(bits, 2 * checks, field)
+    matrix = random_code.matrix.reshape((checks, 2, -1))
+    code_a = codes.QuditCode(matrix.reshape((checks, 2, bits)))
+    stabilizers = code_a.get_stabilizers()
+    code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
+    assert np.array_equal(code_a.matrix, code_b.matrix)
+    assert stabilizers == code_b.get_stabilizers()
 
 
-def test_Qudit_graph(
+def test_qudit_graph(
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:

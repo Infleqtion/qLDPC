@@ -65,7 +65,7 @@ class Pauli(enum.Enum):
         return "Y"
 
     @classmethod
-    def from_string(string: str) -> Pauli:
+    def from_string(cls, string: str) -> Pauli:
         """Build a Pauli operator from a string."""
         if string == "I":
             return Pauli.I

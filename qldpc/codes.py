@@ -306,6 +306,9 @@ class QuditCode(AbstractCode):
                     f" over F_{self._field_order}"
                 )
             self._matrix = matrix.matrix
+        elif isinstance(matrix, galois.FieldArray):
+            self._field_order = type(matrix).order
+            self._matrix = matrix
         else:
             self._field_order = field or DEFAULT_FIELD_ORDER
             self._matrix = self.field(matrix, dtype=int)
@@ -342,16 +345,19 @@ class QuditCode(AbstractCode):
                 return str(Pauli((val_x, val_z)))
             if val_x == val_z:
                 return f"Y({val_z})"
-            op_x = f"X({val_x})" if val_x else ""
-            op_z = f"Z({val_z})" if val_z else ""
-            return "*".join([op_x, op_z])
+            ops = []
+            if val_x:
+                ops.append(f"X({val_x})")
+            if val_z:
+                ops.append(f"Z({val_z})")
+            return "*".join(ops)
 
         stabilizers = []
         for check in range(num_checks):
             ops = []
             for qudit in range(num_qudits):
-                val_x = matrix[check, Pauli.X, qudit]
-                val_z = matrix[check, Pauli.Z, qudit]
+                val_x = matrix[check, Pauli.X.index, qudit]
+                val_z = matrix[check, Pauli.Z.index, qudit]
                 ops.append(_op_to_string(val_z, val_x))
             stabilizers.append(" ".join(ops))
         return stabilizers
@@ -383,14 +389,14 @@ class QuditCode(AbstractCode):
         check_ops = [stabilizer.split() for stabilizer in stabilizers]
 
         num_qudits = len(check_ops[0])
-        matrix = np.zeros(len(check_ops), 2, num_qudits)
+        matrix = np.zeros((len(check_ops), 2, num_qudits), dtype=int)
         for check, check_op in enumerate(check_ops):
             if len(check_op) != num_qudits:
                 raise ValueError(f"Stabilizers 0 and {check} have different lengths")
-            for qudit, op in enumerate(check_op.split()):
+            for qudit, op in enumerate(check_op):
                 val_z, val_x = _string_to_vals(op)
-                matrix[check, Pauli.X, qudit] = val_x
-                matrix[check, Pauli.Z, qudit] = val_z
+                matrix[check, Pauli.X.index, qudit] = val_x
+                matrix[check, Pauli.Z.index, qudit] = val_z
 
         return QuditCode(matrix, field)
 
