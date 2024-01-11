@@ -178,11 +178,11 @@ def test_twisted_XZZX(width: int = 3) -> None:
     mat_2 = codes.ClassicalCode.ring(num_qubits // 2).matrix
     zero_0 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_1 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
-    zero_2 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
-    zero_3 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
+    zero_2 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
+    zero_3 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = [
-        [zero_0, mat_1.T, mat_2, zero_2],
-        [mat_1, zero_1, zero_3, mat_2.T],
+        [mat_1, mat_2.T, zero_2, zero_3],
+        [zero_0, zero_1, mat_2, mat_1.T],
     ]
 
     # construct lifted product code
