@@ -36,6 +36,9 @@ networkx = ">=2.6.2"
 numpy = ">=1.22.0"
 sympy = ">=1.12"
 
+# TODO: remove once https://github.com/python/typeshed/issues/11254 is resolved
+types-protobuf = "<=4.24.0.4"
+
 checks-superstaq = { version = ">=0.5.0", optional = true }
 
 [tool.poetry.extras]
