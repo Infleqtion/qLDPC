@@ -103,6 +103,7 @@ def test_deformations(bits: int = 5, checks: int = 3) -> None:
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
+    # print(code.graph.edges(data=True))
 
     for node_check, node_qubit, data in code.graph.edges(data=True):
         vals = data[codes.QuditOperator].value
@@ -131,8 +132,8 @@ def test_trivial_lift(
     code_b = codes.ClassicalCode.random(*bits_checks_b, field)
     code_HGP = codes.HGPCode(code_a, code_b, field)
 
-    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
-    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix)
+    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix, field=field)
+    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix, field=field)
     code_LP = codes.LPCode(protograph_a, protograph_b, field)
 
     assert np.array_equal(code_HGP.matrix, code_LP.matrix)

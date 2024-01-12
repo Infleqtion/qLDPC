@@ -231,7 +231,9 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
         """Construct a random classical code with the given number of bits and checks."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        if field is None:
+            field = DEFAULT_FIELD_ORDER
+        code_field = galois.GF(field)
         rows, cols = checks, bits
         matrix = code_field.Random((rows, cols))
         for row in range(matrix.shape[0]):
@@ -982,6 +984,7 @@ class HGPCode(CSSCode):
         """
         if code_b is None:
             code_b = code_a
+        # TODO: do we need to construct these codes?  Can we stick to using matrices?
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
         if field is None:
@@ -995,10 +998,10 @@ class HGPCode(CSSCode):
         )
 
         # construct the nontrivial blocks of the parity check matrices
-        matrix_a = ClassicalCode(code_a).matrix
-        matrix_b = ClassicalCode(code_b).matrix
+        matrix_a = code_a.matrix
+        matrix_b = code_b.matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
+        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b) * (field - 1)
         mat_H1_Im2_T = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b.T)
 
