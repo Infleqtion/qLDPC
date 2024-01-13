@@ -95,15 +95,15 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z, 3)
 
 
-def test_deformations(num_qubits: int = 5, num_checks: int = 3) -> None:
+def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
     """Apply Pauli deformations to a qudit code."""
-    code = codes.QuditCode.random(num_qubits, num_checks)
-    conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
-    shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
+    code = codes.QuditCode.random(num_qudits, num_checks)
+    conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
+    shifts = {qubit: np.random.randint(3) for qubit in range(num_qudits)}
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
 
-    transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qubits)
+    transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
     for node_check, node_qubit, data in code.graph.edges(data=True):
         vals = data[codes.QuditOperator].value
         assert transformed_matrix[node_check.index, 0, node_qubit.index] == vals[0]
@@ -160,22 +160,22 @@ def test_lift() -> None:
     # check that the lifted product code is indeed smaller than the HGP code!
     code_HP = codes.HGPCode(matrix)
     code_LP = codes.LPCode(protograph)
-    assert code_HP.num_qubits > code_LP.num_qubits
+    assert code_HP.num_qudits > code_LP.num_qudits
     assert code_HP.num_checks > code_LP.num_checks
 
     # check total number of qubits
-    assert code_HP.sector_size.sum() == code_HP.num_qubits + code_HP.num_checks
-    assert code_LP.sector_size.sum() == code_LP.num_qubits + code_LP.num_checks
+    assert code_HP.sector_size.sum() == code_HP.num_qudits + code_HP.num_checks
+    assert code_LP.sector_size.sum() == code_LP.num_qudits + code_LP.num_checks
 
 
 def test_twisted_XZZX(width: int = 3) -> None:
     """Verify twisted XZZX code in Eqs.(29) and (32) of arXiv:2202.01702v3."""
-    num_qubits = 2 * width**2
+    num_qudits = 2 * width**2
 
     # construct check matrix directly
     ring = codes.ClassicalCode.ring(width).matrix
     mat_1 = np.kron(ring, np.eye(width, dtype=int))
-    mat_2 = codes.ClassicalCode.ring(num_qubits // 2).matrix
+    mat_2 = codes.ClassicalCode.ring(num_qudits // 2).matrix
     zero_0 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_1 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
     zero_2 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
@@ -191,7 +191,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     ]
 
     # construct lifted product code
-    group = abstract.CyclicGroup(num_qubits // 2)
+    group = abstract.CyclicGroup(num_qudits // 2)
     unit = abstract.Element(group).one()
     shift = abstract.Element(group, group.generators[0])
     element_a = unit + shift**width
@@ -208,14 +208,14 @@ def test_cyclic_codes() -> None:
     terms_a = [(0, 3), (1, 1), (1, 2)]
     terms_b = [(1, 3), (0, 1), (0, 2)]
     code = codes.QCCode(dims, terms_a, terms_b)
-    assert code.num_qubits == 72
+    assert code.num_qudits == 72
     assert code.num_logical_qubits == 12
 
     dims = (15, 3)
     terms_a = [(0, 9), (1, 1), (1, 2)]
     terms_b = [(0, 0), (0, 2), (0, 7)]
     code = codes.QCCode(dims, terms_a, terms_b)
-    assert code.num_qubits == 90
+    assert code.num_qudits == 90
     assert code.num_logical_qubits == 8
 
 
@@ -230,7 +230,7 @@ def test_lifted_product_codes() -> None:
         proto_matrix = [[abstract.Element(group, xx**power) for power in row] for row in matrix]
         protograph = abstract.Protograph(proto_matrix)
         code = codes.LPCode(protograph)
-        rate = code.num_logical_qubits / code.num_qubits
+        rate = code.num_logical_qubits / code.num_qudits
         assert rate >= 2 / 17
 
 

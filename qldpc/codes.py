@@ -301,11 +301,11 @@ class ClassicalCode(AbstractCode):
 class QuditCode(AbstractCode):
     """Qudit-based quantum error-correcting code.
 
-    The check matrix of a qudit code is an array of dimensions (num_checks, 2 * num_qubits).
+    The check matrix of a qudit code is an array of dimensions (num_checks, 2 * num_qudits).
 
     There is a Pauli basis for qudit-codes indexed by X(r), Z(r) where r ranges over the base field.
 
-    The check matrix is a block matrix H = [H_X | H_Z], where each block has num_qubits columns.
+    The check matrix is a block matrix H = [H_X | H_Z], where each block has num_qudits columns.
 
     If the entry  H_X (i,j) = r, then stabilizer i acts by the operator X(r) on the qudit j.
 
@@ -320,9 +320,15 @@ class QuditCode(AbstractCode):
         return self.matrix.shape[0]
 
     @property
+    def num_qudits(self) -> int:
+        """Number of data qudits in this code."""
+        return self.matrix.shape[1] // 2
+
+    @property
     def num_qubits(self) -> int:
         """Number of data qubits in this code."""
-        return self.matrix.shape[1] // 2
+        self._assert_qubit_code()
+        return self.num_qudits
 
     def _assert_qubit_code(self) -> None:
         if self._field_order != 2:
@@ -350,13 +356,13 @@ class QuditCode(AbstractCode):
     @classmethod
     def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
-        num_qubits = sum(1 for node in graph.nodes() if node.is_data)
-        num_checks = len(graph.nodes()) - num_qubits
-        matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
+        num_qudits = sum(1 for node in graph.nodes() if node.is_data)
+        num_checks = len(graph.nodes()) - num_qudits
+        matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
         for node_check, node_qubit, data in graph.edges(data=True):
             matrix[node_check.index, :, node_qubit.index] = data[QuditOperator].value
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
-        return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qubits))
+        return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
     @classmethod
     def random(cls, qubits: int, checks: int, field: int | None = None) -> QuditCode:
@@ -365,11 +371,11 @@ class QuditCode(AbstractCode):
 
     def get_stabilizers(self) -> list[str]:
         """Stabilizers (checks) of this code, represented by strings."""
-        matrix = self.matrix.reshape(self.num_checks, 2, self.num_qubits)
+        matrix = self.matrix.reshape(self.num_checks, 2, self.num_qudits)
         stabilizers = []
         for check in range(self.num_checks):
             ops = []
-            for qudit in range(self.num_qubits):
+            for qudit in range(self.num_qudits):
                 val_x = matrix[check, Pauli.X.index, qudit]
                 val_z = matrix[check, Pauli.Z.index, qudit]
                 vals_xz = (val_x, val_z)
@@ -506,14 +512,14 @@ class CSSCode(QuditCode):
         return self.code_x.matrix.shape[0] + self.code_z.matrix.shape[0]
 
     @property
-    def num_qubits(self) -> int:
+    def num_qudits(self) -> int:
         """Number of data qubits in this code."""
         return self.code_x.matrix.shape[1]
 
     @property
     def num_logical_qubits(self) -> int:
         """Number of logical qubits encoded by this code."""
-        return self.code_x.dimension + self.code_z.dimension - self.num_qubits
+        return self.code_x.dimension + self.code_z.dimension - self.num_qudits
 
     def get_code_params(
         self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
@@ -521,14 +527,14 @@ class CSSCode(QuditCode):
         """Compute the parameters of this code: [[n,k,d]].
 
         Here:
-        - n is the number of data qubits
+        - n is the number of data qudits
         - k is the number of encoded ("logical") qubits
         - d is the code distance
 
         Keyword arguments are passed to the calculation of code distance.
         """
         distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
-        return self.num_qubits, self.num_logical_qubits, distance
+        return self.num_qudits, self.num_logical_qubits, distance
 
     def get_distance(
         self,
