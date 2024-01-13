@@ -110,6 +110,9 @@ class ClassicalCode(AbstractCode):
     words must satisfy.  A vector x is a code word iff H @ x = 0 mod q.
     """
 
+    def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
+        return not np.any(self.matrix @ np.array(word))
+
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix H into a Tanner graph.
@@ -705,9 +708,10 @@ class CSSCode(QuditCode):
         """Exact X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         if self._field_order != 2:
-            words_x = (self.code_x if pauli == Pauli.X else self.code_z).words()
-            generator_z = (self.code_z if pauli == Pauli.X else self.code_x).generator
-            return min(np.count_nonzero(word) for word in words_x if np.any(word @ generator_z.T))
+            code_x = self.code_x if pauli == Pauli.X else self.code_z
+            code_z = self.code_z if pauli == Pauli.X else self.code_x
+            dual_code_x = ~code_x
+            return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
 
         # minimize the weight of logical X-type or Z-type operators
         for logical_qubit_index in range(self.num_logical_qubits):
