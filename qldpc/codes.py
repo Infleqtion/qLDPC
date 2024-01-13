@@ -322,48 +322,27 @@ class QuditCode(AbstractCode):
     @property
     def num_qubits(self) -> int:
         """Number of data qubits in this code."""
-        return self.matrix.shape[-1]
+        return self.matrix.shape[1] // 2
 
     def _assert_qubit_code(self) -> None:
         if self._field_order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
 
-    # TODO: use 2D matrix layout, and only convert to 3D internally
-    @classmethod
-    def _standardize_matrix(
-        cls, matrix: IntegerMatrix, field: int | None = None
-    ) -> npt.NDArray[np.int_]:
-        field = field or DEFAULT_FIELD_ORDER
-        if not isinstance(matrix, galois.FieldArray):
-            matrix = galois.GF(field)(matrix)
-        if matrix.ndim == 3:
-            return matrix
-        if matrix.ndim == 2:
-            if matrix.shape[1] % 2:
-                raise ValueError(
-                    "The given quantum parity check matrix has an odd number of columns"
-                    " (which is invalid)"
-                )
-            return matrix.reshape((matrix.shape[0], 2, -1))
-        raise ValueError(
-            f"The given parity check matrix has {matrix.ndim} dimensions (should be 2 or 3)"
-        )
-
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
-        matrix = cls._standardize_matrix(matrix)
         graph = nx.DiGraph()
+        matrix = np.reshape(matrix, (len(matrix), 2, -1))
         for row, col_xz, col in zip(*np.where(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qubit = Node(index=int(col), is_data=True)
             graph.add_edge(node_check, node_qubit)
-            vals = [0, 0]
-            vals[col_xz] = int(matrix[row, col_xz, col])
-            old_op = graph[node_check][node_qubit].get(QuditOperator, QuditOperator())
-            new_op_value = (old_op.value[0] + vals[0], old_op.value[1] + vals[1])
-            new_op = QuditOperator(new_op_value)
-            graph[node_check][node_qubit][QuditOperator] = new_op
+
+            qudit_op = graph[node_check][node_qubit].get(QuditOperator, QuditOperator())
+            vals_xz = list(qudit_op.value)
+            vals_xz[col_xz] += int(matrix[row, col_xz, col])
+            graph[node_check][node_qubit][QuditOperator] = QuditOperator(tuple(vals_xz))
+
         if isinstance(matrix, galois.FieldArray):
             graph.order = type(matrix).order
         return graph
@@ -373,28 +352,24 @@ class QuditCode(AbstractCode):
         """Convert a Tanner graph into a parity check matrix."""
         num_qubits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qubits
-        field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
-        matrix = galois.GF(field).Zeros((num_checks, 2, num_qubits))
+        matrix = np.zeros((num_checks, 2, num_qubits), dtype=int)
         for node_check, node_qubit, data in graph.edges(data=True):
-            op_value = data[QuditOperator].value
-            matrix[node_check.index, 0, node_qubit.index] = op_value[0]
-            matrix[node_check.index, 1, node_qubit.index] = op_value[1]
-        return matrix
+            matrix[node_check.index, :, node_qubit.index] = data[QuditOperator].value
+        field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
+        return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qubits))
 
     @classmethod
     def random(cls, qubits: int, checks: int, field: int | None = None) -> QuditCode:
         """Construct a random qudit code with the given number of bits and checks."""
-        matrix = ClassicalCode.random(2 * qubits, checks, field).matrix
-        return QuditCode(matrix.reshape(checks, 2, qubits))
+        return QuditCode(ClassicalCode.random(2 * qubits, checks, field).matrix, field)
 
     def get_stabilizers(self) -> list[str]:
         """Stabilizers (checks) of this code, represented by strings."""
-        matrix = self.matrix
-        num_checks, _, num_qudits = matrix.shape
+        matrix = self.matrix.reshape(self.num_checks, 2, self.num_qubits)
         stabilizers = []
-        for check in range(num_checks):
+        for check in range(self.num_checks):
             ops = []
-            for qudit in range(num_qudits):
+            for qudit in range(self.num_qubits):
                 val_x = matrix[check, Pauli.X.index, qudit]
                 val_z = matrix[check, Pauli.Z.index, qudit]
                 vals_xz = (val_x, val_z)
@@ -410,9 +385,10 @@ class QuditCode(AbstractCode):
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
         check_ops = [stabilizer.split() for stabilizer in stabilizers]
-
+        num_checks = len(check_ops)
         num_qudits = len(check_ops[0])
-        matrix = np.zeros((len(check_ops), 2, num_qudits), dtype=int)
+
+        matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
         for check, check_op in enumerate(check_ops):
             if len(check_op) != num_qudits:
                 raise ValueError(f"Stabilizers 0 and {check} have different lengths")
@@ -424,7 +400,7 @@ class QuditCode(AbstractCode):
                 matrix[check, Pauli.X.index, qudit] = val_x
                 matrix[check, Pauli.Z.index, qudit] = val_z
 
-        return QuditCode(matrix, field)
+        return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
     """
     Code tranformation methods — Conjugation and Shifting.
@@ -453,26 +429,20 @@ class QuditCode(AbstractCode):
     """
 
     @classmethod
-    def deform(cls, matrix: IntegerMatrix) -> galois.FieldArray:
-        """Apply local Clifford deformations to a parity check matrix.
-
-        The deformation is defined by a permutation of local single-qudit operators.
-        """
-        return NotImplemented
-
-    @classmethod
     def conjugate(
         cls, matrix: IntegerMatrix, qubits: slice | Sequence[int]
     ) -> npt.NDArray[np.int_]:
         """Swap X-type and Z-type operators on the given qubits."""
-        matrix = cls._standardize_matrix(matrix)
+        num_checks = len(matrix)
+        matrix = np.reshape(matrix, (num_checks, 2, -1))
         matrix[:, :, qubits] = np.roll(matrix[:, :, qubits], 1, axis=1)
-        return matrix
+        return matrix.reshape(num_checks, -1)
 
     @classmethod
     def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> npt.NDArray[np.int_]:
         """'Shift' Pauli operators on some qubits."""
-        matrix = cls._standardize_matrix(matrix)
+        num_checks = len(matrix)
+        matrix = np.reshape(matrix, (num_checks, 2, -1))
         # identify qubits to shift up or down along the table of Pauli pairs
         shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
         shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)
@@ -480,7 +450,7 @@ class QuditCode(AbstractCode):
         # address that qubit with X, so copy Z to X.  Likewise for shifting down and X to Z.
         matrix[:, Pauli.X.index, shifts_up] |= matrix[:, Pauli.Z.index, shifts_up]
         matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
-        return matrix
+        return matrix.reshape(num_checks, -1)
 
 
 class CSSCode(QuditCode):
@@ -528,8 +498,7 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
             ]
         )
-        shape = (self.num_checks, 2, -1)
-        return galois.GF(self._field_order)(matrix.reshape(shape))
+        return galois.GF(self._field_order)(matrix)
 
     @property
     def num_checks(self) -> int:

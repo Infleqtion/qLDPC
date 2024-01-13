@@ -95,15 +95,15 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z, 3)
 
 
-def test_deformations(bits: int = 5, checks: int = 3) -> None:
+def test_deformations(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Apply Pauli deformations to a qudit code."""
-    code = codes.QuditCode.random(bits, checks)
-    num_qubits = code.num_qubits
+    code = codes.QuditCode.random(num_qubits, num_checks)
     conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
 
+    transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qubits)
     for node_check, node_qubit, data in code.graph.edges(data=True):
         vals = data[codes.QuditOperator].value
         assert transformed_matrix[node_check.index, 0, node_qubit.index] == vals[0]
@@ -113,9 +113,7 @@ def test_deformations(bits: int = 5, checks: int = 3) -> None:
 @pytest.mark.parametrize("field", [2, 3])
 def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
-    random_code = codes.ClassicalCode.random(bits, 2 * checks, field)
-    matrix = random_code.matrix.reshape((checks, 2, -1))
-    code_a = codes.QuditCode(matrix.reshape((checks, 2, bits)))
+    code_a = codes.QuditCode.random(bits, checks, field)
     stabilizers = code_a.get_stabilizers()
     code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
     assert np.array_equal(code_a.matrix, code_b.matrix)
