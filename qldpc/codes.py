@@ -296,27 +296,24 @@ class ClassicalCode(AbstractCode):
 #   - one method to compute "blocks" of standard form, one to return the matrix itself
 # - add is_CSS method to figure out whether this is a CSS Code
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
-#   - also compute and store H_X, H_Z, if CSS
+#   - also compute and store H_x, H_z, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
 class QuditCode(AbstractCode):
     """Qudit-based quantum error-correcting code.
 
-    The check matrix of a qudit code is an array of dimensions (num_checks, 2 * num_qudits).
+    The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
+    written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
 
-    There is a Pauli basis for qudit-codes indexed by X(r), Z(r) where r ranges over the base field.
-
-    The check matrix is a block matrix H = [H_X | H_Z], where each block has num_qudits columns.
-
-    If the entry  H_X (i,j) = r, then stabilizer i acts by the operator X(r) on the qudit j.
-
-    The Tanner graph of a qubit code is nearly identical to that of a classical code, with the only
-    difference being that the edge (c, b) has an attribute to indicate the Pauli operator with which
-    check qudit c addresses data qudit b.
+    The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
+    X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
+    operators.  Specifically:
+    - X(r) = sum__{j=0}^{d-1} |j+r><j| is a shift operator, and
+    - Z(r) = sum_{j=0}^{d-1} exp(2 pi i j r / d) |j><j| is a phase operator.
     """
 
     @property
     def num_checks(self) -> int:
-        """Number of stabilizers in this code."""
+        """Number of parity checks in this code."""
         return self.matrix.shape[0]
 
     @property
@@ -341,13 +338,13 @@ class QuditCode(AbstractCode):
         matrix = np.reshape(matrix, (len(matrix), 2, -1))
         for row, col_xz, col in zip(*np.where(matrix)):
             node_check = Node(index=int(row), is_data=False)
-            node_qubit = Node(index=int(col), is_data=True)
-            graph.add_edge(node_check, node_qubit)
+            node_qudit = Node(index=int(col), is_data=True)
+            graph.add_edge(node_check, node_qudit)
 
-            qudit_op = graph[node_check][node_qubit].get(QuditOperator, QuditOperator())
+            qudit_op = graph[node_check][node_qudit].get(QuditOperator, QuditOperator())
             vals_xz = list(qudit_op.value)
             vals_xz[col_xz] += int(matrix[row, col_xz, col])
-            graph[node_check][node_qubit][QuditOperator] = QuditOperator(tuple(vals_xz))
+            graph[node_check][node_qudit][QuditOperator] = QuditOperator(tuple(vals_xz))
 
         if isinstance(matrix, galois.FieldArray):
             graph.order = type(matrix).order
@@ -359,15 +356,15 @@ class QuditCode(AbstractCode):
         num_qudits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qudits
         matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
-        for node_check, node_qubit, data in graph.edges(data=True):
-            matrix[node_check.index, :, node_qubit.index] = data[QuditOperator].value
+        for node_check, node_qudit, data in graph.edges(data=True):
+            matrix[node_check.index, :, node_qudit.index] = data[QuditOperator].value
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
     @classmethod
-    def random(cls, qubits: int, checks: int, field: int | None = None) -> QuditCode:
+    def random(cls, qudits: int, checks: int, field: int | None = None) -> QuditCode:
         """Construct a random qudit code with the given number of bits and checks."""
-        return QuditCode(ClassicalCode.random(2 * qubits, checks, field).matrix, field)
+        return QuditCode(ClassicalCode.random(2 * qudits, checks, field).matrix, field)
 
     def get_stabilizers(self) -> list[str]:
         """Stabilizers (checks) of this code, represented by strings."""
@@ -393,18 +390,14 @@ class QuditCode(AbstractCode):
         check_ops = [stabilizer.split() for stabilizer in stabilizers]
         num_checks = len(check_ops)
         num_qudits = len(check_ops[0])
+        operator: type[Pauli] | type[QuditOperator] = Pauli if field == 2 else QuditOperator
 
         matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
         for check, check_op in enumerate(check_ops):
             if len(check_op) != num_qudits:
                 raise ValueError(f"Stabilizers 0 and {check} have different lengths")
             for qudit, op in enumerate(check_op):
-                if field == 2:
-                    val_x, val_z = Pauli.from_string(op).value
-                else:
-                    val_x, val_z = QuditOperator.from_string(op).value
-                matrix[check, Pauli.X.index, qudit] = val_x
-                matrix[check, Pauli.Z.index, qudit] = val_z
+                matrix[check, :, qudit] = operator.from_string(op).value
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
@@ -436,12 +429,12 @@ class QuditCode(AbstractCode):
 
     @classmethod
     def conjugate(
-        cls, matrix: IntegerMatrix, qubits: slice | Sequence[int]
+        cls, matrix: IntegerMatrix, qudits: slice | Sequence[int]
     ) -> npt.NDArray[np.int_]:
-        """Swap X-type and Z-type operators on the given qubits."""
+        """Swap X-type and Z-type operators on the given qudits."""
         num_checks = len(matrix)
         matrix = np.reshape(matrix, (num_checks, 2, -1))
-        matrix[:, :, qubits] = np.roll(matrix[:, :, qubits], 1, axis=1)
+        matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
         return matrix.reshape(num_checks, -1)
 
     @classmethod
@@ -508,7 +501,7 @@ class CSSCode(QuditCode):
 
     @property
     def num_checks(self) -> int:
-        """Number of stabilizers in this code."""
+        """Number of parity checks in this code."""
         return self.code_x.matrix.shape[0] + self.code_z.matrix.shape[0]
 
     @property
@@ -517,8 +510,8 @@ class CSSCode(QuditCode):
         return self.code_x.matrix.shape[1]
 
     @property
-    def num_logical_qubits(self) -> int:
-        """Number of logical qubits encoded by this code."""
+    def num_logical(self) -> int:
+        """Number of logical qudits encoded by this code."""
         return self.code_x.dimension + self.code_z.dimension - self.num_qudits
 
     def get_code_params(
@@ -528,13 +521,13 @@ class CSSCode(QuditCode):
 
         Here:
         - n is the number of data qudits
-        - k is the number of encoded ("logical") qubits
+        - k is the number of encoded ("logical") qudits
         - d is the code distance
 
         Keyword arguments are passed to the calculation of code distance.
         """
         distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
-        return self.num_qudits, self.num_logical_qubits, distance
+        return self.num_qudits, self.num_logical, distance
 
     def get_distance(
         self,
@@ -696,7 +689,7 @@ class CSSCode(QuditCode):
             return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
 
         # minimize the weight of logical X-type or Z-type operators
-        for logical_qubit_index in range(self.num_logical_qubits):
+        for logical_qubit_index in range(self.num_logical):
             self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
 
         # return the minimum weight of logical X-type or Z-type operators
@@ -749,7 +742,7 @@ class CSSCode(QuditCode):
                     if other_z @ op_x % 2:
                         candidates_z[zz] = (other_z + op_z) % 2
 
-        assert len(logicals_x) == self.num_logical_qubits
+        assert len(logicals_x) == self.num_logical
         self._logical_ops = np.stack([logicals_x, logicals_z]).astype(int)
         return self._logical_ops
 
@@ -764,7 +757,7 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if ensure_nontrivial:
-            random_logical_qubit_index = np.random.randint(self.num_logical_qubits)
+            random_logical_qubit_index = np.random.randint(self.num_logical)
             return self.get_logical_ops()[pauli.index, random_logical_qubit_index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
@@ -780,7 +773,7 @@ class CSSCode(QuditCode):
         but exactly with integer linear programming (which has exponential complexity).
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        assert 0 <= logical_qubit_index < self.num_logical_qubits
+        assert 0 <= logical_qubit_index < self.num_logical
         code = self.code_z if pauli == Pauli.X else self.code_x
         matrix = code.matrix.view(np.ndarray)
         word = self.get_logical_ops()[(~pauli).index, logical_qubit_index].view(np.ndarray)
@@ -960,7 +953,7 @@ class HGPCode(CSSCode):
             assert code_a._field_order == code_b._field_order
             field = code_a._field_order
 
-        # identify the number of qubits in each sector
+        # identify the number of qudits in each sector
         self.sector_size = np.outer(
             [code_a.num_bits, code_a.num_checks],
             [code_b.num_bits, code_b.num_checks],
@@ -1023,7 +1016,7 @@ class LPCode(CSSCode):
         protograph_a = abstract.Protograph(protograph_a)
         protograph_b = abstract.Protograph(protograph_b)
 
-        # identify the number of qubits in each sector
+        # identify the number of qudits in each sector
         self.sector_size = protograph_a.group.lift_dim * np.outer(
             protograph_a.shape[::-1],
             protograph_b.shape[::-1],
@@ -1104,7 +1097,7 @@ class TannerCode(ClassicalCode):
 
 
 class QTCode(CSSCode):
-    """Quantum Tanner code: a CSS code for qubits defined on the faces of a Cayley complex
+    """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex
 
     Altogether, a quantum Tanner code is defined by:
     - two symmetric (self-inverse) subsets A and B of a group G, and

@@ -209,14 +209,14 @@ def test_cyclic_codes() -> None:
     terms_b = [(1, 3), (0, 1), (0, 2)]
     code = codes.QCCode(dims, terms_a, terms_b)
     assert code.num_qudits == 72
-    assert code.num_logical_qubits == 12
+    assert code.num_logical == 12
 
     dims = (15, 3)
     terms_a = [(0, 9), (1, 1), (1, 2)]
     terms_b = [(0, 0), (0, 2), (0, 7)]
     code = codes.QCCode(dims, terms_a, terms_b)
     assert code.num_qudits == 90
-    assert code.num_logical_qubits == 8
+    assert code.num_logical == 8
 
 
 def test_lifted_product_codes() -> None:
@@ -230,7 +230,7 @@ def test_lifted_product_codes() -> None:
         proto_matrix = [[abstract.Element(group, xx**power) for power in row] for row in matrix]
         protograph = abstract.Protograph(proto_matrix)
         code = codes.LPCode(protograph)
-        rate = code.num_logical_qubits / code.num_qudits
+        rate = code.num_logical / code.num_qudits
         assert rate >= 2 / 17
 
 
