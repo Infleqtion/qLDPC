@@ -453,13 +453,25 @@ class QuditCode(AbstractCode):
     """
 
     @classmethod
-    def conjugate(cls, matrix: IntegerMatrix, conj: slice | Sequence[int]) -> npt.NDArray[np.int_]:
+    def deform(cls, matrix: IntegerMatrix) -> galois.FieldArray:
+        """Apply local Clifford deformations to a parity check matrix.
+
+        The deformation is defined by a permutation of local single-qudit operators.
+        """
+        return NotImplemented
+
+    @classmethod
+    def conjugate(
+        cls, matrix: IntegerMatrix, qubits: slice | Sequence[int]
+    ) -> npt.NDArray[np.int_]:
+        """Swap X-type and Z-type operators on the given qubits."""
         matrix = cls._standardize_matrix(matrix)
-        matrix[:, :, conj] = np.roll(matrix[:, :, conj], 1, axis=1)
+        matrix[:, :, qubits] = np.roll(matrix[:, :, qubits], 1, axis=1)
         return matrix
 
     @classmethod
     def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> npt.NDArray[np.int_]:
+        """'Shift' Pauli operators on some qubits."""
         matrix = cls._standardize_matrix(matrix)
         # identify qubits to shift up or down along the table of Pauli pairs
         shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
