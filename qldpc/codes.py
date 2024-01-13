@@ -111,7 +111,7 @@ class ClassicalCode(AbstractCode):
     """
 
     def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
-        return not np.any(self.matrix @ np.array(word))
+        return not np.any(self.matrix @ self.field(word))
 
     @classmethod
     def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
@@ -549,11 +549,6 @@ class CSSCode(QuditCode):
         distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
         return self.num_qubits, self.num_logical_qubits, distance
 
-    # TODO: Generalize to other fields
-    # if qubit: do what we currently do
-    # otherwise:
-    #     if exact: brute force
-    #     otherwise: raise error
     def get_distance(
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
