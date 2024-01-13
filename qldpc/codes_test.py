@@ -287,6 +287,6 @@ def test_toric_tanner_code() -> None:
     # check that this is a [[16, 2, 4]] code
     assert code.get_code_params() == (16, 2, 4)
     assert code.get_distance(lower=True) == 4
-    assert code.min_weight_brute() == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
+    assert code.min_weight_brute() == 4

@@ -19,8 +19,8 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
-from collections.abc import TYPE_CHECKING, Collection, Iterable, Sequence
-from typing import Literal
+from collections.abc import Collection, Iterable, Sequence
+from typing import TYPE_CHECKING, Literal
 
 import cachetools
 import galois
@@ -708,6 +708,16 @@ class CSSCode(QuditCode):
         # return the minimum weight of logical X-type or Z-type operators
         return self.get_logical_ops()[pauli.index].sum(-1).min()
 
+    def min_weight_brute(self, pauli: Literal[Pauli.X, Pauli.Z] | None = None) -> int:
+        """Brute force computation of minimum weight of non trivial codewords."""
+        assert pauli in [None, Pauli.X, Pauli.Z]
+        if pauli is None:
+            return min(self.min_weight_brute(Pauli.X), self.min_weight_brute(Pauli.Z))
+        code = self.code_x if pauli == Pauli.X else self.code_z
+        return min(
+            np.count_nonzero(word) for word in code.words() if np.any(word @ code.generator.T)
+        )
+
     def get_logical_ops(self) -> npt.NDArray[np.int_]:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
@@ -796,21 +806,6 @@ class CSSCode(QuditCode):
         )
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_qubit_index] = logical_op
-
-    def min_weight_brute(self) -> int:
-        """Brute Force computation of minweight of non trivial codewords."""
-        words_x = self.code_x.words()
-        # non_triv = words_x @ self.code_z
-        distance_X = np.inf
-        for word in words_x.tolist():
-            if np.any(self.field(word) @ self.code_z.matrix.null_space().T):
-                distance_X = min(distance_X, np.count_nonzero(word))
-        words_z = self.code_z.words()
-        distance_Z = np.inf
-        for word in words_z.tolist():
-            if np.any(self.field(word) @ self.code_x.matrix.null_space().T):
-                distance_Z = min(distance_Z, np.count_nonzero(word))
-        return int(min(distance_X, distance_Z))
 
 
 ################################################################################
