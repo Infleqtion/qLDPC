@@ -19,7 +19,7 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import TYPE_CHECKING, Collection, Iterable, Sequence
 from typing import Literal
 
 import cachetools
@@ -28,11 +28,13 @@ import ldpc.mod2
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
-from typing_extensions import Self
 
 import qldpc
 from qldpc import abstract
 from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
+
+if TYPE_CHECKING:
+    from typing_extensions import Self
 
 IntegerMatrix = npt.NDArray[np.int_] | Sequence[Sequence[int]]
 ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
@@ -285,8 +287,16 @@ class ClassicalCode(AbstractCode):
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 
 
+# TODO:
+# - add method to convert a parity check matrix into standard form
+#   - see https://arxiv.org/abs/1101.1519
+#   - one method to compute "blocks" of standard form, one to return the matrix itself
+# - add is_CSS method to figure out whether this is a CSS Code
+#   - see https://quantumcomputing.stackexchange.com/questions/15432/
+#   - also compute and store H_X, H_Z, if CSS
+#   - also add QuditCode.to_CSS() -> CSSCode
 class QuditCode(AbstractCode):
-    """Template class for a qudit-based quantum error-correcting code.
+    """Qudit-based quantum error-correcting code.
 
     The check matrix of a qudit code is an array of dimensions (num_checks, 2 * num_qubits).
 
@@ -374,22 +384,8 @@ class QuditCode(AbstractCode):
         matrix = ClassicalCode.random(2 * qubits, checks, field).matrix
         return QuditCode(matrix.reshape(checks, 2, qubits))
 
-    # TODO : To implement this.
-    """Check if the qubit code is a CSS code (not sure if works for general fields)
-
-        Implements the algorithm from https://quantumcomputing.stackexchange.com/questions/15432/
-
-        Perhaps also add functionality to return H_X, H_Z if CSS.
-    """
-
-    @functools.cached_property
-    def is_CSS(self) -> bool:
-        ...
-        # TODO: implement
-        return NotImplemented
-
     def get_stabilizers(self) -> list[str]:
-        """Stabilizers (checks) of the code, represented by strings."""
+        """Stabilizers (checks) of this code, represented by strings."""
         matrix = self.matrix
         num_checks, _, num_qudits = matrix.shape
         stabilizers = []
@@ -426,12 +422,6 @@ class QuditCode(AbstractCode):
                 matrix[check, Pauli.Z.index, qudit] = val_z
 
         return QuditCode(matrix, field)
-
-    @classmethod
-    def check_to_standard(cls, matrix: IntegerMatrix) -> list[galois.FieldArray]:
-        """Convert a check matrix into the standard form."""
-        # TODO: implement https://arxiv.org/abs/1101.1519
-        return NotImplemented
 
     """
     Code tranformation methods — Conjugation and Shifting.
@@ -478,8 +468,6 @@ class QuditCode(AbstractCode):
         return matrix
 
 
-# TODO: factor out conjugation and local Pauli transformations to a separate method
-# TODO: allow construction of codes with field > 2, but throw errors for unsupported functionality
 class CSSCode(QuditCode):
     """CSS qudit code, with separate X-type and Z-type parity checks.
 
@@ -490,7 +478,6 @@ class CSSCode(QuditCode):
 
     where H_x and H_z are, respectively, the parity check matrices of the classical codes that
     define the X-type and Z-type stabilizers of the CSS code.
-
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -543,13 +530,6 @@ class CSSCode(QuditCode):
     def num_logical_qubits(self) -> int:
         """Number of logical qubits encoded by this code."""
         return self.code_x.dimension + self.code_z.dimension - self.num_qubits
-
-    """Code Paramenter Computation methods
-
-        (i) Calculating distance, both exactly and upper bounds.
-
-        (ii) Obtaining Logical operators (remove?).
-    """
 
     def get_code_params(
         self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
@@ -683,6 +663,11 @@ class CSSCode(QuditCode):
         X(w_x) -- and presumably one of low Hamming weight, since decoders try to find low-weight
         solutions.  Return the Hamming weight |w_x|.
         """
+        if self._field_order != 2:
+            raise ValueError(
+                "Distance upper bound calculation not implemented for fields of order > 2"
+            )
+
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         matrix_z = code_z.matrix.view(np.ndarray)
@@ -713,6 +698,9 @@ class CSSCode(QuditCode):
     @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
     def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
         """Exact X-distance or Z-distance of this code."""
+        if self._field_order != 2:
+            raise ValueError("Exact distance calculation not implemented for fields of order > 2")
+
         # minimize the weight of logical X-type or Z-type operators
         for logical_qubit_index in range(self.num_logical_qubits):
             self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)

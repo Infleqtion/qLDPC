@@ -71,7 +71,7 @@ extend-ignore = [
   "I201",
   "I202",
 ] # these errors conflict with black and/or isort
-type_checking_exempt_modules = ["collections.abc", "typing_extensions"]
+type_checking_exempt_modules = ["collections.abc"]
 # Configuration for flake8-modern-annotations
 modern-annotations-postponed = "always"
 modern-annotations-deprecated = "always"

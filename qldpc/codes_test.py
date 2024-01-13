@@ -103,7 +103,6 @@ def test_deformations(bits: int = 5, checks: int = 3) -> None:
     shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
     transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
-    # print(code.graph.edges(data=True))
 
     for node_check, node_qubit, data in code.graph.edges(data=True):
         vals = data[codes.QuditOperator].value
@@ -113,6 +112,7 @@ def test_deformations(bits: int = 5, checks: int = 3) -> None:
 
 @pytest.mark.parametrize("field", [2, 3])
 def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
+    """Stabilizers of a QuditCode."""
     random_code = codes.ClassicalCode.random(bits, 2 * checks, field)
     matrix = random_code.matrix.reshape((checks, 2, -1))
     code_a = codes.QuditCode(matrix.reshape((checks, 2, bits)))
