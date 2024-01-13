@@ -289,4 +289,3 @@ def test_toric_tanner_code() -> None:
     assert code.get_distance(lower=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
-    assert code.min_weight_brute() == 4

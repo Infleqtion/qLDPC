@@ -576,7 +576,7 @@ class CSSCode(QuditCode):
 
         All remaining keyword arguments are passed to a decoder in `decode`.
         """
-        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert pauli is None or pauli == Pauli.X or pauli == Pauli.Z
         assert lower is False or upper is None
         if pauli is None:
             # minimize over X-distance and Z-distance
@@ -610,6 +610,7 @@ class CSSCode(QuditCode):
 
         All keyword arguments are passed to `CSSCode.get_one_distance_upper_bound`.
         """
+        assert pauli == Pauli.X or pauli == Pauli.Z
         return min(
             self.get_one_distance_upper_bound(
                 pauli, ensure_nontrivial=ensure_nontrivial, **decoder_args
@@ -663,6 +664,7 @@ class CSSCode(QuditCode):
         X(w_x) -- and presumably one of low Hamming weight, since decoders try to find low-weight
         solutions.  Return the Hamming weight |w_x|.
         """
+        assert pauli == Pauli.X or pauli == Pauli.Z
         if self._field_order != 2:
             raise ValueError(
                 "Distance upper bound calculation not implemented for fields of order > 2"
@@ -698,8 +700,11 @@ class CSSCode(QuditCode):
     @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
     def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
         """Exact X-distance or Z-distance of this code."""
+        assert pauli == Pauli.X or pauli == Pauli.Z
         if self._field_order != 2:
-            raise ValueError("Exact distance calculation not implemented for fields of order > 2")
+            words_x = (self.code_x if pauli == Pauli.X else self.code_z).words()
+            generator_z = (self.code_z if pauli == Pauli.X else self.code_x).generator
+            return min(np.count_nonzero(word) for word in words_x if np.any(word @ generator_z.T))
 
         # minimize the weight of logical X-type or Z-type operators
         for logical_qubit_index in range(self.num_logical_qubits):
@@ -707,16 +712,6 @@ class CSSCode(QuditCode):
 
         # return the minimum weight of logical X-type or Z-type operators
         return self.get_logical_ops()[pauli.index].sum(-1).min()
-
-    def min_weight_brute(self, pauli: Literal[Pauli.X, Pauli.Z] | None = None) -> int:
-        """Brute force computation of minimum weight of non trivial codewords."""
-        assert pauli in [None, Pauli.X, Pauli.Z]
-        if pauli is None:
-            return min(self.min_weight_brute(Pauli.X), self.min_weight_brute(Pauli.Z))
-        code = self.code_x if pauli == Pauli.X else self.code_z
-        return min(
-            np.count_nonzero(word) for word in code.words() if np.any(word @ code.generator.T)
-        )
 
     def get_logical_ops(self) -> npt.NDArray[np.int_]:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
@@ -778,6 +773,7 @@ class CSSCode(QuditCode):
         identity modulo stabilizers.  If `ensure_nontrivial is True`, ensure that the logical
         operator we return is nontrivial.
         """
+        assert pauli == Pauli.X or pauli == Pauli.Z
         if ensure_nontrivial:
             random_logical_qubit_index = np.random.randint(self.num_logical_qubits)
             return self.get_logical_ops()[pauli.index, random_logical_qubit_index]
@@ -794,6 +790,7 @@ class CSSCode(QuditCode):
         This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound,
         but exactly with integer linear programming (which has exponential complexity).
         """
+        assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.num_logical_qubits
         code = self.code_z if pauli == Pauli.X else self.code_x
         matrix = code.matrix.view(np.ndarray)
