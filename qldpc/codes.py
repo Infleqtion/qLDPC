@@ -586,8 +586,7 @@ class CSSCode(QuditCode):
             )
 
         if lower:
-            # distance of the Z-type subcode correcting X-type errors, or vice versa
-            return self.code_z.get_distance() if pauli == Pauli.X else self.code_x.get_distance()
+            return self.get_distance_lower_bound(pauli)
 
         if upper is not None:
             # compute an upper bound to the distance with a decoder
@@ -597,6 +596,10 @@ class CSSCode(QuditCode):
 
         # exact distance with an integer linear program
         return self.get_distance_exact(pauli, **decoder_args)
+
+    def get_distance_lower_bound(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
+        """Lower bound to the X-distance or Z-distance of this code."""
+        return self.code_z.get_distance() if pauli == Pauli.X else self.code_x.get_distance()
 
     def get_distance_upper_bound(
         self,
