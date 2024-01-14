@@ -84,6 +84,13 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
+def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
+    """Random qubit code."""
+    assert codes.QuditCode.random(num_qubits, num_checks).num_qubits == num_qubits
+    with pytest.raises(ValueError, match="qubit-only method"):
+        assert codes.QuditCode.random(num_qubits, num_checks, field=3).num_qubits
+
+
 def test_CSS_code(field: int = 3) -> None:
     """Miscellaneous CSS code tests and coverage."""
     with pytest.raises(ValueError, match="incompatible"):
@@ -112,6 +119,9 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
     assert np.array_equal(code_a.matrix, code_b.matrix)
     assert stabilizers == code_b.get_stabilizers()
+
+    with pytest.raises(ValueError, match="different lengths"):
+        codes.QuditCode.from_stabilizers(["I", "I I"], field)
 
 
 def test_trivial_lift(
