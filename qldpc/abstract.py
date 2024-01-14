@@ -38,19 +38,19 @@ unitary, then p.T is equal to the inverse ~p = p**-1.
 from __future__ import annotations
 
 import collections
+import copy
 import functools
 import itertools
 from collections.abc import Callable, Iterator, Sequence
-from typing import TYPE_CHECKING, TypeVar
+from typing import TypeVar
 
+import galois
 import numpy as np
 import numpy.typing as npt
 import sympy.combinatorics as comb
 from sympy.combinatorics.perm_groups import PermutationGroup
-from sympy.polys.domains import FiniteField
 
-if TYPE_CHECKING:
-    from sympy.polys.domains.modularinteger import ModularInteger
+DEFAULT_FIELD_ORDER = 2
 
 ################################################################################
 # groups
@@ -106,35 +106,49 @@ class Group:
     Group elements are represented by permutations.
 
     A group additionally comes equipped with a "lift", or a representation that maps group elements
-    to integer-valued square matrices, for which the group action is matrix multiplication.  If no
-    lift is provided, the group will default to the representation of group members by explicit
-    permutation matrices.
+    to square matrices, for which the group action is matrix multiplication.  If no lift is
+    provided, the group will default to the representation of group members by explicit permutation
+    matrices.
     """
 
     _group: PermutationGroup
+    _field: type[galois.FieldArray]
     _lift: Lift
 
-    def __init__(self, group: PermutationGroup, lift: Lift | None = None) -> None:
+    def __init__(
+        self, group: PermutationGroup, field: int | None = None, lift: Lift | None = None
+    ) -> None:
         self._group = group
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         self._lift = lift if lift is not None else default_lift
 
     def __eq__(self, other: object) -> bool:
-        return isinstance(other, Group) and self._group == other._group
+        return (
+            isinstance(other, Group) and self._field == other._field and self._group == other._group
+        )
 
     def __mul__(self, other: Group) -> Group:
         """Direct product of two groups."""
+        if self.field != other.field:
+            raise ValueError("Cannot multiply groups with lifts defined over different fields.")
         permutation_group = self._group * other._group
 
-        def lift(member: GroupMember) -> IntegerArray:
+        def lift(member: GroupMember) -> galois.FieldArray:
             degree = self._group.degree
             left = member.array_form[:degree]
             right = [index - degree for index in member.array_form[degree:]]
-            return np.kron(self.lift(GroupMember(left)), other.lift(GroupMember(right)))
+            matrix = np.kron(self.lift(GroupMember(left)), other.lift(GroupMember(right)))
+            return self.field(matrix)
 
-        return Group(permutation_group, lift)
+        return Group(permutation_group, self.field.order, lift)
 
     def __contains__(self, member: GroupMember) -> bool:
         return comb.Permutation(member.array_form) in self._group
+
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """Base field of this group."""
+        return self._field
 
     def order(self) -> int:
         """Number of members in this group."""
@@ -160,9 +174,9 @@ class Group:
         """Direct product of Groups."""
         return functools.reduce(cls.__mul__, groups * repeat)
 
-    def lift(self, member: GroupMember) -> IntegerArray:
+    def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to a unitary representation as an integer-valued square matrix."""
-        return self._lift(member)
+        return self.field(self._lift(member))
 
     @functools.cached_property
     def lift_dim(self) -> int:
@@ -182,25 +196,28 @@ class Group:
     def from_table(
         cls,
         table: IntegerArray | Sequence[Sequence[int]],
+        field: int | None = None,
         integer_lift: IntegerLift | None = None,
     ) -> Group:
         """Construct a group from a multiplication (Cayley) table."""
 
         if integer_lift is None:
             group = PermutationGroup(*[GroupMember(row) for row in table])
-            return Group(group, default_lift)
+            return Group(group, lift=default_lift)
 
         members = {GroupMember(row): idx for idx, row in enumerate(table)}
 
         def lift(member: GroupMember) -> IntegerArray:
             return integer_lift(members[member])
 
-        return Group(PermutationGroup(*members.keys()), lift)
+        return Group(PermutationGroup(*members.keys()), field, lift)
 
     @classmethod
-    def from_generators(cls, *generators: GroupMember, lift: Lift | None = None) -> Group:
+    def from_generators(
+        cls, *generators: GroupMember, field: int | None = None, lift: Lift | None = None
+    ) -> Group:
         """Construct a group from generators."""
-        return Group(PermutationGroup(*generators), lift)
+        return Group(PermutationGroup(*generators), field, lift)
 
 
 ################################################################################
@@ -208,46 +225,37 @@ class Group:
 
 
 class Element:
-    """An element of a group algebra over a prime number field.
+    """An element of a group algebra over a finite field F_q.
 
-    Each "Element" x is a sum of group members with coefficients in Z_p:
-    x = sum_{g in G} x_g g, with each x_g in Z_p (i.e., the integers modulo a prime p).
+    Each "Element" x is a sum of group members with coefficients in F_q:
+    x = sum_{g in G} x_g g, with each x_g in F_q.
     """
 
     _group: Group
-    _field: FiniteField
-    _vec: collections.defaultdict[GroupMember, ModularInteger]
+    _vec: collections.defaultdict[GroupMember, galois.FieldArray]
 
-    def __init__(
-        self,
-        group: Group,
-        *members: GroupMember,
-        field: FiniteField | int = FiniteField(2),
-    ):
+    def __init__(self, group: Group, *members: GroupMember):
         self._group = group
-        self._field = field if isinstance(field, FiniteField) else FiniteField(field)
-        self._vec = collections.defaultdict(lambda: self._field.zero)
+        self._vec = collections.defaultdict(lambda: self.field(0))
         for member in members:
-            self._vec[member] += self._field.one
+            self._vec[member] += self.field(1)
 
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, Element)
-            and self._field == other._field
             and self._group == other._group
             and all(self._vec[member] == other._vec[member] for member in self._vec)
             and all(self._vec[member] == other._vec[member] for member in other._vec)
         )
 
-    def __iter__(self) -> Iterator[tuple[GroupMember, ModularInteger]]:
+    def __iter__(self) -> Iterator[tuple[GroupMember, galois.FieldArray]]:
         yield from self._vec.items()
 
     def __add__(self, other: GroupMember | Element) -> Element:
-        new_element = self.zero()
-        new_element._vec = self._vec.copy()
+        new_element = self.copy()
 
         if isinstance(other, GroupMember):
-            new_element._vec[other] += self._field.one
+            new_element._vec[other] += self.field(1)
             return new_element
 
         # isinstance(other, Element)
@@ -290,30 +298,37 @@ class Element:
     def __pow__(self, power: int) -> Element:
         return functools.reduce(Element.__mul__, [self] * power, self.one())
 
+    def copy(self) -> Element:
+        """Copy of self."""
+        element = self.zero()
+        for member, val in self:
+            element._vec[member] = copy.deepcopy(val)
+        return element
+
     @property
-    def field(self) -> FiniteField:
+    def field(self) -> type[galois.FieldArray]:
         """Base field of this algebra."""
-        return self._field
+        return self.group.field
 
     @property
     def group(self) -> Group:
         """Base group of this algebra."""
         return self._group
 
-    def lift(self) -> IntegerArray:
+    def lift(self) -> galois.FieldArray:
         """Lift this element using the underlying group representation."""
         return sum(
-            (val.to_int() * self._group.lift(member) for member, val in self),
-            start=np.zeros((self._group.lift_dim,) * 2, dtype=int),
+            (val * self._group.lift(member) for member, val in self),
+            start=self.field.Zeros((self._group.lift_dim,) * 2),
         )
 
     def zero(self) -> Element:
         """Zero (additive identity) element."""
-        return Element(self._group, field=self._field)
+        return Element(self._group)
 
     def one(self) -> Element:
         """One (multiplicative identity) element."""
-        return Element(self._group, self._group.identity, field=self._field)
+        return Element(self._group, self._group.identity)
 
     @property
     def T(self) -> Element:
@@ -371,13 +386,18 @@ class Protograph:
         """Group associated with this protograph."""
         return self._matrix[0, 0].group
 
-    def lift(self) -> IntegerArray:
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """Base field of this protograph."""
+        return self.group.field
+
+    def lift(self) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
         vals = [val.lift() for val in self.matrix.ravel()]
         tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
         rows = tensor.shape[0] * tensor.shape[1]
         cols = tensor.shape[2] * tensor.shape[3]
-        return tensor.reshape((rows, cols))
+        return tensor.reshape(rows, cols)  # type:ignore[return-value]
 
     @property
     def T(self) -> Protograph:
@@ -395,10 +415,7 @@ class Protograph:
         matrix are interpreted as zeros of the group algebra.
         """
         matrix = np.array(matrix)
-        vals = [
-            Element(group, member, field=field) if member else Element(group, field=field)
-            for member in matrix.ravel()
-        ]
+        vals = [Element(group, member) if member else Element(group) for member in matrix.ravel()]
         return Protograph(np.array(vals, dtype=object).reshape(matrix.shape))
 
 
@@ -409,22 +426,23 @@ class Protograph:
 class TrivialGroup(Group):
     """The trivial group with one member: the identity."""
 
-    def __init__(self) -> None:
+    def __init__(self, field: int | None = None) -> None:
         super().__init__(
             PermutationGroup(GroupMember()),
+            field,
             lambda _: np.array(1, ndmin=2, dtype=int),
         )
 
     @classmethod
     def to_protograph(
-        cls, matrix: IntegerArray | Sequence[Sequence[int]], *, field: int = 2
+        cls, matrix: IntegerArray | Sequence[Sequence[int]], field: int | None = None
     ) -> Protograph:
         """Convert a matrix of 0s and 1s into a protograph of the trivial group."""
         matrix = np.array(matrix)
-        group = TrivialGroup()
-        zero = Element(group, field=field)
-        unit = Element(group, group.identity, field=field)
-        terms = np.array([unit if val else zero for val in matrix.ravel()], dtype=object)
+        group = TrivialGroup(field)
+        zero = Element(group)
+        unit = Element(group, group.identity)
+        terms = np.array([val * unit if val else zero for val in matrix.ravel()], dtype=object)
         return Protograph(terms.reshape(matrix.shape))
 
 
@@ -480,7 +498,7 @@ class QuaternionGroup(Group):
                 blocks = [[zero, -unit], [unit, zero]]
             else:  # if base == 3; +/- k
                 blocks = [[zero, -imag], [-imag, zero]]
-            return sign * np.block(blocks).astype(int).T
+            return sign * np.block(blocks).astype(int).T % 3
 
-        group = Group.from_table(table, lift)
-        super().__init__(group._group, group._lift)
+        group = Group.from_table(table, integer_lift=lift)
+        super().__init__(group._group, field=3, lift=group._lift)

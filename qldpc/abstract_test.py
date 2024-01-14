@@ -84,11 +84,10 @@ def test_group_product() -> None:
 
 def test_algebra() -> None:
     """Construct elements of a group algebra."""
-    group = abstract.TrivialGroup()
-    zero = abstract.Element(group, field=3)
-    one = abstract.Element(group, field=3).one()
+    group = abstract.TrivialGroup(field=3)
+    zero = abstract.Element(group)
+    one = abstract.Element(group).one()
     assert zero.group == group
-    assert zero.field == abstract.FiniteField(3)
     assert one + one + one == group.identity + 2 * one == zero
     assert group.identity * one == one * group.identity == one**2 == one
     assert np.array_equal(zero.lift(), np.array(0, ndmin=2))

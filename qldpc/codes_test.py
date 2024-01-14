@@ -117,16 +117,16 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (4, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
-    field: int = 2,  # TODO: make this work with field = 3
+    field: int = 3,
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field)
     code_HGP = codes.HGPCode(code_a, code_b, field)
 
-    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix, field=field)
-    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix, field=field)
-    code_LP = codes.LPCode(protograph_a, protograph_b, field)
+    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix, field)
+    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix, field)
+    code_LP = codes.LPCode(protograph_a, protograph_b)
 
     assert np.array_equal(code_HGP.matrix, code_LP.matrix)
     assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)

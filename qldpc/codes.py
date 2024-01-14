@@ -39,9 +39,10 @@ if TYPE_CHECKING:
 IntegerMatrix = npt.NDArray[np.int_] | Sequence[Sequence[int]]
 ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
 
-DEFAULT_FIELD_ORDER = 2
+DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 
 # TODO: fix all comments to generalize fields: Z_2 --> Z_q
+# TODO: remove assertions with helpful errors
 
 ################################################################################
 # template error correction code classes
@@ -71,10 +72,10 @@ class AbstractCode(abc.ABC):
             self._matrix = matrix
         else:
             self._field_order = field or DEFAULT_FIELD_ORDER
-            self._matrix = self.field(matrix, dtype=int)
+            self._matrix = self.field(np.array(matrix))
 
     @property
-    def field(self) -> galois.FieldArrayMeta:
+    def field(self) -> type[galois.FieldArray]:
         """Base field over which the linear code is defined."""
         return galois.GF(self._field_order)
 
@@ -158,9 +159,7 @@ class ClassicalCode(AbstractCode):
 
     def get_random_word(self) -> galois.FieldArray:
         """Random code word: a sum all generators with random field coefficients."""
-        return (
-            self.field.Random(self.generator.shape[0]) @ self.generator  # type:ignore[attr-defined]
-        )
+        return self.field.Random(self.generator.shape[0]) @ self.generator
 
     def dual(self) -> ClassicalCode:
         """Dual to this code.
@@ -921,7 +920,6 @@ class HGPCode(CSSCode):
         """
         if code_b is None:
             code_b = code_a
-        # TODO: do we need to construct these codes?  Can we stick to using matrices?
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
         if field is None:
@@ -971,7 +969,6 @@ class LPCode(CSSCode):
         self,
         protograph_a: abstract.Protograph | ObjectMatrix,
         protograph_b: abstract.Protograph | ObjectMatrix | None = None,
-        field: int | None = None,
         *,
         conjugate: bool = False,
     ) -> None:
@@ -993,6 +990,8 @@ class LPCode(CSSCode):
             protograph_b = protograph_a
         protograph_a = abstract.Protograph(protograph_a)
         protograph_b = abstract.Protograph(protograph_b)
+        assert protograph_a.field == protograph_b.field
+        field = protograph_a.field.order
 
         # identify the number of qudits in each sector
         self.sector_size = protograph_a.group.lift_dim * np.outer(
@@ -1009,7 +1008,7 @@ class LPCode(CSSCode):
 
         # construct the nontrivial blocks in the matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
+        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b) * (field - 1)
         mat_H1_Im2_T = np.kron(matrix_a_T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b_T)
 
