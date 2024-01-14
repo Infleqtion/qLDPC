@@ -47,9 +47,7 @@ def test_bit_codes() -> None:
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
     code = codes.ClassicalCode.random(bits, checks, field)
-    words_a = code.words()
-    words_b = code.dual().words()
-    assert all(word_a @ word_b == 0 for word_a in words_a for word_b in words_b)
+    assert all(word_a @ word_b == 0 for word_a in code.words() for word_b in (~code).words())
 
 
 def test_tensor_product(
@@ -240,7 +238,7 @@ def test_tanner_code() -> None:
         subgraph.add_edge(edge[0], edge)
         subgraph.add_edge(edge[1], edge)
     num_sources = sum(1 for node in subgraph if subgraph.in_degree(node) == 0)
-    num_sinks = sum(1 for node in subgraph if subgraph.out_degree(node) == 0)
+    num_sinks = subgraph.number_of_nodes() - num_sources
 
     # build a classical Tanner code and check that it has the right number of checks/bits
     code = codes.TannerCode(subgraph, subcode)
