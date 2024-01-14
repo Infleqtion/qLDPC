@@ -15,6 +15,7 @@
    limitations under the License.
 """
 import numpy as np
+import pytest
 
 from qldpc import abstract
 
@@ -81,6 +82,9 @@ def test_group_product() -> None:
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
 
+    with pytest.raises(ValueError, match="different fields"):
+        abstract.TrivialGroup(2) * abstract.TrivialGroup(3)
+
 
 def test_algebra() -> None:
     """Construct elements of a group algebra."""
@@ -102,6 +106,7 @@ def test_protograph() -> None:
     assert 1 * protograph == protograph * 1 == protograph
     assert protograph == abstract.Protograph(protograph)
     assert np.array_equal(protograph.lift(), matrix)
+    assert protograph.field == abstract.TrivialGroup().field
 
 
 def test_transpose() -> None:
