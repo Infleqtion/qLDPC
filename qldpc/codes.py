@@ -296,8 +296,10 @@ class ClassicalCode(AbstractCode):
 #   - one method to compute "blocks" of standard form, one to return the matrix itself
 # - add is_CSS method to figure out whether this is a CSS Code
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
-#   - also compute and store H_x, H_z, if CSS
+#   - also compute and store sub-codes, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
+# - implement more general local Clifford transformations
+#   - see https://arxiv.org/pdf/quant-ph/0408190.pdf
 class QuditCode(AbstractCode):
     """Qudit-based quantum error-correcting code.
 
@@ -401,54 +403,16 @@ class QuditCode(AbstractCode):
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
-    """
-    Code tranformation methods — Conjugation and Shifting.
-
-    (i) Conjugation — A QuditCode can specify which data qubits should be hadamard-transformed
-    before/after syndrome extraction, thereby transforming the operators
-    that address a specified data qubit as (X,Y,Z) <--> (Z,Y,X).
-
-    (ii) Shifting — A QuditCode  can also "shift" the Pauli operators on a qubit, moving vertically
-    along the following table:
-
-    ―――――――――――
-    | XY | YX |
-    ―――――――――――
-    | XZ | ZX |
-    ―――――――――――
-    | YZ | ZY |
-    ―――――――――――
-
-    Qubit shifts are specified by a dictionary mapping qubit_index --> shift_index, where
-    shift_index = +1, 0, and -1 mod 3 respectively refer to the top, middle, and bottom rows of the
-    table.
-
-    Physically, a shift of +1 and -1 respectively correspond to conjugating the Pauli operators
-    addressing a qubit by sqrt(X) and sqrt(Z) rotations.
-    """
-
     @classmethod
     def conjugate(
         cls, matrix: IntegerMatrix, qudits: slice | Sequence[int]
     ) -> npt.NDArray[np.int_]:
-        """Swap X-type and Z-type operators on the given qudits."""
+        """Apply local Fourier transforms to the given qudits.
+
+        This is equivalent to swapping X-type and Z-type operators."""
         num_checks = len(matrix)
         matrix = np.reshape(matrix, (num_checks, 2, -1))
         matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
-        return matrix.reshape(num_checks, -1)
-
-    @classmethod
-    def shift(cls, matrix: IntegerMatrix, shifts: dict[int, int]) -> npt.NDArray[np.int_]:
-        """'Shift' Pauli operators on some qubits."""
-        num_checks = len(matrix)
-        matrix = np.reshape(matrix, (num_checks, 2, -1))
-        # identify qubits to shift up or down along the table of Pauli pairs
-        shifts_up = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 1)
-        shifts_dn = tuple(qubit for qubit, shift in shifts.items() if shift % 3 == 2)
-        # For qubits shifting up, any stabilizer addressing a qubit with a Z should now also
-        # address that qubit with X, so copy Z to X.  Likewise for shifting down and X to Z.
-        matrix[:, Pauli.X.index, shifts_up] |= matrix[:, Pauli.Z.index, shifts_up]
-        matrix[:, Pauli.Z.index, shifts_dn] |= matrix[:, Pauli.X.index, shifts_dn]
         return matrix.reshape(num_checks, -1)
 
 

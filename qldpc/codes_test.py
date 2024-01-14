@@ -99,15 +99,12 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
     """Apply Pauli deformations to a qudit code."""
     code = codes.QuditCode.random(num_qudits, num_checks)
     conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
-    shifts = {qubit: np.random.randint(3) for qubit in range(num_qudits)}
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
-    transformed_matrix = codes.CSSCode.shift(transformed_matrix, shifts)
 
     transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
     for node_check, node_qubit, data in code.graph.edges(data=True):
         vals = data[codes.QuditOperator].value
-        assert transformed_matrix[node_check.index, 0, node_qubit.index] == vals[0]
-        assert transformed_matrix[node_check.index, 1, node_qubit.index] == vals[1]
+        assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals
 
 
 @pytest.mark.parametrize("field", [2, 3])
