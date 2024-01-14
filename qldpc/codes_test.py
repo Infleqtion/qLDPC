@@ -86,12 +86,12 @@ def test_conversions(bits: int = 10, checks: int = 8, field: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
-def test_CSS_code() -> None:
+def test_CSS_code(field: int = 3) -> None:
     """Miscellaneous CSS code tests and coverage."""
     with pytest.raises(ValueError, match="incompatible"):
-        code_x = codes.ClassicalCode.random(3, 2, 3)
-        code_z = codes.ClassicalCode.random(4, 2, 3)
-        codes.CSSCode(code_x, code_z, 3)
+        code_x = codes.ClassicalCode.random(3, 2, field)
+        code_z = codes.ClassicalCode.random(4, 2, field)
+        codes.CSSCode(code_x, code_z, field)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
