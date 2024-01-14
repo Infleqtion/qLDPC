@@ -122,13 +122,11 @@ class ClassicalCode(AbstractCode):
         identified with the checks and bits of the code.  The check vertex c and the bit vertex b
         share an edge iff c addresses b; that is, edge (c, b) is in the graph iff H[c, b] != 0.
         """
-        if not isinstance(matrix, np.ndarray):
-            matrix = np.array(matrix)
         graph = nx.DiGraph()
-        for row, col in zip(*np.where(matrix)):
+        for row, col in zip(*np.nonzero(matrix)):
             node_c = Node(index=int(row), is_data=False)
             node_d = Node(index=int(col), is_data=True)
-            graph.add_edge(node_c, node_d, val=matrix[row, col])
+            graph.add_edge(node_c, node_d, val=matrix[row][col])
         if isinstance(matrix, galois.FieldArray):
             graph.order = type(matrix).order
         return graph
@@ -335,7 +333,7 @@ class QuditCode(AbstractCode):
         """Convert a parity check matrix into a Tanner graph."""
         graph = nx.DiGraph()
         matrix = np.reshape(matrix, (len(matrix), 2, -1))
-        for row, col_xz, col in zip(*np.where(matrix)):
+        for row, col_xz, col in zip(*np.nonzero(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qudit = Node(index=int(col), is_data=True)
             graph.add_edge(node_check, node_qudit)

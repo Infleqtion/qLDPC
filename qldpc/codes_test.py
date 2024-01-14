@@ -21,7 +21,7 @@ import pytest
 from qldpc import abstract, codes
 
 
-def test_bit_codes() -> None:
+def test_classical_codes() -> None:
     """Construction of a few classical codes."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
     assert codes.ClassicalCode.hamming(3).get_distance() == 3
@@ -34,7 +34,7 @@ def test_bit_codes() -> None:
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
-        assert not np.any(code.matrix @ code.get_random_word())
+        assert code.get_random_word() in code
 
     # test that rank of repetition and hamming codes is independent of the field
     assert codes.ClassicalCode.repetition(3).rank == codes.ClassicalCode.repetition(3, 3).rank
@@ -71,7 +71,7 @@ def test_tensor_product(
         codes.ClassicalCode.tensor_product(code_a, code_b)
 
 
-def test_conversions(bits: int = 10, checks: int = 8, field: int = 3) -> None:
+def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Conversions between matrix and graph representations of a code."""
     code: codes.ClassicalCode | codes.QuditCode
 
