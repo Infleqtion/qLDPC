@@ -81,8 +81,7 @@ def test_conversions(bits: int = 10, checks: int = 8, field: int = 3) -> None:
     graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
 
-    # TODO: test with field
-    code = codes.QuditCode.random(bits, checks)
+    code = codes.QuditCode.random(bits, checks, field)
     graph = codes.QuditCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 

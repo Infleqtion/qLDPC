@@ -762,7 +762,6 @@ class CSSCode(QuditCode):
 
 
 # TODO: add special/simpler cases of code distance calculations, where available
-# TODO: add "conjugation" as a natural deformation, where applicable
 
 
 class GBCode(CSSCode):
