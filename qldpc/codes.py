@@ -298,8 +298,6 @@ class ClassicalCode(AbstractCode):
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
 #   - also compute and store sub-codes, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
-# - implement more general local Clifford transformations
-#   - see https://arxiv.org/pdf/quant-ph/0408190.pdf
 class QuditCode(AbstractCode):
     """Qudit-based quantum error-correcting code.
 
@@ -403,6 +401,8 @@ class QuditCode(AbstractCode):
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
+    # TODO: generalize to any local Clifford deformation
+    #       see https://arxiv.org/pdf/quant-ph/0408190.pdf
     @classmethod
     def conjugate(
         cls, matrix: IntegerMatrix, qudits: slice | Sequence[int]
@@ -439,13 +439,19 @@ class CSSCode(QuditCode):
         code_x: ClassicalCode | IntegerMatrix,
         code_z: ClassicalCode | IntegerMatrix,
         field: int | None = None,
+        *,
+        conjugate: slice | Sequence[int] = (),
     ) -> None:
-        """Construct a CSS code from X-type and Z-type parity checks."""
+        """Construct a CSS code from X-type and Z-type parity checks.
+
+        Also allow specifying local Fourier transformations on specified qudits.
+        """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
         if field is None and self.code_x._field_order != self.code_z._field_order:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field_order = self.code_x._field_order
+        self._conjugate = conjugate
 
         if self.code_x.num_bits != self.code_z.num_bits or np.any(
             self.code_x.matrix @ self.code_z.matrix.T
@@ -461,7 +467,7 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
             ]
         )
-        return galois.GF(self._field_order)(matrix)
+        return galois.GF(self._field_order)(self.conjugate(matrix, self._conjugate))
 
     @property
     def num_checks(self) -> int:
