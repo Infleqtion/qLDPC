@@ -74,6 +74,9 @@ class AbstractCode(abc.ABC):
             self._field_order = field or DEFAULT_FIELD_ORDER
             self._matrix = self.field(np.array(matrix))
 
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, type(self)) and np.array_equal(self.matrix, other.matrix)
+
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field over which the linear code is defined."""
@@ -431,6 +434,7 @@ class CSSCode(QuditCode):
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
     _field_order: int  # The order of the field over which the CSS code is defined
 
+    _codes_equal: bool
     _logical_ops: npt.NDArray[np.int_] | None = None
 
     def __init__(
@@ -447,6 +451,7 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
+        self._codes_equal = self.code_x == self.code_z
         if field is None and self.code_x._field_order != self.code_z._field_order:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field_order = self.code_x._field_order
@@ -523,8 +528,9 @@ class CSSCode(QuditCode):
 
         All remaining keyword arguments are passed to a decoder in `decode`.
         """
-        assert pauli is None or pauli == Pauli.X or pauli == Pauli.Z
         assert lower is False or upper is None
+        assert pauli == Pauli.X or pauli == Pauli.Z or pauli is None
+        pauli = pauli if not self._codes_equal else Pauli.X
         if pauli is None:
             # minimize over X-distance and Z-distance
             return min(
@@ -546,6 +552,8 @@ class CSSCode(QuditCode):
 
     def get_distance_lower_bound(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
         """Lower bound to the X-distance or Z-distance of this code."""
+        assert pauli == Pauli.X or pauli == Pauli.Z
+        pauli = pauli if not self._codes_equal else Pauli.X
         return self.code_z.get_distance() if pauli == Pauli.X else self.code_x.get_distance()
 
     def get_distance_upper_bound(
@@ -651,6 +659,7 @@ class CSSCode(QuditCode):
     def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
         """Exact X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
+        pauli = pauli if not self._codes_equal else Pauli.X
         if self._field_order != 2:
             code_x = self.code_x if pauli == Pauli.X else self.code_z
             code_z = self.code_z if pauli == Pauli.X else self.code_x
