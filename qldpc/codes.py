@@ -440,7 +440,7 @@ class CSSCode(QuditCode):
         code_z: ClassicalCode | IntegerMatrix,
         field: int | None = None,
         *,
-        conjugate: slice | Sequence[int] = (),
+        conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks.
 
@@ -451,7 +451,7 @@ class CSSCode(QuditCode):
         if field is None and self.code_x._field_order != self.code_z._field_order:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field_order = self.code_x._field_order
-        self._conjugate = conjugate
+        self._conjugate = conjugate or ()
 
         if self.code_x.num_bits != self.code_z.num_bits or np.any(
             self.code_x.matrix @ self.code_z.matrix.T
@@ -783,6 +783,8 @@ class GBCode(CSSCode):
         matrix_a: IntegerMatrix,
         matrix_b: IntegerMatrix | None = None,
         field: int | None = None,
+        *,
+        conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a generalized bicycle code."""
         if matrix_b is None:
@@ -797,7 +799,7 @@ class GBCode(CSSCode):
         if field is None:
             field = DEFAULT_FIELD_ORDER
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate)
 
 
 class QCCode(GBCode):
@@ -824,6 +826,8 @@ class QCCode(GBCode):
         terms_a: Collection[tuple[int, int]],
         terms_b: Collection[tuple[int, int]] | None = None,
         field: int | None = None,
+        *,
+        conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a quasi-cyclic code."""
         if terms_b is None:
@@ -836,7 +840,7 @@ class QCCode(GBCode):
         members_b = [group.generators[factor] ** power for factor, power in terms_b]
         matrix_a = abstract.Element(group, *members_a).lift()
         matrix_b = abstract.Element(group, *members_b).lift()
-        GBCode.__init__(self, matrix_a, matrix_b, field)
+        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
 
 
 ################################################################################
@@ -903,6 +907,8 @@ class HGPCode(CSSCode):
         code_a: ClassicalCode | IntegerMatrix,
         code_b: ClassicalCode | IntegerMatrix | None = None,
         field: int | None = None,
+        *,
+        conjugate: bool = False,
     ) -> None:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
@@ -928,6 +934,7 @@ class HGPCode(CSSCode):
             [code_a.num_bits, code_a.num_checks],
             [code_b.num_bits, code_b.num_checks],
         )
+        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
         # construct the nontrivial blocks of the parity check matrices
         matrix_a = code_a.matrix
@@ -940,7 +947,7 @@ class HGPCode(CSSCode):
         # construct the parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
-        CSSCode.__init__(self, matrix_x, matrix_z, field)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
 
 
 class LPCode(CSSCode):
@@ -966,6 +973,8 @@ class LPCode(CSSCode):
         protograph_a: abstract.Protograph | ObjectMatrix,
         protograph_b: abstract.Protograph | ObjectMatrix | None = None,
         field: int | None = None,
+        *,
+        conjugate: bool = False,
     ) -> None:
         """Same hypergraph product as in the HGPCode, but with protographs.
 
@@ -991,6 +1000,7 @@ class LPCode(CSSCode):
             protograph_a.shape[::-1],
             protograph_b.shape[::-1],
         )
+        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
         # identify sub-matrices and their transposes
         matrix_a = protograph_a.matrix
@@ -1005,9 +1015,9 @@ class LPCode(CSSCode):
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b_T)
 
         # construct the parity check matrices
-        protograph_x = abstract.Protograph(np.block([mat_H1_In2, mat_Im1_H2_T]))
-        protograph_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T]))
-        CSSCode.__init__(self, protograph_x.lift(), protograph_z.lift(), field)
+        matrix_x = abstract.Protograph(np.block([mat_H1_In2, mat_Im1_H2_T])).lift()
+        matrix_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T])).lift()
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
 
 
 ################################################################################
@@ -1097,6 +1107,8 @@ class QTCode(CSSCode):
         code_a: ClassicalCode | IntegerMatrix,
         code_b: ClassicalCode | IntegerMatrix | None = None,
         field: int | None = None,
+        *,
+        conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
         if code_b is None:
@@ -1114,4 +1126,4 @@ class QTCode(CSSCode):
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
         matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
-        CSSCode.__init__(self, matrix_x, matrix_z, field)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate)
