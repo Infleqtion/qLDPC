@@ -43,6 +43,7 @@ DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 
 # TODO: fix all comments to generalize fields: Z_2 --> Z_q
 # TODO: remove assertions with helpful errors
+# TODO: use DEFAULT_FIELD_ORDER instead of None
 
 ################################################################################
 # template error correction code classes
