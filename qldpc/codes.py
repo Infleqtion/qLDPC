@@ -74,9 +74,6 @@ class AbstractCode(abc.ABC):
             self._field_order = field or DEFAULT_FIELD_ORDER
             self._matrix = self.field(np.array(matrix))
 
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, type(self)) and np.array_equal(self.matrix, other.matrix)
-
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field over which the linear code is defined."""
