@@ -472,7 +472,7 @@ class CSSCode(QuditCode):
         return self.code_x.matrix.shape[1]
 
     @property
-    def num_logical(self) -> int:
+    def dimension(self) -> int:
         """Number of logical qudits encoded by this code."""
         return self.code_x.dimension + self.code_z.dimension - self.num_qudits
 
@@ -489,7 +489,7 @@ class CSSCode(QuditCode):
         Keyword arguments are passed to the calculation of code distance.
         """
         distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
-        return self.num_qudits, self.num_logical, distance
+        return self.num_qudits, self.dimension, distance
 
     def get_distance(
         self,
@@ -649,7 +649,7 @@ class CSSCode(QuditCode):
             return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
 
         # minimize the weight of logical X-type or Z-type operators
-        for logical_qubit_index in range(self.num_logical):
+        for logical_qubit_index in range(self.dimension):
             self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
 
         # return the minimum weight of logical X-type or Z-type operators
@@ -666,6 +666,7 @@ class CSSCode(QuditCode):
         Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
         procedure described in arXiv:0903.5256.
         """
+        # TODO: construct logical operators for non-qubit codes
         self._assert_qubit_code()
         if self._logical_ops is not None:
             return self._logical_ops
@@ -703,7 +704,7 @@ class CSSCode(QuditCode):
                     if other_z @ op_x % 2:
                         candidates_z[zz] = (other_z + op_z) % 2
 
-        assert len(logicals_x) == self.num_logical
+        assert len(logicals_x) == self.dimension
         self._logical_ops = np.stack([logicals_x, logicals_z]).astype(int)
         return self._logical_ops
 
@@ -718,7 +719,7 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if ensure_nontrivial:
-            random_logical_qubit_index = np.random.randint(self.num_logical)
+            random_logical_qubit_index = np.random.randint(self.dimension)
             return self.get_logical_ops()[pauli.index, random_logical_qubit_index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
@@ -734,7 +735,7 @@ class CSSCode(QuditCode):
         but exactly with integer linear programming (which has exponential complexity).
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        assert 0 <= logical_qubit_index < self.num_logical
+        assert 0 <= logical_qubit_index < self.dimension
         code = self.code_z if pauli == Pauli.X else self.code_x
         matrix = code.matrix.view(np.ndarray)
         word = self.get_logical_ops()[(~pauli).index, logical_qubit_index].view(np.ndarray)
