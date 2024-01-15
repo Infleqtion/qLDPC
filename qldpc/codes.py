@@ -887,7 +887,6 @@ class HGPCode(CSSCode):
     - https://arxiv.org/abs/1202.0928
     """
 
-    # TODO: recover graph-based construction
     sector_size: npt.NDArray[np.int_]
 
     def __init__(
