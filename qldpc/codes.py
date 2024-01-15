@@ -792,7 +792,7 @@ class QCCode(GBCode):
 
     Inspired by arXiv:2308.07915.
 
-    A quasi-cyclic code is a CSS code with parity check matrices
+    A quasi-cyclic code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B.T], and
     - matrix_z = [B, A.T],
     where A and B are block matrices identified with elements of a multivariate polynomial ring.
@@ -842,7 +842,7 @@ class HGPCode(CSSCode):
     Consider the following:
     - Code A has 3 data and 2 check bits.
     - Code B has 4 data and 3 check bits.
-    We represent data bits/qudits by circles (○) and check bids/qudits by squares (□).
+    We represent data bits/qudits by circles (○) and check bits/qudits by squares (□).
 
     Denode the Tanner graph of code C by G_C.  The nodes of G_AB can be arranged into a matrix.  The
     rows of this matrix are labeled by nodes of G_A, and columns by nodes of G_B.  The matrix of
@@ -944,14 +944,16 @@ class HGPCode(CSSCode):
         """Hypergraph product of two Tanner graphs."""
         graph_product = nx.cartesian_product(graph_a, graph_b)
 
-        # fix edge orientation and tag each edge with a Pauli operator
+        # fix edge orientation and tag each edge with a QuditOperator
         graph = nx.DiGraph()
         for node_fst, node_snd, data in graph_product.edges(data=True):
-            # identify check vs. qubit nodes
+            # determine which node is a check node vs. a qudit node
             if node_fst[0].is_data == node_fst[1].is_data:
+                # the first node is in the (0, 0) or (1, 1) sector --> a data node
                 node_qudit, node_check = node_fst, node_snd
             else:
-                node_qudit, node_check = node_snd, node_fst
+                # the first node is in the (0, 1) or (1, 0) sector --> a check node
+                node_check, node_qudit = node_fst, node_snd
             graph.add_edge(node_check, node_qudit)
 
             # by default, this edge is X-type iff the check qudit is in the (0, 1) sector
