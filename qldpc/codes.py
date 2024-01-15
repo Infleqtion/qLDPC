@@ -455,8 +455,8 @@ class CSSCode(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
                 [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
+                [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
             ]
         )
         return galois.GF(self._field_order)(self.conjugate(matrix, self._conjugate))
@@ -935,6 +935,63 @@ class HGPCode(CSSCode):
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
+
+    @classmethod
+    def get_graph_product(
+        cls,
+        graph_a: nx.DiGraph,
+        graph_b: nx.DiGraph,
+        *,
+        conjugate: bool = False,
+    ) -> nx.DiGraph:
+        """Hypergraph product of two Tanner graphs."""
+        graph_product = nx.cartesian_product(graph_a, graph_b)
+
+        # fix edge orientation and tag each edge with a Pauli operator
+        graph = nx.DiGraph()
+        for node_fst, node_snd, data in graph_product.edges(data=True):
+            # identify check vs. qubit nodes
+            if node_fst[0].is_data == node_fst[1].is_data:
+                node_qudit, node_check = node_fst, node_snd
+            else:
+                node_qudit, node_check = node_snd, node_fst
+            graph.add_edge(node_check, node_qudit)
+
+            # by default, this edge is X-type iff the check qudit is in the (0, 1) sector
+            edge_val = data.get("val", 1)
+            op = QuditOperator((edge_val, 0))
+            if node_check[0].is_data:
+                op = ~op
+            # flip Z <--> X iff `conjugate==True` and the data qudit is in the (1, 1) sector
+            if conjugate and not node_qudit[0].is_data:
+                op = ~op
+            graph[node_check][node_qudit][QuditOperator] = op
+
+        node_map = HGPCode.get_product_node_map(graph_a.nodes, graph_b.nodes)
+        graph = nx.relabel_nodes(graph, node_map)
+        if hasattr(graph_a, "order"):
+            graph.order = graph_a.order
+        return graph
+
+    @classmethod
+    def get_product_node_map(
+        cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
+    ) -> dict[tuple[Node, Node], Node]:
+        """Map (dictionary) that re-labels nodes in the hypergraph product of two codes."""
+        index_qudit = 0
+        index_check = 0
+        node_map = {}
+        for node_a, node_b in itertools.product(sorted(nodes_a), sorted(nodes_b)):
+            if node_a.is_data == node_b.is_data:
+                # this is a data qudit in sector (0, 0) or (1, 1)
+                node = Node(index=index_qudit, is_data=True)
+                index_qudit += 1
+            else:
+                # this is a check qudit in sector (0, 1) or (1, 0)
+                node = Node(index=index_check, is_data=False)
+                index_check += 1
+            node_map[node_a, node_b] = node
+        return node_map
 
 
 class LPCode(CSSCode):
