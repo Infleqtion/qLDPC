@@ -29,7 +29,7 @@ def decode(
     exact: bool = False,
     **decoder_args: object,
 ) -> npt.NDArray[np.int_]:
-    """Find a `vector` that solves `matrix @ vector == syndrome mod q` for modulus `q`.
+    """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
 
     If passed an explicit decoder, use it.  If no explicit decoder is provided and `exact is True`,
     solve exactly with an integer linear program.  Otherwise, use a BP-OSD decoder.  In all cases,
@@ -63,7 +63,10 @@ def _decode_with_integer_program(
     syndrome: npt.NDArray[np.int_],
     **decoder_args: object,
 ) -> npt.NDArray[np.int_]:
-    """Decode with an integer linear program."""
+    """Decode with an integer linear program (ILP): `matrix @ vector == syndrome mod 2`.
+
+    Additionally supports modulus > 2 with the "modulus" argument.
+    """
     modulus = int(decoder_args.pop("modulus", 2))  # type:ignore[call-overload]
     if modulus < 2:
         raise ValueError(f"Decoding problems must have modulus >= 2 (provided modulus: {modulus}")
