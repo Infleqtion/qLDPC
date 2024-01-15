@@ -870,8 +870,8 @@ class HGPCode(CSSCode):
     Edges in G_AB are inherited across rows/columns from G_A and G_B.  For example, if rows r_1 and
     r_2 share an edge in G_A, then the same is true in every column of G_AB.
 
-    By default, the check qubits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
-    sector (1, 0) and X-type operators.  If a HGP is constructed with `conjugate==True`, then the
+    By default, the check qubits in sectors (0, 1) of G_AB measure X-type operators.  Likewise with
+    sector (1, 0) and Z-type operators.  If a HGP is constructed with `conjugate==True`, then the
     types of operators addressing the nodes in sector (1, 1) are switched.
 
     This class contains two equivalent constructions of an HGPCode:
