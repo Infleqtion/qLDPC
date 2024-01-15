@@ -87,7 +87,7 @@ class QuditOperator:
         return isinstance(other, QuditOperator) and self.value == other.value
 
     def __invert__(self) -> QuditOperator:
-        """Swap the X and Z operators."""
+        """Fourier-transform this qudit operator."""
         return QuditOperator(self.value[::-1])
 
     def __str__(self) -> str:
@@ -138,8 +138,8 @@ class QuditOperator:
 class Node:
     """Node in a Tanner graph.
 
-    A node essentially an integer index, together with a boolean flag to identify whether the node
-    represents a "data" (qu)bit or "check" (qu)bit in an error-correcting code.
+    A node essentially an integer index, together with a boolean flag to distinguish "data" node
+    from a "check" node in an error-correcting code.
     """
 
     index: int

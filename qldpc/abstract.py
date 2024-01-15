@@ -29,11 +29,11 @@ therefore make representations likewise right-acting, which is to say that a per
 transposes a vector v as v --> v @ M.  In practice, this simply means that matrices are the
 transpose of what one might expect.
 
-This module only supports unitary representations of group members by integer-valued square
-matrices over finite fields.  The restriction to unitary representations is not fundamental, but it
-is convenient for identifying the "transpose" a group member p with respect to a representation
-(lift) L.  This transpose is defined as the group member p.T for which L(p.T) = L(p).T: if the
-representation is unitary, then p.T is equal to the inverse ~p = p**-1.
+This module only supports representations of group members by orthogonal matrices over finite
+fields.  The restriction to orthogonal representations is not fundamental, but is convenient for
+identifying the "transpose" a group member p with respect to a representation (lift) L.  This
+transpose is defined as the group member p.T for which L(p.T) = L(p).T: if the representation is
+orthogonal, then p.T is equal to the inverse ~p = p**-1.
 """
 from __future__ import annotations
 
@@ -60,7 +60,10 @@ UnknownType = TypeVar("UnknownType")
 
 
 class GroupMember(comb.Permutation):
-    """Wrapper for sympy Permutation class."""
+    """Wrapper for sympy Permutation class.
+
+    Supports sorting permutations (by their rank), and taking their tensor product.
+    """
 
     def __mul__(self, other: UnknownType) -> UnknownType:
         if isinstance(other, GroupMember):
@@ -106,9 +109,9 @@ class Group:
     Group elements are represented by permutations.
 
     A group additionally comes equipped with a "lift", or a representation that maps group elements
-    to square matrices, for which the group action is matrix multiplication.  If no lift is
-    provided, the group will default to the representation of group members by explicit permutation
-    matrices.
+    to square matrices over a finite field.  The group action gets lifted to matrix multiplication.
+    If no lift is provided, the group will default to the representation of group members by
+    explicit permutation matrices.
     """
 
     _group: PermutationGroup
@@ -175,7 +178,7 @@ class Group:
         return functools.reduce(cls.__mul__, groups * repeat)
 
     def lift(self, member: GroupMember) -> galois.FieldArray:
-        """Lift a group member to a unitary representation as an integer-valued square matrix."""
+        """Lift a group member to its representation by an orthogonal matrix."""
         return self.field(self._lift(member))
 
     @functools.cached_property
@@ -335,8 +338,8 @@ class Element:
         """Transpose of this element.
 
         If this element is x = sum_{g in G) x_g g, return x.T = sum_{g in G} x_g g.T, where g.T is
-        the group member for which the lift L(g.T) = L(g).T.  If group members are lifted to unitary
-        matrices (as assumed throughout this abstract algebra module), then g.T = ~g = g**-1.
+        the group member for which the lift L(g.T) = L(g).T.  The fact that group members get lifted
+        to orthogonal matrices implies that g.T = ~g = g**-1.
         """
         new_element = self.zero()
         for member, val in self:
@@ -453,7 +456,7 @@ class CyclicGroup(Group):
     written as g^p for an integer power p in {0, 1, ..., R-1}.  The member g^p can be represented by
     (that is, lifted to) an R×R "shift matrix", or the identity matrix with all rows shifted down
     (equivalently, all columns shifted right) by p.  That is, the lift L(g^p) acts on a standard
-    basis vector |i> as L(g^p) |i> = |i+p mod R>.
+    basis vector <i| as <i| L(g^p) = < i + p mod R |.
     """
 
     def __init__(self, order: int) -> None:
