@@ -32,7 +32,7 @@ transpose of what one might expect.
 This module only supports representations of group members by orthogonal matrices over finite
 fields.  The restriction to orthogonal representations is not fundamental, but is convenient for
 identifying the "transpose" a group member p with respect to a representation (lift) L.  This
-transpose is defined as the group member p.T for which L(p.T) = L(p).T: if the representation is
+transpose is defined as the group member p.T for which L(p.T) = L(p).T.  If the representation is
 orthogonal, then p.T is equal to the inverse ~p = p**-1.
 """
 from __future__ import annotations
@@ -109,9 +109,9 @@ class Group:
     Group elements are represented by permutations.
 
     A group additionally comes equipped with a "lift", or a representation that maps group elements
-    to square matrices over a finite field.  The group action gets lifted to matrix multiplication.
-    If no lift is provided, the group will default to the representation of group members by
-    explicit permutation matrices.
+    to orthogonal matrices over a finite field.  The group action gets lifted to matrix
+    multiplication.  If no lift is provided, the group will default to the representation of group
+    members by explicit permutation matrices.
     """
 
     _group: PermutationGroup
