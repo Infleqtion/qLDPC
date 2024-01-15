@@ -565,8 +565,6 @@ class CSSCode(QuditCode):
     def get_one_distance_upper_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
-        *,
-        ensure_nontrivial: bool = True,
         **decoder_args: object,
     ) -> int:
         """Single upper bound to the X-distance or Z-distance of this code.
@@ -575,8 +573,6 @@ class CSSCode(QuditCode):
 
         Args:
             pauli: Pauli operator choosing whether to compute an X-distance or Z-distance bound.
-            ensure_nontrivial: When we generate a random logical operator, should we ensure that
-                this operator is nontrivial?  (default: True)
             decoder_args: Keyword arguments are passed to a decoder in `decode`.
         Returns:
             An upper bound on the X-distance or Z-distance of this code.
@@ -584,8 +580,6 @@ class CSSCode(QuditCode):
         For ease of language, we henceforth assume that we are computing an X-distance.
 
         Pick a random Z-type logical operator Z(w_z) whose support is indicated by the bistring w_z.
-        If `ensure_nontrivial is True`, ensure that Z(w_z) is a nontrivial logical operator,
-        although doing so is not strictly necessary.
 
         We now wish to find a low-weight Pauli-X string X(w_x) that
             (a) has a trivial syndrome, and
@@ -626,7 +620,7 @@ class CSSCode(QuditCode):
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            word = self.get_random_logical_op(pauli_z, ensure_nontrivial).view(np.ndarray)
+            word = self.get_random_logical_op(pauli_z).view(np.ndarray)
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([matrix_z, word])
@@ -713,7 +707,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool
+        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = True
     ) -> npt.NDArray[np.int_]:
         """Return a random logical operator of a given type.
 
