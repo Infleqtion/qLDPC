@@ -41,8 +41,6 @@ ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
 
 DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 
-# TODO: fix all comments to generalize fields: Z_2 --> Z_q
-
 ################################################################################
 # template error correction code classes
 
@@ -53,7 +51,7 @@ class AbstractCode(abc.ABC):
     _field_order: int
 
     def __init__(self, matrix: Self | IntegerMatrix, field: int | None = None) -> None:
-        """Construct a code from a parity check matrix over a given field.
+        """Construct a code from a parity check matrix over a finite field.
 
         The base field is taken to be F_2 by default.
         """
@@ -75,7 +73,7 @@ class AbstractCode(abc.ABC):
 
     @property
     def field(self) -> type[galois.FieldArray]:
-        """Base field over which the linear code is defined."""
+        """Base field over which this code is defined."""
         return galois.GF(self._field_order)
 
     @property
@@ -107,7 +105,7 @@ class ClassicalCode(AbstractCode):
 
     Operationally, we define a classical code by a parity check matrix H with dimensions
     (num_checks, num_bits).  Each row of H represents a linear constraint (a "check") that code
-    words must satisfy.  A vector x is a code word iff H @ x = 0 mod q.
+    words must satisfy.  A vector x is a code word iff H @ x = 0.
     """
 
     def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
@@ -143,10 +141,7 @@ class ClassicalCode(AbstractCode):
 
     @functools.cached_property
     def generator(self) -> galois.FieldArray:
-        """Generator of this code.
-
-        The generator of a code C is a matrix whose rows form a basis for C.
-        """
+        """Generator of this code: a matrix whose rows for a basis for code words."""
         return self.matrix.null_space()
 
     def words(self) -> galois.FieldArray:
@@ -168,7 +163,6 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(self.generator, self._field_order)
 
     def __invert__(self) -> ClassicalCode:
-        """Dual to this code."""
         return self.dual()
 
     @classmethod
@@ -178,7 +172,7 @@ class ClassicalCode(AbstractCode):
         Let G_a and G_b respectively denote the generators C_a and C_b.
         Definition: C_a ⊗ C_b is the code whose generators are G_a ⊗ G_b.
 
-        G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
+        Observation: G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
         We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
         """
         if not code_a._field_order == code_b._field_order:
@@ -231,7 +225,7 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
-        """Construct a random classical code with the given number of bits and checks."""
+        """Construct a random classical code with the given number of bits and nontrivial checks."""
         if field is None:
             field = DEFAULT_FIELD_ORDER
         code_field = galois.GF(field)
@@ -295,7 +289,7 @@ class ClassicalCode(AbstractCode):
 #   - also compute and store sub-codes, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
 class QuditCode(AbstractCode):
-    """Qudit-based quantum error-correcting code.
+    """Qudit-based quantum stabilizer code.
 
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
     written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
@@ -303,13 +297,13 @@ class QuditCode(AbstractCode):
     The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
     X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
     operators.  Specifically:
-    - X(r) = sum__{j=0}^{d-1} |j+r><j| is a shift operator, and
-    - Z(r) = sum_{j=0}^{d-1} exp(2 pi i j r / d) |j><j| is a phase operator.
+    - X(r) = sum_{j=0}^{d-1} |j+r><j| is a shift operator, and
+    - Z(r) = sum_{j=0}^{d-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / d).
     """
 
     @property
     def num_checks(self) -> int:
-        """Number of parity checks in this code."""
+        """Number of parity checks (stabilizers) in this code."""
         return self.matrix.shape[0]
 
     @property
@@ -359,7 +353,7 @@ class QuditCode(AbstractCode):
 
     @classmethod
     def random(cls, qudits: int, checks: int, field: int | None = None) -> QuditCode:
-        """Construct a random qudit code with the given number of bits and checks."""
+        """Construct a random qudit code with the given number of qudits and nontrivial checks."""
         return QuditCode(ClassicalCode.random(2 * qudits, checks, field).matrix, field)
 
     def get_stabilizers(self) -> list[str]:
@@ -441,7 +435,7 @@ class CSSCode(QuditCode):
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks.
 
-        Also allow specifying local Fourier transformations on specified qudits.
+        Allow specifying local Fourier transformations on the qudits specified by `conjugate`.
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
@@ -518,9 +512,9 @@ class CSSCode(QuditCode):
         `CSSCode.get_distance_upper_bound` and `CSSCode.get_one_distance_upper_bound`.
 
         If `lower is False` and `upper is None`, compute an exact code distance with integer linear
-        programming.  Warning: this is an exponentially scaling (NP-complete) problem.
+        programming.  Warning: this is an exponentially difficult(NP-complete) problem.
 
-        All remaining keyword arguments are passed to a decoder in `decode`.
+        All remaining keyword arguments are passed to a decoder, if applicable.
         """
         if lower and upper:
             raise ValueError(
@@ -530,7 +524,6 @@ class CSSCode(QuditCode):
         pauli = pauli if not self._codes_equal else Pauli.X
 
         if pauli is None:
-            # minimize over X-distance and Z-distance
             return min(
                 self.get_distance(Pauli.X, lower=lower, upper=upper, **decoder_args),
                 self.get_distance(Pauli.Z, lower=lower, upper=upper, **decoder_args),
@@ -540,12 +533,8 @@ class CSSCode(QuditCode):
             return self.get_distance_lower_bound(pauli)
 
         if upper is not None:
-            # compute an upper bound to the distance with a decoder
-            return self.get_distance_upper_bound(
-                pauli, upper, **decoder_args  # type:ignore[arg-type]
-            )
+            return self.get_distance_upper_bound(pauli, num_trials=upper, **decoder_args)
 
-        # exact distance with an integer linear program
         return self.get_distance_exact(pauli, **decoder_args)
 
     def get_distance_lower_bound(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
@@ -558,8 +547,6 @@ class CSSCode(QuditCode):
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         num_trials: int,
-        *,
-        ensure_nontrivial: bool = True,
         **decoder_args: object,
     ) -> int:
         """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
@@ -568,10 +555,7 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         return min(
-            self.get_one_distance_upper_bound(
-                pauli, ensure_nontrivial=ensure_nontrivial, **decoder_args
-            )
-            for _ in range(num_trials)
+            self.get_one_distance_upper_bound(pauli, **decoder_args) for _ in range(num_trials)
         )
 
     def get_one_distance_upper_bound(
@@ -591,7 +575,7 @@ class CSSCode(QuditCode):
                 this operator is nontrivial?  (default: True)
             decoder_args: Keyword arguments are passed to a decoder in `decode`.
         Returns:
-            An upper bound on the X-distance or Z-distance.
+            An upper bound on the X-distance or Z-distance of this code.
 
         For ease of language, we henceforth assume that we are computing an X-distance.
 
@@ -768,7 +752,7 @@ class CSSCode(QuditCode):
 # bicycle and quasi-cyclic codes
 
 
-# TODO: add special/simpler cases of code distance calculations, if and where available
+# TODO: add special/simpler cases of code distance calculations and bounds, if and where available
 
 
 class GBCode(CSSCode):
@@ -813,8 +797,10 @@ class QCCode(GBCode):
     - matrix_x = [A, B.T], and
     - matrix_z = [B, A.T],
     where A and B are block matrices identified with elements of a multivariate polynomial ring.
-    Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are (binary)
-    coefficients and each x_i is the generator of a cyclic group of order R_i.
+    Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
+    and each x_i is the generator of a cyclic group of order R_i.
+
+    We (tentatively) restrict the coefficients A_{ij} to be in {0, 1}.
 
     A quasi-cyclic code is defined by...
     [1] sequence (R_0, R_1, ...) of cyclic group orders (one per variable, x_i), and
@@ -857,7 +843,7 @@ class HGPCode(CSSCode):
     Consider the following:
     - Code A has 3 data and 2 check bits.
     - Code B has 4 data and 3 check bits.
-    We represent data (qu)bits by circles (○) and check (qu)bits by squares (□).
+    We represent data bits/qudits by circles (○) and check bids/qudits by squares (□).
 
     Denode the Tanner graph of code C by G_C.  The nodes of G_AB can be arranged into a matrix.  The
     rows of this matrix are labeled by nodes of G_A, and columns by nodes of G_B.  The matrix of
@@ -877,17 +863,17 @@ class HGPCode(CSSCode):
 
     We identify each sector by two bits.
     In the example above:
-    - sector (0, 0) has 3×4=12 data qubits
-    - sector (0, 1) has 3×3=9 check qubits
-    - sector (1, 0) has 2×4=8 check qubits
-    - sector (1, 1) has 2×3=6 data qubits
+    - sector (0, 0) has 3×4=12 data qudits
+    - sector (0, 1) has 3×3=9 check qudits
+    - sector (1, 0) has 2×4=8 check qudits
+    - sector (1, 1) has 2×3=6 data qudits
 
     Edges in G_AB are inherited across rows/columns from G_A and G_B.  For example, if rows r_1 and
     r_2 share an edge in G_A, then the same is true in every column of G_AB.
 
-    By default, the check qubits in sectors (0, 1) of G_AB measure Pauli-Z operators.  Likewise with
-    sector (1, 0) and Pauli-X operators.  If a HGP is constructed with `conjugate is True`, then the
-    Pauli operators addressing the nodes in sector (1, 1) are switched.
+    By default, the check qubits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
+    sector (1, 0) and X-type operators.  If a HGP is constructed with `conjugate==True`, then the
+    types of operators addressing the nodes in sector (1, 1) are switched.
 
     This class contains two equivalent constructions of an HGPCode:
     - A construction based on Tanner graphs (as discussed above).
@@ -902,6 +888,7 @@ class HGPCode(CSSCode):
     - https://arxiv.org/abs/1202.0928
     """
 
+    # TODO: recover graph-based construction
     sector_size: npt.NDArray[np.int_]
 
     def __init__(
@@ -926,7 +913,7 @@ class HGPCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-        field = field or code_a._field_order
+        field = code_a._field_order
 
         # identify the number of qudits in each sector
         self.sector_size = np.outer(
@@ -954,9 +941,9 @@ class LPCode(CSSCode):
 
     A lifted product code is essentially the same as a hypergraph product code, except that the
     parity check matrices are "protographs", or matrices whose entries are members of a group
-    algebra over the field {0,1}.  Each of these entries can be "lifted" to a representation as
-    square matrices of 0s and 1s, in which case the protograph is interpreted as a block matrix;
-    this is called "lifting" the protograph.
+    algebra over the field {0, 1}.  Each of these entries can be "lifted" to a representation as
+    orthogonal matrices over a finite field, in which case the protograph is interpreted as a block
+    matrix; this is called "lifting" the protograph.
 
     Notes:
     - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
