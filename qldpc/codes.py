@@ -682,6 +682,7 @@ class CSSCode(QuditCode):
         Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
         procedure described in arXiv:0903.5256.
         """
+        self._assert_qubit_code()
         if self._logical_ops is not None:
             return self._logical_ops
 
