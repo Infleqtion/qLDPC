@@ -22,8 +22,8 @@ from qldpc import abstract, objects
 
 def test_pauli() -> None:
     """Pauli operator capabilities."""
-    for pauli in ["I", "X", "Y", "Z"]:
-        assert str(objects.Pauli.from_string(pauli)) == pauli
+    for string in ["I", "X", "Y", "Z"]:
+        assert str(objects.Pauli.from_string(string)) == string
     with pytest.raises(ValueError, match="Invalid Pauli operator"):
         objects.Pauli.from_string("Q")
 

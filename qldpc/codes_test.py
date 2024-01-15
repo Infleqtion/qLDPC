@@ -309,7 +309,8 @@ def test_errors() -> None:
     """Cover some errors."""
     group = abstract.Group.product(abstract.CyclicGroup(3), repeat=2)
     shift_x, shift_y = group.generators
-    subset_a = subset_b = [shift_x, ~shift_x]
+    subset_a = [shift_x, ~shift_x]
+    subset_b = [shift_y, ~shift_y]
     code_a = codes.ClassicalCode.repetition(2)
     code_b = codes.ClassicalCode.repetition(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
