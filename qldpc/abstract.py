@@ -298,6 +298,9 @@ class Element:
             new_element._vec[other * member] = val
         return new_element
 
+    def __neg__(self) -> Element:
+        return self * (-1)
+
     def __pow__(self, power: int) -> Element:
         return functools.reduce(Element.__mul__, [self] * power, self.one())
 

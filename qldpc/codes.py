@@ -901,8 +901,8 @@ class HGPCode(CSSCode):
 
         The parity check matrices of the hypergraph product code are:
 
-        matrix_x = [H1 ⊗ In2, Im1 ⊗ H2.T]
-        matrix_z = [In1 ⊗ H2, H1.T ⊗ Im2]
+        matrix_x = [H1 ⊗ In2, -Im1 ⊗ H2.T]
+        matrix_z = [In1 ⊗ H2,  H1.T ⊗ Im2]
 
         Here (H1, H2) == (matrix_a, matrix_b), and I[m/n][1/2] are identity matrices,
         with (m1, n1) = H1.shape and (m2, n2) = H2.shape.
@@ -924,12 +924,12 @@ class HGPCode(CSSCode):
         matrix_a = code_a.matrix
         matrix_b = code_b.matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b) * (field - 1)
+        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
         mat_H1_Im2_T = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b.T)
 
         # construct the parity check matrices
-        matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
+        matrix_x = np.block([mat_H1_In2, -mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
 
@@ -1052,12 +1052,12 @@ class LPCode(CSSCode):
 
         # construct the nontrivial blocks in the matrix
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b) * (field - 1)
+        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
         mat_H1_Im2_T = np.kron(matrix_a_T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b_T)
 
         # construct the parity check matrices
-        matrix_x = abstract.Protograph(np.block([mat_H1_In2, mat_Im1_H2_T])).lift()
+        matrix_x = abstract.Protograph(np.block([mat_H1_In2, -mat_Im1_H2_T])).lift()
         matrix_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T])).lift()
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
 
