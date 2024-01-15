@@ -958,11 +958,10 @@ class HGPCode(CSSCode):
             graph.add_edge(node_check, node_qudit)
 
             # by default, this edge is X-type iff the check qudit is in the (0, 1) sector
-            edge_val = data.get("val", 1)
-            op = QuditOperator((edge_val, 0))
+            op = QuditOperator((data.get("val", 1), 0))
             if node_check[0].is_data:
                 op = ~op
-            # flip Z <--> X iff `conjugate==True` and the data qudit is in the (1, 1) sector
+            # flip X <--> Z iff `conjugate==True` and the data qudit is in the (1, 1) sector
             if conjugate and not node_qudit[0].is_data:
                 op = ~op
             graph[node_check][node_qudit][QuditOperator] = op
