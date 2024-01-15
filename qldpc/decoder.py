@@ -65,7 +65,8 @@ def _decode_with_integer_program(
 ) -> npt.NDArray[np.int_]:
     """Decode with an integer linear program (ILP): `matrix @ vector == syndrome mod 2`.
 
-    Additionally supports modulus > 2 with the "modulus" argument.
+    Supports modulus > 2 with a "modulus" argument.
+    All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
     modulus = int(decoder_args.pop("modulus", 2))  # type:ignore[call-overload]
     if modulus < 2:
