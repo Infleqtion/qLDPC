@@ -55,7 +55,18 @@ def decode(
         return bposd_decoder.decode(syndrome)
 
     # decode exactly by solving an integer linear program
+    return _decode_with_integer_program(matrix, syndrome, **decoder_args)
+
+
+def _decode_with_integer_program(
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    **decoder_args: object,
+) -> npt.NDArray[np.int_]:
+    """Decode with an integer linear program."""
     modulus = int(decoder_args.pop("modulus", 2))  # type:ignore[call-overload]
+    if modulus < 2:
+        raise ValueError(f"Decoding problems must have modulus >= 2 (provided modulus: {modulus}")
     if modulus == 2:
         opt_variables = cvxpy.Variable(matrix.shape[1], boolean=True)
     else:

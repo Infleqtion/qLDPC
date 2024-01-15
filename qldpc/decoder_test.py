@@ -42,6 +42,10 @@ def test_decoding() -> None:
     matrix *= field + 1
     assert np.allclose(decoder.decode(matrix, syndrome, exact=True, modulus=field), error)
 
+    # raise error for invalid modulus
+    with pytest.raises(ValueError, match="must have modulus >= 2"):
+        decoder.decode(matrix, syndrome, exact=True, modulus=1)
+
 
 def test_decoding_error() -> None:
     """Fail to solve an invalid optimization problem."""
