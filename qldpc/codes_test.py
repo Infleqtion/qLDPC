@@ -93,15 +93,18 @@ def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
 
 def test_CSS_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
+    code_x = codes.ClassicalCode.random(3, 2)
+    code_z = codes.ClassicalCode.random(4, 2)
     with pytest.raises(ValueError, match="incompatible"):
-        code_x = codes.ClassicalCode.random(3, 2)
-        code_z = codes.ClassicalCode.random(4, 2)
         codes.CSSCode(code_x, code_z)
 
     with pytest.raises(ValueError, match="different fields"):
-        code_x = codes.ClassicalCode.random(3, 2, 2)
-        code_z = codes.ClassicalCode.random(4, 2, 3)
+        code_z = codes.ClassicalCode.random(3, 2, 3)
         codes.CSSCode(code_x, code_z)
+
+    code = codes.HGPCode(code_x)
+    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:

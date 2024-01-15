@@ -707,7 +707,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = True
+        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = False
     ) -> npt.NDArray[np.int_]:
         """Return a random logical operator of a given type.
 
