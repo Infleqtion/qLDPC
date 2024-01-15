@@ -767,7 +767,7 @@ class CSSCode(QuditCode):
 # bicycle and quasi-cyclic codes
 
 
-# TODO: add special/simpler cases of code distance calculations, where available
+# TODO: add special/simpler cases of code distance calculations, if and where available
 
 
 class GBCode(CSSCode):
