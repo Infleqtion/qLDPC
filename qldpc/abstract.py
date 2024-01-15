@@ -30,10 +30,10 @@ transposes a vector v as v --> v @ M.  In practice, this simply means that matri
 transpose of what one might expect.
 
 This module only supports unitary representations of group members by integer-valued square
-matrices.  The restriction to unitary representations is not fundamental, but it is very convenient
-for identifying the "transpose" a group member p with respect to a representation (lift) L.  This
-transpose is defined as the group member p.T for which L(p.T) = L(p).T: if the representation is
-unitary, then p.T is equal to the inverse ~p = p**-1.
+matrices over finite fields.  The restriction to unitary representations is not fundamental, but it
+is convenient for identifying the "transpose" a group member p with respect to a representation
+(lift) L.  This transpose is defined as the group member p.T for which L(p.T) = L(p).T: if the
+representation is unitary, then p.T is equal to the inverse ~p = p**-1.
 """
 from __future__ import annotations
 
