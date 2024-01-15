@@ -36,6 +36,7 @@ def test_decoding() -> None:
     error = np.array([1, 1], dtype=int)
     assert np.allclose(decoder.decode(matrix, syndrome, exact=False), error)
     assert np.allclose(decoder.decode(matrix, syndrome, exact=True), error)
+    assert np.allclose(decoder.decode(matrix, syndrome, exact=True, modulus=3), error)
 
 
 def test_decoding_error() -> None:

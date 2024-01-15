@@ -29,7 +29,7 @@ def decode(
     exact: bool = False,
     **decoder_args: object,
 ) -> npt.NDArray[np.int_]:
-    """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
+    """Find a `vector` that solves `matrix @ vector == syndrome mod q` for modulus `q`.
 
     If passed an explicit decoder, use it.  If no explicit decoder is provided and `exact is True`,
     solve exactly with an integer linear program.  Otherwise, use a BP-OSD decoder.  In all cases,
@@ -55,22 +55,35 @@ def decode(
         return bposd_decoder.decode(syndrome)
 
     # decode exactly by solving an integer linear program
-    opt_variables = cvxpy.Variable(matrix.shape[1], boolean=True)
+    modulus = int(decoder_args.pop("modulus", 2))  # type:ignore[call-overload]
+    if modulus == 2:
+        opt_variables = cvxpy.Variable(matrix.shape[1], boolean=True)
+    else:
+        opt_variables = cvxpy.Variable(matrix.shape[1], integer=True)
     objective = cvxpy.Minimize(sum(iter(opt_variables)))
 
     # collect constraints, using slack variables to relax each constraint of the form
-    # `expression = val mod 2` to `expression = val + sum_p 2^p s_p`
+    # `expression = val mod q` to `expression = val + sum_j q^j s_j`
     constraints = []
-    for check, syndrome_bit in zip(matrix, syndrome % 2):
-        max_zero = int(sum(check) - syndrome_bit)  # biggest integer that may need to be 0 mod 2
-        max_power_of_two = max_zero.bit_length() - 1  # max power of 2 needed for the relaxation
-        if max_power_of_two > 0:
-            powers_of_two = [2**pp for pp in range(1, max_power_of_two + 1)]
-            slack_variables = cvxpy.Variable(max_power_of_two, boolean=True)
-            zero_mod_2 = powers_of_two @ slack_variables
+    for check, syndrome_bit in zip(matrix, syndrome % modulus):
+        # identify the largest power of q needed for the relaxation
+        max_zero = int(sum(check) - syndrome_bit)  # biggest integer that may need to be 0 mod q
+        if max_zero == 0 or modulus == 2:
+            max_power_of_q = max_zero.bit_length() - 1
         else:
-            zero_mod_2 = 0  # pragma: no cover
-        constraints.append(check @ opt_variables == syndrome_bit + zero_mod_2)
+            max_power_of_q = int(np.log2(max_zero) / np.log2(modulus))
+
+        if max_power_of_q > 0:
+            powers_of_q = [modulus**jj for jj in range(1, max_power_of_q + 1)]
+            slack_variables = cvxpy.Variable(max_power_of_q, boolean=True)
+            zero_mod_q = powers_of_q @ slack_variables
+        else:
+            zero_mod_q = 0  # pragma: no cover
+        constraints.append(check @ opt_variables == syndrome_bit + zero_mod_q)
+
+    if modulus > 2:
+        constraints += [var >= 0 for var in iter(opt_variables)]
+        constraints += [var <= modulus for var in iter(opt_variables)]
 
     # solve the optimization problem!
     problem = cvxpy.Problem(objective, constraints)
