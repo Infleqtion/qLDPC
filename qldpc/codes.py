@@ -416,6 +416,10 @@ class CSSCode(QuditCode):
 
     where H_x and H_z are, respectively, the parity check matrices of the classical codes that
     define the X-type and Z-type stabilizers of the CSS code.
+
+    The full parity check matrix of a CSSCode is
+    ⌈  0 , H_z ⌉
+    ⌊ H_x,  0  ⌋.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
