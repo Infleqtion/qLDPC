@@ -223,6 +223,14 @@ def test_cyclic_codes() -> None:
     assert code.num_logical == 8
 
 
+def test_GB_code_error() -> None:
+    """Raise error when trying to construct incompatible generalized bicycle codes."""
+    matrix_a = [[1, 0], [0, -1]]
+    matrix_b = [[0, 1], [1, 0]]
+    with pytest.raises(ValueError, match="incompatible"):
+        codes.GBCode(matrix_a, matrix_b)
+
+
 def test_lifted_product_codes() -> None:
     """Lifted product codes in Eq. (5) of arXiv:2308.08648."""
     for lift_dim, matrix in [
@@ -261,7 +269,7 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_surface_hgp_code() -> None:
+def test_surface_HGP_code() -> None:
     """The surface and toric codes as hypergraph product codes."""
     # surface code
     bit_code = codes.ClassicalCode.repetition(3)
@@ -283,14 +291,19 @@ def test_toric_tanner_code() -> None:
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode = codes.ClassicalCode.repetition(2)
-    code = codes.QTCode(subset_a, subset_b, subcode)
+    subcode_a = codes.ClassicalCode.repetition(2)
+    code = codes.QTCode(subset_a, subset_b, subcode_a)
 
     # check that this is a [[16, 2, 4]] code
     assert code.get_code_params() == (16, 2, 4)
     assert code.get_distance(lower=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
+
+    # raise error if constructing QTCode with codes over different fields
+    subcode_b = codes.ClassicalCode.repetition(2, field=3)
+    with pytest.raises(ValueError, match="different fields"):
+        code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
 
 def test_qudit_distance() -> None:
@@ -303,20 +316,3 @@ def test_qudit_distance() -> None:
         code.get_distance(upper=1)
     with pytest.raises(ValueError, match="Must choose"):
         code.get_distance(lower=True, upper=1)
-
-
-def test_errors() -> None:
-    """Cover some errors."""
-    group = abstract.Group.product(abstract.CyclicGroup(3), repeat=2)
-    shift_x, shift_y = group.generators
-    subset_a = [shift_x, ~shift_x]
-    subset_b = [shift_y, ~shift_y]
-    code_a = codes.ClassicalCode.repetition(2)
-    code_b = codes.ClassicalCode.repetition(2, field=3)
-    with pytest.raises(ValueError, match="different fields"):
-        codes.QTCode(subset_a, subset_b, code_a, code_b)
-
-    matrix_a = [[1, 0], [0, -1]]
-    matrix_b = [[0, 1], [1, 0]]
-    with pytest.raises(ValueError, match="incompatible"):
-        codes.GBCode(matrix_a, matrix_b)
