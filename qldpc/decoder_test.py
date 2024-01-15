@@ -36,7 +36,11 @@ def test_decoding() -> None:
     error = np.array([1, 1], dtype=int)
     assert np.allclose(decoder.decode(matrix, syndrome, exact=False), error)
     assert np.allclose(decoder.decode(matrix, syndrome, exact=True), error)
-    assert np.allclose(decoder.decode(matrix, syndrome, exact=True, modulus=3), error)
+
+    # decode over F_3
+    field = 3
+    matrix *= field + 1
+    assert np.allclose(decoder.decode(matrix, syndrome, exact=True, modulus=field), error)
 
 
 def test_decoding_error() -> None:
