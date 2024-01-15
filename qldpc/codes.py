@@ -1118,7 +1118,7 @@ class QTCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-        if field is None and code_a._field_order != code_a._field_order:
+        if field is None and code_a._field_order != code_b._field_order:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
         self.complex = CayleyComplex(subset_a, subset_b)

@@ -291,3 +291,25 @@ def test_toric_tanner_code() -> None:
     assert code.get_distance(lower=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
+
+
+def test_qudit_distance() -> None:
+    """Distance calculations for qudits."""
+    trit_code = codes.ClassicalCode.repetition(2, field=3)
+    code = codes.HGPCode(trit_code)
+
+    assert code.get_distance(exact=True) == 2
+    with pytest.raises(ValueError, match="not implemented"):
+        trit_code = codes.ClassicalCode.repetition(2, field=3)
+        codes.HGPCode(trit_code).get_distance(upper=1)
+
+
+def test_errors() -> None:
+    """Cover some errors."""
+    group = abstract.Group.product(abstract.CyclicGroup(3), repeat=2)
+    shift_x, shift_y = group.generators
+    subset_a = subset_b = [shift_x, ~shift_x]
+    code_a = codes.ClassicalCode.repetition(2)
+    code_b = codes.ClassicalCode.repetition(2, field=3)
+    with pytest.raises(ValueError, match="different fields"):
+        codes.QTCode(subset_a, subset_b, code_a, code_b)
