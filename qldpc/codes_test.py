@@ -300,8 +300,9 @@ def test_qudit_distance() -> None:
 
     assert code.get_distance(exact=True) == 2
     with pytest.raises(ValueError, match="not implemented"):
-        trit_code = codes.ClassicalCode.repetition(2, field=3)
-        codes.HGPCode(trit_code).get_distance(upper=1)
+        code.get_distance(upper=1)
+    with pytest.raises(ValueError, match="Must choose"):
+        code.get_distance(lower=True, upper=1)
 
 
 def test_errors() -> None:
@@ -313,3 +314,8 @@ def test_errors() -> None:
     code_b = codes.ClassicalCode.repetition(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
         codes.QTCode(subset_a, subset_b, code_a, code_b)
+
+    matrix_a = [[1, 0], [0, -1]]
+    matrix_b = [[0, 1], [1, 0]]
+    with pytest.raises(ValueError, match="incompatible"):
+        codes.GBCode(matrix_a, matrix_b)

@@ -42,8 +42,6 @@ ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
 DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 
 # TODO: fix all comments to generalize fields: Z_2 --> Z_q
-# TODO: remove assertions with helpful errors
-# TODO: use DEFAULT_FIELD_ORDER instead of None
 
 ################################################################################
 # template error correction code classes
@@ -524,9 +522,13 @@ class CSSCode(QuditCode):
 
         All remaining keyword arguments are passed to a decoder in `decode`.
         """
-        assert lower is False or upper is None
+        if lower and upper:
+            raise ValueError(
+                "Must choose between computing lower and upper bounds on code distance"
+            )
         assert pauli == Pauli.X or pauli == Pauli.Z or pauli is None
         pauli = pauli if not self._codes_equal else Pauli.X
+
         if pauli is None:
             # minimize over X-distance and Z-distance
             return min(
@@ -794,14 +796,10 @@ class GBCode(CSSCode):
             matrix_b = matrix_a  # pragma: no cover
         matrix_a = np.array(matrix_a)
         matrix_b = np.array(matrix_b)
-        assert np.array_equal(matrix_a @ matrix_b.T, matrix_b.T @ matrix_a)
-
+        if not np.array_equal(matrix_a @ matrix_b.T, matrix_b.T @ matrix_a):
+            raise ValueError("The matrices provided for this GBCode are incompatible")
         matrix_x = np.block([matrix_a, matrix_b.T])
         matrix_z = np.block([matrix_b, matrix_a.T])
-
-        if field is None:
-            field = DEFAULT_FIELD_ORDER
-
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate)
 
 
@@ -927,9 +925,7 @@ class HGPCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-        if field is None:
-            assert code_a._field_order == code_b._field_order
-            field = code_a._field_order
+        field = field or code_a._field_order
 
         # identify the number of qudits in each sector
         self.sector_size = np.outer(
@@ -995,7 +991,6 @@ class LPCode(CSSCode):
             protograph_b = protograph_a
         protograph_a = abstract.Protograph(protograph_a)
         protograph_b = abstract.Protograph(protograph_b)
-        assert protograph_a.field == protograph_b.field
         field = protograph_a.field.order
 
         # identify the number of qudits in each sector
