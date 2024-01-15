@@ -14,15 +14,15 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-All groups in this module are finite, and represented under the hood as a sympy PermutationGroup, or
-a subgroup of the symmetric group.  Group members are essentially represented by sympy Permutation
+All groups in this module are finite, and represented under the hood as a Sympy PermutationGroup, or
+a subgroup of the symmetric group.  Group members are essentially represented by Sympy Permutation
 objects.  Groups additionally come equipped with a representation, or "lift", that maps group
 elements to square matrices, such that the group action gets lifted to matrix multiplication.
 
 !!! WARNINGS !!!
 
 Whereas matrices are "left-acting" (that is, act on objects from the left) by standard convention,
-sympy permutations are "right-acting", which is to say that the action of two permutations p and q
+Sympy permutations are "right-acting", which is to say that the action of two permutations p and q
 on an integer i compose as (p*q)(i) = q(p(i)) = i^p^q.  To preserve the order of products before and
 after lifting permutations to matrices, which ensures that the lift L(p*q) = L(p) @ L(q), we
 therefore make representations likewise right-acting, which is to say that a permutation matrix M
@@ -60,7 +60,7 @@ UnknownType = TypeVar("UnknownType")
 
 
 class GroupMember(comb.Permutation):
-    """Wrapper for sympy Permutation class.
+    """Wrapper for Sympy Permutation class.
 
     Supports sorting permutations (by their rank), and taking their tensor product.
     """
@@ -93,7 +93,7 @@ IntegerLift = Callable[[int], IntegerArray]
 def default_lift(member: GroupMember) -> IntegerArray:
     """Default lift: represent a permutation object by a permutation matrix.
 
-    For consistency with how sympy composes permutations, this matrix is right-acting, meaning that
+    For consistency with how Sympy composes permutations, this matrix is right-acting, meaning that
     it acts on a vector p from the right: p --> p @ M.
     """
     matrix = np.zeros((member.size,) * 2, dtype=int)
@@ -105,8 +105,8 @@ def default_lift(member: GroupMember) -> IntegerArray:
 class Group:
     """Base class for a finite group.
 
-    Under the hood, a Group is represented by a sympy PermutationGroup.
-    Group elements are represented by permutations.
+    Under the hood, a Group is represented by a Sympy PermutationGroup.
+    Group elements are represented by Sympy permutations.
 
     A group additionally comes equipped with a "lift", or a representation that maps group elements
     to orthogonal matrices over a finite field.  The group action gets lifted to matrix
@@ -230,8 +230,10 @@ class Group:
 class Element:
     """An element of a group algebra over a finite field F_q.
 
-    Each "Element" x is a sum of group members with coefficients in F_q:
+    Each Element x is a sum of group members with coefficients in F_q:
     x = sum_{g in G} x_g g, with each x_g in F_q.
+
+    The field F_q is taken to be the same as that of the representation of the group.
     """
 
     _group: Group
