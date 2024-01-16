@@ -640,7 +640,7 @@ class CSSCode(QuditCode):
         """Exact X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
-        if self._field_order != 2:
+        if self.field.degree > 1:
             code_x = self.code_x if pauli == Pauli.X else self.code_z
             code_z = self.code_z if pauli == Pauli.X else self.code_x
             dual_code_x = ~code_x
@@ -741,9 +741,8 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
         code = self.code_z if pauli == Pauli.X else self.code_x
-        matrix = code.matrix.view(np.ndarray)
         word = self.get_logical_ops()[(~pauli).index, logical_qubit_index].view(np.ndarray)
-        effective_check_matrix = np.vstack([matrix, word])
+        effective_check_matrix = np.vstack([code.matrix, word]).view(np.ndarray)
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
         logical_op = qldpc.decoder.decode(
