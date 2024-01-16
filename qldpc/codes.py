@@ -651,7 +651,7 @@ class CSSCode(QuditCode):
             self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
 
         # return the minimum weight of logical X-type or Z-type operators
-        return self.get_logical_ops()[pauli.index].sum(-1).min()
+        return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
     def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
