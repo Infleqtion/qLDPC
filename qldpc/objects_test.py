@@ -21,11 +21,11 @@ from qldpc import abstract, objects
 
 
 def test_pauli() -> None:
-    """Test Pauli operator capabilities."""
-    assert str(objects.Pauli.I) == "I"
-    assert str(objects.Pauli.X) == "X"
-    assert str(objects.Pauli.Y) == "Y"
-    assert str(objects.Pauli.Z) == "Z"
+    """Pauli operator capabilities."""
+    for string in ["I", "X", "Y", "Z"]:
+        assert str(objects.Pauli.from_string(string)) == string
+    with pytest.raises(ValueError, match="Invalid Pauli operator"):
+        objects.Pauli.from_string("Q")
 
     assert ~objects.Pauli.Z == objects.Pauli.X
     assert ~objects.Pauli.X == objects.Pauli.Z
@@ -41,6 +41,17 @@ def test_pauli() -> None:
     for pauli in [objects.Pauli.I, objects.Pauli.Y]:
         with pytest.raises(AttributeError, match="No index"):
             assert pauli.index
+
+
+def test_qudit_operator() -> None:
+    """Qudit operator capabilities."""
+    assert objects.QuditOperator((0, 0)) == objects.QuditOperator()
+    assert objects.QuditOperator((0, 1)) == ~objects.QuditOperator((1, 0))
+    for op in ["I", "Y(1)", "X(1)*Z(2)"]:
+        assert str(objects.QuditOperator.from_string(op)) == op
+    for op in ["a*b*c", "a(1)"]:
+        with pytest.raises(ValueError, match="Invalid qudit operator"):
+            objects.QuditOperator.from_string(op)
 
 
 def test_node() -> None:

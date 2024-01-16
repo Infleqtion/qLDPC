@@ -21,7 +21,7 @@ import pytest
 from qldpc import abstract, codes
 
 
-def test_bit_codes() -> None:
+def test_classical_codes() -> None:
     """Construction of a few classical codes."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
     assert codes.ClassicalCode.hamming(3).get_distance() == 3
@@ -34,7 +34,7 @@ def test_bit_codes() -> None:
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
-        assert not np.any(code.matrix @ code.get_random_word())
+        assert code.get_random_word() in code
 
     # test that rank of repetition and hamming codes is independent of the field
     assert codes.ClassicalCode.repetition(3).rank == codes.ClassicalCode.repetition(3, 3).rank
@@ -47,9 +47,7 @@ def test_bit_codes() -> None:
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
     code = codes.ClassicalCode.random(bits, checks, field)
-    words_a = code.words()
-    words_b = code.dual().words()
-    assert all(word_a @ word_b == 0 for word_a in words_a for word_b in words_b)
+    assert all(word_a @ word_b == 0 for word_a in code.words() for word_b in (~code).words())
 
 
 def test_tensor_product(
@@ -73,78 +71,96 @@ def test_tensor_product(
         codes.ClassicalCode.tensor_product(code_a, code_b)
 
 
-def test_classical_conversion(bits: int = 10, checks: int = 8, field: int = 3) -> None:
-    """Conversion between matrix and graph representations of a classical code."""
+def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
+    """Conversions between matrix and graph representations of a code."""
+    code: codes.ClassicalCode | codes.QuditCode
+
     code = codes.ClassicalCode.random(bits, checks, field)
     graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
 
+    code = codes.QuditCode.random(bits, checks, field)
+    graph = codes.QuditCode.matrix_to_graph(code.matrix)
+    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+
+
+def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
+    """Random qubit code."""
+    assert codes.QuditCode.random(num_qubits, num_checks).num_qubits == num_qubits
+    with pytest.raises(ValueError, match="qubit-only method"):
+        assert codes.QuditCode.random(num_qubits, num_checks, field=3).num_qubits
+
 
 def test_CSS_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
+    code_x = codes.ClassicalCode.random(3, 2)
+    code_z = codes.ClassicalCode.random(4, 2)
     with pytest.raises(ValueError, match="incompatible"):
-        code_x = codes.ClassicalCode.random(3, 2)
-        code_z = codes.ClassicalCode.random(4, 2)
         codes.CSSCode(code_x, code_z)
+
+    with pytest.raises(ValueError, match="different fields"):
+        code_z = codes.ClassicalCode.random(3, 2, 3)
+        codes.CSSCode(code_x, code_z)
+
+    code = codes.HGPCode(code_x)
+    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
+
+
+def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
+    """Apply Pauli deformations to a qudit code."""
+    code = codes.QuditCode.random(num_qudits, num_checks)
+    conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
+    transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
+
+    transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
+    for node_check, node_qubit, data in code.graph.edges(data=True):
+        vals = data[codes.QuditOperator].value
+        assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals
+
+
+@pytest.mark.parametrize("field", [2, 3])
+def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
+    """Stabilizers of a QuditCode."""
+    code_a = codes.QuditCode.random(bits, checks, field)
+    stabilizers = code_a.get_stabilizers()
+    code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
+    assert np.array_equal(code_a.matrix, code_b.matrix)
+    assert stabilizers == code_b.get_stabilizers()
+
+    with pytest.raises(ValueError, match="different lengths"):
+        codes.QuditCode.from_stabilizers(["I", "I I"], field)
 
 
 @pytest.mark.parametrize("conjugate", [False, True])
-def test_hyper_product(
+def test_graph_product(
     conjugate: bool,
-    bits_checks_a: tuple[int, int] = (10, 8),
-    bits_checks_b: tuple[int, int] = (7, 3),
+    bits_checks_a: tuple[int, int] = (5, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Equivalency of matrix-based and graph-based hypergraph products."""
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
 
-    graph_a = codes.ClassicalCode.matrix_to_graph(code_a.matrix)
-    graph_b = codes.ClassicalCode.matrix_to_graph(code_b.matrix)
-
     code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
-    graph = codes.HGPCode.get_graph_product(graph_a, graph_b, conjugate=conjugate)
-    assert np.array_equal(code.matrix, codes.QubitCode.graph_to_matrix(graph))
+    graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph, conjugate=conjugate)
+    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
     assert nx.utils.graphs_equal(code.graph, graph)
 
 
-def test_CSS_shifts(
-    bits_checks_a: tuple[int, int] = (5, 3),
-    bits_checks_b: tuple[int, int] = (3, 2),
-) -> None:
-    """Apply Pauli deformations to a CSS code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    matrix_x, matrix_z, _ = codes.HGPCode.get_hyper_product(code_a, code_b)
-
-    num_qubits = matrix_x.shape[-1]
-    conjugate = tuple(qubit for qubit in range(num_qubits) if np.random.randint(2))
-    shifts = {qubit: np.random.randint(3) for qubit in range(num_qubits)}
-    code = codes.CSSCode(
-        matrix_x,
-        matrix_z,
-        qubits_to_conjugate=conjugate,
-        qubit_shifts=shifts,
-    )
-
-    for node_check, node_qubit, data in code.graph.edges(data=True):
-        pauli_index = np.where(data[codes.Pauli].value)
-        assert (code.matrix[node_check.index, pauli_index, node_qubit.index] == 1).all()
-
-
-@pytest.mark.parametrize("conjugate", [False, True])
 def test_trivial_lift(
-    conjugate: bool,
-    bits_checks_a: tuple[int, int] = (10, 8),
-    bits_checks_b: tuple[int, int] = (7, 3),
+    bits_checks_a: tuple[int, int] = (4, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
+    field: int = 3,
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
-    code_HGP = codes.HGPCode(code_a, code_b, conjugate=conjugate)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field)
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field)
+    code_HGP = codes.HGPCode(code_a, code_b, field)
 
-    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix)
-    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix)
-    code_LP = codes.LPCode(protograph_a, protograph_b, conjugate=conjugate)
+    protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix, field)
+    protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix, field)
+    code_LP = codes.LPCode(protograph_a, protograph_b)
 
     assert np.array_equal(code_HGP.matrix, code_LP.matrix)
     assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)
@@ -172,33 +188,33 @@ def test_lift() -> None:
     # check that the lifted product code is indeed smaller than the HGP code!
     code_HP = codes.HGPCode(matrix)
     code_LP = codes.LPCode(protograph)
-    assert code_HP.num_qubits > code_LP.num_qubits
+    assert code_HP.num_qudits > code_LP.num_qudits
     assert code_HP.num_checks > code_LP.num_checks
 
     # check total number of qubits
-    assert code_HP.sector_size.sum() == code_HP.num_qubits + code_HP.num_checks
-    assert code_LP.sector_size.sum() == code_LP.num_qubits + code_LP.num_checks
+    assert code_HP.sector_size.sum() == code_HP.num_qudits + code_HP.num_checks
+    assert code_LP.sector_size.sum() == code_LP.num_qudits + code_LP.num_checks
 
 
 def test_twisted_XZZX(width: int = 3) -> None:
     """Verify twisted XZZX code in Eqs.(29) and (32) of arXiv:2202.01702v3."""
-    num_qubits = 2 * width**2
+    num_qudits = 2 * width**2
 
     # construct check matrix directly
     ring = codes.ClassicalCode.ring(width).matrix
     mat_1 = np.kron(ring, np.eye(width, dtype=int))
-    mat_2 = codes.ClassicalCode.ring(num_qubits // 2).matrix
-    zero_0 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
-    zero_1 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
-    zero_2 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
+    mat_2 = codes.ClassicalCode.ring(num_qudits // 2).matrix
+    zero_1 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
+    zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
     zero_3 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
+    zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = [
-        [zero_0, mat_1.T, mat_2, zero_2],
-        [mat_1, zero_1, zero_3, mat_2.T],
+        [zero_1, mat_1.T, mat_2, zero_4],
+        [mat_1, zero_2, zero_3, mat_2.T],
     ]
 
     # construct lifted product code
-    group = abstract.CyclicGroup(num_qubits // 2)
+    group = abstract.CyclicGroup(num_qudits // 2)
     unit = abstract.Element(group).one()
     shift = abstract.Element(group, group.generators[0])
     element_a = unit + shift**width
@@ -215,15 +231,23 @@ def test_cyclic_codes() -> None:
     terms_a = [(0, 3), (1, 1), (1, 2)]
     terms_b = [(1, 3), (0, 1), (0, 2)]
     code = codes.QCCode(dims, terms_a, terms_b)
-    assert code.num_qubits == 72
-    assert code.num_logical_qubits == 12
+    assert code.num_qudits == 72
+    assert code.dimension == 12
 
     dims = (15, 3)
     terms_a = [(0, 9), (1, 1), (1, 2)]
     terms_b = [(0, 0), (0, 2), (0, 7)]
     code = codes.QCCode(dims, terms_a, terms_b)
-    assert code.num_qubits == 90
-    assert code.num_logical_qubits == 8
+    assert code.num_qudits == 90
+    assert code.dimension == 8
+
+
+def test_GB_code_error() -> None:
+    """Raise error when trying to construct incompatible generalized bicycle codes."""
+    matrix_a = [[1, 0], [0, -1]]
+    matrix_b = [[0, 1], [1, 0]]
+    with pytest.raises(ValueError, match="incompatible"):
+        codes.GBCode(matrix_a, matrix_b)
 
 
 def test_lifted_product_codes() -> None:
@@ -237,7 +261,7 @@ def test_lifted_product_codes() -> None:
         proto_matrix = [[abstract.Element(group, xx**power) for power in row] for row in matrix]
         protograph = abstract.Protograph(proto_matrix)
         code = codes.LPCode(protograph)
-        rate = code.num_logical_qubits / code.num_qubits
+        rate = code.dimension / code.num_qudits
         assert rate >= 2 / 17
 
 
@@ -256,7 +280,7 @@ def test_tanner_code() -> None:
         subgraph.add_edge(edge[0], edge)
         subgraph.add_edge(edge[1], edge)
     num_sources = sum(1 for node in subgraph if subgraph.in_degree(node) == 0)
-    num_sinks = sum(1 for node in subgraph if subgraph.out_degree(node) == 0)
+    num_sinks = subgraph.number_of_nodes() - num_sources
 
     # build a classical Tanner code and check that it has the right number of checks/bits
     code = codes.TannerCode(subgraph, subcode)
@@ -264,7 +288,7 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_surface_hgp_code() -> None:
+def test_surface_HGP_code() -> None:
     """The surface and toric codes as hypergraph product codes."""
     # surface code
     bit_code = codes.ClassicalCode.repetition(3)
@@ -286,11 +310,28 @@ def test_toric_tanner_code() -> None:
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode = codes.ClassicalCode.repetition(2)
-    code = codes.QTCode(subset_a, subset_b, subcode)
+    subcode_a = codes.ClassicalCode.repetition(2)
+    code = codes.QTCode(subset_a, subset_b, subcode_a)
 
     # check that this is a [[16, 2, 4]] code
     assert code.get_code_params() == (16, 2, 4)
     assert code.get_distance(lower=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
+
+    # raise error if constructing QTCode with codes over different fields
+    subcode_b = codes.ClassicalCode.repetition(2, field=3)
+    with pytest.raises(ValueError, match="different fields"):
+        code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
+
+
+def test_qudit_distance() -> None:
+    """Distance calculations for qudits."""
+    trit_code = codes.ClassicalCode.repetition(2, field=3)
+    code = codes.HGPCode(trit_code)
+
+    assert code.get_distance(exact=True) == 2
+    with pytest.raises(ValueError, match="not implemented"):
+        code.get_distance(upper=1)
+    with pytest.raises(ValueError, match="Must choose"):
+        code.get_distance(lower=True, upper=1)
