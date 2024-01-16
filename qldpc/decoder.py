@@ -64,7 +64,7 @@ def decode_with_ILP(
         opt_variables = cvxpy.Variable(matrix.shape[1], integer=True)
     objective = cvxpy.Minimize(sum(iter(opt_variables)))
 
-    # collect constraints, using slack variables to relax each constraint of the form
+    # collect constraints, using boolean slack variables to relax each constraint of the form
     # `expression = val mod q` to `expression = val + sum_j q^j s_j`
     constraints = []
     matrix = matrix % modulus
