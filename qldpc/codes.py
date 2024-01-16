@@ -36,9 +36,6 @@ from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-IntegerMatrix = npt.NDArray[np.int_] | Sequence[Sequence[int]]
-ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
-
 DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 
 ################################################################################
@@ -50,7 +47,11 @@ class AbstractCode(abc.ABC):
 
     _field_order: int
 
-    def __init__(self, matrix: Self | IntegerMatrix, field: int | None = None) -> None:
+    def __init__(
+        self,
+        matrix: Self | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        field: int | None = None,
+    ) -> None:
         """Construct a code from a parity check matrix over a finite field.
 
         The base field is taken to be F_2 by default.
@@ -88,7 +89,7 @@ class AbstractCode(abc.ABC):
 
     @classmethod
     @abc.abstractmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
+    def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
 
     @classmethod
@@ -112,7 +113,7 @@ class ClassicalCode(AbstractCode):
         return not np.any(self.matrix @ self.field(word))
 
     @classmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
+    def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix H into a Tanner graph.
 
         The Tanner graph is a bipartite graph with (num_checks, num_bits) vertices, respectively
@@ -322,7 +323,7 @@ class QuditCode(AbstractCode):
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
 
     @classmethod
-    def matrix_to_graph(cls, matrix: IntegerMatrix) -> nx.DiGraph:
+    def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
         graph = nx.DiGraph()
         matrix = np.reshape(matrix, (len(matrix), 2, -1))
@@ -395,7 +396,7 @@ class QuditCode(AbstractCode):
     #       see https://arxiv.org/pdf/quant-ph/0408190.pdf
     @classmethod
     def conjugate(
-        cls, matrix: IntegerMatrix, qudits: slice | Sequence[int]
+        cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]], qudits: slice | Sequence[int]
     ) -> npt.NDArray[np.int_]:
         """Apply local Fourier transforms to the given qudits.
 
@@ -431,8 +432,8 @@ class CSSCode(QuditCode):
 
     def __init__(
         self,
-        code_x: ClassicalCode | IntegerMatrix,
-        code_z: ClassicalCode | IntegerMatrix,
+        code_x: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] | None = (),
@@ -769,8 +770,8 @@ class GBCode(CSSCode):
 
     def __init__(
         self,
-        matrix_a: IntegerMatrix,
-        matrix_b: IntegerMatrix | None = None,
+        matrix_a: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        matrix_b: npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
@@ -891,8 +892,8 @@ class HGPCode(CSSCode):
 
     def __init__(
         self,
-        code_a: ClassicalCode | IntegerMatrix,
-        code_b: ClassicalCode | IntegerMatrix | None = None,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
         conjugate: bool = False,
@@ -1012,8 +1013,11 @@ class LPCode(CSSCode):
 
     def __init__(
         self,
-        protograph_a: abstract.Protograph | ObjectMatrix,
-        protograph_b: abstract.Protograph | ObjectMatrix | None = None,
+        protograph_a: abstract.Protograph | npt.NDArray[np.object_] | Sequence[Sequence[object]],
+        protograph_b: abstract.Protograph
+        | npt.NDArray[np.object_]
+        | Sequence[Sequence[object]]
+        | None = None,
         *,
         conjugate: bool = False,
     ) -> None:
@@ -1146,8 +1150,8 @@ class QTCode(CSSCode):
         self,
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember],
-        code_a: ClassicalCode | IntegerMatrix,
-        code_b: ClassicalCode | IntegerMatrix | None = None,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] | None = (),
