@@ -516,7 +516,7 @@ class CSSCode(QuditCode):
         `CSSCode.get_distance_upper_bound` and `CSSCode.get_one_distance_upper_bound`.
 
         If `lower is False` and `upper is None`, compute an exact code distance with integer linear
-        programming.  Warning: this is an exponentially difficult(NP-complete) problem.
+        programming.  Warning: this is an NP-complete problem and takes exponential time to execute.
 
         All remaining keyword arguments are passed to a decoder, if applicable.
         """
