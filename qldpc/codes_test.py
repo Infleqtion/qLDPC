@@ -338,7 +338,7 @@ def test_qudit_distance() -> None:
     trit_code = codes.ClassicalCode.repetition(2, field=3)
     code = codes.HGPCode(trit_code)
 
-    assert code.get_distance(exact=True) == 2
+    assert code.get_distance() == 2
     with pytest.raises(ValueError, match="not implemented"):
         code.get_distance(upper=1)
     with pytest.raises(ValueError, match="Must choose"):
