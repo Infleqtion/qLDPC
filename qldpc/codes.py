@@ -564,7 +564,7 @@ class CSSCode(QubitCode):
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([matrix_z, word])
-            candidate_logical_op = qldpc.decode(
+            candidate_logical_op = qldpc.decoder.decode(
                 effective_check_matrix, effective_syndrome, exact=False, **decoder_args
             )
 
@@ -668,7 +668,7 @@ class CSSCode(QubitCode):
         effective_check_matrix = np.vstack([matrix, word])
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
-        logical_op = qldpc.decode(
+        logical_op = qldpc.decoder.decode(
             effective_check_matrix, effective_syndrome, exact=True, **decoder_args
         )
         assert self._logical_ops is not None
