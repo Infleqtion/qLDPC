@@ -104,7 +104,7 @@ def test_CSS_code() -> None:
 
 
 def test_logical_ops() -> None:
-    """Test logical operator construction."""
+    """Logical operator construction."""
     code = codes.HGPCode(codes.ClassicalCode.random(3, 2, field=3))
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
