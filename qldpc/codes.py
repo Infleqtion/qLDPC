@@ -610,7 +610,6 @@ class CSSCode(QuditCode):
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
-        matrix_z = code_z.matrix.view(np.ndarray)
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
         # construct the effective syndrome
@@ -620,10 +619,10 @@ class CSSCode(QuditCode):
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            word = self.get_random_logical_op(pauli_z).view(np.ndarray)
+            word = self.get_random_logical_op(pauli_z)
 
             # support of a candidate pauli-type logical operator
-            effective_check_matrix = np.vstack([matrix_z, word])
+            effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
             candidate_logical_op = qldpc.decoder.decode(
                 effective_check_matrix, effective_syndrome, exact=False, **decoder_args
             )
@@ -743,7 +742,7 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
         code = self.code_z if pauli == Pauli.X else self.code_x
-        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index].view(np.ndarray)
+        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
         effective_check_matrix = np.vstack([code.matrix, word]).view(np.ndarray)
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
