@@ -290,7 +290,7 @@ class ClassicalCode(AbstractCode):
 #   - also compute and store sub-codes, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
 class QuditCode(AbstractCode):
-    """Qudit-based quantum stabilizer code.
+    """Quantum stabilizer code for Galois qudits.
 
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
     written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
