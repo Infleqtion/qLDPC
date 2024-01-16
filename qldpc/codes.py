@@ -661,17 +661,19 @@ class CSSCode(QuditCode):
         code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
         physical qubits addressed nontrivially) by the logical Pauli-X operator on logical qubit 4.
 
+        In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
+        by this method are the unit shift and phase operators that generate all logical X-type and
+        Z-type qudit operators.
+
         Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
         procedure described in arXiv:0903.5256.
         """
-        # TODO: construct logical operators for non-qubit codes
-        self._assert_qubit_code()
         if self._logical_ops is not None:
             return self._logical_ops
 
         # identify candidate X-type and Z-type operators
-        candidates_x = list(self.code_z.generator.view(np.ndarray))
-        candidates_z = list(self.code_x.generator.view(np.ndarray))
+        candidates_x = list(self.code_z.generator)
+        candidates_z = list(self.code_x.generator)
 
         # collect logical operators sequentially
         logicals_x = []
@@ -684,7 +686,7 @@ class CSSCode(QuditCode):
 
             # check whether op_x anti-commutes with any of the candidate Z-type operators
             for zz, op_z in enumerate(candidates_z):
-                if op_x @ op_z % 2:
+                if op_x @ op_z:
                     # op_x and op_z anti-commute, so they are conjugate pair of logical operators!
                     found_logical_pair = True
                     logicals_x.append(op_x)
@@ -692,18 +694,21 @@ class CSSCode(QuditCode):
                     del candidates_z[zz]
                     break
 
+            if len(logicals_x) == self.dimension:
+                # we have found all logical operators
+                break
+
             if found_logical_pair:
                 # If any other candidate X-type operators anti-commute with op_z, it's because they
                 # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
                 for xx, other_x in enumerate(candidates_x):
-                    if other_x @ op_z % 2:
-                        candidates_x[xx] = (other_x + op_x) % 2
+                    if other_x @ op_z:
+                        candidates_x[xx] = other_x - op_x
                 for zz, other_z in enumerate(candidates_z):
-                    if other_z @ op_x % 2:
-                        candidates_z[zz] = (other_z + op_z) % 2
+                    if other_z @ op_x:
+                        candidates_z[zz] = other_z - op_z
 
-        assert len(logicals_x) == self.dimension
-        self._logical_ops = np.stack([logicals_x, logicals_z]).astype(int)
+        self._logical_ops = np.stack([logicals_x, logicals_z])
         return self._logical_ops
 
     def get_random_logical_op(
