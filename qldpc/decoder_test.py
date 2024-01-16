@@ -36,6 +36,7 @@ def test_decoding() -> None:
     error = np.array([1, 1], dtype=int)
     assert np.allclose(decoder.decode(matrix, syndrome, exact=False), error)
     assert np.allclose(decoder.decode(matrix, syndrome, exact=True), error)
+    assert np.allclose(decoder.decode_with_MWPM(matrix, syndrome), error)
 
     # decode over F_3
     modulus = 3
