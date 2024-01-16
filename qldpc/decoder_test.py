@@ -38,9 +38,10 @@ def test_decoding() -> None:
     assert np.allclose(decoder.decode(matrix, syndrome, exact=True), error)
 
     # decode over F_3
-    field = 3
-    matrix *= field + 1
-    assert np.allclose(decoder.decode(matrix, syndrome, exact=True, modulus=field), error)
+    modulus = 3
+    matrix = -matrix
+    error = -error % modulus
+    assert np.allclose(decoder.decode(matrix, syndrome, exact=True, modulus=modulus), error)
 
     # raise error for invalid modulus
     with pytest.raises(ValueError, match="must have modulus >= 2"):
