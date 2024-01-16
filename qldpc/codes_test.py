@@ -102,9 +102,17 @@ def test_CSS_code() -> None:
         code_z = codes.ClassicalCode.random(3, 2, 3)
         codes.CSSCode(code_x, code_z)
 
-    code = codes.HGPCode(code_x)
-    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+
+def test_logical_ops() -> None:
+    """Test logical operator construction."""
+    code = codes.HGPCode(codes.ClassicalCode.random(3, 2, field=3))
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
+    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+    ops = code.get_logical_ops()
+    for qudit in range(code.dimension):
+        op_x = ops[0, qudit, :]
+        op_z = ops[1, qudit, :]
+        assert op_x @ op_z == 1
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:

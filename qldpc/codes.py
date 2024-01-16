@@ -427,7 +427,7 @@ class CSSCode(QuditCode):
     _field_order: int  # The order of the field over which the CSS code is defined
 
     _codes_equal: bool
-    _logical_ops: npt.NDArray[np.int_] | None = None
+    _logical_ops: galois.FieldArray | None = None
 
     def __init__(
         self,
@@ -653,7 +653,7 @@ class CSSCode(QuditCode):
         # return the minimum weight of logical X-type or Z-type operators
         return self.get_logical_ops()[pauli.index].sum(-1).min()
 
-    def get_logical_ops(self) -> npt.NDArray[np.int_]:
+    def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -709,12 +709,12 @@ class CSSCode(QuditCode):
                     if other_z @ op_x == 1:
                         candidates_z[zz] = other_z - op_z
 
-        self._logical_ops = np.stack([logicals_x, logicals_z])
+        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
 
     def get_random_logical_op(
         self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = False
-    ) -> npt.NDArray[np.int_]:
+    ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
         A random logical operator may be trivial, which is to say that it may be equal to the
