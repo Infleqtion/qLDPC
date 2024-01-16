@@ -697,11 +697,11 @@ class CSSCode(QuditCode):
                     del candidates_z[zz]
                     break
 
-            if len(logicals_x) == self.dimension:
-                # we have found all logical operators
-                break
-
             if found_logical_pair:
+                if len(logicals_x) == self.dimension:
+                    # we have found all logical operators
+                    break
+
                 # If any other candidate X-type operators anti-commute with op_z, it's because they
                 # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
                 for xx, other_x in enumerate(candidates_x):
