@@ -463,7 +463,7 @@ class CSSCode(QuditCode):
                 [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
             ]
         )
-        return galois.GF(self._field_order)(self.conjugate(matrix, self._conjugate))
+        return self.field(self.conjugate(matrix, self._conjugate))
 
     @property
     def num_checks(self) -> int:
