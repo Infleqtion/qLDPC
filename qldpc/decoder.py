@@ -20,52 +20,39 @@ import cvxpy
 import ldpc
 import numpy as np
 import numpy.typing as npt
+import pymatching
 
 
-def decode(
-    matrix: npt.NDArray[np.int_],
-    syndrome: npt.NDArray[np.int_],
-    *,
-    exact: bool = False,
-    **decoder_args: object,
-) -> npt.NDArray[np.int_]:
-    """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
-
-    If passed an explicit decoder, use it.  If no explicit decoder is provided and `exact is True`,
-    solve exactly with an integer linear program.  Otherwise, use a BP-OSD decoder.  In all cases,
-    pass the `decoder_args` to the decoder that is used.
-
-    For details about the BD-OSD decoder, see:
-    - Documentation: https://roffe.eu/software/ldpc/ldpc/osd_decoder.html
-    - Reference: https://arxiv.org/pdf/2005.07016.pdf
-    """
-    # if a custom decoder was provided, use it
-    if callable(custom_decoder := decoder_args.pop("decoder", None)):
-        if exact:
-            warnings.warn(
-                "Exact decoding was reqested, but cannot be guaranteed with a custom decoder"
-            )
-        return custom_decoder(matrix, syndrome, **decoder_args)
-
-    if not exact:
-        # decode approximate with a BP-OSD decoder
-        bposd_decoder = ldpc.bposd_decoder(
-            matrix, osd_order=decoder_args.pop("osd_order", 0), **decoder_args
-        )
-        return bposd_decoder.decode(syndrome)
-
-    # decode exactly by solving an integer linear program
-    return _decode_with_integer_program(matrix, syndrome, **decoder_args)
-
-
-def _decode_with_integer_program(
+def decode_with_BP_OSD(
     matrix: npt.NDArray[np.int_],
     syndrome: npt.NDArray[np.int_],
     **decoder_args: object,
 ) -> npt.NDArray[np.int_]:
-    """Decode with an integer linear program (ILP): `matrix @ vector == syndrome mod 2`.
+    """Decode with belief propagation with ordered statistics (BP+OSD)."""
+    bposd_decoder = ldpc.bposd_decoder(
+        matrix, osd_order=decoder_args.pop("osd_order", 0), **decoder_args
+    )
+    return bposd_decoder.decode(syndrome)
 
-    Supports modulus > 2 with a "modulus" argument.
+
+def decode_with_MWPM(
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    **decoder_args: object,
+) -> npt.NDArray[np.int_]:
+    """Decode with minimum weight perfect matching (MWPM)."""
+    matching = pymatching.Matching.from_check_matrix(matrix, **decoder_args)
+    return matching.decode(syndrome)
+
+
+def decode_with_ILP(
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    **decoder_args: object,
+) -> npt.NDArray[np.int_]:
+    """Decode with an integer linear program (ILP).
+
+    Supports integers modulo q for q > 2 with a "modulus" argument.
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
     modulus = int(decoder_args.pop("modulus", 2))  # type:ignore[call-overload]
@@ -109,4 +96,34 @@ def _decode_with_integer_program(
         message = "Optimal solution to integer linear program could not be found!"
         raise ValueError(message + f"\nSolver output: {result}")
     solution = problem.variables()[0].value
-    return np.round(solution).astype(int)
+    return np.array(solution).astype(int)
+
+
+def decode(
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    *,
+    exact: bool = False,
+    **decoder_args: object,
+) -> npt.NDArray[np.int_]:
+    """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
+
+    If passed an explicit decoder, use it.  If no explicit decoder is provided and `exact is True`,
+    solve exactly with an integer linear program.  Otherwise, use a BP-OSD decoder.  In all cases,
+    pass the `decoder_args` to the decoder that is used.
+
+    For details about the BD-OSD decoder, see:
+    - Documentation: https://roffe.eu/software/ldpc/ldpc/osd_decoder.html
+    - Reference: https://arxiv.org/pdf/2005.07016.pdf
+    """
+    if callable(custom_decoder := decoder_args.pop("decoder", None)):
+        if exact:
+            warnings.warn(
+                "Exact decoding was reqested, but cannot be guaranteed with a custom decoder"
+            )
+        return custom_decoder(matrix, syndrome, **decoder_args)
+
+    if not exact:
+        return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
+
+    return decode_with_ILP(matrix, syndrome, **decoder_args)
