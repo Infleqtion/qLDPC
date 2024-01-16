@@ -668,6 +668,7 @@ class CSSCode(QuditCode):
         Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
         procedure described in arXiv:0903.5256.
         """
+        # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
             return self._logical_ops
 
@@ -686,7 +687,7 @@ class CSSCode(QuditCode):
 
             # check whether op_x anti-commutes with any of the candidate Z-type operators
             for zz, op_z in enumerate(candidates_z):
-                if op_x @ op_z:
+                if op_x @ op_z == 1:
                     # op_x and op_z anti-commute, so they are conjugate pair of logical operators!
                     found_logical_pair = True
                     logicals_x.append(op_x)
@@ -702,10 +703,10 @@ class CSSCode(QuditCode):
                 # If any other candidate X-type operators anti-commute with op_z, it's because they
                 # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
                 for xx, other_x in enumerate(candidates_x):
-                    if other_x @ op_z:
+                    if other_x @ op_z == 1:
                         candidates_x[xx] = other_x - op_x
                 for zz, other_z in enumerate(candidates_z):
-                    if other_z @ op_x:
+                    if other_z @ op_x == 1:
                         candidates_z[zz] = other_z - op_z
 
         self._logical_ops = np.stack([logicals_x, logicals_z])
