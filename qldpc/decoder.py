@@ -80,9 +80,11 @@ def _decode_with_integer_program(
     # collect constraints, using slack variables to relax each constraint of the form
     # `expression = val mod q` to `expression = val + sum_j q^j s_j`
     constraints = []
-    for check, syndrome_bit in zip(matrix, syndrome % modulus):
+    matrix = matrix % modulus
+    syndrome = syndrome % modulus
+    for check, syndrome_bit in zip(matrix, syndrome):
         # identify the largest power of q needed for the relaxation
-        max_zero = int(sum(check) - syndrome_bit)  # biggest integer that may need to be 0 mod q
+        max_zero = int(sum(check) * (modulus - 1) - syndrome_bit)
         if max_zero == 0 or modulus == 2:
             max_power_of_q = max_zero.bit_length() - 1
         else:
