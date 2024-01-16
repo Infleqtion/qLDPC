@@ -96,7 +96,7 @@ def decode_with_ILP(
         message = "Optimal solution to integer linear program could not be found!"
         raise ValueError(message + f"\nSolver output: {result}")
     solution = problem.variables()[0].value
-    return np.array(solution).astype(int)
+    return np.array(solution).astype(int) % modulus
 
 
 def decode(

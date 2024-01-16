@@ -748,7 +748,11 @@ class CSSCode(QuditCode):
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
         logical_op = qldpc.decoder.decode(
-            effective_check_matrix, effective_syndrome, exact=True, **decoder_args
+            effective_check_matrix,
+            effective_syndrome,
+            exact=True,
+            modulus=self.field.order,
+            **decoder_args,
         )
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_qubit_index] = logical_op

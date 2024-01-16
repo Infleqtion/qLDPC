@@ -333,11 +333,10 @@ def test_toric_tanner_code() -> None:
         code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
 
-def test_qudit_distance() -> None:
+@pytest.mark.parametrize("field", [3, 4])
+def test_qudit_distance(field: int) -> None:
     """Distance calculations for qudits."""
-    trit_code = codes.ClassicalCode.repetition(2, field=3)
-    code = codes.HGPCode(trit_code)
-
+    code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
     assert code.get_distance() == 2
     with pytest.raises(ValueError, match="not implemented"):
         code.get_distance(upper=1)
