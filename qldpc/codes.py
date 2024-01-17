@@ -178,10 +178,9 @@ class ClassicalCode(AbstractCode):
         """
         if not code_a._field_order == code_b._field_order:
             raise ValueError("Cannot take tensor product of codes over different fields")
-        gen_a: npt.NDArray[np.int_] = code_a.generator.view(np.ndarray)
-        gen_b: npt.NDArray[np.int_] = code_b.generator.view(np.ndarray)
-        generator_ab = np.kron(gen_a, gen_b)
-        return ~ClassicalCode(generator_ab, field=code_a._field_order)
+        gen_a: npt.NDArray[np.int_] = code_a.generator
+        gen_b: npt.NDArray[np.int_] = code_b.generator
+        return ~ClassicalCode(np.kron(gen_a, gen_b))
 
     @property
     def num_checks(self) -> int:
