@@ -22,7 +22,7 @@ from qldpc import abstract, codes
 
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
-    """Construct a random (but probably trivial) QuditCode."""
+    """Construct a random (but probably trivial or invalid) QuditCode."""
     return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
 
 
