@@ -21,6 +21,11 @@ import pytest
 from qldpc import abstract, codes
 
 
+def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
+    """Construct a random (but probably trivial) QuditCode."""
+    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
+
+
 def test_classical_codes() -> None:
     """Construction of a few classical codes."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
@@ -79,16 +84,16 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
 
-    code = codes.QuditCode.random(bits, checks, field)
+    code = get_random_qudit_code(bits, checks, field)
     graph = codes.QuditCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
-    assert codes.QuditCode.random(num_qubits, num_checks).num_qubits == num_qubits
+    assert get_random_qudit_code(num_qubits, num_checks).num_qubits == num_qubits
     with pytest.raises(ValueError, match="qubit-only method"):
-        assert codes.QuditCode.random(num_qubits, num_checks, field=3).num_qubits
+        assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
 
 
 def test_CSS_code() -> None:
@@ -107,9 +112,9 @@ def test_CSS_code() -> None:
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
 
 
-def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
+def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Apply Pauli deformations to a qudit code."""
-    code = codes.QuditCode.random(num_qudits, num_checks)
+    code = get_random_qudit_code(num_qudits, num_checks, field)
     conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
 
@@ -122,7 +127,7 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
 @pytest.mark.parametrize("field", [2, 3])
 def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
-    code_a = codes.QuditCode.random(bits, checks, field)
+    code_a = get_random_qudit_code(bits, checks, field)
     stabilizers = code_a.get_stabilizers()
     code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
     assert np.array_equal(code_a.matrix, code_b.matrix)

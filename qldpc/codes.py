@@ -352,11 +352,6 @@ class QuditCode(AbstractCode):
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
-    @classmethod
-    def random(cls, qudits: int, checks: int, field: int | None = None) -> QuditCode:
-        """Construct a random qudit code with the given number of qudits and nontrivial checks."""
-        return QuditCode(ClassicalCode.random(2 * qudits, checks, field).matrix, field)
-
     def get_stabilizers(self) -> list[str]:
         """Stabilizers (checks) of this code, represented by strings."""
         matrix = self.matrix.reshape(self.num_checks, 2, self.num_qudits)
