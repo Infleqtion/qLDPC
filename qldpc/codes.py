@@ -655,7 +655,7 @@ class CSSCode(QuditCode):
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
-    def get_logical_ops(self) -> galois.FieldArray:
+    def get_logical_ops(self) -> galois.FieldArray:  # noqa:C901 -- ignore flake8 complexity check
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
