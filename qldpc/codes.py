@@ -706,12 +706,10 @@ class CSSCode(QuditCode):
                 break
 
         # orthogonalize the Z-type logical operators
-        for idx in range(self.dimension):
-            logical_x = logicals_x[idx]
-            logical_z = logicals_z[idx]
-            for zz in range(idx + 1, self.dimension):
-                if overlap := logicals_z[zz] @ logical_x:
-                    logicals_z[zz] -= overlap * logical_z
+        for zz in range(1, self.dimension):
+            for idx in range(zz):
+                if overlap := logicals_z[zz] @ logicals_x[idx]:
+                    logicals_z[zz] -= overlap * logicals_x[idx]
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
