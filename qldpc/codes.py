@@ -687,7 +687,7 @@ class CSSCode(QuditCode):
             # check whether op_x anti-commutes with any of the candidate Z-type operators
             for zz, op_z in enumerate(candidates_z):
                 if exponent := op_x @ op_z:
-                    op_z /= exponent
+                    op_z /= exponent  # to ensure that op_x @ op_z == 1
                     # op_x and op_z anti-commute, so they are conjugate pair of logical operators!
                     found_logical_pair = True
                     logicals_x.append(op_x)
