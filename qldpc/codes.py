@@ -686,16 +686,16 @@ class CSSCode(QuditCode):
         for op_x in candidates_x:
             # remove the components of all previously found logical X-type operators
             for logical_x, logical_z in zip(logicals_x, logicals_z):
-                if exponent := op_x @ logical_z:
-                    op_x -= exponent * logical_x
+                if overlap := op_x @ logical_z:
+                    op_x -= overlap * logical_x
 
-            # check whether op_x anti-commutes with any of the candidate Z-type operators
+            # look for a candidate Z-type operator that does not commute with X(op_x)
             found_logical_pair = False
             for zz, op_z in enumerate(candidates_z):
-                if exponent := op_x @ op_z:
-                    # op_x and op_z do not commute, so they are conjugate pair of logical operators!
+                if overlap := op_x @ op_z:
+                    # op_x and op_z are conjugate pair of logical operators!
                     logicals_x.append(op_x)
-                    logicals_z.append(op_z / exponent)
+                    logicals_z.append(op_z / overlap)  # so that logical_x @ logical_z == 1
 
                     del candidates_z[zz]
                     found_logical_pair = True
@@ -710,8 +710,8 @@ class CSSCode(QuditCode):
             logical_x = logicals_x[idx]
             logical_z = logicals_z[idx]
             for zz in range(idx + 1, self.dimension):
-                if exponent := logicals_z[zz] @ logical_x:
-                    logicals_z[zz] -= exponent * logical_z
+                if overlap := logicals_z[zz] @ logical_x:
+                    logicals_z[zz] -= overlap * logical_z
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
