@@ -683,11 +683,11 @@ class CSSCode(QuditCode):
 
             # check whether op_x anti-commutes with any of the candidate Z-type operators
             for zz, op_z in enumerate(candidates_z):
-                if op_x @ op_z == 1:
+                if exponent := op_x @ op_z:
                     # op_x and op_z anti-commute, so they are conjugate pair of logical operators!
                     found_logical_pair = True
                     logicals_x.append(op_x)
-                    logicals_z.append(op_z)
+                    logicals_z.append(op_z / exponent)
                     del candidates_z[zz]
                     break
 
@@ -699,10 +699,10 @@ class CSSCode(QuditCode):
                 # If any other candidate X-type operators anti-commute with op_z, it's because they
                 # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
                 for xx, other_x in enumerate(candidates_x):
-                    if other_x @ op_z == 1:
+                    if other_x @ op_z:
                         candidates_x[xx] = other_x - op_x
                 for zz, other_z in enumerate(candidates_z):
-                    if other_z @ op_x == 1:
+                    if other_z @ op_x:
                         candidates_z[zz] = other_z - op_z
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
