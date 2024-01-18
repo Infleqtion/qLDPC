@@ -289,7 +289,7 @@ class ClassicalCode(AbstractCode):
 #   - also compute and store sub-codes, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
 class QuditCode(AbstractCode):
-    """Quantum stabilizer code for Galois qudits.
+    """Quantum stabilizer code for Galois qudits, with dimension q = p^m for prime p and integer m.
 
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
     written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
@@ -297,11 +297,13 @@ class QuditCode(AbstractCode):
     The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
     X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
     operators.  Specifically:
-    - X(r) = sum_{j=0}^{d-1} |j+r><j| is a shift operator, and
-    - Z(r) = sum_{j=0}^{d-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / d).
+    - X(r) = sum_{j=0}^{q-1} |j+r><j| is a shift operator, and
+    - Z(r) = sum_{j=0}^{q-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / q).
 
-    Warning: here j, r, s, etc. not integers, but elements of the Galois field GF(d), which may have
-    different rules for addition and multiplication.
+    Warning: here j, r, s, etc. not integers, but elements of the Galois field GF(q), which has
+    different rules for addition and multiplication when q is not a prime number.
+
+    Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
 
     @property
