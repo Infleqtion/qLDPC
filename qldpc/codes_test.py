@@ -107,9 +107,17 @@ def test_CSS_code() -> None:
         code_z = codes.ClassicalCode.random(3, 2, 3)
         codes.CSSCode(code_x, code_z)
 
-    code = codes.HGPCode(code_x)
-    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+
+def test_logical_ops() -> None:
+    """Logical operator construction."""
+    code = codes.HGPCode(codes.ClassicalCode.random(3, 2, field=3))
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
+    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+    ops = code.get_logical_ops()
+    for qudit in range(code.dimension):
+        op_x = ops[0, qudit, :]
+        op_z = ops[1, qudit, :]
+        assert op_x @ op_z == 1
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
@@ -330,12 +338,11 @@ def test_toric_tanner_code() -> None:
         code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
 
-def test_qudit_distance() -> None:
+@pytest.mark.parametrize("field", [3, 4])
+def test_qudit_distance(field: int) -> None:
     """Distance calculations for qudits."""
-    trit_code = codes.ClassicalCode.repetition(2, field=3)
-    code = codes.HGPCode(trit_code)
-
-    assert code.get_distance(exact=True) == 2
+    code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
+    assert code.get_distance() == 2
     with pytest.raises(ValueError, match="not implemented"):
         code.get_distance(upper=1)
     with pytest.raises(ValueError, match="Must choose"):
