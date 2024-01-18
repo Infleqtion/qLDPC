@@ -695,18 +695,17 @@ class CSSCode(QuditCode):
             found_logical_pair = False
             for zz, op_z in enumerate(candidates_z):
                 if exponent := op_x @ op_z:
-                    op_z /= exponent  # to ensure that op_x @ op_z == 1
-                    # op_x and op_z anti-commute, so they are conjugate pair of logical operators!
-                    found_logical_pair = True
+                    # op_x and op_z do not commute, so they are conjugate pair of logical operators!
                     logicals_x.append(op_x)
-                    logicals_z.append(op_z)
+                    logicals_z.append(op_z / exponent)
+
                     del candidates_z[zz]
+                    found_logical_pair = True
                     break
 
-            if found_logical_pair:
-                if len(logicals_x) == self.dimension:
-                    # we have found all logical operators
-                    break
+            if found_logical_pair and len(logicals_x) == self.dimension:
+                # we have found all logical operators
+                break
 
         # orthogonalize the Z-type logical operators
         for idx, (logical_x, logical_z) in enumerate(zip(logicals_x, logicals_z)):
