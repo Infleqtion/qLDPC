@@ -699,11 +699,11 @@ class CSSCode(QuditCode):
                 # If any other candidate X-type operators anti-commute with op_z, it's because they
                 # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
                 for xx, other_x in enumerate(candidates_x):
-                    if other_x @ op_z:
-                        candidates_x[xx] = other_x - op_x
+                    if exponent := other_x @ op_z:
+                        candidates_x[xx] = other_x - op_x / exponent
                 for zz, other_z in enumerate(candidates_z):
-                    if other_z @ op_x:
-                        candidates_z[zz] = other_z - op_z
+                    if exponent := other_z @ op_x:
+                        candidates_z[zz] = other_z - op_z / exponent
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
