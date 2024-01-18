@@ -638,8 +638,9 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
         if self.field.degree > 1:
-            # The base field is not prime, so we can't use the integer linear program method.
-            # Compute code distance with a brute-force search over all code words.
+            # The base field is not prime, so we can't use the integer linear program method due to
+            # different rules for addition and multiplication.  We therefore compute distance with a
+            # brute-force search over all code words.
             code_x = self.code_x if pauli == Pauli.X else self.code_z
             code_z = self.code_z if pauli == Pauli.X else self.code_x
             dual_code_x = ~code_x
