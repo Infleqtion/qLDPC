@@ -655,7 +655,7 @@ class CSSCode(QuditCode):
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
-    def get_logical_ops(self) -> galois.FieldArray:  # noqa:C901 -- ignore flake8 complexity check
+    def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -671,22 +671,20 @@ class CSSCode(QuditCode):
         procedure described in arXiv:0903.5256.
         """
         # memoize manually because other methods may modify the logical operators computed here
-        # if self._logical_ops is not None:
-        #     return self._logical_ops
-
-        # identify candidate X-type and Z-type operators
-        candidates_x = list(self.code_z.generator)
-        candidates_z = list(self.code_x.generator)
+        if self._logical_ops is not None:
+            return self._logical_ops
 
         # collect logical operators sequentially
         logicals_x: list[galois.FieldArray] = []
         logicals_z: list[galois.FieldArray] = []
 
-        # iterate over all candidate X-type operators
-        while candidates_x:
-            op_x = candidates_x.pop()
+        # identify candidate X-type and Z-type operators
+        candidates_x = self.code_z.generator
+        candidates_z = list(self.code_x.generator)
 
-            # remove the component of all previously found logical X-type operators
+        # iterate over all candidate X-type operators
+        for op_x in candidates_x:
+            # remove the components of all previously found logical X-type operators
             for logical_x, logical_z in zip(logicals_x, logicals_z):
                 if exponent := op_x @ logical_z:
                     op_x -= exponent * logical_x
@@ -708,10 +706,12 @@ class CSSCode(QuditCode):
                 break
 
         # orthogonalize the Z-type logical operators
-        for idx, (logical_x, logical_z) in enumerate(zip(logicals_x, logicals_z)):
-            for zz in range(idx + 1, len(candidates_z)):
-                if exponent := candidates_z[zz] @ logical_x:
-                    candidates_z[zz] -= exponent * logical_z
+        for idx in range(self.dimension):
+            logical_x = logicals_x[idx]
+            logical_z = logicals_z[idx]
+            for zz in range(idx + 1, self.dimension):
+                if exponent := logicals_z[zz] @ logical_x:
+                    logicals_z[zz] -= exponent * logical_z
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
