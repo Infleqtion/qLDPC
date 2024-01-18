@@ -701,10 +701,10 @@ class CSSCode(QuditCode):
                 # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
                 for xx, other_x in enumerate(candidates_x):
                     if exponent := other_x @ op_z:
-                        candidates_x[xx] = other_x / exponent - op_x
+                        candidates_x[xx] = other_x - op_x * exponent
                 for zz, other_z in enumerate(candidates_z):
                     if exponent := other_z @ op_x:
-                        candidates_z[zz] = other_z / exponent - op_z
+                        candidates_z[zz] = other_z - op_z * exponent
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
