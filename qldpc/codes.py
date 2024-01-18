@@ -299,6 +299,9 @@ class QuditCode(AbstractCode):
     operators.  Specifically:
     - X(r) = sum_{j=0}^{d-1} |j+r><j| is a shift operator, and
     - Z(r) = sum_{j=0}^{d-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / d).
+
+    Warning: here j, r, s, etc. not integers, but elements of the Galois field GF(d), which may have
+    different rules for addition and multiplication.
     """
 
     @property
