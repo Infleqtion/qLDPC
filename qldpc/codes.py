@@ -671,23 +671,28 @@ class CSSCode(QuditCode):
         procedure described in arXiv:0903.5256.
         """
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
-            return self._logical_ops
+        # if self._logical_ops is not None:
+        #     return self._logical_ops
 
         # identify candidate X-type and Z-type operators
         candidates_x = list(self.code_z.generator)
         candidates_z = list(self.code_x.generator)
 
         # collect logical operators sequentially
-        logicals_x = []
-        logicals_z = []
+        logicals_x: list[galois.FieldArray] = []
+        logicals_z: list[galois.FieldArray] = []
 
         # iterate over all candidate X-type operators
         while candidates_x:
             op_x = candidates_x.pop()
-            found_logical_pair = False
+
+            # remove the component of all previously found logical X-type operators
+            for logical_x, logical_z in zip(logicals_x, logicals_z):
+                if exponent := op_x @ logical_z:
+                    op_x -= exponent * logical_x
 
             # check whether op_x anti-commutes with any of the candidate Z-type operators
+            found_logical_pair = False
             for zz, op_z in enumerate(candidates_z):
                 if exponent := op_x @ op_z:
                     op_z /= exponent  # to ensure that op_x @ op_z == 1
@@ -703,14 +708,11 @@ class CSSCode(QuditCode):
                     # we have found all logical operators
                     break
 
-                # If any other candidate X-type operators anti-commute with op_z, it's because they
-                # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
-                for xx, other_x in enumerate(candidates_x):
-                    if exponent := other_x @ op_z:
-                        candidates_x[xx] = other_x - exponent * op_x
-                for zz, other_z in enumerate(candidates_z):
-                    if exponent := other_z @ op_x:
-                        candidates_z[zz] = other_z - exponent * op_z
+        # orthogonalize the Z-type logical operators
+        for idx, (logical_x, logical_z) in enumerate(zip(logicals_x, logicals_z)):
+            for zz in range(idx + 1, len(candidates_z)):
+                if exponent := candidates_z[zz] @ logical_x:
+                    candidates_z[zz] -= exponent * logical_z
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
