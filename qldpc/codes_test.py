@@ -323,7 +323,7 @@ def test_toric_tanner_code() -> None:
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode_a = codes.ClassicalCode.repetition(2)
+    subcode_a = codes.ClassicalCode.repetition(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a)
 
     # check that this is a [[16, 2, 4]] code
