@@ -243,7 +243,7 @@ class ClassicalCode(AbstractCode):
     def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code on the given number of bits."""
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        matrix = code_field.Zeros((num_bits, num_bits))
+        matrix = code_field.Zeros((num_bits - 1, num_bits))
         for row in range(num_bits - 1):
             matrix[row, row] = 1
             matrix[row, row + 1] = -code_field(1)
