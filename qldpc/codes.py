@@ -971,8 +971,13 @@ class HGPCode(CSSCode):
                 node_check, node_qudit = node_fst, node_snd
             graph.add_edge(node_check, node_qudit)
 
+            # identify the "value" of the operator for this edge, e.g., the r in X(r)
+            op_val = data.get("val", 1)
+            if not node_check[0].is_data and not node_qudit[0].is_data:
+                op_val = -op_val
+
             # by default, this edge is X-type iff the check qudit is in the (0, 1) sector
-            op = QuditOperator((data.get("val", 1), 0))
+            op = QuditOperator((op_val, 0))
             if node_check[0].is_data:
                 op = ~op
             # flip X <--> Z iff `conjugate==True` and the data qudit is in the (1, 1) sector
