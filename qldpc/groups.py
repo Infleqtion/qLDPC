@@ -78,40 +78,26 @@ def construct_projspace(field:int, dimension:int):
             proj_space.append(gf(v).data.tobytes())
     return proj_space
 
-def construct_lineargroup(field:int, dimension:int, proj_space, group):
+def group_to_permutation(field:int, proj_space, group):
     """
     Construct a hashdict of the projspace
     multiply these elements by the PSL/SL  matrices and generate the permutation matrices by lookup
     Construct sympy group using these permutation matrices
     """
     gf = galois.GF(field)
-    #proj_space = construct_projspace(field, dimension)
     perm_group = []
-    num = set(range(len(proj_space)))
     for M in group:
-        num_temp = num.copy()
         #print(M)
-        perm_string = list(num_temp)
-        while len(num_temp) > 0:
-            index = num_temp.pop() 
-            cycle = [index]
+        perm_string = list(range(len(proj_space)))
+        for index in range(len(proj_space)):
             current_vector = gf(np.frombuffer(proj_space[index], dtype=np.uint8))
-            #print(current_vector, index)
-            next_index = -1
-            while next_index != index: 
-                next_vector = M @ current_vector
-                next_index = proj_space.index(next_vector.data.tobytes())
-                perm_string[index] = next_index
-                if next_index in num_temp:
-                    num_temp.remove(next_index)
-                    cycle.append(next_index)
-                    #print(next_vector, next_index)
-                current_vector = next_vector
-            perm_string.append(cycle)
+            next_vector = M @ current_vector
+            next_index = proj_space.index(next_vector.data.tobytes())
+            perm_string[index] = next_index
         perm_group.append(perm_string)
         #print(perm_string)
-    return
+    return perm_group
 
-proj_space = construct_projspace(2, 3)
-psl, sl = construct_linearmat(2, 3)
-construct_lineargroup(2,3,proj_space,psl)
+#proj_space = construct_projspace(2, 3)
+#psl, sl = construct_linearmat(2, 3)
+#group_to_permutation(2,3,proj_space,psl)
