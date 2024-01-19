@@ -947,7 +947,6 @@ class HGPCode(CSSCode):
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
 
-    # TODO: fix for fields > 2 to account for -mat_Im1_H2_T
     @classmethod
     def get_graph_product(
         cls,
