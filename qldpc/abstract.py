@@ -268,6 +268,9 @@ class Element:
             new_element._vec[member] += val
         return new_element
 
+    def __sub__(self, other: GroupMember | Element) -> Element:
+        return self + (-1) * other
+
     def __radd__(self, other: GroupMember) -> Element:
         return self + other
 

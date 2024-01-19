@@ -223,17 +223,17 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = [
         [zero_1, mat_1.T, mat_2, zero_4],
-        [mat_1, zero_2, zero_3, mat_2.T],
+        [mat_1, zero_2, zero_3, -mat_2.T],
     ]
 
     # construct lifted product code
     group = abstract.CyclicGroup(num_qudits // 2)
     unit = abstract.Element(group).one()
     shift = abstract.Element(group, group.generators[0])
-    element_a = unit + shift**width
-    element_b = unit + shift
+    element_a = unit - shift**width
+    element_b = unit - shift
     code = codes.LPCode([[element_a]], [[element_b]], conjugate=True)
-    assert np.array_equal(np.block(matrix).ravel(), code.matrix.ravel())
+    assert np.array_equal(np.block(matrix), code.matrix)
 
 
 def test_cyclic_codes() -> None:

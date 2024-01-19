@@ -242,22 +242,22 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code on the given number of bits."""
-        minus_one = galois.GF(field or DEFAULT_FIELD_ORDER).characteristic - 1
-        matrix = np.zeros((num_bits - 1, num_bits), dtype=int)
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        matrix = code_field.Zeros((num_bits, num_bits))
         for row in range(num_bits - 1):
             matrix[row, row] = 1
-            matrix[row, row + 1] = minus_one
-        return ClassicalCode(matrix, field)
+            matrix[row, row + 1] = -code_field(1)
+        return ClassicalCode(matrix)
 
     @classmethod
     def ring(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code with periodic boundary conditions."""
-        minus_one = galois.GF(field or DEFAULT_FIELD_ORDER).characteristic - 1
-        matrix = np.zeros((num_bits, num_bits), dtype=int)
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        matrix = code_field.Zeros((num_bits, num_bits))
         for row in range(num_bits):
             matrix[row, row] = 1
-            matrix[row, (row + 1) % num_bits] = minus_one
-        return ClassicalCode(matrix, field)
+            matrix[row, (row + 1) % num_bits] = -code_field(1)
+        return ClassicalCode(matrix)
 
     @classmethod
     def hamming(cls, rank: int, field: int | None = None) -> ClassicalCode:
