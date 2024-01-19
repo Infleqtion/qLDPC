@@ -69,7 +69,10 @@ def construct_linear_all(field:int, dimension:int):
                 psl.append(a)
     return (psl,sl)
 
-def special_linear_gen(field:int, dimension:int):
+def special_linear_gen(field:int, dimension:int) -> galois.FieldArray:
+    '''
+    Construct generators for SL(field, dimension) based on https://arxiv.org/abs/2201.09155
+    '''
     gf = galois.GF(field)
     sl = []
     W = gf.Zeros((dimension,dimension))
