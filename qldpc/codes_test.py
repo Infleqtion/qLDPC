@@ -72,7 +72,7 @@ def test_tensor_product(
     assert (n_ab, k_ab, d_ab) == (n_a * n_b, k_a * k_b, d_a * d_b)
 
     with pytest.raises(ValueError, match="Cannot take tensor product"):
-        code_b = codes.ClassicalCode.random(*bits_checks_b, field=3)
+        code_b = codes.ClassicalCode.random(*bits_checks_b, field=code_a.field.order**2)
         codes.ClassicalCode.tensor_product(code_a, code_b)
 
 
@@ -91,7 +91,7 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
-    assert get_random_qudit_code(num_qubits, num_checks).num_qubits == num_qubits
+    assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
     with pytest.raises(ValueError, match="qubit-only method"):
         assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
 
@@ -104,7 +104,7 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z)
 
     with pytest.raises(ValueError, match="different fields"):
-        code_z = codes.ClassicalCode.random(3, 2, 3)
+        code_z = codes.ClassicalCode.random(3, 2, field=code_x.field.order**2)
         codes.CSSCode(code_x, code_z)
 
 
@@ -333,7 +333,7 @@ def test_toric_tanner_code() -> None:
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
 
     # raise error if constructing QTCode with codes over different fields
-    subcode_b = codes.ClassicalCode.repetition(2, field=3)
+    subcode_b = codes.ClassicalCode.repetition(2, field=subcode_a.field.order**2)
     with pytest.raises(ValueError, match="different fields"):
         code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
