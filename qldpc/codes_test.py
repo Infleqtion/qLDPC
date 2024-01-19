@@ -243,16 +243,19 @@ def test_cyclic_codes() -> None:
     dims = (6, 6)
     terms_a = [(0, 3), (1, 1), (1, 2)]
     terms_b = [(1, 3), (0, 1), (0, 2)]
-    code = codes.QCCode(dims, terms_a, terms_b)
+    code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
 
     dims = (15, 3)
     terms_a = [(0, 9), (1, 1), (1, 2)]
     terms_b = [(0, 0), (0, 2), (0, 7)]
-    code = codes.QCCode(dims, terms_a, terms_b)
+    code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 90
     assert code.dimension == 8
+
+    with pytest.raises(ValueError, match="not supported"):
+        codes.QCCode(dims, terms_a, terms_b, field=3)
 
 
 def test_GB_code_error() -> None:

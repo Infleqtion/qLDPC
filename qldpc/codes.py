@@ -828,6 +828,9 @@ class QCCode(GBCode):
         conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a quasi-cyclic code."""
+        if field and field != 2:
+            raise ValueError("Non-boolean (field > 2) quasi-cyclic codes are not supported")
+
         if terms_b is None:
             terms_b = terms_a  # pragma: no cover
 
