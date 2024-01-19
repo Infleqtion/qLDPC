@@ -90,6 +90,10 @@ class QuditOperator:
         """Fourier-transform this qudit operator."""
         return QuditOperator(self.value[::-1])
 
+    def __neg__(self) -> QuditOperator:
+        """Invert the shifts and phases on this qudit operator."""
+        return QuditOperator((-self.value[0], -self.value[1]))
+
     def __str__(self) -> str:
         val_x, val_z = self.value
         if not val_x and not val_z:
