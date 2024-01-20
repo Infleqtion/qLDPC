@@ -668,7 +668,7 @@ class CSSCode(QuditCode):
         Z-type qudit operators.
 
         Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
-        procedure described in arXiv:0903.5256.
+        procedure described in arXiv:0903.5256, slightly modified and generalized for qudits.
         """
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
