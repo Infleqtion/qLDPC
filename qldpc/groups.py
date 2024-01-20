@@ -87,14 +87,30 @@ def special_linear_gen(field:int, dimension:int) -> galois.FieldArray:
     else:
         W[0,0] = -1*gf(1)
         sl.append(W)
-        elements = list(gf.elements)
-        for elem in elements[1:]:
-            A = gf.Identity(dimension)
-            A[0,0] = elem
-            A[1,1] = elem ** -1      
-            sl.append(A)
+        prim = gf.primitive_element
+        A = gf.Identity(dimension)
+        A[0,0] = prim
+        A[1,1] = prim ** -1    
+        sl.append(A)
     return sl  
-    
+
+def proj_linear_gen(field:int, dimension:int) -> galois.FieldArray:
+    '''
+    Construct generators for PSL(field, 2) based on https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
+    '''
+    gf = galois.GF(field)
+    psl = []
+    if dimension == 2:
+        prim = gf.primitive_element
+        minus = -1*gf(1)
+        A = gf([[minus, 1], [minus, 0]])
+        W = gf([[prim, 0], [0, prim**-1]])       
+        psl.append(A)
+        psl.append(W)
+    else:
+        return NotImplemented
+    return psl  
+
 
 def construct_projspace(field:int, dimension:int):
     gf = galois.GF(field)
