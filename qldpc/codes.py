@@ -709,7 +709,7 @@ class CSSCode(QuditCode):
         for zz in range(1, self.dimension):
             for idx in range(zz):
                 if overlap := logicals_z[zz] @ logicals_x[idx]:
-                    logicals_z[zz] -= overlap * logicals_x[idx]
+                    logicals_z[zz] -= overlap * logicals_z[idx]
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
