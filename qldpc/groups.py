@@ -38,7 +38,7 @@ def random_cyclicQTcode(
     code_b = ClassicalCode.random(deg, int(0.2*deg),field)
     
     pass
-"""
+
 
 def construct_psl2(field:int):
     gf = galois.GF(field)
@@ -55,7 +55,7 @@ def construct_psl2(field:int):
             if M[(gf(M)!=0).argmax()] <= field//2: #we force the first non-zero entry to be < p/2 to quotient by -I 
                 psl.append(a)
     return (psl,sl)
-
+"""
 def construct_linear_all(field:int, dimension:int):
     gf = galois.GF(field)
     vectors = itertools.product(gf.elements, repeat=dimension**2)
@@ -97,6 +97,7 @@ def special_linear_gen(field:int, dimension:int) -> galois.FieldArray:
 def proj_linear_gen(field:int, dimension:int) -> galois.FieldArray:
     '''
     Construct generators for PSL(field, 2) based on https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
+    I doubt if it is correct. Looks the same as that for SL(2,q)!
     '''
     gf = galois.GF(field)
     psl = []
@@ -130,7 +131,7 @@ def construct_linspace(field:int, dimension:int):
             lin_space.append(gf(v).tobytes())
     return lin_space
 
-def group_to_permutation(field:int, proj_space, group) -> PermutationGroup:
+def group_to_permutation(field:int, space, group) -> PermutationGroup:
     """
     Constructs a sympy PermutationGroup using these permutation matrices
     """
@@ -138,15 +139,33 @@ def group_to_permutation(field:int, proj_space, group) -> PermutationGroup:
     perm_group = []
     for M in group:
         #print(M)
-        perm_string = list(range(len(proj_space)))
-        for index in range(len(proj_space)):
-            current_vector = gf(np.frombuffer(proj_space[index], dtype=np.uint8))
+        perm_string = list(range(len(space)))
+        for index in range(len(space)):
+            current_vector = gf(np.frombuffer(space[index], dtype=np.uint8))
             next_vector = M @ current_vector
-            next_index = proj_space.index(next_vector.tobytes())
+            next_index = space.index(next_vector.tobytes())
             perm_string[index] = next_index
         perm_group.append(Permutation(perm_string))
         #print(perm_string)
     return PermutationGroup(perm_group)
+
+
+def psl2_expanding_generators(field:int):
+    """
+    Expanding generators for PSL2/SL2 from https://arxiv.org/abs/1807.03879
+    """
+    gf = galois.GF(field)
+    A = gf([[1,-1*gf(1)],[0,1]])
+    B = gf([[1,1],[0,1]])
+    C = gf([[1,0],[-1*gf(1),1]])
+    D = gf([[1,0],[1,1]])
+    return [A,B,C,D]
+
+
+
+
+
+
 
 dimension = 2
 field = 37

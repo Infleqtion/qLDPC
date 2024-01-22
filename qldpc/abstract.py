@@ -221,6 +221,17 @@ class Group:
     ) -> Group:
         """Construct a group from generators."""
         return Group(PermutationGroup(*generators), field, lift)
+    
+    def random_subset(self, size:int) -> list[GroupMember]:
+        """
+        Outputs a random subset of the group of input size
+        """
+        assert(size > 0)
+        return list(self._group.random() for _ in range(size))
+        # S = []
+        # for _ in range(size):
+        #     S.append(self._group.random())
+        # return S            
 
 
 ################################################################################
@@ -510,3 +521,5 @@ class QuaternionGroup(Group):
 
         group = Group.from_table(table, integer_lift=lift)
         super().__init__(group._group, field=3, lift=group._lift)
+
+# class SpecialLinearGroup(Group):
