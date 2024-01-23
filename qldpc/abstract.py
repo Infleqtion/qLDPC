@@ -522,15 +522,8 @@ class QuaternionGroup(Group):
         group = Group.from_table(table, integer_lift=lift)
         super().__init__(group._group, field=3, lift=group._lift)
 
-#Needs Checking
+# Needs Checking
 class SpecialLinearGroup(Group):
-    def __init__(self, field, dimension) -> None:
-        generators = special_linear_gen(field, dimension)
-        space = construct_linspace(field, dimension)
-        group = group_to_permutation(field, space, generators)
-        super().__init__(group, field=field)
-
-    
     def construct_linspace(field:int, dimension:int):
         gf = galois.GF(field)
         lin_space = []
@@ -582,3 +575,9 @@ class SpecialLinearGroup(Group):
             perm_group.append(Permutation(perm_string))
             #print(perm_string)
         return PermutationGroup(perm_group)
+
+    def __init__(self, field, dimension) -> None:
+        generators = special_linear_gen(field, dimension)
+        space = construct_linspace(field, dimension)
+        group = group_to_permutation(field, space, generators)
+        super().__init__(group, field=field)

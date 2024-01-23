@@ -183,6 +183,33 @@ class ClassicalCode(AbstractCode):
         generator_ab = np.kron(gen_a, gen_b)
         return ~ClassicalCode(generator_ab, field=code_a._field_order)
 
+
+    """ 
+    TODO: Implement this
+    @classmethod
+        def test_robustness(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
+            """Test if the tensor product C_a ⊗ C_b of two codes C_a and C_b, is robustly-testable.
+            If so, ouput a lower bound on the robustness parameter rho.
+            See definition in  https://arxiv.org/abs/2206.09973
+            """
+            
+            tensor_code = ClassicalCode.tensor_product(code_a, code_b)
+            gf = galois.GF(code_a._field_order)             
+            n = code_a.num_bits
+            itertools.product(gf.elements, repeat=n*n)
+            rho_estimate = np.inf
+            for x in itertools.product(gf.elements, repeat=n*n):
+                matrix = x.reshape((n,n))
+                dist_AB = compute_distance (x, C_A\otimes C_B)
+                dist_A = np.sum([code_a.get_distance(row) for row in matrix])
+                dist_B = np.sum([code_b.get_distance(col) for col in matrix])
+                ratio = (dist_A + dist_B)/ (2*dist_AB)
+                rho_estimate = min(rho_estimate, ratio)
+
+            return rho_estimate
+    """        
+
+
     @property
     def num_checks(self) -> int:
         """Number of check bits in this code."""
@@ -209,10 +236,15 @@ class ClassicalCode(AbstractCode):
         return self.num_bits - self.rank
 
     @functools.cache
-    def get_distance(self) -> int:
-        """The distance of this code, or equivalently the minimal weight of a nonzero code word."""
+    def get_distance(self, vector = None) -> int:
+        """The distance of vector from this code. 
+        If vector is None, then computes distance of the code or equivalently the minimal weight of a nonzero code word.""" 
         words = self.words().view(np.ndarray)
-        return np.min(np.count_nonzero(words[1:], axis=1))
+        if vector is not None:
+            vec = np.vstack(list(a for a in itertools.repeat(vector,words.shape[0])))
+            return np.min(np.count_nonzero(words-vec, axis=1)) 
+        else:
+            return np.min(np.count_nonzero(words[1:], axis=1))
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].
