@@ -221,17 +221,17 @@ class Group:
     ) -> Group:
         """Construct a group from generators."""
         return Group(PermutationGroup(*generators), field, lift)
-    
-    def random_subset(self, size:int) -> list[GroupMember]:
+
+    def random_subset(self, size: int) -> list[GroupMember]:
         """
         Outputs a random subset of the group of input size
         """
-        assert(size > 0)
+        assert size > 0
         return list(self._group.random() for _ in range(size))
         # S = []
         # for _ in range(size):
         #     S.append(self._group.random())
-        # return S            
+        # return S
 
 
 ################################################################################
@@ -525,50 +525,51 @@ class QuaternionGroup(Group):
         group = Group.from_table(table, integer_lift=lift)
         super().__init__(group._group, field=3, lift=group._lift)
 
+
 # Needs Checking
 class SpecialLinearGroup(Group):
-    def construct_linspace(field:int, dimension:int):
+    def construct_linspace(field: int, dimension: int):
         gf = galois.GF(field)
         lin_space = []
         vectors = itertools.product(gf.elements, repeat=dimension)
         for v in vectors:
-            if gf(v).any(): 
+            if gf(v).any():
                 lin_space.append(gf(v).tobytes())
         return lin_space
 
-    def special_linear_gen(field:int, dimension:int) -> galois.FieldArray:
-        '''
+    def special_linear_gen(field: int, dimension: int) -> galois.FieldArray:
+        """
         Construct generators for SL(field, dimension) based on https://arxiv.org/abs/2201.09155
-        '''
+        """
         gf = galois.GF(field)
         sl = []
-        W = gf.Zeros((dimension,dimension))
-        W[0,-1] = 1
-        for index in range(dimension-1):
-            W[index+1,index] = -1*gf(1)
+        W = gf.Zeros((dimension, dimension))
+        W[0, -1] = 1
+        for index in range(dimension - 1):
+            W[index + 1, index] = -1 * gf(1)
         if field <= 3:
             A = gf.Identity(dimension)
-            A[0,1] = 1
+            A[0, 1] = 1
             sl.append(A)
             sl.append(W)
         else:
-            W[0,0] = -1*gf(1)
+            W[0, 0] = -1 * gf(1)
             sl.append(W)
             prim = gf.primitive_element
             A = gf.Identity(dimension)
-            A[0,0] = prim
-            A[1,1] = prim ** -1    
+            A[0, 0] = prim
+            A[1, 1] = prim**-1
             sl.append(A)
-        return sl 
+        return sl
 
-    def group_to_permutation(field:int, space, group) -> PermutationGroup:
+    def group_to_permutation(field: int, space, group) -> PermutationGroup:
         """
         Constructs a sympy PermutationGroup using these permutation matrices
         """
         gf = galois.GF(field)
         perm_group = []
         for M in group:
-            #print(M)
+            # print(M)
             perm_string = list(range(len(space)))
             for index in range(len(space)):
                 current_vector = gf(np.frombuffer(space[index], dtype=np.uint8))
@@ -576,7 +577,7 @@ class SpecialLinearGroup(Group):
                 next_index = space.index(next_vector.tobytes())
                 perm_string[index] = next_index
             perm_group.append(Permutation(perm_string))
-            #print(perm_string)
+            # print(perm_string)
         return PermutationGroup(perm_group)
 
     def __init__(self, field, dimension) -> None:
