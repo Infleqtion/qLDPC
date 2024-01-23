@@ -21,6 +21,11 @@ import pytest
 from qldpc import abstract, codes
 
 
+def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
+    """Construct a random (but probably trivial or invalid) QuditCode."""
+    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
+
+
 def test_classical_codes() -> None:
     """Construction of a few classical codes."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
@@ -67,7 +72,7 @@ def test_tensor_product(
     assert (n_ab, k_ab, d_ab) == (n_a * n_b, k_a * k_b, d_a * d_b)
 
     with pytest.raises(ValueError, match="Cannot take tensor product"):
-        code_b = codes.ClassicalCode.random(*bits_checks_b, field=3)
+        code_b = codes.ClassicalCode.random(*bits_checks_b, field=code_a.field.order**2)
         codes.ClassicalCode.tensor_product(code_a, code_b)
 
 
@@ -79,16 +84,16 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
 
-    code = codes.QuditCode.random(bits, checks, field)
+    code = get_random_qudit_code(bits, checks, field)
     graph = codes.QuditCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
-    assert codes.QuditCode.random(num_qubits, num_checks).num_qubits == num_qubits
+    assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
     with pytest.raises(ValueError, match="qubit-only method"):
-        assert codes.QuditCode.random(num_qubits, num_checks, field=3).num_qubits
+        assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
 
 
 def test_CSS_code() -> None:
@@ -99,17 +104,24 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z)
 
     with pytest.raises(ValueError, match="different fields"):
-        code_z = codes.ClassicalCode.random(3, 2, 3)
+        code_z = codes.ClassicalCode.random(3, 2, field=code_x.field.order**2)
         codes.CSSCode(code_x, code_z)
 
-    code = codes.HGPCode(code_x)
-    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+
+def test_logical_ops() -> None:
+    """Logical operator construction."""
+    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
+    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+    ops = code.get_logical_ops()
+    for qq in range(code.dimension):
+        for rr in range(qq + 1):
+            assert ops[0, qq, :] @ ops[1, rr, :] == int(qq == rr)
 
 
-def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
+def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Apply Pauli deformations to a qudit code."""
-    code = codes.QuditCode.random(num_qudits, num_checks)
+    code = get_random_qudit_code(num_qudits, num_checks, field)
     conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
     transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
 
@@ -122,7 +134,7 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3) -> None:
 @pytest.mark.parametrize("field", [2, 3])
 def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
-    code_a = codes.QuditCode.random(bits, checks, field)
+    code_a = get_random_qudit_code(bits, checks, field)
     stabilizers = code_a.get_stabilizers()
     code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
     assert np.array_equal(code_a.matrix, code_b.matrix)
@@ -210,17 +222,17 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = [
         [zero_1, mat_1.T, mat_2, zero_4],
-        [mat_1, zero_2, zero_3, mat_2.T],
+        [mat_1, zero_2, zero_3, -mat_2.T],
     ]
 
     # construct lifted product code
     group = abstract.CyclicGroup(num_qudits // 2)
     unit = abstract.Element(group).one()
     shift = abstract.Element(group, group.generators[0])
-    element_a = unit + shift**width
-    element_b = unit + shift
+    element_a = unit - shift**width
+    element_b = unit - shift
     code = codes.LPCode([[element_a]], [[element_b]], conjugate=True)
-    assert np.array_equal(np.block(matrix).ravel(), code.matrix.ravel())
+    assert np.array_equal(np.block(matrix), code.matrix)
 
 
 def test_cyclic_codes() -> None:
@@ -230,16 +242,19 @@ def test_cyclic_codes() -> None:
     dims = (6, 6)
     terms_a = [(0, 3), (1, 1), (1, 2)]
     terms_b = [(1, 3), (0, 1), (0, 2)]
-    code = codes.QCCode(dims, terms_a, terms_b)
+    code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
 
     dims = (15, 3)
     terms_a = [(0, 9), (1, 1), (1, 2)]
     terms_b = [(0, 0), (0, 2), (0, 7)]
-    code = codes.QCCode(dims, terms_a, terms_b)
+    code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 90
     assert code.dimension == 8
+
+    with pytest.raises(ValueError, match="not supported"):
+        codes.QCCode(dims, terms_a, terms_b, field=3)
 
 
 def test_GB_code_error() -> None:
@@ -310,7 +325,7 @@ def test_toric_tanner_code() -> None:
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode_a = codes.ClassicalCode.repetition(2)
+    subcode_a = codes.ClassicalCode.repetition(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a)
 
     # check that this is a [[16, 2, 4]] code
@@ -320,17 +335,16 @@ def test_toric_tanner_code() -> None:
     assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
 
     # raise error if constructing QTCode with codes over different fields
-    subcode_b = codes.ClassicalCode.repetition(2, field=3)
+    subcode_b = codes.ClassicalCode.repetition(2, field=subcode_a.field.order**2)
     with pytest.raises(ValueError, match="different fields"):
         code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
 
-def test_qudit_distance() -> None:
+@pytest.mark.parametrize("field", [3, 4])
+def test_qudit_distance(field: int) -> None:
     """Distance calculations for qudits."""
-    trit_code = codes.ClassicalCode.repetition(2, field=3)
-    code = codes.HGPCode(trit_code)
-
-    assert code.get_distance(exact=True) == 2
+    code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
+    assert code.get_distance() == 2
     with pytest.raises(ValueError, match="not implemented"):
         code.get_distance(upper=1)
     with pytest.raises(ValueError, match="Must choose"):

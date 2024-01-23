@@ -178,10 +178,9 @@ class ClassicalCode(AbstractCode):
         """
         if not code_a._field_order == code_b._field_order:
             raise ValueError("Cannot take tensor product of codes over different fields")
-        gen_a: npt.NDArray[np.int_] = code_a.generator.view(np.ndarray)
-        gen_b: npt.NDArray[np.int_] = code_b.generator.view(np.ndarray)
-        generator_ab = np.kron(gen_a, gen_b)
-        return ~ClassicalCode(generator_ab, field=code_a._field_order)
+        gen_a: npt.NDArray[np.int_] = code_a.generator
+        gen_b: npt.NDArray[np.int_] = code_b.generator
+        return ~ClassicalCode(np.kron(gen_a, gen_b))
 
 
     """ 
@@ -275,22 +274,22 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code on the given number of bits."""
-        minus_one = galois.GF(field or DEFAULT_FIELD_ORDER).characteristic - 1
-        matrix = np.zeros((num_bits - 1, num_bits), dtype=int)
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        matrix = code_field.Zeros((num_bits - 1, num_bits))
         for row in range(num_bits - 1):
             matrix[row, row] = 1
-            matrix[row, row + 1] = minus_one
-        return ClassicalCode(matrix, field)
+            matrix[row, row + 1] = -code_field(1)
+        return ClassicalCode(matrix)
 
     @classmethod
     def ring(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct a repetition code with periodic boundary conditions."""
-        minus_one = galois.GF(field or DEFAULT_FIELD_ORDER).characteristic - 1
-        matrix = np.zeros((num_bits, num_bits), dtype=int)
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        matrix = code_field.Zeros((num_bits, num_bits))
         for row in range(num_bits):
             matrix[row, row] = 1
-            matrix[row, (row + 1) % num_bits] = minus_one
-        return ClassicalCode(matrix, field)
+            matrix[row, (row + 1) % num_bits] = -code_field(1)
+        return ClassicalCode(matrix)
 
     @classmethod
     def hamming(cls, rank: int, field: int | None = None) -> ClassicalCode:
@@ -322,7 +321,7 @@ class ClassicalCode(AbstractCode):
 #   - also compute and store sub-codes, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
 class QuditCode(AbstractCode):
-    """Quantum stabilizer code for Galois qudits.
+    """Quantum stabilizer code for Galois qudits, with dimension q = p^m for prime p and integer m.
 
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
     written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
@@ -330,8 +329,13 @@ class QuditCode(AbstractCode):
     The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
     X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
     operators.  Specifically:
-    - X(r) = sum_{j=0}^{d-1} |j+r><j| is a shift operator, and
-    - Z(r) = sum_{j=0}^{d-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / d).
+    - X(r) = sum_{j=0}^{q-1} |j+r><j| is a shift operator, and
+    - Z(r) = sum_{j=0}^{q-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / q).
+
+    Warning: here j, r, s, etc. not integers, but elements of the Galois field GF(q), which has
+    different rules for addition and multiplication when q is not a prime number.
+
+    Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
 
     @property
@@ -383,11 +387,6 @@ class QuditCode(AbstractCode):
             matrix[node_check.index, :, node_qudit.index] = data[QuditOperator].value
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
-
-    @classmethod
-    def random(cls, qudits: int, checks: int, field: int | None = None) -> QuditCode:
-        """Construct a random qudit code with the given number of qudits and nontrivial checks."""
-        return QuditCode(ClassicalCode.random(2 * qudits, checks, field).matrix, field)
 
     def get_stabilizers(self) -> list[str]:
         """Stabilizers (checks) of this code, represented by strings."""
@@ -460,7 +459,7 @@ class CSSCode(QuditCode):
     _field_order: int  # The order of the field over which the CSS code is defined
 
     _codes_equal: bool
-    _logical_ops: npt.NDArray[np.int_] | None = None
+    _logical_ops: galois.FieldArray | None = None
 
     def __init__(
         self,
@@ -643,7 +642,6 @@ class CSSCode(QuditCode):
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
-        matrix_z = code_z.matrix.view(np.ndarray)
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
         # construct the effective syndrome
@@ -653,10 +651,10 @@ class CSSCode(QuditCode):
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            word = self.get_random_logical_op(pauli_z).view(np.ndarray)
+            word = self.get_random_logical_op(pauli_z)
 
             # support of a candidate pauli-type logical operator
-            effective_check_matrix = np.vstack([matrix_z, word])
+            effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
             candidate_logical_op = qldpc.decoder.decode(
                 effective_check_matrix, effective_syndrome, exact=False, **decoder_args
             )
@@ -673,7 +671,10 @@ class CSSCode(QuditCode):
         """Exact X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
-        if self._field_order != 2:
+        if self.field.degree > 1:
+            # The base field is not prime, so we can't use the integer linear program method due to
+            # different rules for addition and multiplication.  We therefore compute distance with a
+            # brute-force search over all code words.
             code_x = self.code_x if pauli == Pauli.X else self.code_z
             code_z = self.code_z if pauli == Pauli.X else self.code_x
             dual_code_x = ~code_x
@@ -684,9 +685,9 @@ class CSSCode(QuditCode):
             self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
 
         # return the minimum weight of logical X-type or Z-type operators
-        return self.get_logical_ops()[pauli.index].sum(-1).min()
+        return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
-    def get_logical_ops(self) -> npt.NDArray[np.int_]:
+    def get_logical_ops(self) -> galois.FieldArray:  # noqa:C901 -- ignore flake8 complexity check
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -694,54 +695,60 @@ class CSSCode(QuditCode):
         code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
         physical qubits addressed nontrivially) by the logical Pauli-X operator on logical qubit 4.
 
+        In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
+        by this method are the unit shift and phase operators that generate all logical X-type and
+        Z-type qudit operators.
+
         Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
-        procedure described in arXiv:0903.5256.
+        procedure described in arXiv:0903.5256, slightly modified and generalized for qudits.
         """
-        # TODO: construct logical operators for non-qubit codes
-        self._assert_qubit_code()
+        # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
             return self._logical_ops
 
-        # identify candidate X-type and Z-type operators
-        candidates_x = list(self.code_z.generator.view(np.ndarray))
-        candidates_z = list(self.code_x.generator.view(np.ndarray))
-
         # collect logical operators sequentially
-        logicals_x = []
-        logicals_z = []
+        logicals_x: list[galois.FieldArray] = []
+        logicals_z: list[galois.FieldArray] = []
+
+        # identify candidate X-type and Z-type operators
+        candidates_x = self.code_z.generator
+        candidates_z = list(self.code_x.generator)
 
         # iterate over all candidate X-type operators
-        while candidates_x:
-            op_x = candidates_x.pop()
-            found_logical_pair = False
+        for op_x in candidates_x:
+            # remove the components of all previously found logical X-type operators
+            for logical_x, logical_z in zip(logicals_x, logicals_z):
+                if overlap := op_x @ logical_z:
+                    op_x -= overlap * logical_x
 
-            # check whether op_x anti-commutes with any of the candidate Z-type operators
+            # look for a candidate Z-type operator that does not commute with X(op_x)
+            found_logical_pair = False
             for zz, op_z in enumerate(candidates_z):
-                if op_x @ op_z % 2:
-                    # op_x and op_z anti-commute, so they are conjugate pair of logical operators!
-                    found_logical_pair = True
+                if overlap := op_x @ op_z:
+                    # op_x and op_z are conjugate pair of logical operators!
                     logicals_x.append(op_x)
-                    logicals_z.append(op_z)
+                    logicals_z.append(op_z / overlap)  # so that logical_x @ logical_z == 1
+
                     del candidates_z[zz]
+                    found_logical_pair = True
                     break
 
-            if found_logical_pair:
-                # If any other candidate X-type operators anti-commute with op_z, it's because they
-                # have an op_x component.  Remove that component.  Likewise with Z-type candidates.
-                for xx, other_x in enumerate(candidates_x):
-                    if other_x @ op_z % 2:
-                        candidates_x[xx] = (other_x + op_x) % 2
-                for zz, other_z in enumerate(candidates_z):
-                    if other_z @ op_x % 2:
-                        candidates_z[zz] = (other_z + op_z) % 2
+            if found_logical_pair and len(logicals_x) == self.dimension:
+                # we have found all logical operators
+                break
 
-        assert len(logicals_x) == self.dimension
-        self._logical_ops = np.stack([logicals_x, logicals_z]).astype(int)
+        # orthogonalize the Z-type logical operators
+        for zz in range(1, self.dimension):
+            for idx in range(zz):
+                if overlap := logicals_z[zz] @ logicals_x[idx]:
+                    logicals_z[zz] -= overlap * logicals_z[idx]  # pragma: no cover
+
+        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
 
     def get_random_logical_op(
         self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = False
-    ) -> npt.NDArray[np.int_]:
+    ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
         A random logical operator may be trivial, which is to say that it may be equal to the
@@ -768,13 +775,16 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
         code = self.code_z if pauli == Pauli.X else self.code_x
-        matrix = code.matrix.view(np.ndarray)
-        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index].view(np.ndarray)
-        effective_check_matrix = np.vstack([matrix, word])
+        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
+        effective_check_matrix = np.vstack([code.matrix, word]).view(np.ndarray)
         effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
         effective_syndrome[-1] = 1
         logical_op = qldpc.decoder.decode(
-            effective_check_matrix, effective_syndrome, exact=True, **decoder_args
+            effective_check_matrix,
+            effective_syndrome,
+            exact=True,
+            modulus=self.field.order,
+            **decoder_args,
         )
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_qubit_index] = logical_op
@@ -850,6 +860,9 @@ class QCCode(GBCode):
         conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a quasi-cyclic code."""
+        if field and field != 2:
+            raise ValueError("Non-boolean (field > 2) quasi-cyclic codes are not supported")
+
         if terms_b is None:
             terms_b = terms_a  # pragma: no cover
 
@@ -992,10 +1005,18 @@ class HGPCode(CSSCode):
             # by default, this edge is X-type iff the check qudit is in the (0, 1) sector
             op = QuditOperator((data.get("val", 1), 0))
             if node_check[0].is_data:
+                # make this a Z-type operator
                 op = ~op
-            # flip X <--> Z iff `conjugate==True` and the data qudit is in the (1, 1) sector
-            if conjugate and not node_qudit[0].is_data:
-                op = ~op
+
+            # special treatment of qudits in the (1, 1) sector
+            if not node_qudit[0].is_data:
+                # account for the minus sign in the X-type subcode
+                if not node_check[0].is_data:
+                    op = -op
+                # flip X <--> Z operators for the conjugated code
+                if conjugate:
+                    op = ~op
+
             graph[node_check][node_qudit][QuditOperator] = op
 
         node_map = HGPCode.get_product_node_map(graph_a.nodes, graph_b.nodes)
