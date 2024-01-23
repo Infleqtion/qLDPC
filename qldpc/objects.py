@@ -266,6 +266,7 @@ class CayleyComplex:
 
 
         # construct the vertices, edges, and faces of this complex
+        # TODO: Check the sort thing needed for Tanner graph
         self.subgraph_0 = nx.DiGraph()
         self.subgraph_0.add_nodes_from(V_0)
         self.subgraph_1 = nx.DiGraph()
@@ -278,13 +279,22 @@ class CayleyComplex:
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             face = frozenset([(gg,0), (aa_gg,1), (gg_bb,2), (aa_gg_bb,3)])
             self.faces.add(face)
+            
             self.graph.add_node(face)
-            self.graph.add_edge((gg,00), face)
+            self.graph.add_edge((gg,0), face)
             self.graph.add_edge((aa_gg_bb,3), face)
             self.graph.add_edge(face,(aa_gg,1))
             self.graph.add_edge(face, (gg_bb,2))
-            self.subgraph_0.add_edge((gg,0), (aa_gg_bb,3) )
-            self.subgraph_1.add_edge((aa_gg,1), (gg_bb,2) )
+
+
+            self.subgraph_0.add_node(face)
+            self.subgraph_0.add_edge((gg,0), face, sort=())
+            self.subgraph_0.add_edge((aa_gg_bb,3), face, sort=())
+
+            self.subgraph_1.add_node(face)
+            self.subgraph_1.add_edge((aa_gg,1),face, sort=())
+            self.subgraph_1.add_edge((gg_bb,2),face, sort=())
+            
 
         # # construct the subgraphs of the complex
         # self.subgraph_0 = nx.DiGraph()
