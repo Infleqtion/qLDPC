@@ -197,8 +197,8 @@ class ClassicalCode(AbstractCode):
         itertools.product(gf.elements, repeat=n * n)
         rho_estimate = np.inf
         for x in itertools.product(gf.elements, repeat=n * n):
+            dist_AB = compute_distance(x, tensor_code)
             matrix = x.reshape((n, n))
-            dist_AB = compute_distance(x, "C_A \otimes C_B")
             dist_A = np.sum([code_a.get_distance(row) for row in matrix])
             dist_B = np.sum([code_b.get_distance(col) for col in matrix])
             ratio = (dist_A + dist_B) / (2 * dist_AB)
