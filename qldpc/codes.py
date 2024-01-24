@@ -427,6 +427,7 @@ class CSSCode(QuditCode):
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
     _field_order: int  # The order of the field over which the CSS code is defined
 
+    _conjugate: slice | Sequence[int]
     _codes_equal: bool
     _logical_ops: galois.FieldArray | None = None
 
@@ -437,6 +438,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] | None = (),
+        skip_validation: bool = False,
     ) -> None:
         """Construct a CSS code from X-type and Z-type parity checks.
 
@@ -444,16 +446,22 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
-        self._codes_equal = self.code_x == self.code_z
         if field is None and self.code_x._field_order != self.code_z._field_order:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field_order = self.code_x._field_order
-        self._conjugate = conjugate or ()
 
-        if self.code_x.num_bits != self.code_z.num_bits or np.any(
-            self.code_x.matrix @ self.code_z.matrix.T
-        ):
+        if not skip_validation and not self.is_valid:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
+
+        self._conjugate = conjugate or ()
+        self._codes_equal = self.code_x == self.code_z
+
+    @functools.cached_property
+    def is_valid(self) -> bool:
+        """Is this a valid CSS code?"""
+        return self.code_x.num_bits == self.code_z.num_bits and not np.any(
+            self.code_x.matrix @ self.code_z.matrix.T
+        )
 
     @functools.cached_property
     def matrix(self) -> galois.FieldArray:
@@ -796,7 +804,7 @@ class GBCode(CSSCode):
             raise ValueError("The matrices provided for this GBCode are incompatible")
         matrix_x = np.block([matrix_a, matrix_b.T])
         matrix_z = np.block([matrix_b, matrix_a.T])
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
 class QCCode(GBCode):
@@ -946,7 +954,9 @@ class HGPCode(CSSCode):
         # construct the parity check matrices
         matrix_x = np.block([mat_H1_In2, -mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+        )
 
     @classmethod
     def get_graph_product(
@@ -1085,7 +1095,9 @@ class LPCode(CSSCode):
         # construct the parity check matrices
         matrix_x = abstract.Protograph(np.block([mat_H1_In2, -mat_Im1_H2_T])).lift()
         matrix_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T])).lift()
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate)
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+        )
 
 
 ################################################################################
@@ -1194,4 +1206,4 @@ class QTCode(CSSCode):
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
         matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
