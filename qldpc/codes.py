@@ -42,6 +42,7 @@ DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 # template error correction code classes
 
 
+# TODO(?): support sparse parity check matrices
 class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
