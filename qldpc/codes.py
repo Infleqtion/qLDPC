@@ -665,7 +665,7 @@ class CSSCode(QuditCode):
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
-    def get_logical_ops(self) -> galois.FieldArray:  # noqa:C901 -- ignore flake8 complexity check
+    def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -677,49 +677,78 @@ class CSSCode(QuditCode):
         by this method are the unit shift and phase operators that generate all logical X-type and
         Z-type qudit operators.
 
-        Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
-        procedure described in arXiv:0903.5256, slightly modified and generalized for qudits.
+        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
+        thesis (arXiv:9705052), slightly modified and generalized for qudits.
         """
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
             return self._logical_ops
 
-        # collect logical operators sequentially
-        logicals_x: list[galois.FieldArray] = []
-        logicals_z: list[galois.FieldArray] = []
+        num_qudits = self.num_qudits
+        dimension = self.dimension
+        identity = self.field.Identity(dimension)
 
-        # identify candidate X-type and Z-type operators
-        candidates_x = self.code_z.generator
-        candidates_z = list(self.code_x.generator)
+        def row_reduce(
+            matrix: npt.NDArray[np.int_],
+        ) -> tuple[npt.NDArray[np.int_], Sequence[int], Sequence[int]]:
+            """Perform Gaussian elimination on the matrix.
 
-        # iterate over all candidate X-type operators
-        for op_x in candidates_x:
-            # remove the components of all previously found logical X-type operators
-            for logical_x, logical_z in zip(logicals_x, logicals_z):
-                if overlap := op_x @ logical_z:
-                    op_x -= overlap * logical_x
+            Returns:
+                matrix_RRE: the reduced row echelon form of the matrix
+                pivot: the "pivot" columns of the reduced matrix
+                other: the remaining columns of the reduced matrix
 
-            # look for a candidate Z-type operator that does not commute with X(op_x)
-            found_logical_pair = False
-            for zz, op_z in enumerate(candidates_z):
-                if overlap := op_x @ op_z:
-                    # op_x and op_z are conjugate pair of logical operators!
-                    logicals_x.append(op_x)
-                    logicals_z.append(op_z / overlap)  # so that logical_x @ logical_z == 1
+            In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
+            occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
+            """
+            # row-reduce the matrix and identify its pivots
+            matrix_RRE = self.field(matrix).row_reduce()
+            pivots = (matrix_RRE != 0).argmax(axis=1)
 
-                    del candidates_z[zz]
-                    found_logical_pair = True
-                    break
+            # remove trailing zero pivots, which correspond to trivial (all-zero) rows
+            if pivots.size > 1 and pivots[-1] == 0:
+                pivots = np.concatenate([[pivots[0]], pivots[1:][pivots[1:] != 0]])
 
-            if found_logical_pair and len(logicals_x) == self.dimension:
-                # we have found all logical operators
-                break
+            # identify remaining columns and return
+            other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
+            return matrix_RRE, pivots, other
 
-        # orthogonalize the Z-type logical operators
-        for zz in range(1, self.dimension):
-            for idx in range(zz):
-                if overlap := logicals_z[zz] @ logicals_x[idx]:
-                    logicals_z[zz] -= overlap * logicals_z[idx]  # pragma: no cover
+        # identify check matrices for X/Z-type errors, and the current qubit locations
+        checks_x: npt.NDArray[np.int_] = self.code_z.matrix
+        checks_z: npt.NDArray[np.int_] = self.code_x.matrix
+        qubit_locs = np.arange(num_qudits, dtype=int)
+
+        # row reduce the check matrix for X-type errors and move its pivots to the back
+        checks_x, pivot_x, other_x = row_reduce(checks_x)
+        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
+        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
+        qubit_locs = np.hstack([qubit_locs[other_x], qubit_locs[pivot_x]])
+
+        # row reduce the check matrix for Z-type errors and move its pivots to the back
+        checks_z, pivot_z, other_z = row_reduce(checks_z)
+        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivot_z]])
+        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
+        qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
+
+        # get the support of the check matrices on non-pivot qudits
+        num_non_pivots = num_qudits - len(pivot_x) - len(pivot_z)
+        non_pivot_x = checks_x[:, :num_non_pivots]
+        non_pivot_z = checks_z[:, :num_non_pivots]
+
+        # construct logical X operators
+        logicals_x = self.field.Zeros((dimension, num_qudits))
+        logicals_x[:, dimension : dimension + non_pivot_x.shape[0]] = -non_pivot_x.T
+        logicals_x[:dimension, :dimension] = identity
+
+        # construct logical Z operators
+        logicals_z = self.field.Zeros((dimension, num_qudits))
+        logicals_z[:, -non_pivot_z.shape[0] :] = -non_pivot_z.T
+        logicals_z[:dimension, :dimension] = identity
+
+        # move qudits back to their original locations
+        _, permutation = zip(*sorted(zip(qubit_locs, range(num_qudits))))
+        logicals_x = logicals_x[:, permutation]
+        logicals_z = logicals_z[:, permutation]
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops

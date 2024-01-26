@@ -113,10 +113,13 @@ def test_logical_ops() -> None:
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
-    ops = code.get_logical_ops()
-    for qq in range(code.dimension):
-        for rr in range(qq + 1):
-            assert ops[0, qq, :] @ ops[1, rr, :] == int(qq == rr)
+
+    # test that logical operators are dual to each other and have trivial syndromes
+    logicals = code.get_logical_ops()
+    logicals_x, logicals_z = logicals[0], logicals[1]
+    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
+    assert not np.any(code.code_z.matrix @ logicals_x.T)
+    assert not np.any(code.code_x.matrix @ logicals_z.T)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
