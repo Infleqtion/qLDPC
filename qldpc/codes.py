@@ -282,9 +282,6 @@ class ClassicalCode(AbstractCode):
 
 
 # TODO:
-# - add method to convert a parity check matrix into standard form
-#   - see https://arxiv.org/abs/1101.1519
-#   - one method to compute "blocks" of standard form, one to return the matrix itself
 # - add is_CSS method to figure out whether this is a CSS Code
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
 #   - also compute and store sub-codes, if CSS
