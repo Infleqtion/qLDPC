@@ -182,30 +182,29 @@ class ClassicalCode(AbstractCode):
         gen_b: npt.NDArray[np.int_] = code_b.generator
         return ~ClassicalCode(np.kron(gen_a, gen_b))
 
-    '''
-    # TODO: Implement this
+    
+    # TODO: Test this
     @classmethod
     def test_robustness(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
         """Test if the tensor product C_a ⊗ C_b of two codes C_a and C_b, is robustly-testable.
         If so, ouput a lower bound on the robustness parameter rho.
         See definition in  https://arxiv.org/abs/2206.09973
         """
-
+        
         tensor_code = ClassicalCode.tensor_product(code_a, code_b)
         gf = galois.GF(code_a._field_order)
         n = code_a.num_bits
         itertools.product(gf.elements, repeat=n * n)
         rho_estimate = np.inf
         for x in itertools.product(gf.elements, repeat=n * n):
-            dist_AB = tensor_code.distance_from_code(x)
+            dist_AB = tensor_code.get_distance(x)
             matrix = x.reshape((n, n))
-            dist_A = np.sum([code_a.distance_from_code(row) for row in matrix])
-            dist_B = np.sum([code_b.distance_from_code(col) for col in matrix])
+            dist_A = np.sum(np.apply_along_axis(code_a.get_distance, axis=1, arr=matrix))
+            dist_B = np.sum(np.apply_along_axis(code_b.get_distance, axis=0, arr=matrix))
             ratio = (dist_A + dist_B) / (2 * dist_AB)
             rho_estimate = min(rho_estimate, ratio)
 
-        return rho_estimate
-    '''
+        return rho_estimate 
 
     @property
     def num_checks(self) -> int:
