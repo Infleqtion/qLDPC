@@ -28,7 +28,12 @@ def decode_with_BP_OSD(
     syndrome: npt.NDArray[np.int_],
     **decoder_args: object,
 ) -> npt.NDArray[np.int_]:
-    """Decode with belief propagation with ordered statistics (BP+OSD)."""
+    """Decode with belief propagation with ordered statistics (BP+OSD).
+
+    For details about the BD-OSD decoder and its arguments, see:
+    - Documentation: https://roffe.eu/software/ldpc/ldpc/osd_decoder.html
+    - Reference: https://arxiv.org/pdf/2005.07016.pdf
+    """
     bposd_decoder = ldpc.bposd_decoder(
         matrix, osd_order=decoder_args.pop("osd_order", 0), **decoder_args
     )
@@ -108,13 +113,11 @@ def decode(
 ) -> npt.NDArray[np.int_]:
     """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
 
-    If passed an explicit decoder, use it.  If no explicit decoder is provided and `exact is True`,
-    solve exactly with an integer linear program.  Otherwise, use a BP-OSD decoder.  In all cases,
-    pass the `decoder_args` to the decoder that is used.
+    - If passed an explicit decoder, use it.
+    - If no decoder is provided and `exact is True`, solve exactly with an integer linear program.
+    - Otherwise, use a BP-OSD decoder.
 
-    For details about the BD-OSD decoder, see:
-    - Documentation: https://roffe.eu/software/ldpc/ldpc/osd_decoder.html
-    - Reference: https://arxiv.org/pdf/2005.07016.pdf
+    In all cases, pass the `decoder_args` to the decoder that is used.
     """
     if callable(custom_decoder := decoder_args.pop("decoder", None)):
         if exact:

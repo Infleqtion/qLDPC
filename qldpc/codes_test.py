@@ -42,8 +42,8 @@ def test_classical_codes() -> None:
         assert code.get_random_word() in code
 
     # test that rank of repetition and hamming codes is independent of the field
-    assert codes.ClassicalCode.repetition(3).rank == codes.ClassicalCode.repetition(3, 3).rank
-    assert codes.ClassicalCode.hamming(3).rank == codes.ClassicalCode.hamming(3, 3).rank
+    assert codes.ClassicalCode.repetition(3, 2).rank == codes.ClassicalCode.repetition(3, 3).rank
+    assert codes.ClassicalCode.hamming(3, 2).rank == codes.ClassicalCode.hamming(3, 3).rank
 
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
@@ -113,10 +113,13 @@ def test_logical_ops() -> None:
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
-    ops = code.get_logical_ops()
-    for qq in range(code.dimension):
-        for rr in range(qq + 1):
-            assert ops[0, qq, :] @ ops[1, rr, :] == int(qq == rr)
+
+    # test that logical operators are dual to each other and have trivial syndromes
+    logicals = code.get_logical_ops()
+    logicals_x, logicals_z = logicals[0], logicals[1]
+    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
+    assert not np.any(code.code_z.matrix @ logicals_x.T)
+    assert not np.any(code.code_x.matrix @ logicals_z.T)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
@@ -214,15 +217,15 @@ def test_twisted_XZZX(width: int = 3) -> None:
 
     # construct check matrix directly
     ring = codes.ClassicalCode.ring(width).matrix
-    mat_1 = np.kron(ring, np.eye(width, dtype=int))
-    mat_2 = codes.ClassicalCode.ring(num_qudits // 2).matrix
+    mat_1 = codes.ClassicalCode.ring(num_qudits // 2).matrix
+    mat_2 = np.kron(ring, np.eye(width, dtype=int))
     zero_1 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
     zero_3 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = [
-        [zero_1, mat_1.T, mat_2, zero_4],
-        [mat_1, zero_2, zero_3, -mat_2.T],
+        [mat_1, zero_2, zero_3, mat_2.T],
+        [zero_1, -mat_1.T, mat_2, zero_4],
     ]
 
     # construct lifted product code
