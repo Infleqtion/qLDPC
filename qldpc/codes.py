@@ -746,7 +746,7 @@ class CSSCode(QuditCode):
         logicals_z[:dimension, :dimension] = identity
 
         # move qudits back to their original locations
-        _, permutation = zip(*sorted(zip(qubit_locs, range(num_qudits))))
+        permutation = np.argsort(qubit_locs)
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
