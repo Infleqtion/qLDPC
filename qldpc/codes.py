@@ -684,8 +684,14 @@ class CSSCode(QuditCode):
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
         # construct the effective syndrome
-        effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
-        effective_syndrome[-1] = 1
+        if vector is None:
+            vector = self.field.Zeros(code_z.num_bits)
+        else:
+            assert vector.shape == (code_z.num_bits, 1)
+            vector = self.field(vector)
+
+        syndrome = vector @ self.matrix
+        effective_syndrome = np.append(syndrome, [1]) 
 
         logical_op_found = False
         while not logical_op_found:
