@@ -576,7 +576,7 @@ class SpecialLinearGroup(Group):
                 next_vector = M @ current_vector
                 next_index = space.index(next_vector.tobytes())
                 perm_string[index] = next_index
-            perm_group.append(Permutation(perm_string))
+            perm_group.append(comb.Permutation(perm_string))
             # print(perm_string)
         return PermutationGroup(perm_group)
 
