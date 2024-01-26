@@ -666,8 +666,21 @@ class CSSCode(QuditCode):
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
     def new_get_logical_ops(self) -> galois.FieldArray:
-        """Testing new method for constructing logical operators."""
-        # # memoize manually because other methods may modify the logical operators computed here
+        """Complete basis of nontrivial X-type and Z-type logical operators for this code.
+
+        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
+        (2, k, n), where k and n are respectively the numbers of logical and physical qubits in this
+        code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
+        physical qubits addressed nontrivially) by the logical Pauli-X operator on logical qubit 4.
+
+        In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
+        by this method are the unit shift and phase operators that generate all logical X-type and
+        Z-type qudit operators.
+
+        Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
+        procedure described in arXiv:0903.5256, slightly modified and generalized for qudits.
+        """
+        # memoize manually because other methods may modify the logical operators computed here
         # if self._logical_ops is not None:
         #     return self._logical_ops
 
@@ -677,7 +690,7 @@ class CSSCode(QuditCode):
 
         def row_reduce(
             matrix: npt.NDArray[np.int_],
-        ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], list[int]]:
+        ) -> tuple[npt.NDArray[np.int_], Sequence[int], Sequence[int]]:
             """Perform Gaussian elimination on the matrix.
 
             Returns:
@@ -686,23 +699,23 @@ class CSSCode(QuditCode):
                 other: the remaining columns of the reduced matrix
 
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
-            occur at a unique columns for each row; these columns are the "pivots".
+            occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
             """
             # row-reduce the matrix and identify its pivots
-            matrix_RRE = matrix.row_reduce()
+            matrix_RRE = self.field(matrix).row_reduce()
             pivots = (matrix_RRE != 0).argmax(axis=1)
 
-            # remove zeroes at the end of "pivots", which correspond to trivial (all-zero) rows
-            while len(pivots) > 1 and pivots[-1] == 0:
-                pivots = pivots[:-1]
+            # remove trailing zero pivots, which correspond to trivial (all-zero) rows
+            if pivots.size > 1 and pivots[-1] == 0:
+                pivots = np.concatenate([[pivots[0]], pivots[1:][pivots[1:] != 0]])
 
             # identify remaining columns and return
             other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
             return matrix_RRE, pivots, other
 
         # identify check matrices for X/Z-type errors, and the current qubit locations
-        checks_x = self.code_z.matrix
-        checks_z = self.code_x.matrix
+        checks_x: npt.NDArray[np.int_] = self.code_z.matrix
+        checks_z: npt.NDArray[np.int_] = self.code_x.matrix
         qubit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
@@ -724,12 +737,12 @@ class CSSCode(QuditCode):
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
-        logicals_x[:, dimension : dimension + len(pivot_x)] = non_pivot_x.T
+        logicals_x[:, dimension : dimension + non_pivot_x.shape[0]] = -non_pivot_x.T
         logicals_x[:dimension, :dimension] = identity
 
         # construct logical Z operators
         logicals_z = self.field.Zeros((dimension, num_qudits))
-        logicals_z[:, -len(pivot_z) :] = non_pivot_z.T
+        logicals_z[:, -non_pivot_z.shape[0] :] = -non_pivot_z.T
         logicals_z[:dimension, :dimension] = identity
 
         # move qubits back to their original locations
