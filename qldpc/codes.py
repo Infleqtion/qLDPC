@@ -665,6 +665,81 @@ class CSSCode(QuditCode):
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
+    def new_get_logical_ops(self) -> galois.FieldArray:
+        """Testing new method for constructing logical operators."""
+        # # memoize manually because other methods may modify the logical operators computed here
+        # if self._logical_ops is not None:
+        #     return self._logical_ops
+
+        num_qudits = self.num_qudits
+        dimension = self.dimension
+        identity = self.field.Identity(dimension)
+
+        def row_reduce(
+            matrix: npt.NDArray[np.int_],
+        ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_], list[int]]:
+            """Perform Gaussian elimination on the matrix.
+
+            Returns:
+                matrix_RRE: the reduced row echelon form of the matrix
+                pivot: the "pivot" columns of the reduced matrix
+                other: the remaining columns of the reduced matrix
+
+            In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
+            occur at a unique columns for each row; these columns are the "pivots".
+            """
+            # row-reduce the matrix and identify its pivots
+            matrix_RRE = matrix.row_reduce()
+            pivots = (matrix_RRE != 0).argmax(axis=1)
+
+            # remove zeroes at the end of "pivots", which correspond to trivial (all-zero) rows
+            while len(pivots) > 1 and pivots[-1] == 0:
+                pivots = pivots[:-1]
+
+            # identify remaining columns and return
+            other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
+            return matrix_RRE, pivots, other
+
+        # identify check matrices for X/Z-type errors, and the current qubit locations
+        checks_x = self.code_z.matrix
+        checks_z = self.code_x.matrix
+        qubit_locs = np.arange(num_qudits, dtype=int)
+
+        # row reduce the check matrix for X-type errors and move its pivots to the back
+        checks_x, pivot_x, other_x = row_reduce(checks_x)
+        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
+        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
+        qubit_locs = np.hstack([qubit_locs[other_x], qubit_locs[pivot_x]])
+
+        # row reduce the check matrix for Z-type errors and move its pivots to the back
+        checks_z, pivot_z, other_z = row_reduce(checks_z)
+        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivot_z]])
+        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
+        qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
+
+        # get the support of the check matrices on non-pivot qubits
+        num_non_pivots = num_qudits - len(pivot_x) - len(pivot_z)
+        non_pivot_x = checks_x[:, :num_non_pivots]
+        non_pivot_z = checks_z[:, :num_non_pivots]
+
+        # construct logical X operators
+        logicals_x = self.field.Zeros((dimension, num_qudits))
+        logicals_x[:, dimension : dimension + len(pivot_x)] = non_pivot_x.T
+        logicals_x[:dimension, :dimension] = identity
+
+        # construct logical Z operators
+        logicals_z = self.field.Zeros((dimension, num_qudits))
+        logicals_z[:, -len(pivot_z) :] = non_pivot_z.T
+        logicals_z[:dimension, :dimension] = identity
+
+        # move qubits back to their original locations
+        _, permutation = zip(*sorted(zip(qubit_locs, range(num_qudits))))
+        logicals_x = logicals_x[:, permutation]
+        logicals_z = logicals_z[:, permutation]
+
+        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
+        return self._logical_ops
+
     def get_logical_ops(self) -> galois.FieldArray:  # noqa:C901 -- ignore flake8 complexity check
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
@@ -681,8 +756,8 @@ class CSSCode(QuditCode):
         procedure described in arXiv:0903.5256, slightly modified and generalized for qudits.
         """
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
-            return self._logical_ops
+        # if self._logical_ops is not None:
+        #     return self._logical_ops
 
         # collect logical operators sequentially
         logicals_x: list[galois.FieldArray] = []
