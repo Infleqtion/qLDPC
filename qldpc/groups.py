@@ -19,15 +19,8 @@ import itertools
 import time
 
 import galois
-import networkx as nx
 import numpy as np
-import numpy.typing as npt
 from sympy.combinatorics import Permutation, PermutationGroup
-
-import qldpc
-from qldpc import codes
-from qldpc.abstract import Group, GroupMember
-from qldpc.codes import ClassicalCode, QTCode, QuditCode
 
 """
 def random_cyclicQTcode(
@@ -40,23 +33,6 @@ def random_cyclicQTcode(
     code_b = ClassicalCode.random(deg, int(0.2*deg),field)
     
     pass
-
-
-def construct_psl2(field:int):
-    gf = galois.GF(field)
-    proj_line = [gf([1,0])]
-    for p in gf.elements[1:]: 
-        proj_line.append(gf([p,1]))
-    vectors = itertools.product(gf.elements, repeat=4)
-    psl = []
-    sl = []
-    for M in vectors:
-        a = np.reshape(gf(M), (2,2))
-        if np.linalg.det(a) == 1:
-            sl.append(a)
-            if M[(gf(M)!=0).argmax()] <= field//2: #we force the first non-zero entry to be < p/2 to quotient by -I 
-                psl.append(a)
-    return (psl,sl)
 """
 
 
@@ -104,7 +80,7 @@ def special_linear_gen(field: int, dimension: int) -> galois.FieldArray:
 
 def proj_linear_gen(field: int, dimension: int) -> galois.FieldArray:
     """
-    Construct generators for PSL(field, 2) based on https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
+    Generators for PSL(2) from https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
     I doubt if it is correct. Looks the same as that for SL(2,q)!
     """
     gf = galois.GF(field)
@@ -119,6 +95,18 @@ def proj_linear_gen(field: int, dimension: int) -> galois.FieldArray:
     else:
         return NotImplemented
     return psl
+
+
+def psl2_expanding_generators(field: int):
+    """
+    Expanding generators for PSL2/SL2 from https://arxiv.org/abs/1807.03879
+    """
+    gf = galois.GF(field)
+    A = gf([[1, -1 * gf(1)], [0, 1]])
+    B = gf([[1, 1], [0, 1]])
+    C = gf([[1, 0], [-1 * gf(1), 1]])
+    D = gf([[1, 0], [1, 1]])
+    return [A, B, C, D]
 
 
 def construct_projspace(field: int, dimension: int):
@@ -160,25 +148,19 @@ def group_to_permutation(field: int, space, group) -> PermutationGroup:
     return PermutationGroup(perm_group)
 
 
-def psl2_expanding_generators(field: int):
-    """
-    Expanding generators for PSL2/SL2 from https://arxiv.org/abs/1807.03879
-    """
-    gf = galois.GF(field)
-    A = gf([[1, -1 * gf(1)], [0, 1]])
-    B = gf([[1, 1], [0, 1]])
-    C = gf([[1, 0], [-1 * gf(1), 1]])
-    D = gf([[1, 0], [1, 1]])
-    return [A, B, C, D]
-
-
-dimension = 2
-field = 37
 # gf = galois.GF(field)
 # lin_space = gf(list(itertools.product(gf.elements, repeat=dimension))[1:])
 # proj_space = construct_projspace(field, dimension)
 
+dimension = 2
+field = 37
 lin_space = construct_linspace(field, dimension)
+init = time.time()
+slg = special_linear_gen(field, dimension)
+sl_group2 = group_to_permutation(field, lin_space, slg)
+final = time.time()
+print("Method 2 executed in", final - init)
+print(sl_group2.order())
 
 # init = time.time()
 # psl, sl = construct_linear_all(field, dimension)
@@ -186,13 +168,6 @@ lin_space = construct_linspace(field, dimension)
 # final = time.time()
 # print("Method 1 executed in", final - init)
 # print(sl_group.order())
-
-init = time.time()
-slg = special_linear_gen(field, dimension)
-sl_group2 = group_to_permutation(field, lin_space, slg)
-final = time.time()
-print("Method 2 executed in", final - init)
-print(sl_group2.order())
 
 
 # sl_group = group_to_permutation(2,proj_space,sl)

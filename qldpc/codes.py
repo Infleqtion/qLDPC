@@ -182,7 +182,6 @@ class ClassicalCode(AbstractCode):
         gen_b: npt.NDArray[np.int_] = code_b.generator
         return ~ClassicalCode(np.kron(gen_a, gen_b))
 
-    
     # TODO: Test this
     @classmethod
     def test_robustness(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
@@ -190,21 +189,21 @@ class ClassicalCode(AbstractCode):
         If so, ouput a lower bound on the robustness parameter rho.
         See definition in  https://arxiv.org/abs/2206.09973
         """
-        
+
         tensor_code = ClassicalCode.tensor_product(code_a, code_b)
         gf = galois.GF(code_a._field_order)
         n = code_a.num_bits
         itertools.product(gf.elements, repeat=n * n)
         rho_estimate = np.inf
         for x in itertools.product(gf.elements, repeat=n * n):
-            dist_AB = tensor_code.get_distance(x)
+            dist_AB = tensor_code.get_distance(vector=gf(x))
             matrix = x.reshape((n, n))
             dist_A = np.sum(np.apply_along_axis(code_a.get_distance, axis=1, arr=matrix))
             dist_B = np.sum(np.apply_along_axis(code_b.get_distance, axis=0, arr=matrix))
             ratio = (dist_A + dist_B) / (2 * dist_AB)
             rho_estimate = min(rho_estimate, ratio)
 
-        return rho_estimate 
+        return rho_estimate
 
     @property
     def num_checks(self) -> int:
@@ -234,7 +233,8 @@ class ClassicalCode(AbstractCode):
     @functools.cache
     def distance_bruteforce(self, vector=None) -> int:
         """The distance of vector from this code.
-        If vector is None, then computes distance of the code or equivalently the minimal weight of a nonzero code word.
+        If vector is None, then computes distance of the code or equivalently,
+        the minimal weight of a nonzero code word.
         """
         words = self.words().view(np.ndarray)
         if vector is not None:
@@ -242,7 +242,7 @@ class ClassicalCode(AbstractCode):
             return np.min(np.count_nonzero(words - vec, axis=1))
         else:
             return np.min(np.count_nonzero(words[1:], axis=1))
-    
+
     def get_distance(
         self,
         *,
@@ -250,18 +250,19 @@ class ClassicalCode(AbstractCode):
         exact: bool = False,
         brute: bool = False,
         **decoder_args: object,
-    ) -> None:
+    ) -> int:
         """Find smallest Hamming distance between input vector and a codeword.
 
-        This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound        """
+        This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound
+        """
         if vector is None:
-            vector = self.field.Zeros(code.num_bits)
+            vector = self.field.Zeros(self.num_bits)
         else:
-            assert vector.shape == (code.num_bits, 1)
+            assert vector.shape == (self.num_bits, 1)
             vector = self.field(vector)
 
         syndrome = vector @ self.matrix
-        
+
         if brute:
             return self.distance_bruteforce(vector)
 
@@ -272,10 +273,8 @@ class ClassicalCode(AbstractCode):
             modulus=self.field.order,
             **decoder_args,
         )
-        
+
         return np.count_nonzero(closest_vec)
-
-
 
     def get_code_params(self) -> tuple[int, int, int]:
         """Compute the parameters of this code: [n,k,d].
@@ -569,9 +568,9 @@ class CSSCode(QuditCode):
         **decoder_args: object,
     ) -> int:
         """Least possible distance between the input vector and any nontrivial logical operator
-        
-        If vector is None, then it is initialize to the all zero vector and thus, the function computes the
-        distance of the this code: minimum weight of a nontrivial logical operator .
+
+        If vector is None, then it initializes to the zero vector and the function computes the
+        distance of this code, i.e., minimum weight of a nontrivial logical operator .
 
         If provided a Pauli as an argument, compute the minimim weight of an nontrivial logical
         operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
@@ -598,7 +597,7 @@ class CSSCode(QuditCode):
         if pauli is None:
             return min(
                 self.get_distance(Pauli.X, lower=lower, upper=upper, vector=vector, **decoder_args),
-                self.get_distance(Pauli.Z, lower=lower, upper=upper, vector=vector,**decoder_args),
+                self.get_distance(Pauli.Z, lower=lower, upper=upper, vector=vector, **decoder_args),
             )
 
         if lower:
@@ -609,16 +608,24 @@ class CSSCode(QuditCode):
 
         return self.get_distance_exact(pauli, **decoder_args)
 
-    def get_distance_lower_bound(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
+    def get_distance_lower_bound(
+        self, pauli: Literal[Pauli.X, Pauli.Z], vector: galois.FieldArray | None = None
+    ) -> int:
         """Lower bound to the X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
-        return self.code_z.get_distance() if pauli == Pauli.X else self.code_x.get_distance()
+        return (
+            self.code_z.get_distance(vector=vector)
+            if pauli == Pauli.X
+            else self.code_x.get_distance(vector=vector)
+        )
 
     def get_distance_upper_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         num_trials: int,
+        *,
+        vector: galois.FieldArray | None = None,
         **decoder_args: object,
     ) -> int:
         """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
@@ -627,14 +634,16 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         return min(
-            self.get_one_distance_upper_bound(pauli, **decoder_args) for _ in range(num_trials)
+            self.get_one_distance_upper_bound(pauli, vector=vector, **decoder_args)
+            for _ in range(num_trials)
         )
+
     # TODO: Modify to take any x
     def get_one_distance_upper_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         *,
-        vector:galois.FieldArray,
+        vector: galois.FieldArray | None = None,
         **decoder_args: object,
     ) -> int:
         """Single upper bound to the X-distance or Z-distance of this code.
@@ -690,7 +699,7 @@ class CSSCode(QuditCode):
             vector = self.field(vector)
 
         syndrome = vector @ self.matrix
-        effective_syndrome = np.append(syndrome, [1]) 
+        effective_syndrome = np.append(syndrome, [1])
 
         logical_op_found = False
         while not logical_op_found:

@@ -50,6 +50,8 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 from sympy.combinatorics.perm_groups import PermutationGroup
 
+import qldpc.groups as groups
+
 DEFAULT_FIELD_ORDER = 2
 
 ################################################################################
@@ -528,60 +530,8 @@ class QuaternionGroup(Group):
 
 # Needs Checking
 class SpecialLinearGroup(Group):
-    def construct_linspace(field: int, dimension: int):
-        gf = galois.GF(field)
-        lin_space = []
-        vectors = itertools.product(gf.elements, repeat=dimension)
-        for v in vectors:
-            if gf(v).any():
-                lin_space.append(gf(v).tobytes())
-        return lin_space
-
-    def special_linear_gen(field: int, dimension: int) -> galois.FieldArray:
-        """
-        Construct generators for SL(field, dimension) based on https://arxiv.org/abs/2201.09155
-        """
-        gf = galois.GF(field)
-        sl = []
-        W = gf.Zeros((dimension, dimension))
-        W[0, -1] = 1
-        for index in range(dimension - 1):
-            W[index + 1, index] = -1 * gf(1)
-        if field <= 3:
-            A = gf.Identity(dimension)
-            A[0, 1] = 1
-            sl.append(A)
-            sl.append(W)
-        else:
-            W[0, 0] = -1 * gf(1)
-            sl.append(W)
-            prim = gf.primitive_element
-            A = gf.Identity(dimension)
-            A[0, 0] = prim
-            A[1, 1] = prim**-1
-            sl.append(A)
-        return sl
-
-    def group_to_permutation(field: int, space, group) -> PermutationGroup:
-        """
-        Constructs a sympy PermutationGroup using these permutation matrices
-        """
-        gf = galois.GF(field)
-        perm_group = []
-        for M in group:
-            # print(M)
-            perm_string = list(range(len(space)))
-            for index in range(len(space)):
-                current_vector = gf(np.frombuffer(space[index], dtype=np.uint8))
-                next_vector = M @ current_vector
-                next_index = space.index(next_vector.tobytes())
-                perm_string[index] = next_index
-            perm_group.append(comb.Permutation(perm_string))
-            # print(perm_string)
-        return PermutationGroup(perm_group)
-
     def __init__(self, field, dimension) -> None:
-        generators = special_linear_gen(field, dimension)
-        space = construct_linspace(field, dimension)
-        group = group_to_permutation(field, space, generators)
+        generators = groups.special_linear_gen(field, dimension)
+        space = groups.construct_linspace(field, dimension)
+        group = groups.group_to_permutation(field, space, generators)
         super().__init__(group, field=field)

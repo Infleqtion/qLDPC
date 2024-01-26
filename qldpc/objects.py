@@ -260,8 +260,9 @@ class CayleyComplex:
         self.subset_b = subset_b
 
         if twopartite:
-            # assert CayleyComplex.satisfies_total_no_conjugacy()
-            return NotImplemented
+            assert CayleyComplex.satisfies_total_no_conjugacy(
+                self.group, self.subset_a, self.subset_b
+            )
 
         G = self.group.generate()
         V_0 = [p for p in itertools.product(set(G), {0, 3})]
@@ -279,8 +280,9 @@ class CayleyComplex:
         self.graph.add_nodes_from(V_1)
         for gg, aa, bb in itertools.product(G, self.subset_a, self.subset_b):
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
-            face = frozenset([(gg, 0), (aa_gg, 1), (gg_bb, 2), (aa_gg_bb, 3)])
-            self.faces.add(face)
+            square = [(gg, 0), (aa_gg, 1), (gg_bb, 2), (aa_gg_bb, 3)]
+            face = frozenset(square)
+            self.faces.add(square)
 
             self.graph.add_node(face)
             self.graph.add_edge((gg, 0), face)
@@ -326,7 +328,10 @@ class CayleyComplex:
         subset_a: Collection[abstract.GroupMember] | None = None,
         subset_b: Collection[abstract.GroupMember] | None = None,
     ) -> tuple[nx.Graph, nx.Graph]:
-        """Cayley graphs for the left- and right-acting subsets. If both subsets are given, then outputs a left-right graph."""
+        """
+        Cayley graphs for the left- and right-acting subsets.
+        If both subsets are given, then outputs a left-right graph.
+        """
         edges_a = []
         edges_b = []
         if subset_a is not None:

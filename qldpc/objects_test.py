@@ -64,6 +64,7 @@ def test_node() -> None:
     assert hash(node_c1) != hash(node_d1) != hash(node_d2)
 
 
+# TODO: Get rid of rank stuff?
 def test_cayley_complex() -> None:
     """Construct and test Cayley complexes."""
     group: abstract.Group
