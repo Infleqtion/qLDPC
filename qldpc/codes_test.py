@@ -110,17 +110,12 @@ def test_CSS_code() -> None:
 
 def test_logical_ops() -> None:
     """Logical operator construction."""
-    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=2))
+    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
     code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
 
+    # test that logical operators are dual to each other and have trivial syndromes
     logicals = code.get_logical_ops()
-    logicals_x, logicals_z = logicals[0], logicals[1]
-    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
-    assert not np.any(code.code_z.matrix @ logicals_x.T)
-    assert not np.any(code.code_x.matrix @ logicals_z.T)
-
-    logicals = code.new_get_logical_ops()
     logicals_x, logicals_z = logicals[0], logicals[1]
     assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
     assert not np.any(code.code_z.matrix @ logicals_x.T)

@@ -665,7 +665,7 @@ class CSSCode(QuditCode):
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
 
-    def new_get_logical_ops(self) -> galois.FieldArray:
+    def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -749,65 +749,6 @@ class CSSCode(QuditCode):
         _, permutation = zip(*sorted(zip(qubit_locs, range(num_qudits))))
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
-
-        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
-        return self._logical_ops
-
-    def get_logical_ops(self) -> galois.FieldArray:  # noqa:C901 -- ignore flake8 complexity check
-        """Complete basis of nontrivial X-type and Z-type logical operators for this code.
-
-        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        (2, k, n), where k and n are respectively the numbers of logical and physical qubits in this
-        code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
-        physical qubits addressed nontrivially) by the logical Pauli-X operator on logical qubit 4.
-
-        In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
-        by this method are the unit shift and phase operators that generate all logical X-type and
-        Z-type qudit operators.
-
-        Logical operators are identified using the symplectic Gram-Schmidt orthogonalization
-        procedure described in arXiv:0903.5256, slightly modified and generalized for qudits.
-        """
-        # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
-            return self._logical_ops
-
-        # collect logical operators sequentially
-        logicals_x: list[galois.FieldArray] = []
-        logicals_z: list[galois.FieldArray] = []
-
-        # identify candidate X-type and Z-type operators
-        candidates_x = self.code_z.generator
-        candidates_z = list(self.code_x.generator)
-
-        # iterate over all candidate X-type operators
-        for op_x in candidates_x:
-            # remove the components of all previously found logical X-type operators
-            for logical_x, logical_z in zip(logicals_x, logicals_z):
-                if overlap := op_x @ logical_z:
-                    op_x -= overlap * logical_x
-
-            # look for a candidate Z-type operator that does not commute with X(op_x)
-            found_logical_pair = False
-            for zz, op_z in enumerate(candidates_z):
-                if overlap := op_x @ op_z:
-                    # op_x and op_z are conjugate pair of logical operators!
-                    logicals_x.append(op_x)
-                    logicals_z.append(op_z / overlap)  # so that logical_x @ logical_z == 1
-
-                    del candidates_z[zz]
-                    found_logical_pair = True
-                    break
-
-            if found_logical_pair and len(logicals_x) == self.dimension:
-                # we have found all logical operators
-                break
-
-        # orthogonalize the Z-type logical operators
-        for zz in range(1, self.dimension):
-            for idx in range(zz):
-                if overlap := logicals_z[zz] @ logicals_x[idx]:
-                    logicals_z[zz] -= overlap * logicals_z[idx]  # pragma: no cover
 
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
