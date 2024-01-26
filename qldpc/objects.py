@@ -260,7 +260,7 @@ class CayleyComplex:
         self.subset_b = subset_b
 
         if twopartite:
-            # assert (CayleyComplex.satisfies_total_no_conjugacy())
+            # assert CayleyComplex.satisfies_total_no_conjugacy()
             return NotImplemented
 
         G = self.group.generate()
