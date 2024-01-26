@@ -42,8 +42,8 @@ def test_classical_codes() -> None:
         assert code.get_random_word() in code
 
     # test that rank of repetition and hamming codes is independent of the field
-    assert codes.ClassicalCode.repetition(3).rank == codes.ClassicalCode.repetition(3, 3).rank
-    assert codes.ClassicalCode.hamming(3).rank == codes.ClassicalCode.hamming(3, 3).rank
+    assert codes.ClassicalCode.repetition(3, 2).rank == codes.ClassicalCode.repetition(3, 3).rank
+    assert codes.ClassicalCode.hamming(3, 2).rank == codes.ClassicalCode.hamming(3, 3).rank
 
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
