@@ -730,7 +730,7 @@ class CSSCode(QuditCode):
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
         qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
 
-        # get the support of the check matrices on non-pivot qubits
+        # get the support of the check matrices on non-pivot qudits
         num_non_pivots = num_qudits - len(pivot_x) - len(pivot_z)
         non_pivot_x = checks_x[:, :num_non_pivots]
         non_pivot_z = checks_z[:, :num_non_pivots]
@@ -745,7 +745,7 @@ class CSSCode(QuditCode):
         logicals_z[:, -non_pivot_z.shape[0] :] = -non_pivot_z.T
         logicals_z[:dimension, :dimension] = identity
 
-        # move qubits back to their original locations
+        # move qudits back to their original locations
         _, permutation = zip(*sorted(zip(qubit_locs, range(num_qudits))))
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
