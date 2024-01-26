@@ -688,8 +688,8 @@ class CSSCode(QuditCode):
         logicals_z: list[galois.FieldArray] = []
 
         # identify candidate X-type and Z-type operators
-        candidates_x = self.code_z.generator
-        candidates_z = list(self.code_x.generator)
+        candidates_x = self.code_x.generator
+        candidates_z = list(self.code_z.generator)
 
         # iterate over all candidate X-type operators
         for op_x in candidates_x:
