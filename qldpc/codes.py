@@ -416,11 +416,12 @@ class CSSCode(QuditCode):
     H_x @ H_z.T == 0,
 
     where H_x and H_z are, respectively, the parity check matrices of the classical codes that
-    define the X-type and Z-type stabilizers of the CSS code.
+    define the X-type and Z-type stabilizers of the CSS code.  Note that H_x witnesses Z-type errors
+    and H_z witnesses X-type errors.
 
     The full parity check matrix of a CSSCode is
-    ⌈  0 , H_z ⌉
-    ⌊ H_x,  0  ⌋.
+    ⌈ H_z,  0  ⌉
+    ⌊  0 , H_x ⌋.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -468,8 +469,8 @@ class CSSCode(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [np.zeros_like(self.code_z.matrix), self.code_z.matrix],
-                [self.code_x.matrix, np.zeros_like(self.code_x.matrix)],
+                [self.code_z.matrix, np.zeros_like(self.code_z.matrix)],
+                [np.zeros_like(self.code_x.matrix), self.code_x.matrix],
             ]
         )
         return self.field(self.conjugate(matrix, self._conjugate))
@@ -893,8 +894,8 @@ class HGPCode(CSSCode):
     Edges in G_AB are inherited across rows/columns from G_A and G_B.  For example, if rows r_1 and
     r_2 share an edge in G_A, then the same is true in every column of G_AB.
 
-    By default, the check qubits in sectors (0, 1) of G_AB measure X-type operators.  Likewise with
-    sector (1, 0) and Z-type operators.  If a HGP is constructed with `conjugate==True`, then the
+    By default, the check qubits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
+    sector (1, 0) and X-type operators.  If a HGP is constructed with `conjugate==True`, then the
     types of operators addressing the nodes in sector (1, 1) are switched.
 
     This class contains two equivalent constructions of an HGPCode:
@@ -981,10 +982,10 @@ class HGPCode(CSSCode):
                 node_check, node_qudit = node_fst, node_snd
             graph.add_edge(node_check, node_qudit)
 
-            # by default, this edge is X-type iff the check qudit is in the (0, 1) sector
-            op = QuditOperator((data.get("val", 1), 0))
+            # by default, this edge is Z-type iff the check qudit is in the (0, 1) sector
+            op = QuditOperator((0, data.get("val", 1)))
             if node_check[0].is_data:
-                # make this a Z-type operator
+                # make this a X-type operator
                 op = ~op
 
             # special treatment of qudits in the (1, 1) sector

@@ -214,15 +214,15 @@ def test_twisted_XZZX(width: int = 3) -> None:
 
     # construct check matrix directly
     ring = codes.ClassicalCode.ring(width).matrix
-    mat_1 = np.kron(ring, np.eye(width, dtype=int))
-    mat_2 = codes.ClassicalCode.ring(num_qudits // 2).matrix
+    mat_1 = codes.ClassicalCode.ring(num_qudits // 2).matrix
+    mat_2 = np.kron(ring, np.eye(width, dtype=int))
     zero_1 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
     zero_3 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = [
-        [zero_1, mat_1.T, mat_2, zero_4],
-        [mat_1, zero_2, zero_3, -mat_2.T],
+        [mat_1, zero_2, zero_3, mat_2.T],
+        [zero_1, -mat_1.T, mat_2, zero_4],
     ]
 
     # construct lifted product code
