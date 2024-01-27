@@ -729,8 +729,8 @@ class CSSCode(QuditCode):
 
         # get the support of the check matrices on non-pivot qudits
         num_non_pivots = num_qudits - len(pivot_x) - len(pivot_z)
-        non_pivot_x = checks_x[:, :num_non_pivots]
-        non_pivot_z = checks_z[:, :num_non_pivots]
+        non_pivot_x = checks_x[: len(pivot_x), :num_non_pivots]
+        non_pivot_z = checks_z[: len(pivot_z), :num_non_pivots]
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
