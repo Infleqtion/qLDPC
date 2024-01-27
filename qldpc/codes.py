@@ -734,12 +734,12 @@ class CSSCode(QuditCode):
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
-        logicals_x[:, dimension : dimension + non_pivot_x.shape[0]] = -non_pivot_x.T
+        logicals_x[:, dimension : dimension + len(pivot_x)] = -non_pivot_x.T
         logicals_x[:dimension, :dimension] = identity
 
         # construct logical Z operators
         logicals_z = self.field.Zeros((dimension, num_qudits))
-        logicals_z[:, -non_pivot_z.shape[0] :] = -non_pivot_z.T
+        logicals_z[:, -len(pivot_z) :] = -non_pivot_z.T
         logicals_z[:dimension, :dimension] = identity
 
         # move qudits back to their original locations
