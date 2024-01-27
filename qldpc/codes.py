@@ -727,10 +727,13 @@ class CSSCode(QuditCode):
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
         qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
 
+        # run some sanity checks
+        assert pivot_z[-1] < num_qudits - len(pivot_x)
+        assert dimension + len(pivot_x) + len(pivot_z) == num_qudits
+
         # get the support of the check matrices on non-pivot qudits
-        num_non_pivots = num_qudits - len(pivot_x) - len(pivot_z)
-        non_pivot_x = checks_x[: len(pivot_x), :num_non_pivots]
-        non_pivot_z = checks_z[: len(pivot_z), :num_non_pivots]
+        non_pivot_x = checks_x[: len(pivot_x), :dimension]
+        non_pivot_z = checks_z[: len(pivot_z), :dimension]
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
