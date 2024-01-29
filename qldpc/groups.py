@@ -21,19 +21,32 @@ import time
 import galois
 import numpy as np
 from sympy.combinatorics import Permutation, PermutationGroup
+from qldpc.abstract import CyclicGroup, Group
+from qldpc.codes import QTCode, ClassicalCode
 
-"""
+
 def random_cyclicQTcode(
     blocklength: int,
-    dimension: int,
     field: int = 2,
-) -> ClassicalCode :
-    deg = int(20 * np.log2(blocklength))
-    code_a = ClassicalCode.random(deg, int(0.2*deg), field)
-    code_b = ClassicalCode.random(deg, int(0.2*deg),field)
-    
-    pass
-"""
+) -> QTCode :
+    deg = int(2 * int(np.log2(blocklength)))
+    cyclegroup = CyclicGroup(blocklength)
+    subset_a = cyclegroup.random_subset(deg)
+    subset_b = cyclegroup.random_subset(deg)
+    # print(len(subset_a))
+    # print(deg)
+    # print(len(subset_b))
+    code_a = ClassicalCode.random(deg, int(0.4*deg), field)
+    code_b = ClassicalCode.random(deg, deg-int(0.4*deg),field)
+    return QTCode(subset_a, subset_b, code_a, code_b)
+
+# def random_robustcode(
+#     blocklength: int,
+#     dimension: int,
+#     field: int = 2,
+#     robustness: float | None = None,
+# ) -> ClassicalCode :
+#     return
 
 
 def construct_linear_all(field: int, dimension: int):
@@ -119,48 +132,48 @@ def construct_projspace(field: int, dimension: int):
     return proj_space
 
 
-def construct_linspace(field: int, dimension: int):
-    gf = galois.GF(field)
-    lin_space = []
-    vectors = itertools.product(gf.elements, repeat=dimension)
-    for v in vectors:
-        if gf(v).any():
-            lin_space.append(gf(v).tobytes())
-    return lin_space
+# def construct_linspace(field: int, dimension: int):
+#     gf = galois.GF(field)
+#     lin_space = []
+#     vectors = itertools.product(gf.elements, repeat=dimension)
+#     for v in vectors:
+#         if gf(v).any():
+#             lin_space.append(gf(v).tobytes())
+#     return lin_space
 
 
-def group_to_permutation(field: int, space, group) -> PermutationGroup:
-    """
-    Constructs a sympy PermutationGroup using these permutation matrices
-    """
-    gf = galois.GF(field)
-    perm_group = []
-    for M in group:
-        # print(M)
-        perm_string = list(range(len(space)))
-        for index in range(len(space)):
-            current_vector = gf(np.frombuffer(space[index], dtype=np.uint8))
-            next_vector = M @ current_vector
-            next_index = space.index(next_vector.tobytes())
-            perm_string[index] = next_index
-        perm_group.append(Permutation(perm_string))
-        # print(perm_string)
-    return PermutationGroup(perm_group)
+# def group_to_permutation(field: int, space, group) -> PermutationGroup:
+#     """
+#     Constructs a sympy PermutationGroup using these permutation matrices
+#     """
+#     gf = galois.GF(field)
+#     perm_group = []
+#     for M in group:
+#         # print(M)
+#         perm_string = list(range(len(space)))
+#         for index in range(len(space)):
+#             current_vector = gf(np.frombuffer(space[index], dtype=np.uint8))
+#             next_vector = M @ current_vector
+#             next_index = space.index(next_vector.tobytes())
+#             perm_string[index] = next_index
+#         perm_group.append(Permutation(perm_string))
+#         # print(perm_string)
+#     return PermutationGroup(perm_group)
 
 
 # gf = galois.GF(field)
 # lin_space = gf(list(itertools.product(gf.elements, repeat=dimension))[1:])
 # proj_space = construct_projspace(field, dimension)
 
-dimension = 2
-field = 37
-lin_space = construct_linspace(field, dimension)
-init = time.time()
-slg = special_linear_gen(field, dimension)
-sl_group2 = group_to_permutation(field, lin_space, slg)
-final = time.time()
-print("Method 2 executed in", final - init)
-print(sl_group2.order())
+# dimension = 2
+# field = 37
+# lin_space = construct_linspace(field, dimension)
+# init = time.time()
+# slg = special_linear_gen(field, dimension)
+# sl_group2 = group_to_permutation(field, lin_space, slg)
+# final = time.time()
+# print("Method 2 executed in", final - init)
+# print(sl_group2.order())
 
 # init = time.time()
 # psl, sl = construct_linear_all(field, dimension)
@@ -172,3 +185,16 @@ print(sl_group2.order())
 
 # sl_group = group_to_permutation(2,proj_space,sl)
 # print(psl_group.random())
+
+
+np.set_printoptions(linewidth=200)
+
+blocklength = 29
+field = 2
+#cyclegroup = CyclicGroup(blocklength)
+#subset_a = cyclegroup.random_subset(4)
+tannercode = random_cyclicQTcode(blocklength, field)
+print(tannercode.num_qubits)
+print(tannercode.dimension)
+print(tannercode.get_distance(upper=10))
+# print(np.any(tannercode.matrix))

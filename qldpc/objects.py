@@ -264,39 +264,24 @@ class CayleyComplex:
                 self.group, self.subset_a, self.subset_b
             )
 
-        G = self.group.generate()
-        V_0 = [p for p in itertools.product(set(G), {0, 3})]
-        V_1 = [p for p in itertools.product(set(G), {1, 2})]
-
         # construct the vertices, edges, and faces of this complex
         # TODO: Check the sort thing needed for Tanner graph
         self.subgraph_0 = nx.DiGraph()
-        self.subgraph_0.add_nodes_from(V_0)
         self.subgraph_1 = nx.DiGraph()
-        self.subgraph_1.add_nodes_from(V_1)
-        self.graph = nx.Graph()
-        self.faces = set()
-        self.graph.add_nodes_from(V_0)
-        self.graph.add_nodes_from(V_1)
-        for gg, aa, bb in itertools.product(G, self.subset_a, self.subset_b):
+        for gg, aa, bb in itertools.product(self.group.generate(), self.subset_a, self.subset_b):
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             square = [(gg, 0), (aa_gg, 1), (gg_bb, 2), (aa_gg_bb, 3)]
             face = frozenset(square)
-            self.faces.add(square)
+            # self.graph.add_node(face)
+            # self.graph.add_edge((gg, 0), face)
+            # self.graph.add_edge((aa_gg_bb, 3), face)
+            # self.graph.add_edge(face, (aa_gg, 1))
+            # self.graph.add_edge(face, (gg_bb, 2))
+            self.subgraph_0.add_edge((gg, 0), face,  sort=(aa, bb))
+            self.subgraph_0.add_edge((aa_gg_bb, 3), face, sort=(aa, bb))
+            self.subgraph_1.add_edge((aa_gg, 1), face, sort=(aa, bb))
+            self.subgraph_1.add_edge((gg_bb, 2), face, sort=(aa, bb))
 
-            self.graph.add_node(face)
-            self.graph.add_edge((gg, 0), face)
-            self.graph.add_edge((aa_gg_bb, 3), face)
-            self.graph.add_edge(face, (aa_gg, 1))
-            self.graph.add_edge(face, (gg_bb, 2))
-
-            self.subgraph_0.add_node(face)
-            self.subgraph_0.add_edge((gg, 0), face, sort=())
-            self.subgraph_0.add_edge((aa_gg_bb, 3), face, sort=())
-
-            self.subgraph_1.add_node(face)
-            self.subgraph_1.add_edge((aa_gg, 1), face, sort=())
-            self.subgraph_1.add_edge((gg_bb, 2), face, sort=())
 
         # # construct the subgraphs of the complex
         # self.subgraph_0 = nx.DiGraph()

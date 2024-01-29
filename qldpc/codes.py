@@ -611,7 +611,7 @@ class CSSCode(QuditCode):
             return self.get_distance_lower_bound(pauli)
 
         if upper is not None:
-            return self.get_distance_upper_bound(pauli, num_trials=upper, **decoder_args)
+            return self.get_distance_upper_bound(pauli, num_trials=upper, vector=vector, **decoder_args)
 
         return self.get_distance_exact(pauli, **decoder_args)
 
@@ -631,7 +631,6 @@ class CSSCode(QuditCode):
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         num_trials: int,
-        *,
         vector: galois.FieldArray | None = None,
         **decoder_args: object,
     ) -> int:
@@ -649,7 +648,6 @@ class CSSCode(QuditCode):
     def get_one_distance_upper_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
-        *,
         vector: galois.FieldArray | None = None,
         **decoder_args: object,
     ) -> int:
@@ -704,8 +702,7 @@ class CSSCode(QuditCode):
         else:
             assert vector.shape == (code_z.num_bits, 1)
             vector = self.field(vector)
-
-        syndrome = vector @ self.matrix
+        syndrome =  code_z.matrix @ vector
         effective_syndrome = np.append(syndrome, [1])
 
         logical_op_found = False
@@ -1251,12 +1248,20 @@ class TannerCode(ClassicalCode):
         sinks = [node for node in subgraph if subgraph.out_degree(node) == 0]
         sink_indices = {sink: idx for idx, sink in enumerate(sorted(sinks))}
 
+        # print()
+        # matrix = nx.adjacency_matrix(subgraph).toarray()
+        # print(matrix.shape)
+        # print(matrix)
+
         num_bits = len(sinks)
         num_checks = len(sources) * subcode.num_checks
         matrix = np.zeros((num_checks, num_bits), dtype=int)
         for idx, source in enumerate(sorted(sources)):
             checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
             bits = [sink_indices[sink] for sink in self._get_sorted_neighbors(source)]
+            # print()
+            # print(len(bits))
+            # print(len(list(subgraph.neighbors(source))))
             matrix[np.ix_(checks, bits)] = subcode.matrix
         ClassicalCode.__init__(self, matrix, subcode._field_order)
 
