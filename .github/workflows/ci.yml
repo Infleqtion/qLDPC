@@ -20,10 +20,10 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python 3.11
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       - uses: actions/cache@v3
         with:
           path: ${{ env.pythonLocation }}
@@ -43,10 +43,10 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python 3.11
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       - uses: actions/cache@v3
         with:
           path: ${{ env.pythonLocation }}
@@ -66,10 +66,10 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python 3.11
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       - uses: actions/cache@v3
         with:
           path: ${{ env.pythonLocation }}
@@ -89,10 +89,10 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python 3.11
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       - uses: actions/cache@v3
         with:
           path: ${{ env.pythonLocation }}
@@ -112,10 +112,10 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v3
-      - name: Set up Python 3.11
+      - name: Set up Python 3.10
         uses: actions/setup-python@v4
         with:
-          python-version: '3.11'
+          python-version: '3.10'
       - uses: actions/cache@v3
         with:
           path: ${{ env.pythonLocation }}
