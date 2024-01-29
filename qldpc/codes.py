@@ -824,19 +824,22 @@ class CSSCode(QuditCode):
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
         qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
 
+        # run some sanity checks
+        assert pivot_z[-1] < num_qudits - len(pivot_x)
+        assert dimension + len(pivot_x) + len(pivot_z) == num_qudits
+
         # get the support of the check matrices on non-pivot qudits
-        num_non_pivots = num_qudits - len(pivot_x) - len(pivot_z)
-        non_pivot_x = checks_x[:, :num_non_pivots]
-        non_pivot_z = checks_z[:, :num_non_pivots]
+        non_pivot_x = checks_x[: len(pivot_x), :dimension]
+        non_pivot_z = checks_z[: len(pivot_z), :dimension]
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
-        logicals_x[:, dimension : dimension + non_pivot_x.shape[0]] = -non_pivot_x.T
+        logicals_x[:, dimension : dimension + len(pivot_x)] = -non_pivot_x.T
         logicals_x[:dimension, :dimension] = identity
 
         # construct logical Z operators
         logicals_z = self.field.Zeros((dimension, num_qudits))
-        logicals_z[:, -non_pivot_z.shape[0] :] = -non_pivot_z.T
+        logicals_z[:, -len(pivot_z) :] = -non_pivot_z.T
         logicals_z[:dimension, :dimension] = identity
 
         # move qudits back to their original locations
@@ -858,8 +861,8 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if ensure_nontrivial:
-            random_logical_qubit_index = np.random.randint(self.dimension)
-            return self.get_logical_ops()[pauli.index, random_logical_qubit_index]
+            random_logical_qudit_index = np.random.randint(self.dimension)
+            return self.get_logical_ops()[pauli.index, random_logical_qudit_index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
     def _minimize_weight_of_logical_op(
