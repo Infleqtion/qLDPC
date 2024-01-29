@@ -277,7 +277,7 @@ class ClassicalCode(AbstractCode):
 
         return np.count_nonzero(closest_vec)
 
-    def get_code_params(self) -> tuple[int, int, int]:
+    def get_code_params(self) -> tuple[int, int, int, int]:
         """Compute the parameters of this code: [n,k,d].
 
         Here:
@@ -285,7 +285,15 @@ class ClassicalCode(AbstractCode):
         - k is the number of encoded ("logical") bits
         - d is the code distance
         """
-        return self.num_bits, self.dimension, self.get_distance()
+        return self.num_bits, self.dimension, self.get_distance(), self.get_weight()
+    
+    def get_weight(self) -> int:
+        """Compute the weight of the largest check
+        """
+        row_max = np.max([np.count_nonzero(self.matrix[i, :]) for i in range(self.matrix.shape[0])])
+        col_max = np.max([np.count_nonzero(self.matrix[:, i]) for i in range(self.matrix.shape[1])])
+        
+        return max(row_max,col_max)
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
@@ -386,7 +394,14 @@ class QuditCode(AbstractCode):
     def _assert_qubit_code(self) -> None:
         if self._field_order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
-
+    
+    def get_weight(self) -> int:
+        """Compute the weight of the largest check
+        """
+        row_max = np.max([np.count_nonzero(self.matrix[i, :]) for i in range(self.matrix.shape[0])])
+        col_max = np.max([np.count_nonzero(self.matrix[:, i]) for i in range(self.matrix.shape[1])])
+        return max(row_max,col_max)
+    
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
