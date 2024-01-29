@@ -231,6 +231,10 @@ class Group:
         assert size > 0
         #return list(self._group.random() for _ in range(size))
         S = set()
+        if size % 2 == 1:
+            identity = GroupMember(self._group.identity.array_form)
+            S.add(identity)
+            size = size - 1 
         while len(S) < size :
             s = GroupMember(self._group.random().array_form)
             if s == ~s:
@@ -238,6 +242,7 @@ class Group:
             else:
                 S.add(s)
                 S.add(~s)
+        
         return S
 
 

@@ -387,7 +387,7 @@ class QuditCode(AbstractCode):
 
     @property
     def num_qubits(self) -> int:
-        """Number of data qubits in this code."""
+        """Number of data qubits in     this code."""
         self._assert_qubit_code()
         return self.num_qudits
 
@@ -396,7 +396,7 @@ class QuditCode(AbstractCode):
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
     
     def get_weight(self) -> int:
-        """Compute the weight of the largest check
+        """Compute the weight of the largest check.
         """
         row_max = np.max([np.count_nonzero(self.matrix[i, :]) for i in range(self.matrix.shape[0])])
         col_max = np.max([np.count_nonzero(self.matrix[:, i]) for i in range(self.matrix.shape[1])])
@@ -848,7 +848,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = False
+        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = True
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 

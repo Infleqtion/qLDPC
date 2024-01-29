@@ -46,11 +46,11 @@ def random_cyclicHammingQTcode(
 ) -> QTCode :
     deg = 7
     cyclegroup = CyclicGroup(blocklength)
-    subset_a = cyclegroup.random_subset(deg-1)
-    subset_b = cyclegroup.random_subset(deg-1)
+    subset_a = cyclegroup.random_subset(deg)
+    subset_b = cyclegroup.random_subset(deg)
     identity = cyclegroup.identity
-    subset_a.add(identity)
-    subset_b.add(identity)
+    # subset_a.add(identity)
+    # subset_b.add(identity)
 
     code_a = ClassicalCode.hamming(3,field)
     print(code_a.get_weight())
@@ -65,11 +65,8 @@ def random_linearQTcode(
 ) -> QTCode :
     deg = 7
     group = SpecialLinearGroup(sl_field, dimension)
-    subset_a = group.random_subset(deg-1)
-    subset_b = group.random_subset(deg-1)
-    identity = group.identity
-    subset_a.add(identity)
-    subset_b.add(identity)
+    subset_a = group.random_subset(deg)
+    subset_b = group.random_subset(deg)
     code_a = ClassicalCode.hamming(3,field)
     #print(code_a.get_weight())
     code_b = ~code_a
@@ -98,8 +95,8 @@ field = 2
 sl_field = 5
 #cyclegroup = CyclicGroup(blocklength)
 #subset_a = cyclegroup.random_subset(4)
-#tannercode = random_cyclicHammingQTcode(blocklength, field)
-tannercode = random_linearQTcode(sl_field, field)
+tannercode = random_cyclicHammingQTcode(blocklength, field)
+#tannercode = random_linearQTcode(sl_field, field)
 print(tannercode.num_qubits)
 print(tannercode.dimension)
 print(tannercode.get_distance(upper=10))
