@@ -50,8 +50,7 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics import Permutation
-
-#import qldpc.groups as groups
+import qldpc.groups as groups
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -533,34 +532,6 @@ class QuaternionGroup(Group):
         group = Group.from_table(table, integer_lift=lift)
         super().__init__(group._group, field=3, lift=group._lift)
 
-
-def construct_linspace(field: int, dimension: int):
-    gf = galois.GF(field)
-    lin_space = []
-    vectors = itertools.product(gf.elements, repeat=dimension)
-    for v in vectors:
-        if gf(v).any():
-            lin_space.append(gf(v).tobytes())
-    return lin_space
-
-
-def group_to_permutation(field: int, space, group) -> PermutationGroup:
-    """
-    Constructs a sympy PermutationGroup using these permutation matrices
-    """
-    gf = galois.GF(field)
-    perm_group = []
-    for M in group:
-        # print(M)
-        perm_string = list(range(len(space)))
-        for index in range(len(space)):
-            current_vector = gf(np.frombuffer(space[index], dtype=np.uint8))
-            next_vector = M @ current_vector
-            next_index = space.index(next_vector.tobytes())
-            perm_string[index] = next_index
-        perm_group.append(Permutation(perm_string))
-        # print(perm_string)
-    return PermutationGroup(perm_group)
 
 # Needs Checking
 class SpecialLinearGroup(Group):
