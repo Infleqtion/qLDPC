@@ -764,8 +764,8 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if ensure_nontrivial:
-            random_logical_qubit_index = np.random.randint(self.dimension)
-            return self.get_logical_ops()[pauli.index, random_logical_qubit_index]
+            random_logical_qudit_index = np.random.randint(self.dimension)
+            return self.get_logical_ops()[pauli.index, random_logical_qudit_index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
     def _minimize_weight_of_logical_op(
