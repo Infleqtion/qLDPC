@@ -66,7 +66,7 @@ class GroupMember(comb.Permutation):
     """
 
     def __mul__(self, other: UnknownType) -> UnknownType:
-        if isinstance(other, GroupMember):
+        if isinstance(other, comb.Permutation):
             return GroupMember(super().__mul__(other).array_form)  # type:ignore[return-value]
         elif hasattr(other, "__rmul__"):
             return other.__rmul__(self)
