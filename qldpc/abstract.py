@@ -172,6 +172,10 @@ class Group:
         """The identity element of this group."""
         return GroupMember(self._group.identity.array_form)
 
+    def random(self) -> GroupMember:
+        """A random element this group."""
+        return GroupMember(self._group.random().array_form)
+
     @classmethod
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
@@ -443,6 +447,13 @@ class TrivialGroup(Group):
             field,
             lambda _: np.array(1, ndmin=2, dtype=int),
         )
+
+    def random(self) -> GroupMember:
+        """A random (albeit unique) element this group.
+
+        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation."
+        """
+        return self.identity
 
     @classmethod
     def to_protograph(
