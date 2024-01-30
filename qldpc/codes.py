@@ -825,6 +825,8 @@ class CSSCode(QuditCode):
         qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
 
         # run some sanity checks
+        # print(pivot_z[-1])
+        # print(len(pivot_x))
         assert pivot_z[-1] < num_qudits - len(pivot_x)
         assert dimension + len(pivot_x) + len(pivot_z) == num_qudits
 
@@ -1322,6 +1324,7 @@ class QTCode(CSSCode):
         code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
+        twopartite: bool | None = False,
         *,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
@@ -1333,7 +1336,7 @@ class QTCode(CSSCode):
         if field is None and code_a._field_order != code_b._field_order:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
-        self.complex = CayleyComplex(subset_a, subset_b)
+        self.complex = CayleyComplex(subset_a, subset_b, twopartite=twopartite)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 

@@ -20,7 +20,7 @@
 # import galois
 
 import numpy as np
-from qldpc.abstract import CyclicGroup, SpecialLinearGroup
+from qldpc.abstract import CyclicGroup, SpecialLinearGroup, Group
 from qldpc.codes import QTCode, ClassicalCode
 
 
@@ -43,12 +43,14 @@ def random_cyclicQTcode(
 def random_cyclicHammingQTcode(
     blocklength: int,
     field: int = 2,
+    cyclegroup: Group | None = None,
 ) -> QTCode :
     deg = 7
-    cyclegroup = CyclicGroup(blocklength)
+    if cyclegroup is None:
+        cyclegroup = CyclicGroup(blocklength)
     subset_a = cyclegroup.random_subset(deg)
     subset_b = cyclegroup.random_subset(deg)
-    identity = cyclegroup.identity
+    #identity = cyclegroup.identity
     # subset_a.add(identity)
     # subset_b.add(identity)
 
@@ -63,20 +65,21 @@ def random_linearQTcode(
     field: int = 2,
     dimension: int = 2,
 ) -> QTCode :
-    deg = 7
+    deg = 4
     group = SpecialLinearGroup(sl_field, dimension)
     subset_a = group.random_subset(deg)
     subset_b = group.random_subset(deg)
-    code_a = ClassicalCode.hamming(3,field)
+    #subset_a.add()
+    #code_a = ClassicalCode.hamming(3,field)
     #print(code_a.get_weight())
-    code_b = ~code_a
+    #code_b = ~code_a
     # print(len(subset_a))
     # print(deg)
     # print(len(subset_b))
-    # code_a = ClassicalCode.random(deg, int(0.4*deg), field)
-    # code_b = ~code_a
+    code_a = ClassicalCode.random(deg, int(0.4*deg), field)
+    code_b = ~code_a
     #code_b = ClassicalCode.random(deg, deg-int(0.4*deg),field)
-    return QTCode(subset_a, subset_b, code_a, code_b)
+    return QTCode(subset_a, subset_b, code_a, code_b, twopartite=False)
 
 
 # def random_robustcode(
@@ -90,15 +93,26 @@ def random_linearQTcode(
 
 np.set_printoptions(linewidth=200)
 
-blocklength = 12
+blocklength = 11
 field = 2
 sl_field = 5
 #cyclegroup = CyclicGroup(blocklength)
 #subset_a = cyclegroup.random_subset(4)
+#cyclegroup = CyclicGroup(3)*CyclicGroup(3)
 tannercode = random_cyclicHammingQTcode(blocklength, field)
 #tannercode = random_linearQTcode(sl_field, field)
 print(tannercode.num_qubits)
 print(tannercode.dimension)
-print(tannercode.get_distance(upper=10))
+print(tannercode.get_distance(upper=10, ensure_nontrivial=False))
+#if tannercode.get_distance(upper=10, ensure_nontrivial=False) > 20:
+#    np.save
 # print(np.any(tannercode.matrix))
+
+"""
+Experiment with cyclic codes upto like 20? 
+Fix base codes to be Hamming[7,4] and its dual [7,3]
+
+"""
+#def save_subsets():
+
 
