@@ -18,19 +18,19 @@ import cirq
 
 from qldpc import codes
 
-rep_code = codes.BitCode.ring(3)
+rep_code = codes.ClassicalCode.ring(3)
 code = codes.HGPCode(rep_code)
 
 
-circuit = cirq.Circuit()
-
-for ancilla in [qubit for qubit in code.graph.nodes if not qubit.is_data]:
-    string = {
-        cirq.NamedQubit(str(neighbor)): str(code.graph[ancilla][neighbor][codes.Pauli])
-        for neighbor in code.graph.successors(ancilla)
-    }
-    circuit += cirq.H(cirq.NamedQubit(str(ancilla)))
-    circuit += cirq.PauliString(string).controlled_by(cirq.NamedQubit(str(ancilla)))
-    circuit += cirq.H(cirq.NamedQubit(str(ancilla)))
-    print(circuit)
-    exit()
+# circuit = cirq.Circuit()
+#
+# for ancilla in [qubit for qubit in code.graph.nodes if not qubit.is_data]:
+#     string = {
+#         cirq.NamedQubit(str(neighbor)): str(code.graph[ancilla][neighbor][codes.Pauli])
+#         for neighbor in code.graph.successors(ancilla)
+#     }
+#     circuit += cirq.H(cirq.NamedQubit(str(ancilla)))
+#     circuit += cirq.PauliString(string).controlled_by(cirq.NamedQubit(str(ancilla)))
+#     circuit += cirq.H(cirq.NamedQubit(str(ancilla)))
+#     print(circuit)
+#     exit()
