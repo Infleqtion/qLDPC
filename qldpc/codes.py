@@ -324,7 +324,6 @@ class QuditCode(AbstractCode):
         if self._field_order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
 
-    # TODO: use Pauli instead of QuditOperator if field == 2
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
@@ -340,8 +339,14 @@ class QuditCode(AbstractCode):
             vals_xz[col_xz] += int(matrix[row, col_xz, col])
             graph[node_check][node_qudit][QuditOperator] = QuditOperator(tuple(vals_xz))
 
+        # remember order of the field, and use Pauli operators if appropriate
         if isinstance(matrix, galois.FieldArray):
             graph.order = type(matrix).order
+            if graph.order == 2:
+                for _, __, data in graph.edges(data=True):
+                    data[Pauli] = Pauli(data[QuditOperator].value)
+                    del data[QuditOperator]
+
         return graph
 
     @classmethod
@@ -351,7 +356,8 @@ class QuditCode(AbstractCode):
         num_checks = len(graph.nodes()) - num_qudits
         matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
         for node_check, node_qudit, data in graph.edges(data=True):
-            matrix[node_check.index, :, node_qudit.index] = data[QuditOperator].value
+            op = data.get(QuditOperator) or data.get(Pauli)
+            matrix[node_check.index, :, node_qudit.index] = op.value
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
@@ -993,16 +999,14 @@ class HGPCode(CSSCode):
 
     @classmethod
     def get_graph_product(
-        cls,
-        graph_a: nx.DiGraph,
-        graph_b: nx.DiGraph,
-        *,
-        conjugate: bool = False,
+        cls, graph_a: nx.DiGraph, graph_b: nx.DiGraph, *, conjugate: bool = False
     ) -> nx.DiGraph:
         """Hypergraph product of two Tanner graphs."""
+
+        # start with a cartesian products of the input graphs
         graph_product = nx.cartesian_product(graph_a, graph_b)
 
-        # fix edge orientation and tag each edge with a QuditOperator
+        # fix edge orientation, and tag each edge with a QuditOperator
         graph = nx.DiGraph()
         for node_fst, node_snd, data in graph_product.edges(data=True):
             # determine which node is a check node vs. a qudit node
@@ -1031,10 +1035,18 @@ class HGPCode(CSSCode):
 
             graph[node_check][node_qudit][QuditOperator] = op
 
+        # relabel nodes, from (node_a, node_b) --> node_combined
         node_map = HGPCode.get_product_node_map(graph_a.nodes, graph_b.nodes)
         graph = nx.relabel_nodes(graph, node_map)
+
+        # remember order of the field, and use Pauli operators if appropriate
         if hasattr(graph_a, "order"):
             graph.order = graph_a.order
+            if graph.order == 2:
+                for _, __, data in graph.edges(data=True):
+                    data[Pauli] = Pauli(data[QuditOperator].value)
+                    del data[QuditOperator]
+
         return graph
 
     @classmethod
