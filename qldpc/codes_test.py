@@ -147,15 +147,16 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers(["I", "I I"], field)
 
 
-@pytest.mark.parametrize("conjugate", [False, True])
+@pytest.mark.parametrize("field", [2, 3])
 def test_graph_product(
-    conjugate: bool,
+    field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
+    conjugate: bool = True,
 ) -> None:
     """Equivalency of matrix-based and graph-based hypergraph products."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a)
-    code_b = codes.ClassicalCode.random(*bits_checks_b)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
 
     code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph, conjugate=conjugate)
