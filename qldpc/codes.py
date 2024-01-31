@@ -262,14 +262,19 @@ class ClassicalCode(AbstractCode):
             assert vector.shape == (self.num_bits, 1)
             vector = self.field(vector)
 
-        syndrome = vector @ self.matrix
 
         if brute:
             return self.distance_bruteforce(vector)
 
+        syndrome = self.matrix @ vector
+        effective_syndrome = np.append(syndrome, [1])
+        word = self.field.Ones(self.num_bits)
+        effective_check_matrix = np.vstack([self.matrix, word]).view(np.ndarray)
+
+
         closest_vec = qldpc.decoder.decode(
-            self.matrix,
-            syndrome,
+            effective_check_matrix,
+            effective_syndrome,
             exact=exact,
             modulus=self.field.order,
             **decoder_args,

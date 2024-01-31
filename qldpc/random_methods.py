@@ -1,4 +1,4 @@
-"""Methods for generation of random codes, classical and quantum
+"""Methods for generation of random codes, classical and quantum.
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -22,91 +22,110 @@
 import numpy as np
 from qldpc.abstract import CyclicGroup, SpecialLinearGroup, Group
 from qldpc.codes import QTCode, ClassicalCode
+from typing import TYPE_CHECKING, Literal
 
+
+def random_cyclicgens(order: int | tuple, degree: int):
+    if type(order) == int:
+        cyclegroup = CyclicGroup(order)
+    elif type(order) == tuple:
+        cyclegroup = CyclicGroup(order[0])
+        for i in order[1:]:
+            cyclegroup = cyclegroup*CyclicGroup(i)
+    subset_a = cyclegroup.random_subset(degree)
+    subset_b = cyclegroup.random_subset(degree)
+    print(f"Quantum Tanner Code over Cyclic group of order {order} with {degree} generators")
+    if type(order) == int:
+        print("Generators")
+        print([p(0) for p in subset_a])
+        print([p(0) for p in subset_b])
+    return cyclegroup, subset_a, subset_b
+
+def random_lineargens(sl_field:int, degree: int, dimension: int = 2):
+    lineargroup = SpecialLinearGroup(sl_field, dimension)
+    subset_a = lineargroup.random_subset(degree)
+    subset_b = lineargroup.random_subset(degree)
+    print(f"Quantum Tanner Code over SL({sl_field}, {dimension}) with {degree} generators ")
+    return lineargroup, subset_a, subset_b
+
+
+def random_basecodes(
+    blocklength: int,
+    field: int = 2,
+    hamming: int | None = None,
+    save: bool = False,
+) -> (ClassicalCode, ClassicalCode) :
+    if hamming is not None:
+        assert blocklength > 2**hamming - 1
+        print("Inner Code is Hamming and its dual of rank {hamming}")
+        code_a = ClassicalCode.hamming(hamming,field)
+        code_b = ~code_a
+    else:
+        rate = 0.4
+        print("Inner Code is random linear and its dual")
+        code_a = ClassicalCode.random(blocklength, int(rate*blocklength), field)
+        code_b = ~code_a
+    print("Inner code params:")
+    print(code_a.get_code_params())
+    print(code_b.get_code_params())
+    return code_a, code_b
+ 
 
 def random_cyclicQTcode(
-    blocklength: int,
+    order:int | tuple,
     field: int = 2,
+    hamming:int | None = None,
+    save: bool = False,
 ) -> QTCode :
-    deg = int(2 * int(np.log2(blocklength)))
-    cyclegroup = CyclicGroup(blocklength)
-    subset_a = cyclegroup.random_subset(deg)
-    subset_b = cyclegroup.random_subset(deg)
-    # print(len(subset_a))
-    # print(deg)
-    # print(len(subset_b))
-    code_a = ClassicalCode.random(deg, int(0.35*deg), field)
-    code_b = ~code_a
-    #code_b = ClassicalCode.random(deg, deg-int(0.4*deg),field)
-    return QTCode(subset_a, subset_b, code_a, code_b)
-
-def random_cyclicHammingQTcode(
-    blocklength: int,
-    field: int = 2,
-    cyclegroup: Group | None = None,
-) -> QTCode :
-    deg = 7
-    if cyclegroup is None:
-        cyclegroup = CyclicGroup(blocklength)
-    subset_a = cyclegroup.random_subset(deg)
-    subset_b = cyclegroup.random_subset(deg)
-    #identity = cyclegroup.identity
-    # subset_a.add(identity)
-    # subset_b.add(identity)
-
-    code_a = ClassicalCode.hamming(3,field)
-    print(code_a.get_weight())
-    code_b = ~code_a
-    #code_b = ClassicalCode.random(deg, deg-int(0.4*deg),field)
-    return QTCode(subset_a, subset_b, code_a, code_b)
+    if type(order) == int:
+        size = order
+    else:
+        size = np.prod(np.array(order))
+    deg = int(2*np.log2(size))
+    _, subset_a, subset_b = random_cyclicgens(order, deg)
+    code_a, code_b = random_basecodes(deg, hamming = hamming, save = save)
+    tannercode = QTCode(subset_a, subset_b, code_a, code_b, twopartite=False)
+    params = [
+    tannercode.num_qubits,
+    tannercode.dimension,
+    tannercode.get_distance(upper=5, ensure_nontrivial=False),
+    tannercode.get_weight()
+     ]
+    print("Final code params:", params)
+    return tannercode
 
 def random_linearQTcode(
     sl_field:int,
     field: int = 2,
     dimension: int = 2,
+    hamming:int | None = None,
+    save: bool = False,
 ) -> QTCode :
     deg = 4
-    group = SpecialLinearGroup(sl_field, dimension)
-    subset_a = group.random_subset(deg)
-    subset_b = group.random_subset(deg)
-    #subset_a.add()
-    #code_a = ClassicalCode.hamming(3,field)
-    #print(code_a.get_weight())
-    #code_b = ~code_a
-    # print(len(subset_a))
-    # print(deg)
-    # print(len(subset_b))
-    code_a = ClassicalCode.random(deg, int(0.4*deg), field)
-    code_b = ~code_a
-    #code_b = ClassicalCode.random(deg, deg-int(0.4*deg),field)
-    return QTCode(subset_a, subset_b, code_a, code_b, twopartite=False)
-
-
-# def random_robustcode(
-#     blocklength: int,
-#     dimension: int,
-#     field: int = 2,
-#     robustness: float | None = None,
-# ) -> ClassicalCode :
-#     return
+    _, subset_a, subset_b = random_lineargens(sl_field, deg, dimension)
+    code_a, code_b = random_basecodes(deg, hamming = hamming, save = save)
+    tannercode = QTCode(subset_a, subset_b, code_a, code_b)
+    params = [
+    tannercode.num_qubits,
+    tannercode.dimension,
+    tannercode.get_distance(upper=5, ensure_nontrivial=False),
+    tannercode.get_weight()
+     ]
+    print("Final code params:", params)
+    return tannercode
 
 
 np.set_printoptions(linewidth=200)
 
-blocklength = 11
+blocklength = 13
 field = 2
 sl_field = 5
-#cyclegroup = CyclicGroup(blocklength)
-#subset_a = cyclegroup.random_subset(4)
-#cyclegroup = CyclicGroup(3)*CyclicGroup(3)
-tannercode = random_cyclicHammingQTcode(blocklength, field)
-#tannercode = random_linearQTcode(sl_field, field)
-print(tannercode.num_qubits)
-print(tannercode.dimension)
-print(tannercode.get_distance(upper=10, ensure_nontrivial=False))
+random_cyclicQTcode(blocklength, field)
+
 #if tannercode.get_distance(upper=10, ensure_nontrivial=False) > 20:
 #    np.save
 # print(np.any(tannercode.matrix))
+
 
 """
 Experiment with cyclic codes upto like 20? 
