@@ -324,6 +324,7 @@ class QuditCode(AbstractCode):
         if self._field_order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
 
+    # TODO: use Pauli instead of QuditOperator if field == 2
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
