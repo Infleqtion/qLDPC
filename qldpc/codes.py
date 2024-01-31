@@ -655,6 +655,8 @@ class CSSCode(QuditCode):
             dual_code_x = ~code_x
             return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
 
+        # TODO: is this wrong???
+
         # minimize the weight of logical X-type or Z-type operators
         for logical_qubit_index in range(self.dimension):
             self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
