@@ -262,7 +262,6 @@ class ClassicalCode(AbstractCode):
             assert vector.shape == (self.num_bits, 1)
             vector = self.field(vector)
 
-
         if brute:
             return self.distance_bruteforce(vector)
 
@@ -270,7 +269,6 @@ class ClassicalCode(AbstractCode):
         effective_syndrome = np.append(syndrome, [1])
         word = self.field.Ones(self.num_bits)
         effective_check_matrix = np.vstack([self.matrix, word]).view(np.ndarray)
-
 
         closest_vec = qldpc.decoder.decode(
             effective_check_matrix,
@@ -291,14 +289,13 @@ class ClassicalCode(AbstractCode):
         - d is the code distance
         """
         return self.num_bits, self.dimension, self.get_distance(), self.get_weight()
-    
+
     def get_weight(self) -> int:
-        """Compute the weight of the largest check
-        """
+        """Compute the weight of the largest check"""
         row_max = np.max([np.count_nonzero(self.matrix[i, :]) for i in range(self.matrix.shape[0])])
         col_max = np.max([np.count_nonzero(self.matrix[:, i]) for i in range(self.matrix.shape[1])])
-        
-        return max(row_max,col_max)
+
+        return max(row_max, col_max)
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
@@ -399,14 +396,13 @@ class QuditCode(AbstractCode):
     def _assert_qubit_code(self) -> None:
         if self._field_order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
-    
+
     def get_weight(self) -> int:
-        """Compute the weight of the largest check.
-        """
+        """Compute the weight of the largest check."""
         row_max = np.max([np.count_nonzero(self.matrix[i, :]) for i in range(self.matrix.shape[0])])
         col_max = np.max([np.count_nonzero(self.matrix[:, i]) for i in range(self.matrix.shape[1])])
-        return max(row_max,col_max)
-    
+        return max(row_max, col_max)
+
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
@@ -631,7 +627,9 @@ class CSSCode(QuditCode):
             return self.get_distance_lower_bound(pauli)
 
         if upper is not None:
-            return self.get_distance_upper_bound(pauli, num_trials=upper, vector=vector, **decoder_args)
+            return self.get_distance_upper_bound(
+                pauli, num_trials=upper, vector=vector, **decoder_args
+            )
 
         return self.get_distance_exact(pauli, **decoder_args)
 
@@ -722,7 +720,7 @@ class CSSCode(QuditCode):
         else:
             assert vector.shape == (code_z.num_bits, 1)
             vector = self.field(vector)
-        syndrome =  code_z.matrix @ vector
+        syndrome = code_z.matrix @ vector
         effective_syndrome = np.append(syndrome, [1])
 
         logical_op_found = False

@@ -48,8 +48,9 @@ import galois
 import numpy as np
 import numpy.typing as npt
 import sympy.combinatorics as comb
-from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics import Permutation
+from sympy.combinatorics.perm_groups import PermutationGroup
+
 import qldpc.groups as groups
 
 DEFAULT_FIELD_ORDER = 2
@@ -229,20 +230,20 @@ class Group:
         Outputs a random symmetric subset of the group of input size
         """
         assert size > 0
-        #return list(self._group.random() for _ in range(size))
+        # return list(self._group.random() for _ in range(size))
         S = set()
         if size % 2 == 1:
             identity = GroupMember(self._group.identity.array_form)
             S.add(identity)
-            size = size - 1 
-        while len(S) < size :
+            size = size - 1
+        while len(S) < size:
             s = GroupMember(self._group.random().array_form)
             if s == ~s:
                 pass
             else:
                 S.add(s)
                 S.add(~s)
-        
+
         return S
 
 

@@ -266,11 +266,13 @@ class CayleyComplex:
             )
             self.subgraph_0 = nx.DiGraph()
             self.subgraph_1 = nx.DiGraph()
-            for gg, aa, bb in itertools.product(self.group.generate(), self.subset_a, self.subset_b):
+            for gg, aa, bb in itertools.product(
+                self.group.generate(), self.subset_a, self.subset_b
+            ):
                 aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
                 square = [(gg, 0), (aa_gg, 1), (gg_bb, 1), (aa_gg_bb, 0)]
                 face = frozenset(square)
-                self.subgraph_0.add_edge((gg, 0), face,  sort=(aa, bb))
+                self.subgraph_0.add_edge((gg, 0), face, sort=(aa, bb))
                 self.subgraph_0.add_edge((aa_gg_bb, 0), face, sort=(aa, bb))
                 self.subgraph_1.add_edge((aa_gg, 1), face, sort=(aa, bb))
                 self.subgraph_1.add_edge((gg_bb, 1), face, sort=(aa, bb))
@@ -280,7 +282,9 @@ class CayleyComplex:
         else:
             self.subgraph_0 = nx.DiGraph()
             self.subgraph_1 = nx.DiGraph()
-            for gg, aa, bb in itertools.product(self.group.generate(), self.subset_a, self.subset_b):
+            for gg, aa, bb in itertools.product(
+                self.group.generate(), self.subset_a, self.subset_b
+            ):
                 aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
                 square = [(gg, 0), (aa_gg, 1), (gg_bb, 2), (aa_gg_bb, 3)]
                 face = frozenset(square)
@@ -289,11 +293,10 @@ class CayleyComplex:
                 # self.graph.add_edge((aa_gg_bb, 3), face)
                 # self.graph.add_edge(face, (aa_gg, 1))
                 # self.graph.add_edge(face, (gg_bb, 2))
-                self.subgraph_0.add_edge((gg, 0), face,  sort=(aa, bb))
+                self.subgraph_0.add_edge((gg, 0), face, sort=(aa, bb))
                 self.subgraph_0.add_edge((aa_gg_bb, 3), face, sort=(aa, bb))
                 self.subgraph_1.add_edge((aa_gg, 1), face, sort=(aa, bb))
                 self.subgraph_1.add_edge((gg_bb, 2), face, sort=(aa, bb))
-
 
         # # construct the subgraphs of the complex
         # self.subgraph_0 = nx.DiGraph()

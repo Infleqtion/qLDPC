@@ -23,7 +23,6 @@ import numpy as np
 from sympy.combinatorics import Permutation, PermutationGroup
 
 
-
 def construct_linear_all(field: int, dimension: int):
     gf = galois.GF(field)
     vectors = itertools.product(gf.elements, repeat=dimension**2)
