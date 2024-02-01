@@ -700,9 +700,9 @@ class CSSCode(QuditCode):
             """Perform Gaussian elimination on the matrix.
 
             Returns:
-                matrix_RRE: the reduced row echelon form of the matrix
-                pivot: the "pivot" columns of the reduced matrix
-                other: the remaining columns of the reduced matrix
+                matrix_RRE: the reduced row echelon form of the matrix.
+                pivot: the "pivot" columns of the reduced matrix.
+                other: the remaining columns of the reduced matrix.
 
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
             occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
