@@ -782,18 +782,25 @@ class CSSCode(QuditCode):
     ) -> None:
         """Minimize the weight of a logical operator.
 
-        This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound,
-        but exactly with integer linear programming (which has exponential complexity).
+        A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
+        that it commutes with all logical operators except its dual.  This is essentially the same
+        optimization as in CSSCode.get_one_distance_upper_bound, but solved exactly with integer
+        linear programming.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
         if self.field.degree > 1:
             raise ValueError("Method only supported for prime number fields")
+
+        # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
         dual_ops = self.get_logical_ops()[(~pauli).index]
         effective_check_matrix = np.vstack([code.matrix, dual_ops]).view(np.ndarray)
+
+        # enforce that the new logical operator commutes with everything except its dual
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[code.num_checks + logical_qubit_index] = 1
+
         logical_op = qldpc.decoder.decode(
             effective_check_matrix,
             effective_syndrome,
