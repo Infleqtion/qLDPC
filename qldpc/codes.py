@@ -649,7 +649,7 @@ class CSSCode(QuditCode):
         return candidate_logical_op.sum()
 
     @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
-    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
+    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
         """Exact X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
@@ -666,7 +666,7 @@ class CSSCode(QuditCode):
 
         # minimize the weight of logical X-type or Z-type operators
         for logical_qubit_index in range(self.dimension):
-            self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
+            self.minimize_logical_op(pauli, logical_qubit_index)
 
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
@@ -777,11 +777,8 @@ class CSSCode(QuditCode):
             return self.get_logical_ops()[pauli.index, random_logical_qudit_index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
-    def _minimize_weight_of_logical_op(
-        self,
-        pauli: Literal[Pauli.X, Pauli.Z],
-        logical_qubit_index: int,
-        **decoder_args: object,
+    def minimize_logical_op(
+        self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int
     ) -> None:
         """Minimize the weight of a logical operator.
 
@@ -791,16 +788,15 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
         code = self.code_z if pauli == Pauli.X else self.code_x
-        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
-        effective_check_matrix = np.vstack([code.matrix, word]).view(np.ndarray)
-        effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
-        effective_syndrome[-1] = 1
+        dual_ops = self.get_logical_ops()[(~pauli).index]
+        effective_check_matrix = np.vstack([code.matrix, dual_ops]).view(np.ndarray)
+        effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
+        effective_syndrome[code.num_checks + logical_qubit_index] = 1
         logical_op = qldpc.decoder.decode(
             effective_check_matrix,
             effective_syndrome,
             exact=True,
             modulus=self.field.order,
-            **decoder_args,
         )
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_qubit_index] = logical_op
