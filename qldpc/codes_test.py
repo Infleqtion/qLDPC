@@ -121,6 +121,11 @@ def test_logical_ops() -> None:
     assert not np.any(code.code_z.matrix @ logicals_x.T)
     assert not np.any(code.code_x.matrix @ logicals_z.T)
 
+    # minimizing logical operator weight only supported for prime number fields
+    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
+    with pytest.raises(ValueError, match="prime number fields"):
+        code.minimize_logical_op(codes.Pauli.X, 0)
+
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Apply Pauli deformations to a qudit code."""
