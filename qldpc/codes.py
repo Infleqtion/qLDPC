@@ -787,6 +787,8 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
+        if self.field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
         code = self.code_z if pauli == Pauli.X else self.code_x
         dual_ops = self.get_logical_ops()[(~pauli).index]
         effective_check_matrix = np.vstack([code.matrix, dual_ops]).view(np.ndarray)
