@@ -58,6 +58,9 @@ def random_basecodes(
     hamming: int | None = None,
     save: int | None = None,
 ) -> (ClassicalCode, ClassicalCode):
+    """ Outputs a pair of codes C_A, C_B such that 
+    dim(C_A) + dim(C_B) = blocklength
+    """
     if hamming is not None:
         assert blocklength == 2**hamming - 1
         print(f"Inner Code is Hamming and its dual of rank {hamming}")
