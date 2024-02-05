@@ -229,24 +229,24 @@ class Group:
         """Construct a group from generators."""
         return Group(comb.PermutationGroup(*generators), field, lift)
 
-    def random_symmetric_subset(self, size: int) -> set[GroupMember]:
+    def random_symmetric_subset(self, size: int, seed: int | None = None) -> set[GroupMember]:
         """Construct a random symmetric subset of a given size."""
-        assert size > 0
+        if not 1 < size <= self.order():
+            raise ValueError(
+                f"Size between 2 and {self.order()} needed to build a random symmetric subset of a"
+                " group with order {self.order()}."
+            )
+        sympy.core.random.seed(seed)
 
         subset = set()
-        if size % 2 == 1:
-            identity = GroupMember(self.identity)
-            subset.add(identity)
-            size -= 1
-
         while len(subset) < size:
             member = GroupMember(self.random())
-            if member == ~member:
-                pass
-            else:
-                subset.add(member)
-                subset.add(~member)
-
+            if member == self.identity:
+                continue
+            subset.add(member)
+            subset.add(~member)
+            if len(subset) == size - 1:
+                subset.add(self.identity)
         return subset
 
 
