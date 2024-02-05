@@ -250,18 +250,19 @@ class Group:
             if not allow_identity and member == self.identity:
                 continue
 
+            # always add members we find
             if member == ~member:
                 singles.append(member)
             else:
                 doubles.append(member)
                 doubles.append(~member)
 
-            num_elements = len(singles) + len(doubles)
-            if num_elements == size:
+            extras = len(singles) + len(doubles) - size
+            if not extras:
                 return singles | doubles
 
-            elif num_elements > size and len(singles):
-                extras = num_elements - size
+            elif extras > 0 and len(singles):
+                # we have overshot, so throw away elements to get to the right size
                 for _ in range(extras // 2):
                     member = doubles.pop()
                     doubles.remove(~member)
