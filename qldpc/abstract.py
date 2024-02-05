@@ -48,7 +48,6 @@ import galois
 import numpy as np
 import numpy.typing as npt
 import sympy.combinatorics as comb
-from sympy.combinatorics.perm_groups import PermutationGroup
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -114,12 +113,12 @@ class Group:
     members by explicit permutation matrices.
     """
 
-    _group: PermutationGroup
+    _group: comb.PermutationGroup
     _field: type[galois.FieldArray]
     _lift: Lift
 
     def __init__(
-        self, group: PermutationGroup, field: int | None = None, lift: Lift | None = None
+        self, group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
     ) -> None:
         self._group = group
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -209,7 +208,7 @@ class Group:
         """Construct a group from a multiplication (Cayley) table."""
 
         if integer_lift is None:
-            group = PermutationGroup(*[GroupMember(row) for row in table])
+            group = comb.PermutationGroup(*[GroupMember(row) for row in table])
             return Group(group, lift=default_lift)
 
         members = {GroupMember(row): idx for idx, row in enumerate(table)}
@@ -217,14 +216,14 @@ class Group:
         def lift(member: GroupMember) -> IntegerArray:
             return integer_lift(members[member])
 
-        return Group(PermutationGroup(*members.keys()), field, lift)
+        return Group(comb.PermutationGroup(*members.keys()), field, lift)
 
     @classmethod
     def from_generators(
         cls, *generators: GroupMember, field: int | None = None, lift: Lift | None = None
     ) -> Group:
         """Construct a group from generators."""
-        return Group(PermutationGroup(*generators), field, lift)
+        return Group(comb.PermutationGroup(*generators), field, lift)
 
 
 ################################################################################
@@ -443,7 +442,7 @@ class TrivialGroup(Group):
 
     def __init__(self, field: int | None = None) -> None:
         super().__init__(
-            PermutationGroup(GroupMember()),
+            comb.PermutationGroup(GroupMember()),
             field,
             lambda _: np.array(1, ndmin=2, dtype=int),
         )
