@@ -262,7 +262,7 @@ class Group:
                 return singles | doubles
 
             elif extras > 0 and len(singles):
-                # we have overshot, so throw away elements to get to the right size
+                # we have overshot, so throw away elements to get down to the right size
                 for _ in range(extras // 2):
                     member = doubles.pop()
                     doubles.remove(~member)
