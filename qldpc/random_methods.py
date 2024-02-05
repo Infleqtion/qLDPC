@@ -130,10 +130,10 @@ def random_linearQTcode(
 
 np.set_printoptions(linewidth=200)
 
-blocklength = 21
+blocklength = 18
 field = 2
 sl_field = 5
-random_cyclicQTcode(blocklength, field)
+random_cyclicQTcode(blocklength, field, hamming=3)
 
 # if tannercode.get_distance(upper=10, ensure_nontrivial=False) > 20:
 #    np.save

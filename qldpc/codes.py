@@ -231,54 +231,62 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
-    @functools.cache
     def distance_bruteforce(self, vector=None) -> int:
         """The distance of vector from this code.
         If vector is None, then computes distance of the code or equivalently,
         the minimal weight of a nonzero code word.
         """
-        words = self.words().view(np.ndarray)
+        words = self.field(self.words())
         if vector is not None:
-            vec = np.vstack(list(a for a in itertools.repeat(vector, words.shape[0])))
-            return np.min(np.count_nonzero(words - vec, axis=1))
+            vec = np.vstack([vector] * words.shape[0])
+            shifted_words = np.array(words - vec)
+            return np.min(np.count_nonzero(shifted_words, axis=1))
         else:
-            return np.min(np.count_nonzero(words[1:], axis=1))
+            words = np.array(words[1:])
+            return np.min(np.count_nonzero(words, axis=1))
 
     def get_distance(
         self,
         *,
+        num_trials: int = 10,
         vector: galois.FieldArray | None = None,
         exact: bool = False,
-        brute: bool = False,
+        brute: bool = True,
         **decoder_args: object,
     ) -> int:
         """Find smallest Hamming distance between input vector and a codeword.
 
         This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound
         """
+        if brute:
+            return self.distance_bruteforce(vector)
+        
         if vector is None:
             vector = self.field.Zeros(self.num_bits)
         else:
             assert vector.shape == (self.num_bits, 1)
             vector = self.field(vector)
 
-        if brute:
-            return self.distance_bruteforce(vector)
+        
 
         syndrome = self.matrix @ vector
         effective_syndrome = np.append(syndrome, [1])
-        word = self.field.Ones(self.num_bits)
-        effective_check_matrix = np.vstack([self.matrix, word]).view(np.ndarray)
+        dist_bound = np.inf
 
-        closest_vec = qldpc.decoder.decode(
-            effective_check_matrix,
-            effective_syndrome,
-            exact=exact,
-            modulus=self.field.order,
-            **decoder_args,
-        )
+        for _ in range(num_trials):
+            word = self.field.Random(self.num_bits)
+            effective_check_matrix = np.vstack([self.matrix, word]).view(np.ndarray)
 
-        return np.count_nonzero(closest_vec)
+            closest_vec = qldpc.decoder.decode(
+                effective_check_matrix,
+                effective_syndrome,
+                exact=exact,
+                modulus=self.field.order,
+                **decoder_args,
+            )
+        dist_bound = min(dist_bound, np.count_nonzero(closest_vec))
+
+        return dist_bound
 
     def get_code_params(self) -> tuple[int, int, int, int]:
         """Compute the parameters of this code: [n,k,d].
