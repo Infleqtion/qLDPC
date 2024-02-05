@@ -243,9 +243,9 @@ class Group:
             )
         sympy.core.random.seed(seed)
 
-        singles = set()
-        doubles = set()
-        while True:
+        singles = set()  # group members equal to their own inverse
+        doubles = set()  # pairs of group members and their inverses
+        while True:  # sounds dangerous, but bear with me
             member = GroupMember(self.random())
             if not allow_identity and member == self.identity:
                 continue
