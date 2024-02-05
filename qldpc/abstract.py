@@ -252,10 +252,10 @@ class Group:
 
             # always add group members we find
             if member == ~member:
-                singles.append(member)
+                singles.add(member)
             else:
-                doubles.append(member)
-                doubles.append(~member)
+                doubles.add(member)
+                doubles.add(~member)
 
             # count how many extra group members we have found
             extras = len(singles) + len(doubles) - size
