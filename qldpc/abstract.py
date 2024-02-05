@@ -265,7 +265,7 @@ class Group:
                 for _ in range(extras // 2):
                     member = doubles.pop()
                     doubles.remove(~member)
-                if len(singles) + len(doubles) > size:
+                if extras % 2:
                     singles.pop()
                 return singles | doubles
 
