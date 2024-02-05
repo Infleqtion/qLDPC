@@ -50,6 +50,8 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 from sympy.combinatorics.perm_groups import PermutationGroup
 
+import qldpc.groups as groups
+
 DEFAULT_FIELD_ORDER = 2
 
 ################################################################################
@@ -66,7 +68,7 @@ class GroupMember(comb.Permutation):
     """
 
     def __mul__(self, other: UnknownType) -> UnknownType:
-        if isinstance(other, comb.Permutation):
+        if isinstance(other, GroupMember):
             return GroupMember(super().__mul__(other).array_form)  # type:ignore[return-value]
         elif hasattr(other, "__rmul__"):
             return other.__rmul__(self)
@@ -172,10 +174,6 @@ class Group:
         """The identity element of this group."""
         return GroupMember(self._group.identity.array_form)
 
-    def random(self) -> GroupMember:
-        """A random element this group."""
-        return GroupMember(self._group.random().array_form)
-
     @classmethod
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
@@ -225,6 +223,25 @@ class Group:
     ) -> Group:
         """Construct a group from generators."""
         return Group(PermutationGroup(*generators), field, lift)
+
+    def random_subset(self, size: int) -> list[GroupMember]:
+        """Outputs a random symmetric subset of the group of input size"""
+        assert size > 0
+        # return list(self._group.random() for _ in range(size))
+        S = set()
+        if size % 2 == 1:
+            identity = GroupMember(self._group.identity.array_form)
+            S.add(identity)
+            size = size - 1
+        while len(S) < size:
+            s = GroupMember(self._group.random().array_form)
+            if s == ~s:
+                pass
+            else:
+                S.add(s)
+                S.add(~s)
+
+        return S
 
 
 ################################################################################
@@ -448,13 +465,6 @@ class TrivialGroup(Group):
             lambda _: np.array(1, ndmin=2, dtype=int),
         )
 
-    def random(self) -> GroupMember:
-        """A random (albeit unique) element this group.
-
-        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation."
-        """
-        return self.identity
-
     @classmethod
     def to_protograph(
         cls, matrix: IntegerArray | Sequence[Sequence[int]], field: int | None = None
@@ -524,3 +534,13 @@ class QuaternionGroup(Group):
 
         group = Group.from_table(table, integer_lift=lift)
         super().__init__(group._group, field=3, lift=group._lift)
+
+
+class SpecialLinearGroup(Group):
+    """Constructs permutations corresponding to generators of SL(q,d)"""
+
+    def __init__(self, field, dimension) -> None:
+        generators = groups.special_linear_gen(field, dimension)
+        space = groups.construct_linspace(field, dimension)
+        group = groups.group_to_permutation(field, space, generators)
+        super().__init__(group, field=field)
