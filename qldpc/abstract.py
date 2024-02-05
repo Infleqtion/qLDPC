@@ -250,15 +250,18 @@ class Group:
             if not allow_identity and member == self.identity:
                 continue
 
-            # always add members we find
+            # always add group members we find
             if member == ~member:
                 singles.append(member)
             else:
                 doubles.append(member)
                 doubles.append(~member)
 
+            # count how many extra group members we have found
             extras = len(singles) + len(doubles) - size
+
             if not extras:
+                # if we have the right number of group members, we are done
                 return singles | doubles
 
             elif extras > 0 and len(singles):
