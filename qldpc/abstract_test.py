@@ -29,6 +29,7 @@ def test_permutation_group() -> None:
     assert all(perm in group for perm in gens)
     assert len(group.generators) == 2
     assert group.random() in group
+    assert group.random(seed=0) == group.random(seed=0)
 
 
 def test_trivial_group() -> None:
