@@ -16,14 +16,19 @@
 """
 
 import itertools
-import time
 
 import galois
 import numpy as np
+import numpy.typing as npt
 from sympy.combinatorics import Permutation, PermutationGroup
 
+# import time
+# from typing import TYPE_CHECKING, Literal
 
-def construct_linear_all(field: int, dimension: int):
+
+def construct_linear_all(
+    field: int, dimension: int
+) -> tuple[list[npt.NDArray[np.int_]], list[npt.NDArray[np.int_]]]:
     gf = galois.GF(field)
     vectors = itertools.product(gf.elements, repeat=dimension**2)
     psl = []
@@ -65,9 +70,10 @@ def special_linear_gen(field: int, dimension: int) -> galois.FieldArray:
     return sl
 
 
-def proj_linear_gen(field: int, dimension: int) -> galois.FieldArray:
+def proj_linear_gen(field: int, dimension: int) -> list[galois.FieldArray]:
     """
-    Generators for PSL(2) from https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
+    Generators for PSL(2) from
+    https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
     I doubt if it is correct. Looks the same as that for SL(2,q)!
     """
     gf = galois.GF(field)

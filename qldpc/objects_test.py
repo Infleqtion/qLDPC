@@ -64,50 +64,20 @@ def test_node() -> None:
     assert hash(node_c1) != hash(node_d1) != hash(node_d2)
 
 
-# TODO: Get rid of rank stuff?
+# TODO: Add a two-partite example?
 def test_cayley_complex() -> None:
     """Construct and test Cayley complexes."""
     group: abstract.Group
     subset_a: list[abstract.GroupMember]
     subset_b: list[abstract.GroupMember]
 
-    # rank-2 complex
-    group = abstract.CyclicGroup(3)
-    shift = group.generators[0]
-    subset_a = [shift, ~shift]
-    cayplex = objects.CayleyComplex(subset_a)
-    assert cayplex.rank == 2
-    assert_valid_complex(cayplex)
-
-    # rank-1 complex
+    # Abelian complex
     group = abstract.CyclicGroup(6)
     shift = group.generators[0]
     subset_a = [shift, shift**2, ~shift, (~shift) ** 2]
     subset_b = [shift**3]
     cayplex = objects.CayleyComplex(subset_a, subset_b)
-    assert cayplex.rank == 1
     assert_valid_complex(cayplex)
-
-    # rank-0 complex
-    group = abstract.Group.product(abstract.CyclicGroup(2), abstract.CyclicGroup(5))
-    shift_x, shift_y = group.generators
-    subset_a = [shift_x * shift_y, ~(shift_x * shift_y)]
-    subset_b = [shift_x * shift_y**2, ~(shift_x * shift_y**2)]
-    cayplex = objects.CayleyComplex(subset_a, subset_b)
-    assert cayplex.rank == 0
-    assert_valid_complex(cayplex)
-
-    # test setting rank manually
-    trivial_group = abstract.TrivialGroup()
-    subset = [trivial_group.identity]
-    assert objects.CayleyComplex(subset, rank=2).rank == 2
-
-    # test setting incompatible rank
-    group = abstract.CyclicGroup(3)
-    shift = group.generators[0]
-    subset_a = [shift, shift**2]
-    with pytest.raises(ValueError, match="Cannot set CayleyComplex rank"):
-        cayplex = objects.CayleyComplex(subset_a, rank=0)
 
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
@@ -116,9 +86,12 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     size_g = cayplex.group.order()
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
-    assert cayplex.graph.number_of_nodes() == size_g
-    assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
-    assert len(cayplex.faces) == size_g * size_a * size_b // 4
+    assert cayplex.subgraph_0.number_of_nodes() == 2 * size_g + size_g * size_a * size_b
+    assert cayplex.subgraph_1.number_of_nodes() == 2 * size_g + size_g * size_a * size_b
+
+    assert cayplex.subgraph_0.number_of_edges() == 2 * size_g * size_a * size_b
+    assert cayplex.subgraph_1.number_of_edges() == 2 * size_g * size_a * size_b
+    assert len(cayplex.faces) == size_g * size_a * size_b
 
     # check that the subgraphs have the correct number of checks
     for graph in [cayplex.subgraph_0, cayplex.subgraph_1]:

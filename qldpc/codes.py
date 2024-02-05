@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
+DEFAULT_DISTANCE_TRIALS = 10
 
 ################################################################################
 # template error correction code classes
@@ -231,7 +232,7 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
-    def distance_bruteforce(self, vector=None) -> int:
+    def distance_bruteforce(self, vector: galois.FieldArray | None = None) -> int:
         """The distance of vector from this code.
         If vector is None, then computes distance of the code or equivalently,
         the minimal weight of a nonzero code word.
@@ -248,7 +249,7 @@ class ClassicalCode(AbstractCode):
     def get_distance(
         self,
         *,
-        num_trials: int = 10,
+        num_trials: int = DEFAULT_DISTANCE_TRIALS,
         vector: galois.FieldArray | None = None,
         exact: bool = False,
         brute: bool = True,
@@ -260,14 +261,12 @@ class ClassicalCode(AbstractCode):
         """
         if brute:
             return self.distance_bruteforce(vector)
-        
+
         if vector is None:
             vector = self.field.Zeros(self.num_bits)
         else:
             assert vector.shape == (self.num_bits, 1)
             vector = self.field(vector)
-
-        
 
         syndrome = self.matrix @ vector
         effective_syndrome = np.append(syndrome, [1])
@@ -677,13 +676,19 @@ class CSSCode(QuditCode):
         vector: galois.FieldArray | None = None,
         **decoder_args: object,
     ) -> int:
-        """Single upper bound to the X-distance or Z-distance of this code.
+        """Single upper bound to the least possible distance between the input vector
+        and any nontrivial logical operator.
+
+        If vector is None, then it initializes to the zero vector and the function computes the
+        distance of this code, i.e., minimum weight of a nontrivial logical (X or Z) operator .
 
         This method uses a randomized algorithm described in arXiv:2308.07915 (and also below).
 
         Args:
             pauli: Pauli operator choosing whether to compute an X-distance or Z-distance bound.
             decoder_args: Keyword arguments are passed to a decoder in `decode`.
+            vector: The vector for which distance needs to be computed. 
+                    Setting it to None gives code distance.
         Returns:
             An upper bound on the X-distance or Z-distance of this code.
 

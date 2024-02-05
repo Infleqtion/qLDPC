@@ -19,18 +19,18 @@
 # import time
 # import galois
 
-from typing import TYPE_CHECKING, Literal
+# from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from qldpc.abstract import CyclicGroup, Group, SpecialLinearGroup
+from qldpc.abstract import CyclicGroup, SpecialLinearGroup
 from qldpc.codes import ClassicalCode, QTCode
 
 
 def random_cyclicgens(order: int | tuple, degree: int):
     if isinstance(order, int):
         cyclegroup = CyclicGroup(order)
-    elif type(order) == tuple:
+    elif isinstance(order, tuple):
         cyclegroup = CyclicGroup(order[0])
         for i in order[1:]:
             cyclegroup = cyclegroup * CyclicGroup(i)
@@ -58,7 +58,7 @@ def random_basecodes(
     hamming: int | None = None,
     save: int | None = None,
 ) -> (ClassicalCode, ClassicalCode):
-    """ Outputs a pair of codes C_A, C_B such that 
+    """Outputs a pair of codes C_A, C_B such that
     dim(C_A) + dim(C_B) = blocklength
     """
     if hamming is not None:
@@ -138,9 +138,6 @@ random_cyclicQTcode(blocklength, field, hamming=3)
 # if tannercode.get_distance(upper=10, ensure_nontrivial=False) > 20:
 #    np.save
 # print(np.any(tannercode.matrix))
-
-
-"""
-Experiment with cyclic codes upto like 20? 
+""" Experiment with cyclic codes upto like 20? 
 Fix base codes to be Hamming[7,4] and its dual [7,3]
 """

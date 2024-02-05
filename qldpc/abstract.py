@@ -48,7 +48,6 @@ import galois
 import numpy as np
 import numpy.typing as npt
 import sympy.combinatorics as comb
-from sympy.combinatorics import Permutation
 from sympy.combinatorics.perm_groups import PermutationGroup
 
 import qldpc.groups as groups
@@ -226,9 +225,7 @@ class Group:
         return Group(PermutationGroup(*generators), field, lift)
 
     def random_subset(self, size: int) -> list[GroupMember]:
-        """
-        Outputs a random symmetric subset of the group of input size
-        """
+        """Outputs a random symmetric subset of the group of input size"""
         assert size > 0
         # return list(self._group.random() for _ in range(size))
         S = set()
@@ -539,8 +536,9 @@ class QuaternionGroup(Group):
         super().__init__(group._group, field=3, lift=group._lift)
 
 
-# Needs Checking
 class SpecialLinearGroup(Group):
+    """Constructs permutations corresponding to generators of SL(q,d)"""
+
     def __init__(self, field, dimension) -> None:
         generators = groups.special_linear_gen(field, dimension)
         space = groups.construct_linspace(field, dimension)

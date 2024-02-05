@@ -20,11 +20,12 @@ import dataclasses
 import enum
 import itertools
 from collections.abc import Collection
-from typing import Literal
 
 import networkx as nx
 
 from qldpc import abstract
+
+# from typing import Literal
 
 
 class Pauli(enum.Enum):
@@ -328,8 +329,7 @@ class CayleyComplex:
         subset_a: Collection[abstract.GroupMember] | None = None,
         subset_b: Collection[abstract.GroupMember] | None = None,
     ) -> tuple[nx.Graph, nx.Graph]:
-        """
-        Cayley graphs for the left- and right-acting subsets.
+        """Cayley graphs for the left- and right-acting subsets.
         If both subsets are given, then outputs a left-right graph.
         """
         edges_a = []
