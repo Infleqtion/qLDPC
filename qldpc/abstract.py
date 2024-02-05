@@ -48,6 +48,7 @@ import galois
 import numpy as np
 import numpy.typing as npt
 import sympy.combinatorics as comb
+import sympy.core
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -171,8 +172,9 @@ class Group:
         """The identity element of this group."""
         return GroupMember(self._group.identity.array_form)
 
-    def random(self) -> GroupMember:
+    def random(self, seed: int | None = None) -> GroupMember:
         """A random element this group."""
+        sympy.core.random.seed(seed)
         return GroupMember(self._group.random().array_form)
 
     @classmethod
@@ -447,7 +449,7 @@ class TrivialGroup(Group):
             lambda _: np.array(1, ndmin=2, dtype=int),
         )
 
-    def random(self) -> GroupMember:
+    def random(self, seed: int | None = None) -> GroupMember:
         """A random (albeit unique) element this group.
 
         Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation."
