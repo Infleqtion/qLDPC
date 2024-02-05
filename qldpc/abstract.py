@@ -234,7 +234,7 @@ class Group:
     ) -> set[GroupMember]:
         """Construct a random symmetric subset of a given size.
 
-        Note: this is not a *uniformaly random* symmetric subset, only a "sufficiently random" one.
+        Note: this is not necessarily a uniformaly random subset, only a "sufficiently random" one.
         """
         if not 1 < size <= self.order():
             raise ValueError(
