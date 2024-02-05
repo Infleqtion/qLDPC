@@ -14,6 +14,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+from __future__ import annotations
 
 import itertools
 
@@ -21,9 +22,6 @@ import galois
 import numpy as np
 import numpy.typing as npt
 from sympy.combinatorics import Permutation, PermutationGroup
-
-# import time
-# from typing import TYPE_CHECKING, Literal
 
 
 def construct_linear_all(
@@ -129,7 +127,6 @@ def group_to_permutation(field: int, space, group) -> PermutationGroup:
     gf = galois.GF(field)
     perm_group = []
     for M in group:
-        # print(M)
         perm_string = list(range(len(space)))
         for index in range(len(space)):
             current_vector = gf(np.frombuffer(space[index], dtype=np.uint8))
@@ -137,31 +134,4 @@ def group_to_permutation(field: int, space, group) -> PermutationGroup:
             next_index = space.index(next_vector.tobytes())
             perm_string[index] = next_index
         perm_group.append(Permutation(perm_string))
-        # print(perm_string)
     return PermutationGroup(perm_group)
-
-
-# gf = galois.GF(field)
-# lin_space = gf(list(itertools.product(gf.elements, repeat=dimension))[1:])
-# proj_space = construct_projspace(field, dimension)
-
-# dimension = 2
-# field = 37
-# lin_space = construct_linspace(field, dimension)
-# init = time.time()
-# slg = special_linear_gen(field, dimension)
-# sl_group2 = group_to_permutation(field, lin_space, slg)
-# final = time.time()
-# print("Method 2 executed in", final - init)
-# print(sl_group2.order())
-
-# init = time.time()
-# psl, sl = construct_linear_all(field, dimension)
-# sl_group = group_to_permutation(field,proj_space,sl)
-# final = time.time()
-# print("Method 1 executed in", final - init)
-# print(sl_group.order())
-
-
-# sl_group = group_to_permutation(2,proj_space,sl)
-# print(psl_group.random())
