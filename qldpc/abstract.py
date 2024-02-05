@@ -174,7 +174,7 @@ class Group:
         """The identity element of this group."""
         return GroupMember(self._group.identity.array_form)
 
-    def random(self, seed: int | None = None) -> GroupMember:
+    def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
         sympy.core.random.seed(seed)
         return GroupMember(self._group.random().array_form)
@@ -229,8 +229,13 @@ class Group:
         """Construct a group from generators."""
         return Group(comb.PermutationGroup(*generators), field, lift)
 
-    def random_symmetric_subset(self, size: int, seed: int | None = None) -> set[GroupMember]:
-        """Construct a random symmetric subset of a given size."""
+    def random_symmetric_subset(
+        self, size: int, *, allow_identity: bool = True, seed: int | None = None
+    ) -> set[GroupMember]:
+        """Construct a random symmetric subset of a given size.
+
+        Note: this is not a *uniformaly random* symmetric subset, only a "sufficiently random" one.
+        """
         if not 1 < size <= self.order():
             raise ValueError(
                 f"Size between 2 and {self.order()} needed to build a random symmetric subset of a"
@@ -238,16 +243,31 @@ class Group:
             )
         sympy.core.random.seed(seed)
 
-        subset = set()
-        while len(subset) < size:
+        singles = set()
+        doubles = set()
+        while True:
             member = GroupMember(self.random())
-            if member == self.identity:
+            if not allow_identity and member == self.identity:
                 continue
-            subset.add(member)
-            subset.add(~member)
-            if len(subset) == size - 1:
-                subset.add(self.identity)
-        return subset
+
+            if member == ~member:
+                singles.append(member)
+            else:
+                doubles.append(member)
+                doubles.append(~member)
+
+            num_elements = len(singles) + len(doubles)
+            if num_elements == size:
+                return singles | doubles
+
+            elif num_elements > size and len(singles):
+                extras = num_elements - size
+                for _ in range(extras // 2):
+                    member = doubles.pop()
+                    doubles.remove(~member)
+                if len(singles) + len(doubles) > size:
+                    singles.pop()
+                return singles | doubles
 
 
 ################################################################################
