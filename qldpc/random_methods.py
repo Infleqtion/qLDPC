@@ -134,10 +134,9 @@ blocklength = 18
 field = 2
 sl_field = 5
 random_cyclicQTcode(blocklength, field, hamming=3)
-
 # if tannercode.get_distance(upper=10, ensure_nontrivial=False) > 20:
 #    np.save
 # print(np.any(tannercode.matrix))
-""" Experiment with cyclic codes upto like 20? 
+""" Experiment with cyclic codes upto like 20?
 Fix base codes to be Hamming[7,4] and its dual [7,3]
 """

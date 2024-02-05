@@ -687,7 +687,7 @@ class CSSCode(QuditCode):
         Args:
             pauli: Pauli operator choosing whether to compute an X-distance or Z-distance bound.
             decoder_args: Keyword arguments are passed to a decoder in `decode`.
-            vector: The vector for which distance needs to be computed. 
+            vector: The vector for which distance needs to be computed.
                     Setting it to None gives code distance.
         Returns:
             An upper bound on the X-distance or Z-distance of this code.
