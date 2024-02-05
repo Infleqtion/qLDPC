@@ -14,7 +14,6 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
-from __future__ import annotations
 
 import itertools
 
@@ -27,6 +26,9 @@ from sympy.combinatorics import Permutation, PermutationGroup
 def construct_linear_all(
     field: int, dimension: int
 ) -> tuple[list[npt.NDArray[np.int_]], list[npt.NDArray[np.int_]]]:
+    """Constructs the entire group PSL(field, dimension) and
+    SL(field, dimension) by a direct computation. Quite slow.
+    """
     gf = galois.GF(field)
     vectors = itertools.product(gf.elements, repeat=dimension**2)
     psl = []
@@ -42,10 +44,8 @@ def construct_linear_all(
     return (psl, sl)
 
 
-def special_linear_gen(field: int, dimension: int) -> galois.FieldArray:
-    """
-    Construct generators for SL(field, dimension) based on https://arxiv.org/abs/2201.09155
-    """
+def special_linear_gen(field: int, dimension: int) -> list[galois.FieldArray]:
+    """Construct generators for SL(field, dimension) based on https://arxiv.org/abs/2201.09155."""
     gf = galois.GF(field)
     sl = []
     W = gf.Zeros((dimension, dimension))
@@ -69,8 +69,7 @@ def special_linear_gen(field: int, dimension: int) -> galois.FieldArray:
 
 
 def proj_linear_gen(field: int, dimension: int) -> list[galois.FieldArray]:
-    """
-    Generators for PSL(2) from
+    """Generators for PSL(2) from
     https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
     I doubt if it is correct. Looks the same as that for SL(2,q)!
     """
@@ -88,10 +87,8 @@ def proj_linear_gen(field: int, dimension: int) -> list[galois.FieldArray]:
     return psl
 
 
-def psl2_expanding_generators(field: int):
-    """
-    Expanding generators for PSL2/SL2 from https://arxiv.org/abs/1807.03879
-    """
+def psl2_expanding_generators(field: int) -> list[galois.FieldArray]:
+    """Expanding generators for PSL2/SL2 from https://arxiv.org/abs/1807.03879."""
     gf = galois.GF(field)
     A = gf([[1, -1 * gf(1)], [0, 1]])
     B = gf([[1, 1], [0, 1]])
@@ -100,7 +97,10 @@ def psl2_expanding_generators(field: int):
     return [A, B, C, D]
 
 
-def construct_projspace(field: int, dimension: int):
+def construct_projspace(field: int, dimension: int) -> list[bytes]:
+    """Helper function to create the vectors in the Projective space.
+    The difference from usual vectors is that scalar multiples are identified.
+    """
     gf = galois.GF(field)
     proj_space = []
     vectors = itertools.product(gf.elements, repeat=dimension)
@@ -110,7 +110,8 @@ def construct_projspace(field: int, dimension: int):
     return proj_space
 
 
-def construct_linspace(field: int, dimension: int):
+def construct_linspace(field: int, dimension: int) -> list[bytes]:
+    """Helper function to generate a list of vectors over finite field."""
     gf = galois.GF(field)
     lin_space = []
     vectors = itertools.product(gf.elements, repeat=dimension)
@@ -120,9 +121,11 @@ def construct_linspace(field: int, dimension: int):
     return lin_space
 
 
-def group_to_permutation(field: int, space, group) -> PermutationGroup:
-    """
-    Constructs a sympy PermutationGroup using these permutation matrices
+def group_to_permutation(
+    field: int, space: list[bytes], group: list[galois.FieldArray]
+) -> PermutationGroup:
+    """Constructs a sympy PermutationGroup using the input permutation matrices
+    that define the group.
     """
     gf = galois.GF(field)
     perm_group = []
