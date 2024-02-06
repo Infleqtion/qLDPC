@@ -616,26 +616,23 @@ class SpecialLinearGroup(Group):
 
     @classmethod
     def get_generator_mats(
-        cls, dimension: int, field: int | None
+        cls, dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
         """Generator matrices for the special linear group SL(dimension, field).
 
         This construction is based on https://arxiv.org/abs/2201.09155.
         """
         finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        W = finite_field.Zeros((dimension, dimension))
+        A = finite_field.Identity(dimension)
+        W = -np.roll(finite_field.Identity(dimension), 1, axis=0)
         W[0, -1] = 1
-        for index in range(dimension - 1):
-            W[index + 1, index] = -1 * finite_field(1)
         if finite_field.order > 3:
-            W[0, 0] = -1 * finite_field(1)
-            A = finite_field.Identity(dimension)
             A[0, 0] = finite_field.primitive_element
             A[1, 1] = finite_field.primitive_element**-1
+            W[0, 0] = -1 * finite_field(1)
         else:
-            A = finite_field.Identity(dimension)
             A[0, 1] = 1
-        return W, A
+        return A, W
 
 
 def construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
