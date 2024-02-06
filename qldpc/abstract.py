@@ -622,16 +622,16 @@ class SpecialLinearGroup(Group):
         This construction is based on https://arxiv.org/abs/2201.09155.
         """
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        A = base_field.Identity(dimension)
-        W = -np.roll(base_field.Identity(dimension), 1, axis=0)
-        W[0, -1] = 1
-        if base_field.order > 3:
-            A[0, 0] = base_field.primitive_element
-            A[1, 1] = base_field.primitive_element**-1
-            W[0, 0] = -1 * base_field(1)
+        gen_x = base_field.Identity(dimension)
+        gen_w = -np.roll(base_field.Identity(dimension), 1, axis=0)
+        gen_w[0, -1] = 1
+        if base_field.order <= 3:
+            gen_x[0, 1] = 1
         else:
-            A[0, 1] = 1
-        return A, W
+            gen_x[0, 0] = base_field.primitive_element
+            gen_x[1, 1] = base_field.primitive_element**-1
+            gen_w[0, 0] = -1 * base_field(1)
+        return gen_x, gen_w
 
 
 def ProjectiveSpecialLinearGroup(Group):
