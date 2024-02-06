@@ -671,23 +671,6 @@ def construct_linear_all(
     return special_linear, proj_special_linear
 
 
-def proj_linear_gen(
-    dimension: int, field: int | None
-) -> tuple[galois.FieldArray, galois.FieldArray]:
-    """Generators for PSL(2) from
-    https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
-    I doubt if it is correct. Looks the same as that for SL(2,q)!
-    """
-    if dimension > 2:
-        return NotImplemented
-    finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-    prim = finite_field.primitive_element
-    minus_one = -1 * finite_field(1)
-    W = finite_field([[prim, 0], [0, prim**-1]])
-    A = finite_field([[minus_one, 1], [minus_one, 0]])
-    return W, A
-
-
 def psl2_expanding_generators(
     field: int | None = None,
 ) -> tuple[galois.FieldArray, galois.FieldArray, galois.FieldArray, galois.FieldArray]:
