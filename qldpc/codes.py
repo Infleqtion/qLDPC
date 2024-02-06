@@ -199,7 +199,7 @@ class ClassicalCode(AbstractCode):
         rho_estimate = np.inf
         for x in itertools.product(gf.elements, repeat=n * n):
             dist_AB = tensor_code.get_distance(vector=gf(x))
-            matrix = x.reshape((n, n))
+            matrix = gf(x).reshape((n, n))
             dist_A = np.sum(np.apply_along_axis(code_a.get_distance, axis=1, arr=matrix))
             dist_B = np.sum(np.apply_along_axis(code_b.get_distance, axis=0, arr=matrix))
             ratio = (dist_A + dist_B) / (2 * dist_AB)
@@ -243,7 +243,7 @@ class ClassicalCode(AbstractCode):
             shifted_words = np.array(words - vec)
             return np.min(np.count_nonzero(shifted_words, axis=1))
         else:
-            words = np.array(words[1:])
+            words = self.field(words[1:])
             return np.min(np.count_nonzero(words, axis=1))
 
     def get_distance(
@@ -285,7 +285,7 @@ class ClassicalCode(AbstractCode):
             )
         dist_bound = min(dist_bound, np.count_nonzero(closest_vec))
 
-        return dist_bound
+        return int(dist_bound)
 
     def get_code_params(self) -> tuple[int, int, int, int]:
         """Compute the parameters of this code: [n,k,d].
@@ -585,7 +585,9 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
+        distance = self.get_distance(
+            pauli=None, lower=lower, upper=upper, vector=None, **decoder_args
+        )
         return self.num_qudits, self.dimension, distance
 
     def get_distance(

@@ -224,7 +224,7 @@ class Group:
         """Construct a group from generators."""
         return Group(PermutationGroup(*generators), field, lift)
 
-    def random_subset(self, size: int) -> list[GroupMember]:
+    def random_subset(self, size: int) -> set[GroupMember]:
         """Outputs a random symmetric subset of the group of input size"""
         assert size > 0
         # return list(self._group.random() for _ in range(size))
@@ -539,7 +539,7 @@ class QuaternionGroup(Group):
 class SpecialLinearGroup(Group):
     """Constructs permutations corresponding to generators of SL(q,d)"""
 
-    def __init__(self, field, dimension) -> None:
+    def __init__(self, field: int, dimension: int) -> None:
         generators = groups.special_linear_gen(field, dimension)
         space = groups.construct_linspace(field, dimension)
         group = groups.group_to_permutation(field, space, generators)

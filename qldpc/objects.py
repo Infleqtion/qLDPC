@@ -245,7 +245,7 @@ class CayleyComplex:
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember] | None = None,
         *,
-        twopartite: bool = False,
+        twopartite: bool | None = False,
     ) -> None:
         """Construct a left-right Cayley complex."""
         if subset_b is None:
