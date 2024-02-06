@@ -634,14 +634,14 @@ class SpecialLinearGroup(Group):
         return gen_x, gen_w  # type:ignore[return-value]
 
     @classmethod
-    def get_all_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of SL(dimension, field) by brute force."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         for entries in itertools.product(base_field.elements, repeat=dimension**2):
             vec = base_field(entries)
             mat = vec.reshape(dimension, dimension)
             if np.linalg.det(mat) == 1:
-                yield mat
+                yield mat  # type:ignore[misc]
 
 
 SL = SpecialLinearGroup
@@ -679,13 +679,12 @@ class ProjectiveSpecialLinearGroup(Group):
         return A, B, C, D
 
     @classmethod
-    def get_all_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of FSL(dimension, field) by brute force."""
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        for mat in SpecialLinearGroup.get_all_mats():
+        for mat in SpecialLinearGroup.iter_mats(dimension, field):
             vec = mat.ravel()
-            # to quotient SL(d,F) by -I, force the first non-zero entry to be < p/2
-            if vec[(vec != 0).argmax()] <= base_field.order // 2:
+            # to quotient SL(d,q) by -I, force the first non-zero entry to be < q/2
+            if vec[(vec != 0).argmax()] <= type(mat).order // 2:
                 yield mat
 
 
