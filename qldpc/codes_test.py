@@ -249,15 +249,15 @@ def test_cyclic_codes() -> None:
     dims: tuple[int, ...]
 
     dims = (6, 6)
-    terms_a = [(0, 3), (1, 1), (1, 2)]
-    terms_b = [(1, 3), (0, 1), (0, 2)]
+    terms_a = [("x", 3), ("y", 1), ("y", 2)]
+    terms_b = [("y", 3), ("x", 1), ("x", 2)]
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
 
     dims = (15, 3)
-    terms_a = [(0, 9), (1, 1), (1, 2)]
-    terms_b = [(0, 0), (0, 2), (0, 7)]
+    terms_a = [("x", 9), ("y", 1), ("y", 2)]
+    terms_b = [("x", 0), ("x", 2), ("x", 7)]
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 90
     assert code.dimension == 8
