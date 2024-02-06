@@ -656,22 +656,22 @@ def construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
 def construct_linear_all(
     dimension: int, field: int | None = None
 ) -> tuple[list[galois.FieldArray], list[galois.FieldArray]]:
-    """Constructs the entire group PSL(field, dimension) and
-    SL(field, dimension) by a direct computation. Quite slow.
+    """Construct all elements of SL(dimension, field) and PSL(field, dimension) by brute force.
+
+    WARNING: SLOW!!!
     """
     special_linear: list[galois.FieldArray] = []
     proj_special_linear: list[galois.FieldArray] = []
     finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-    vectors = itertools.product(finite_field.elements, repeat=dimension**2)
-    for vec in vectors:
-        mat = finite_field(vec).reshape(dimension, dimension)
+    for entries in itertools.product(finite_field.elements, repeat=dimension**2):
+        vec = finite_field(entries)
+        mat = vec.reshape(dimension, dimension)
         if np.linalg.det(mat) == 1:
             special_linear.append(mat)  # type:ignore[arg-type]
-            if (
-                vec[(finite_field(vec) != 0).argmax()] <= finite_field.order // 2
-            ):  # we force the first non-zero entry to be < p/2 to quotient by -I
+            # for PSL, we force the first non-zero entry to be < p/2 to quotient by -I
+            if vec[(vec != 0).argmax()] <= finite_field.order // 2:
                 proj_special_linear.append(mat)  # type:ignore[arg-type]
-    return proj_special_linear, special_linear
+    return special_linear, proj_special_linear
 
 
 def proj_linear_gen(
