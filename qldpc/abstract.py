@@ -50,8 +50,6 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 import sympy.core
 
-import qldpc.groups as groups
-
 DEFAULT_FIELD_ORDER = 2
 
 ################################################################################
