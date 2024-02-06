@@ -661,9 +661,6 @@ class SpecialLinearGroup(Group):
                 yield mat  # type:ignore[misc]
 
 
-SL = SpecialLinearGroup
-
-
 class ProjectiveSpecialLinearGroup(Group):
     """Projective variant of the special linear group (PSL)."""
 
@@ -715,4 +712,5 @@ class ProjectiveSpecialLinearGroup(Group):
                 yield mat
 
 
+SL = SpecialLinearGroup
 PSL = ProjectiveSpecialLinearGroup
