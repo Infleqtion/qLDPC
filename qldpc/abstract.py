@@ -244,17 +244,20 @@ class Group:
 
     @classmethod
     def from_generating_mats(
-        cls, generators: Iterable[galois.FieldArray], space: list[bytes], field: int | None = None
+        cls,
+        generators: Iterable[galois.FieldArray],
+        target_space: list[bytes],
+        field: int | None = None,
     ) -> Group:
         """Constructs a Group from a given set of generating matrices."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         group_perms = []
         for member in generators:
-            string = np.empty(len(space), dtype=int)
-            for index, vec_bytes in enumerate(space):
+            string = np.empty(len(target_space), dtype=int)
+            for index, vec_bytes in enumerate(target_space):
                 vec = base_field(np.frombuffer(vec_bytes, dtype=np.uint8))
                 next_vec = member @ vec
-                next_index = space.index(next_vec.tobytes())
+                next_index = target_space.index(next_vec.tobytes())
                 string[index] = next_index
             group_perms.append(comb.Permutation(string))
         return Group(comb.PermutationGroup(group_perms), field=field)
@@ -614,9 +617,9 @@ class SpecialLinearGroup(Group):
     """Special linear group (SL): square matrices with determinant 1."""
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
-        generators = self.get_generator_mats(dimension, field)
-        space = _construct_linear_space(dimension, field)
-        group = Group.from_generating_mats(generators, space, field)
+        generator_mats = self.get_generator_mats(dimension, field)
+        target_space = self._target_space(dimension, field)
+        group = Group.from_generating_mats(generator_mats, target_space, field)
         super().__init__(group)
 
     @classmethod
@@ -640,6 +643,14 @@ class SpecialLinearGroup(Group):
         return gen_x, gen_w
 
     @classmethod
+    def _target_space(cls, dimension: int, field: int | None = None) -> list[bytes]:
+        """All members of the target space that SL(d,q) acts on."""
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        vectors = itertools.product(base_field.elements, repeat=dimension)
+        next(vectors)  # skip the all-0 element
+        return [base_field(vec).tobytes() for vec in vectors]
+
+    @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of SL(dimension, field)."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -661,9 +672,9 @@ class ProjectiveSpecialLinearGroup(Group):
         if base_field.order == 2:
             super().__init__(SpecialLinearGroup(dimension, 2))
         elif dimension == 2:
-            generators = self.get_expanding_generator_mats(field)
-            space = _construct_projective_space(dimension, field)
-            group = Group.from_generating_mats(generators, space, field)
+            generator_mats = self.get_generator_mats(dimension, field)
+            target_space = self._target_space(dimension, field)
+            group = Group.from_generating_mats(generator_mats, target_space, field)
             super().__init__(group)
         else:
             raise ValueError(
@@ -685,6 +696,16 @@ class ProjectiveSpecialLinearGroup(Group):
         return A, B, C, D
 
     @classmethod
+    def _target_space(cls, dimension: int, field: int | None = None) -> list[bytes]:
+        """All members of the target (projective) space that PSL(d,q) acts on."""
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        return [
+            base_field(vec).tobytes()
+            for vec in itertools.product(base_field.elements, repeat=dimension)
+            if vec[(base_field(vec) != 0).argmax()] == 1
+        ]
+
+    @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of PSL(dimension, field)."""
         for mat in SpecialLinearGroup.iter_mats(dimension, field):
@@ -695,24 +716,3 @@ class ProjectiveSpecialLinearGroup(Group):
 
 
 PSL = ProjectiveSpecialLinearGroup
-
-
-def _construct_linear_space(dimension: int, field: int | None = None) -> list[bytes]:
-    """Helper function to generate a list of vectors over finite field."""
-    base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-    vectors = itertools.product(base_field.elements, repeat=dimension)
-    next(vectors)  # skip the all-0 element
-    return [base_field(vec).tobytes() for vec in vectors]
-
-
-def _construct_projective_space(dimension: int, field: int | None = None) -> list[bytes]:
-    """Helper function to list the elements of a projective space.
-
-    The difference from usual vectors is that scalar multiples are identified.
-    """
-    base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-    return [
-        base_field(vec).tobytes()
-        for vec in itertools.product(base_field.elements, repeat=dimension)
-        if vec[(base_field(vec) != 0).argmax()] == 1
-    ]
