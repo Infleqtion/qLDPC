@@ -23,22 +23,24 @@
 
 import numpy as np
 
-from qldpc.abstract import CyclicGroup, GroupMember, SpecialLinearGroup
+from qldpc.abstract import CyclicGroup, Group, GroupMember, SpecialLinearGroup
 from qldpc.codes import ClassicalCode, QTCode
 
 
 def random_cyclicgens(
     order: int | tuple[int], degree: int
-) -> tuple[CyclicGroup, set[GroupMember], set[GroupMember]]:
+) -> tuple[CyclicGroup | Group, set[GroupMember], set[GroupMember]]:
     """Generates a pair of random subsets of a cyclic group or a product of cyclic groups.
     Order: Can be an integer k --> Z_k or a tuple,
             (k_1,k_2, ... , k_r) --> Z_{k_1} x ... x Z_{k_r}
     degree: The size of the subsets (both equal to degree)
     """
+    cyclegroup: CyclicGroup | Group
     if isinstance(order, int):
         cyclegroup = CyclicGroup(order)
     elif isinstance(order, tuple):
         cyclegroup = CyclicGroup(order[0])
+        i: int
         for i in order[1:]:
             cyclegroup = cyclegroup * CyclicGroup(i)
     subset_a = cyclegroup.random_subset(degree)

@@ -237,13 +237,13 @@ class ClassicalCode(AbstractCode):
         If vector is None, then computes distance of the code or equivalently,
         the minimal weight of a nonzero code word.
         """
-        words = self.field(self.words())
         if vector is not None:
-            vec = np.vstack([vector] * words.shape[0])
-            shifted_words = np.array(words - vec)
+            field_words = self.field(self.words())
+            vec = np.vstack([vector] * field_words.shape[0])
+            shifted_words = np.array(field_words - vec)
             return np.min(np.count_nonzero(shifted_words, axis=1))
         else:
-            words = self.field(words[1:])
+            words = np.array(self.words()[1:], dtype=int)
             return np.min(np.count_nonzero(words, axis=1))
 
     def get_distance(
@@ -299,8 +299,9 @@ class ClassicalCode(AbstractCode):
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check"""
-        row_max = np.max([np.count_nonzero(self.matrix[i, :]) for i in range(self.matrix.shape[0])])
-        col_max = np.max([np.count_nonzero(self.matrix[:, i]) for i in range(self.matrix.shape[1])])
+        matrix = np.array(self.matrix, dtype=int)
+        row_max = np.max([np.count_nonzero(matrix[i, :]) for i in range(matrix.shape[0])])
+        col_max = np.max([np.count_nonzero(matrix[:, i]) for i in range(matrix.shape[1])])
 
         return max(row_max, col_max)
 
