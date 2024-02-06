@@ -230,16 +230,19 @@ class Group:
         return Group(comb.PermutationGroup(*generators), field, lift)
 
     def random_symmetric_subset(
-        self, size: int, *, allow_identity: bool = True, seed: int | None = None
+        self, size: int, *, exclude_identity: bool = False, seed: int | None = None
     ) -> set[GroupMember]:
         """Construct a random symmetric subset of a given size.
 
-        Note: this is not necessarily a uniformaly random subset, only a "sufficiently random" one.
+        Note: this is not a uniformaly random subset, only a "sufficiently random" one.
+
+        WARNING: not all groups have symmetric subsets of arbitrary size.  If called with a poor
+        choice of group and subset size, this method may never terminate.
         """
-        if not 1 < size <= self.order():
+        if not 0 < size <= self.order():
             raise ValueError(
-                f"Size between 2 and {self.order()} needed to build a random symmetric subset of a"
-                " group with order {self.order()}."
+                "A random symmetric subset of this group must have a size between 1 and"
+                f" {self.order()} (provided: {size})."
             )
         sympy.core.random.seed(seed)
 
@@ -247,7 +250,7 @@ class Group:
         doubles = set()  # pairs of group members and their inverses
         while True:  # sounds dangerous, but bear with me
             member = GroupMember(self.random())
-            if not allow_identity and member == self.identity:
+            if exclude_identity and member == self.identity:
                 continue
 
             # always add group members we find
