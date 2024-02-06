@@ -634,6 +634,9 @@ class SpecialLinearGroup(Group):
         return gen_x, gen_w  # type:ignore[return-value]
 
 
+SL = SpecialLinearGroup
+
+
 class ProjectiveSpecialLinearGroup(Group):
     """Projective variant of the special linear group."""
 
@@ -664,6 +667,9 @@ class ProjectiveSpecialLinearGroup(Group):
         C = base_field([[1, 0], [1, 1]])
         D = base_field([[1, 0], [minus_one, 1]])
         return A, B, C, D
+
+
+PSL = ProjectiveSpecialLinearGroup
 
 
 def _construct_linear_space(dimension: int, field: int | None = None) -> list[bytes]:
