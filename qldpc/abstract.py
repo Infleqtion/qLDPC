@@ -41,7 +41,7 @@ import collections
 import copy
 import functools
 import itertools
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import TypeVar
 
 import galois
@@ -50,9 +50,8 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 import sympy.core
 
-import qldpc.groups as groups
-
 DEFAULT_FIELD_ORDER = 2
+
 
 ################################################################################
 # groups
@@ -121,11 +120,20 @@ class Group:
     _lift: Lift
 
     def __init__(
-        self, group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
+        self,
+        group: Group | comb.PermutationGroup,
+        field: int | None = None,
+        lift: Lift | None = None,
     ) -> None:
-        self._group = group
-        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        self._lift = lift if lift is not None else default_lift
+        if isinstance(group, Group):
+            assert field is None or field == group._field.order
+            self._group = group._group
+            self._field = group._field
+            self._lift = lift or group._lift
+        else:
+            self._group = group
+            self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            self._lift = lift if lift is not None else default_lift
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -229,6 +237,23 @@ class Group:
         """Construct a group from generators."""
         return Group(comb.PermutationGroup(*generators), field, lift)
 
+    @classmethod
+    def from_permutation_mats(
+        cls, generators: Iterable[galois.FieldArray], space: list[bytes], field: int | None = None
+    ) -> Group:
+        """Constructs a Group from a given set of generating permutation matrices."""
+        finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        group_perms = []
+        for member in generators:
+            string = list(range(len(space)))
+            for index in range(len(space)):
+                current_vector = finite_field(np.frombuffer(space[index], dtype=np.uint8))
+                next_vector = member @ current_vector
+                next_index = space.index(next_vector.tobytes())
+                string[index] = next_index
+            group_perms.append(comb.Permutation(string))
+        return Group(comb.PermutationGroup(group_perms), field=field)
+
     def random_symmetric_subset(
         self, size: int, *, exclude_identity: bool = False, seed: int | None = None
     ) -> set[GroupMember]:
@@ -261,18 +286,18 @@ class Group:
                 doubles.add(~member)
 
             # count how many extra group members we have found
-            extras = len(singles) + len(doubles) - size
+            num_extra = len(singles) + len(doubles) - size
 
-            if not extras:
+            if not num_extra:
                 # if we have the right number of group members, we are done
                 return singles | doubles
 
-            elif extras > 0 and len(singles):
+            elif num_extra > 0 and len(singles):
                 # we have overshot, so throw away elements to get down to the right size
-                for _ in range(extras // 2):
+                for _ in range(num_extra // 2):
                     member = doubles.pop()
                     doubles.remove(~member)
-                if extras % 2:
+                if num_extra % 2:
                     singles.pop()
                 return singles | doubles
 
@@ -485,7 +510,7 @@ class Protograph:
 
 
 ################################################################################
-# named groups
+# "simple" named groups
 
 
 class TrivialGroup(Group):
@@ -576,11 +601,117 @@ class QuaternionGroup(Group):
         super().__init__(group._group, field=3, lift=group._lift)
 
 
+################################################################################
+# "special" named groups
+
+
 class SpecialLinearGroup(Group):
     """Constructs permutations corresponding to generators of SL(q,d)."""
 
-    def __init__(self, field: int, dimension: int) -> None:
-        generators = groups.special_linear_gen(field, dimension)
-        space = groups.construct_linspace(field, dimension)
-        group = groups.group_to_permutation(field, space, generators)
-        super().__init__(group, field=field)
+    def __init__(self, dimension: int, field: int | None = None) -> None:
+        generators = self.get_generator_mats(dimension, field)
+        space = construct_linspace(dimension, field)
+        group = Group.from_permutation_mats(generators, space, field)
+        super().__init__(group)
+
+    @classmethod
+    def get_generator_mats(
+        cls, dimension: int, field: int | None
+    ) -> tuple[galois.FieldArray, galois.FieldArray]:
+        """Generator matrices for the special linear group SL(dimension, field).
+
+        This construction is based on https://arxiv.org/abs/2201.09155.
+        """
+        finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        W = finite_field.Zeros((dimension, dimension))
+        W[0, -1] = 1
+        for index in range(dimension - 1):
+            W[index + 1, index] = -1 * finite_field(1)
+        if finite_field.order > 3:
+            W[0, 0] = -1 * finite_field(1)
+            A = finite_field.Identity(dimension)
+            A[0, 0] = finite_field.primitive_element
+            A[1, 1] = finite_field.primitive_element**-1
+        else:
+            A = finite_field.Identity(dimension)
+            A[0, 1] = 1
+        return W, A
+
+
+def construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
+    """Helper function to generate a list of vectors over finite field."""
+    gf = galois.GF(field or DEFAULT_FIELD_ORDER)
+    lin_space = []
+    vectors = itertools.product(gf.elements, repeat=dimension)
+    for v in vectors:
+        if gf(v).any():
+            lin_space.append(gf(v).tobytes())
+    return lin_space
+
+
+################################################################################
+# constructions that may be useful in the future
+
+
+def construct_linear_all(
+    dimension: int, field: int | None = None
+) -> tuple[list[galois.FieldArray], list[galois.FieldArray]]:
+    """Constructs the entire group PSL(field, dimension) and
+    SL(field, dimension) by a direct computation. Quite slow.
+    """
+    special_linear: list[galois.FieldArray] = []
+    proj_special_linear: list[galois.FieldArray] = []
+    finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+    vectors = itertools.product(finite_field.elements, repeat=dimension**2)
+    for vec in vectors:
+        mat = finite_field(vec).reshape(dimension, dimension)
+        if np.linalg.det(mat) == 1:
+            special_linear.append(mat)  # type:ignore[arg-type]
+            if (
+                vec[(finite_field(vec) != 0).argmax()] <= finite_field.order // 2
+            ):  # we force the first non-zero entry to be < p/2 to quotient by -I
+                proj_special_linear.append(mat)  # type:ignore[arg-type]
+    return proj_special_linear, special_linear
+
+
+def proj_linear_gen(
+    dimension: int, field: int | None
+) -> tuple[galois.FieldArray, galois.FieldArray]:
+    """Generators for PSL(2) from
+    https://math.stackexchange.com/questions/580607/generating-pair-for-psl2-q
+    I doubt if it is correct. Looks the same as that for SL(2,q)!
+    """
+    if dimension > 2:
+        return NotImplemented
+    finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+    prim = finite_field.primitive_element
+    minus_one = -1 * finite_field(1)
+    W = finite_field([[prim, 0], [0, prim**-1]])
+    A = finite_field([[minus_one, 1], [minus_one, 0]])
+    return W, A
+
+
+def psl2_expanding_generators(
+    field: int | None = None,
+) -> tuple[galois.FieldArray, galois.FieldArray, galois.FieldArray, galois.FieldArray]:
+    """Expanding generators for PSL2/SL2, from https://arxiv.org/abs/1807.03879."""
+    finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+    minus_one = -finite_field(1)
+    A = finite_field([[1, minus_one], [0, 1]])
+    B = finite_field([[1, 1], [0, 1]])
+    C = finite_field([[1, 0], [minus_one, 1]])
+    D = finite_field([[1, 0], [1, 1]])
+    return A, B, C, D
+
+
+def construct_projspace(dimension: int, field: int) -> list[bytes]:
+    """Helper function to create the vectors in the Projective space.
+    The difference from usual vectors is that scalar multiples are identified.
+    """
+    gf = galois.GF(field)
+    proj_space = []
+    vectors = itertools.product(gf.elements, repeat=dimension)
+    for v in vectors:
+        if v[(gf(v) != 0).argmax()] == 1:
+            proj_space.append(gf(v).tobytes())
+    return proj_space
