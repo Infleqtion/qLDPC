@@ -611,7 +611,7 @@ class QuaternionGroup(Group):
 
 
 class SpecialLinearGroup(Group):
-    """Special linear group: square matrices with determinant 1."""
+    """Special linear group (SL): square matrices with determinant 1."""
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
         generators = self.get_generator_mats(dimension, field)
@@ -654,7 +654,7 @@ SL = SpecialLinearGroup
 
 
 class ProjectiveSpecialLinearGroup(Group):
-    """Projective variant of the special linear group."""
+    """Projective variant of the special linear group (PSL)."""
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
