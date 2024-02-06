@@ -241,12 +241,12 @@ class Group:
         cls, generators: Iterable[galois.FieldArray], space: list[bytes], field: int | None = None
     ) -> Group:
         """Constructs a Group from a given set of generating permutation matrices."""
-        finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         group_perms = []
         for member in generators:
             string = list(range(len(space)))
             for index in range(len(space)):
-                current_vector = finite_field(np.frombuffer(space[index], dtype=np.uint8))
+                current_vector = base_field(np.frombuffer(space[index], dtype=np.uint8))
                 next_vector = member @ current_vector
                 next_index = space.index(next_vector.tobytes())
                 string[index] = next_index
@@ -609,7 +609,7 @@ class SpecialLinearGroup(Group):
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
         generators = self.get_generator_mats(dimension, field)
-        space = construct_linspace(dimension, field)
+        space = _construct_linspace(dimension, field)
         group = Group.from_permutation_mats(generators, space, field)
         super().__init__(group)
 
@@ -621,14 +621,14 @@ class SpecialLinearGroup(Group):
 
         This construction is based on https://arxiv.org/abs/2201.09155.
         """
-        finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        A = finite_field.Identity(dimension)
-        W = -np.roll(finite_field.Identity(dimension), 1, axis=0)
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        A = base_field.Identity(dimension)
+        W = -np.roll(base_field.Identity(dimension), 1, axis=0)
         W[0, -1] = 1
-        if finite_field.order > 3:
-            A[0, 0] = finite_field.primitive_element
-            A[1, 1] = finite_field.primitive_element**-1
-            W[0, 0] = -1 * finite_field(1)
+        if base_field.order > 3:
+            A[0, 0] = base_field.primitive_element
+            A[1, 1] = base_field.primitive_element**-1
+            W[0, 0] = -1 * base_field(1)
         else:
             A[0, 1] = 1
         return A, W
@@ -643,7 +643,7 @@ def ProjectiveSpecialLinearGroup(Group):
             super().__init__(SpecialLinearGroup(dimension, 2))
         elif dimension == 2:
             generators = self.get_expanding_generator_mats(dimension, field)
-            space = construct_linspace(dimension, field)
+            space = _construct_projspace(dimension, field)
             group = Group.from_permutation_mats(generators, space, field)
             super().__init__(group)
         else:
@@ -657,37 +657,33 @@ def ProjectiveSpecialLinearGroup(Group):
         cls, field: int | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
         """Expanding generator matrices for PSL(2, field), from https://arxiv.org/abs/1807.03879"""
-        finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        minus_one = -finite_field(1)
-        A = finite_field([[1, 1], [0, 1]])
-        B = finite_field([[1, minus_one], [0, 1]])
-        C = finite_field([[1, 0], [1, 1]])
-        D = finite_field([[1, 0], [minus_one, 1]])
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        minus_one = -base_field(1)
+        A = base_field([[1, 1], [0, 1]])
+        B = base_field([[1, minus_one], [0, 1]])
+        C = base_field([[1, 0], [1, 1]])
+        D = base_field([[1, 0], [minus_one, 1]])
         return A, B, C, D
 
 
-def construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
+def _construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
     """Helper function to generate a list of vectors over finite field."""
-    gf = galois.GF(field or DEFAULT_FIELD_ORDER)
-    lin_space = []
-    vectors = itertools.product(gf.elements, repeat=dimension)
-    for v in vectors:
-        if gf(v).any():
-            lin_space.append(gf(v).tobytes())
-    return lin_space
+    base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+    vectors = itertools.product(base_field.elements, repeat=dimension)
+    next(vectors)  # skip the all-0 element
+    return [base_field(vec).tobytes() for vec in vectors]
 
 
-def construct_projspace(dimension: int, field: int) -> list[bytes]:
-    """Helper function to create the vectors in the Projective space.
+def _construct_projspace(dimension: int, field: int) -> list[bytes]:
+    """Helper function to create the vectors in the projective space.
     The difference from usual vectors is that scalar multiples are identified.
     """
-    gf = galois.GF(field)
-    proj_space = []
-    vectors = itertools.product(gf.elements, repeat=dimension)
-    for v in vectors:
-        if v[(gf(v) != 0).argmax()] == 1:
-            proj_space.append(gf(v).tobytes())
-    return proj_space
+    base_field = galois.GF(field)
+    return [
+        base_field(vec).tobytes()
+        for vec in itertools.product(base_field.elements, repeat=dimension)
+        if vec[(base_field(vec) != 0).argmax()] == 1
+    ]
 
 
 def construct_special_linear_groups(
@@ -699,13 +695,13 @@ def construct_special_linear_groups(
     """
     special_linear: list[galois.FieldArray] = []
     proj_special_linear: list[galois.FieldArray] = []
-    finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-    for entries in itertools.product(finite_field.elements, repeat=dimension**2):
-        vec = finite_field(entries)
+    base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+    for entries in itertools.product(base_field.elements, repeat=dimension**2):
+        vec = base_field(entries)
         mat = vec.reshape(dimension, dimension)
         if np.linalg.det(mat) == 1:
             special_linear.append(mat)  # type:ignore[arg-type]
             # for PSL, we force the first non-zero entry to be < p/2 to quotient by -I
-            if vec[(vec != 0).argmax()] <= finite_field.order // 2:
+            if vec[(vec != 0).argmax()] <= base_field.order // 2:
                 proj_special_linear.append(mat)  # type:ignore[arg-type]
     return special_linear, proj_special_linear
