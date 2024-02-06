@@ -250,11 +250,11 @@ class Group:
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         group_perms = []
         for member in generators:
-            string = list(range(len(space)))
-            for index in range(len(space)):
-                current_vector = base_field(np.frombuffer(space[index], dtype=np.uint8))
-                next_vector = member @ current_vector
-                next_index = space.index(next_vector.tobytes())
+            string = np.empty(len(space), dtype=int)
+            for index, vec_bytes in enumerate(space):
+                vec = base_field(np.frombuffer(vec_bytes, dtype=np.uint8))
+                next_vec = member @ vec
+                next_index = space.index(next_vec.tobytes())
                 string[index] = next_index
             group_perms.append(comb.Permutation(string))
         return Group(comb.PermutationGroup(group_perms), field=field)
