@@ -622,9 +622,9 @@ class SpecialLinearGroup(Group):
         This construction is based on https://arxiv.org/abs/2201.09155.
         """
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        gen_x = base_field.Identity(dimension)
-        gen_w = -np.roll(base_field.Identity(dimension), 1, axis=0)
+        gen_w = np.diag(-base_field.Ones(dimension - 1), k=-1)
         gen_w[0, -1] = 1
+        gen_x = base_field.Identity(dimension)
         if base_field.order <= 3:
             gen_x[0, 1] = 1
         else:
