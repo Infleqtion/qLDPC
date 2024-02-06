@@ -683,7 +683,7 @@ class ProjectiveSpecialLinearGroup(Group):
         """Iterate over all elements of FSL(dimension, field) by brute force."""
         for mat in SpecialLinearGroup.iter_mats(dimension, field):
             vec = mat.ravel()
-            # to quotient SL(d,q) by -I, force the first non-zero entry to be < q/2
+            # to quotient SL(d,q) by -I, force the first non-zero entry to be <= q/2
             if vec[(vec != 0).argmax()] <= type(mat).order // 2:
                 yield mat
 
