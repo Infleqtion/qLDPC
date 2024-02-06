@@ -675,7 +675,8 @@ def _construct_linear_space(dimension: int, field: int | None = None) -> list[by
 
 
 def _construct_projective_space(dimension: int, field: int) -> list[bytes]:
-    """Helper function to create the vectors in the projective space.
+    """Helper function to list the elements of a projective space.
+
     The difference from usual vectors is that scalar multiples are identified.
     """
     base_field = galois.GF(field)
