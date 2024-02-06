@@ -616,7 +616,7 @@ class SpecialLinearGroup(Group):
     @classmethod
     def get_generator_mats(
         cls, dimension: int, field: int | None = None
-    ) -> tuple[galois.FieldArray, galois.FieldArray]:
+    ) -> tuple[galois.FieldArray, ...]:
         """Generator matrices for the special linear group SL(dimension, field).
 
         This construction is based on https://arxiv.org/abs/2201.09155.
@@ -631,10 +631,10 @@ class SpecialLinearGroup(Group):
             gen_x[0, 0] = base_field.primitive_element
             gen_x[1, 1] = base_field.primitive_element**-1
             gen_w[0, 0] = -1 * base_field(1)
-        return gen_x, gen_w
+        return gen_x, gen_w  # type:ignore[return-value]
 
 
-def ProjectiveSpecialLinearGroup(Group):
+class ProjectiveSpecialLinearGroup(Group):
     """Projective variant of the special linear group."""
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
@@ -642,7 +642,7 @@ def ProjectiveSpecialLinearGroup(Group):
         if base_field.order == 2:
             super().__init__(SpecialLinearGroup(dimension, 2))
         elif dimension == 2:
-            generators = self.get_expanding_generator_mats(dimension, field)
+            generators = self.get_expanding_generator_mats(field)
             space = _construct_projective_space(dimension, field)
             group = Group.from_permutation_mats(generators, space, field)
             super().__init__(group)
@@ -655,7 +655,7 @@ def ProjectiveSpecialLinearGroup(Group):
     @classmethod
     def get_expanding_generator_mats(
         cls, field: int | None = None
-    ) -> tuple[galois.FieldArray, galois.FieldArray]:
+    ) -> tuple[galois.FieldArray, ...]:
         """Expanding generator matrices for PSL(2, field), from https://arxiv.org/abs/1807.03879"""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         minus_one = -base_field(1)
@@ -674,12 +674,12 @@ def _construct_linear_space(dimension: int, field: int | None = None) -> list[by
     return [base_field(vec).tobytes() for vec in vectors]
 
 
-def _construct_projective_space(dimension: int, field: int) -> list[bytes]:
+def _construct_projective_space(dimension: int, field: int | None = None) -> list[bytes]:
     """Helper function to list the elements of a projective space.
 
     The difference from usual vectors is that scalar multiples are identified.
     """
-    base_field = galois.GF(field)
+    base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
     return [
         base_field(vec).tobytes()
         for vec in itertools.product(base_field.elements, repeat=dimension)
