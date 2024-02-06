@@ -635,7 +635,7 @@ class SpecialLinearGroup(Group):
 
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
-        """Iterate over all elements of SL(dimension, field) by brute force."""
+        """Iterate over all elements of SL(dimension, field)."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         for entries in itertools.product(base_field.elements, repeat=dimension**2):
             vec = base_field(entries)
@@ -680,7 +680,7 @@ class ProjectiveSpecialLinearGroup(Group):
 
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
-        """Iterate over all elements of FSL(dimension, field) by brute force."""
+        """Iterate over all elements of PSL(dimension, field)."""
         for mat in SpecialLinearGroup.iter_mats(dimension, field):
             vec = mat.ravel()
             # to quotient SL(d,q) by -I, force the first non-zero entry to be <= q/2
