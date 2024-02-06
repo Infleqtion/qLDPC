@@ -609,7 +609,7 @@ class SpecialLinearGroup(Group):
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
         generators = self.get_generator_mats(dimension, field)
-        space = _construct_linspace(dimension, field)
+        space = _construct_linear_space(dimension, field)
         group = Group.from_permutation_mats(generators, space, field)
         super().__init__(group)
 
@@ -643,7 +643,7 @@ def ProjectiveSpecialLinearGroup(Group):
             super().__init__(SpecialLinearGroup(dimension, 2))
         elif dimension == 2:
             generators = self.get_expanding_generator_mats(dimension, field)
-            space = _construct_projspace(dimension, field)
+            space = _construct_projective_space(dimension, field)
             group = Group.from_permutation_mats(generators, space, field)
             super().__init__(group)
         else:
@@ -666,7 +666,7 @@ def ProjectiveSpecialLinearGroup(Group):
         return A, B, C, D
 
 
-def _construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
+def _construct_linear_space(dimension: int, field: int | None = None) -> list[bytes]:
     """Helper function to generate a list of vectors over finite field."""
     base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
     vectors = itertools.product(base_field.elements, repeat=dimension)
@@ -674,7 +674,7 @@ def _construct_linspace(dimension: int, field: int | None = None) -> list[bytes]
     return [base_field(vec).tobytes() for vec in vectors]
 
 
-def _construct_projspace(dimension: int, field: int) -> list[bytes]:
+def _construct_projective_space(dimension: int, field: int) -> list[bytes]:
     """Helper function to create the vectors in the projective space.
     The difference from usual vectors is that scalar multiples are identified.
     """
