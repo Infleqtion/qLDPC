@@ -65,9 +65,15 @@ class GroupMember(comb.Permutation):
     Supports sorting permutations (by their rank), and taking their tensor product.
     """
 
+    def __new__(cls, *args: object, **kwargs: object) -> GroupMember:
+        """Allow instantiating a GroupMember from a SymPy Permutation object."""
+        if len(args) == 1 and isinstance(args[0], comb.Permutation):
+            return super().__new__(cls, args[0].array_form, **kwargs)
+        return super().__new__(cls, *args, **kwargs)
+
     def __mul__(self, other: UnknownType) -> UnknownType:
         if isinstance(other, comb.Permutation):
-            return GroupMember(super().__mul__(other).array_form)  # type:ignore[return-value]
+            return GroupMember(super().__mul__(other))  # type:ignore[return-value]
         elif hasattr(other, "__rmul__"):
             return other.__rmul__(self)
         return NotImplemented  # pragma: no cover
@@ -169,22 +175,22 @@ class Group:
     @property
     def generators(self) -> Sequence[GroupMember]:
         """Generators of this group."""
-        return [GroupMember(member.array_form) for member in self._group.generators]
+        return [GroupMember(member) for member in self._group.generators]
 
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
         for member in self._group.generate():
-            yield GroupMember(member.array_form)
+            yield GroupMember(member)
 
     @property
     def identity(self) -> GroupMember:
         """The identity element of this group."""
-        return GroupMember(self._group.identity.array_form)
+        return GroupMember(self._group.identity)
 
     def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
         sympy.core.random.seed(seed)
-        return GroupMember(self._group.random().array_form)
+        return GroupMember(self._group.random())
 
     @classmethod
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
