@@ -19,7 +19,7 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal
 
 import cachetools
@@ -308,9 +308,7 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
         """Construct a random classical code with the given number of bits and nontrivial checks."""
-        if field is None:
-            field = DEFAULT_FIELD_ORDER
-        code_field = galois.GF(field)
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         rows, cols = checks, bits
         matrix = code_field.Random((rows, cols))
         for row in range(matrix.shape[0]):
@@ -319,7 +317,7 @@ class ClassicalCode(AbstractCode):
         for col in range(matrix.shape[1]):
             if not matrix[:, col].any():
                 matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
-        return ClassicalCode(matrix, field)
+        return ClassicalCode(matrix)
 
     @classmethod
     def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
@@ -349,6 +347,7 @@ class ClassicalCode(AbstractCode):
             # parity check matrix: columns = all nonzero bitstrings
             bitstrings = list(itertools.product([0, 1], repeat=rank))
             return ClassicalCode(np.array(bitstrings[1:]).T)
+
         # More generally, columns = maximal set of nonzero, linearly independent strings.
         # This is achieved by collecting together all strings whose first nonzero element is a 1.
         strings = [
@@ -426,8 +425,14 @@ class QuditCode(AbstractCode):
             vals_xz[col_xz] += int(matrix[row, col_xz, col])
             graph[node_check][node_qudit][QuditOperator] = QuditOperator(tuple(vals_xz))
 
+        # remember order of the field, and use Pauli operators if appropriate
         if isinstance(matrix, galois.FieldArray):
             graph.order = type(matrix).order
+            if graph.order == 2:
+                for _, __, data in graph.edges(data=True):
+                    data[Pauli] = Pauli(data[QuditOperator].value)
+                    del data[QuditOperator]
+
         return graph
 
     @classmethod
@@ -437,7 +442,8 @@ class QuditCode(AbstractCode):
         num_checks = len(graph.nodes()) - num_qudits
         matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
         for node_check, node_qudit, data in graph.edges(data=True):
-            matrix[node_check.index, :, node_qudit.index] = data[QuditOperator].value
+            op = data.get(QuditOperator) or data.get(Pauli)
+            matrix[node_check.index, :, node_qudit.index] = op.value
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
@@ -758,7 +764,7 @@ class CSSCode(QuditCode):
         return candidate_logical_op.sum()
 
     @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
-    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
+    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
         """Exact X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
@@ -771,9 +777,11 @@ class CSSCode(QuditCode):
             dual_code_x = ~code_x
             return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
 
+        # TODO: is this wrong???
+
         # minimize the weight of logical X-type or Z-type operators
         for logical_qubit_index in range(self.dimension):
-            self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
+            self.minimize_logical_op(pauli, logical_qubit_index)
 
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
@@ -807,9 +815,9 @@ class CSSCode(QuditCode):
             """Perform Gaussian elimination on the matrix.
 
             Returns:
-                matrix_RRE: the reduced row echelon form of the matrix
-                pivot: the "pivot" columns of the reduced matrix
-                other: the remaining columns of the reduced matrix
+                matrix_RRE: the reduced row echelon form of the matrix.
+                pivot: the "pivot" columns of the reduced matrix.
+                other: the remaining columns of the reduced matrix.
 
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
             occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
@@ -886,30 +894,35 @@ class CSSCode(QuditCode):
             return self.get_logical_ops()[pauli.index, random_logical_qudit_index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
-    def _minimize_weight_of_logical_op(
-        self,
-        pauli: Literal[Pauli.X, Pauli.Z],
-        logical_qubit_index: int,
-        **decoder_args: object,
+    def minimize_logical_op(
+        self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int
     ) -> None:
         """Minimize the weight of a logical operator.
 
-        This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound,
-        but exactly with integer linear programming (which has exponential complexity).
+        A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
+        that it commutes with all logical operators except its dual.  This is essentially the same
+        optimization as in CSSCode.get_one_distance_upper_bound, but solved exactly with integer
+        linear programming.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
+        if self.field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
+
+        # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
-        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
-        effective_check_matrix = np.vstack([code.matrix, word]).view(np.ndarray)
-        effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
-        effective_syndrome[-1] = 1
+        dual_ops = self.get_logical_ops()[(~pauli).index]
+        effective_check_matrix = np.vstack([code.matrix, dual_ops]).view(np.ndarray)
+
+        # enforce that the new logical operator commutes with everything except its dual
+        effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
+        effective_syndrome[code.num_checks + logical_qubit_index] = 1
+
         logical_op = qldpc.decoder.decode(
             effective_check_matrix,
             effective_syndrome,
             exact=True,
             modulus=self.field.order,
-            **decoder_args,
         )
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_qubit_index] = logical_op
@@ -978,8 +991,8 @@ class QCCode(GBCode):
     def __init__(
         self,
         dims: Sequence[int],
-        terms_a: Collection[tuple[int, int]],
-        terms_b: Collection[tuple[int, int]] | None = None,
+        terms_a: Collection[tuple[Hashable, int]],
+        terms_b: Collection[tuple[Hashable, int]] | None = None,
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
@@ -991,11 +1004,22 @@ class QCCode(GBCode):
         if terms_b is None:
             terms_b = terms_a  # pragma: no cover
 
+        # identify the symbols used to denote cyclic group generators
+        symbols = tuple({symbol for symbol, _ in list(terms_a) + list(terms_b)})
+        if len(symbols) != len(dims):
+            raise ValueError(
+                f"Number of cyclic group orders, {dims}, does not match the number of generator"
+                f" symbols, {symbols}."
+            )
+
+        # identify the base cyclic groups, their product, and the generators
         groups = [abstract.CyclicGroup(dim) for dim in dims]
         group = abstract.Group.product(*groups)
+        generators = group.generators
 
-        members_a = [group.generators[factor] ** power for factor, power in terms_a]
-        members_b = [group.generators[factor] ** power for factor, power in terms_b]
+        # build defining matrices of a generalized bicycle code
+        members_a = [generators[symbols.index(ss)] ** pp for ss, pp in terms_a]
+        members_b = [generators[symbols.index(ss)] ** pp for ss, pp in terms_b]
         matrix_a = abstract.Element(group, *members_a).lift()
         matrix_b = abstract.Element(group, *members_b).lift()
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
@@ -1108,16 +1132,14 @@ class HGPCode(CSSCode):
 
     @classmethod
     def get_graph_product(
-        cls,
-        graph_a: nx.DiGraph,
-        graph_b: nx.DiGraph,
-        *,
-        conjugate: bool = False,
+        cls, graph_a: nx.DiGraph, graph_b: nx.DiGraph, *, conjugate: bool = False
     ) -> nx.DiGraph:
         """Hypergraph product of two Tanner graphs."""
+
+        # start with a cartesian products of the input graphs
         graph_product = nx.cartesian_product(graph_a, graph_b)
 
-        # fix edge orientation and tag each edge with a QuditOperator
+        # fix edge orientation, and tag each edge with a QuditOperator
         graph = nx.DiGraph()
         for node_fst, node_snd, data in graph_product.edges(data=True):
             # determine which node is a check node vs. a qudit node
@@ -1146,10 +1168,18 @@ class HGPCode(CSSCode):
 
             graph[node_check][node_qudit][QuditOperator] = op
 
+        # relabel nodes, from (node_a, node_b) --> node_combined
         node_map = HGPCode.get_product_node_map(graph_a.nodes, graph_b.nodes)
         graph = nx.relabel_nodes(graph, node_map)
+
+        # remember order of the field, and use Pauli operators if appropriate
         if hasattr(graph_a, "order"):
             graph.order = graph_a.order
+            if graph.order == 2:
+                for _, __, data in graph.edges(data=True):
+                    data[Pauli] = Pauli(data[QuditOperator].value)
+                    del data[QuditOperator]
+
         return graph
 
     @classmethod

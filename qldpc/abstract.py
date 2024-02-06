@@ -48,7 +48,7 @@ import galois
 import numpy as np
 import numpy.typing as npt
 import sympy.combinatorics as comb
-from sympy.combinatorics.perm_groups import PermutationGroup
+import sympy.core
 
 import qldpc.groups as groups
 
@@ -67,9 +67,15 @@ class GroupMember(comb.Permutation):
     Supports sorting permutations (by their rank), and taking their tensor product.
     """
 
+    def __new__(cls, *args: object, **kwargs: object) -> GroupMember:
+        """Allow instantiating a GroupMember from a SymPy Permutation object."""
+        if len(args) == 1 and isinstance(args[0], comb.Permutation):
+            return super().__new__(cls, args[0].array_form, **kwargs)
+        return super().__new__(cls, *args, **kwargs)
+
     def __mul__(self, other: UnknownType) -> UnknownType:
-        if isinstance(other, GroupMember):
-            return GroupMember(super().__mul__(other).array_form)  # type:ignore[return-value]
+        if isinstance(other, comb.Permutation):
+            return GroupMember(super().__mul__(other))  # type:ignore[return-value]
         elif hasattr(other, "__rmul__"):
             return other.__rmul__(self)
         return NotImplemented  # pragma: no cover
@@ -116,12 +122,12 @@ class Group:
     members by explicit permutation matrices.
     """
 
-    _group: PermutationGroup
+    _group: comb.PermutationGroup
     _field: type[galois.FieldArray]
     _lift: Lift
 
     def __init__(
-        self, group: PermutationGroup, field: int | None = None, lift: Lift | None = None
+        self, group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
     ) -> None:
         self._group = group
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -162,17 +168,22 @@ class Group:
     @property
     def generators(self) -> Sequence[GroupMember]:
         """Generators of this group."""
-        return [GroupMember(member.array_form) for member in self._group.generators]
+        return [GroupMember(member) for member in self._group.generators]
 
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
         for member in self._group.generate():
-            yield GroupMember(member.array_form)
+            yield GroupMember(member)
 
     @property
     def identity(self) -> GroupMember:
         """The identity element of this group."""
-        return GroupMember(self._group.identity.array_form)
+        return GroupMember(self._group.identity)
+
+    def random(self, seed: int | None = None) -> GroupMember:
+        """A random element this group."""
+        sympy.core.random.seed(seed)
+        return GroupMember(self._group.random())
 
     @classmethod
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
@@ -207,7 +218,7 @@ class Group:
         """Construct a group from a multiplication (Cayley) table."""
 
         if integer_lift is None:
-            group = PermutationGroup(*[GroupMember(row) for row in table])
+            group = comb.PermutationGroup(*[GroupMember(row) for row in table])
             return Group(group, lift=default_lift)
 
         members = {GroupMember(row): idx for idx, row in enumerate(table)}
@@ -215,14 +226,14 @@ class Group:
         def lift(member: GroupMember) -> IntegerArray:
             return integer_lift(members[member])
 
-        return Group(PermutationGroup(*members.keys()), field, lift)
+        return Group(comb.PermutationGroup(*members.keys()), field, lift)
 
     @classmethod
     def from_generators(
         cls, *generators: GroupMember, field: int | None = None, lift: Lift | None = None
     ) -> Group:
         """Construct a group from generators."""
-        return Group(PermutationGroup(*generators), field, lift)
+        return Group(comb.PermutationGroup(*generators), field, lift)
 
     def random_subset(self, size: int) -> set[GroupMember]:
         """Outputs a random symmetric subset of the group of input size"""
@@ -460,10 +471,17 @@ class TrivialGroup(Group):
 
     def __init__(self, field: int | None = None) -> None:
         super().__init__(
-            PermutationGroup(GroupMember()),
+            comb.PermutationGroup(GroupMember()),
             field,
             lambda _: np.array(1, ndmin=2, dtype=int),
         )
+
+    def random(self, seed: int | None = None) -> GroupMember:
+        """A random (albeit unique) element this group.
+
+        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation."
+        """
+        return self.identity
 
     @classmethod
     def to_protograph(

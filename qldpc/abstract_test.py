@@ -28,6 +28,8 @@ def test_permutation_group() -> None:
     group = abstract.Group.from_generators(*gens)
     assert all(perm in group for perm in gens)
     assert len(group.generators) == 2
+    assert group.random() in group
+    assert group.random(seed=0) == group.random(seed=0)
 
 
 def test_trivial_group() -> None:
@@ -37,6 +39,7 @@ def test_trivial_group() -> None:
     assert group == group_squared
     assert group.lift_dim == 1
     assert group_squared.lift_dim == 1
+    assert group.random() == group.identity
     assert np.array_equal(group.lift(group.identity), np.array(1, ndmin=2))
 
 
