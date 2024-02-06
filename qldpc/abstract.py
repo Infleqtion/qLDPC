@@ -616,39 +616,42 @@ class QuaternionGroup(Group):
 class SpecialLinearGroup(Group):
     """Special linear group (SL): square matrices with determinant 1."""
 
+    _dimension: int
+
     def __init__(self, dimension: int, field: int | None = None) -> None:
-        generator_mats = self.get_generator_mats(dimension, field)
-        target_space = self._target_space(dimension, field)
+        self._dimension = dimension
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        generator_mats = self.get_generator_mats()
+        target_space = self.target_space()
         group = Group.from_generating_mats(generator_mats, target_space, field)
         super().__init__(group)
 
-    @classmethod
-    def get_generator_mats(
-        cls, dimension: int, field: int | None = None
-    ) -> tuple[galois.FieldArray, ...]:
-        """Generator matrices for the special linear group SL(dimension, field).
+    @property
+    def dimension(self) -> int:
+        """Dimension of the elements of this group."""
+        return self._dimension
+
+    def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
+        """Generator matrices for this group.
 
         This construction is based on https://arxiv.org/abs/2201.09155.
         """
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        gen_w = -base_field(np.diag(np.ones(dimension - 1, dtype=int), k=-1))
+        gen_w = -self.field(np.diag(np.ones(self.dimension - 1, dtype=int), k=-1))
         gen_w[0, -1] = 1
-        gen_x = base_field.Identity(dimension)
-        if base_field.order <= 3:
+        gen_x = self.field.Identity(self._dimension)
+        if self.field.order <= 3:
             gen_x[0, 1] = 1
         else:
-            gen_x[0, 0] = base_field.primitive_element
-            gen_x[1, 1] = base_field.primitive_element**-1
-            gen_w[0, 0] = -1 * base_field(1)
+            gen_x[0, 0] = self.field.primitive_element
+            gen_x[1, 1] = self.field.primitive_element**-1
+            gen_w[0, 0] = -1 * self.field(1)
         return gen_x, gen_w
 
-    @classmethod
-    def _target_space(cls, dimension: int, field: int | None = None) -> list[bytes]:
-        """All members of the target space that SL(d,q) acts on."""
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        vectors = itertools.product(base_field.elements, repeat=dimension)
+    def target_space(self) -> list[bytes]:
+        """All members of the target space that this group acts on."""
+        vectors = itertools.product(self.field.elements, repeat=self._dimension)
         next(vectors)  # skip the all-0 element
-        return [base_field(vec).tobytes() for vec in vectors]
+        return [self.field(vec).tobytes() for vec in vectors]
 
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
@@ -664,13 +667,16 @@ class SpecialLinearGroup(Group):
 class ProjectiveSpecialLinearGroup(Group):
     """Projective variant of the special linear group (PSL)."""
 
+    _dimension: int
+
     def __init__(self, dimension: int, field: int | None = None) -> None:
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        if base_field.order == 2:
+        self._dimension = dimension
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        if self.field.order == 2:
             super().__init__(SpecialLinearGroup(dimension, 2))
         elif dimension == 2:
-            generator_mats = self.get_generator_mats(dimension, field)
-            target_space = self._target_space(dimension, field)
+            generator_mats = self.get_generator_mats()
+            target_space = self.target_space()
             group = Group.from_generating_mats(generator_mats, target_space, field)
             super().__init__(group)
         else:
@@ -679,27 +685,33 @@ class ProjectiveSpecialLinearGroup(Group):
                 " not yet supported."
             )
 
-    @classmethod
-    def get_expanding_generator_mats(
-        cls, field: int | None = None
-    ) -> tuple[galois.FieldArray, ...]:
-        """Expanding generator matrices for PSL(2, field), from https://arxiv.org/abs/1807.03879"""
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        minus_one = -base_field(1)
-        A = base_field([[1, 1], [0, 1]])
-        B = base_field([[1, minus_one], [0, 1]])
-        C = base_field([[1, 0], [1, 1]])
-        D = base_field([[1, 0], [minus_one, 1]])
+    @property
+    def dimension(self) -> int:
+        """Dimension of the elements of this group."""
+        return self._dimension
+
+    def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
+        """Expanding generator matrices for this group.
+
+        This construction is based on https://arxiv.org/abs/1807.03879.
+        """
+        minus_one = -self.field(1)
+        A = self.field([[1, 1], [0, 1]])
+        B = self.field([[1, minus_one], [0, 1]])
+        C = self.field([[1, 0], [1, 1]])
+        D = self.field([[1, 0], [minus_one, 1]])
         return A, B, C, D
 
-    @classmethod
-    def _target_space(cls, dimension: int, field: int | None = None) -> list[bytes]:
-        """All members of the target (projective) space that PSL(d,q) acts on."""
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+    def target_space(self) -> list[bytes]:
+        """All members of the target space that this group acts on.
+
+        Since this group acts on a projective space, scalar multiples of target vectors are
+        identified with each other.
+        """
         return [
-            base_field(vec).tobytes()
-            for vec in itertools.product(base_field.elements, repeat=dimension)
-            if vec[(base_field(vec) != 0).argmax()] == 1
+            self.field(vec).tobytes()
+            for vec in itertools.product(self.field.elements, repeat=self.dimension)
+            if vec[(self.field(vec) != 0).argmax()] == 1
         ]
 
     @classmethod
