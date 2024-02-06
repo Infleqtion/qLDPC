@@ -19,7 +19,7 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal
 
 import cachetools
@@ -873,8 +873,8 @@ class QCCode(GBCode):
     def __init__(
         self,
         dims: Sequence[int],
-        terms_a: Collection[tuple[int, int]],
-        terms_b: Collection[tuple[int, int]] | None = None,
+        terms_a: Collection[tuple[Hashable, int]],
+        terms_b: Collection[tuple[Hashable, int]] | None = None,
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
@@ -886,11 +886,17 @@ class QCCode(GBCode):
         if terms_b is None:
             terms_b = terms_a  # pragma: no cover
 
+        # identify the base cyclic groups, their product, and the group generators
         groups = [abstract.CyclicGroup(dim) for dim in dims]
         group = abstract.Group.product(*groups)
+        generators = group.generators
 
-        members_a = [group.generators[factor] ** power for factor, power in terms_a]
-        members_b = [group.generators[factor] ** power for factor, power in terms_b]
+        # identify the symbols and associated group generators
+        symbols = list({symbol for symbol, _ in list(terms_a) + list(terms_b)})
+
+        # build defining matrices of a generalized bicycle code
+        members_a = [generators[symbols.index(ss)] ** pp for ss, pp in terms_a]
+        members_b = [generators[symbols.index(ss)] ** pp for ss, pp in terms_b]
         matrix_a = abstract.Element(group, *members_a).lift()
         matrix_b = abstract.Element(group, *members_b).lift()
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
