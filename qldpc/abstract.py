@@ -243,10 +243,10 @@ class Group:
         return Group(comb.PermutationGroup(*generators), field, lift)
 
     @classmethod
-    def from_permutation_mats(
+    def from_generating_mats(
         cls, generators: Iterable[galois.FieldArray], space: list[bytes], field: int | None = None
     ) -> Group:
-        """Constructs a Group from a given set of generating permutation matrices."""
+        """Constructs a Group from a given set of generating matrices."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         group_perms = []
         for member in generators:
@@ -616,7 +616,7 @@ class SpecialLinearGroup(Group):
     def __init__(self, dimension: int, field: int | None = None) -> None:
         generators = self.get_generator_mats(dimension, field)
         space = _construct_linear_space(dimension, field)
-        group = Group.from_permutation_mats(generators, space, field)
+        group = Group.from_generating_mats(generators, space, field)
         super().__init__(group)
 
     @classmethod
@@ -663,7 +663,7 @@ class ProjectiveSpecialLinearGroup(Group):
         elif dimension == 2:
             generators = self.get_expanding_generator_mats(field)
             space = _construct_projective_space(dimension, field)
-            group = Group.from_permutation_mats(generators, space, field)
+            group = Group.from_generating_mats(generators, space, field)
             super().__init__(group)
         else:
             raise ValueError(
