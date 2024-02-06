@@ -227,9 +227,7 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
         """Construct a random classical code with the given number of bits and nontrivial checks."""
-        if field is None:
-            field = DEFAULT_FIELD_ORDER
-        code_field = galois.GF(field)
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         rows, cols = checks, bits
         matrix = code_field.Random((rows, cols))
         for row in range(matrix.shape[0]):
@@ -238,7 +236,7 @@ class ClassicalCode(AbstractCode):
         for col in range(matrix.shape[1]):
             if not matrix[:, col].any():
                 matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
-        return ClassicalCode(matrix, field)
+        return ClassicalCode(matrix)
 
     @classmethod
     def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
@@ -268,6 +266,7 @@ class ClassicalCode(AbstractCode):
             # parity check matrix: columns = all nonzero bitstrings
             bitstrings = list(itertools.product([0, 1], repeat=rank))
             return ClassicalCode(np.array(bitstrings[1:]).T)
+
         # More generally, columns = maximal set of nonzero, linearly independent strings.
         # This is achieved by collecting together all strings whose first nonzero element is a 1.
         strings = [
