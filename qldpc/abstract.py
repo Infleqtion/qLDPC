@@ -633,6 +633,16 @@ class SpecialLinearGroup(Group):
             gen_w[0, 0] = -1 * base_field(1)
         return gen_x, gen_w  # type:ignore[return-value]
 
+    @classmethod
+    def get_all_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+        """Iterate over all elements of SL(dimension, field) by brute force."""
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        for entries in itertools.product(base_field.elements, repeat=dimension**2):
+            vec = base_field(entries)
+            mat = vec.reshape(dimension, dimension)
+            if np.linalg.det(mat) == 1:
+                yield mat
+
 
 SL = SpecialLinearGroup
 
@@ -668,6 +678,16 @@ class ProjectiveSpecialLinearGroup(Group):
         D = base_field([[1, 0], [minus_one, 1]])
         return A, B, C, D
 
+    @classmethod
+    def get_all_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+        """Iterate over all elements of FSL(dimension, field) by brute force."""
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        for mat in SpecialLinearGroup.get_all_mats():
+            vec = mat.ravel()
+            # to quotient SL(d,F) by -I, force the first non-zero entry to be < p/2
+            if vec[(vec != 0).argmax()] <= base_field.order // 2:
+                yield mat
+
 
 PSL = ProjectiveSpecialLinearGroup
 
@@ -691,24 +711,3 @@ def _construct_projective_space(dimension: int, field: int | None = None) -> lis
         for vec in itertools.product(base_field.elements, repeat=dimension)
         if vec[(base_field(vec) != 0).argmax()] == 1
     ]
-
-
-def construct_special_linear_groups(
-    dimension: int, field: int | None = None
-) -> tuple[list[galois.FieldArray], list[galois.FieldArray]]:
-    """Construct all elements of SL(dimension, field) and PSL(field, dimension) by brute force.
-
-    WARNING: SLOW!!!
-    """
-    special_linear: list[galois.FieldArray] = []
-    proj_special_linear: list[galois.FieldArray] = []
-    base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-    for entries in itertools.product(base_field.elements, repeat=dimension**2):
-        vec = base_field(entries)
-        mat = vec.reshape(dimension, dimension)
-        if np.linalg.det(mat) == 1:
-            special_linear.append(mat)  # type:ignore[arg-type]
-            # for PSL, we force the first non-zero entry to be < p/2 to quotient by -I
-            if vec[(vec != 0).argmax()] <= base_field.order // 2:
-                proj_special_linear.append(mat)  # type:ignore[arg-type]
-    return special_linear, proj_special_linear
