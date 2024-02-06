@@ -606,7 +606,7 @@ class QuaternionGroup(Group):
 
 
 class SpecialLinearGroup(Group):
-    """Constructs permutations corresponding to generators of SL(q,d)."""
+    """Special linear group: square matrices with determinant 1."""
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
         generators = self.get_generator_mats(dimension, field)
@@ -635,6 +635,30 @@ class SpecialLinearGroup(Group):
         return A, W
 
 
+def ProjectiveSpecialLinearGroup(Group):
+    """Projective variant of the special linear group."""
+
+    def __init__(self, dimension: int, field: int | None = None) -> None:
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        if base_field.order == 2:
+            super().__init__(SpecialLinearGroup(dimension, 2))
+        else:
+            ...
+
+    @classmethod
+    def get_expanding_generator_mats(
+        cls, field: int | None = None
+    ) -> tuple[galois.FieldArray, galois.FieldArray]:
+        """Expanding generator matrices for PSL(2, field), from https://arxiv.org/abs/1807.03879"""
+        finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        minus_one = -finite_field(1)
+        A = finite_field([[1, 1], [0, 1]])
+        B = finite_field([[1, minus_one], [0, 1]])
+        C = finite_field([[1, 0], [1, 1]])
+        D = finite_field([[1, 0], [minus_one, 1]])
+        return A, B, C, D
+
+
 def construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
     """Helper function to generate a list of vectors over finite field."""
     gf = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -646,11 +670,20 @@ def construct_linspace(dimension: int, field: int | None = None) -> list[bytes]:
     return lin_space
 
 
-################################################################################
-# constructions that may be useful in the future
+def construct_projspace(dimension: int, field: int) -> list[bytes]:
+    """Helper function to create the vectors in the Projective space.
+    The difference from usual vectors is that scalar multiples are identified.
+    """
+    gf = galois.GF(field)
+    proj_space = []
+    vectors = itertools.product(gf.elements, repeat=dimension)
+    for v in vectors:
+        if v[(gf(v) != 0).argmax()] == 1:
+            proj_space.append(gf(v).tobytes())
+    return proj_space
 
 
-def construct_linear_all(
+def construct_special_linear_groups(
     dimension: int, field: int | None = None
 ) -> tuple[list[galois.FieldArray], list[galois.FieldArray]]:
     """Construct all elements of SL(dimension, field) and PSL(field, dimension) by brute force.
@@ -669,29 +702,3 @@ def construct_linear_all(
             if vec[(vec != 0).argmax()] <= finite_field.order // 2:
                 proj_special_linear.append(mat)  # type:ignore[arg-type]
     return special_linear, proj_special_linear
-
-
-def psl2_expanding_generators(
-    field: int | None = None,
-) -> tuple[galois.FieldArray, galois.FieldArray, galois.FieldArray, galois.FieldArray]:
-    """Expanding generators for PSL2/SL2, from https://arxiv.org/abs/1807.03879."""
-    finite_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-    minus_one = -finite_field(1)
-    A = finite_field([[1, minus_one], [0, 1]])
-    B = finite_field([[1, 1], [0, 1]])
-    C = finite_field([[1, 0], [minus_one, 1]])
-    D = finite_field([[1, 0], [1, 1]])
-    return A, B, C, D
-
-
-def construct_projspace(dimension: int, field: int) -> list[bytes]:
-    """Helper function to create the vectors in the Projective space.
-    The difference from usual vectors is that scalar multiples are identified.
-    """
-    gf = galois.GF(field)
-    proj_space = []
-    vectors = itertools.product(gf.elements, repeat=dimension)
-    for v in vectors:
-        if v[(gf(v) != 0).argmax()] == 1:
-            proj_space.append(gf(v).tobytes())
-    return proj_space
