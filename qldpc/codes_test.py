@@ -262,6 +262,9 @@ def test_cyclic_codes() -> None:
     assert code.num_qudits == 90
     assert code.dimension == 8
 
+    with pytest.raises(ValueError, match="does not match"):
+        codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
+
     with pytest.raises(ValueError, match="not supported"):
         codes.QCCode(dims, terms_a, terms_b, field=3)
 

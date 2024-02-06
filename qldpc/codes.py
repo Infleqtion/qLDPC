@@ -886,13 +886,18 @@ class QCCode(GBCode):
         if terms_b is None:
             terms_b = terms_a  # pragma: no cover
 
-        # identify the base cyclic groups, their product, and the group generators
+        # identify the symbols used to denote cyclic group generators
+        symbols = tuple({symbol for symbol, _ in list(terms_a) + list(terms_b)})
+        if len(symbols) != len(dims):
+            raise ValueError(
+                f"Number of cyclic group orders, {dims}, does not match the number of generator"
+                f" symbols, {symbols}."
+            )
+
+        # identify the base cyclic groups, their product, and the generators
         groups = [abstract.CyclicGroup(dim) for dim in dims]
         group = abstract.Group.product(*groups)
         generators = group.generators
-
-        # identify the symbols and associated group generators
-        symbols = list({symbol for symbol, _ in list(terms_a) + list(terms_b)})
 
         # build defining matrices of a generalized bicycle code
         members_a = [generators[symbols.index(ss)] ** pp for ss, pp in terms_a]
