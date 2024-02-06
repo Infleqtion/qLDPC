@@ -642,8 +642,16 @@ def ProjectiveSpecialLinearGroup(Group):
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         if base_field.order == 2:
             super().__init__(SpecialLinearGroup(dimension, 2))
+        elif dimension == 2:
+            generators = self.get_expanding_generator_mats(dimension, field)
+            space = construct_linspace(dimension, field)
+            group = Group.from_permutation_mats(generators, space, field)
+            super().__init__(group)
         else:
-            ...
+            raise ValueError(
+                "Projective special linear groups with both dimension and field greater than 2 are"
+                " not yet supported."
+            )
 
     @classmethod
     def get_expanding_generator_mats(
