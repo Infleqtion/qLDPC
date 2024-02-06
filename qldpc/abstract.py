@@ -628,7 +628,7 @@ class SpecialLinearGroup(Group):
         This construction is based on https://arxiv.org/abs/2201.09155.
         """
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        gen_w = -base_field(np.diag(np.ones(dimension - 1), k=-1))
+        gen_w = -base_field(np.diag(np.ones(dimension - 1, dtype=int), k=-1))
         gen_w[0, -1] = 1
         gen_x = base_field.Identity(dimension)
         if base_field.order <= 3:
