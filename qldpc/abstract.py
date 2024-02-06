@@ -41,7 +41,7 @@ import collections
 import copy
 import functools
 import itertools
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from typing import TypeVar
 
 import galois
@@ -127,11 +127,20 @@ class Group:
     _lift: Lift
 
     def __init__(
-        self, group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
+        self,
+        group: Group | comb.PermutationGroup,
+        field: int | None = None,
+        lift: Lift | None = None,
     ) -> None:
-        self._group = group
-        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        self._lift = lift if lift is not None else default_lift
+        if isinstance(group, Group):
+            assert field is None or field == group._field.order
+            self._group = group._group
+            self._field = group._field
+            self._lift = lift or group._lift
+        else:
+            self._group = group
+            self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            self._lift = lift if lift is not None else default_lift
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -180,7 +189,7 @@ class Group:
         """The identity element of this group."""
         return GroupMember(self._group.identity)
 
-    def random(self, seed: int | None = None) -> GroupMember:
+    def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
         sympy.core.random.seed(seed)
         return GroupMember(self._group.random())
@@ -235,24 +244,72 @@ class Group:
         """Construct a group from generators."""
         return Group(comb.PermutationGroup(*generators), field, lift)
 
-    def random_subset(self, size: int) -> set[GroupMember]:
-        """Outputs a random symmetric subset of the group of input size"""
-        assert size > 0
-        # return list(self._group.random() for _ in range(size))
-        S = set()
-        if size % 2 == 1:
-            identity = GroupMember(self._group.identity.array_form)
-            S.add(identity)
-            size = size - 1
-        while len(S) < size:
-            s = GroupMember(self._group.random().array_form)
-            if s == ~s:
-                pass
-            else:
-                S.add(s)
-                S.add(~s)
+    @classmethod
+    def from_generating_mats(
+        cls,
+        generators: Iterable[galois.FieldArray],
+        target_space: list[bytes],
+        field: int | None = None,
+    ) -> Group:
+        """Constructs a Group from a given set of generating matrices."""
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        group_perms = []
+        for member in generators:
+            string = np.empty(len(target_space), dtype=int)
+            for index, vec_bytes in enumerate(target_space):
+                vec = base_field(np.frombuffer(vec_bytes, dtype=np.uint8))
+                next_vec = member @ vec
+                next_index = target_space.index(next_vec.tobytes())
+                string[index] = next_index
+            group_perms.append(comb.Permutation(string))
+        return Group(comb.PermutationGroup(group_perms), field=field)
 
-        return S
+    def random_symmetric_subset(
+        self, size: int, *, exclude_identity: bool = False, seed: int | None = None
+    ) -> set[GroupMember]:
+        """Construct a random symmetric subset of a given size.
+
+        Note: this is not a uniformaly random subset, only a "sufficiently random" one.
+
+        WARNING: not all groups have symmetric subsets of arbitrary size.  If called with a poor
+        choice of group and subset size, this method may never terminate.
+        """
+        if not 0 < size <= self.order():
+            raise ValueError(
+                "A random symmetric subset of this group must have a size between 1 and"
+                f" {self.order()} (provided: {size})."
+            )
+        sympy.core.random.seed(seed)
+
+        singles = set()  # group members equal to their own inverse
+        doubles = set()  # pairs of group members and their inverses
+        while True:  # sounds dangerous, but bear with me
+            member = GroupMember(self.random())
+            if exclude_identity and member == self.identity:
+                continue
+
+            # always add group members we find
+            if member == ~member:
+                singles.add(member)
+            else:
+                doubles.add(member)
+                doubles.add(~member)
+
+            # count how many extra group members we have found
+            num_extra = len(singles) + len(doubles) - size
+
+            if not num_extra:
+                # if we have the right number of group members, we are done
+                return singles | doubles
+
+            elif num_extra > 0 and len(singles):
+                # we have overshot, so throw away elements to get down to the right size
+                for _ in range(num_extra // 2):
+                    member = doubles.pop()
+                    doubles.remove(~member)
+                if num_extra % 2:
+                    singles.pop()
+                return singles | doubles
 
 
 ################################################################################
@@ -463,7 +520,7 @@ class Protograph:
 
 
 ################################################################################
-# named groups
+# "simple" named groups
 
 
 class TrivialGroup(Group):
@@ -554,11 +611,120 @@ class QuaternionGroup(Group):
         super().__init__(group._group, field=3, lift=group._lift)
 
 
-class SpecialLinearGroup(Group):
-    """Constructs permutations corresponding to generators of SL(q,d)"""
+################################################################################
+# "special" named groups
 
-    def __init__(self, field: int, dimension: int) -> None:
-        generators = groups.special_linear_gen(field, dimension)
-        space = groups.construct_linspace(field, dimension)
-        group = groups.group_to_permutation(field, space, generators)
-        super().__init__(group, field=field)
+
+class SpecialLinearGroup(Group):
+    """Special linear group (SL): square matrices with determinant 1."""
+
+    _dimension: int
+
+    def __init__(self, dimension: int, field: int | None = None) -> None:
+        self._dimension = dimension
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        generator_mats = self.get_generator_mats()
+        target_space = self.target_space()
+        group = Group.from_generating_mats(generator_mats, target_space, field)
+        super().__init__(group)
+
+    @property
+    def dimension(self) -> int:
+        """Dimension of the elements of this group."""
+        return self._dimension
+
+    def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
+        """Generator matrices for this group.
+
+        This construction is based on https://arxiv.org/abs/2201.09155.
+        """
+        gen_w = -self.field(np.diag(np.ones(self.dimension - 1, dtype=int), k=-1))
+        gen_w[0, -1] = 1
+        gen_x = self.field.Identity(self._dimension)
+        if self.field.order <= 3:
+            gen_x[0, 1] = 1
+        else:
+            gen_x[0, 0] = self.field.primitive_element
+            gen_x[1, 1] = self.field.primitive_element**-1
+            gen_w[0, 0] = -1 * self.field(1)
+        return gen_x, gen_w
+
+    def target_space(self) -> list[bytes]:
+        """All members of the target space that this group acts on."""
+        vectors = itertools.product(self.field.elements, repeat=self._dimension)
+        next(vectors)  # skip the all-0 element
+        return [self.field(vec).tobytes() for vec in vectors]
+
+    @classmethod
+    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+        """Iterate over all elements of SL(dimension, field)."""
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        for entries in itertools.product(base_field.elements, repeat=dimension**2):
+            vec = base_field(entries)
+            mat = vec.reshape(dimension, dimension)
+            if np.linalg.det(mat) == 1:
+                yield mat  # type:ignore[misc]
+
+
+class ProjectiveSpecialLinearGroup(Group):
+    """Projective variant of the special linear group (PSL)."""
+
+    _dimension: int
+
+    def __init__(self, dimension: int, field: int | None = None) -> None:
+        self._dimension = dimension
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        if self.field.order == 2:
+            super().__init__(SpecialLinearGroup(dimension, 2))
+        elif dimension == 2:
+            generator_mats = self.get_generator_mats()
+            target_space = self.target_space()
+            group = Group.from_generating_mats(generator_mats, target_space, field)
+            super().__init__(group)
+        else:
+            raise ValueError(
+                "Projective special linear groups with both dimension and field greater than 2 are"
+                " not yet supported."
+            )
+
+    @property
+    def dimension(self) -> int:
+        """Dimension of the elements of this group."""
+        return self._dimension
+
+    def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
+        """Expanding generator matrices for this group.
+
+        This construction is based on https://arxiv.org/abs/1807.03879.
+        """
+        minus_one = -self.field(1)
+        A = self.field([[1, 1], [0, 1]])
+        B = self.field([[1, minus_one], [0, 1]])
+        C = self.field([[1, 0], [1, 1]])
+        D = self.field([[1, 0], [minus_one, 1]])
+        return A, B, C, D
+
+    def target_space(self) -> list[bytes]:
+        """All members of the target space that this group acts on.
+
+        Since this group acts on a projective space, scalar multiples of target vectors are
+        identified with each other.
+        """
+        return [
+            self.field(vec).tobytes()
+            for vec in itertools.product(self.field.elements, repeat=self.dimension)
+            if vec[(self.field(vec) != 0).argmax()] == 1
+        ]
+
+    @classmethod
+    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+        """Iterate over all elements of PSL(dimension, field)."""
+        for mat in SpecialLinearGroup.iter_mats(dimension, field):
+            vec = mat.ravel()
+            # to quotient SL(d,q) by -I, force the first non-zero entry to be <= q/2
+            if vec[(vec != 0).argmax()] <= type(mat).order // 2:
+                yield mat
+
+
+SL = SpecialLinearGroup
+PSL = ProjectiveSpecialLinearGroup
