@@ -682,6 +682,8 @@ class SpecialLinearGroup(Group):
                     perm[index] = next_index
                 generators.append(comb.Permutation(perm))
 
+            # TODO: construct lift
+
             super().__init__(comb.PermutationGroup(generators), field=field)
 
         else:
