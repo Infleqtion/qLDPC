@@ -91,12 +91,11 @@ class GroupMember(comb.Permutation):
         return GroupMember(self.array_form + [val + self.size for val in other.array_form])
 
 
-IntegerArray = npt.NDArray[np.int_]
-Lift = Callable[[GroupMember], IntegerArray]
-IntegerLift = Callable[[int], IntegerArray]
+Lift = Callable[[GroupMember], npt.NDArray[np.int_]]
+IntegerLift = Callable[[int], npt.NDArray[np.int_]]
 
 
-def default_lift(member: GroupMember) -> IntegerArray:
+def default_lift(member: GroupMember) -> npt.NDArray[np.int_]:
     """Default lift: represent a permutation object by a permutation matrix.
 
     For consistency with how Sympy composes permutations, this matrix is right-acting, meaning that
@@ -178,7 +177,7 @@ class Group:
         """The identity element of this group."""
         return GroupMember(self._group.identity)
 
-    def random(self, seed: int | None = None) -> GroupMember:
+    def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
         sympy.core.random.seed(seed)
         return GroupMember(self._group.random())
@@ -198,7 +197,7 @@ class Group:
         return self._lift(self.generators[0]).shape[0]
 
     @functools.cached_property
-    def table(self) -> IntegerArray:
+    def table(self) -> npt.NDArray[np.int_]:
         """Multiplication (Cayley) table for this group."""
         members = {member: idx for idx, member in enumerate(self.generate())}
         return np.array(
@@ -209,7 +208,7 @@ class Group:
     @classmethod
     def from_table(
         cls,
-        table: IntegerArray | Sequence[Sequence[int]],
+        table: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         integer_lift: IntegerLift | None = None,
     ) -> Group:
@@ -221,7 +220,7 @@ class Group:
 
         members = {GroupMember(row): idx for idx, row in enumerate(table)}
 
-        def lift(member: GroupMember) -> IntegerArray:
+        def lift(member: GroupMember) -> npt.NDArray[np.int_]:
             return integer_lift(members[member])
 
         return Group(comb.PermutationGroup(*members.keys()), field, lift)
@@ -464,7 +463,7 @@ class TrivialGroup(Group):
 
     @classmethod
     def to_protograph(
-        cls, matrix: IntegerArray | Sequence[Sequence[int]], field: int | None = None
+        cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
     ) -> Protograph:
         """Convert a matrix of 0s and 1s into a protograph of the trivial group."""
         matrix = np.array(matrix)
@@ -511,7 +510,7 @@ class QuaternionGroup(Group):
             [7, 6, 1, 0, 3, 2, 5, 4],
         ]
 
-        def lift(member: int) -> IntegerArray:
+        def lift(member: int) -> npt.NDArray[np.int_]:
             """Representation from https://en.wikipedia.org/wiki/Quaternion_group."""
             assert 0 <= member < 8
             sign = 1 if member < 4 else -1
