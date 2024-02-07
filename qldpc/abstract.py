@@ -756,7 +756,7 @@ class ProjectiveSpecialLinearGroup(Group):
         if self.field.order == 2:
             group = SpecialLinearGroup(dimension, 2)
         elif dimension == 2:
-            group = Group.from_generating_mats(self.get_generator_mats(), field)
+            group = Group.from_generating_mats(self.get_generator_mats())
         else:
             raise ValueError(
                 "Projective special linear groups with both dimension and field greater than 2 are"

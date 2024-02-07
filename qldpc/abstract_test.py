@@ -31,6 +31,8 @@ def test_permutation_group() -> None:
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
 
+    assert abstract.Group.from_generating_mats([[1]], field=2) == abstract.CyclicGroup(1)
+
 
 def test_trivial_group() -> None:
     """Trivial group tests."""
@@ -123,9 +125,14 @@ def test_transpose() -> None:
     assert protograph.T.T == protograph
 
 
-@pytest.mark.parametrize("linear_rep", [True, False])
-def test_SL_group(linear_rep: bool) -> None:
+def test_SL_group(field: int = 3) -> None:
     """Test special linear group."""
-    group = abstract.SL(2, field=3, linear_rep=linear_rep)
-    for perm, mat in zip(group.generators, group.get_generator_mats()):
-        assert np.array_equal(group.lift(perm), mat)
+    for linear_rep in [False, True]:
+        group = abstract.SL(2, field=field, linear_rep=linear_rep)
+        gens = group.generators
+        mats = group.get_generator_mats()
+        assert np.array_equal(group.lift(gens[0]), mats[0])
+        assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
+
+    with pytest.raises(ValueError, match="inconsistent"):
+        abstract.Group.from_generating_mats(mats, field=field + 1)
