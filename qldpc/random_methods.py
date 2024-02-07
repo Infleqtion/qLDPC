@@ -43,8 +43,8 @@ def random_cyclicgens(
         i: int
         for i in order[1:]:
             cyclegroup = cyclegroup * CyclicGroup(i)
-    subset_a = cyclegroup.random_subset(degree)
-    subset_b = cyclegroup.random_subset(degree)
+    subset_a = cyclegroup.random_symmetric_subset(degree)
+    subset_b = cyclegroup.random_symmetric_subset(degree)
     print(f"Quantum Tanner Code over Cyclic group of order {order} with {degree} generators")
     if isinstance(order, int):
         print("Generators")
@@ -58,8 +58,8 @@ def random_lineargens(
 ) -> tuple[SpecialLinearGroup, set[GroupMember], set[GroupMember]]:
     """Generates a pair of random subsets of SL(dimension, sl_field) of size degree."""
     lineargroup = SpecialLinearGroup(sl_field, dimension)
-    subset_a = lineargroup.random_subset(degree)
-    subset_b = lineargroup.random_subset(degree)
+    subset_a = lineargroup.random_symmetric_subset(degree)
+    subset_b = lineargroup.random_symmetric_subset(degree)
     print(f"Quantum Tanner Code over SL({sl_field}, {dimension}) with {degree} generators ")
     return lineargroup, subset_a, subset_b
 

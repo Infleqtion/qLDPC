@@ -184,7 +184,7 @@ class ClassicalCode(AbstractCode):
         gen_b: npt.NDArray[np.int_] = code_b.generator
         return ~ClassicalCode(np.kron(gen_a, gen_b))
 
-    # TODO: Test this
+    # TODO: Test this or suppress
     @classmethod
     def test_robustness(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
         """Test if the tensor product C_a ⊗ C_b of two codes C_a and C_b, is robustly-testable.
@@ -265,15 +265,19 @@ class ClassicalCode(AbstractCode):
         if vector is None:
             vector = self.field.Zeros(self.num_bits)
         else:
-            assert vector.shape == (self.num_bits, 1)
+            assert vector.shape == (self.num_bits, )
             vector = self.field(vector)
+            if not np.any(self.matrix @ vector):
+                return 0
 
         syndrome = self.matrix @ vector
         effective_syndrome = np.append(syndrome, [1])
-        dist_bound = np.inf
+        dist_bound = self.num_bits
 
         for _ in range(num_trials):
             word = self.field.Random(self.num_bits)
+            if not np.any(word):
+                word[0] = 1
             effective_check_matrix = np.vstack([self.matrix, word]).view(np.ndarray)
 
             closest_vec = qldpc.decoder.decode(
@@ -283,7 +287,9 @@ class ClassicalCode(AbstractCode):
                 modulus=self.field.order,
                 **decoder_args,
             )
-        dist_bound = min(dist_bound, np.count_nonzero(closest_vec))
+            #print(f"Vector {vector}, word, {word} Closest vec, {closest_vec}") 
+            if np.all(effective_check_matrix @ closest_vec == effective_syndrome):
+                dist_bound = min(dist_bound, np.count_nonzero(closest_vec))
 
         return int(dist_bound)
 

@@ -14,6 +14,8 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+import itertools
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -361,3 +363,16 @@ def test_qudit_distance(field: int) -> None:
         code.get_distance(upper=1)
     with pytest.raises(ValueError, match="Must choose"):
         code.get_distance(lower=True, upper=1)
+
+
+def test_distance_classical() -> None:
+    """Distance test of a vector from a code."""
+    rep_code = codes.ClassicalCode.repetition(3, field=2)
+    vectors = itertools.product(rep_code.field.elements, repeat=3)
+    for vector in list(vectors):
+        vec = rep_code.field(vector)
+        dist_brute = rep_code.distance_bruteforce(vec)
+        dist_upper = rep_code.get_distance(num_trials=2, vector=vec, brute=False)
+        assert dist_brute == min(np.count_nonzero(vec), 3 - np.count_nonzero(vec))
+        assert dist_upper >= dist_brute
+    assert rep_code.get_distance(brute=False) == 3
