@@ -309,7 +309,7 @@ class Group:
         # identify generating permutations and build the group itself
         gen_perms = [GroupMember(table[row]) for row in range(len(generators))]
         group = comb.PermutationGroup(*gen_perms)
-        return Group(group, field, lift)
+        return Group(group, base_field.order, lift)
 
     def random_symmetric_subset(
         self, size: int, *, exclude_identity: bool = False, seed: int | None = None
@@ -736,11 +736,10 @@ class SpecialLinearGroup(Group):
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of SL(dimension, field)."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        for entries in itertools.product(base_field.elements, repeat=dimension**2):
-            vec = base_field(entries)
-            mat = vec.reshape(dimension, dimension)
+        for vec in itertools.product(base_field.elements, repeat=dimension**2):
+            mat = base_field(np.reshape(vec, (dimension, dimension)))
             if np.linalg.det(mat) == 1:
-                yield mat  # type:ignore[misc]
+                yield mat
 
 
 class ProjectiveSpecialLinearGroup(Group):

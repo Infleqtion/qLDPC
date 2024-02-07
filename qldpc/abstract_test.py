@@ -59,10 +59,7 @@ def assert_valid_lift(group: abstract.Group) -> None:
         for bb in group.generate()
     )
     assert all(
-        np.array_equal(
-            group.lift(aa) @ group.lift(bb),
-            group.lift(aa * bb),
-        )
+        np.array_equal(group.lift(aa) @ group.lift(bb), group.lift(aa * bb))
         for aa in group.generate()
         for bb in group.generate()
     )
@@ -123,3 +120,11 @@ def test_transpose() -> None:
     matrix = [[x0, 0, x1], [x2, 0, x3]]
     protograph = abstract.Protograph.build(group, matrix)
     assert protograph.T.T == protograph
+
+
+@pytest.mark.parametrize("linear_rep", [True, False])
+def test_SL_group(linear_rep: bool) -> None:
+    """Test special linear group."""
+    group = abstract.SL(2, field=3, linear_rep=linear_rep)
+    for perm, mat in zip(group.generators, group.get_generator_mats()):
+        assert np.array_equal(group.lift(perm), mat)
