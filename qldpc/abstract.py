@@ -691,9 +691,19 @@ class SpecialLinearGroup(Group):
                     perm[index] = next_index
                 generators.append(comb.Permutation(perm))
 
-            # TODO: construct lift
+            def lift(member: GroupMember) -> npt.NDArray[np.int_]:
+                """Lift a group member to a square matrix."""
+                cols = []
+                for entry in range(self.dimension):
+                    inp_vec = self.field.Zeros(self.dimension)
+                    inp_vec[entry] = 1
+                    inp_idx = target_space.index(inp_vec.tobytes())
+                    out_idx = member(inp_idx)
+                    out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
+                    cols.append(out_vec)
+                return np.vstack(cols).T
 
-            super().__init__(comb.PermutationGroup(generators), field=field)
+            super().__init__(comb.PermutationGroup(generators), field, lift)
 
         else:
             # represent group members by how they permute elements of the group
