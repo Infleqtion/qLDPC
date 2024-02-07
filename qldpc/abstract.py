@@ -244,23 +244,63 @@ class Group:
 
     @classmethod
     def from_generating_mats(
-        cls,
-        generators: Iterable[galois.FieldArray],
-        target_space: list[bytes],
-        field: int | None = None,
+        cls, generators: Sequence[npt.NDArray[np.int_]], field: int | None = None
     ) -> Group:
-        """Constructs a Group from a given set of generating matrices."""
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        group_perms = []
-        for member in generators:
-            string = np.empty(len(target_space), dtype=int)
-            for index, vec_bytes in enumerate(target_space):
-                vec = base_field(np.frombuffer(vec_bytes, dtype=np.uint8))
-                next_vec = member @ vec
-                next_index = target_space.index(next_vec.tobytes())
-                string[index] = next_index
-            group_perms.append(comb.Permutation(string))
-        return Group(comb.PermutationGroup(group_perms), field=field)
+        """Constructs a Group from a given set of generating matrices.
+
+        Goup members are represented by how they permute elements of the group itself.
+        """
+
+        def _hash(member: galois.FieldArray) -> int:
+            return hash(member.data.tobytes())
+
+        # keep track of group members and a multiplication table
+        index_to_member = {idx: gen for idx, gen in enumerate(generators)}
+        hash_to_index = {_hash(gen): idx for idx, gen in index_to_member.items()}
+        table_as_dict = {}
+
+        new_members: dict[int, galois.FieldArray]
+
+        def _account_for_product(
+            aa_idx: int, aa_mat: galois.FieldArray, bb_idx: int, bb_mat: galois.FieldArray
+        ) -> None:
+            """Account for the product of two matrices."""
+            cc_mat = aa_mat @ bb_mat
+            cc_hash = _hash(cc_mat)
+            if cc_hash not in hash_to_index:
+                hash_to_index[cc_hash] = cc_idx = len(hash_to_index)
+                new_members[cc_idx] = cc_mat
+            else:
+                cc_idx = hash_to_index[cc_hash]
+            table_as_dict[aa_idx, bb_idx] = cc_idx
+
+        # generate all members of the group and build the group multiplication table
+        members_to_add = index_to_member.copy()
+        while members_to_add:
+            new_members = {}
+            for aa_idx, aa_mat in members_to_add.items():
+                for bb_idx, bb_mat in index_to_member.items():
+                    _account_for_product(aa_idx, aa_mat, bb_idx, bb_mat)
+                    _account_for_product(bb_idx, bb_mat, aa_idx, aa_mat)
+            index_to_member |= new_members
+            members_to_add = new_members
+
+        # convert the multiplication table into a 2-D array
+        table = np.zeros((len(index_to_member), len(index_to_member)), dtype=int)
+        for (aa, bb), cc in table_as_dict.items():
+            table[aa, bb] = cc
+
+        # dictionary from a permutation to the index of a group member
+        permutation_to_index = {tuple(row): idx for idx, row in enumerate(table)}
+
+        def lift(member: GroupMember) -> npt.NDArray[int]:
+            """Lift a member to its matrix representation."""
+            return index_to_member[permutation_to_index[tuple(member.array_form)]]
+
+        # identify generating permutations and build the group itself
+        gen_perms = [GroupMember(table[row]) for row in range(len(generators))]
+        group = comb.PermutationGroup(*gen_perms)
+        return Group(group, field, lift)
 
     def random_symmetric_subset(
         self, size: int, *, exclude_identity: bool = False, seed: int | None = None
@@ -618,13 +658,36 @@ class SpecialLinearGroup(Group):
 
     _dimension: int
 
-    def __init__(self, dimension: int, field: int | None = None) -> None:
+    def __init__(self, dimension: int, field: int | None = None, linear_rep: bool = True) -> None:
         self._dimension = dimension
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        generator_mats = self.get_generator_mats()
-        target_space = self.target_space()
-        group = Group.from_generating_mats(generator_mats, target_space, field)
-        super().__init__(group)
+
+        if linear_rep:
+            # Construct a linear representation of this group, in which group elements permute
+            # elements of the vector space that the generating matrices act on.
+
+            # identify the target space that group members (as matrices) act on
+            target_elements = itertools.product(range(self.field.order), repeat=self.dimension)
+            next(target_elements)  # skip the all-0 element
+            target_space = [self.field(vec).tobytes() for vec in target_elements]
+            target_space_size = self.field.order**self.dimension - 1
+
+            # identify how the generators permute elements of the target space
+            generators = []
+            for member in self.get_generator_mats():
+                perm = np.empty(target_space_size, dtype=int)
+                for index, vec_bytes in enumerate(target_space):
+                    next_vec = member @ self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
+                    next_index = target_space.index(next_vec.tobytes())
+                    perm[index] = next_index
+                generators.append(comb.Permutation(perm))
+
+            super().__init__(comb.PermutationGroup(generators), field=field)
+
+        else:
+            # represent group members by how they permute elements of the group
+            group = self.from_generating_mats(self.get_generator_mats())
+            super().__init__(group)
 
     @property
     def dimension(self) -> int:
@@ -647,12 +710,6 @@ class SpecialLinearGroup(Group):
             gen_w[0, 0] = -1 * self.field(1)
         return gen_x, gen_w
 
-    def target_space(self) -> list[bytes]:
-        """All members of the target space that this group acts on."""
-        vectors = itertools.product(self.field.elements, repeat=self._dimension)
-        next(vectors)  # skip the all-0 element
-        return [self.field(vec).tobytes() for vec in vectors]
-
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of SL(dimension, field)."""
@@ -673,11 +730,10 @@ class ProjectiveSpecialLinearGroup(Group):
         self._dimension = dimension
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         if self.field.order == 2:
-            super().__init__(SpecialLinearGroup(dimension, 2))
+            group = SpecialLinearGroup(dimension, 2)
+            super().__init__(group)
         elif dimension == 2:
-            generator_mats = self.get_generator_mats()
-            target_space = self.target_space()
-            group = Group.from_generating_mats(generator_mats, target_space, field)
+            group = Group.from_generating_mats(self.get_generator_mats(), field)
             super().__init__(group)
         else:
             raise ValueError(
@@ -701,18 +757,6 @@ class ProjectiveSpecialLinearGroup(Group):
         C = self.field([[1, 0], [1, 1]])
         D = self.field([[1, 0], [minus_one, 1]])
         return A, B, C, D
-
-    def target_space(self) -> list[bytes]:
-        """All members of the target space that this group acts on.
-
-        Since this group acts on a projective space, scalar multiples of target vectors are
-        identified with each other.
-        """
-        return [
-            self.field(vec).tobytes()
-            for vec in itertools.product(self.field.elements, repeat=self.dimension)
-            if vec[(self.field(vec) != 0).argmax()] == 1
-        ]
 
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
