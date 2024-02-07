@@ -46,7 +46,7 @@ DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
-    _field_order: int
+    _field: type[galois.FieldArray]
 
     def __init__(
         self,
@@ -59,24 +59,24 @@ class AbstractCode(abc.ABC):
         """
         self._matrix: galois.FieldArray
         if isinstance(matrix, type(self)):
-            self._field_order = matrix.field.order
-            if not (field is None or field == self._field_order):
+            self._field = matrix.field
+            if not (field is None or field == self.field.order):
                 raise ValueError(
                     f"Field argument {field} is inconsistent with the given code, which is defined"
-                    f" over F_{self._field_order}"
+                    f" over F_{self.field.order}"
                 )
             self._matrix = matrix.matrix
         elif isinstance(matrix, galois.FieldArray):
-            self._field_order = type(matrix).order
+            self._field = type(matrix)
             self._matrix = matrix
         else:
-            self._field_order = field or DEFAULT_FIELD_ORDER
+            self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
             self._matrix = self.field(np.array(matrix))
 
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field over which this code is defined."""
-        return galois.GF(self._field_order)
+        return self._field
 
     @property
     def matrix(self) -> galois.FieldArray:
@@ -162,7 +162,7 @@ class ClassicalCode(AbstractCode):
         ~C = { x : x @ y = 0 for all y in C }.
         The parity check matrix of ~C is equal to the generator of C.
         """
-        return ClassicalCode(self.generator, self._field_order)
+        return ClassicalCode(self.generator)
 
     def __invert__(self) -> ClassicalCode:
         return self.dual()
@@ -177,7 +177,7 @@ class ClassicalCode(AbstractCode):
         Observation: G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
         We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
         """
-        if not code_a._field_order == code_b._field_order:
+        if code_a.field is not code_b.field:
             raise ValueError("Cannot take tensor product of codes over different fields")
         gen_a: npt.NDArray[np.int_] = code_a.generator
         gen_b: npt.NDArray[np.int_] = code_b.generator
@@ -199,7 +199,7 @@ class ClassicalCode(AbstractCode):
 
         Equivalently, the number of linearly independent parity checks in this code.
         """
-        if self._field_order == 2:
+        if self.field.order == 2:
             return ldpc.mod2.rank(self._matrix)
         return np.linalg.matrix_rank(self._matrix)
 
@@ -320,7 +320,7 @@ class QuditCode(AbstractCode):
         return self.num_qudits
 
     def _assert_qubit_code(self) -> None:
-        if self._field_order != 2:
+        if self.field.order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
 
     @classmethod
@@ -370,7 +370,7 @@ class QuditCode(AbstractCode):
                 val_x = matrix[check, Pauli.X.index, qudit]
                 val_z = matrix[check, Pauli.Z.index, qudit]
                 vals_xz = (val_x, val_z)
-                if self._field_order == 2:
+                if self.field.order == 2:
                     ops.append(str(Pauli(vals_xz)))
                 else:
                     ops.append(str(QuditOperator(vals_xz)))
@@ -450,9 +450,9 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
-        if field is None and self.code_x._field_order != self.code_z._field_order:
+        if field is None and self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
-        self._field_order = self.code_x._field_order
+        self._field = self.code_x.field
 
         if not skip_validation and not self.is_valid:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
@@ -616,7 +616,7 @@ class CSSCode(QuditCode):
         solutions.  Return the Hamming weight |w_x|.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        if self._field_order != 2:
+        if self.field.order != 2:
             raise ValueError(
                 "Distance upper bound calculation not implemented for fields of order > 2"
             )
@@ -988,7 +988,7 @@ class HGPCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-        field = code_a._field_order
+        field = code_a.field.order
 
         # identify the number of qudits in each sector
         self.sector_size = np.outer(
@@ -1206,7 +1206,7 @@ class TannerCode(ClassicalCode):
             checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
             bits = [sink_indices[sink] for sink in self._get_sorted_neighbors(source)]
             matrix[np.ix_(checks, bits)] = subcode.matrix
-        ClassicalCode.__init__(self, matrix, subcode._field_order)
+        ClassicalCode.__init__(self, matrix, subcode.field.order)
 
     def _get_sorted_neighbors(self, node: object) -> Sequence[object]:
         """Sorted neighbors of the given node."""
@@ -1255,7 +1255,7 @@ class QTCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-        if field is None and code_a._field_order != code_b._field_order:
+        if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
         self.complex = CayleyComplex(subset_a, subset_b)
