@@ -322,7 +322,7 @@ class QuditCode(AbstractCode):
 
     def _assert_qubit_code(self) -> None:
         if self.field.order != 2:
-            raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
+            raise ValueError("Attempted to call a qubit-only method with a non-qubit code")
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -892,7 +892,7 @@ class QCCode(GBCode):
         if len(symbols) != len(dims):
             raise ValueError(
                 f"Number of cyclic group orders, {dims}, does not match the number of generator"
-                f" symbols, {symbols}."
+                f" symbols, {symbols}"
             )
 
         # identify the base cyclic groups, their product, and the generators
