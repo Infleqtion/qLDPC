@@ -184,14 +184,13 @@ class ClassicalCode(AbstractCode):
         gen_b: npt.NDArray[np.int_] = code_b.generator
         return ~ClassicalCode(np.kron(gen_a, gen_b))
 
+    """
     # TODO: Test this or suppress
     @classmethod
     def test_robustness(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
-        """Test if the tensor product C_a ⊗ C_b of two codes C_a and C_b, is robustly-testable.
+        Test if the tensor product C_a ⊗ C_b of two codes C_a and C_b, is robustly-testable.
         If so, ouput a lower bound on the robustness parameter rho.
         See definition in  https://arxiv.org/abs/2206.09973
-        """
-
         tensor_code = ClassicalCode.tensor_product(code_a, code_b)
         gf = galois.GF(code_a._field_order)
         n = code_a.num_bits
@@ -206,6 +205,7 @@ class ClassicalCode(AbstractCode):
             rho_estimate = min(rho_estimate, ratio)
 
         return rho_estimate
+    """
 
     @property
     def num_checks(self) -> int:
@@ -265,7 +265,7 @@ class ClassicalCode(AbstractCode):
         if vector is None:
             vector = self.field.Zeros(self.num_bits)
         else:
-            assert vector.shape == (self.num_bits, )
+            assert vector.shape == (self.num_bits,)
             vector = self.field(vector)
             if not np.any(self.matrix @ vector):
                 return 0
@@ -287,7 +287,7 @@ class ClassicalCode(AbstractCode):
                 modulus=self.field.order,
                 **decoder_args,
             )
-            #print(f"Vector {vector}, word, {word} Closest vec, {closest_vec}") 
+            # print(f"Vector {vector}, word, {word} Closest vec, {closest_vec}")
             if np.all(effective_check_matrix @ closest_vec == effective_syndrome):
                 dist_bound = min(dist_bound, np.count_nonzero(closest_vec))
 
@@ -587,7 +587,7 @@ class CSSCode(QuditCode):
         return self.code_x.dimension + self.code_z.dimension - self.num_qudits
 
     def get_code_params(
-        self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
+        self, *, upper: int | None = None, **decoder_args: object
     ) -> tuple[int, int, int]:
         """Compute the parameters of this code: [[n,k,d]].
 
@@ -598,16 +598,13 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(
-            pauli=None, lower=lower, upper=upper, vector=None, **decoder_args
-        )
+        distance = self.get_distance(pauli=None, upper=upper, vector=None, **decoder_args)
         return self.num_qudits, self.dimension, distance
 
     def get_distance(
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
-        lower: bool = False,
         upper: int | None = None,
         vector: galois.FieldArray | None = None,
         **decoder_args: object,
@@ -620,33 +617,23 @@ class CSSCode(QuditCode):
         If provided a Pauli as an argument, compute the minimim weight of an nontrivial logical
         operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
 
-        If `lower is True`, compute a lower bound: for the X-distance, compute the distance of the
-        classical Z-type subcode that corrects X-type errors.  Vice versa with the Z-distance.
-
         If `upper is not None`, compute an upper bound using a randomized algorithm described in
         arXiv:2308.07915, minimizing over `upper` random trials.  For a detailed explanation, see
         `CSSCode.get_distance_upper_bound` and `CSSCode.get_one_distance_upper_bound`.
 
-        If `lower is False` and `upper is None`, compute an exact code distance with integer linear
+        If `upper is None`, compute an exact code distance with integer linear
         programming.  Warning: this is an NP-complete problem and takes exponential time to execute.
 
         All remaining keyword arguments are passed to a decoder, if applicable.
         """
-        if lower and upper:
-            raise ValueError(
-                "Must choose between computing lower and upper bounds on code distance"
-            )
         assert pauli == Pauli.X or pauli == Pauli.Z or pauli is None
         pauli = pauli if not self._codes_equal else Pauli.X
 
         if pauli is None:
             return min(
-                self.get_distance(Pauli.X, lower=lower, upper=upper, vector=vector, **decoder_args),
-                self.get_distance(Pauli.Z, lower=lower, upper=upper, vector=vector, **decoder_args),
+                self.get_distance(Pauli.X, upper=upper, vector=vector, **decoder_args),
+                self.get_distance(Pauli.Z, upper=upper, vector=vector, **decoder_args),
             )
-
-        if lower:
-            return self.get_distance_lower_bound(pauli)
 
         if upper is not None:
             return self.get_distance_upper_bound(
@@ -654,18 +641,6 @@ class CSSCode(QuditCode):
             )
 
         return self.get_distance_exact(pauli, **decoder_args)
-
-    def get_distance_lower_bound(
-        self, pauli: Literal[Pauli.X, Pauli.Z], vector: galois.FieldArray | None = None
-    ) -> int:
-        """Lower bound to the X-distance or Z-distance of this code."""
-        assert pauli == Pauli.X or pauli == Pauli.Z
-        pauli = pauli if not self._codes_equal else Pauli.X
-        return (
-            self.code_z.get_distance(vector=vector)
-            if pauli == Pauli.X
-            else self.code_x.get_distance(vector=vector)
-        )
 
     def get_distance_upper_bound(
         self,

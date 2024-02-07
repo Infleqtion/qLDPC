@@ -41,6 +41,7 @@ def test_classical_codes() -> None:
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
+        assert code.get_weight() == 2
         assert code.get_random_word() in code
 
     # test that rank of repetition and hamming codes is independent of the field
@@ -256,6 +257,7 @@ def test_cyclic_codes() -> None:
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
+    assert code.get_weight() == 6
 
     dims = (15, 3)
     terms_a = [("x", 9), ("y", 1), ("y", 2)]
@@ -263,6 +265,7 @@ def test_cyclic_codes() -> None:
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 90
     assert code.dimension == 8
+    assert code.get_weight() == 6
 
     with pytest.raises(ValueError, match="does not match"):
         codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
@@ -361,8 +364,6 @@ def test_qudit_distance(field: int) -> None:
     assert code.get_distance() == 2
     with pytest.raises(ValueError, match="not implemented"):
         code.get_distance(upper=1)
-    with pytest.raises(ValueError, match="Must choose"):
-        code.get_distance(lower=True, upper=1)
 
 
 def test_distance_classical() -> None:
