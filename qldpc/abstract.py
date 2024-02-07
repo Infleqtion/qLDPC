@@ -335,7 +335,7 @@ class Group:
         while True:  # sounds dangerous, but bear with me
             member = GroupMember(self.random())
             if exclude_identity and member == self.identity:
-                continue
+                continue  # pragma: no cover
 
             # always add group members we find
             if member == ~member:
