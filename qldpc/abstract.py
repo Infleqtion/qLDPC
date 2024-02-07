@@ -188,7 +188,8 @@ class Group:
 
     def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
-        sympy.core.random.seed(seed)
+        if seed is not None:
+            sympy.core.random.seed(seed)
         return GroupMember(self._group.random())
 
     @classmethod
@@ -326,7 +327,8 @@ class Group:
                 "A random symmetric subset of this group must have a size between 1 and"
                 f" {self.order()} (provided: {size})"
             )
-        sympy.core.random.seed(seed)
+        if seed is not None:
+            sympy.core.random.seed(seed)
 
         singles = set()  # group members equal to their own inverse
         doubles = set()  # pairs of group members and their inverses
