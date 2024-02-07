@@ -686,7 +686,7 @@ class SpecialLinearGroup(Group):
             for member in self.get_generator_mats():
                 perm = np.empty(target_space_size, dtype=int)
                 for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ self.field(np.frombuffer(vec_bytes, dtype=int))
+                    next_vec = member @ self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
                     next_index = target_space.index(next_vec.tobytes())
                     perm[index] = next_index
                 generators.append(comb.Permutation(perm))
@@ -694,8 +694,8 @@ class SpecialLinearGroup(Group):
             def lift(member: GroupMember) -> npt.NDArray[np.int_]:
                 """Lift a group member to a square matrix.
 
-                Each row of the (left-acting) matrix is nominally determined by how the matrix acts
-                on a standard basis vector.
+                Each column of the matrix is nominally determined by how the matrix acts on a
+                standard basis vector.  We then take the transpose to make the matrix left-acting.
                 """
                 cols = []
                 for entry in range(self.dimension):
@@ -703,9 +703,9 @@ class SpecialLinearGroup(Group):
                     inp_vec[entry] = 1
                     inp_idx = target_space.index(inp_vec.tobytes())
                     out_idx = member(inp_idx)
-                    out_vec = np.frombuffer(target_space[out_idx], dtype=int)
+                    out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
                     cols.append(out_vec)
-                return np.hstack(cols)
+                return np.vstack(cols, dtype=int).T
 
             super().__init__(comb.PermutationGroup(generators), field, lift)
 
