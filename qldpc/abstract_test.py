@@ -136,3 +136,6 @@ def test_SL_group(field: int = 3) -> None:
 
     with pytest.raises(ValueError, match="inconsistent"):
         abstract.Group.from_generating_mats(mats, field=field + 1)
+
+    # cover representation with different generators
+    assert len(abstract.SL(2, 5).generators) == 2
