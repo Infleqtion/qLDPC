@@ -164,5 +164,8 @@ def test_random_symmetric_subset() -> None:
         subset = group.random_symmetric_subset(size=2, seed=seed)
         assert subset == {~member for member in subset}
 
+    subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
+    assert subset == {group.identity}
+
     with pytest.raises(ValueError, match="must have a size between"):
         group.random_symmetric_subset(size=0)
