@@ -745,6 +745,8 @@ class SpecialLinearGroup(Group):
 class ProjectiveSpecialLinearGroup(Group):
     """Projective variant of the special linear group (PSL)."""
 
+    # TODO: support linear representation, similarly to SL
+
     _dimension: int
 
     def __init__(self, dimension: int, field: int | None = None) -> None:

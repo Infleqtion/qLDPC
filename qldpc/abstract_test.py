@@ -41,6 +41,7 @@ def test_trivial_group() -> None:
     assert group_squared.lift_dim == 1
     assert group.random() == group.identity
     assert np.array_equal(group.lift(group.identity), np.array(1, ndmin=2))
+    assert group == abstract.Group.from_generating_mats([])
 
 
 def test_lift() -> None:
