@@ -32,7 +32,7 @@ def test_permutation_group() -> None:
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
 
-    assert abstract.Group.from_generating_mats([[1]], field=2) == abstract.CyclicGroup(1)
+    assert abstract.Group.from_generating_mats([[[1]]], field=2) == abstract.CyclicGroup(1)
 
     with pytest.raises(ValueError, match="inconsistent"):
         gen = galois.GF(2)([[1]])
@@ -42,7 +42,7 @@ def test_permutation_group() -> None:
 def test_trivial_group() -> None:
     """Trivial group tests."""
     group = abstract.TrivialGroup()
-    group_squared = group * group
+    group_squared = group @ group
     assert group == group_squared
     assert group.lift_dim == 1
     assert group_squared.lift_dim == 1
@@ -83,15 +83,14 @@ def test_group_product() -> None:
         [2, 3, 0, 1],
         [3, 2, 1, 0],
     ]
-    group = cycle * cycle
+    group = abstract.Group.product(cycle, cycle)
     assert_valid_lift(group)
-    assert group == abstract.Group.product(cycle, cycle)
     assert group.generators == [shift @ identity, identity @ shift]
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
 
     with pytest.raises(ValueError, match="different fields"):
-        _ = abstract.TrivialGroup(2) * abstract.TrivialGroup(3)
+        _ = abstract.TrivialGroup(2) @ abstract.TrivialGroup(3)
 
 
 def test_algebra() -> None:
@@ -100,7 +99,7 @@ def test_algebra() -> None:
     zero = abstract.Element(group)
     one = abstract.Element(group).one()
     assert zero.group == group
-    assert one + one + one == group.identity + 2 * one == zero
+    assert one + one + one == group.identity + 2 * one == -one + one == one - one == zero
     assert group.identity * one == one * group.identity == one**2 == one
     assert np.array_equal(zero.lift(), np.array(0, ndmin=2))
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
@@ -156,3 +155,9 @@ def test_PSL(field: int = 3) -> None:
 
     with pytest.raises(ValueError, match="not yet supported"):
         abstract.PSL(3, 3)
+
+
+# def test_random_symmetric_subset() -> None:
+#     """Cover Group.random_symmetric_subset."""
+#     group = abstract.CyclicGroup(2) @ abstract.CyclicGroup(3)
+#     group.random_symmetric_subset(size=2, seed=0)

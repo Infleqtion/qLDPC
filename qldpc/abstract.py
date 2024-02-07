@@ -144,7 +144,7 @@ class Group:
             isinstance(other, Group) and self._field == other._field and self._group == other._group
         )
 
-    def __mul__(self, other: Group) -> Group:
+    def __matmul__(self, other: Group) -> Group:
         """Direct product of two groups."""
         if self.field != other.field:
             raise ValueError("Cannot multiply groups with lifts defined over different fields")
@@ -194,7 +194,7 @@ class Group:
     @classmethod
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
-        return functools.reduce(cls.__mul__, groups * repeat)
+        return functools.reduce(cls.__matmul__, groups * repeat)
 
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
