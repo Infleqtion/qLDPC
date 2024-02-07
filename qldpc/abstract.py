@@ -251,7 +251,7 @@ class Group:
         Goup members are represented by how they permute elements of the group itself.
         """
 
-        def _hash(member: galois.FieldArray) -> int:
+        def _hash(member: npt.NDArray[np.int_]) -> int:
             return hash(member.data.tobytes())
 
         # keep track of group members and a multiplication table
@@ -262,7 +262,7 @@ class Group:
         new_members: dict[int, galois.FieldArray]
 
         def _account_for_product(
-            aa_idx: int, aa_mat: galois.FieldArray, bb_idx: int, bb_mat: galois.FieldArray
+            aa_idx: int, aa_mat: npt.NDArray[np.int_], bb_idx: int, bb_mat: npt.NDArray[np.int_]
         ) -> None:
             """Account for the product of two matrices."""
             cc_mat = aa_mat @ bb_mat
@@ -293,7 +293,7 @@ class Group:
         # dictionary from a permutation to the index of a group member
         permutation_to_index = {tuple(row): idx for idx, row in enumerate(table)}
 
-        def lift(member: GroupMember) -> npt.NDArray[int]:
+        def lift(member: GroupMember) -> npt.NDArray[np.int_]:
             """Lift a member to its matrix representation."""
             return index_to_member[permutation_to_index[tuple(member.array_form)]]
 
@@ -729,17 +729,17 @@ class ProjectiveSpecialLinearGroup(Group):
     def __init__(self, dimension: int, field: int | None = None) -> None:
         self._dimension = dimension
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        group: Group
         if self.field.order == 2:
             group = SpecialLinearGroup(dimension, 2)
-            super().__init__(group)
         elif dimension == 2:
             group = Group.from_generating_mats(self.get_generator_mats(), field)
-            super().__init__(group)
         else:
             raise ValueError(
                 "Projective special linear groups with both dimension and field greater than 2 are"
                 " not yet supported."
             )
+        super().__init__(group)
 
     @property
     def dimension(self) -> int:
