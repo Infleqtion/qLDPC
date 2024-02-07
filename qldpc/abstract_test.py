@@ -125,8 +125,8 @@ def test_transpose() -> None:
     assert protograph.T.T == protograph
 
 
-def test_SL_group(field: int = 3) -> None:
-    """Test special linear group."""
+def test_SL(field: int = 3) -> None:
+    """Special linear group."""
     for linear_rep in [False, True]:
         group = abstract.SL(2, field=field, linear_rep=linear_rep)
         gens = group.generators
@@ -139,3 +139,15 @@ def test_SL_group(field: int = 3) -> None:
 
     # cover representation with different generators
     assert len(abstract.SL(2, 5).generators) == 2
+
+
+def test_PSL(field: int = 3) -> None:
+    """Projective special linear group."""
+    group = abstract.PSL(2, 2)
+    assert group.generators == abstract.SL(2, 2).generators
+    assert group.dimension == 2
+
+    assert len(abstract.PSL(2, 3).generators) == 4
+
+    with pytest.raises(ValueError, match="not yet supported"):
+        abstract.PSL(3, 3)
