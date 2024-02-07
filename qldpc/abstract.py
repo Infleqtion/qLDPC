@@ -266,22 +266,17 @@ class Group:
                 f" defined over F_{base_field.order}"
             )
 
-        def _hash(member: npt.NDArray[np.int_]) -> int:
-            return hash(member.data.tobytes())
-
         # keep track of group members and a multiplication table
         index_to_member = {idx: base_field(gen) for idx, gen in enumerate(generators)}
-        hash_to_index = {_hash(gen): idx for idx, gen in index_to_member.items()}
+        hash_to_index = {hash(gen.data.tobytes()): idx for idx, gen in index_to_member.items()}
         table_as_dict = {}
 
-        new_members: dict[int, npt.NDArray[np.int_]]
+        new_members: dict[int, galois.FieldArray]
 
-        def _account_for_product(
-            aa_idx: int, aa_mat: npt.NDArray[np.int_], bb_idx: int, bb_mat: npt.NDArray[np.int_]
-        ) -> None:
+        def _account_for_product(aa_idx: int, bb_idx: int) -> None:
             """Account for the product of two matrices."""
-            cc_mat = aa_mat @ bb_mat
-            cc_hash = _hash(cc_mat)
+            cc_mat = index_to_member[aa_idx] @ index_to_member[bb_idx]
+            cc_hash = hash(cc_mat.data.tobytes())
             if cc_hash not in hash_to_index:
                 hash_to_index[cc_hash] = cc_idx = len(hash_to_index)
                 new_members[cc_idx] = cc_mat
@@ -293,10 +288,9 @@ class Group:
         members_to_add = index_to_member.copy()
         while members_to_add:
             new_members = {}
-            for aa_idx, aa_mat in members_to_add.items():
-                for bb_idx, bb_mat in index_to_member.items():
-                    _account_for_product(aa_idx, aa_mat, bb_idx, bb_mat)
-                    _account_for_product(bb_idx, bb_mat, aa_idx, aa_mat)
+            for aa_idx, bb_idx in itertools.product(members_to_add, index_to_member):
+                _account_for_product(aa_idx, bb_idx)
+                _account_for_product(bb_idx, aa_idx)
             index_to_member |= new_members
             members_to_add = new_members
 
