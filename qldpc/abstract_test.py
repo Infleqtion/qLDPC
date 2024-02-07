@@ -17,6 +17,8 @@
 import numpy as np
 import pytest
 
+import galois
+
 from qldpc import abstract
 
 
@@ -32,6 +34,10 @@ def test_permutation_group() -> None:
     assert group.random(seed=0) == group.random(seed=0)
 
     assert abstract.Group.from_generating_mats([[1]], field=2) == abstract.CyclicGroup(1)
+
+    with pytest.raises(ValueError, match="inconsistent"):
+        gen = galois.GF(2)([[1]])
+        abstract.Group.from_generating_mats([gen], field=3)
 
 
 def test_trivial_group() -> None:
@@ -133,9 +139,6 @@ def test_SL(field: int = 3) -> None:
         mats = group.get_generator_mats()
         assert np.array_equal(group.lift(gens[0]), mats[0])
         assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
-
-    with pytest.raises(ValueError, match="inconsistent"):
-        abstract.Group.from_generating_mats(mats, field=field + 1)
 
     # cover representation with different generators
     assert len(abstract.SL(2, 5).generators) == 2
