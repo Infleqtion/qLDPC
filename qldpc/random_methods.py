@@ -19,7 +19,7 @@
 # import time
 # import galois
 
-# from typing import TYPE_CHECKING, Literal
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -28,8 +28,8 @@ from qldpc.codes import ClassicalCode, QTCode
 
 
 def random_cyclicgens(
-    order: int | tuple[int], degree: int
-) -> tuple[CyclicGroup | Group, set[GroupMember], set[GroupMember]]:
+    order: int | Sequence[int], degree: int
+) -> tuple[Group, set[GroupMember], set[GroupMember]]:
     """Generates a pair of random subsets of a cyclic group or a product of cyclic groups.
     Order: Can be an integer k --> Z_k or a tuple,
             (k_1,k_2, ... , k_r) --> Z_{k_1} x ... x Z_{k_r}
@@ -38,9 +38,8 @@ def random_cyclicgens(
     cyclegroup: CyclicGroup | Group
     if isinstance(order, int):
         cyclegroup = CyclicGroup(order)
-    elif isinstance(order, tuple):
+    else:
         cyclegroup = CyclicGroup(order[0])
-        i: int
         for i in order[1:]:
             cyclegroup = cyclegroup * CyclicGroup(i)
     subset_a = cyclegroup.random_symmetric_subset(degree)
@@ -90,7 +89,7 @@ def random_basecodes(
 
 
 def random_cyclicQTcode(
-    order: int | tuple[int],
+    order: int | Sequence[int],
     field: int = 2,
     hamming: int | None = None,
     save: bool = False,
@@ -154,8 +153,8 @@ np.set_printoptions(linewidth=200)
 blocklength = 18
 field = 2
 sl_field = 4
-# random_cyclicQTcode(blocklength, field, hamming=3)
-random_linearQTcode(sl_field, hamming=3)
+random_cyclicQTcode(blocklength, field, hamming=3)
+#random_linearQTcode(sl_field, hamming=3)
 # if tannercode.get_distance(upper=10, ensure_nontrivial=False) > 20:
 #    np.save
 # print(np.any(tannercode.matrix))
