@@ -14,10 +14,9 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+import galois
 import numpy as np
 import pytest
-
-import galois
 
 from qldpc import abstract
 
@@ -140,6 +139,8 @@ def test_SL(field: int = 3) -> None:
         assert np.array_equal(group.lift(gens[0]), mats[0])
         assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
 
+    assert len(list(abstract.SL.iter_mats(2, 2))) == abstract.SL(2, 2).order()
+
     # cover representation with different generators
     assert len(abstract.SL(2, 5).generators) == 2
 
@@ -150,7 +151,8 @@ def test_PSL(field: int = 3) -> None:
     assert group.generators == abstract.SL(2, 2).generators
     assert group.dimension == 2
 
-    assert len(abstract.PSL(2, 3).generators) == 4
+    assert len(list(abstract.PSL.iter_mats(2, 2))) == abstract.PSL(2, 2).order()
+    assert abstract.PSL(2, 3).order() == 24
 
     with pytest.raises(ValueError, match="not yet supported"):
         abstract.PSL(3, 3)
