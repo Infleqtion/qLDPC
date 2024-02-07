@@ -720,10 +720,7 @@ class SpecialLinearGroup(Group):
         return self._dimension
 
     def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
-        """Generator matrices for this group.
-
-        This construction is based on https://arxiv.org/abs/2201.09155.
-        """
+        """Generator matrices for this group, based on arXiv:2201.09155."""
         gen_w = -self.field(np.diag(np.ones(self.dimension - 1, dtype=int), k=-1))
         gen_w[0, -1] = 1
         gen_x = self.field.Identity(self._dimension)
@@ -772,10 +769,7 @@ class ProjectiveSpecialLinearGroup(Group):
         return self._dimension
 
     def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
-        """Expanding generator matrices for this group.
-
-        This construction is based on https://arxiv.org/abs/1807.03879.
-        """
+        """Expanding generator matrices for this group, based on arXiv:1807.03879."""
         minus_one = -self.field(1)
         A = self.field([[1, 1], [0, 1]])
         B = self.field([[1, minus_one], [0, 1]])
