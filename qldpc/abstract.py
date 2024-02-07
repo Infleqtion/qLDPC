@@ -259,7 +259,7 @@ class Group:
         hash_to_index = {_hash(gen): idx for idx, gen in index_to_member.items()}
         table_as_dict = {}
 
-        new_members: dict[int, galois.FieldArray]
+        new_members: dict[int, npt.NDArray[np.int_]]
 
         def _account_for_product(
             aa_idx: int, aa_mat: npt.NDArray[np.int_], bb_idx: int, bb_mat: npt.NDArray[np.int_]
