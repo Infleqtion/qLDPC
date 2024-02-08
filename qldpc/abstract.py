@@ -701,7 +701,7 @@ class SpecialLinearGroup(Group):
                 """
                 cols = []
                 for entry in range(self.dimension):
-                    inp_vec = self.field.Zeros(self.dimension)
+                    inp_vec = np.zeros(self.dimension, dtype=np.uint8)
                     inp_vec[entry] = 1
                     inp_idx = target_space.index(inp_vec.tobytes())
                     out_idx = member(inp_idx)
