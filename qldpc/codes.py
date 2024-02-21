@@ -762,7 +762,8 @@ class CSSCode(QuditCode):
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
 
-    def get_random_logical_op(
+    def \
+            get_random_logical_op(
         self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = False
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
