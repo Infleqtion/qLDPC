@@ -38,7 +38,6 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
-DEFAULT_DISTANCE_TRIALS = 10
 
 
 def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
@@ -222,8 +221,7 @@ class ClassicalCode(AbstractCode):
     def get_distance(
         self,
         *,
-        exact: bool = True,
-        num_trials: int = DEFAULT_DISTANCE_TRIALS,
+        bound: int | None = None,
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -236,10 +234,10 @@ class ClassicalCode(AbstractCode):
 
         This method uses essentially the same trick as that in CSSCode.get_one_distance_bound.
         """
-        if exact:
-            return self.get_distance_exact(vector)
+        if bound:
+            return self.get_distance_bound(bound, vector=vector, **decoder_args)
 
-        return self.get_distance_bound(num_trials, vector=vector, **decoder_args)
+        return self.get_distance_exact(vector)
 
     def get_distance_exact(self, vector: npt.NDArray[np.int_] | None = None) -> int:
         """Compute the code distance by brute force.
@@ -258,7 +256,7 @@ class ClassicalCode(AbstractCode):
 
     def get_distance_bound(
         self,
-        num_trials: int = DEFAULT_DISTANCE_TRIALS,
+        num_trials: int,
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -301,8 +299,7 @@ class ClassicalCode(AbstractCode):
     def get_code_params(
         self,
         *,
-        exact: bool = True,
-        num_trials: int = DEFAULT_DISTANCE_TRIALS,
+        bound: int | None = None,
         **decoder_args: object,
     ) -> tuple[int, int, int, int]:
         """Compute the parameters of this code: [n,k,d].
@@ -315,7 +312,7 @@ class ClassicalCode(AbstractCode):
         return (
             self.num_bits,
             self.dimension,
-            self.get_distance(exact=exact, num_trials=num_trials, vector=None, **decoder_args),
+            self.get_distance(bound=bound, vector=None, **decoder_args),
             self.get_weight(),
         )
 
@@ -616,8 +613,7 @@ class CSSCode(QuditCode):
     def get_code_params(
         self,
         *,
-        exact: bool = True,
-        num_trials: int = DEFAULT_DISTANCE_TRIALS,
+        bound: int | None = None,
         **decoder_args: object,
     ) -> tuple[int, int, int]:
         """Compute the parameters of this code: [[n,k,d]].
@@ -629,17 +625,14 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(
-            pauli=None, exact=exact, num_trials=num_trials, vector=None, **decoder_args
-        )
+        distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
         return self.num_qudits, self.dimension, distance
 
     def get_distance(
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
-        exact: bool = True,
-        num_trials: int = DEFAULT_DISTANCE_TRIALS,
+        bound: int | None = None,
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -648,14 +641,10 @@ class CSSCode(QuditCode):
         If provided a Pauli as an argument, compute the minimim weight of an nontrivial logical
         operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
 
-        If `exact is True`, compute an upper bound using a randomized algorithm described in
-        arXiv:2308.07915, minimizing over `bound` random trials.  For a detailed explanation, see
-        `CSSCode.get_distance_bound` and `CSSCode.get_one_distance_bound`.
-
-        If `exact is True`, compute an exact code distance by brute force.  Otherwise, compute an
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
         upper bound using a randomized algorithm described in arXiv:2308.07915, minimizing over
-        `num_trials` random trials.  For a detailed explanation, see `CSSCode.get_distance_bound`
-        and `CSSCode.get_one_distance_bound`.
+        `bound` random trials.  For a detailed explanation, see `CSSCode.get_distance_bound` and
+        `CSSCode.get_one_distance_bound`.
 
         If provided a vector, compute the minimum Hamming distance of this vector from a nontrivial
         logical operator.
@@ -667,18 +656,12 @@ class CSSCode(QuditCode):
 
         if pauli is None:
             return min(
-                self.get_distance(
-                    Pauli.X, exact=exact, num_trials=num_trials, vector=vector, **decoder_args
-                ),
-                self.get_distance(
-                    Pauli.Z, exact=exact, num_trials=num_trials, vector=vector, **decoder_args
-                ),
+                self.get_distance(Pauli.X, bound=bound, vector=vector, **decoder_args),
+                self.get_distance(Pauli.Z, bound=bound, vector=vector, **decoder_args),
             )
 
-        if not exact:
-            return self.get_distance_bound(
-                pauli, num_trials=num_trials, vector=vector, **decoder_args
-            )
+        if bound:
+            return self.get_distance_bound(pauli, num_trials=bound, vector=vector, **decoder_args)
 
         return self.get_distance_exact(pauli, **decoder_args)
 
