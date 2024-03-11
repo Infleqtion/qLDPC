@@ -859,9 +859,8 @@ class CSSCode(QuditCode):
 
         return op_a
 
-    # TODO: accept custom decoder arguments
     def minimize_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int
+        self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int, **decoder_args: object
     ) -> None:
         """Minimize the weight of a logical operator.
 
@@ -872,8 +871,6 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
-        if self.field.degree > 1:
-            raise ValueError("Method only supported for prime number fields")
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
@@ -884,14 +881,22 @@ class CSSCode(QuditCode):
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[code.num_checks + logical_qubit_index] = 1
 
-        logical_op = qldpc.decoder.decode(
-            effective_check_matrix,
-            effective_syndrome,
-            with_ILP=True,
-            modulus=self.field.order,
-        )
+        if self.field.order > 2:
+            if self.field.degree > 1:
+                raise ValueError("Method only supported for prime number fields")
+            decoder_args["modulus"] = self.field.order
+            decoder_args["with_ILP"] = True
+
+        logical_op_found = False
+        while not logical_op_found:
+            candidate_logical_op = qldpc.decoder.decode(
+                effective_check_matrix, effective_syndrome, **decoder_args
+            )
+            actual_syndrome = effective_check_matrix @ candidate_logical_op
+            logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
+
         assert self._logical_ops is not None
-        self._logical_ops[pauli.index, logical_qubit_index] = logical_op
+        self._logical_ops[pauli.index, logical_qubit_index] = candidate_logical_op
 
 
 ################################################################################
