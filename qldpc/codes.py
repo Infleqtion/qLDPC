@@ -277,10 +277,7 @@ class ClassicalCode(AbstractCode):
         If passed a vector, compute an upper bound of the Hamming distance between the vector and a
         code word.
         """
-        if self.field.order != 2:
-            raise ValueError(
-                "Distance upper bound calculation not implemented for fields of order > 2"
-            )
+        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
         syndrome = self.matrix @ (vector or self.field.Zeros(self.num_bits))
         effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
@@ -296,7 +293,7 @@ class ClassicalCode(AbstractCode):
                 **decoder_args,
             )
 
-            actual_syndrome = effective_check_matrix @ closest_vec % 2
+            actual_syndrome = effective_check_matrix @ closest_vec % self.field.order
             decoding_succeeded = np.array_equal(actual_syndrome, effective_syndrome)
 
         return int(np.count_nonzero(closest_vec))
@@ -384,6 +381,17 @@ class ClassicalCode(AbstractCode):
 
     # TODO: add more codes, particularly from code families that are useful for good quantum codes
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
+
+
+def _fix_decoder_args_for_nonprime_fields(
+    decoder_args: dict[str, object], field: type[galois.FieldArray]
+) -> None:
+    """Fix decoder arguments for nonprime number fields."""
+    if field.order > 2:
+        if field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
+        decoder_args["modulus"] = field.order
+        decoder_args["with_ILP"] = True
 
 
 # TODO:
@@ -742,10 +750,7 @@ class CSSCode(QuditCode):
         solutions.  Return the Hamming weight |w_x|.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        if self.field.order != 2:
-            raise ValueError(
-                "Distance upper bound calculation not implemented for fields of order > 2"
-            )
+        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
@@ -772,7 +777,7 @@ class CSSCode(QuditCode):
             )
 
             # check whether decoding was successful
-            actual_syndrome = effective_check_matrix @ candidate_logical_op % 2
+            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
@@ -927,6 +932,7 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
+        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
@@ -937,18 +943,12 @@ class CSSCode(QuditCode):
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[code.num_checks + logical_qubit_index] = 1
 
-        if self.field.order > 2:
-            if self.field.degree > 1:
-                raise ValueError("Method only supported for prime number fields")
-            decoder_args["modulus"] = self.field.order
-            decoder_args["with_ILP"] = True
-
         logical_op_found = False
         while not logical_op_found:
             candidate_logical_op = qldpc.decoder.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
-            actual_syndrome = effective_check_matrix @ candidate_logical_op
+            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
