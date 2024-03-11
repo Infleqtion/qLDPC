@@ -634,7 +634,6 @@ class CSSCode(QuditCode):
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            # NOTE: bounds appear to be empirically better with ensure_nontrivial=False
             word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True)
 
             # support of a candidate pauli-type logical operator
