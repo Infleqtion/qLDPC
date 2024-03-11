@@ -186,29 +186,6 @@ class ClassicalCode(AbstractCode):
         gen_b: npt.NDArray[np.int_] = code_b.generator
         return ~ClassicalCode(np.kron(gen_a, gen_b))
 
-    """
-    # TODO: Test this or suppress
-    @classmethod
-    def test_robustness(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
-        Test if the tensor product C_a ⊗ C_b of two codes C_a and C_b, is robustly-testable.
-        If so, ouput a lower bound on the robustness parameter rho.
-        See definition in  https://arxiv.org/abs/2206.09973
-        tensor_code = ClassicalCode.tensor_product(code_a, code_b)
-        gf = galois.GF(code_a._field_order)
-        n = code_a.num_bits
-        itertools.product(gf.elements, repeat=n * n)
-        rho_estimate = np.inf
-        for x in itertools.product(gf.elements, repeat=n * n):
-            dist_AB = tensor_code.get_distance(vector=gf(x))
-            matrix = gf(x).reshape((n, n))
-            dist_A = np.sum(np.apply_along_axis(code_a.get_distance, axis=1, arr=matrix))
-            dist_B = np.sum(np.apply_along_axis(code_b.get_distance, axis=0, arr=matrix))
-            ratio = (dist_A + dist_B) / (2 * dist_AB)
-            rho_estimate = min(rho_estimate, ratio)
-
-        return rho_estimate
-    """
-
     @property
     def num_checks(self) -> int:
         """Number of check bits in this code."""
@@ -289,7 +266,6 @@ class ClassicalCode(AbstractCode):
                 modulus=self.field.order,
                 **decoder_args,
             )
-            # print(f"Vector {vector}, word, {word} Closest vec, {closest_vec}")
             if np.all(effective_check_matrix @ closest_vec == effective_syndrome):
                 dist_bound = min(dist_bound, np.count_nonzero(closest_vec))
 
@@ -404,7 +380,7 @@ class QuditCode(AbstractCode):
 
     @property
     def num_qubits(self) -> int:
-        """Number of data qubits in     this code."""
+        """Number of data qubits in this code."""
         self._assert_qubit_code()
         return self.num_qudits
 
@@ -589,7 +565,7 @@ class CSSCode(QuditCode):
         return self.code_x.dimension + self.code_z.dimension - self.num_qudits
 
     def get_code_params(
-        self, *, upper: int | None = None, **decoder_args: object
+        self, *, bound: int | None = None, **decoder_args: object
     ) -> tuple[int, int, int]:
         """Compute the parameters of this code: [[n,k,d]].
 
@@ -600,14 +576,14 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(pauli=None, upper=upper, vector=None, **decoder_args)
+        distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
         return self.num_qudits, self.dimension, distance
 
     def get_distance(
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
-        upper: int | None = None,
+        bound: int | None = None,
         vector: galois.FieldArray | None = None,
         **decoder_args: object,
     ) -> int:
@@ -619,11 +595,11 @@ class CSSCode(QuditCode):
         If provided a Pauli as an argument, compute the minimim weight of an nontrivial logical
         operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
 
-        If `upper is not None`, compute an upper bound using a randomized algorithm described in
+        If `bound is not None`, compute an upper bound using a randomized algorithm described in
         arXiv:2308.07915, minimizing over `upper` random trials.  For a detailed explanation, see
         `CSSCode.get_distance_upper_bound` and `CSSCode.get_one_distance_upper_bound`.
 
-        If `upper is None`, compute an exact code distance with integer linear
+        If `bound is None`, compute an exact code distance with integer linear
         programming.  Warning: this is an NP-complete problem and takes exponential time to execute.
 
         All remaining keyword arguments are passed to a decoder, if applicable.
@@ -633,13 +609,13 @@ class CSSCode(QuditCode):
 
         if pauli is None:
             return min(
-                self.get_distance(Pauli.X, upper=upper, vector=vector, **decoder_args),
-                self.get_distance(Pauli.Z, upper=upper, vector=vector, **decoder_args),
+                self.get_distance(Pauli.X, bound=bound, vector=vector, **decoder_args),
+                self.get_distance(Pauli.Z, bound=bound, vector=vector, **decoder_args),
             )
 
-        if upper is not None:
+        if bound is not None:
             return self.get_distance_upper_bound(
-                pauli, num_trials=upper, vector=vector, **decoder_args
+                pauli, num_trials=bound, vector=vector, **decoder_args
             )
 
         return self.get_distance_exact(pauli, **decoder_args)
@@ -836,8 +812,6 @@ class CSSCode(QuditCode):
         qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
 
         # run some sanity checks
-        # print(pivot_z[-1])
-        # print(len(pivot_x))
         assert pivot_z[-1] < num_qudits - len(pivot_x)
         assert dimension + len(pivot_x) + len(pivot_z) == num_qudits
 
@@ -1302,20 +1276,12 @@ class TannerCode(ClassicalCode):
         sinks = [node for node in subgraph if subgraph.out_degree(node) == 0]
         sink_indices = {sink: idx for idx, sink in enumerate(sorted(sinks))}
 
-        # print()
-        # matrix = nx.adjacency_matrix(subgraph).toarray()
-        # print(matrix.shape)
-        # print(matrix)
-
         num_bits = len(sinks)
         num_checks = len(sources) * subcode.num_checks
         matrix = np.zeros((num_checks, num_bits), dtype=int)
         for idx, source in enumerate(sorted(sources)):
             checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
             bits = [sink_indices[sink] for sink in self._get_sorted_neighbors(source)]
-            # print()
-            # print(len(bits))
-            # print(len(list(subgraph.neighbors(source))))
             matrix[np.ix_(checks, bits)] = subcode.matrix
         ClassicalCode.__init__(self, matrix, subcode.field.order)
 
@@ -1358,8 +1324,8 @@ class QTCode(CSSCode):
         code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
-        twopartite: bool | None = False,
         *,
+        bipartite: bool | None = False,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
@@ -1370,7 +1336,7 @@ class QTCode(CSSCode):
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
-        self.complex = CayleyComplex(subset_a, subset_b, twopartite=twopartite)
+        self.complex = CayleyComplex(subset_a, subset_b, twopartite=bipartite)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 

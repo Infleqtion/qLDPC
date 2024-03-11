@@ -110,7 +110,7 @@ def random_cyclicQTcode(
 
     _, subset_a, subset_b = random_cyclicgens(order, deg)
     code_a, code_b = random_basecodes(deg, field, hamming=hamming, save=save)
-    tannercode = QTCode(subset_a, subset_b, code_a, code_b, twopartite=False)
+    tannercode = QTCode(subset_a, subset_b, code_a, code_b, bipartite=False)
     params = [
         tannercode.num_qubits,
         tannercode.dimension,

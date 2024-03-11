@@ -344,13 +344,13 @@ def test_toric_tanner_code() -> None:
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
     subcode_a = codes.ClassicalCode.repetition(2, field=2)
-    code = codes.QTCode(subset_a, subset_b, subcode_a)
+    code = codes.QTCode(subset_a, subset_b, subcode_a)  # TODO: test bipartite as well
 
     # check that this is a [[64, 8, 4]] code
     assert code.get_code_params() == (64, 8, 4)
-    # assert code.get_distance(lower=True) == 4
-    # assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
-    assert code.get_distance(upper=50, ensure_nontrivial=False) == 4
+    assert code.get_distance(lower=True) == 4
+    assert code.get_distance(bound=100, ensure_nontrivial=True) == 4
+    assert code.get_distance(bound=50, ensure_nontrivial=False) == 4
 
     # raise error if constructing QTCode with codes over different fields
     subcode_b = codes.ClassicalCode.repetition(2, field=subcode_a.field.order**2)
@@ -364,7 +364,7 @@ def test_qudit_distance(field: int) -> None:
     code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
     assert code.get_distance() == 2
     with pytest.raises(ValueError, match="not implemented"):
-        code.get_distance(upper=1)
+        code.get_distance(bound=1)
 
 
 def test_distance_classical() -> None:
