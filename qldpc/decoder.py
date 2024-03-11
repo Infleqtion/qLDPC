@@ -108,26 +108,25 @@ def decode_with_ILP(
 def decode(
     matrix: npt.NDArray[np.int_],
     syndrome: npt.NDArray[np.int_],
-    *,
-    exact: bool = False,
     **decoder_args: object,
 ) -> npt.NDArray[np.int_]:
     """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
 
     - If passed an explicit decoder, use it.
-    - If no decoder is provided and `exact is True`, solve exactly with an integer linear program.
+    - If passed `with_ILP=True`, solve exactly with an integer linear program.
     - Otherwise, use a BP-OSD decoder.
 
     In all cases, pass the `decoder_args` to the decoder that is used.
     """
+    with_ILP = decoder_args.pop("with_ILP", False)
     if callable(custom_decoder := decoder_args.pop("decoder", None)):
-        if exact:
+        if with_ILP:
             warnings.warn(
                 "Exact decoding was reqested, but cannot be guaranteed with a custom decoder"
             )
         return custom_decoder(matrix, syndrome, **decoder_args)
 
-    if not exact:
+    if not with_ILP:
         return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
 
     return decode_with_ILP(matrix, syndrome, **decoder_args)

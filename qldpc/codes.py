@@ -219,15 +219,16 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
-    def get_distance_brute(self, vector: galois.FieldArray | None = None) -> int:
-        """The distance of this code, or equivalently the minimal weight of a nonzero code word.
+    def get_distance_exact(self, vector: npt.NDArray[np.int_] | None = None) -> int:
+        """Compute the minimal distance between a given vector and a code word by brute force.
 
-        If `vector is not None`, compute the distance of the given vector from this code.
+        If `vector is None`, then compute this code's code distance: the minimal Hamming distance
+        between two code words, or equivalently the minimal weight of a nonzero code word.
         """
-        if vector is None:
-            words = self.words()[1:]
-        else:
+        if vector is not None:
             words = self.words() - vector[np.newaxis, :]
+        else:
+            words = self.words()[1:]
         word_array = np.array(words, dtype=int)
         return np.min(np.count_nonzero(word_array, axis=1))
 
@@ -235,17 +236,16 @@ class ClassicalCode(AbstractCode):
         self,
         *,
         num_trials: int = DEFAULT_DISTANCE_TRIALS,
-        vector: galois.FieldArray | None = None,
-        exact: bool = False,
-        brute: bool = True,
+        vector: npt.NDArray[np.int_] | None = None,
+        exact: bool = True,
         **decoder_args: object,
     ) -> int:
-        """Find smallest Hamming distance between input vector and a codeword.
+        """Estimate the minimal distance between a given vector and a code word.
 
-        This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound
+        Uses thes same method as in CSSCode.get_one_distance_bound.
         """
-        if brute:
-            return self.get_distance_brute(vector)
+        if exact:
+            return self.get_distance_exact(vector)
 
         if vector is None:
             vector = self.field.Zeros(self.num_bits)
@@ -257,7 +257,7 @@ class ClassicalCode(AbstractCode):
 
         syndrome = self.matrix @ vector
         effective_syndrome = np.append(syndrome, [1])
-        dist_bound = self.num_bits
+        bound = self.num_bits
 
         for _ in range(num_trials):
             word = get_random_nontrivial_vec(self.field, self.num_bits)
@@ -266,14 +266,13 @@ class ClassicalCode(AbstractCode):
             closest_vec = qldpc.decoder.decode(
                 effective_check_matrix,
                 effective_syndrome,
-                exact=exact,
                 modulus=self.field.order,
                 **decoder_args,
             )
             if np.all(effective_check_matrix @ closest_vec == effective_syndrome):
-                dist_bound = min(dist_bound, np.count_nonzero(closest_vec))
+                bound = min(bound, np.count_nonzero(closest_vec))
 
-        return int(dist_bound)
+        return int(bound)
 
     def get_code_params(self) -> tuple[int, int, int, int]:
         """Compute the parameters of this code: [n,k,d].
@@ -601,7 +600,7 @@ class CSSCode(QuditCode):
 
         If `bound is not None`, compute an upper bound using a randomized algorithm described in
         arXiv:2308.07915, minimizing over `upper` random trials.  For a detailed explanation, see
-        `CSSCode.get_distance_upper_bound` and `CSSCode.get_one_distance_upper_bound`.
+        `CSSCode.get_distance_bound` and `CSSCode.get_one_distance_bound`.
 
         If `bound is None`, compute an exact code distance with integer linear
         programming.  Warning: this is an NP-complete problem and takes exponential time to execute.
@@ -618,13 +617,11 @@ class CSSCode(QuditCode):
             )
 
         if bound is not None:
-            return self.get_distance_upper_bound(
-                pauli, num_trials=bound, vector=vector, **decoder_args
-            )
+            return self.get_distance_bound(pauli, num_trials=bound, vector=vector, **decoder_args)
 
         return self.get_distance_exact(pauli, **decoder_args)
 
-    def get_distance_upper_bound(
+    def get_distance_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         num_trials: int,
@@ -633,16 +630,16 @@ class CSSCode(QuditCode):
     ) -> int:
         """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
 
-        All keyword arguments are passed to `CSSCode.get_one_distance_upper_bound`.
+        All keyword arguments are passed to `CSSCode.get_one_distance_bound`.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         return min(
-            self.get_one_distance_upper_bound(pauli, vector=vector, **decoder_args)
+            self.get_one_distance_bound(pauli, vector=vector, **decoder_args)
             for _ in range(num_trials)
         )
 
     # TODO: Modify to take any x
-    def get_one_distance_upper_bound(
+    def get_one_distance_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         vector: galois.FieldArray | None = None,
@@ -717,7 +714,7 @@ class CSSCode(QuditCode):
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
             candidate_logical_op = qldpc.decoder.decode(
-                effective_check_matrix, effective_syndrome, exact=False, **decoder_args
+                effective_check_matrix, effective_syndrome, **decoder_args
             )
 
             # check whether the decoding was successful
@@ -864,8 +861,8 @@ class CSSCode(QuditCode):
 
         A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
         that it commutes with all logical operators except its dual.  This is essentially the same
-        optimization as in CSSCode.get_one_distance_upper_bound, but solved exactly with integer
-        linear programming.
+        optimization as in CSSCode.get_one_distance_bound, but solved exactly with integer linear
+        programming.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
@@ -884,7 +881,7 @@ class CSSCode(QuditCode):
         logical_op = qldpc.decoder.decode(
             effective_check_matrix,
             effective_syndrome,
-            exact=True,
+            with_ILP=True,
             modulus=self.field.order,
         )
         assert self._logical_ops is not None
