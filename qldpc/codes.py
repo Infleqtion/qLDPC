@@ -40,6 +40,14 @@ if TYPE_CHECKING:
 DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 DEFAULT_DISTANCE_TRIALS = 10
 
+
+def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
+    """Get a random nontrivial vector of a given size."""
+    while not (vec := field.Random(size)).any():
+        pass  # pragma: no cover
+    return vec
+
+
 ################################################################################
 # template error correction code classes
 
@@ -254,9 +262,7 @@ class ClassicalCode(AbstractCode):
         dist_bound = self.num_bits
 
         for _ in range(num_trials):
-            word = self.field.Random(self.num_bits)
-            if not np.any(word):
-                word[0] = 1
+            word = get_random_nontrivial_vec(self.field, self.num_bits)
             effective_check_matrix = np.vstack([self.matrix, word]).view(np.ndarray)
 
             closest_vec = qldpc.decoder.decode(
@@ -849,8 +855,7 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         if ensure_nontrivial:
             # get a random nontrivial vector of coefficients for the logical operators
-            while not (op_vec := self.field.Random(self.dimension)).any():
-                pass  # pragma: no cover
+            op_vec = get_random_nontrivial_vec(self.field, self.dimension)
             return op_vec @ self.get_logical_ops()[pauli.index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
