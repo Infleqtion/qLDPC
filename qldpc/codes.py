@@ -709,7 +709,6 @@ class CSSCode(QuditCode):
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
             word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True).view(np.ndarray)
-            print(word)
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
