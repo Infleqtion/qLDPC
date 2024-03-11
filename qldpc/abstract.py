@@ -35,6 +35,7 @@ identifying the "transpose" a group member p with respect to a representation (l
 transpose is defined as the group member p.T for which L(p.T) = L(p).T.  If the representation is
 orthogonal, then p.T is equal to the inverse ~p = p**-1.
 """
+
 from __future__ import annotations
 
 import collections

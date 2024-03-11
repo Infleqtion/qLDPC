@@ -14,6 +14,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
 from __future__ import annotations
 
 import abc
@@ -1107,10 +1108,9 @@ class LPCode(CSSCode):
     def __init__(
         self,
         protograph_a: abstract.Protograph | npt.NDArray[np.object_] | Sequence[Sequence[object]],
-        protograph_b: abstract.Protograph
-        | npt.NDArray[np.object_]
-        | Sequence[Sequence[object]]
-        | None = None,
+        protograph_b: (
+            abstract.Protograph | npt.NDArray[np.object_] | Sequence[Sequence[object]] | None
+        ) = None,
         *,
         conjugate: bool = False,
     ) -> None:
