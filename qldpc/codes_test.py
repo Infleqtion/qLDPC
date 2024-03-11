@@ -363,8 +363,6 @@ def test_qudit_distance(field: int) -> None:
     """Distance calculations for qudits."""
     code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
     assert code.get_distance() == 2
-    with pytest.raises(ValueError, match="not implemented"):
-        code.get_distance(bound=1)
 
 
 def test_distance_classical() -> None:

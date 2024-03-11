@@ -222,7 +222,7 @@ class ClassicalCode(AbstractCode):
     def get_distance(
         self,
         *,
-        exact: bool = False,
+        exact: bool = True,
         num_trials: int = DEFAULT_DISTANCE_TRIALS,
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
@@ -301,7 +301,7 @@ class ClassicalCode(AbstractCode):
     def get_code_params(
         self,
         *,
-        exact: bool = False,
+        exact: bool = True,
         num_trials: int = DEFAULT_DISTANCE_TRIALS,
         **decoder_args: object,
     ) -> tuple[int, int, int, int]:
@@ -616,7 +616,7 @@ class CSSCode(QuditCode):
     def get_code_params(
         self,
         *,
-        exact: bool = False,
+        exact: bool = True,
         num_trials: int = DEFAULT_DISTANCE_TRIALS,
         **decoder_args: object,
     ) -> tuple[int, int, int]:
@@ -638,7 +638,7 @@ class CSSCode(QuditCode):
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
-        exact: bool = False,
+        exact: bool = True,
         num_trials: int = DEFAULT_DISTANCE_TRIALS,
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
