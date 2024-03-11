@@ -636,7 +636,7 @@ class CSSCode(QuditCode):
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
-        """Estimate the distance of this code, or the minimal weight of a nontrivial logical operator.
+        """Estimate the code distance, or the minimal weight of a nontrivial logical operator.
 
         If provided a Pauli as an argument, compute the minimim weight of an nontrivial logical
         operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
