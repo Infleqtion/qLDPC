@@ -851,11 +851,12 @@ class CSSCode(QuditCode):
             return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
         # generate random logical ops until we find ones with a nontrivial commutation relation
-        while True:
+        noncommuting_ops_found = False
+        while not noncommuting_ops_found:
             op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
             op_b = self.get_random_logical_op(pauli, ensure_nontrivial=False)
-            if np.any(op_a @ op_b):
-                break
+            noncommuting_ops_found = np.any(op_a @ op_b)
+
         return op_a
 
     # TODO: accept custom decoder arguments
