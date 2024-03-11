@@ -373,7 +373,7 @@ def test_distance_classical() -> None:
     vectors = itertools.product(rep_code.field.elements, repeat=3)
     for vector in list(vectors):
         vec = rep_code.field(vector)
-        dist_brute = rep_code.distance_bruteforce(vec)
+        dist_brute = rep_code.get_distance_brute(vec)
         dist_upper = rep_code.get_distance(num_trials=2, vector=vec, brute=False)
         assert dist_brute == min(np.count_nonzero(vec), 3 - np.count_nonzero(vec))
         assert dist_upper >= dist_brute

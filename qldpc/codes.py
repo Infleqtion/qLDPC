@@ -219,19 +219,17 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
-    def distance_bruteforce(self, vector: galois.FieldArray | None = None) -> int:
-        """The distance of vector from this code.
-        If vector is None, then computes distance of the code or equivalently,
-        the minimal weight of a nonzero code word.
+    def get_distance_brute(self, vector: galois.FieldArray | None = None) -> int:
+        """The distance of this code, or equivalently the minimal weight of a nonzero code word.
+
+        If `vector is not None`, compute the distance of the given vector from this code.
         """
-        if vector is not None:
-            field_words = self.field(self.words())
-            vec = np.vstack([vector] * field_words.shape[0])
-            shifted_words = np.array(field_words - vec)
-            return np.min(np.count_nonzero(shifted_words, axis=1))
+        if vector is None:
+            words = self.words()[1:]
         else:
-            words = np.array(self.words()[1:], dtype=int)
-            return np.min(np.count_nonzero(words, axis=1))
+            words = self.words() - vector[np.newaxis, :]
+        word_array = np.array(words, dtype=int)
+        return np.min(np.count_nonzero(word_array, axis=1))
 
     def get_distance(
         self,
@@ -247,7 +245,7 @@ class ClassicalCode(AbstractCode):
         This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound
         """
         if brute:
-            return self.distance_bruteforce(vector)
+            return self.get_distance_brute(vector)
 
         if vector is None:
             vector = self.field.Zeros(self.num_bits)
