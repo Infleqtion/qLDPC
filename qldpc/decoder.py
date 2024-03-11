@@ -123,4 +123,3 @@ def decode(
         return decode_with_ILP(matrix, syndrome, **decoder_args)
 
     return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
-
