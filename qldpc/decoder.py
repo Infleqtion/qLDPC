@@ -119,7 +119,8 @@ def decode(
     if callable(custom_decoder := decoder_args.pop("decoder", None)):
         return custom_decoder(matrix, syndrome, **decoder_args)
 
-    if not decoder_args.pop("with_ILP", False):
-        return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
+    if decoder_args.pop("with_ILP", False):
+        return decode_with_ILP(matrix, syndrome, **decoder_args)
 
-    return decode_with_ILP(matrix, syndrome, **decoder_args)
+    return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
+
