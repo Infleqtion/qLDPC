@@ -14,6 +14,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -120,6 +121,11 @@ def test_logical_ops() -> None:
     assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
     assert not np.any(code.code_z.matrix @ logicals_x.T)
     assert not np.any(code.code_x.matrix @ logicals_z.T)
+
+    # minimizing logical operator weight only supported for prime number fields
+    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
+    with pytest.raises(ValueError, match="prime number fields"):
+        code.minimize_logical_op(codes.Pauli.X, 0)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
@@ -244,18 +250,21 @@ def test_cyclic_codes() -> None:
     dims: tuple[int, ...]
 
     dims = (6, 6)
-    terms_a = [(0, 3), (1, 1), (1, 2)]
-    terms_b = [(1, 3), (0, 1), (0, 2)]
+    terms_a = [("x", 3), ("y", 1), ("y", 2)]
+    terms_b = [("y", 3), ("x", 1), ("x", 2)]
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
 
     dims = (15, 3)
-    terms_a = [(0, 9), (1, 1), (1, 2)]
-    terms_b = [(0, 0), (0, 2), (0, 7)]
+    terms_a = [("x", 9), ("y", 1), ("y", 2)]
+    terms_b = [("x", 0), ("x", 2), ("x", 7)]
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 90
     assert code.dimension == 8
+
+    with pytest.raises(ValueError, match="does not match"):
+        codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
 
     with pytest.raises(ValueError, match="not supported"):
         codes.QCCode(dims, terms_a, terms_b, field=3)

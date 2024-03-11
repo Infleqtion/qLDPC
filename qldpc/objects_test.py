@@ -14,6 +14,7 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
 import numpy as np
 import pytest
 
@@ -47,6 +48,7 @@ def test_qudit_operator() -> None:
     """Qudit operator capabilities."""
     assert objects.QuditOperator((0, 0)) == objects.QuditOperator()
     assert objects.QuditOperator((0, 1)) == ~objects.QuditOperator((1, 0))
+    assert -objects.QuditOperator((0, 1)) == objects.QuditOperator((0, -1))
     for op in ["I", "Y(1)", "X(1)*Z(2)"]:
         assert str(objects.QuditOperator.from_string(op)) == op
     for op in ["a*b*c", "a(1)"]:

@@ -14,12 +14,13 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
 from __future__ import annotations
 
 import abc
 import functools
 import itertools
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal
 
 import cachetools
@@ -46,7 +47,7 @@ DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
 class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
-    _field_order: int
+    _field: type[galois.FieldArray]
 
     def __init__(
         self,
@@ -59,24 +60,25 @@ class AbstractCode(abc.ABC):
         """
         self._matrix: galois.FieldArray
         if isinstance(matrix, type(self)):
-            self._field_order = matrix.field.order
-            if not (field is None or field == self._field_order):
-                raise ValueError(
-                    f"Field argument {field} is inconsistent with the given code, which is defined"
-                    f" over F_{self._field_order}"
-                )
+            self._field = matrix.field
             self._matrix = matrix.matrix
         elif isinstance(matrix, galois.FieldArray):
-            self._field_order = type(matrix).order
+            self._field = type(matrix)
             self._matrix = matrix
         else:
-            self._field_order = field or DEFAULT_FIELD_ORDER
+            self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
             self._matrix = self.field(np.array(matrix))
+
+        if field is not None and field != self.field.order:
+            raise ValueError(
+                f"Field argument {field} is inconsistent with the given code, which is defined"
+                f" over F_{self.field.order}"
+            )
 
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field over which this code is defined."""
-        return galois.GF(self._field_order)
+        return self._field
 
     @property
     def matrix(self) -> galois.FieldArray:
@@ -162,7 +164,7 @@ class ClassicalCode(AbstractCode):
         ~C = { x : x @ y = 0 for all y in C }.
         The parity check matrix of ~C is equal to the generator of C.
         """
-        return ClassicalCode(self.generator, self._field_order)
+        return ClassicalCode(self.generator)
 
     def __invert__(self) -> ClassicalCode:
         return self.dual()
@@ -177,7 +179,7 @@ class ClassicalCode(AbstractCode):
         Observation: G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
         We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
         """
-        if not code_a._field_order == code_b._field_order:
+        if code_a.field is not code_b.field:
             raise ValueError("Cannot take tensor product of codes over different fields")
         gen_a: npt.NDArray[np.int_] = code_a.generator
         gen_b: npt.NDArray[np.int_] = code_b.generator
@@ -199,7 +201,7 @@ class ClassicalCode(AbstractCode):
 
         Equivalently, the number of linearly independent parity checks in this code.
         """
-        if self._field_order == 2:
+        if self.field.order == 2:
             return ldpc.mod2.rank(self._matrix)
         return np.linalg.matrix_rank(self._matrix)
 
@@ -227,9 +229,7 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
         """Construct a random classical code with the given number of bits and nontrivial checks."""
-        if field is None:
-            field = DEFAULT_FIELD_ORDER
-        code_field = galois.GF(field)
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         rows, cols = checks, bits
         matrix = code_field.Random((rows, cols))
         for row in range(matrix.shape[0]):
@@ -238,7 +238,7 @@ class ClassicalCode(AbstractCode):
         for col in range(matrix.shape[1]):
             if not matrix[:, col].any():
                 matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
-        return ClassicalCode(matrix, field)
+        return ClassicalCode(matrix)
 
     @classmethod
     def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
@@ -268,6 +268,7 @@ class ClassicalCode(AbstractCode):
             # parity check matrix: columns = all nonzero bitstrings
             bitstrings = list(itertools.product([0, 1], repeat=rank))
             return ClassicalCode(np.array(bitstrings[1:]).T)
+
         # More generally, columns = maximal set of nonzero, linearly independent strings.
         # This is achieved by collecting together all strings whose first nonzero element is a 1.
         strings = [
@@ -321,8 +322,8 @@ class QuditCode(AbstractCode):
         return self.num_qudits
 
     def _assert_qubit_code(self) -> None:
-        if self._field_order != 2:
-            raise ValueError("Attempted to call a qubit-only method with a non-qubit code.")
+        if self.field.order != 2:
+            raise ValueError("Attempted to call a qubit-only method with a non-qubit code")
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -371,7 +372,7 @@ class QuditCode(AbstractCode):
                 val_x = matrix[check, Pauli.X.index, qudit]
                 val_z = matrix[check, Pauli.Z.index, qudit]
                 vals_xz = (val_x, val_z)
-                if self._field_order == 2:
+                if self.field.order == 2:
                     ops.append(str(Pauli(vals_xz)))
                 else:
                     ops.append(str(QuditOperator(vals_xz)))
@@ -451,9 +452,9 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
-        if field is None and self.code_x._field_order != self.code_z._field_order:
+        if field is None and self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
-        self._field_order = self.code_x._field_order
+        self._field = self.code_x.field
 
         if not skip_validation and not self.is_valid:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
@@ -617,7 +618,7 @@ class CSSCode(QuditCode):
         solutions.  Return the Hamming weight |w_x|.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        if self._field_order != 2:
+        if self.field.order != 2:
             raise ValueError(
                 "Distance upper bound calculation not implemented for fields of order > 2"
             )
@@ -633,7 +634,8 @@ class CSSCode(QuditCode):
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            word = self.get_random_logical_op(pauli_z)
+            # NOTE: bounds appear to be empirically better with ensure_nontrivial=False
+            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=False)
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
@@ -649,7 +651,7 @@ class CSSCode(QuditCode):
         return candidate_logical_op.sum()
 
     @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
-    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z], **decoder_args: object) -> int:
+    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
         """Exact X-distance or Z-distance of this code."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
@@ -666,7 +668,7 @@ class CSSCode(QuditCode):
 
         # minimize the weight of logical X-type or Z-type operators
         for logical_qubit_index in range(self.dimension):
-            self._minimize_weight_of_logical_op(pauli, logical_qubit_index, **decoder_args)
+            self.minimize_logical_op(pauli, logical_qubit_index)
 
         # return the minimum weight of logical X-type or Z-type operators
         return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
@@ -700,9 +702,9 @@ class CSSCode(QuditCode):
             """Perform Gaussian elimination on the matrix.
 
             Returns:
-                matrix_RRE: the reduced row echelon form of the matrix
-                pivot: the "pivot" columns of the reduced matrix
-                other: the remaining columns of the reduced matrix
+                matrix_RRE: the reduced row echelon form of the matrix.
+                pivot: the "pivot" columns of the reduced matrix.
+                other: the remaining columns of the reduced matrix.
 
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
             occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
@@ -762,9 +764,8 @@ class CSSCode(QuditCode):
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
 
-    def \
-            get_random_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], ensure_nontrivial: bool = False
+    def get_random_logical_op(
+        self, pauli: Literal[Pauli.X, Pauli.Z], *, ensure_nontrivial: bool = False
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
@@ -774,34 +775,41 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if ensure_nontrivial:
-            random_logical_qudit_index = np.random.randint(self.dimension)
-            return self.get_logical_ops()[pauli.index, random_logical_qudit_index]
+            # get a random nontrivial vector of coefficients for the logical operators
+            while not (op_vec := self.field.Random(self.dimension)).any():
+                pass  # pragma: no cover
+            return op_vec @ self.get_logical_ops()[pauli.index]
         return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
-    def _minimize_weight_of_logical_op(
-        self,
-        pauli: Literal[Pauli.X, Pauli.Z],
-        logical_qubit_index: int,
-        **decoder_args: object,
+    def minimize_logical_op(
+        self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int
     ) -> None:
         """Minimize the weight of a logical operator.
 
-        This method solves the same optimization problem as in CSSCode.get_one_distance_upper_bound,
-        but exactly with integer linear programming (which has exponential complexity).
+        A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
+        that it commutes with all logical operators except its dual.  This is essentially the same
+        optimization as in CSSCode.get_one_distance_upper_bound, but solved exactly with integer
+        linear programming.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
+        if self.field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
+
+        # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
-        word = self.get_logical_ops()[(~pauli).index, logical_qubit_index]
-        effective_check_matrix = np.vstack([code.matrix, word]).view(np.ndarray)
-        effective_syndrome = np.zeros((code.num_checks + 1), dtype=int)
-        effective_syndrome[-1] = 1
+        dual_ops = self.get_logical_ops()[(~pauli).index]
+        effective_check_matrix = np.vstack([code.matrix, dual_ops]).view(np.ndarray)
+
+        # enforce that the new logical operator commutes with everything except its dual
+        effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
+        effective_syndrome[code.num_checks + logical_qubit_index] = 1
+
         logical_op = qldpc.decoder.decode(
             effective_check_matrix,
             effective_syndrome,
             exact=True,
             modulus=self.field.order,
-            **decoder_args,
         )
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_qubit_index] = logical_op
@@ -870,8 +878,8 @@ class QCCode(GBCode):
     def __init__(
         self,
         dims: Sequence[int],
-        terms_a: Collection[tuple[int, int]],
-        terms_b: Collection[tuple[int, int]] | None = None,
+        terms_a: Collection[tuple[Hashable, int]],
+        terms_b: Collection[tuple[Hashable, int]] | None = None,
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
@@ -883,11 +891,22 @@ class QCCode(GBCode):
         if terms_b is None:
             terms_b = terms_a  # pragma: no cover
 
+        # identify the symbols used to denote cyclic group generators
+        symbols = tuple({symbol for symbol, _ in list(terms_a) + list(terms_b)})
+        if len(symbols) != len(dims):
+            raise ValueError(
+                f"Number of cyclic group orders, {dims}, does not match the number of generator"
+                f" symbols, {symbols}"
+            )
+
+        # identify the base cyclic groups, their product, and the generators
         groups = [abstract.CyclicGroup(dim) for dim in dims]
         group = abstract.Group.product(*groups)
+        generators = group.generators
 
-        members_a = [group.generators[factor] ** power for factor, power in terms_a]
-        members_b = [group.generators[factor] ** power for factor, power in terms_b]
+        # build defining matrices of a generalized bicycle code
+        members_a = [generators[symbols.index(ss)] ** pp for ss, pp in terms_a]
+        members_b = [generators[symbols.index(ss)] ** pp for ss, pp in terms_b]
         matrix_a = abstract.Element(group, *members_a).lift()
         matrix_b = abstract.Element(group, *members_b).lift()
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
@@ -974,7 +993,7 @@ class HGPCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-        field = code_a._field_order
+        field = code_a.field.order
 
         # identify the number of qudits in each sector
         self.sector_size = np.outer(
@@ -1092,10 +1111,9 @@ class LPCode(CSSCode):
     def __init__(
         self,
         protograph_a: abstract.Protograph | npt.NDArray[np.object_] | Sequence[Sequence[object]],
-        protograph_b: abstract.Protograph
-        | npt.NDArray[np.object_]
-        | Sequence[Sequence[object]]
-        | None = None,
+        protograph_b: (
+            abstract.Protograph | npt.NDArray[np.object_] | Sequence[Sequence[object]] | None
+        ) = None,
         *,
         conjugate: bool = False,
     ) -> None:
@@ -1192,7 +1210,7 @@ class TannerCode(ClassicalCode):
             checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
             bits = [sink_indices[sink] for sink in self._get_sorted_neighbors(source)]
             matrix[np.ix_(checks, bits)] = subcode.matrix
-        ClassicalCode.__init__(self, matrix, subcode._field_order)
+        ClassicalCode.__init__(self, matrix, subcode.field.order)
 
     def _get_sorted_neighbors(self, node: object) -> Sequence[object]:
         """Sorted neighbors of the given node."""
@@ -1241,7 +1259,7 @@ class QTCode(CSSCode):
             code_b = code_a
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b, field)
-        if field is None and code_a._field_order != code_b._field_order:
+        if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
         self.complex = CayleyComplex(subset_a, subset_b)
