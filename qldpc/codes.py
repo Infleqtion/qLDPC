@@ -185,6 +185,27 @@ class ClassicalCode(AbstractCode):
         gen_b: npt.NDArray[np.int_] = code_b.generator
         return ~ClassicalCode(np.kron(gen_a, gen_b))
 
+    @classmethod
+    def get_robustness_estimate(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
+        """Estimate the robustness of the tensor product C_a ⊗ C_b of two codes C_a and C_b.
+
+        See https://arxiv.org/abs/2206.09973
+        """
+        assert code_a.field is code_b.field
+        field = code_a.field
+
+        tensor_code = ClassicalCode.tensor_product(code_a, code_b)
+        estimate = np.inf
+        for vec in itertools.product(field.elements, repeat=code_a.num_bits * code_b.num_bits):
+            matrix = field(vec).reshape((code_a.num_bits, code_b.num_bits))
+            dist_A = np.sum(np.apply_along_axis(code_a.get_distance, axis=1, arr=matrix))
+            dist_B = np.sum(np.apply_along_axis(code_b.get_distance, axis=0, arr=matrix))
+            dist_AB = tensor_code.get_distance(vector=field(vec))
+            ratio = (dist_A + dist_B) / (2 * dist_AB)
+            estimate = min(estimate, ratio)
+
+        return estimate
+
     @property
     def num_checks(self) -> int:
         """Number of check bits in this code."""
