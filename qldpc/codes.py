@@ -635,7 +635,7 @@ class CSSCode(QuditCode):
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
             # NOTE: bounds appear to be empirically better with ensure_nontrivial=False
-            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=False)
+            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True)
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
@@ -774,12 +774,16 @@ class CSSCode(QuditCode):
         operator we return is nontrivial.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        if ensure_nontrivial:
-            # get a random nontrivial vector of coefficients for the logical operators
-            while not (op_vec := self.field.Random(self.dimension)).any():
-                pass  # pragma: no cover
-            return op_vec @ self.get_logical_ops()[pauli.index]
-        return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
+        if not ensure_nontrivial:
+            return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
+
+        # generate random logical ops until we find ones with a nontrivial commutation relation
+        while True:
+            op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
+            op_b = self.get_random_logical_op(pauli, ensure_nontrivial=False)
+            if np.any(op_a @ op_b):
+                break
+        return op_a
 
     def minimize_logical_op(
         self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int
