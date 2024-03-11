@@ -41,7 +41,7 @@ def random_cyclicgens(
     else:
         cyclegroup = CyclicGroup(order[0])
         for i in order[1:]:
-            cyclegroup = cyclegroup * CyclicGroup(i)
+            cyclegroup = cyclegroup @ CyclicGroup(i)
     subset_a = cyclegroup.random_symmetric_subset(degree)
     subset_b = cyclegroup.random_symmetric_subset(degree)
     print(f"Quantum Tanner Code over Cyclic group of order {order} with {degree} generators")
