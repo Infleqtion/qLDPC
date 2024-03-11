@@ -848,12 +848,15 @@ class CSSCode(QuditCode):
         operator we return is nontrivial.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        if ensure_nontrivial:
-            # get a random nontrivial vector of coefficients for the logical operators
-            op_vec = get_random_nontrivial_vec(self.field, self.dimension)
-            return op_vec @ self.get_logical_ops()[pauli.index]
-        return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
+        if not ensure_nontrivial:
+            return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
+        # TODO: try random logical ops until we find one that has a nontrivial commutation relation
+        # get a random nontrivial vector of coefficients for the logical operators
+        op_vec = get_random_nontrivial_vec(self.field, self.dimension)
+        return op_vec @ self.get_logical_ops()[pauli.index]
+
+    # TODO: accept custom decoder arguments
     def minimize_logical_op(
         self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int
     ) -> None:
