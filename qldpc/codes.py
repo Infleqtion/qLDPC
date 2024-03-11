@@ -256,7 +256,7 @@ class ClassicalCode(AbstractCode):
                 return 0
 
         syndrome = self.matrix @ vector
-        effective_syndrome = np.append(syndrome, [1])
+        effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
         bound = self.num_bits
 
         for _ in range(num_trials):
@@ -703,17 +703,17 @@ class CSSCode(QuditCode):
             assert vector.shape == (code_z.num_bits, 1)
             vector = self.field(vector)
         syndrome = code_z.matrix @ vector
-        effective_syndrome = np.append(syndrome, [1])
+        effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
 
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True).view(np.ndarray)
+            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True)
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
             candidate_logical_op = qldpc.decoder.decode(
-                effective_check_matrix, effective_syndrome, with_ILP=True, **decoder_args
+                effective_check_matrix, effective_syndrome, **decoder_args
             )
 
             # check whether the decoding was successful
