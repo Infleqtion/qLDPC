@@ -599,7 +599,7 @@ class CSSCode(QuditCode):
         operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
 
         If `bound is not None`, compute an upper bound using a randomized algorithm described in
-        arXiv:2308.07915, minimizing over `upper` random trials.  For a detailed explanation, see
+        arXiv:2308.07915, minimizing over `bound` random trials.  For a detailed explanation, see
         `CSSCode.get_distance_bound` and `CSSCode.get_one_distance_bound`.
 
         If `bound is None`, compute an exact code distance with integer linear
