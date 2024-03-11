@@ -764,7 +764,7 @@ class CSSCode(QuditCode):
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
-        return candidate_logical_op.sum()
+        return int(np.count_nonzero(candidate_logical_op))
 
     # TODO: Modify to take any vector.  Also make this correct...
     @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
