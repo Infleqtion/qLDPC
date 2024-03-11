@@ -41,8 +41,8 @@ def test_decoding() -> None:
     # decode over F_3
     modulus = 3
     assert np.allclose(
-        decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus),
         -error % modulus,
+        decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus),
     )
 
     # raise error for invalid modulus
