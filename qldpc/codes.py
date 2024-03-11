@@ -229,7 +229,7 @@ class ClassicalCode(AbstractCode):
             words = self.words() - vector[np.newaxis, :]
         else:
             words = self.words()[1:]
-        word_array = np.array(words, dtype=int)
+        word_array = words.view(np.ndarray)
         return np.min(np.count_nonzero(word_array, axis=1))
 
     def get_distance(
@@ -286,7 +286,7 @@ class ClassicalCode(AbstractCode):
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check"""
-        matrix = np.array(self.matrix, dtype=int)
+        matrix = self.matrix.view(np.ndarray)
         row_max = np.max([np.count_nonzero(matrix[i, :]) for i in range(matrix.shape[0])])
         col_max = np.max([np.count_nonzero(matrix[:, i]) for i in range(matrix.shape[1])])
 
@@ -708,12 +708,13 @@ class CSSCode(QuditCode):
         logical_op_found = False
         while not logical_op_found:
             # support of pauli string with a trivial syndrome
-            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True)
+            word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True).view(np.ndarray)
+            print(word)
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
             candidate_logical_op = qldpc.decoder.decode(
-                effective_check_matrix, effective_syndrome, **decoder_args
+                effective_check_matrix, effective_syndrome, with_ILP=True, **decoder_args
             )
 
             # check whether the decoding was successful
