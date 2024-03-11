@@ -15,8 +15,6 @@
    limitations under the License.
 """
 
-import warnings
-
 import cvxpy
 import ldpc
 import numpy as np
@@ -118,15 +116,10 @@ def decode(
 
     In all cases, pass the `decoder_args` to the decoder that is used.
     """
-    with_ILP = decoder_args.pop("with_ILP", False)
     if callable(custom_decoder := decoder_args.pop("decoder", None)):
-        if with_ILP:
-            warnings.warn(
-                "Exact decoding was reqested, but cannot be guaranteed with a custom decoder"
-            )
         return custom_decoder(matrix, syndrome, **decoder_args)
 
-    if not with_ILP:
+    if not decoder_args.pop("with_ILP", False):
         return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
 
     return decode_with_ILP(matrix, syndrome, **decoder_args)

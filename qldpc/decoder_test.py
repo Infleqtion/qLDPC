@@ -25,8 +25,7 @@ def test_custom_decoder() -> None:
     """Custom decoder."""
     matrix = np.eye(2, dtype=int)
     syndrome = np.zeros(2, dtype=int)
-    with pytest.warns(UserWarning, match="cannot be guaranteed"):
-        result = decoder.decode(matrix, syndrome, exact=True, decoder=lambda matrix, syndrome: None)
+    result = decoder.decode(matrix, syndrome, decoder=lambda matrix, syndrome: None)
     assert result is None
 
 
@@ -35,20 +34,20 @@ def test_decoding() -> None:
     matrix = np.eye(3, 2, dtype=int)
     syndrome = np.array([1, 1, 0])
     error = np.array([1, 1], dtype=int)
-    assert np.allclose(decoder.decode(matrix, syndrome, exact=False), error)
-    assert np.allclose(decoder.decode(matrix, syndrome, exact=True), error)
-    assert np.allclose(decoder.decode_with_MWPM(matrix, syndrome), error)
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=False))
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=True))
+    assert np.allclose(error, decoder.decode_with_MWPM(matrix, syndrome))
 
     # decode over F_3
     modulus = 3
     assert np.allclose(
-        decoder.decode(-matrix, syndrome, exact=True, modulus=modulus),
+        decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus),
         -error % modulus,
     )
 
     # raise error for invalid modulus
     with pytest.raises(ValueError, match="must have modulus >= 2"):
-        decoder.decode(matrix, syndrome, exact=True, modulus=1)
+        decoder.decode(matrix, syndrome, with_ILP=True, modulus=1)
 
 
 def test_decoding_error() -> None:
@@ -56,4 +55,4 @@ def test_decoding_error() -> None:
     matrix = np.ones((2, 2), dtype=int)
     syndrome = np.array([0, 1], dtype=int)
     with pytest.raises(ValueError, match="could not be found"):
-        decoder.decode(matrix, syndrome, exact=True)
+        decoder.decode(matrix, syndrome, with_ILP=True)
