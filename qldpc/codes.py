@@ -826,7 +826,9 @@ class CSSCode(QuditCode):
         code_x = self.code_x if pauli == Pauli.X else self.code_z
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         dual_code_x = ~code_x
-        return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
+        if vector is None:
+            vector = self.field.Zeros(code_z.num_bits)
+        return min(np.count_nonzero(word - vector) for word in code_z.words() if word not in dual_code_x)
 
     # TODO: use vector...
     def get_distance_from_logical_ops(
