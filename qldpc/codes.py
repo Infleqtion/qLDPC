@@ -645,6 +645,7 @@ class CSSCode(QuditCode):
         self,
         *,
         bound: int | None = None,
+        from_logical_ops: bool = False,
         **decoder_args: object,
     ) -> tuple[int, int, int]:
         """Compute the parameters of this code: [[n,k,d]].
@@ -656,7 +657,9 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
+        distance = self.get_distance(
+            pauli=None, bound=bound, from_logical_ops=from_logical_ops, vector=None, **decoder_args
+        )
         return self.num_qudits, self.dimension, distance
 
     def get_distance(
@@ -1446,7 +1449,7 @@ class QTCode(CSSCode):
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
-        self.complex = CayleyComplex(subset_a, subset_b, twopartite=bipartite)
+        self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 

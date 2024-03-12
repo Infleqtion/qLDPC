@@ -246,7 +246,7 @@ class CayleyComplex:
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember] | None = None,
         *,
-        twopartite: bool | None = False,
+        bipartite: bool | None = False,
     ) -> None:
         """Construct a left-right Cayley complex."""
         if subset_b is None:
@@ -262,7 +262,7 @@ class CayleyComplex:
         self.subset_b = subset_b
 
         # TODO: Might be some issue with the sort
-        if twopartite:
+        if bipartite:
             assert CayleyComplex.satisfies_total_no_conjugacy(
                 self.group, self.subset_a, self.subset_b
             )
