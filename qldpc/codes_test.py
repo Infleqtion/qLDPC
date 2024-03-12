@@ -333,29 +333,31 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_surface_HGP_codes(distance: int = 2) -> None:
+def test_surface_HGP_codes(distance: int = 2, field: int = 2) -> None:
     """The surface and toric codes as hypergraph product codes."""
     # surface code
-    bit_code = codes.ClassicalCode.repetition(distance)
+    bit_code = codes.ClassicalCode.repetition(distance, field=field)
     code = codes.HGPCode(bit_code)
-    assert code.num_qubits == distance**2 + (distance - 1) ** 2
+    assert code.num_qudits == distance**2 + (distance - 1) ** 2
     assert code.dimension == 1
     assert code.get_distance(bound=10) == distance
 
     # check that the logical X operator has correct weight when minimzed
     code.minimize_logical_op(codes.Pauli.X, 0)
-    assert np.count_nonzero(code.get_logical_ops()[codes.Pauli.X.index, 0]) == distance
+    op = code.get_logical_ops()[codes.Pauli.X.index, 0]
+    assert np.count_nonzero(op) == distance
 
     # toric code
-    bit_code = codes.ClassicalCode.ring(distance)
+    bit_code = codes.ClassicalCode.ring(distance, field=field)
     code = codes.HGPCode(bit_code)
-    assert code.num_qubits == 2 * distance**2
+    assert code.num_qudits == 2 * distance**2
     assert code.dimension == 2
     assert code.get_distance(bound=10) == distance
 
     # check that a logical X operator has correct weight when minimzed
     code.minimize_logical_op(codes.Pauli.X, 0)
-    assert np.count_nonzero(code.get_logical_ops()[codes.Pauli.X.index, 0]) == distance
+    op = code.get_logical_ops()[codes.Pauli.X.index, 0]
+    assert np.count_nonzero(op) == distance
 
 
 def test_toric_tanner_code() -> None:
