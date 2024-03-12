@@ -693,19 +693,30 @@ class CSSCode(QuditCode):
             )
 
         if from_logical_ops:
-            # TODO: use vector
-            # minimize the weight of logical X-type or Z-type operators
-            for logical_qubit_index in range(self.dimension):
-                self.minimize_logical_op(pauli, logical_qubit_index)
-
-            # return the minimum weight of logical X-type or Z-type operators
-            logical_ops = self.get_logical_ops()[pauli.index].view(np.ndarray)
-            return np.count_nonzero(logical_ops, axis=-1).min()
+            assert not bound
+            return self.get_distance_from_logical_ops(pauli, vector=vector, **decoder_args)
 
         if bound:
             return self.get_distance_bound(pauli, num_trials=bound, vector=vector, **decoder_args)
 
         return self.get_distance_exact(pauli, vector)
+
+    # TODO: use vector...
+    def get_distance_from_logical_ops(
+        self,
+        pauli: Literal[Pauli.X, Pauli.Z],
+        *,
+        vector: npt.NDArray[np.int_] | None = None,
+        **decoder_args: object,
+    ) -> int:
+        """Comment."""
+        # minimize the weight of logical X-type or Z-type operators
+        for logical_qubit_index in range(self.dimension):
+            self.minimize_logical_op(pauli, logical_qubit_index, **decoder_args)
+
+        # return the minimum weight of logical X-type or Z-type operators
+        logical_ops = self.get_logical_ops()[pauli.index].view(np.ndarray)
+        return np.count_nonzero(logical_ops, axis=-1).min()
 
     def get_distance_bound(
         self,
@@ -808,7 +819,7 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    # TODO: Use vector correctly...
+    # TODO: use vector...
     @cachetools.cached(
         cache={},
         key=lambda self, pauli, vector: (
