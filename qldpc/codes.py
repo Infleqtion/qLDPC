@@ -249,7 +249,7 @@ class ClassicalCode(AbstractCode):
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
         if vector is not None:
-            words = self.words() - vector[np.newaxis, :]
+            words = self.words() - self.field(vector)[np.newaxis, :]
         else:
             words = self.words()[1:]
         word_array = words.view(np.ndarray)
@@ -299,8 +299,13 @@ class ClassicalCode(AbstractCode):
         """
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
+        if vector is None:
+            vector = self.field.Zeros(self.num_bits)
+        else:
+            vector = self.field(vector)
+
         # effective syndrome enforcing conditions (a) and (b)
-        syndrome = self.matrix @ (vector or self.field.Zeros(self.num_bits))
+        syndrome = self.matrix @ vector
         effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
 
         candidate_remainder_found = False
@@ -659,6 +664,7 @@ class CSSCode(QuditCode):
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
         bound: int | None = None,
+        from_logical_ops: bool = False,
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -686,10 +692,20 @@ class CSSCode(QuditCode):
                 self.get_distance(Pauli.Z, bound=bound, vector=vector, **decoder_args),
             )
 
+        if from_logical_ops:
+            # TODO: use vector
+            # minimize the weight of logical X-type or Z-type operators
+            for logical_qubit_index in range(self.dimension):
+                self.minimize_logical_op(pauli, logical_qubit_index)
+
+            # return the minimum weight of logical X-type or Z-type operators
+            logical_ops = self.get_logical_ops()[pauli.index].view(np.ndarray)
+            return np.count_nonzero(logical_ops, axis=-1).min()
+
         if bound:
             return self.get_distance_bound(pauli, num_trials=bound, vector=vector, **decoder_args)
 
-        return self.get_distance_exact(pauli, **decoder_args)
+        return self.get_distance_exact(pauli, vector)
 
     def get_distance_bound(
         self,
@@ -792,29 +808,25 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    # TODO: Modify to take any vector.  Also make this correct...
-    @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
-    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
-        """Exact X-distance or Z-distance of this code."""
+    # TODO: Use vector correctly...
+    @cachetools.cached(
+        cache={},
+        key=lambda self, pauli, vector: (
+            self,
+            pauli,
+            tuple(val for val in vector) if vector is not None else None,
+        ),
+    )
+    def get_distance_exact(
+        self, pauli: Literal[Pauli.X, Pauli.Z], vector: npt.NDArray[np.int_] | None = None
+    ) -> int:
+        """Exact X-distance or Z-distance of this code, found via brute force."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
-        if self.field.degree > 1:
-            # The base field is not prime, so we can't use the integer linear program method due to
-            # different rules for addition and multiplication.  We therefore compute distance with a
-            # brute-force search over all code words.
-            code_x = self.code_x if pauli == Pauli.X else self.code_z
-            code_z = self.code_z if pauli == Pauli.X else self.code_x
-            dual_code_x = ~code_x
-            return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
-
-        # TODO: is this wrong???
-
-        # minimize the weight of logical X-type or Z-type operators
-        for logical_qubit_index in range(self.dimension):
-            self.minimize_logical_op(pauli, logical_qubit_index)
-
-        # return the minimum weight of logical X-type or Z-type operators
-        return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
+        code_x = self.code_x if pauli == Pauli.X else self.code_z
+        code_z = self.code_z if pauli == Pauli.X else self.code_x
+        dual_code_x = ~code_x
+        return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
 
     def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.

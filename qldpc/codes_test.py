@@ -93,6 +93,19 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
+def test_distance_from_classical_code(bits: int = 3) -> None:
+    """Distance of a vector from a classical code."""
+    rep_code = codes.ClassicalCode.repetition(bits, field=2)
+    for vector in itertools.product(rep_code.field.elements, repeat=3):
+        vector = np.array(vector)
+        weight = np.count_nonzero(vector)
+        dist_brute = rep_code.get_distance_exact(vector)
+        dist_bound = rep_code.get_distance(bound=True, vector=vector)
+        assert dist_brute == min(weight, bits - weight)
+        assert dist_brute <= dist_bound
+    assert rep_code.get_distance(brute=False) == 3
+
+
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
     assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
@@ -363,16 +376,3 @@ def test_qudit_distance(field: int) -> None:
     """Distance calculations for qudits."""
     code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
     assert code.get_distance() == 2
-
-
-def test_distance_classical() -> None:
-    """Distance test of a vector from a code."""
-    rep_code = codes.ClassicalCode.repetition(3, field=2)
-    vectors = itertools.product(rep_code.field.elements, repeat=3)
-    for vector in list(vectors):
-        vec = rep_code.field(vector)
-        dist_brute = rep_code.get_distance_exact(vec)
-        dist_bound = rep_code.get_distance(num_trials=2, vector=vec, brute=False)
-        assert dist_brute == min(np.count_nonzero(vec), 3 - np.count_nonzero(vec))
-        assert dist_brute <= dist_bound
-    assert rep_code.get_distance(brute=False) == 3
