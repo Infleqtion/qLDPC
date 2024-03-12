@@ -363,6 +363,7 @@ def test_toric_tanner_code() -> None:
     # check that this is a [[64, 8, 4]] code
     assert code.num_qubits == 64
     assert code.dimension == 8
+    # TODO: uncomment for [[16, 2, 4]]
     # assert code.get_distance(from_logical_ops=True) == 4
     assert code.get_distance(bound=100) == 4
 
