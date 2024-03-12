@@ -644,7 +644,6 @@ class CSSCode(QuditCode):
         self,
         *,
         bound: int | None = None,
-        from_logical_ops: bool = False,
         **decoder_args: object,
     ) -> tuple[int, int, int]:
         """Compute the parameters of this code: [[n,k,d]].
@@ -656,9 +655,7 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(
-            pauli=None, bound=bound, from_logical_ops=from_logical_ops, vector=None, **decoder_args
-        )
+        distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
         return self.num_qudits, self.dimension, distance
 
     def get_distance(
@@ -666,7 +663,6 @@ class CSSCode(QuditCode):
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
         bound: int | None = None,
-        from_logical_ops: bool = False,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -679,9 +675,6 @@ class CSSCode(QuditCode):
         upper bound using a randomized algorithm described in arXiv:2308.07915, minimizing over
         `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
 
-        If `from_logical_ops is True`, estimate the code distance by minimizing the weight of
-        logical operators in a fixed basis, and identifying the lowest-weight operator.
-
         If provided a vector, compute the minimum Hamming distance between this vector and a
         nontrivial X-type or Z-type logical operator, as applicable.
 
@@ -693,28 +686,12 @@ class CSSCode(QuditCode):
 
         if pauli is None:
             return min(
-                self.get_distance(
-                    Pauli.X,
-                    bound=bound,
-                    from_logical_ops=from_logical_ops,
-                    vector=vector,
-                    **decoder_args,
-                ),
-                self.get_distance(
-                    Pauli.Z,
-                    bound=bound,
-                    from_logical_ops=from_logical_ops,
-                    vector=vector,
-                    **decoder_args,
-                ),
+                self.get_distance(Pauli.X, bound=bound, vector=vector, **decoder_args),
+                self.get_distance(Pauli.Z, bound=bound, vector=vector, **decoder_args),
             )
 
         if bound:
-            assert not from_logical_ops
             return self.get_distance_bound(pauli, num_trials=bound, vector=vector, **decoder_args)
-
-        if from_logical_ops:
-            return self.get_distance_from_logical_ops(pauli, vector=vector, **decoder_args)
 
         return self.get_distance_exact(pauli, vector)
 
@@ -841,31 +818,6 @@ class CSSCode(QuditCode):
         dual_code_x = ~code_x
         logical_ops_z = (word for word in code_z.words() if word not in dual_code_x)
         return min(np.count_nonzero(word - vector) for word in logical_ops_z)
-
-    # TODO: use vector...
-    def get_distance_from_logical_ops(
-        self,
-        pauli: Literal[Pauli.X, Pauli.Z],
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
-    ) -> int:
-        """Estimate X-distance or Z-distance by minimizing the weight of logical operators.
-
-        `CSSCode.get_logical_ops` constructs a basis of logical operators.  This method first
-        minimizes the weight of these operators (while preserving their commutation relations),
-        then returns the smallest weight of the resulting logical operators.
-
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        nontrivial X-type or Z-type logical operator, as applicable.
-        """
-        # minimize the weight of logical X-type or Z-type operators
-        for logical_qubit_index in range(self.dimension):
-            self.minimize_logical_op(pauli, logical_qubit_index, **decoder_args)
-
-        # return the minimum weight of logical X-type or Z-type operators
-        logical_ops = self.get_logical_ops()[pauli.index].view(np.ndarray)
-        return np.count_nonzero(logical_ops, axis=-1).min()
 
     def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
