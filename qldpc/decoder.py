@@ -89,8 +89,8 @@ def decode_with_ILP(
         message = "Optimal solution to integer linear program could not be found!"
         raise ValueError(message + f"\nSolver output: {result}")
 
-    # return solution
-    return problem.variables()[0].value.astype(int)
+    # return solution to the problem variables
+    return variables.value.astype(int)
 
 
 def _build_cvxpy_constraints(
