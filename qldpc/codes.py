@@ -290,10 +290,9 @@ class ClassicalCode(AbstractCode):
         (a) the same syndrome as `vector` (or with a trivial syndrome, if `vector is None`), and
         (b) a nonzero inner product with a random word.
 
-        The first condition, (a), ensures that `diff = vector - remainder` has a trivial syndrome,
-        which means that `diff` is a code word.  Conversely, `vector = code_word + remainder`, so
-        the weight of `remainder` is an upper bound for the distance between `vector` and a code
-        word.
+        The first condition, (a), ensures that `vector = code_word + remainder`, where `code_word`
+        has a trivial syndrome, so the weight of `remainder` is an upper bound for the distance
+        between `vector` and a code word.
 
         The second condition, (b), simply ensures that `remainder` cannot be the all-0 string.
         """
