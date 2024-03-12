@@ -353,7 +353,7 @@ def test_surface_HGP_codes(distance: int = 2) -> None:
     assert code.dimension == 2
     assert code.get_distance(bound=10) == distance
 
-    # check that the logical X operator has correct weight when minimzed
+    # check that a logical X operator has correct weight when minimzed
     code.minimize_logical_op(codes.Pauli.X, 0)
     assert np.count_nonzero(code.get_logical_ops()[codes.Pauli.X.index, 0]) == distance
 
