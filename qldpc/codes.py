@@ -232,7 +232,8 @@ class ClassicalCode(AbstractCode):
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
 
-        Decoding arguments, if any, are passed to `ClassicalCode.get_one_distance_bound`.
+        Additional arguments, if provided, are passed to a decoder in
+        `ClassicalCode.get_one_distance_bound`.
         """
         if bound:
             return self.get_distance_bound(bound, vector=vector, **decoder_args)
@@ -655,10 +656,11 @@ class CSSCode(QuditCode):
         upper bound using a randomized algorithm described in arXiv:2308.07915, minimizing over
         `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
 
-        If provided a vector, compute the minimum Hamming distance of this vector from a nontrivial
-        logical operator.
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        nontrivial X-type or Z-type logical operator, as applicable.
 
-        All remaining keyword arguments are passed to a decoder, if applicable.
+        Additional arguments, if provided, are passed to a decoder in
+        `CSSCode.get_one_distance_bound`.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z or pauli is None
         pauli = pauli if not self._codes_equal else Pauli.X
@@ -683,10 +685,11 @@ class CSSCode(QuditCode):
     ) -> int:
         """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
 
-        If provided a vector, compute the minimum Hamming distance of this vector from a nontrivial
-        X-type or Z-type logical operator, as appropriate.
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        nontrivial X-type or Z-type logical operator, as applicable.
 
-        All keyword arguments are passed to `CSSCode.get_one_distance_bound`.
+        Additional arguments, if provided, are passed to a decoder in
+        `CSSCode.get_one_distance_bound`.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         return min(
@@ -702,8 +705,8 @@ class CSSCode(QuditCode):
     ) -> int:
         """Single upper bound to the X-distance or Z-distance of this code.
 
-        If provided a vector, compute the minimum Hamming distance of this vector from a nontrivial
-        X-type or Z-type logical operator, as appropriate.
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        nontrivial X-type or Z-type logical operator, as applicable.
 
         This method uses a randomized algorithm described in arXiv:2308.07915 (and also below).
 
