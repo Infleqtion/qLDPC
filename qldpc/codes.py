@@ -973,8 +973,7 @@ class CSSCode(QuditCode):
 
         A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
         that it commutes with all logical operators except its dual.  This is essentially the same
-        optimization as in CSSCode.get_one_distance_bound, but solved exactly with integer linear
-        programming.
+        method as that used in CSSCode.get_one_distance_bound.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
