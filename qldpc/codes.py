@@ -297,12 +297,12 @@ class ClassicalCode(AbstractCode):
 
         The second condition, (b), simply ensures that `remainder` cannot be the all-0 string.
         """
-        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
         vector = self.field.Zeros(self.num_bits) if vector is None else self.field(vector)
 
         # effective syndrome enforcing conditions (a) and (b)
         syndrome = self.matrix @ vector
         effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
+        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=-1)
 
         candidate_remainder_found = False
         while not candidate_remainder_found:
@@ -408,14 +408,16 @@ class ClassicalCode(AbstractCode):
 
 
 def _fix_decoder_args_for_nonprime_fields(
-    decoder_args: dict[str, object], field: type[galois.FieldArray]
+    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
 ) -> None:
     """Fix decoder arguments for nonprime number fields."""
     if field.order > 2:
         if field.degree > 1:
             raise ValueError("Method only supported for prime number fields")
-        decoder_args["modulus"] = field.order
         decoder_args["with_ILP"] = True
+        decoder_args["modulus"] = field.order
+        if bound_index is not None:
+            decoder_args["lower_bound_row"] = bound_index
 
 
 # TODO:
@@ -760,7 +762,6 @@ class CSSCode(QuditCode):
         solutions.  Return the Hamming weight |w_x|.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
         vector = self.field.Zeros(self.num_qudits) if vector is None else self.field(vector)
 
         # define code_z and pauli_z as if we are computing X-distance
@@ -770,6 +771,7 @@ class CSSCode(QuditCode):
         # construct the effective syndrome
         syndrome = code_z.matrix @ vector
         effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
+        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=-1)
 
         logical_op_found = False
         while not logical_op_found:
@@ -937,16 +939,17 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_qubit_index < self.dimension
-        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
-        dual_ops = self.get_logical_ops()[(~pauli).index]
-        effective_check_matrix = np.vstack([code.matrix, dual_ops]).view(np.ndarray)
+        all_dual_ops = self.get_logical_ops()[(~pauli).index]
+        effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
+        dual_op_index = code.num_checks + logical_qubit_index
 
         # enforce that the new logical operator commutes with everything except its dual
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
-        effective_syndrome[code.num_checks + logical_qubit_index] = 1
+        effective_syndrome[dual_op_index] = 1
+        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=dual_op_index)
 
         logical_op_found = False
         while not logical_op_found:

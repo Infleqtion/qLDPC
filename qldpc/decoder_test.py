@@ -50,9 +50,11 @@ def test_decoding() -> None:
         decoder.decode(matrix, syndrome, with_ILP=True, modulus=1)
 
 
+@pytest.mark.filterwarnings("ignore:infeasible or unbounded")
 def test_decoding_error() -> None:
     """Fail to solve an invalid optimization problem."""
     matrix = np.ones((2, 2), dtype=int)
     syndrome = np.array([0, 1], dtype=int)
     with pytest.raises(ValueError, match="could not be found"):
-        decoder.decode(matrix, syndrome, with_ILP=True)
+        with pytest.warns(UserWarning, match="infeasible or unbounded"):
+            decoder.decode(matrix, syndrome, with_ILP=True)

@@ -57,11 +57,19 @@ def decode_with_ILP(
     """Decode with an integer linear program (ILP).
 
     Supports integers modulo q for q > 2 with a "modulus" argument.
+
+    If a "lower_bound_row" argument is provided, treat this row of the linear constraint as a lower
+    bound (>=), rather than an equality (==) constraint.
+
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
     modulus = decoder_args.pop("modulus", 2)
     if not isinstance(modulus, int) or modulus < 2:
         raise ValueError(f"Decoding problems must have modulus >= 2 (provided modulus: {modulus}")
+
+    lower_bound_row = decoder_args.pop("lower_bound_row", None)
+    if not (lower_bound_row is None or isinstance(lower_bound_row, int)):
+        raise ValueError(f"Lower bound row index must be an integer, not {lower_bound_row}")
 
     # variables, their constraints, and the objective (minimizing number of nonzero variables)
     constraints = []
@@ -78,7 +86,7 @@ def decode_with_ILP(
         objective = cvxpy.Minimize(cvxpy.norm(nonzero_variable_flags, 1))
 
     # constraints for the decoding problem: matrix @ solution == syndrome (mod q)
-    constraints += _build_cvxpy_constraints(variables, matrix, syndrome, modulus)
+    constraints += _build_cvxpy_constraints(variables, matrix, syndrome, modulus, lower_bound_row)
 
     # solve the optimization problem!
     problem = cvxpy.Problem(objective, constraints)
@@ -98,18 +106,24 @@ def _build_cvxpy_constraints(
     matrix: npt.NDArray[np.int_],
     syndrome: npt.NDArray[np.int_],
     modulus: int,
+    lower_bound_row: int | None = None,
 ) -> list[cvxpy.Constraint]:
-    """Build constraints for an ILP of the form `matrix @ variables == syndrome (mod q)`.
+    """Build cvxpy constraints of the form `matrix @ variables == syndrome (mod q)`.
 
     This method uses boolean slack variables {s_j} to relax each constraint of the form
     `expression = val mod q`
     to
     `expression = val + sum_j q^j s_j`.
+
+    If `lower_bound_row is not None`, treat the constraint at this row index as a lower bound.
     """
-    constraints = []
     matrix = matrix % modulus
     syndrome = syndrome % modulus
-    for check, syndrome_bit in zip(matrix, syndrome):
+    if lower_bound_row is not None:
+        lower_bound_row %= syndrome.size
+
+    constraints = []
+    for idx, (check, syndrome_bit) in enumerate(zip(matrix, syndrome)):
         # identify the largest power of q needed for the relaxation
         max_zero = int(sum(check) * (modulus - 1) - syndrome_bit)
         if max_zero == 0 or modulus == 2:
@@ -123,7 +137,12 @@ def _build_cvxpy_constraints(
             zero_mod_q = powers_of_q @ slack_variables
         else:
             zero_mod_q = 0  # pragma: no cover
-        constraints.append(check @ variables == syndrome_bit + zero_mod_q)
+
+        if idx == lower_bound_row:
+            constraint = check @ variables >= syndrome_bit + zero_mod_q
+        else:
+            constraint = check @ variables == syndrome_bit + zero_mod_q
+        constraints.append(constraint)
 
     return constraints
 
