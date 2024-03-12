@@ -232,7 +232,7 @@ class ClassicalCode(AbstractCode):
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
 
-        This method uses essentially the same trick as that in CSSCode.get_one_distance_bound.
+        Decoding arguments, if any, are passed to `ClassicalCode.get_one_distance_bound`.
         """
         if bound:
             return self.get_distance_bound(bound, vector=vector, **decoder_args)
@@ -260,7 +260,15 @@ class ClassicalCode(AbstractCode):
         vector: npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
-        """Compute an upper bound by minimizing many individual upper bounds."""
+        """Compute an upper bound by minimizing many individual upper bounds.
+
+        The code distance is the minimal Hamming weight between two code words, or equivalently the
+        minimal weight of a nonzero code word.
+
+        If passed a vector, compute the minimal Hamming distance between the vector and a code word.
+
+        Decoding arguments, if any, are passed to `ClassicalCode.get_one_distance_bound`.
+        """
         return min(
             self.get_one_distance_bound(vector=vector, **decoder_args) for _ in range(num_trials)
         )
@@ -272,8 +280,10 @@ class ClassicalCode(AbstractCode):
     ) -> int:
         """Single upper bound to the distance of this code.
 
-        If passed a vector, compute an upper bound of the Hamming distance between the vector and a
-        code word.
+        The code distance is the minimal Hamming weight between two code words, or equivalently the
+        minimal weight of a nonzero code word.
+
+        If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
@@ -282,8 +292,8 @@ class ClassicalCode(AbstractCode):
 
         decoding_succeeded = False
         while not decoding_succeeded:
-            word = get_random_nontrivial_vec(self.field, self.num_bits)
-            effective_check_matrix = np.vstack([self.matrix, word]).view(np.ndarray)
+            random_word = get_random_nontrivial_vec(self.field, self.num_bits)
+            effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             closest_vec = qldpc.decoder.decode(
                 effective_check_matrix,
@@ -643,8 +653,7 @@ class CSSCode(QuditCode):
 
         If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
         upper bound using a randomized algorithm described in arXiv:2308.07915, minimizing over
-        `bound` random trials.  For a detailed explanation, see `CSSCode.get_distance_bound` and
-        `CSSCode.get_one_distance_bound`.
+        `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
 
         If provided a vector, compute the minimum Hamming distance of this vector from a nontrivial
         logical operator.
@@ -685,7 +694,6 @@ class CSSCode(QuditCode):
             for _ in range(num_trials)
         )
 
-    # TODO: Modify to take any vector
     def get_one_distance_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
