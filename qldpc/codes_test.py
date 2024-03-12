@@ -333,17 +333,23 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_surface_HGP_code() -> None:
+def test_surface_HGP_codes() -> None:
     """The surface and toric codes as hypergraph product codes."""
     # surface code
     bit_code = codes.ClassicalCode.repetition(3)
     code = codes.HGPCode(bit_code)
     assert code.get_code_params() == (13, 1, 3)
 
+    code.minimize_logical_op(codes.Pauli.X, 0)
+    assert np.count_nonzero(code.get_logical_ops()[codes.Pauli.X.index, 0]) == 3
+
     # toric code
     bit_code = codes.ClassicalCode.ring(3)
     code = codes.HGPCode(bit_code)
     assert code.get_code_params() == (18, 2, 3)
+
+    code.minimize_logical_op(codes.Pauli.X, 0)
+    assert np.count_nonzero(code.get_logical_ops()[codes.Pauli.X.index, 0]) == 3
 
 
 def test_toric_tanner_code() -> None:
