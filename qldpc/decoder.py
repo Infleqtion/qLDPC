@@ -59,17 +59,53 @@ def decode_with_ILP(
     Supports integers modulo q for q > 2 with a "modulus" argument.
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
-    modulus = int(decoder_args.pop("modulus", 2))  # type:ignore[call-overload]
-    if modulus < 2:
+    modulus = decoder_args.pop("modulus", 2)
+    if not isinstance(modulus, int) or modulus < 2:
         raise ValueError(f"Decoding problems must have modulus >= 2 (provided modulus: {modulus}")
-    if modulus == 2:
-        opt_variables = cvxpy.Variable(matrix.shape[1], boolean=True)
-    else:
-        opt_variables = cvxpy.Variable(matrix.shape[1], integer=True)
-    objective = cvxpy.Minimize(sum(iter(opt_variables)))
 
-    # collect constraints, using boolean slack variables to relax each constraint of the form
-    # `expression = val mod q` to `expression = val + sum_j q^j s_j`
+    # variables, their constraints, and the objective (minimizing number of nonzero variables)
+    constraints = []
+    if modulus == 2:
+        variables = cvxpy.Variable(matrix.shape[1], boolean=True)
+        objective = cvxpy.Minimize(cvxpy.norm(variables, 1))
+    else:
+        variables = cvxpy.Variable(matrix.shape[1], integer=True)
+        nonzero_variable_flags = cvxpy.Variable(matrix.shape[1], boolean=True)
+        constraints += [var >= 0 for var in iter(variables)]
+        constraints += [var <= modulus - 1 for var in iter(variables)]
+        constraints += [modulus * nonzero_variable_flags >= variables]
+
+        objective = cvxpy.Minimize(cvxpy.norm(nonzero_variable_flags, 1))
+
+    # constraints for the decoding problem: matrix @ solution == syndrome (mod q)
+    constraints += _build_cvxpy_constraints(variables, matrix, syndrome, modulus)
+
+    # solve the optimization problem!
+    problem = cvxpy.Problem(objective, constraints)
+    result = problem.solve(**decoder_args)
+
+    # raise error if the optimization failed
+    if not isinstance(result, float) or not np.isfinite(result):
+        message = "Optimal solution to integer linear program could not be found!"
+        raise ValueError(message + f"\nSolver output: {result}")
+
+    # return solution
+    return problem.variables()[0].value.astype(int)
+
+
+def _build_cvxpy_constraints(
+    variables: cvxpy.Variable,
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    modulus: int,
+) -> list[cvxpy.Constraint]:
+    """Build constraints for an ILP of the form `matrix @ variables == syndrome (mod q)`.
+
+    This method uses boolean slack variables {s_j} to relax each constraint of the form
+    `expression = val mod q`
+    to
+    `expression = val + sum_j q^j s_j`.
+    """
     constraints = []
     matrix = matrix % modulus
     syndrome = syndrome % modulus
@@ -87,20 +123,9 @@ def decode_with_ILP(
             zero_mod_q = powers_of_q @ slack_variables
         else:
             zero_mod_q = 0  # pragma: no cover
-        constraints.append(check @ opt_variables == syndrome_bit + zero_mod_q)
+        constraints.append(check @ variables == syndrome_bit + zero_mod_q)
 
-    if modulus > 2:
-        constraints += [var >= 0 for var in iter(opt_variables)]
-        constraints += [var <= modulus for var in iter(opt_variables)]
-
-    # solve the optimization problem!
-    problem = cvxpy.Problem(objective, constraints)
-    result = problem.solve(**decoder_args)
-    if not isinstance(result, float) or not np.isfinite(result):
-        message = "Optimal solution to integer linear program could not be found!"
-        raise ValueError(message + f"\nSolver output: {result}")
-    solution = problem.variables()[0].value
-    return np.array(solution).astype(int) % modulus
+    return constraints
 
 
 def decode(
