@@ -35,14 +35,14 @@ def test_decoding() -> None:
     syndrome = np.array([1, 1, 0])
     error = np.array([1, 1], dtype=int)
     assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=False))
-    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=True, lower_bound_row=-1))
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=True))
     assert np.allclose(error, decoder.decode_with_MWPM(matrix, syndrome))
 
-    # decode over F_3
+    # decode over trinary field
     modulus = 3
     assert np.allclose(
         -error % modulus,
-        decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus),
+        decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus, lower_bound_row=-1),
     )
 
 
