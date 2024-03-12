@@ -285,27 +285,42 @@ class ClassicalCode(AbstractCode):
         minimal weight of a nonzero code word.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
+
+        The basic idea is to find a word `remainder` with:
+        (a) the same syndrome as `vector` (or with a trivial syndrome, if `vector is None`), and
+        (b) a nonzero inner product with a random word.
+
+        The first condition, (a), ensures that `diff = vector - remainder` has a trivial syndrome,
+        which means that `diff` is a code word.  Conversely, `vector = code_word + remainder`, so
+        the weight of `remainder` is an upper bound for the distance between `vector` and a code
+        word.
+
+        The second condition, (b), simply ensures that `remainder` cannot be the all-0 string.
         """
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
+        # effective syndrome enforcing conditions (a) and (b)
         syndrome = self.matrix @ (vector or self.field.Zeros(self.num_bits))
         effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
 
-        decoding_succeeded = False
-        while not decoding_succeeded:
+        candidate_remainder_found = False
+        while not candidate_remainder_found:
+            # construct the effective check matrix enforcing conditions (a) and (b)
             random_word = get_random_nontrivial_vec(self.field, self.num_bits)
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
-            closest_vec = qldpc.decoder.decode(
+            # compute a low-weight "remainder" for which vector = code_word + remainder
+            remainder = qldpc.decoder.decode(
                 effective_check_matrix,
                 effective_syndrome,
                 **decoder_args,
             )
 
-            actual_syndrome = effective_check_matrix @ closest_vec % self.field.order
-            decoding_succeeded = np.array_equal(actual_syndrome, effective_syndrome)
+            # check whether we found a candidate remainder
+            actual_syndrome = self.field(effective_check_matrix @ remainder)
+            candidate_remainder_found = np.array_equal(actual_syndrome, effective_syndrome)
 
-        return int(np.count_nonzero(closest_vec))
+        return int(np.count_nonzero(remainder))
 
     def get_code_params(
         self,
@@ -771,7 +786,7 @@ class CSSCode(QuditCode):
             )
 
             # check whether decoding was successful
-            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
+            actual_syndrome = self.field(effective_check_matrix @ candidate_logical_op)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
@@ -942,7 +957,7 @@ class CSSCode(QuditCode):
             candidate_logical_op = qldpc.decoder.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
-            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
+            actual_syndrome = self.field(effective_check_matrix @ candidate_logical_op)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
