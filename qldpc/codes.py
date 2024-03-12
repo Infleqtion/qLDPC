@@ -818,7 +818,6 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    # TODO: use vector...
     @cachetools.cached(
         cache={},
         key=lambda self, pauli, vector: (
@@ -835,14 +834,13 @@ class CSSCode(QuditCode):
         """Exact X-distance or Z-distance of this code, found via brute force."""
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
+        if vector is None:
+            vector = self.field.Zeros(self.num_qudits)
         code_x = self.code_x if pauli == Pauli.X else self.code_z
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         dual_code_x = ~code_x
-        if vector is None:
-            vector = self.field.Zeros(code_z.num_bits)
-        return min(
-            np.count_nonzero(word - vector) for word in code_z.words() if word not in dual_code_x
-        )
+        logical_ops_z = (word for word in code_z.words() if word not in dual_code_x)
+        return min(np.count_nonzero(word - vector) for word in logical_ops_z)
 
     # TODO: use vector...
     def get_distance_from_logical_ops(
