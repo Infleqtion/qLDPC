@@ -97,7 +97,6 @@ def test_distance_from_classical_code(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.ClassicalCode.repetition(bits, field=2)
     for vector in itertools.product(rep_code.field.elements, repeat=3):
-        vector = np.array(vector)
         weight = np.count_nonzero(vector)
         dist_brute = rep_code.get_distance_exact(vector)
         dist_bound = rep_code.get_distance(bound=True, vector=vector)

@@ -222,7 +222,7 @@ class ClassicalCode(AbstractCode):
         self,
         *,
         bound: int | None = None,
-        vector: npt.NDArray[np.int_] | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
         """Estimate the distance of this code, or the minimal weight of a nontrivial code word.
@@ -240,7 +240,7 @@ class ClassicalCode(AbstractCode):
 
         return self.get_distance_exact(vector)
 
-    def get_distance_exact(self, vector: npt.NDArray[np.int_] | None = None) -> int:
+    def get_distance_exact(self, vector: Sequence[int] | npt.NDArray[np.int_] | None = None) -> int:
         """Compute the code distance by brute force.
 
         The code distance is the minimal Hamming weight between two code words, or equivalently the
@@ -258,7 +258,7 @@ class ClassicalCode(AbstractCode):
     def get_distance_bound(
         self,
         num_trials: int,
-        vector: npt.NDArray[np.int_] | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
         """Compute an upper bound by minimizing many individual upper bounds.
@@ -276,7 +276,7 @@ class ClassicalCode(AbstractCode):
 
     def get_one_distance_bound(
         self,
-        vector: npt.NDArray[np.int_] | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
         """Single upper bound to the distance of this code.
@@ -301,8 +301,7 @@ class ClassicalCode(AbstractCode):
 
         if vector is None:
             vector = self.field.Zeros(self.num_bits)
-        else:
-            vector = self.field(vector)
+        vector = self.field(vector)
 
         # effective syndrome enforcing conditions (a) and (b)
         syndrome = self.matrix @ vector
@@ -668,7 +667,7 @@ class CSSCode(QuditCode):
         *,
         bound: int | None = None,
         from_logical_ops: bool = False,
-        vector: npt.NDArray[np.int_] | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
         """Estimate the code distance, or the minimal weight of a nontrivial logical operator.
@@ -694,8 +693,20 @@ class CSSCode(QuditCode):
 
         if pauli is None:
             return min(
-                self.get_distance(Pauli.X, bound=bound, vector=vector, **decoder_args),
-                self.get_distance(Pauli.Z, bound=bound, vector=vector, **decoder_args),
+                self.get_distance(
+                    Pauli.X,
+                    bound=bound,
+                    from_logical_ops=from_logical_ops,
+                    vector=vector,
+                    **decoder_args,
+                ),
+                self.get_distance(
+                    Pauli.Z,
+                    bound=bound,
+                    from_logical_ops=from_logical_ops,
+                    vector=vector,
+                    **decoder_args,
+                ),
             )
 
         if bound:
@@ -711,7 +722,7 @@ class CSSCode(QuditCode):
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         num_trials: int,
-        vector: npt.NDArray[np.int_] | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
         """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
@@ -731,7 +742,7 @@ class CSSCode(QuditCode):
     def get_one_distance_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
-        vector: npt.NDArray[np.int_] | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
         """Single upper bound to the X-distance or Z-distance of this code.
@@ -777,16 +788,15 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
 
+        if vector is None:
+            vector = self.field.Zeros(self.num_qudits)
+        vector = self.field(vector)
+
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
         # construct the effective syndrome
-        if vector is None:
-            vector = self.field.Zeros(code_z.num_bits)
-        else:
-            assert vector.shape == (code_z.num_bits, 1)
-            vector = self.field(vector)
         syndrome = code_z.matrix @ vector
         effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
 
@@ -818,7 +828,9 @@ class CSSCode(QuditCode):
         ),
     )
     def get_distance_exact(
-        self, pauli: Literal[Pauli.X, Pauli.Z], vector: npt.NDArray[np.int_] | None = None
+        self,
+        pauli: Literal[Pauli.X, Pauli.Z],
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
     ) -> int:
         """Exact X-distance or Z-distance of this code, found via brute force."""
         assert pauli == Pauli.X or pauli == Pauli.Z
@@ -828,14 +840,16 @@ class CSSCode(QuditCode):
         dual_code_x = ~code_x
         if vector is None:
             vector = self.field.Zeros(code_z.num_bits)
-        return min(np.count_nonzero(word - vector) for word in code_z.words() if word not in dual_code_x)
+        return min(
+            np.count_nonzero(word - vector) for word in code_z.words() if word not in dual_code_x
+        )
 
     # TODO: use vector...
     def get_distance_from_logical_ops(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         *,
-        vector: npt.NDArray[np.int_] | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
         """Estimate X-distance or Z-distance by minimizing the weight of logical operators.
