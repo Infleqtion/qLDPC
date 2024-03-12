@@ -35,7 +35,7 @@ def test_decoding() -> None:
     syndrome = np.array([1, 1, 0])
     error = np.array([1, 1], dtype=int)
     assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=False))
-    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=True))
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=True, lower_bound_row=-1))
     assert np.allclose(error, decoder.decode_with_MWPM(matrix, syndrome))
 
     # decode over F_3
@@ -45,16 +45,18 @@ def test_decoding() -> None:
         decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus),
     )
 
-    # raise error for invalid modulus
-    with pytest.raises(ValueError, match="must have modulus >= 2"):
-        decoder.decode(matrix, syndrome, with_ILP=True, modulus=1)
 
-
-@pytest.mark.filterwarnings("ignore:infeasible or unbounded")
-def test_decoding_error() -> None:
+def test_decoding_errors() -> None:
     """Fail to solve an invalid optimization problem."""
     matrix = np.ones((2, 2), dtype=int)
     syndrome = np.array([0, 1], dtype=int)
+
+    with pytest.raises(ValueError, match="must have modulus >= 2"):
+        decoder.decode_with_ILP(matrix, syndrome, with_ILP=True, modulus=1)
+
+    with pytest.raises(ValueError, match="row index must be an integer"):
+        decoder.decode_with_ILP(matrix, syndrome, with_ILP=True, lower_bound_row="x")
+
     with pytest.raises(ValueError, match="could not be found"):
         with pytest.warns(UserWarning, match="infeasible or unbounded"):
             decoder.decode(matrix, syndrome, with_ILP=True)
