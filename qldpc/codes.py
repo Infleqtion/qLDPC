@@ -298,10 +298,7 @@ class ClassicalCode(AbstractCode):
         The second condition, (b), simply ensures that `remainder` cannot be the all-0 string.
         """
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
-
-        if vector is None:
-            vector = self.field.Zeros(self.num_bits)
-        vector = self.field(vector)
+        vector = self.field.Zeros(self.num_bits) if vector is None else self.field(vector)
 
         # effective syndrome enforcing conditions (a) and (b)
         syndrome = self.matrix @ vector
@@ -764,10 +761,7 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field)
-
-        if vector is None:
-            vector = self.field.Zeros(self.num_qudits)
-        vector = self.field(vector)
+        vector = self.field.Zeros(self.num_qudits) if vector is None else self.field(vector)
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
