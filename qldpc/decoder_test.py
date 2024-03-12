@@ -40,10 +40,9 @@ def test_decoding() -> None:
 
     # decode over trinary field
     modulus = 3
-    assert np.allclose(
-        -error % modulus,
-        decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus, lower_bound_row=-1),
-    )
+    answer = -error % modulus
+    result = decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus, lower_bound_row=-1)
+    assert np.allclose(answer, result)
 
 
 def test_decoding_errors() -> None:
