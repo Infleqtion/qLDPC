@@ -317,7 +317,7 @@ class ClassicalCode(AbstractCode):
             )
 
             # check whether we found a candidate remainder
-            actual_syndrome = self.field(effective_check_matrix @ remainder)
+            actual_syndrome = effective_check_matrix @ remainder % self.field.order
             candidate_remainder_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         return int(np.count_nonzero(remainder))
@@ -786,7 +786,7 @@ class CSSCode(QuditCode):
             )
 
             # check whether decoding was successful
-            actual_syndrome = self.field(effective_check_matrix @ candidate_logical_op)
+            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
@@ -957,7 +957,7 @@ class CSSCode(QuditCode):
             candidate_logical_op = qldpc.decoder.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
-            actual_syndrome = self.field(effective_check_matrix @ candidate_logical_op)
+            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
