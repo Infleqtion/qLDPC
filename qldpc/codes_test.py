@@ -333,7 +333,7 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_surface_HGP_codes(distance: int = 2, field: int = 2) -> None:
+def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
     """The surface and toric codes as hypergraph product codes."""
     # surface code
     bit_code = codes.ClassicalCode.repetition(distance, field=field)
