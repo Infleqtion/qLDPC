@@ -769,7 +769,7 @@ class CSSCode(QuditCode):
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
         if vector is not None:
-            # find the distance of the given vector from a logical operator
+            # find the distance of the given vector from a logical X-type operator
             remainder = qldpc.decoder.decode(
                 code_z.matrix,
                 code_z.matrix @ self.field(vector),
