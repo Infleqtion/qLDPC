@@ -330,27 +330,22 @@ class ClassicalCode(AbstractCode):
     def get_code_params(
         self, *, bound: int | None = None, **decoder_args: object
     ) -> tuple[int, int, int, int]:
-        """Compute the parameters of this code: [n,k,d].
+        """Compute the parameters of this code: [n,k,d,w].
 
         Here:
         - n is the number of data bits
         - k is the number of encoded ("logical") bits
         - d is the code distance
+        - w is the weight of the largest parity check
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        return (
-            self.num_bits,
-            self.dimension,
-            self.get_distance(bound=bound, vector=None, **decoder_args),
-            self.get_weight(),
-        )
+        distance = self.get_distance(bound=bound, vector=None, **decoder_args)
+        return self.num_bits, self.dimension, distance, self.get_weight()
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
-        row_max = max(np.count_nonzero(row) for row in self.matrix)
-        col_max = max(np.count_nonzero(col) for col in self.matrix.T)
-        return max(row_max, col_max)
+        return max(np.count_nonzero(row) for row in self.matrix)
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
@@ -469,9 +464,7 @@ class QuditCode(AbstractCode):
         matrix_x = self.matrix[:, : self.num_qudits].view(np.ndarray)
         matrix_z = self.matrix[:, self.num_qudits :].view(np.ndarray)
         matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
-        row_max = max(np.count_nonzero(row) for row in matrix)
-        col_max = max(np.count_nonzero(col) for col in matrix.T)
-        return max(row_max, col_max)
+        return max(np.count_nonzero(row) for row in matrix)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -646,17 +639,18 @@ class CSSCode(QuditCode):
     def get_code_params(
         self, *, bound: int | None = None, **decoder_args: object
     ) -> tuple[int, int, int]:
-        """Compute the parameters of this code: [[n,k,d]].
+        """Compute the parameters of this code: [[n,k,d,w]].
 
         Here:
         - n is the number of data qudits
         - k is the number of encoded ("logical") qudits
         - d is the code distance
+        - w is the weight of the largest parity check
 
         Keyword arguments are passed to the calculation of code distance.
         """
         distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
-        return self.num_qudits, self.dimension, distance
+        return self.num_bits, self.dimension, distance, self.get_weight()
 
     def get_distance(
         self,
