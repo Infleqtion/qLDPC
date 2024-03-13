@@ -15,6 +15,8 @@
    limitations under the License.
 """
 
+import itertools
+
 import networkx as nx
 import numpy as np
 import pytest
@@ -32,14 +34,16 @@ def test_classical_codes() -> None:
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
     assert codes.ClassicalCode.hamming(3).get_distance() == 3
 
-    num_bits = 5
+    num_bits = 2
     for code in [
         codes.ClassicalCode.repetition(num_bits, field=3),
-        codes.ClassicalCode.ring(num_bits, field=4),
+        codes.ClassicalCode.ring(num_bits, field=3),
     ]:
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
+        assert code.get_distance(bound=10) == num_bits
+        assert code.get_weight() == 2
         assert code.get_random_word() in code
 
     # test that rank of repetition and hamming codes is independent of the field
@@ -67,9 +71,9 @@ def test_tensor_product(
     basis = np.reshape(code_ab.generator, (-1, code_a.num_bits, code_b.num_bits))
     assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
 
-    n_a, k_a, d_a = code_a.get_code_params()
-    n_b, k_b, d_b = code_b.get_code_params()
-    n_ab, k_ab, d_ab = code_ab.get_code_params()
+    n_a, k_a, d_a, _ = code_a.get_code_params()
+    n_b, k_b, d_b, _ = code_b.get_code_params()
+    n_ab, k_ab, d_ab, _ = code_ab.get_code_params()
     assert (n_ab, k_ab, d_ab) == (n_a * n_b, k_a * k_b, d_a * d_b)
 
     with pytest.raises(ValueError, match="Cannot take tensor product"):
@@ -88,6 +92,18 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     code = get_random_qudit_code(bits, checks, field)
     graph = codes.QuditCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+
+
+def test_distance_from_classical_code(bits: int = 3) -> None:
+    """Distance of a vector from a classical code."""
+    rep_code = codes.ClassicalCode.repetition(bits, field=2)
+    for vector in itertools.product(rep_code.field.elements, repeat=bits):
+        weight = np.count_nonzero(vector)
+        dist_brute = rep_code.get_distance_exact(vector=vector)
+        dist_bound = rep_code.get_distance(bound=True, vector=vector)
+        assert dist_brute == min(weight, bits - weight)
+        assert dist_brute <= dist_bound
+    assert rep_code.get_distance(brute=False) == bits
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -255,6 +271,7 @@ def test_cyclic_codes() -> None:
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
+    assert code.get_weight() == 6
 
     dims = (15, 3)
     terms_a = [("x", 9), ("y", 1), ("y", 2)]
@@ -262,6 +279,7 @@ def test_cyclic_codes() -> None:
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 90
     assert code.dimension == 8
+    assert code.get_weight() == 6
 
     with pytest.raises(ValueError, match="does not match"):
         codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
@@ -316,17 +334,30 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_surface_HGP_code() -> None:
+def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
     """The surface and toric codes as hypergraph product codes."""
     # surface code
-    bit_code = codes.ClassicalCode.repetition(3)
+    bit_code = codes.ClassicalCode.repetition(distance, field=field)
     code = codes.HGPCode(bit_code)
-    assert code.get_code_params() == (13, 1, 3)
+    assert code.num_qudits == distance**2 + (distance - 1) ** 2
+    assert code.dimension == 1
+    assert code.get_distance(bound=10) == distance
 
     # toric code
-    bit_code = codes.ClassicalCode.ring(3)
+    bit_code = codes.ClassicalCode.ring(distance, field=field)
     code = codes.HGPCode(bit_code)
-    assert code.get_code_params() == (18, 2, 3)
+    assert code.num_qudits == 2 * distance**2
+    assert code.dimension == 2
+    assert code.get_distance(bound=10) == distance
+
+    # check that a logical X operator has correct weight when minimzed
+    code.minimize_logical_op(codes.Pauli.X, 0)
+    op = code.get_logical_ops()[codes.Pauli.X.index, 0]
+    assert np.count_nonzero(op) == distance
+
+    # check that the identity operator is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
 
 
 def test_toric_tanner_code() -> None:
@@ -341,11 +372,9 @@ def test_toric_tanner_code() -> None:
     subcode_a = codes.ClassicalCode.repetition(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a)
 
-    # check that this is a [[16, 2, 4]] code
-    assert code.get_code_params() == (16, 2, 4)
-    assert code.get_distance(lower=True) == 4
-    assert code.get_distance(upper=100, ensure_nontrivial=True) == 4
-    assert code.get_distance(upper=100, ensure_nontrivial=False) == 4
+    # TODO: with bipartite, check that this is a [[16, 2, 4]] code
+    # check that this is a [[64, 8, 4]] code
+    assert code.get_code_params(bound=10) == (64, 8, 4)
 
     # raise error if constructing QTCode with codes over different fields
     subcode_b = codes.ClassicalCode.repetition(2, field=subcode_a.field.order**2)
@@ -358,7 +387,3 @@ def test_qudit_distance(field: int) -> None:
     """Distance calculations for qudits."""
     code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
     assert code.get_distance() == 2
-    with pytest.raises(ValueError, match="not implemented"):
-        code.get_distance(upper=1)
-    with pytest.raises(ValueError, match="Must choose"):
-        code.get_distance(lower=True, upper=1)

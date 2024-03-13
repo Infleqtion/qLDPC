@@ -23,7 +23,6 @@ import itertools
 from collections.abc import Collection, Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal
 
-import cachetools
 import galois
 import ldpc.mod2
 import networkx as nx
@@ -38,6 +37,14 @@ if TYPE_CHECKING:
     from typing_extensions import Self
 
 DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
+
+
+def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
+    """Get a random nontrivial vector of a given size."""
+    while not (vec := field.Random(size)).any():
+        pass  # pragma: no cover
+    return vec
+
 
 ################################################################################
 # template error correction code classes
@@ -210,21 +217,126 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return self.num_bits - self.rank
 
-    @functools.cache
-    def get_distance(self) -> int:
-        """The distance of this code, or equivalently the minimal weight of a nonzero code word."""
-        words = self.words().view(np.ndarray)
-        return np.min(np.count_nonzero(words[1:], axis=1))
+    def get_distance(
+        self,
+        *,
+        bound: int | bool | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
+        **decoder_args: object,
+    ) -> int:
+        """Compute (or upper bound) the minimal weight of a nontrivial code word.
 
-    def get_code_params(self) -> tuple[int, int, int]:
-        """Compute the parameters of this code: [n,k,d].
+        If passed a vector, compute the minimal Hamming distance between the vector and a code word.
+
+        Additional arguments, if applicable, are passed to a decoder in
+        `ClassicalCode.get_one_distance_bound`.
+        """
+        if bound is None:
+            return self.get_distance_exact(vector=vector)
+        return self.get_distance_bound(num_trials=int(bound), vector=vector, **decoder_args)
+
+    def get_distance_exact(
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
+    ) -> int:
+        """Compute the minimal weight of a nontrivial code word by brute force.
+
+        If passed a vector, compute the minimal Hamming distance between the vector and a code word.
+        """
+        if vector is not None:
+            words = self.words() - self.field(vector)[np.newaxis, :]
+        else:
+            words = self.words()[1:]
+        return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+
+    def get_distance_bound(
+        self,
+        num_trials: int = 1,
+        *,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
+        **decoder_args: object,
+    ) -> int:
+        """Compute an upper bound on code distance by minimizing many individual upper bounds.
+
+        If passed a vector, compute the minimal Hamming distance between the vector and a code word.
+
+        Additional arguments, if applicable, are passed to a decoder in
+        `ClassicalCode.get_one_distance_bound`.
+        """
+        distance_bounds = (
+            self.get_one_distance_bound(vector=vector, **decoder_args) for _ in range(num_trials)
+        )
+        return min(distance_bounds, default=self.num_qudits)
+
+    def get_one_distance_bound(
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
+    ) -> int:
+        """Compute a single upper bound on code distance.
+
+        The code distance is the minimal Hamming distance between two code words, or equivalently
+        the minimal Hamming weight of a nonzero code word.  To find a minimal nonzero code word we
+        decode a trivial (all-zero) syndrome, but enforce that the code word has nonzero overlap
+        with a random word, which excludes the all-0 vector as a candidate.
+
+        If passed a vector, compute the minimal Hamming distance between the vector and a code word.
+        Equivalently, we can interpret the given vector as an error, and find a minimal-weight
+        correction from decoding the syndrome induced by this vector.
+
+        Additional arguments, if applicable, are passed to a decoder.
+        """
+        if vector is not None:
+            # find the distance of the given vector from a code word
+            correction = qldpc.decoder.decode(
+                self.matrix,
+                self.matrix @ self.field(vector),
+                **decoder_args,
+            )
+            return int(np.count_nonzero(correction))
+
+        # effective syndrome: a trivial "actual" syndrome, and a nonzero overlap with a random word
+        effective_syndrome = np.zeros(self.num_checks + 1, dtype=int)
+        effective_syndrome[-1] = 1
+        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=-1)
+
+        valid_candidate_found = False
+        while not valid_candidate_found:
+            # construct the effective check matrix enforcing
+            # (a) a trivial syndrome, and
+            # (b) a nonzero overlap with a random word
+            random_word = get_random_nontrivial_vec(self.field, self.num_bits)
+            effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
+
+            # compute a low-weight candidate code word
+            candidate = qldpc.decoder.decode(
+                effective_check_matrix,
+                effective_syndrome,
+                **decoder_args,
+            )
+
+            # check whether we found a candidate candidate
+            actual_syndrome = effective_check_matrix @ candidate % self.field.order
+            valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
+
+        return int(np.count_nonzero(candidate))
+
+    def get_code_params(
+        self, *, bound: int | bool | None = None, **decoder_args: object
+    ) -> tuple[int, int, int, int]:
+        """Compute the parameters of this code: [n,k,d,w].
 
         Here:
         - n is the number of data bits
         - k is the number of encoded ("logical") bits
         - d is the code distance
+        - w is the maximal weight of (i.e., number of bits addressed by) a parity check
+
+        Keyword arguments are passed to the calculation of code distance.
         """
-        return self.num_bits, self.dimension, self.get_distance()
+        distance = self.get_distance(bound=bound, vector=None, **decoder_args)
+        return self.num_bits, self.dimension, distance, self.get_weight()
+
+    def get_weight(self) -> int:
+        """Compute the weight of the largest check."""
+        return max(np.count_nonzero(row) for row in self.matrix)
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
@@ -282,6 +394,19 @@ class ClassicalCode(AbstractCode):
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 
 
+def _fix_decoder_args_for_nonbinary_fields(
+    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
+) -> None:
+    """Fix decoder arguments for nonprime number fields."""
+    if field.order > 2:
+        if field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
+        decoder_args["with_ILP"] = True
+        decoder_args["modulus"] = field.order
+        if bound_index is not None:
+            decoder_args["lower_bound_row"] = bound_index
+
+
 # TODO:
 # - add is_CSS method to figure out whether this is a CSS Code
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
@@ -324,6 +449,13 @@ class QuditCode(AbstractCode):
     def _assert_qubit_code(self) -> None:
         if self.field.order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code")
+
+    def get_weight(self) -> int:
+        """Compute the weight of the largest check."""
+        matrix_x = self.matrix[:, : self.num_qudits].view(np.ndarray)
+        matrix_z = self.matrix[:, self.num_qudits :].view(np.ndarray)
+        matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
+        return max(np.count_nonzero(row) for row in matrix)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -487,7 +619,7 @@ class CSSCode(QuditCode):
 
     @property
     def num_qudits(self) -> int:
-        """Number of data qubits in this code."""
+        """Number of data qudits in this code."""
         return self.code_x.matrix.shape[1]
 
     @property
@@ -496,98 +628,117 @@ class CSSCode(QuditCode):
         return self.code_x.dimension + self.code_z.dimension - self.num_qudits
 
     def get_code_params(
-        self, *, lower: bool = False, upper: int | None = None, **decoder_args: object
-    ) -> tuple[int, int, int]:
-        """Compute the parameters of this code: [[n,k,d]].
+        self, *, bound: int | bool | None = None, **decoder_args: object
+    ) -> tuple[int, int, int, int]:
+        """Compute the parameters of this code: [[n,k,d,w]].
 
         Here:
         - n is the number of data qudits
         - k is the number of encoded ("logical") qudits
         - d is the code distance
+        - w is the maximal weight of (i.e., number of qudits addressed by) a parity check
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(pauli=None, lower=lower, upper=upper, **decoder_args)
-        return self.num_qudits, self.dimension, distance
+        distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
+        return self.num_qudits, self.dimension, distance, self.get_weight()
 
     def get_distance(
         self,
         pauli: Literal[Pauli.X, Pauli.Z] | None = None,
         *,
-        lower: bool = False,
-        upper: int | None = None,
+        bound: int | bool | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
-        """Distance of the this code: minimum weight of a nontrivial logical operator.
+        """Compute (or upper bound) the minimal weight of a nontrivial logical operator.
 
-        If provided a Pauli as an argument, compute the minimim weight of an nontrivial logical
-        operator of the corresponding type.  Otherwise, minimize over Pauli.X and Pauli.Z.
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
+        upper bound using a randomized algorithm described in arXiv:2308.07915, minimizing over
+        `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
 
-        If `lower is True`, compute a lower bound: for the X-distance, compute the distance of the
-        classical Z-type subcode that corrects X-type errors.  Vice versa with the Z-distance.
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
 
-        If `upper is not None`, compute an upper bound using a randomized algorithm described in
-        arXiv:2308.07915, minimizing over `upper` random trials.  For a detailed explanation, see
-        `CSSCode.get_distance_upper_bound` and `CSSCode.get_one_distance_upper_bound`.
-
-        If `lower is False` and `upper is None`, compute an exact code distance with integer linear
-        programming.  Warning: this is an NP-complete problem and takes exponential time to execute.
-
-        All remaining keyword arguments are passed to a decoder, if applicable.
+        Additional arguments, if applicable, are passed to a decoder in
+        `CSSCode.get_one_distance_bound`.
         """
-        if lower and upper:
-            raise ValueError(
-                "Must choose between computing lower and upper bounds on code distance"
-            )
-        assert pauli == Pauli.X or pauli == Pauli.Z or pauli is None
-        pauli = pauli if not self._codes_equal else Pauli.X
+        if bound is None:
+            return self.get_distance_exact(pauli, vector=vector)
+        return self.get_distance_bound(pauli, num_trials=int(bound), vector=vector, **decoder_args)
 
+    def get_distance_exact(
+        self,
+        pauli: Literal[Pauli.X, Pauli.Z] | None,
+        *,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
+    ) -> int:
+        """Compute the minimal weight of a nontrivial code word by brute force.
+
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
+        """
+        assert pauli in [None, Pauli.X, Pauli.Z]
         if pauli is None:
             return min(
-                self.get_distance(Pauli.X, lower=lower, upper=upper, **decoder_args),
-                self.get_distance(Pauli.Z, lower=lower, upper=upper, **decoder_args),
+                self.get_distance_exact(Pauli.X, vector=vector),
+                self.get_distance_exact(Pauli.Z, vector=vector),
             )
 
-        if lower:
-            return self.get_distance_lower_bound(pauli)
+        code_x = self.code_x if pauli == Pauli.X else self.code_z
+        code_z = self.code_z if pauli == Pauli.X else self.code_x
 
-        if upper is not None:
-            return self.get_distance_upper_bound(pauli, num_trials=upper, **decoder_args)
+        if vector is not None:
+            ops_x = code_z.words()
+            vector = self.field(vector)
+            return min(np.count_nonzero(word - vector) for word in ops_x)
 
-        return self.get_distance_exact(pauli, **decoder_args)
+        dual_code_x = ~code_x
+        nontrivial_ops_x = (word for word in code_z.words() if word not in dual_code_x)
+        return min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
-    def get_distance_lower_bound(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
-        """Lower bound to the X-distance or Z-distance of this code."""
-        assert pauli == Pauli.X or pauli == Pauli.Z
-        pauli = pauli if not self._codes_equal else Pauli.X
-        return self.code_z.get_distance() if pauli == Pauli.X else self.code_x.get_distance()
-
-    def get_distance_upper_bound(
+    def get_distance_bound(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z],
-        num_trials: int,
+        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        num_trials: int = 1,
+        *,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
-        """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
+        """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
-        All keyword arguments are passed to `CSSCode.get_one_distance_upper_bound`.
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
+
+        Additional arguments, if applicable, are passed to a decoder in
+        `CSSCode.get_one_distance_bound`.
         """
-        assert pauli == Pauli.X or pauli == Pauli.Z
-        return min(
-            self.get_one_distance_upper_bound(pauli, **decoder_args) for _ in range(num_trials)
+        distance_bounds = (
+            self.get_one_distance_bound(pauli, vector=vector, **decoder_args)
+            for _ in range(num_trials)
         )
+        return min(distance_bounds, default=self.num_qudits)
 
-    def get_one_distance_upper_bound(
+    def get_one_distance_bound(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z],
+        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        *,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
-        """Single upper bound to the X-distance or Z-distance of this code.
+        """Compute a single upper bound on code distance.
+
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
+
+        Additional arguments, if applicable, are passed to a decoder.
 
         This method uses a randomized algorithm described in arXiv:2308.07915 (and also below).
 
         Args:
             pauli: Pauli operator choosing whether to compute an X-distance or Z-distance bound.
+            vector: If not None, the vector for which we are to compute the distance to a nontrivial
+                logical operator.
             decoder_args: Keyword arguments are passed to a decoder in `decode`.
         Returns:
             An upper bound on the X-distance or Z-distance of this code.
@@ -617,19 +768,26 @@ class CSSCode(QuditCode):
         X(w_x) -- and presumably one of low Hamming weight, since decoders try to find low-weight
         solutions.  Return the Hamming weight |w_x|.
         """
-        assert pauli == Pauli.X or pauli == Pauli.Z
-        if self.field.order != 2:
-            raise ValueError(
-                "Distance upper bound calculation not implemented for fields of order > 2"
-            )
+        assert pauli in [None, Pauli.X, Pauli.Z]
+        pauli = pauli or np.random.choice([Pauli.X, Pauli.Z])
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
+        if vector is not None:
+            # find the distance of the given vector from a logical X-type operator
+            correction = qldpc.decoder.decode(
+                code_z.matrix,
+                code_z.matrix @ self.field(vector),
+                **decoder_args,
+            )
+            return int(np.count_nonzero(correction))
+
         # construct the effective syndrome
         effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
         effective_syndrome[-1] = 1
+        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=-1)
 
         logical_op_found = False
         while not logical_op_found:
@@ -639,46 +797,23 @@ class CSSCode(QuditCode):
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
             candidate_logical_op = qldpc.decoder.decode(
-                effective_check_matrix, effective_syndrome, exact=False, **decoder_args
+                effective_check_matrix, effective_syndrome, **decoder_args
             )
 
-            # check whether the decoding was successful
-            actual_syndrome = effective_check_matrix @ candidate_logical_op % 2
+            # check whether decoding was successful
+            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
-        return candidate_logical_op.sum()
-
-    @cachetools.cached(cache={}, key=lambda self, pauli, **decoder_args: (self, pauli))
-    def get_distance_exact(self, pauli: Literal[Pauli.X, Pauli.Z]) -> int:
-        """Exact X-distance or Z-distance of this code."""
-        assert pauli == Pauli.X or pauli == Pauli.Z
-        pauli = pauli if not self._codes_equal else Pauli.X
-        if self.field.degree > 1:
-            # The base field is not prime, so we can't use the integer linear program method due to
-            # different rules for addition and multiplication.  We therefore compute distance with a
-            # brute-force search over all code words.
-            code_x = self.code_x if pauli == Pauli.X else self.code_z
-            code_z = self.code_z if pauli == Pauli.X else self.code_x
-            dual_code_x = ~code_x
-            return min(np.count_nonzero(word) for word in code_z.words() if word not in dual_code_x)
-
-        # TODO: is this wrong???
-
-        # minimize the weight of logical X-type or Z-type operators
-        for logical_qubit_index in range(self.dimension):
-            self.minimize_logical_op(pauli, logical_qubit_index)
-
-        # return the minimum weight of logical X-type or Z-type operators
-        return np.count_nonzero(self.get_logical_ops()[pauli.index].view(np.ndarray), axis=-1).min()
+        return int(np.count_nonzero(candidate_logical_op))
 
     def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        (2, k, n), where k and n are respectively the numbers of logical and physical qubits in this
+        (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
         code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
-        physical qubits addressed nontrivially) by the logical Pauli-X operator on logical qubit 4.
+        physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
 
         In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
         by this method are the unit shift and phase operators that generate all logical X-type and
@@ -720,22 +855,22 @@ class CSSCode(QuditCode):
             other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
             return matrix_RRE, pivots, other
 
-        # identify check matrices for X/Z-type errors, and the current qubit locations
+        # identify check matrices for X/Z-type errors, and the current qudit locations
         checks_x: npt.NDArray[np.int_] = self.code_z.matrix
         checks_z: npt.NDArray[np.int_] = self.code_x.matrix
-        qubit_locs = np.arange(num_qudits, dtype=int)
+        qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
         checks_x, pivot_x, other_x = row_reduce(checks_x)
         checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
         checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
-        qubit_locs = np.hstack([qubit_locs[other_x], qubit_locs[pivot_x]])
+        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivot_x]])
 
         # row reduce the check matrix for Z-type errors and move its pivots to the back
         checks_z, pivot_z, other_z = row_reduce(checks_z)
         checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivot_z]])
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
-        qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivot_z]])
 
         # run some sanity checks
         assert pivot_z[-1] < num_qudits - len(pivot_x)
@@ -756,7 +891,7 @@ class CSSCode(QuditCode):
         logicals_z[:dimension, :dimension] = identity
 
         # move qudits back to their original locations
-        permutation = np.argsort(qubit_locs)
+        permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
@@ -777,45 +912,47 @@ class CSSCode(QuditCode):
             return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
 
         # generate random logical ops until we find ones with a nontrivial commutation relation
-        while True:
+        noncommuting_ops_found = False
+        while not noncommuting_ops_found:
             op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
             op_b = self.get_random_logical_op(pauli, ensure_nontrivial=False)
-            if np.any(op_a @ op_b):
-                break
+            noncommuting_ops_found = bool(np.any(op_a @ op_b))
+
         return op_a
 
     def minimize_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int
+        self, pauli: Literal[Pauli.X, Pauli.Z], logical_index: int, **decoder_args: object
     ) -> None:
         """Minimize the weight of a logical operator.
 
         A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
         that it commutes with all logical operators except its dual.  This is essentially the same
-        optimization as in CSSCode.get_one_distance_upper_bound, but solved exactly with integer
-        linear programming.
+        method as that used in CSSCode.get_one_distance_bound.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        assert 0 <= logical_qubit_index < self.dimension
-        if self.field.degree > 1:
-            raise ValueError("Method only supported for prime number fields")
+        assert 0 <= logical_index < self.dimension
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
-        dual_ops = self.get_logical_ops()[(~pauli).index]
-        effective_check_matrix = np.vstack([code.matrix, dual_ops]).view(np.ndarray)
+        all_dual_ops = self.get_logical_ops()[(~pauli).index]
+        effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
+        dual_op_index = code.num_checks + logical_index
 
         # enforce that the new logical operator commutes with everything except its dual
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
-        effective_syndrome[code.num_checks + logical_qubit_index] = 1
+        effective_syndrome[dual_op_index] = 1
+        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=dual_op_index)
 
-        logical_op = qldpc.decoder.decode(
-            effective_check_matrix,
-            effective_syndrome,
-            exact=True,
-            modulus=self.field.order,
-        )
+        logical_op_found = False
+        while not logical_op_found:
+            candidate_logical_op = qldpc.decoder.decode(
+                effective_check_matrix, effective_syndrome, **decoder_args
+            )
+            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
+            logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
+
         assert self._logical_ops is not None
-        self._logical_ops[pauli.index, logical_qubit_index] = logical_op
+        self._logical_ops[pauli.index, logical_index] = candidate_logical_op
 
 
 ################################################################################
@@ -955,7 +1092,7 @@ class HGPCode(CSSCode):
     Edges in G_AB are inherited across rows/columns from G_A and G_B.  For example, if rows r_1 and
     r_2 share an edge in G_A, then the same is true in every column of G_AB.
 
-    By default, the check qubits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
+    By default, the check qudits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
     sector (1, 0) and X-type operators.  If a HGP is constructed with `conjugate==True`, then the
     types of operators addressing the nodes in sector (1, 1) are switched.
 
@@ -1255,6 +1392,7 @@ class QTCode(CSSCode):
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
+        bipartite: bool | None = False,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
@@ -1265,7 +1403,7 @@ class QTCode(CSSCode):
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
-        self.complex = CayleyComplex(subset_a, subset_b)
+        self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 
