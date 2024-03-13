@@ -288,10 +288,8 @@ class ClassicalCode(AbstractCode):
         random word, which excludes the all-0 vector as a candidate.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
-        Specifically, expand `vector = code_word + remainder`, where `code_word` has a trivial
-        syndrome and `remainder` has a small weight that upper bounds the distance between `vector`
-        and a code word.  A small-weight `remainder` can be found by enforcing that it has the same
-        syndrome as `vector.
+        Equivalently, we can interpret the given vector as an error, and find a minimal-weight
+        correction from decoding the syndrome induced by this vector.
 
         Additional arguments, if applicable, are passed to a decoder.
         """
