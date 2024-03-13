@@ -348,9 +348,8 @@ class ClassicalCode(AbstractCode):
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
-        matrix = self.matrix.view(np.ndarray)
-        row_max = np.max([np.count_nonzero(matrix[i, :]) for i in range(matrix.shape[0])])
-        col_max = np.max([np.count_nonzero(matrix[:, i]) for i in range(matrix.shape[1])])
+        row_max = max(np.count_nonzero(row) for row in self.matrix)
+        col_max = max(np.count_nonzero(col) for col in self.matrix.T)
         return max(row_max, col_max)
 
     @classmethod
@@ -467,8 +466,8 @@ class QuditCode(AbstractCode):
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
-        row_max = np.max([np.count_nonzero(self.matrix[i, :]) for i in range(self.matrix.shape[0])])
-        col_max = np.max([np.count_nonzero(self.matrix[:, i]) for i in range(self.matrix.shape[1])])
+        row_max = max(np.count_nonzero(row) for row in self.matrix)
+        col_max = max(np.count_nonzero(col) for col in self.matrix.T)
         return max(row_max, col_max)
 
     @classmethod
