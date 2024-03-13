@@ -633,7 +633,7 @@ class CSSCode(QuditCode):
 
     @property
     def num_qudits(self) -> int:
-        """Number of data qubits in this code."""
+        """Number of data qudits in this code."""
         return self.code_x.matrix.shape[1]
 
     @property
@@ -813,16 +813,16 @@ class CSSCode(QuditCode):
         code_x = self.code_x if pauli == Pauli.X else self.code_z
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         dual_code_x = ~code_x
-        logical_ops_z = (word for word in code_z.words() if word not in dual_code_x)
-        return min(np.count_nonzero(word - vector) for word in logical_ops_z)
+        nontrivial_ops_z = (word for word in code_z.words() if word not in dual_code_x)
+        return min(np.count_nonzero(word - vector) for word in nontrivial_ops_z)
 
     def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        (2, k, n), where k and n are respectively the numbers of logical and physical qubits in this
+        (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
         code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
-        physical qubits addressed nontrivially) by the logical Pauli-X operator on logical qubit 4.
+        physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
 
         In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
         by this method are the unit shift and phase operators that generate all logical X-type and
@@ -864,22 +864,22 @@ class CSSCode(QuditCode):
             other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
             return matrix_RRE, pivots, other
 
-        # identify check matrices for X/Z-type errors, and the current qubit locations
+        # identify check matrices for X/Z-type errors, and the current qudit locations
         checks_x: npt.NDArray[np.int_] = self.code_z.matrix
         checks_z: npt.NDArray[np.int_] = self.code_x.matrix
-        qubit_locs = np.arange(num_qudits, dtype=int)
+        qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
         checks_x, pivot_x, other_x = row_reduce(checks_x)
         checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
         checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
-        qubit_locs = np.hstack([qubit_locs[other_x], qubit_locs[pivot_x]])
+        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivot_x]])
 
         # row reduce the check matrix for Z-type errors and move its pivots to the back
         checks_z, pivot_z, other_z = row_reduce(checks_z)
         checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivot_z]])
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
-        qubit_locs = np.hstack([qubit_locs[other_z], qubit_locs[pivot_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivot_z]])
 
         # run some sanity checks
         assert pivot_z[-1] < num_qudits - len(pivot_x)
@@ -900,7 +900,7 @@ class CSSCode(QuditCode):
         logicals_z[:dimension, :dimension] = identity
 
         # move qudits back to their original locations
-        permutation = np.argsort(qubit_locs)
+        permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
@@ -930,7 +930,7 @@ class CSSCode(QuditCode):
         return op_a
 
     def minimize_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], logical_qubit_index: int, **decoder_args: object
+        self, pauli: Literal[Pauli.X, Pauli.Z], logical_index: int, **decoder_args: object
     ) -> None:
         """Minimize the weight of a logical operator.
 
@@ -939,13 +939,13 @@ class CSSCode(QuditCode):
         method as that used in CSSCode.get_one_distance_bound.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        assert 0 <= logical_qubit_index < self.dimension
+        assert 0 <= logical_index < self.dimension
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
         all_dual_ops = self.get_logical_ops()[(~pauli).index]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
-        dual_op_index = code.num_checks + logical_qubit_index
+        dual_op_index = code.num_checks + logical_index
 
         # enforce that the new logical operator commutes with everything except its dual
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
@@ -961,7 +961,7 @@ class CSSCode(QuditCode):
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
-        self._logical_ops[pauli.index, logical_qubit_index] = candidate_logical_op
+        self._logical_ops[pauli.index, logical_index] = candidate_logical_op
 
 
 ################################################################################
@@ -1101,7 +1101,7 @@ class HGPCode(CSSCode):
     Edges in G_AB are inherited across rows/columns from G_A and G_B.  For example, if rows r_1 and
     r_2 share an edge in G_A, then the same is true in every column of G_AB.
 
-    By default, the check qubits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
+    By default, the check qudits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
     sector (1, 0) and X-type operators.  If a HGP is constructed with `conjugate==True`, then the
     types of operators addressing the nodes in sector (1, 1) are switched.
 
