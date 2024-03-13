@@ -236,7 +236,7 @@ class ClassicalCode(AbstractCode):
         `ClassicalCode.get_one_distance_bound`.
         """
         if bound:
-            return self.get_distance_bound(bound, vector=vector, **decoder_args)
+            return self.get_distance_bound(bound, **decoder_args)
 
         return self.get_distance_exact(vector)
 
@@ -340,7 +340,7 @@ class ClassicalCode(AbstractCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(bound=bound, vector=None, **decoder_args)
+        distance = self.get_distance(bound=bound, **decoder_args)
         return self.num_bits, self.dimension, distance, self.get_weight()
 
     def get_weight(self) -> int:
@@ -649,8 +649,8 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
-        return self.num_bits, self.dimension, distance, self.get_weight()
+        distance = self.get_distance(bound=bound, **decoder_args)
+        return self.num_qudits, self.dimension, distance, self.get_weight()
 
     def get_distance(
         self,
