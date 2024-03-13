@@ -16,13 +16,13 @@ if __name__ == "__main__":
     )
 
     # run checks on individual files
-    checks_passed = {}
+    exit_codes = {}
     for file in coverage_files:
-        checks_passed[file] = checks_superstaq.coverage_.run(file)
+        exit_codes[file] = checks_superstaq.coverage_.run(file)
 
     # print warnings for files that are not covered
-    for file, passed in checks_passed.items():
-        if not passed:
+    for file, exit_code in exit_codes.items():
+        if exit_code:
             checks_superstaq.check_utils.warning(f"Coverage failed for {file}.")
 
-    exit(0 if all(checks_passed.values()) else 1)
+    exit(sum(exit_codes.values()))
