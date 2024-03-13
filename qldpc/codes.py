@@ -225,10 +225,7 @@ class ClassicalCode(AbstractCode):
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
-        """Estimate the distance of this code, or the minimal weight of a nontrivial code word.
-
-        The code distance is the minimal Hamming distance between two code words, or equivalently
-        the minimal weight of a nonzero code word.
+        """Compute (or estimate) the minimal weight of a nontrivial code word.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
 
@@ -243,10 +240,7 @@ class ClassicalCode(AbstractCode):
     def get_distance_exact(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
     ) -> int:
-        """Compute the code distance by brute force.
-
-        The code distance is the minimal Hamming distance between two code words, or equivalently
-        the minimal weight of a nonzero code word.
+        """Compute the minimal weight of a nontrivial code word by brute force.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
@@ -254,8 +248,7 @@ class ClassicalCode(AbstractCode):
             words = self.words() - self.field(vector)[np.newaxis, :]
         else:
             words = self.words()[1:]
-        word_array = words.view(np.ndarray)
-        return np.min(np.count_nonzero(word_array, axis=1))
+        return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
 
     def get_distance_bound(
         self,
@@ -264,10 +257,7 @@ class ClassicalCode(AbstractCode):
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
-        """Compute an upper bound by minimizing many individual upper bounds.
-
-        The code distance is the minimal Hamming distance between two code words, or equivalently
-        the minimal weight of a nonzero code word.
+        """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
 
@@ -281,12 +271,12 @@ class ClassicalCode(AbstractCode):
     def get_one_distance_bound(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
     ) -> int:
-        """Single upper bound to the distance of this code.
+        """Compute a single upper bound on code distance.
 
         The code distance is the minimal Hamming distance between two code words, or equivalently
-        the minimal weight of a nonzero code word.  To find a minimal nonzero code word we decode a
-        trivial (all-zero) syndrome, but enforce that the code word has nonzero overlap with a
-        random word, which excludes the all-0 vector as a candidate.
+        the minimal Hamming weight of a nonzero code word.  To find a minimal nonzero code word we
+        decode a trivial (all-zero) syndrome, but enforce that the code word has nonzero overlap
+        with a random word, which excludes the all-0 vector as a candidate.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         Equivalently, we can interpret the given vector as an error, and find a minimal-weight
@@ -296,17 +286,17 @@ class ClassicalCode(AbstractCode):
         """
         if vector is not None:
             # find the distance of the given vector from a code word
-            remainder = qldpc.decoder.decode(
+            correction = qldpc.decoder.decode(
                 self.matrix,
                 self.matrix @ self.field(vector),
                 **decoder_args,
             )
-            return int(np.count_nonzero(remainder))
+            return int(np.count_nonzero(correction))
 
         # effective syndrome: a trivial "actual" syndrome, and a nonzero overlap with a random word
         effective_syndrome = np.zeros(self.num_checks + 1, dtype=int)
         effective_syndrome[-1] = 1
-        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=-1)
+        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=-1)
 
         valid_candidate_found = False
         while not valid_candidate_found:
@@ -405,7 +395,7 @@ class ClassicalCode(AbstractCode):
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 
 
-def _fix_decoder_args_for_nonprime_fields(
+def _fix_decoder_args_for_nonbinary_fields(
     decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
 ) -> None:
     """Fix decoder arguments for nonprime number fields."""
@@ -781,7 +771,7 @@ class CSSCode(QuditCode):
         # construct the effective syndrome
         effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
         effective_syndrome[-1] = 1
-        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=-1)
+        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=-1)
 
         logical_op_found = False
         while not logical_op_found:
@@ -815,7 +805,7 @@ class CSSCode(QuditCode):
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
     ) -> int:
-        """Exact X-distance or Z-distance of this code, found via brute force.
+        """Compute the X-distance or Z-distance of this code by brute force.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
         (possibly trivial) X-type or Z-type logical operator, as applicable.
@@ -968,7 +958,7 @@ class CSSCode(QuditCode):
         # enforce that the new logical operator commutes with everything except its dual
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[dual_op_index] = 1
-        _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=dual_op_index)
+        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=dual_op_index)
 
         logical_op_found = False
         while not logical_op_found:
