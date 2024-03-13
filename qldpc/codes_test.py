@@ -34,7 +34,7 @@ def test_classical_codes() -> None:
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
     assert codes.ClassicalCode.hamming(3).get_distance() == 3
 
-    num_bits = 5
+    num_bits = 2
     for code in [
         codes.ClassicalCode.repetition(num_bits, field=3),
         codes.ClassicalCode.ring(num_bits, field=4),
@@ -42,6 +42,7 @@ def test_classical_codes() -> None:
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
+        assert code.get_distance(bound=10) == num_bits
         assert code.get_weight() == 2
         assert code.get_random_word() in code
 
@@ -96,13 +97,13 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
 def test_distance_from_classical_code(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.ClassicalCode.repetition(bits, field=2)
-    for vector in itertools.product(rep_code.field.elements, repeat=3):
+    for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
         dist_brute = rep_code.get_distance_exact(vector)
         dist_bound = rep_code.get_distance(bound=True, vector=vector)
         assert dist_brute == min(weight, bits - weight)
         assert dist_brute <= dist_bound
-    assert rep_code.get_distance(brute=False) == 3
+    assert rep_code.get_distance(brute=False) == bits
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
