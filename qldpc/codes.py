@@ -466,8 +466,11 @@ class QuditCode(AbstractCode):
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
-        row_max = max(np.count_nonzero(row) for row in self.matrix)
-        col_max = max(np.count_nonzero(col) for col in self.matrix.T)
+        matrix_x = self.matrix[:, : self.num_qudits].view(np.ndarray)
+        matrix_z = self.matrix[:, self.num_qudits :].view(np.ndarray)
+        matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
+        row_max = max(np.count_nonzero(row) for row in matrix)
+        col_max = max(np.count_nonzero(col) for col in matrix.T)
         return max(row_max, col_max)
 
     @classmethod
