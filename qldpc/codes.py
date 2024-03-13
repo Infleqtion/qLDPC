@@ -192,15 +192,16 @@ class ClassicalCode(AbstractCode):
         See https://arxiv.org/abs/2206.09973
         """
         assert code_a.field is code_b.field
-        field = code_a.field
 
-        tensor_code = ClassicalCode.tensor_product(code_a, code_b)
+        code = ClassicalCode.tensor_product(code_a, code_b)
         estimate = np.inf
-        for vec in itertools.product(field.elements, repeat=code_a.num_bits * code_b.num_bits):
-            matrix = field(vec).reshape((code_a.num_bits, code_b.num_bits))
+        for vector in itertools.product(
+            code.field.elements, repeat=code_a.num_bits * code_b.num_bits
+        ):
+            matrix = code.field(vector).reshape((code_a.num_bits, code_b.num_bits))
             dist_A = np.sum(np.apply_along_axis(code_a.get_distance, axis=1, arr=matrix))
             dist_B = np.sum(np.apply_along_axis(code_b.get_distance, axis=0, arr=matrix))
-            dist_AB = tensor_code.get_distance(vector=field(vec))
+            dist_AB = code.get_distance(vector=vector)
             ratio = (dist_A + dist_B) / (2 * dist_AB)
             estimate = min(estimate, ratio)
 
