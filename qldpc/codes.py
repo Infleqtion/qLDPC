@@ -673,7 +673,7 @@ class CSSCode(QuditCode):
         `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
-        nontrivial X-type or Z-type logical operator, as applicable.
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
 
         Additional arguments, if applicable, are passed to a decoder in
         `CSSCode.get_one_distance_bound`.
@@ -702,7 +702,7 @@ class CSSCode(QuditCode):
         """Upper bound to the X-distance or Z-distance of this code, minimized over many trials.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
-        nontrivial X-type or Z-type logical operator, as applicable.
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
 
         Additional arguments, if applicable, are passed to a decoder in
         `CSSCode.get_one_distance_bound`.
@@ -722,7 +722,7 @@ class CSSCode(QuditCode):
         """Single upper bound to the X-distance or Z-distance of this code.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
-        nontrivial X-type or Z-type logical operator, as applicable.
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
 
         Additional arguments, if applicable, are passed to a decoder.
 
@@ -768,9 +768,18 @@ class CSSCode(QuditCode):
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
+        if vector is not None:
+            # find the distance of the given vector from a logical operator
+            remainder = qldpc.decoder.decode(
+                code_z.matrix,
+                code_z.matrix @ self.field(vector),
+                **decoder_args,
+            )
+            return int(np.count_nonzero(remainder))
+
         # construct the effective syndrome
-        syndrome = code_z.matrix @ vector
-        effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
+        effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
+        effective_syndrome[-1] = 1
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=-1)
 
         logical_op_found = False
@@ -804,16 +813,26 @@ class CSSCode(QuditCode):
         pauli: Literal[Pauli.X, Pauli.Z],
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
     ) -> int:
-        """Exact X-distance or Z-distance of this code, found via brute force."""
+        """Exact X-distance or Z-distance of this code, found via brute force.
+
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
+        """
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
         if vector is None:
             vector = self.field.Zeros(self.num_qudits)
         code_x = self.code_x if pauli == Pauli.X else self.code_z
         code_z = self.code_z if pauli == Pauli.X else self.code_x
+
+        if vector is not None:
+            ops_x = code_z.words()
+            vector = self.field(vector)
+            return min(np.count_nonzero(word - vector) for word in ops_x)
+
         dual_code_x = ~code_x
-        nontrivial_ops_z = (word for word in code_z.words() if word not in dual_code_x)
-        return min(np.count_nonzero(word - vector) for word in nontrivial_ops_z)
+        nontrivial_ops_x = (word for word in code_z.words() if word not in dual_code_x)
+        return min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
     def get_logical_ops(self) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
