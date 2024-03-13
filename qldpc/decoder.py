@@ -58,7 +58,7 @@ def decode_with_ILP(
 
     Supports integers modulo q for q > 2 with a "modulus" argument.
 
-    If a "lower_bound_row" argument is provided, treat this row of the linear constraint as a lower
+    If a "lower_bound_row" argument is provided, treat this linear constraint (by index) as a lower
     bound (>=), rather than an equality (==) constraint.
 
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
@@ -136,7 +136,7 @@ def _build_cvxpy_constraints(
             slack_variables = cvxpy.Variable(max_power_of_q, boolean=True)
             zero_mod_q = powers_of_q @ slack_variables
         else:
-            zero_mod_q = 0  # pragma: no cover
+            zero_mod_q = 0
 
         if idx == lower_bound_row:
             constraint = check @ variables >= syndrome_bit + zero_mod_q

@@ -740,20 +740,11 @@ class CSSCode(QuditCode):
 
         Additional arguments, if applicable, are passed to a decoder.
 
-        This method uses a randomized algorithm described in arXiv:2308.07915 (and also below).
+        This method uses a randomized algorithm described in arXiv:2308.07915, and also below.
 
-        Args:
-            pauli: Pauli operator choosing whether to compute an X-distance or Z-distance bound.
-            vector: If not None, the vector for which we are to compute the distance to a nontrivial
-                logical operator.
-            decoder_args: Keyword arguments are passed to a decoder in `decode`.
-        Returns:
-            An upper bound on the X-distance or Z-distance of this code.
-
-        For ease of language, we henceforth assume that we are computing an X-distance.
+        For ease of language, we henceforth assume without loss of generality that we are computing an X-distance.
 
         Pick a random Z-type logical operator Z(w_z) whose support is indicated by the bistring w_z.
-
         We now wish to find a low-weight Pauli-X string X(w_x) that
             (a) has a trivial syndrome, and
             (b) anti-commutes with Z(w_z),
@@ -770,10 +761,10 @@ class CSSCode(QuditCode):
         by decoding the syndrome [ 0, 0, ..., 0, 1 ].T for the parity check matrix [ H_z.T, w_z ].T.
 
         We solve the above decoding problem with a decoder in `decode`.  If the decoder fails to
-        find a solution, try again with a new initial random operator Z(w_z).  If the decoder
-        succeeds in finding a solution w_x, this solution corresponds to a logical X-type operator
-        X(w_x) -- and presumably one of low Hamming weight, since decoders try to find low-weight
-        solutions.  Return the Hamming weight |w_x|.
+        find a solution, try again with a new random operator Z(w_z).  If the decoder succeeds in
+        finding a solution w_x, this solution corresponds to a logical X-type operator X(w_x) -- and
+        presumably one of low Hamming weight, since decoders try to find low-weight solutions.
+        Return the Hamming weight |w_x|.
         """
         assert pauli in [None, Pauli.X, Pauli.Z]
         pauli = pauli or random.choice([Pauli.X, Pauli.Z])
