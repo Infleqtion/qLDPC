@@ -20,6 +20,7 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
+import random
 from collections.abc import Collection, Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal
 
@@ -265,7 +266,7 @@ class ClassicalCode(AbstractCode):
         distance_bounds = (
             self.get_one_distance_bound(vector=vector, **decoder_args) for _ in range(num_trials)
         )
-        return min(distance_bounds, default=self.num_qudits)
+        return min(distance_bounds, default=self.num_bits)
 
     def get_one_distance_bound(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
@@ -769,7 +770,7 @@ class CSSCode(QuditCode):
         solutions.  Return the Hamming weight |w_x|.
         """
         assert pauli in [None, Pauli.X, Pauli.Z]
-        pauli = pauli or np.random.choice([Pauli.X, Pauli.Z])
+        pauli = pauli or random.choice([Pauli.X, Pauli.Z])
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
@@ -1392,7 +1393,6 @@ class QTCode(CSSCode):
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        bipartite: bool | None = False,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
@@ -1403,7 +1403,7 @@ class QTCode(CSSCode):
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
-        self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
+        self.complex = CayleyComplex(subset_a, subset_b)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 
