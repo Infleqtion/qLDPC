@@ -276,9 +276,7 @@ class ClassicalCode(AbstractCode):
         )
 
     def get_one_distance_bound(
-        self,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        self, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
     ) -> int:
         """Single upper bound to the distance of this code.
 
@@ -329,10 +327,7 @@ class ClassicalCode(AbstractCode):
         return int(np.count_nonzero(candidate))
 
     def get_code_params(
-        self,
-        *,
-        bound: int | None = None,
-        **decoder_args: object,
+        self, *, bound: int | None = None, **decoder_args: object
     ) -> tuple[int, int, int, int]:
         """Compute the parameters of this code: [n,k,d].
 
@@ -645,10 +640,7 @@ class CSSCode(QuditCode):
         return self.code_x.dimension + self.code_z.dimension - self.num_qudits
 
     def get_code_params(
-        self,
-        *,
-        bound: int | None = None,
-        **decoder_args: object,
+        self, *, bound: int | None = None, **decoder_args: object
     ) -> tuple[int, int, int]:
         """Compute the parameters of this code: [[n,k,d]].
 
