@@ -284,8 +284,8 @@ class ClassicalCode(AbstractCode):
 
         The code distance is the minimal Hamming weight between two code words, or equivalently the
         minimal weight of a nonzero code word.  To find a minimal nonzero code word we decode a
-        trivial syndrome, but enforce that the code word has nonzero overlap with a random word,
-        which excludes the all-0 vector as a candidate.
+        trivial (all-zero) syndrome, but enforce that the code word has nonzero overlap with a
+        random word, which excludes the all-0 vector as a candidate.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         Specifically, expand `vector = code_word + remainder`, where `code_word` has a trivial
