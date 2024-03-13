@@ -336,7 +336,7 @@ class ClassicalCode(AbstractCode):
         - n is the number of data bits
         - k is the number of encoded ("logical") bits
         - d is the code distance
-        - w is the weight of the largest parity check
+        - w is the maximal weight of (i.e., number of bits addressed by) a parity check
 
         Keyword arguments are passed to the calculation of code distance.
         """
@@ -645,7 +645,7 @@ class CSSCode(QuditCode):
         - n is the number of data qudits
         - k is the number of encoded ("logical") qudits
         - d is the code distance
-        - w is the weight of the largest parity check
+        - w is the maximal weight of (i.e., number of qudits addressed by) a parity check
 
         Keyword arguments are passed to the calculation of code distance.
         """
