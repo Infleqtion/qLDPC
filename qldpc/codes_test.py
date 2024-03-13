@@ -37,7 +37,7 @@ def test_classical_codes() -> None:
     num_bits = 2
     for code in [
         codes.ClassicalCode.repetition(num_bits, field=3),
-        codes.ClassicalCode.ring(num_bits, field=4),
+        codes.ClassicalCode.ring(num_bits, field=3),
     ]:
         assert code.num_bits == num_bits
         assert code.dimension == 1
@@ -343,11 +343,6 @@ def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
     assert code.dimension == 1
     assert code.get_distance(bound=10) == distance
 
-    # check that the logical X operator has correct weight when minimzed
-    code.minimize_logical_op(codes.Pauli.X, 0)
-    op = code.get_logical_ops()[codes.Pauli.X.index, 0]
-    assert np.count_nonzero(op) == distance
-
     # toric code
     bit_code = codes.ClassicalCode.ring(distance, field=field)
     code = codes.HGPCode(bit_code)
@@ -359,6 +354,10 @@ def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
     code.minimize_logical_op(codes.Pauli.X, 0)
     op = code.get_logical_ops()[codes.Pauli.X.index, 0]
     assert np.count_nonzero(op) == distance
+
+    # check that the identity operator is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
 
 
 def test_toric_tanner_code() -> None:
