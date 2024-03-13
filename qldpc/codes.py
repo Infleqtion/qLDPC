@@ -275,8 +275,8 @@ class ClassicalCode(AbstractCode):
 
         The code distance is the minimal Hamming distance between two code words, or equivalently
         the minimal Hamming weight of a nonzero code word.  To find a minimal nonzero code word we
-        decode a trivial (all-zero) syndrome, but enforce that the code word has nonzero overlap
-        with a random word, which excludes the all-0 vector as a candidate.
+        decode a trivial (all-0) syndrome, but enforce that the code word has nonzero overlap with a
+        random word, which excludes the all-0 word as a candidate.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         Equivalently, we can interpret the given vector as an error, and find a minimal-weight
@@ -300,20 +300,18 @@ class ClassicalCode(AbstractCode):
 
         valid_candidate_found = False
         while not valid_candidate_found:
-            # construct the effective check matrix enforcing
-            # (a) a trivial syndrome, and
-            # (b) a nonzero overlap with a random word
+            # construct the effective check matrix
             random_word = get_random_nontrivial_vec(self.field, self.num_bits)
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
-            # compute a low-weight candidate code word
+            # find a low-weight candidate code word
             candidate = qldpc.decoder.decode(
                 effective_check_matrix,
                 effective_syndrome,
                 **decoder_args,
             )
 
-            # check whether we found a candidate candidate
+            # check whether we found a valid candidate
             actual_syndrome = effective_check_matrix @ candidate % self.field.order
             valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
 
@@ -398,7 +396,15 @@ class ClassicalCode(AbstractCode):
 def _fix_decoder_args_for_nonbinary_fields(
     decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
 ) -> None:
-    """Fix decoder arguments for nonprime number fields."""
+    """Fix decoder arguments for nonbinary number fields.
+
+    If the field has order greater than 2, then we can only decode
+    (a) prime number fields, with
+    (b) an integer-linear program decoder.
+
+    If provided a bound_index, treat the constraint corresponding to this row of the parity check
+    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
+    """
     if field.order > 2:
         if field.degree > 1:
             raise ValueError("Method only supported for prime number fields")
