@@ -268,7 +268,8 @@ class ClassicalCode(AbstractCode):
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
 
-        Decoding arguments, if any, are passed to `ClassicalCode.get_one_distance_bound`.
+        Additional arguments, if provided, are passed to a decoder in
+        `ClassicalCode.get_one_distance_bound`.
         """
         return min(
             self.get_one_distance_bound(vector=vector, **decoder_args) for _ in range(num_trials)
@@ -291,6 +292,8 @@ class ClassicalCode(AbstractCode):
         syndrome and `remainder` has a small weight that upper bounds the distance between `vector`
         and a code word.  A small-weight `remainder` can be found by enforcing that it has the same
         syndrome as `vector.
+
+        Additional arguments, if provided, are passed to a decoder.
         """
         if vector is not None:
             # find the distance of the given vector from a code word
@@ -729,6 +732,8 @@ class CSSCode(QuditCode):
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
         nontrivial X-type or Z-type logical operator, as applicable.
+
+        Additional arguments, if provided, are passed to a decoder.
 
         This method uses a randomized algorithm described in arXiv:2308.07915 (and also below).
 
