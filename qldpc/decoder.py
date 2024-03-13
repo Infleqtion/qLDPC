@@ -15,8 +15,6 @@
    limitations under the License.
 """
 
-import warnings
-
 import cvxpy
 import ldpc
 import numpy as np
@@ -59,23 +57,73 @@ def decode_with_ILP(
     """Decode with an integer linear program (ILP).
 
     Supports integers modulo q for q > 2 with a "modulus" argument.
+
+    If a "lower_bound_row" argument is provided, treat this linear constraint (by index) as a lower
+    bound (>=), rather than an equality (==) constraint.
+
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
-    modulus = int(decoder_args.pop("modulus", 2))  # type:ignore[call-overload]
-    if modulus < 2:
+    modulus = decoder_args.pop("modulus", 2)
+    if not isinstance(modulus, int) or modulus < 2:
         raise ValueError(f"Decoding problems must have modulus >= 2 (provided modulus: {modulus}")
-    if modulus == 2:
-        opt_variables = cvxpy.Variable(matrix.shape[1], boolean=True)
-    else:
-        opt_variables = cvxpy.Variable(matrix.shape[1], integer=True)
-    objective = cvxpy.Minimize(sum(iter(opt_variables)))
 
-    # collect constraints, using boolean slack variables to relax each constraint of the form
-    # `expression = val mod q` to `expression = val + sum_j q^j s_j`
+    lower_bound_row = decoder_args.pop("lower_bound_row", None)
+    if not (lower_bound_row is None or isinstance(lower_bound_row, int)):
+        raise ValueError(f"Lower bound row index must be an integer, not {lower_bound_row}")
+
+    # variables, their constraints, and the objective (minimizing number of nonzero variables)
     constraints = []
+    if modulus == 2:
+        variables = cvxpy.Variable(matrix.shape[1], boolean=True)
+        objective = cvxpy.Minimize(cvxpy.norm(variables, 1))
+    else:
+        variables = cvxpy.Variable(matrix.shape[1], integer=True)
+        nonzero_variable_flags = cvxpy.Variable(matrix.shape[1], boolean=True)
+        constraints += [var >= 0 for var in iter(variables)]
+        constraints += [var <= modulus - 1 for var in iter(variables)]
+        constraints += [modulus * nonzero_variable_flags >= variables]
+
+        objective = cvxpy.Minimize(cvxpy.norm(nonzero_variable_flags, 1))
+
+    # constraints for the decoding problem: matrix @ solution == syndrome (mod q)
+    constraints += _build_cvxpy_constraints(variables, matrix, syndrome, modulus, lower_bound_row)
+
+    # solve the optimization problem!
+    problem = cvxpy.Problem(objective, constraints)
+    result = problem.solve(**decoder_args)
+
+    # raise error if the optimization failed
+    if not isinstance(result, float) or not np.isfinite(result):
+        message = "Optimal solution to integer linear program could not be found!"
+        raise ValueError(message + f"\nSolver output: {result}")
+
+    # return solution to the problem variables
+    return variables.value.astype(int)
+
+
+def _build_cvxpy_constraints(
+    variables: cvxpy.Variable,
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    modulus: int,
+    lower_bound_row: int | None = None,
+) -> list[cvxpy.Constraint]:
+    """Build cvxpy constraints of the form `matrix @ variables == syndrome (mod q)`.
+
+    This method uses boolean slack variables {s_j} to relax each constraint of the form
+    `expression = val mod q`
+    to
+    `expression = val + sum_j q^j s_j`.
+
+    If `lower_bound_row is not None`, treat the constraint at this row index as a lower bound.
+    """
     matrix = matrix % modulus
     syndrome = syndrome % modulus
-    for check, syndrome_bit in zip(matrix, syndrome):
+    if lower_bound_row is not None:
+        lower_bound_row %= syndrome.size
+
+    constraints = []
+    for idx, (check, syndrome_bit) in enumerate(zip(matrix, syndrome)):
         # identify the largest power of q needed for the relaxation
         max_zero = int(sum(check) * (modulus - 1) - syndrome_bit)
         if max_zero == 0 or modulus == 2:
@@ -88,46 +136,34 @@ def decode_with_ILP(
             slack_variables = cvxpy.Variable(max_power_of_q, boolean=True)
             zero_mod_q = powers_of_q @ slack_variables
         else:
-            zero_mod_q = 0  # pragma: no cover
-        constraints.append(check @ opt_variables == syndrome_bit + zero_mod_q)
+            zero_mod_q = 0
 
-    if modulus > 2:
-        constraints += [var >= 0 for var in iter(opt_variables)]
-        constraints += [var <= modulus for var in iter(opt_variables)]
+        if idx == lower_bound_row:
+            constraint = check @ variables >= syndrome_bit + zero_mod_q
+        else:
+            constraint = check @ variables == syndrome_bit + zero_mod_q
+        constraints.append(constraint)
 
-    # solve the optimization problem!
-    problem = cvxpy.Problem(objective, constraints)
-    result = problem.solve(**decoder_args)
-    if not isinstance(result, float) or not np.isfinite(result):
-        message = "Optimal solution to integer linear program could not be found!"
-        raise ValueError(message + f"\nSolver output: {result}")
-    solution = problem.variables()[0].value
-    return np.array(solution).astype(int) % modulus
+    return constraints
 
 
 def decode(
     matrix: npt.NDArray[np.int_],
     syndrome: npt.NDArray[np.int_],
-    *,
-    exact: bool = False,
     **decoder_args: object,
 ) -> npt.NDArray[np.int_]:
     """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
 
     - If passed an explicit decoder, use it.
-    - If no decoder is provided and `exact is True`, solve exactly with an integer linear program.
+    - If passed `with_ILP=True`, solve exactly with an integer linear program.
     - Otherwise, use a BP-OSD decoder.
 
     In all cases, pass the `decoder_args` to the decoder that is used.
     """
     if callable(custom_decoder := decoder_args.pop("decoder", None)):
-        if exact:
-            warnings.warn(
-                "Exact decoding was reqested, but cannot be guaranteed with a custom decoder"
-            )
         return custom_decoder(matrix, syndrome, **decoder_args)
 
-    if not exact:
-        return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
+    if decoder_args.pop("with_ILP", False):
+        return decode_with_ILP(matrix, syndrome, **decoder_args)
 
-    return decode_with_ILP(matrix, syndrome, **decoder_args)
+    return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
