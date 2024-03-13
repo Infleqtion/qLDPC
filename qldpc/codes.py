@@ -682,6 +682,7 @@ class CSSCode(QuditCode):
         pauli = pauli if not self._codes_equal else Pauli.X
 
         if pauli is None:
+            assert vector is None, "Distance of vector from logical operators is ambiguous"
             return min(
                 self.get_distance(Pauli.X, bound=bound, vector=vector, **decoder_args),
                 self.get_distance(Pauli.Z, bound=bound, vector=vector, **decoder_args),
