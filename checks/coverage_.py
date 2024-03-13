@@ -12,7 +12,7 @@ if __name__ == "__main__":
     # Start by identifying files that should be covered.
     tracked_files = checks_superstaq.check_utils.get_tracked_files("*.py")
     coverage_files = checks_superstaq.check_utils.exclude_files(
-        tracked_files, ["checks/*", "*__init__.py", "*_test.py"]
+        tracked_files, ["checks/*.py", "*__init__.py", "*_test.py"]
     )
 
     # run checks on individual files
