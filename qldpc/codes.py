@@ -742,7 +742,8 @@ class CSSCode(QuditCode):
 
         This method uses a randomized algorithm described in arXiv:2308.07915, and also below.
 
-        For ease of language, we henceforth assume without loss of generality that we are computing an X-distance.
+        For ease of language, we henceforth assume (without loss of generality) that we are
+        computing an X-distance.
 
         Pick a random Z-type logical operator Z(w_z) whose support is indicated by the bistring w_z.
         We now wish to find a low-weight Pauli-X string X(w_x) that
