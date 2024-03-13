@@ -350,7 +350,6 @@ class ClassicalCode(AbstractCode):
         matrix = self.matrix.view(np.ndarray)
         row_max = np.max([np.count_nonzero(matrix[i, :]) for i in range(matrix.shape[0])])
         col_max = np.max([np.count_nonzero(matrix[:, i]) for i in range(matrix.shape[1])])
-
         return max(row_max, col_max)
 
     @classmethod
