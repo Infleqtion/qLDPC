@@ -335,6 +335,8 @@ class ClassicalCode(AbstractCode):
         - n is the number of data bits
         - k is the number of encoded ("logical") bits
         - d is the code distance
+
+        Keyword arguments are passed to the calculation of code distance.
         """
         return (
             self.num_bits,
