@@ -20,6 +20,7 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
+import random
 from collections.abc import Collection, Hashable, Iterable, Sequence
 from typing import TYPE_CHECKING, Literal
 
@@ -265,7 +266,7 @@ class ClassicalCode(AbstractCode):
         distance_bounds = (
             self.get_one_distance_bound(vector=vector, **decoder_args) for _ in range(num_trials)
         )
-        return min(distance_bounds, default=self.num_qudits)
+        return min(distance_bounds, default=self.num_bits)
 
     def get_one_distance_bound(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
@@ -274,8 +275,8 @@ class ClassicalCode(AbstractCode):
 
         The code distance is the minimal Hamming distance between two code words, or equivalently
         the minimal Hamming weight of a nonzero code word.  To find a minimal nonzero code word we
-        decode a trivial (all-zero) syndrome, but enforce that the code word has nonzero overlap
-        with a random word, which excludes the all-0 vector as a candidate.
+        decode a trivial (all-0) syndrome, but enforce that the code word has nonzero overlap with a
+        random word, which excludes the all-0 word as a candidate.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         Equivalently, we can interpret the given vector as an error, and find a minimal-weight
@@ -299,20 +300,18 @@ class ClassicalCode(AbstractCode):
 
         valid_candidate_found = False
         while not valid_candidate_found:
-            # construct the effective check matrix enforcing
-            # (a) a trivial syndrome, and
-            # (b) a nonzero overlap with a random word
+            # construct the effective check matrix
             random_word = get_random_nontrivial_vec(self.field, self.num_bits)
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
-            # compute a low-weight candidate code word
+            # find a low-weight candidate code word
             candidate = qldpc.decoder.decode(
                 effective_check_matrix,
                 effective_syndrome,
                 **decoder_args,
             )
 
-            # check whether we found a candidate candidate
+            # check whether we found a valid candidate
             actual_syndrome = effective_check_matrix @ candidate % self.field.order
             valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
 
@@ -397,7 +396,15 @@ class ClassicalCode(AbstractCode):
 def _fix_decoder_args_for_nonbinary_fields(
     decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
 ) -> None:
-    """Fix decoder arguments for nonprime number fields."""
+    """Fix decoder arguments for nonbinary number fields.
+
+    If the field has order greater than 2, then we can only decode
+    (a) prime number fields, with
+    (b) an integer-linear program decoder.
+
+    If provided a bound_index, treat the constraint corresponding to this row of the parity check
+    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
+    """
     if field.order > 2:
         if field.degree > 1:
             raise ValueError("Method only supported for prime number fields")
@@ -733,20 +740,12 @@ class CSSCode(QuditCode):
 
         Additional arguments, if applicable, are passed to a decoder.
 
-        This method uses a randomized algorithm described in arXiv:2308.07915 (and also below).
+        This method uses a randomized algorithm described in arXiv:2308.07915, and also below.
 
-        Args:
-            pauli: Pauli operator choosing whether to compute an X-distance or Z-distance bound.
-            vector: If not None, the vector for which we are to compute the distance to a nontrivial
-                logical operator.
-            decoder_args: Keyword arguments are passed to a decoder in `decode`.
-        Returns:
-            An upper bound on the X-distance or Z-distance of this code.
-
-        For ease of language, we henceforth assume that we are computing an X-distance.
+        For ease of language, we henceforth assume (without loss of generality) that we are
+        computing an X-distance.
 
         Pick a random Z-type logical operator Z(w_z) whose support is indicated by the bistring w_z.
-
         We now wish to find a low-weight Pauli-X string X(w_x) that
             (a) has a trivial syndrome, and
             (b) anti-commutes with Z(w_z),
@@ -763,13 +762,13 @@ class CSSCode(QuditCode):
         by decoding the syndrome [ 0, 0, ..., 0, 1 ].T for the parity check matrix [ H_z.T, w_z ].T.
 
         We solve the above decoding problem with a decoder in `decode`.  If the decoder fails to
-        find a solution, try again with a new initial random operator Z(w_z).  If the decoder
-        succeeds in finding a solution w_x, this solution corresponds to a logical X-type operator
-        X(w_x) -- and presumably one of low Hamming weight, since decoders try to find low-weight
-        solutions.  Return the Hamming weight |w_x|.
+        find a solution, try again with a new random operator Z(w_z).  If the decoder succeeds in
+        finding a solution w_x, this solution corresponds to a logical X-type operator X(w_x) -- and
+        presumably one of low Hamming weight, since decoders try to find low-weight solutions.
+        Return the Hamming weight |w_x|.
         """
         assert pauli in [None, Pauli.X, Pauli.Z]
-        pauli = pauli or np.random.choice([Pauli.X, Pauli.Z])
+        pauli = pauli or random.choice([Pauli.X, Pauli.Z])
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
