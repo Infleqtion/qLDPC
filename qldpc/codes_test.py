@@ -99,7 +99,7 @@ def test_distance_from_classical_code(bits: int = 3) -> None:
     rep_code = codes.ClassicalCode.repetition(bits, field=2)
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
-        dist_brute = rep_code.get_distance_exact(vector)
+        dist_brute = rep_code.get_distance_exact(vector=vector)
         dist_bound = rep_code.get_distance(bound=True, vector=vector)
         assert dist_brute == min(weight, bits - weight)
         assert dist_brute <= dist_bound

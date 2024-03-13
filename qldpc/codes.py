@@ -227,8 +227,8 @@ class ClassicalCode(AbstractCode):
     ) -> int:
         """Estimate the distance of this code, or the minimal weight of a nontrivial code word.
 
-        The code distance is the minimal Hamming weight between two code words, or equivalently the
-        minimal weight of a nonzero code word.
+        The code distance is the minimal Hamming distance between two code words, or equivalently
+        the minimal weight of a nonzero code word.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
 
@@ -236,15 +236,17 @@ class ClassicalCode(AbstractCode):
         `ClassicalCode.get_one_distance_bound`.
         """
         if bound:
-            return self.get_distance_bound(bound, **decoder_args)
+            return self.get_distance_bound(bound, vector=vector, **decoder_args)
 
-        return self.get_distance_exact(vector)
+        return self.get_distance_exact(vector=vector)
 
-    def get_distance_exact(self, vector: Sequence[int] | npt.NDArray[np.int_] | None = None) -> int:
+    def get_distance_exact(
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
+    ) -> int:
         """Compute the code distance by brute force.
 
-        The code distance is the minimal Hamming weight between two code words, or equivalently the
-        minimal weight of a nonzero code word.
+        The code distance is the minimal Hamming distance between two code words, or equivalently
+        the minimal weight of a nonzero code word.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
@@ -264,8 +266,8 @@ class ClassicalCode(AbstractCode):
     ) -> int:
         """Compute an upper bound by minimizing many individual upper bounds.
 
-        The code distance is the minimal Hamming weight between two code words, or equivalently the
-        minimal weight of a nonzero code word.
+        The code distance is the minimal Hamming distance between two code words, or equivalently
+        the minimal weight of a nonzero code word.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
 
@@ -277,12 +279,12 @@ class ClassicalCode(AbstractCode):
         )
 
     def get_one_distance_bound(
-        self, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
     ) -> int:
         """Single upper bound to the distance of this code.
 
-        The code distance is the minimal Hamming weight between two code words, or equivalently the
-        minimal weight of a nonzero code word.  To find a minimal nonzero code word we decode a
+        The code distance is the minimal Hamming distance between two code words, or equivalently
+        the minimal weight of a nonzero code word.  To find a minimal nonzero code word we decode a
         trivial (all-zero) syndrome, but enforce that the code word has nonzero overlap with a
         random word, which excludes the all-0 vector as a candidate.
 
@@ -340,7 +342,7 @@ class ClassicalCode(AbstractCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(bound=bound, **decoder_args)
+        distance = self.get_distance(bound=bound, vector=None, **decoder_args)
         return self.num_bits, self.dimension, distance, self.get_weight()
 
     def get_weight(self) -> int:
@@ -638,7 +640,7 @@ class CSSCode(QuditCode):
 
     def get_code_params(
         self, *, bound: int | None = None, **decoder_args: object
-    ) -> tuple[int, int, int]:
+    ) -> tuple[int, int, int, int]:
         """Compute the parameters of this code: [[n,k,d,w]].
 
         Here:
@@ -649,7 +651,7 @@ class CSSCode(QuditCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(bound=bound, **decoder_args)
+        distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
         return self.num_qudits, self.dimension, distance, self.get_weight()
 
     def get_distance(
@@ -688,7 +690,7 @@ class CSSCode(QuditCode):
         if bound:
             return self.get_distance_bound(pauli, num_trials=bound, vector=vector, **decoder_args)
 
-        return self.get_distance_exact(pauli, vector)
+        return self.get_distance_exact(pauli, vector=vector)
 
     def get_distance_bound(
         self,
@@ -708,12 +710,14 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         return min(
-            self.get_one_distance_bound(pauli, vector, **decoder_args) for _ in range(num_trials)
+            self.get_one_distance_bound(pauli, vector=vector, **decoder_args)
+            for _ in range(num_trials)
         )
 
     def get_one_distance_bound(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
+        *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -808,6 +812,7 @@ class CSSCode(QuditCode):
     def get_distance_exact(
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
+        *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
     ) -> int:
         """Exact X-distance or Z-distance of this code, found via brute force.
