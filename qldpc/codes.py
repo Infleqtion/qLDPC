@@ -258,6 +258,7 @@ class ClassicalCode(AbstractCode):
     def get_distance_bound(
         self,
         num_trials: int,
+        *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -346,7 +347,7 @@ class ClassicalCode(AbstractCode):
         )
 
     def get_weight(self) -> int:
-        """Compute the weight of the largest check"""
+        """Compute the weight of the largest check."""
         matrix = self.matrix.view(np.ndarray)
         row_max = np.max([np.count_nonzero(matrix[i, :]) for i in range(matrix.shape[0])])
         col_max = np.max([np.count_nonzero(matrix[:, i]) for i in range(matrix.shape[1])])
@@ -697,6 +698,7 @@ class CSSCode(QuditCode):
         self,
         pauli: Literal[Pauli.X, Pauli.Z],
         num_trials: int,
+        *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
     ) -> int:
@@ -710,8 +712,7 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         return min(
-            self.get_one_distance_bound(pauli, vector=vector, **decoder_args)
-            for _ in range(num_trials)
+            self.get_one_distance_bound(pauli, vector, **decoder_args) for _ in range(num_trials)
         )
 
     def get_one_distance_bound(
@@ -763,7 +764,6 @@ class CSSCode(QuditCode):
         solutions.  Return the Hamming weight |w_x|.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        vector = self.field.Zeros(self.num_qudits) if vector is None else self.field(vector)
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
@@ -821,8 +821,6 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         pauli = pauli if not self._codes_equal else Pauli.X
-        if vector is None:
-            vector = self.field.Zeros(self.num_qudits)
         code_x = self.code_x if pauli == Pauli.X else self.code_z
         code_z = self.code_z if pauli == Pauli.X else self.code_x
 
