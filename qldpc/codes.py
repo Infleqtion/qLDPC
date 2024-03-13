@@ -282,45 +282,50 @@ class ClassicalCode(AbstractCode):
         """Single upper bound to the distance of this code.
 
         The code distance is the minimal Hamming weight between two code words, or equivalently the
-        minimal weight of a nonzero code word.
+        minimal weight of a nonzero code word.  To find a minimal nonzero code word we decode a
+        trivial syndrome, but enforce that the code word has nonzero overlap with a random word,
+        which excludes the all-0 vector as a candidate.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
-
-        The basic idea is to find a word `remainder` with:
-        (a) the same syndrome as `vector` (or with a trivial syndrome, if `vector is None`), and
-        (b) a nonzero inner product with a random word.
-
-        The first condition, (a), ensures that `vector = code_word + remainder`, where `code_word`
-        has a trivial syndrome, so the weight of `remainder` is an upper bound for the distance
-        between `vector` and a code word.
-
-        The second condition, (b), simply ensures that `remainder` cannot be the all-0 string.
+        Specifically, expand `vector = code_word + remainder`, where `code_word` has a trivial
+        syndrome and `remainder` has a small weight that upper bounds the distance between `vector`
+        and a code word.  A small-weight `remainder` can be found by enforcing that it has the same
+        syndrome as `vector.
         """
-        vector = self.field.Zeros(self.num_bits) if vector is None else self.field(vector)
+        if vector is not None:
+            # find the distance of the given vector from a code word
+            remainder = qldpc.decoder.decode(
+                self.matrix,
+                self.matrix @ self.field(vector),
+                **decoder_args,
+            )
+            return int(np.count_nonzero(remainder))
 
-        # effective syndrome enforcing conditions (a) and (b)
-        syndrome = self.matrix @ vector
-        effective_syndrome = np.append(syndrome, [1]).view(np.ndarray)
+        # effective syndrome: a trivial "actual" syndrome, and a nonzero overlap with a random word
+        effective_syndrome = np.zeros(self.num_checks + 1, dtype=int)
+        effective_syndrome[-1] = 1
         _fix_decoder_args_for_nonprime_fields(decoder_args, self.field, bound_index=-1)
 
-        candidate_remainder_found = False
-        while not candidate_remainder_found:
-            # construct the effective check matrix enforcing conditions (a) and (b)
+        valid_candidate_found = False
+        while not valid_candidate_found:
+            # construct the effective check matrix enforcing
+            # (a) a trivial syndrome, and
+            # (b) a nonzero overlap with a random word
             random_word = get_random_nontrivial_vec(self.field, self.num_bits)
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
-            # compute a low-weight "remainder" for which vector = code_word + remainder
-            remainder = qldpc.decoder.decode(
+            # compute a low-weight candidate code word
+            candidate = qldpc.decoder.decode(
                 effective_check_matrix,
                 effective_syndrome,
                 **decoder_args,
             )
 
-            # check whether we found a candidate remainder
-            actual_syndrome = effective_check_matrix @ remainder % self.field.order
-            candidate_remainder_found = np.array_equal(actual_syndrome, effective_syndrome)
+            # check whether we found a candidate candidate
+            actual_syndrome = effective_check_matrix @ candidate % self.field.order
+            valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
 
-        return int(np.count_nonzero(remainder))
+        return int(np.count_nonzero(candidate))
 
     def get_code_params(
         self,
