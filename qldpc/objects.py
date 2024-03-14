@@ -288,7 +288,7 @@ class CayleyComplex:
                 self.group.generate(), self.subset_a, self.subset_b
             ):
                 aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
-                square = [(gg, 0, 0), (aa_gg, 1, 0), (gg_bb, 0, 1), (aa_gg_bb, 1, 1)]
+                square = [(gg, 0, 0), (aa_gg, 0, 1), (gg_bb, 1, 0), (aa_gg_bb, 1, 1)]
                 face = frozenset(square)
                 self.subgraph_0.add_edge((gg, 0, 0), face, sort=(aa, bb))
                 self.subgraph_0.add_edge((aa_gg_bb, 1, 1), face, sort=(aa, bb))
