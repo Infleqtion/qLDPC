@@ -1146,27 +1146,37 @@ class HGPCode(CSSCode):
         code_b = ClassicalCode(code_b, field)
         field = code_a.field.order
 
+        # use a matrix-based hypergraph product to identify X-sector and Z-sector parity checks
+        matrix_x, matrix_z = HGPCode.get_matrix_product(code_a.matrix, code_b.matrix)
+
         # identify the number of qudits in each sector
         self.sector_size = np.outer(
             [code_a.num_bits, code_a.num_checks],
             [code_b.num_bits, code_b.num_checks],
         )
+
+        # identify which qudits to conjugate (Hadamard-transform)
         qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
-        # construct the nontrivial blocks of the parity check matrices
-        matrix_a = code_a.matrix
-        matrix_b = code_b.matrix
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+        )
+
+    @classmethod
+    def get_matrix_product(
+        cls, matrix_a: npt.NDArray[np.int_], matrix_b: npt.NDArray[np.int_]
+    ) -> nx.DiGraph:
+        """Hypergraph product of two parity check matrices."""
+        # construct the nontrivial blocks of the final parity check matrices
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
         mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
         mat_H1_Im2_T = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b.T)
 
-        # construct the parity check matrices
+        # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.block([mat_H1_In2, -mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
-        CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
-        )
+        return matrix_x, matrix_z
 
     @classmethod
     def get_graph_product(
@@ -1268,7 +1278,34 @@ class LPCode(CSSCode):
         *,
         conjugate: bool = False,
     ) -> None:
-        """Same hypergraph product as in the HGPCode, but with protographs.
+        """Lifted product of two protographs, as in arXiv:2012.04068."""
+        if protograph_b is None:
+            protograph_b = protograph_a
+        protograph_a = abstract.Protograph(protograph_a)
+        protograph_b = abstract.Protograph(protograph_b)
+        field = protograph_a.field.order
+
+        # identify X-sector and Z-sector parity checks
+        matrix_x, matrix_z = LPCode.get_matrix_product(protograph_a, protograph_b)
+
+        # identify the number of qudits in each sector
+        self.sector_size = protograph_a.group.lift_dim * np.outer(
+            protograph_a.shape[::-1],
+            protograph_b.shape[::-1],
+        )
+
+        # identify which qudits to conjugate (Hadamard-transform)
+        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
+
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+        )
+
+    @classmethod
+    def get_matrix_product(
+        cls, protograph_a: abstract.Protograph, protograph_b: abstract.Protograph
+    ) -> nx.DiGraph:
+        """Matrix-based hypergraph product similar to that in HGPCode, but with protographs.
 
         There is one crucial subtlety when computing the hypergraph product of protographs.  When
         taking the transpose of a protograph, P --> P.T, we also need to transpose the individual
@@ -1282,19 +1319,6 @@ class LPCode(CSSCode):
         this reason, we need to take the transpose of a protograph "manually" when using it for the
         hypergraph product.
         """
-        if protograph_b is None:
-            protograph_b = protograph_a
-        protograph_a = abstract.Protograph(protograph_a)
-        protograph_b = abstract.Protograph(protograph_b)
-        field = protograph_a.field.order
-
-        # identify the number of qudits in each sector
-        self.sector_size = protograph_a.group.lift_dim * np.outer(
-            protograph_a.shape[::-1],
-            protograph_b.shape[::-1],
-        )
-        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
-
         # identify sub-matrices and their transposes
         matrix_a = protograph_a.matrix
         matrix_b = protograph_b.matrix
@@ -1307,12 +1331,10 @@ class LPCode(CSSCode):
         mat_H1_Im2_T = np.kron(matrix_a_T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b_T)
 
-        # construct the parity check matrices
+        # construct the X-sector and Z-sector parity check matrices
         matrix_x = abstract.Protograph(np.block([mat_H1_In2, -mat_Im1_H2_T])).lift()
         matrix_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T])).lift()
-        CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
-        )
+        return matrix_x, matrix_z
 
 
 ################################################################################
