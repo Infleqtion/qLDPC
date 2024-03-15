@@ -72,6 +72,12 @@ def test_cayley_complex() -> None:
     subset_a: list[abstract.GroupMember]
     subset_b: list[abstract.GroupMember]
 
+    # raise error when trying to build a complex from non-symmetric generating sets
+    with pytest.raises(ValueError, match="not symmetric"):
+        group = abstract.CyclicGroup(3)
+        subset_a = [group.generators[0]]
+        objects.CayleyComplex(subset_a, bipartite=True)
+
     # quadripartite complex
     group = abstract.CyclicGroup(3)
     shift = group.generators[0]
