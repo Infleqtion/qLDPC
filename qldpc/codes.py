@@ -1325,7 +1325,7 @@ class LPCode(CSSCode):
         matrix_a_T = protograph_a.T.matrix
         matrix_b_T = protograph_b.T.matrix
 
-        # construct the nontrivial blocks in the matrix
+        # construct the nontrivial blocks of the final parity check matrices
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
         mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
         mat_H1_Im2_T = np.kron(matrix_a_T, np.eye(matrix_b.shape[0], dtype=int))
