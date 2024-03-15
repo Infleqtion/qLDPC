@@ -26,8 +26,6 @@ import networkx as nx
 
 from qldpc import abstract
 
-# from typing import Literal
-
 
 class Pauli(enum.Enum):
     """Pauli operators."""
