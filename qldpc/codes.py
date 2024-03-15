@@ -1256,9 +1256,9 @@ class LPCode(CSSCode):
 
     A lifted product code is essentially the same as a hypergraph product code, except that the
     parity check matrices are "protographs", or matrices whose entries are members of a group
-    algebra over the field {0, 1}.  Each of these entries can be "lifted" to a representation as
-    orthogonal matrices over a finite field, in which case the protograph is interpreted as a block
-    matrix; this is called "lifting" the protograph.
+    algebra over the field Z_2 ~ {0,1}.  Each of these entries can be "lifted" to a representation
+    as orthogonal matrices over a finite field, in which case the protograph is interpreted as a
+    block matrix; this is called "lifting" the protograph.
 
     Notes:
     - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
