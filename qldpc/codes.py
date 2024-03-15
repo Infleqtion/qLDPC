@@ -1413,6 +1413,7 @@ class QTCode(CSSCode):
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
+        bipartite: bool = False,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
@@ -1423,12 +1424,13 @@ class QTCode(CSSCode):
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
-        self.complex = CayleyComplex(subset_a, subset_b)
+        self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 
+        subgraph_x, subgraph_z = self.complex.subgraphs()
         subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
-        matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
-        matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+        code_x = TannerCode(subgraph_x, subcode_x)
+        code_z = TannerCode(subgraph_z, subcode_z)
+        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
