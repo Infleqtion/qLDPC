@@ -924,7 +924,7 @@ class CSSCode(QuditCode):
     ) -> None:
         """Reduce the weight of a logical operator.
 
-        A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
+        A minimal-weight logical operator is found by enforcing that it has a trivial syndrome, and
         that it commutes with all logical operators except its dual.  This is essentially the same
         method as that used in CSSCode.get_one_distance_bound.
         """
