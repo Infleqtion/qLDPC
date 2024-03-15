@@ -31,7 +31,7 @@ def decode_with_BP_OSD(
 
     For details about the BD-OSD decoder and its arguments, see:
     - Documentation: https://roffe.eu/software/ldpc/ldpc/osd_decoder.html
-    - Reference: https://arxiv.org/pdf/2005.07016.pdf
+    - Reference: https://arxiv.org/abs/2005.07016
     """
     bposd_decoder = ldpc.bposd_decoder(
         matrix, osd_order=decoder_args.pop("osd_order", 0), **decoder_args
