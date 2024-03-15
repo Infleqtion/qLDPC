@@ -919,10 +919,10 @@ class CSSCode(QuditCode):
 
         return op_a
 
-    def minimize_logical_op(
+    def reduce_logical_op(
         self, pauli: Literal[Pauli.X, Pauli.Z], logical_index: int, **decoder_args: object
     ) -> None:
-        """Minimize the weight of a logical operator.
+        """Reduce the weight of a logical operator.
 
         A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
         that it commutes with all logical operators except its dual.  This is essentially the same
@@ -952,6 +952,18 @@ class CSSCode(QuditCode):
 
         assert self._logical_ops is not None
         self._logical_ops[pauli.index, logical_index] = candidate_logical_op
+
+    def reduce_logical_ops(
+        self, pauli: Literal[Pauli.X, Pauli.Z] | None = None, **decoder_args: object
+    ) -> None:
+        """Reduce the weight of all logical operators."""
+        assert pauli in [None, Pauli.X, Pauli.Z]
+        if pauli is None:
+            self.reduce_logical_ops(Pauli.X, **decoder_args)
+            self.reduce_logical_ops(Pauli.Z, **decoder_args)
+        else:
+            for logical_index in range(self.dimension):
+                self.reduce_logical_op(pauli, logical_index, **decoder_args)
 
 
 ################################################################################

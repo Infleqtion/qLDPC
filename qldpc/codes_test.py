@@ -141,7 +141,7 @@ def test_logical_ops() -> None:
     # minimizing logical operator weight only supported for prime number fields
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
     with pytest.raises(ValueError, match="prime number fields"):
-        code.minimize_logical_op(codes.Pauli.X, 0)
+        code.reduce_logical_op(codes.Pauli.X, 0)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
@@ -350,10 +350,10 @@ def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
     assert code.dimension == 2
     assert code.get_distance(bound=10) == distance
 
-    # check that a logical X operator has correct weight when minimzed
-    code.minimize_logical_op(codes.Pauli.X, 0)
-    op = code.get_logical_ops()[codes.Pauli.X.index, 0]
-    assert np.count_nonzero(op) == distance
+    # check logical operators have the correct weight when reduced
+    code.reduce_logical_ops()
+    logical_ops = code.get_logical_ops().reshape((2 * code.dimension, -1))
+    assert all(np.count_nonzero(op) == distance for op in logical_ops)
 
     # check that the identity operator is a logical operator
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
