@@ -226,7 +226,7 @@ class CayleyComplex:
     - https://www.youtube.com/watch?v=orWcstqWGGo
     """
 
-    # defining data
+    # identifying data
     group: abstract.Group
     subset_a: set[abstract.GroupMember]
     subset_b: set[abstract.GroupMember]
@@ -265,7 +265,7 @@ class CayleyComplex:
         if bipartite and not CayleyComplex.satisfies_total_no_conjugacy(group, subset_a, subset_b):
             raise ValueError("Provided group and subsets do not satisfy Total No Conjugacy")
 
-        # save the data that defines this complex
+        # save identifying data
         self.group = group
         self.subset_a = subset_a
         self.subset_b = subset_b
