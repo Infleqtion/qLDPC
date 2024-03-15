@@ -66,7 +66,6 @@ def test_node() -> None:
     assert hash(node_c1) != hash(node_d1) != hash(node_d2)
 
 
-# TODO: Add a two-partite example?
 def test_cayley_complex() -> None:
     """Construct and test Cayley complexes."""
     group: abstract.Group
@@ -111,11 +110,9 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     size_g = cayplex.group.order()
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
-    assert cayplex.subgraph_0.number_of_nodes() == 2 * size_g + size_g * size_a * size_b
-    assert cayplex.subgraph_1.number_of_nodes() == 2 * size_g + size_g * size_a * size_b
-
-    assert cayplex.subgraph_0.number_of_edges() == 2 * size_g * size_a * size_b
-    assert cayplex.subgraph_1.number_of_edges() == 2 * size_g * size_a * size_b
+    assert cayplex.graph.number_of_nodes() == size_g
+    assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
+    assert len(cayplex.faces) == size_g * size_a * size_b // 4
 
     # check that the subgraphs have the correct number of nodes, edges, and node degrees
     for graph in cayplex.subgraphs():
