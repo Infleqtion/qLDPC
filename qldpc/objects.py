@@ -233,6 +233,7 @@ class CayleyComplex:
     bipartite: bool
 
     # geometric data
+    faces: set[frozenset[abstract.GroupMember]]
     graph: nx.Graph
 
     def __init__(
@@ -272,9 +273,12 @@ class CayleyComplex:
         self.bipartite = bipartite
 
         # construct geometric complex itself
+        self.faces = set()
         self.graph = nx.Graph()
         for gg, aa, bb in itertools.product(group.generate(), subset_a, subset_b):
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
+            face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
+            self.faces.add(face)
             self.graph.add_edge(gg, aa_gg)
             self.graph.add_edge(gg, gg_bb)
             self.graph.add_edge(aa_gg, aa_gg_bb)

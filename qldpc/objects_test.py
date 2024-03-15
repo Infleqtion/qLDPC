@@ -100,6 +100,15 @@ def test_cayley_complex() -> None:
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     """Assert that sources of the CayleyComplex subgraphs have the same degree."""
+    # assert that the complex has the right number of vertices, edges, and faces
+    size_g = cayplex.group.order()
+    size_a = len(cayplex.subset_a)
+    size_b = len(cayplex.subset_b)
+    assert cayplex.graph.number_of_nodes() == size_g
+    assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
+    assert len(cayplex.faces) == size_g * size_a * size_b // 4
+
+    # check that the subgraphs have the correct number of checks
     for graph in cayplex.subgraphs():
         sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
-        assert len({graph.out_degree(node) for node in sources}) == 1
+        assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
