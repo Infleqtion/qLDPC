@@ -68,43 +68,46 @@ def test_node() -> None:
 
 def test_cayley_complex() -> None:
     """Construct and test Cayley complexes."""
+    group: abstract.Group
+    subset_a: list[abstract.GroupMember]
+    subset_b: list[abstract.GroupMember]
 
-    # raise error when trying to build a complex from non-symmetric generating sets
-    with pytest.raises(ValueError, match="not symmetric"):
-        group = abstract.CyclicGroup(3)
-        subset_a = [group.generators[0]]
-        objects.CayleyComplex(subset_a, bipartite=True)
-
-    # four-partite complex
+    # rank-2 complex
     group = abstract.CyclicGroup(3)
     shift = group.generators[0]
     subset_a = [shift, ~shift]
-    cayplex = objects.CayleyComplex(subset_a, bipartite=False)
+    cayplex = objects.CayleyComplex(subset_a, rank=2)
+    assert cayplex.rank == 2
     assert_valid_complex(cayplex)
-    with pytest.raises(ValueError, match="do not satisfy Total No Conjugacy"):
-        objects.CayleyComplex(subset_a, bipartite=True)
 
-    # bipartite complex
+    # rank-1 complex
     group = abstract.CyclicGroup(6)
     shift = group.generators[0]
     subset_a = [shift, shift**2, ~shift, (~shift) ** 2]
     subset_b = [shift**3]
-    cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=True)
+    cayplex = objects.CayleyComplex(subset_a, subset_b, rank=1)
+    assert cayplex.rank == 1
+    assert_valid_complex(cayplex)
+
+    # rank-0 complex
+    group = abstract.Group.product(abstract.CyclicGroup(2), abstract.CyclicGroup(5))
+    shift_x, shift_y = group.generators
+    subset_a = [shift_x * shift_y, ~(shift_x * shift_y)]
+    subset_b = [shift_x * shift_y**2, ~(shift_x * shift_y**2)]
+    cayplex = objects.CayleyComplex(subset_a, subset_b, rank=0)
+    assert cayplex.rank == 0
     assert_valid_complex(cayplex)
 
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     """Run various sanity checks on a Cayley complex."""
-    # assert that the complex has the right number of vertices, edges
+    # assert that the complex has the right number of vertices, edges, and faces
     size_g = cayplex.group.order()
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
-    mult = 2 if not cayplex.bipartite else 1
-
-    assert cayplex.subgraph_0.number_of_nodes() == mult * (size_g + size_g * size_a * size_b / 2)
-    assert cayplex.subgraph_1.number_of_nodes() == mult * (size_g + size_g * size_a * size_b / 2)
-    assert cayplex.subgraph_0.number_of_edges() == mult * size_g * size_a * size_b
-    assert cayplex.subgraph_1.number_of_edges() == mult * size_g * size_a * size_b
+    assert cayplex.graph.number_of_nodes() == size_g
+    assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
+    assert len(cayplex.faces) == size_g * size_a * size_b // 4
 
     # check that the subgraphs have the correct number of checks
     for graph in [cayplex.subgraph_0, cayplex.subgraph_1]:
