@@ -537,7 +537,7 @@ class QuditCode(AbstractCode):
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
     # TODO: generalize to any local Clifford deformation
-    #       see https://arxiv.org/pdf/quant-ph/0408190.pdf
+    #       see https://arxiv.org/abs/quant-ph/0408190
     @classmethod
     def conjugate(
         cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]], qudits: slice | Sequence[int]
