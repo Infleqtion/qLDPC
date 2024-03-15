@@ -1262,6 +1262,8 @@ class LPCode(CSSCode):
 
     Notes:
     - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
+    - A lifted product code with protographs whose entries get lifted to 1×1 matrices is a
+        hypergraph product code of the lifted protographs.
 
     References:
     - https://errorcorrectionzoo.org/c/lifted_product
