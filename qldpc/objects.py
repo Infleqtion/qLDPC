@@ -294,7 +294,7 @@ class CayleyComplex:
         )
 
     def subgraphs(self) -> tuple[nx.DiGraph, nx.DiGraph]:
-        """."""
+        """Build the subgraphs used to build a quantum Tanner code."""
         subgraph_x = nx.DiGraph()
         subgraph_z = nx.DiGraph()
         half_group, _ = nx.bipartite.sets(self.graph)
