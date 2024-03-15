@@ -23,8 +23,8 @@ Notable features include:
 - `QuditCode`: general class for constructing [Galois-qudit codes](https://errorcorrectionzoo.org/c/galois_into_galois).
 - `CSSCode`: general class for constructing [quantum CSS codes](https://errorcorrectionzoo.org/c/css) out of two mutually compatible `ClassicalCode`s.
   - `CSSCode.get_logical_ops`: method to construct a complete basis of nontrivial logical operators for a `CSSCode`.
-  - `CSSCode.get_distance`: method to compute the code distance (i.e., the minimum weight of a nontrivial logical operator) of a `CSSCode`.  Includes options for computing a lower bound (determined by the distances of the underlying `ClassicalCode`s), an upper bound (with the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915)), and the exact code distance (with an integer linear program).
-  - Includes options for applying local Hadamard transforms, which is useful for tailoring a `CSSCode` to biased noise (see [arXiv:2202.01702](https://arxiv.org/abs/2202.01702)).  Options to apply more general Clifford code deformations are pending.
+  - `CSSCode.get_distance`: method to compute the code distance (i.e., the minimum weight of a nontrivial logical operator) of a `CSSCode`.  Includes options for computing the exact code distance by brute force, as well as estimate (or upper bound) with the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
+  - Includes options for applying local Hadamard transformations, which is useful for tailoring a `CSSCode` to biased noise (see [arXiv:2202.01702](https://arxiv.org/abs/2202.01702)).  Options to apply more general Clifford code deformations are pending.
 - `GBCode`: class for constructing [generalized bicycle codes](https://errorcorrectionzoo.org/c/generalized_bicycle), as described in [arXiv:1904.02703](https://arxiv.org/abs/1904.02703).
 - `QCCode`: class for constructing the [quasi-cyclic codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic) in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
 - `HGPCode`: class for constructing [hypergraph product codes](https://errorcorrectionzoo.org/c/hypergraph_product) out of two `ClassicalCode`s.
