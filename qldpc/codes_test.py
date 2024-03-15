@@ -366,8 +366,8 @@ def test_toric_tanner_code(size: int = 4) -> None:
 
     group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
     shift_x, shift_y = group.generators
-    subset_a = [shift_x]
-    subset_b = [shift_y]
+    subset_a = [shift_x, ~shift_x]
+    subset_b = [shift_y, ~shift_y]
     subcode_a = codes.ClassicalCode.repetition(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
 
