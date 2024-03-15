@@ -362,7 +362,7 @@ def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
 
 def test_toric_tanner_code(size: int = 4) -> None:
     """Rotated toric code as a quantum Tanner code."""
-    assert size % 2 == 0, "QTCode rotated toric code construction only works for even side lengths"
+    assert size % 2 == 0, "Rotated toric QTCode construction only works for even side lengths"
 
     group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
     shift_x, shift_y = group.generators
