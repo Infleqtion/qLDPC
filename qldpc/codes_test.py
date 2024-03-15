@@ -360,20 +360,19 @@ def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
 
 
-def test_toric_tanner_code() -> None:
-    """Rotated toric code as a quantum Tanner code.
+def test_toric_tanner_code(size: int = 4) -> None:
+    """Rotated toric code as a quantum Tanner code."""
+    assert size % 2 == 0, "QTCode rotated toric code construction only works for even side lengths"
 
-    This construction only works for cyclic groups of even order.
-    """
-    group = abstract.Group.product(abstract.CyclicGroup(4), repeat=2)
+    group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
     subcode_a = codes.ClassicalCode.repetition(2, field=2)
-    code = codes.QTCode(subset_a, subset_b, subcode_a)
+    code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
 
-    # check that this is a [[16, 2, 4, 4]] code
-    assert code.get_code_params(bound=10) == (16, 2, 4, 4)
+    # verify rotated toric code parameters
+    assert code.get_code_params(bound=10) == (size**2, 2, size, 4)
 
     # raise error if constructing QTCode with codes over different fields
     subcode_b = codes.ClassicalCode.repetition(2, field=subcode_a.field.order**2)
