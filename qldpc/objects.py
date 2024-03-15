@@ -273,7 +273,7 @@ class CayleyComplex:
         self.subset_b = subset_b
         self.bipartite = bipartite
 
-        # construct geometric complex itself
+        # construct geometric data
         self.faces = set()
         self.graph = nx.Graph()
         for gg, aa, bb in itertools.product(group.generate(), subset_a, subset_b):
