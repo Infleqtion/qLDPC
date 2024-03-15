@@ -106,7 +106,7 @@ def test_cayley_complex() -> None:
 
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
-    """Assert that sources of the CayleyComplex subgraphs have the same degree."""
+    """Run various sanity checks on a Cayley complex."""
     # assert that the complex has the right number of vertices, edges, and faces
     size_g = cayplex.group.order()
     size_a = len(cayplex.subset_a)
