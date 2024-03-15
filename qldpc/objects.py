@@ -220,7 +220,7 @@ class CayleyComplex:
     - b --> (b,0,1),
     where similarly to before (a,1,0) * (g,i,j) = (ag,i+1,j) and (b,0,1) * (g,i,j) = (gb,i,j+1).
     This modification of A and B corresponds to the "quadripartite" Cayley complex constructed in
-    https://arxiv.org/abs/2202.13641.
+    https://arxiv.org/abs/2206.07571.
 
     References:
     - https://arxiv.org/abs/2202.13641
