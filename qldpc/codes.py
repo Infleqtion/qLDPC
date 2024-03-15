@@ -1403,6 +1403,8 @@ class QTCode(CSSCode):
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
+        assert code_a.num_bits == len(self.complex.subset_a)
+        assert code_b.num_bits == len(self.complex.subset_b)
 
         subgraph_x, subgraph_z = self.complex.subgraphs()
         subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
