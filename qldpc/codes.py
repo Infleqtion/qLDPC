@@ -1391,7 +1391,7 @@ class QTCode(CSSCode):
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        bipartite: bool | None = False,
+        bipartite: bool = False,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
@@ -1406,8 +1406,9 @@ class QTCode(CSSCode):
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 
+        subgraph_x, subgraph_z = self.complex.subgraphs()
         subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
-        matrix_x = TannerCode(self.complex.subgraph_0, subcode_x).matrix
-        matrix_z = TannerCode(self.complex.subgraph_1, subcode_z).matrix
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+        code_x = TannerCode(subgraph_x, subcode_x)
+        code_z = TannerCode(subgraph_z, subcode_z)
+        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)

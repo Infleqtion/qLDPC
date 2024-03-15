@@ -73,18 +73,41 @@ def test_cayley_complex() -> None:
     subset_a: list[abstract.GroupMember]
     subset_b: list[abstract.GroupMember]
 
-    # Abelian complex
-    group = abstract.CyclicGroup(6)
+    # raise error when trying to build a complex from non-symmetric generating sets
+    with pytest.raises(ValueError, match="not symmetric"):
+        group = abstract.CyclicGroup(3)
+        subset_a = [group.generators[0]]
+        objects.CayleyComplex(subset_a, bipartite=True)
+
+    # quadripartite complex
+    group = abstract.CyclicGroup(3)
     shift = group.generators[0]
-    subset_a = [shift, shift**2, ~shift, (~shift) ** 2]
-    subset_b = [shift**3]
-    cayplex = objects.CayleyComplex(subset_a, subset_b)
+    subset_a = [shift, ~shift]
+    cayplex = objects.CayleyComplex(subset_a, bipartite=False)
     assert_valid_complex(cayplex)
+    with pytest.raises(ValueError, match="do not satisfy Total No Conjugacy"):
+        objects.CayleyComplex(subset_a, bipartite=True)
+
+    # complexes that may be bipartite or quadripartite
+    for bipartite in [True, False]:
+        group = abstract.CyclicGroup(6)
+        shift = group.generators[0]
+        subset_a = [shift, shift**2, ~shift, (~shift) ** 2]
+        subset_b = [shift**3]
+        cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=bipartite)
+        assert_valid_complex(cayplex)
+
+        group = abstract.Group.product(abstract.CyclicGroup(2), abstract.CyclicGroup(5))
+        shift_x, shift_y = group.generators
+        subset_a = [shift_x * shift_y, ~(shift_x * shift_y)]
+        subset_b = [shift_x * shift_y**2, ~(shift_x * shift_y**2)]
+        cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=bipartite)
+        assert_valid_complex(cayplex)
 
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
-    """Run various sanity checks on a Cayley complex."""
-    # assert that the complex has the right number of vertices, edges
+    """Assert that sources of the CayleyComplex subgraphs have the same degree."""
+    # assert that the complex has the right number of vertices, edges, and faces
     size_g = cayplex.group.order()
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
@@ -94,7 +117,9 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     assert cayplex.subgraph_0.number_of_edges() == 2 * size_g * size_a * size_b
     assert cayplex.subgraph_1.number_of_edges() == 2 * size_g * size_a * size_b
 
-    # check that the subgraphs have the correct number of checks
-    for graph in [cayplex.subgraph_0, cayplex.subgraph_1]:
+    # check that the subgraphs have the correct number of nodes, edges, and node degrees
+    for graph in cayplex.subgraphs():
+        assert graph.number_of_nodes() == len(cayplex.faces) + size_g / 2
+        assert graph.number_of_edges() == len(cayplex.faces) * 2
         sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
         assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
