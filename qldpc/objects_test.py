@@ -72,30 +72,27 @@ def test_cayley_complex() -> None:
     subset_a: list[abstract.GroupMember]
     subset_b: list[abstract.GroupMember]
 
-    # rank-2 complex
+    # raise error when trying to build a complex from non-symmetric generating sets
+    with pytest.raises(ValueError, match="not symmetric"):
+        group = abstract.CyclicGroup(3)
+        subset_a = [group.generators[0]]
+        objects.CayleyComplex(subset_a, bipartite=True)
+
+    # quadripartite complex
     group = abstract.CyclicGroup(3)
     shift = group.generators[0]
     subset_a = [shift, ~shift]
-    cayplex = objects.CayleyComplex(subset_a, rank=2)
-    assert cayplex.rank == 2
+    cayplex = objects.CayleyComplex(subset_a, bipartite=False)
     assert_valid_complex(cayplex)
+    with pytest.raises(ValueError, match="do not satisfy Total No Conjugacy"):
+        objects.CayleyComplex(subset_a, bipartite=True)
 
-    # rank-1 complex
+    # bipartite complex
     group = abstract.CyclicGroup(6)
     shift = group.generators[0]
     subset_a = [shift, shift**2, ~shift, (~shift) ** 2]
     subset_b = [shift**3]
-    cayplex = objects.CayleyComplex(subset_a, subset_b, rank=1)
-    assert cayplex.rank == 1
-    assert_valid_complex(cayplex)
-
-    # rank-0 complex
-    group = abstract.Group.product(abstract.CyclicGroup(2), abstract.CyclicGroup(5))
-    shift_x, shift_y = group.generators
-    subset_a = [shift_x * shift_y, ~(shift_x * shift_y)]
-    subset_b = [shift_x * shift_y**2, ~(shift_x * shift_y**2)]
-    cayplex = objects.CayleyComplex(subset_a, subset_b, rank=0)
-    assert cayplex.rank == 0
+    cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=True)
     assert_valid_complex(cayplex)
 
 
