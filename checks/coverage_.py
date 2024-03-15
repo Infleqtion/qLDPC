@@ -3,13 +3,11 @@ import sys
 
 import checks_superstaq
 
-if __name__ == "__main__":
-    if sys.argv[1:]:
-        # check coverage for the provided arguments
-        exit(checks_superstaq.coverage_.run(*sys.argv[1:]))
 
-    # Check that each file is covered by its own data file.
-    # Start by identifying files that should be covered.
+def run_modular() -> int:
+    """Check that each file is covered by its own data file."""
+
+    # start by identifying files that should be covered
     tracked_files = checks_superstaq.check_utils.get_tracked_files("*.py")
     coverage_files = checks_superstaq.check_utils.exclude_files(
         tracked_files, ["checks/*.py", "*__init__.py", "*_test.py"]
@@ -25,4 +23,13 @@ if __name__ == "__main__":
         if exit_code:
             checks_superstaq.check_utils.warning(f"Coverage failed for {file}.")
 
-    exit(sum(exit_codes.values()))
+    return sum(exit_codes.values())
+
+
+if __name__ == "__main__":
+    if sys.argv[1:]:
+        # check coverage for the provided arguments
+        exit(checks_superstaq.coverage_.run(*sys.argv[1:]))
+
+    # check for modular coverage
+    exit(run_modular())
