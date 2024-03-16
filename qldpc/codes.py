@@ -342,13 +342,10 @@ class ClassicalCode(AbstractCode):
         """Construct a random classical code with the given number of bits and nontrivial checks."""
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         rows, cols = checks, bits
-        matrix = code_field.Random((rows, cols))
+        matrix = code_field.Zeros((rows, cols))
         for row in range(matrix.shape[0]):
-            if not matrix[row, :].any():
-                matrix[row, np.random.randint(cols)] = code_field.Random(low=1)  # pragma: no cover
-        for col in range(matrix.shape[1]):
-            if not matrix[:, col].any():
-                matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
+            while not matrix[row, :].any():
+                matrix[row, :] = code_field.Random(cols)
         return ClassicalCode(matrix)
 
     @classmethod
@@ -388,6 +385,34 @@ class ClassicalCode(AbstractCode):
             for rest in itertools.product(range(field), repeat=rank - top_row - 1)
         ]
         return ClassicalCode(np.array(strings).T, field=field)
+
+    @classmethod
+    def CordaroWagner(cls, length: int, field: int | None = None) -> ClassicalCode:
+        """Construct Cordaro Wagner Code of length 4, 5, 6."""
+        field = field or DEFAULT_FIELD_ORDER
+        gf = galois.GF(field)
+        if length == 4:
+            gen = gf(np.array([[1, 1, 0, 0], [0, 0, 1, 1]]))
+        if length == 5:
+            gen = gf(np.array([[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]))
+        if length == 6:
+            gen = gf(np.array([[1, 1, 0, 0, 1, 1], [0, 0, 1, 1, 1, 1]]))
+            # parity = gf(np.array([[1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 1, 1], [0, 0, 1, 1, 0, 0], [1, 0, 1, 0, 1, 0] ]))
+            # return ClassicalCode(parity, field=field)
+        return ~ClassicalCode(gen, field=field)
+
+    @classmethod
+    def RepSum(cls, length: int, field: int | None = None) -> ClassicalCode:
+        """Construct punctured Hammming Codes [6,3,3] Code."""
+        field = field or DEFAULT_FIELD_ORDER
+        gf = galois.GF(field)
+        if length == 5:
+            gen = gf(np.array([[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]))
+            # parity = gf(np.array([[1, 0, 0, 1, 0], [0, 1, 0, 0, 1], [1,0,1,0,1] ]))
+            # return ClassicalCode(parity, field=field)
+        if length == 6:
+            gen = gf(np.array([[1, 0, 0, 1, 1, 0], [0, 1, 0, 1, 0, 1], [0, 0, 1, 0, 1, 1]]))
+        return ~ClassicalCode(gen, field=field)
 
     # TODO: add more codes, particularly from code families that are useful for good quantum codes
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
