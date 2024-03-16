@@ -380,7 +380,7 @@ class ClassicalCode(AbstractCode):
             bitstrings = list(itertools.product([0, 1], repeat=rank))
             return ClassicalCode(np.array(bitstrings[1:]).T)
 
-        # More generally, columns = maximal set of nonzero, linearly independent strings.
+        # More generally, columns = maximal set of linearly independent strings.
         # This is achieved by collecting together all strings whose first nonzero element is a 1.
         strings = [
             (0,) * top_row + (1,) + rest
