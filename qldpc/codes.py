@@ -376,7 +376,7 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def hamming(cls, rank: int, field: int | None = None) -> ClassicalCode:
-        """Construct a hamming code of a given rank."""
+        """Construct a Hamming code of a given rank."""
         field = field or DEFAULT_FIELD_ORDER
         if field == 2:
             # parity check matrix: columns = all nonzero bitstrings
@@ -391,6 +391,12 @@ class ClassicalCode(AbstractCode):
             for rest in itertools.product(range(field), repeat=rank - top_row - 1)
         ]
         return ClassicalCode(np.array(strings).T, field=field)
+
+    @classmethod
+    def punctured(cls, code: ClassicalCode, removals: Sequence[int]) -> ClassicalCode:
+        """Puncture a code, removing some of its bits."""
+        bits_to_keep = [bit for bit in range(code.num_bits) if bit not in removals]
+        return ~ClassicalCode(code.generator[:, bits_to_keep])
 
     @classmethod
     def cordaro_wagner(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
@@ -408,7 +414,7 @@ class ClassicalCode(AbstractCode):
         return ~ClassicalCode(generator, field=field or DEFAULT_FIELD_ORDER)
 
     @classmethod
-    def punctured_hamming(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
+    def RepSum(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct punctured Hammming Codes [6,3,3] Code."""
         if num_bits == 5:
             generator = [[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]
