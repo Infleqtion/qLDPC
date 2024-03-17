@@ -260,7 +260,7 @@ class Group:
     ) -> Group:
         """Constructs a Group from a given set of generating matrices.
 
-        Goup members are represented by how they permute elements of the group itself.
+        Group members are represented by how they permute elements of the group itself.
         """
         if not generators:
             return TrivialGroup()
