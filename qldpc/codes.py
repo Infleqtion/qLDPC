@@ -393,23 +393,31 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(np.array(strings).T, field=field)
 
     @classmethod
-    def CordaroWagner(cls, length: int, field: int | None = None) -> ClassicalCode:
+    def cordaro_wagner(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct Cordaro Wagner Code of length 4, 5, 6."""
-        if length == 4:
+        if num_bits == 4:
             generator = [[1, 1, 0, 0], [0, 0, 1, 1]]
-        if length == 5:
+        elif num_bits == 5:
             generator = [[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]
-        if length == 6:
+        elif num_bits == 6:
             generator = [[1, 1, 0, 0, 1, 1], [0, 0, 1, 1, 1, 1]]
+        else:
+            raise ValueError(
+                f"Cordaro Wagner codes only supported for block length 4, 5, or 6, not {num_bits}"
+            )
         return ~ClassicalCode(generator, field=field or DEFAULT_FIELD_ORDER)
 
     @classmethod
-    def RepSum(cls, length: int, field: int | None = None) -> ClassicalCode:
+    def punctured_hamming(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct punctured Hammming Codes [6,3,3] Code."""
-        if length == 5:
+        if num_bits == 5:
             generator = [[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]
-        if length == 6:
+        elif num_bits == 6:
             generator = [[1, 0, 0, 1, 1, 0], [0, 1, 0, 1, 0, 1], [0, 0, 1, 0, 1, 1]]
+        else:
+            raise ValueError(
+                f"Punctured Hamming codes only supported for block length 5 or 6, not {num_bits}"
+            )
         return ~ClassicalCode(generator, field=field or DEFAULT_FIELD_ORDER)
 
     # TODO: add more codes, particularly from code families that are useful for good quantum codes
