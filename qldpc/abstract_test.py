@@ -90,8 +90,8 @@ def test_group_product() -> None:
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
 
-    with pytest.raises(ValueError, match="different fields"):
-        _ = abstract.TrivialGroup(2) @ abstract.TrivialGroup(3)
+    # product of groups over different fields results in a group over the binary field
+    assert abstract.TrivialGroup(2) @ abstract.TrivialGroup(3) == abstract.TrivialGroup(2)
 
 
 def test_algebra() -> None:
