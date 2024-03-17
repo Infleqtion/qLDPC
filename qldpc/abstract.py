@@ -202,6 +202,11 @@ class Group:
             sympy.core.random.seed(seed)
         return GroupMember(self._group.random())
 
+    @property
+    def is_abelian(self) -> bool:
+        """Is this group Abelian / commutative?"""
+        return self._group.is_abelian
+
     @classmethod
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
@@ -733,7 +738,7 @@ class DicyclicGroup(Group):
         if order == 12 and binary_lift:
             # Special case with more compact representation:
             # https://math.stackexchange.com/a/2837920
-            gen_a = comb.Permutation(1, 2, 3)
+            gen_a = comb.Permutation(1, 2, 3)(4, 6)(5, 7)
             gen_b = comb.Permutation(2, 3)(4, 5, 6, 7)
             super().__init__(comb.PermutationGroup(gen_a, gen_b))
 

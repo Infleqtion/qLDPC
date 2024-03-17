@@ -50,6 +50,7 @@ def test_trivial_group() -> None:
     assert group.random() == group.identity
     assert np.array_equal(group.lift(group.identity), np.array(1, ndmin=2))
     assert group == abstract.Group.from_generating_mats()
+    assert group.is_abelian
 
 
 def test_lift() -> None:
@@ -146,15 +147,15 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-def test_dicyclic() -> None:
+def test_dicyclic_group() -> None:
+    """Dicyclic group."""
+    compact_orders = [12]
     for order in range(4, 21, 4):
-        group = abstract.DicyclicGroup(order)
-        gen_a, gen_b = group.generators
-        assert gen_a ** (order // 2) == gen_b**4 == group.identity
-
-    group = abstract.DicyclicGroup(12, binary_lift=True)
-    gen_a, gen_b = group.generators
-    assert gen_a ** (order // 2) == gen_b**4 == group.identity
+        for binary_lift in [True, False] if order in compact_orders else [False]:
+            group = abstract.DicyclicGroup(order)
+            gen_a, gen_b = group.generators
+            assert gen_a ** (order // 2) == gen_b**4 == group.identity
+            assert group.is_abelian == (order == 4)
 
 
 def test_SL(field: int = 3) -> None:
