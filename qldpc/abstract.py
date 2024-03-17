@@ -624,6 +624,20 @@ class DihedralGroup(Group):
         super().__init__(comb.named_groups.DihedralGroup(order))
 
 
+class AlternatingGroup(Group):
+    """Alternating group on order many elements."""
+
+    def __init__(self, order: int) -> None:
+        super().__init__(comb.named_groups.AlternatingGroup(order))
+
+
+class SymmetricGroup(Group):
+    """Symmetric group on order many elements."""
+
+    def __init__(self, order: int) -> None:
+        super().__init__(comb.named_groups.SymmetricGroup(order))
+
+
 class QuaternionGroup(Group):
     """Quaternion group: 1, i, j, k, -1, -i, -j, -k."""
 
@@ -793,3 +807,233 @@ class ProjectiveSpecialLinearGroup(Group):
 
 SL = SpecialLinearGroup
 PSL = ProjectiveSpecialLinearGroup
+
+
+###### Small Groups#####
+
+
+class DiCyclicGroup(Group):
+    """Dicyclic group of order at most 20."""
+
+    def __init__(self, order: int) -> None:
+        # F, a, b  = comb.free_groups.free_group("a, b")
+        # n = order
+        # return super().__init__(comb.fp_groups.FpGroup(F, [a**(2*n), a**n*b**-2,b*a*b**-1*a]))
+
+        assert order % 4 == 0
+        order = order // 4
+        assert 1 < order < 6
+        if order == 1:
+            super().__init__(comb.named_groups.CyclicGroup(4))
+
+        elif order == 2:
+            """Same as the Quaternion Group"""
+            A = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            B = comb.Permutation(1, 7, 3, 5)(2, 6, 4, 8)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif order == 3:
+            A = comb.Permutation(1, 2, 3)
+            B = comb.Permutation(2, 3)(4, 5, 6, 7)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif order == 4:
+            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            B = comb.Permutation(1, 9, 5, 13)(2, 16, 6, 12)(3, 15, 7, 11)(4, 14, 8, 10)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif order == 5:
+            """Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/Dic5.html"""
+            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+            )
+            B = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
+                5, 20, 10, 15
+            )
+            super().__init__(comb.PermutationGroup(A, B))
+
+
+class Order16(Group):
+    """Outputs Group of Order 16 based on GAP ID
+    Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
+    """
+
+    def __init__(self, ind: int) -> None:
+        assert ind > 0 and ind < 15
+
+        if ind == 1:
+            super().__init__(comb.named_groups.CyclicGroup(16))
+
+        elif ind == 2:
+            """C(4) x C(4) : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4^2.html"""
+            A = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)(9, 10, 11, 12)(13, 14, 15, 16)
+            B = comb.Permutation(1, 10, 15, 7)(2, 11, 16, 8)(3, 12, 13, 5)(4, 9, 14, 6)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        if ind == 3:
+            """The semidirect product of C2 x C2 and C4
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^2sC4.html"""
+            A = comb.Permutation(2, 6)(4, 8)
+            B = comb.Permutation(1, 5)(2, 6)(3, 7)(4, 8)
+            C = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            super().__init__(comb.PermutationGroup(A, B, C))
+
+        elif ind == 4:
+            """The semidirect product of C4 and C4
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4sC4.html"""
+            A = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)(9, 10, 11, 12)(13, 14, 15, 16)
+            B = comb.Permutation(1, 14, 12, 5)(2, 13, 9, 8)(3, 16, 10, 7)(4, 15, 11, 6)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 5:
+            """The direct product of C2 and C8
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2xC8.html"""
+            A = comb.Permutation(1, 11)(2, 12)(3, 13)(4, 14)(5, 15)(6, 16)(7, 9)(8, 10)
+            B = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 6:
+            """Modular maximal-cyclic group : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/M4(2).html"""
+            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
+            B = comb.Permutation(2, 6)(4, 8)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 7:
+            """Dihedral Group (8) : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/D8.html"""
+            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
+            B = comb.Permutation(1, 8)(2, 7)(3, 6)(4, 5)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 8:
+            """Semidihedral group: https://people.maths.bris.ac.uk/~matyd/GroupNames/1/SD16.html"""
+            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
+            B = comb.Permutation(2, 4)(3, 7)(6, 8)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 9:
+            """Generalised quaternion group: https://people.maths.bris.ac.uk/~matyd/GroupNames/1/Q16.html"""
+            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            B = comb.Permutation(1, 12, 5, 16)(2, 11, 6, 15)(3, 10, 7, 14)(4, 9, 8, 13)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 10:
+            """The direct product of C2, C2, and C4
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^2xC4.html"""
+            A = comb.Permutation(1, 8)(2, 5)(3, 6)(4, 7)(9, 15)(10, 16)(11, 13)(12, 14)
+            B = comb.Permutation(1, 15)(2, 16)(3, 13)(4, 14)(5, 10)(6, 11)(7, 12)(8, 9)
+            C = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)(9, 10, 11, 12)(13, 14, 15, 16)
+            super().__init__(comb.PermutationGroup(A, B, C))
+
+        elif ind == 11:
+            """The direct product of C2, C2, and C4
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^2xC4.html"""
+            A = comb.Permutation(1, 8)(2, 5)(3, 6)(4, 7)(9, 15)(10, 16)(11, 13)(12, 14)
+            B = comb.Permutation(1, 15)(2, 16)(3, 13)(4, 14)(5, 10)(6, 11)(7, 12)(8, 9)
+            C = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)(9, 10, 11, 12)(13, 14, 15, 16)
+            super().__init__(comb.PermutationGroup(A, B, C))
+
+        elif ind == 12:
+            """The direct product of C2 and Dihedral Group(4)
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2xD4.html"""
+            A = comb.Permutation(1, 7)(2, 8)(3, 5)(4, 6)
+            B = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            C = comb.Permutation(1, 4)(2, 3)(5, 8)(6, 7)
+            super().__init__(comb.PermutationGroup(A, B, C))
+
+        elif ind == 13:
+            """Pauli Group : Central product of C4 and Dihedral Group(4)
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4oD4.html"""
+            A = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            B = comb.Permutation(1, 4, 3, 2)(5, 6, 7, 8)
+            C = comb.Permutation(1, 6)(2, 7)(3, 8)(4, 5)
+            super().__init__(comb.PermutationGroup(A, B, C))
+
+        elif ind == 14:
+            """The direct product of C2, C2, C2, and C2
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^4.html"""
+            A = comb.Permutation(1, 2)(3, 4)(5, 6)(7, 8)(9, 10)(11, 12)(13, 14)(15, 16)
+            B = comb.Permutation(1, 15)(2, 16)(3, 8)(4, 7)(5, 12)(6, 11)(9, 13)(10, 14)
+            C = comb.Permutation(1, 5)(2, 6)(3, 13)(4, 14)(7, 10)(8, 9)(11, 16)(12, 15)
+            D = comb.Permutation(1, 3)(2, 4)(5, 13)(6, 14)(7, 16)(8, 15)(9, 12)(10, 11)
+            super().__init__(comb.PermutationGroup(A, B, C, D))
+
+
+class Order18(Group):
+    """Outputs Group of Order 18 based on GAP ID
+    Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
+    """
+
+    def __init__(self, ind: int) -> None:
+        assert ind > 0 and ind < 6
+
+        if ind == 1:
+            super().__init__(comb.named_groups.DihedralGroup(9))
+
+        elif ind == 2:
+            super().__init__(comb.named_groups.CyclicGroup(18))
+
+        elif ind == 3:
+            """The direct product of C3 and S3
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3xS3.html"""
+            A = comb.Permutation(1, 2, 3)(4, 5, 6)
+            B = comb.Permutation(1, 2, 3)(4, 6, 5)
+            C = comb.Permutation(1, 4)(2, 5)(3, 6)
+            super().__init__(comb.PermutationGroup(A, B, C))
+
+        elif ind == 4:
+            """The semidirect product of C3 and S3
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3sS3.html"""
+            A = comb.Permutation(1, 2, 3)(4, 5, 6)(7, 8, 9)
+            B = comb.Permutation(1, 5, 8)(2, 6, 9)(3, 4, 7)
+            C = comb.Permutation(2, 3)(4, 9)(5, 8)(6, 7)
+            super().__init__(comb.PermutationGroup(A, B, C))
+
+        elif ind == 5:
+            """The direct product of C3 and C6
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3xC6.html"""
+            A = comb.Permutation(1, 12, 15)(2, 7, 16)(3, 8, 17)(4, 9, 18)(5, 10, 13)(6, 11, 14)
+            B = comb.Permutation(1, 2, 3, 4, 5, 6)(7, 8, 9, 10, 11, 12)(13, 14, 15, 16, 17, 18)
+            super().__init__(comb.PermutationGroup(A, B))
+
+
+class Order20(Group):
+    """Outputs Group of Order 20 based on GAP ID
+    Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
+    """
+
+    def __init__(self, ind: int) -> None:
+        assert ind > 0 and ind < 6
+
+        if ind == 1:
+            """DiCyclic Group of order 20"""
+            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+            )
+            B = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
+                5, 20, 10, 15
+            )
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 2:
+            super().__init__(comb.named_groups.CyclicGroup(20))
+
+        elif ind == 3:
+            """Frobenius group
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/F5.html"""
+            A = comb.Permutation(1, 2, 3, 4, 5)
+            B = comb.Permutation(2, 3, 5, 4)
+            super().__init__(comb.PermutationGroup(A, B))
+
+        elif ind == 4:
+            super().__init__(comb.named_groups.DihedralGroup(10))
+
+        elif ind == 5:
+            """The direct product of C2 and C10
+            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2xC10.html"""
+            A = comb.Permutation(1, 17)(2, 18)(3, 19)(4, 20)(5, 11)(6, 12)(7, 13)(8, 14)(9, 15)(
+                10, 16
+            )
+            B = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+            )
+            super().__init__(comb.PermutationGroup(A, B))
