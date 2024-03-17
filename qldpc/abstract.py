@@ -696,10 +696,7 @@ class DicyclicGroup(Group):
             super().__init__(comb.named_groups.CyclicGroup(4))
 
         elif order == 8:
-            """Same as the Quaternion Group"""
-            A = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
-            B = comb.Permutation(1, 7, 3, 5)(2, 6, 4, 8)
-            super().__init__(comb.PermutationGroup(A, B))
+            super().__init__(QuaternionGroup())
 
         elif order == 12:
             A = comb.Permutation(1, 2, 3)
