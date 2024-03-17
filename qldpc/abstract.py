@@ -595,7 +595,7 @@ class TrivialGroup(Group):
     def random(self, seed: int | None = None) -> GroupMember:
         """A random (albeit unique) element this group.
 
-        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation."
+        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation.
         """
         return self.identity
 
