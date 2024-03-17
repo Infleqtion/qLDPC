@@ -708,26 +708,26 @@ class DicyclicGroup(Group):
             super().__init__(comb.named_groups.CyclicGroup(4))
 
         elif order == 8:
-            super().__init__(QuaternionGroup())
+            gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            gen_b = comb.Permutation(1, 7, 3, 5)(2, 6, 4, 8)
 
         elif order == 12:
-            A = comb.Permutation(1, 2, 3)
-            B = comb.Permutation(2, 3)(4, 5, 6, 7)
-            super().__init__(comb.PermutationGroup(A, B))
+            gen_a = comb.Permutation(1, 2, 3)
+            gen_b = comb.Permutation(2, 3)(4, 5, 6, 7)
 
         elif order == 16:
-            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
-            B = comb.Permutation(1, 9, 5, 13)(2, 16, 6, 12)(3, 15, 7, 11)(4, 14, 8, 10)
-            super().__init__(comb.PermutationGroup(A, B))
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            gen_b = comb.Permutation(1, 9, 5, 13)(2, 16, 6, 12)(3, 15, 7, 11)(4, 14, 8, 10)
 
         elif order == 20:
-            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
                 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
             )
-            B = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
+            gen_b = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
                 5, 20, 10, 15
             )
-            super().__init__(comb.PermutationGroup(A, B))
+
+        super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
 
 class DicyclicGroupNew(Group):
