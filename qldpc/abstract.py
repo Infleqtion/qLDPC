@@ -683,7 +683,7 @@ class DicyclicGroup(Group):
     """Dicyclic group of order at most 20."""
 
     def __init__(self, order: int) -> None:
-        if order > 0 and order % 4 == 0:
+        if not (order > 0 and order % 4 == 0):
             raise ValueError(
                 f"Dicyclic groups only defined for orders that are positive multiples of 4 (provided: {order})"
             )
