@@ -53,8 +53,9 @@ import sympy.core
 
 DEFAULT_FIELD_ORDER = 2
 
+
 ################################################################################
-# groups
+# groups and group members
 
 
 UnknownType = TypeVar("UnknownType")
