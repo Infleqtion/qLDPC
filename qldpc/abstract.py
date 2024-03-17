@@ -88,7 +88,11 @@ class GroupMember(comb.Permutation):
         return self.rank() < other.rank()
 
     def __matmul__(self, other: GroupMember) -> GroupMember:
-        """Take the "tensor product" of two permutations."""
+        """Take the "tensor product" of two group members.
+
+        If group members g_1 and g_2 are, respectively, elements of the groups G_1 and G_2, then the
+        "tensor product" g_1 @ g_2 is an element of the direct product of G_1 and G_2.
+        """
         return GroupMember(self.array_form + [val + self.size for val in other.array_form])
 
 
@@ -708,7 +712,7 @@ class DicyclicGroup(Group):
             super().__init__(comb.PermutationGroup(A, B))
 
         elif order == 20:
-            """Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/Dic5.html"""
+            """Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/1/Dic5.html"""
             A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
                 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
             )
