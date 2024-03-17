@@ -172,6 +172,10 @@ class Group:
     def __contains__(self, member: GroupMember) -> bool:
         return comb.Permutation(member.array_form) in self._group
 
+    def to_sympy(self) -> comb.PermutationGroup:
+        """Return the underlying SymPy permutation group."""
+        return self._group
+
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field of this group."""
@@ -201,11 +205,6 @@ class Group:
         if seed is not None:
             sympy.core.random.seed(seed)
         return GroupMember(self._group.random())
-
-    @property
-    def is_abelian(self) -> bool:
-        """Is this group Abelian / commutative?"""
-        return self._group.is_abelian
 
     @classmethod
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
