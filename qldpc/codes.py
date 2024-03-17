@@ -403,8 +403,6 @@ class ClassicalCode(AbstractCode):
             gen = gf(np.array([[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]))
         if length == 6:
             gen = gf(np.array([[1, 1, 0, 0, 1, 1], [0, 0, 1, 1, 1, 1]]))
-            # parity = gf(np.array([[1, 1, 0, 0, 0, 0], [0, 0, 0, 0, 1, 1], [0, 0, 1, 1, 0, 0], [1, 0, 1, 0, 1, 0] ]))
-            # return ClassicalCode(parity, field=field)
         return ~ClassicalCode(gen, field=field)
 
     @classmethod
@@ -414,8 +412,6 @@ class ClassicalCode(AbstractCode):
         gf = galois.GF(field)
         if length == 5:
             gen = gf(np.array([[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]))
-            # parity = gf(np.array([[1, 0, 0, 1, 0], [0, 1, 0, 0, 1], [1,0,1,0,1] ]))
-            # return ClassicalCode(parity, field=field)
         if length == 6:
             gen = gf(np.array([[1, 0, 0, 1, 1, 0], [0, 1, 0, 1, 0, 1], [0, 0, 1, 0, 1, 1]]))
         return ~ClassicalCode(gen, field=field)
