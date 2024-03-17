@@ -634,14 +634,14 @@ class DihedralGroup(Group):
 
 
 class AlternatingGroup(Group):
-    """Alternating group on order many elements."""
+    """Alternating group of a specified order."""
 
     def __init__(self, order: int) -> None:
         super().__init__(comb.named_groups.AlternatingGroup(order))
 
 
 class SymmetricGroup(Group):
-    """Symmetric group on order many elements."""
+    """Symmetric group of a specified order."""
 
     def __init__(self, order: int) -> None:
         super().__init__(comb.named_groups.SymmetricGroup(order))
