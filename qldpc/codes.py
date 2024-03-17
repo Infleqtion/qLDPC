@@ -37,7 +37,7 @@ from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
+DEFAULT_FIELD_ORDER = 2
 
 
 def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
