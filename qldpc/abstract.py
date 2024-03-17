@@ -680,7 +680,7 @@ class QuaternionGroup(Group):
 
 
 class DicyclicGroup(Group):
-    """Dicyclic group of order at most 20."""
+    """Dicyclic group of order <= 20."""
 
     def __init__(self, order: int) -> None:
         if not (order > 0 and order % 4 == 0):
