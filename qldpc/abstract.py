@@ -681,7 +681,10 @@ class QuaternionGroup(Group):
 
 
 class DicyclicGroup(Group):
-    """Dicyclic group of order <= 20."""
+    """Dicyclic group of order <= 20.
+
+    See https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
+    """
 
     def __init__(self, order: int) -> None:
         if not (order > 0 and order % 4 == 0):
@@ -711,7 +714,6 @@ class DicyclicGroup(Group):
             super().__init__(comb.PermutationGroup(A, B))
 
         elif order == 20:
-            """Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/1/Dic5.html"""
             A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
                 11, 12, 13, 14, 15, 16, 17, 18, 19, 20
             )
