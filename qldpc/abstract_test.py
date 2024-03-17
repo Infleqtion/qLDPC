@@ -33,11 +33,11 @@ def test_permutation_group() -> None:
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
 
-    assert abstract.Group.from_generating_mats([[[1]]]) == abstract.CyclicGroup(1)
+    assert abstract.Group.from_generating_mats([[1]]) == abstract.CyclicGroup(1)
 
     with pytest.raises(ValueError, match="inconsistent"):
         gen = galois.GF(2)([[1]])
-        abstract.Group.from_generating_mats([gen], field=3)
+        abstract.Group.from_generating_mats(gen, field=3)
 
 
 def test_trivial_group() -> None:

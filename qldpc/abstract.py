@@ -152,15 +152,19 @@ class Group:
 
     def __matmul__(self, other: Group) -> Group:
         """Direct product of two groups."""
-        if self.field != other.field:
-            raise ValueError("Cannot multiply groups with lifts defined over different fields")
         permutation_group = self._group * other._group
+
+        if self.field == other.field:
+            left_lift = self._lift
+            right_lift = other._lift
+        else:
+            left_lift = right_lift = default_lift
 
         def lift(member: GroupMember) -> galois.FieldArray:
             degree = self._group.degree
             left = member.array_form[:degree]
             right = [index - degree for index in member.array_form[degree:]]
-            matrix = np.kron(self.lift(GroupMember(left)), other.lift(GroupMember(right)))
+            matrix = np.kron(left_lift(GroupMember(left)), right_lift(GroupMember(right)))
             return self.field(matrix)
 
         return Group(permutation_group, self.field.order, lift)
@@ -251,7 +255,7 @@ class Group:
     @classmethod
     def from_generating_mats(
         cls,
-        generators: Sequence[npt.NDArray[np.int_] | Sequence[Sequence[int]]],
+        *generators: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
     ) -> Group:
         """Constructs a Group from a given set of generating matrices.
@@ -726,6 +730,57 @@ class DicyclicGroup(Group):
             super().__init__(comb.PermutationGroup(A, B))
 
 
+class DicyclicGroupNew(Group):
+    """Dicyclic group of order <= 20.
+
+    Generating matrices taken from: https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
+
+    Additional references:
+    - https://en.wikipedia.org/wiki/Dicyclic_group
+    - https://groupprops.subwiki.org/wiki/Dicyclic_group
+    """
+
+    def __init__(self, order: int, binary_lift: bool = False) -> None:
+        if not (order > 0 and order % 4 == 0):
+            raise ValueError(
+                "Dicyclic groups only supported for orders that are positive multiples of 4"
+                + f" (provided: {order})"
+            )
+        if not order <= 20:
+            raise ValueError(
+                f"Dicyclic groups only supported for order up to 20 (provided: {order})"
+            )
+
+        if order == 4:
+            mat_a = [[2, 0], [0, 2]]
+            mat_b = [[0, 2], [1, 0]]
+            field = 3
+
+        elif order == 8:
+            mat_a = [[2, 2], [2, 1]]
+            mat_b = [[0, 2], [1, 0]]
+            field = 3
+
+        elif order == 12:
+            mat_a = [[0, 1], [4, 1]]
+            mat_b = [[3, 2], [0, 2]]
+            field = 5
+
+        elif order == 16:
+            mat_a = [[0, 6], [1, 3]]
+            mat_b = [[6, 5], [1, 1]]
+            field = 7
+
+        elif order == 20:
+            mat_a = [[9, 3], [3, 6]]
+            mat_b = [[0, 10], [1, 0]]
+            field = 11
+
+        group = self.from_generating_mats(mat_a, mat_b, field=field)
+        lift = default_lift if binary_lift else group._lift
+        super().__init__(group, lift=lift)
+
+
 ################################################################################
 # special linear (SL) and projective special linear (PSL) groups
 
@@ -779,7 +834,7 @@ class SpecialLinearGroup(Group):
 
         else:
             # represent group members by how they permute elements of the group
-            group = self.from_generating_mats(self.get_generator_mats())
+            group = self.from_generating_mats(*self.get_generator_mats())
             super().__init__(group)
 
     @property
@@ -824,7 +879,7 @@ class ProjectiveSpecialLinearGroup(Group):
         if self.field.order == 2:
             group = SpecialLinearGroup(dimension, 2)
         elif dimension == 2:
-            group = Group.from_generating_mats(self.get_generator_mats())
+            group = Group.from_generating_mats(*self.get_generator_mats())
         else:
             raise ValueError(
                 "Projective special linear groups with both dimension and field greater than 2 are"
