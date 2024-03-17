@@ -865,8 +865,7 @@ class Order16(Group):
     Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
     """
 
-    # flake8: noqa: C901  # ignore complexity check
-    def __init__(self, ind: int) -> None:
+    def __init__(self, ind: int) -> None:  # noqa: max-complexity
         assert ind > 0 and ind < 15
 
         if ind == 1:
