@@ -686,7 +686,8 @@ class DicyclicGroup(Group):
     def __init__(self, order: int) -> None:
         if not (order > 0 and order % 4 == 0):
             raise ValueError(
-                f"Dicyclic groups only defined for orders that are positive multiples of 4 (provided: {order})"
+                "Dicyclic groups only supported for orders that are positive multiples of 4"
+                + f" (provided: {order})"
             )
         if not order <= 20:
             raise ValueError(
@@ -859,10 +860,12 @@ PSL = ProjectiveSpecialLinearGroup
 
 
 class Order16(Group):
-    """Outputs Group of Order 16 based on GAP ID
-    Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
+    """Outputs Group of Order 16 based on GAP ID.
+
+    Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
     """
 
+    # flake8: noqa: C901  # ignore complexity check
     def __init__(self, ind: int) -> None:
         assert ind > 0 and ind < 15
 
@@ -870,7 +873,7 @@ class Order16(Group):
             super().__init__(comb.named_groups.CyclicGroup(16))
 
         elif ind == 2:
-            """C(4) x C(4) : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4^2.html"""
+            """C(4) x C(4): https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4^2.html"""
             A = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)(9, 10, 11, 12)(13, 14, 15, 16)
             B = comb.Permutation(1, 10, 15, 7)(2, 11, 16, 8)(3, 12, 13, 5)(4, 9, 14, 6)
             super().__init__(comb.PermutationGroup(A, B))
@@ -898,13 +901,13 @@ class Order16(Group):
             super().__init__(comb.PermutationGroup(A, B))
 
         elif ind == 6:
-            """Modular maximal-cyclic group : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/M4(2).html"""
+            """Modular maximal-cyclic group: https://people.maths.bris.ac.uk/~matyd/GroupNames/1/M4(2).html"""
             A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
             B = comb.Permutation(2, 6)(4, 8)
             super().__init__(comb.PermutationGroup(A, B))
 
         elif ind == 7:
-            """Dihedral Group (8) : https://people.maths.bris.ac.uk/~matyd/GroupNames/1/D8.html"""
+            """Dihedral Group (8): https://people.maths.bris.ac.uk/~matyd/GroupNames/1/D8.html"""
             A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
             B = comb.Permutation(1, 8)(2, 7)(3, 6)(4, 5)
             super().__init__(comb.PermutationGroup(A, B))
@@ -946,7 +949,7 @@ class Order16(Group):
             super().__init__(comb.PermutationGroup(A, B, C))
 
         elif ind == 13:
-            """Pauli Group : Central product of C4 and Dihedral Group(4)
+            """Pauli Group: Central product of C4 and Dihedral Group(4)
             https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4oD4.html"""
             A = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
             B = comb.Permutation(1, 4, 3, 2)(5, 6, 7, 8)
@@ -964,8 +967,9 @@ class Order16(Group):
 
 
 class Order18(Group):
-    """Outputs Group of Order 18 based on GAP ID
-    Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
+    """Outputs Group of Order 18 based on GAP ID.
+
+    Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
     """
 
     def __init__(self, ind: int) -> None:
@@ -1002,8 +1006,9 @@ class Order18(Group):
 
 
 class Order20(Group):
-    """Outputs Group of Order 20 based on GAP ID
-    Source : https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
+    """Outputs Group of Order 20 based on GAP ID.
+
+    Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
     """
 
     def __init__(self, ind: int) -> None:
