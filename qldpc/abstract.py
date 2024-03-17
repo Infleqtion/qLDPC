@@ -707,7 +707,7 @@ class DicyclicGroup(Group):
             )
         if not order <= 20:
             raise ValueError(
-                f"Dicyclic groups only supported for order up to 20 (provided: {order})"
+                f"Dicyclic groups only supported for orders up to 20 (provided: {order})"
             )
 
         if order == 4:

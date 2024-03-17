@@ -163,7 +163,7 @@ def test_dicyclic_group() -> None:
     with pytest.raises(ValueError, match="positive multiples of 4"):
         abstract.DicyclicGroup(2)
 
-    with pytest.raises(ValueError, match="order up to 20"):
+    with pytest.raises(ValueError, match="orders up to 20"):
         abstract.DicyclicGroup(24)
 
 
