@@ -1343,6 +1343,7 @@ class LPCode(CSSCode):
 # classical and quantum Tanner codes
 
 
+# TODO: add TannerCode construction based on undirected graphs
 class TannerCode(ClassicalCode):
     """Classical Tanner code, as described in DOI:10.1109/TIT.1981.1056404.
 
@@ -1448,3 +1449,6 @@ class QTCode(CSSCode):
         code_x = TannerCode(subgraph_x, subcode_x)
         code_z = TannerCode(subgraph_z, subcode_z)
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
+
+
+# TODO: add ordinary + rotated SurfaceCode and ToricCode
