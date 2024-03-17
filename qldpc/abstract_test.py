@@ -132,6 +132,31 @@ def test_transpose() -> None:
     assert protograph.T.T == protograph
 
 
+def test_random_symmetric_subset() -> None:
+    """Cover Group.random_symmetric_subset."""
+    group = abstract.CyclicGroup(2) @ abstract.CyclicGroup(3)
+    for seed in [0, 1]:
+        subset = group.random_symmetric_subset(size=2, seed=seed)
+        assert subset == {~member for member in subset}
+
+    subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
+    assert subset == {group.identity}
+
+    with pytest.raises(ValueError, match="must have a size between"):
+        group.random_symmetric_subset(size=0)
+
+
+def test_dicyclic() -> None:
+    for order in range(4, 21, 4):
+        group = abstract.DicyclicGroup(order)
+        gen_a, gen_b = group.generators
+        assert gen_a ** (order // 2) == gen_b**4 == group.identity
+
+    group = abstract.DicyclicGroup(12, binary_lift=True)
+    gen_a, gen_b = group.generators
+    assert gen_a ** (order // 2) == gen_b**4 == group.identity
+
+
 def test_SL(field: int = 3) -> None:
     """Special linear group."""
     for linear_rep in [False, True]:
@@ -158,17 +183,3 @@ def test_PSL(field: int = 3) -> None:
 
     with pytest.raises(ValueError, match="not yet supported"):
         abstract.PSL(3, 3)
-
-
-def test_random_symmetric_subset() -> None:
-    """Cover Group.random_symmetric_subset."""
-    group = abstract.CyclicGroup(2) @ abstract.CyclicGroup(3)
-    for seed in [0, 1]:
-        subset = group.random_symmetric_subset(size=2, seed=seed)
-        assert subset == {~member for member in subset}
-
-    subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
-    assert subset == {group.identity}
-
-    with pytest.raises(ValueError, match="must have a size between"):
-        group.random_symmetric_subset(size=0)
