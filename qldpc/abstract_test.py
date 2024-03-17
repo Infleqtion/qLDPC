@@ -57,6 +57,8 @@ def test_lift() -> None:
     assert_valid_lift(abstract.TrivialGroup())
     assert_valid_lift(abstract.CyclicGroup(3))
     assert_valid_lift(abstract.DihedralGroup(3))
+    assert_valid_lift(abstract.AlternatingGroup(3))
+    assert_valid_lift(abstract.SymmetricGroup(3))
     assert_valid_lift(abstract.QuaternionGroup())
 
 
