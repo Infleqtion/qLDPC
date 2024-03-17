@@ -339,13 +339,19 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
-        """Construct a random classical code with the given number of bits and nontrivial checks."""
+        """Construct a random classical code with the given number of bits and nontrivial checks.
+
+        Reject parity check matrices that have a row or column of all zeroes.
+        """
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        rows, cols = checks, bits
-        matrix = code_field.Zeros((rows, cols))
-        for row in range(matrix.shape[0]):
-            while not matrix[row, :].any():
-                matrix[row, :] = code_field.Random(cols)
+
+        def has_zero_row_or_column(matrix: galois.FieldArray) -> bool:
+            """Does the given matrix have a row or column that is all zeroes?"""
+            return any(not row.any() for row in matrix) or any(not col.any() for col in matrix.T)
+
+        while has_zero_row_or_column(matrix := code_field.Random((checks, bits))):
+            pass
+
         return ClassicalCode(matrix)
 
     @classmethod
