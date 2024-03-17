@@ -683,7 +683,10 @@ class QuaternionGroup(Group):
 class DicyclicGroup(Group):
     """Dicyclic group of order <= 20.
 
-    See https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
+    References:
+    - https://en.wikipedia.org/wiki/Dicyclic_group
+    - https://groupprops.subwiki.org/wiki/Dicyclic_group
+    - https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
     """
 
     def __init__(self, order: int) -> None:
