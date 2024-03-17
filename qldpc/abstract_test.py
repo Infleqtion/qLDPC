@@ -149,9 +149,9 @@ def test_random_symmetric_subset() -> None:
 
 def test_dicyclic_group() -> None:
     """Dicyclic group."""
-    compact_orders = [12]
+    compact_binary_orders = [12]
     for order in range(4, 21, 4):
-        for binary_lift in [True, False] if order in compact_orders else [False]:
+        for binary_lift in [True, False] if order in compact_binary_orders else [False]:
             group = abstract.DicyclicGroup(order)
             gen_a, gen_b = group.generators
             assert gen_a ** (order // 2) == gen_b**4 == group.identity
