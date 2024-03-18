@@ -23,32 +23,36 @@ import sympy.combinatorics as comb
 from qldpc import abstract
 
 
-BASE_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
-
-
-def get_group_page(order: int, index: int):
+def get_group_page(
+    order: int,
+    index: int,
+    base_url: str = "https://people.maths.bris.ac.uk/~matyd/GroupNames/",
+) -> str:
     """Get the webpage for an indexed group on GroupNames.org."""
 
     # load index
     extra = "index500.html" if order > 60 else ""
-    page = urllib.request.urlopen(BASE_URL + extra)
+    page = urllib.request.urlopen(base_url + extra)
     page_text = page.read().decode("utf-8")
 
     # extract section with the specified group
-    index_loc = page_text.find(f"<td>{order},{index}</td>")
-    if index_loc == -1:
+    loc = page_text.find(f"<td>{order},{index}</td>")
+    if loc == -1:
         raise ValueError(f"Group {order},{index} not found")
-    end = index_loc + page_text[index_loc:].find("\n")
-    start = index_loc - page_text[:index_loc][::-1].find("\n")
+    end = loc + page_text[loc:].find("\n")
+    start = loc - page_text[:loc][::-1].find("\n")
     section = page_text[start:end]
 
     # extract first link from this section
     pattern = r'href="([^"]*)"'
     match = re.search(pattern, section)
-    return BASE_URL + match.group(1)
+    if match is None:
+        raise ValueError(f"Webpage for group {order},{index} not found")
+
+    return base_url + match.group(1)
 
 
-def get_group_generators(order: int, index: int):
+def get_group_generators(order: int, index: int) -> list[abstract.GroupMember]:
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
@@ -65,6 +69,8 @@ def get_group_generators(order: int, index: int):
     section = section[section.find("<pre") :]
     pattern = r">((?:.|\n)*?)<\/pre>"
     match = re.search(pattern, section)
+    if match is None:
+        raise ValueError(f"Generators for group {order},{index} not found")
     gen_strings = match.group(1).split("<br>\n")
 
     # build generators
