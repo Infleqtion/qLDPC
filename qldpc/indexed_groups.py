@@ -117,7 +117,7 @@ def get_generators_with_gap(order: int, index: int) -> list[list[tuple[int, ...]
 
 
 def gap4_is_installed() -> bool:
-    """Is GAP installed?"""
+    """Is GAP 4 installed?"""
     result = subprocess.run(["script", "-c", "gap --version"], capture_output=True, text=True)
     lines = result.stdout.split("\n")
     return len(lines) == 2 and lines[1][:5] == "GAP 4"
