@@ -19,16 +19,21 @@ import re
 import subprocess
 import urllib.request
 
+GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
-def get_groupnames_url(order: int, index: int) -> str:
+def get_groupnames_url(order: int, index: int) -> str | None:
     """Get the webpage for an indexed group on GroupNames.org."""
 
-    # load index
-    extra = "index500.html" if order > 60 else ""
-    page = urllib.request.urlopen(GROUPNAMES_URL + extra)
-    page_text = page.read().decode("utf-8")
+    try:
+        # load index
+        extra = "index500.html" if order > 60 else ""
+        page = urllib.request.urlopen(GROUPNAMES_URL + extra)
+        page_text = page.read().decode("utf-8")
+    except (urllib.error.URLError, urllib.error.HTTPError):
+        # we cannot access the webapage
+        return None
 
     # extract section with the specified group
     loc = page_text.find(f"<td>{order},{index}</td>")
@@ -44,14 +49,18 @@ def get_groupnames_url(order: int, index: int) -> str:
     if match is None:
         raise ValueError(f"Webpage for group {order},{index} not found")
 
+    # return url for the desired group
     return GROUPNAMES_URL + match.group(1)
 
 
-def get_generators_from_groupnames(order: int, index: int) -> list[list[tuple[int, ...]]]:
+def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST:
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
     url = get_groupnames_url(order, index)
+    if url is None:
+        # we cannot access the webapage
+        return None
     page = urllib.request.urlopen(url)
     html = page.read().decode("utf-8")
 
@@ -82,10 +91,18 @@ def get_generators_from_groupnames(order: int, index: int) -> list[list[tuple[in
     return generators
 
 
-def get_generators_with_gap(order: int, index: int) -> list[list[tuple[int, ...]]]:
+def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     """Get a finite group from the GAP computer algebra system."""
+
+    # check that GAP 4 is installed
+    commands = ["script", "-c", "gap --version"]
+    result = subprocess.run(commands, capture_output=True, text=True)
+    lines = result.stdout.split("\n")
+    if not len(lines) == 2 and lines[1][:5] == "GAP 4":
+        return None
+
     # build GAP command
-    gap_lines = [
+    lines_gap = [
         f"G := SmallGroup({order},{index});",
         "iso := IsomorphismPermGroup(G);",
         "permG := Image(iso,G);",
@@ -93,10 +110,11 @@ def get_generators_with_gap(order: int, index: int) -> list[list[tuple[int, ...]
         r'for gen in gens do Print(gen, "\n"); od;',
         "QUIT;",
     ]
-    gap_script = "".join(gap_lines)
+    command_gap = "".join(lines_gap)
 
     # run GAP
-    result = subprocess.run(["gap", "-q", "-c", gap_script], capture_output=True, text=True)
+    commands = ["gap", "-q", "-c", command_gap]
+    result = subprocess.run(commands, capture_output=True, text=True)
 
     # collect generators
     generators = []
@@ -116,35 +134,24 @@ def get_generators_with_gap(order: int, index: int) -> list[list[tuple[int, ...]
     return generators
 
 
-def gap4_is_installed() -> bool:
-    """Is GAP 4 installed?"""
-    result = subprocess.run(["script", "-c", "gap --version"], capture_output=True, text=True)
-    lines = result.stdout.split("\n")
-    return len(lines) == 2 and lines[1][:5] == "GAP 4"
-
-
-def can_connect_to_groupnames() -> bool:
-    """Can we connect to GroupNames.org?"""
-    try:
-        urllib.request.urlopen(GROUPNAMES_URL)
-        return True
-    except (urllib.error.URLError, urllib.error.HTTPError):
-        return False
-
-
 # TODO: save groups to a local database, and retrieve if present
 
 
-def get_generators(order: int, index: int) -> list[list[tuple[int, ...]]]:
-    """Retrieve GAP group generators somehow.
+def get_generators(order: int, index: int) -> GENERATORS_LIST:
+    """Try to retrieve GAP group generators."""
+    generators: GENERATORS_LIST | None
+    for get_generators in [
+        get_generators_with_gap,
+        get_generators_from_groupnames,
+    ]:
+        generators = get_generators(order, index)
+        if generators is not None:
+            return generators
 
-    First try using a locally installed version of GAP 4.  If that fails, try GroupNames.org.
-    """
-    if gap4_is_installed():
-        return get_generators_with_gap(order, index)
-    elif can_connect_to_groupnames():
-        return get_generators_from_groupnames(order, index)
-    else:
-        raise ValueError(
-            "Cannot build GAP group\nGAP 4 not installed and GroupNames.org is unreachable"
-        )
+    message = [
+        "Cannot build GAP group:",
+        "- local database does not contain the group",
+        "- GAP 4 not installed",
+        "- GroupNames.org is unreachable",
+    ]
+    raise ValueError("\n".join(message))
