@@ -15,9 +15,7 @@
    limitations under the License.
 """
 
-import bs4
-import io
-import pandas
+import re
 import urllib.request
 
 import sympy.combinatorics as comb
@@ -34,29 +32,20 @@ def get_group_page(order: int, index: int):
     # load index
     extra = "index500.html" if order > 60 else ""
     page = urllib.request.urlopen(BASE_URL + extra)
-    html = page.read().decode("utf-8")
+    page_text = page.read().decode("utf-8")
 
-    # extract section of groups with a given order
-    loc = html.find(f"Groups of order {order}")
-    end_str = "</table>"
-    end = html[loc:].find(end_str)
-    section = html[loc : loc + end + len(end_str)]
-
-    # extract tables in this section
-    tables = pandas.read_html(io.StringIO(section), extract_links="body")
-    if not tables:
-        raise ValueError(f"Groups of order {order} not found")
-
-    # extract the row corresponding to the specified group
-    table = tables[0]
-    row = table.loc[table["ID"] == (f"{order},{index}", None)]
-
-    if row.empty:
+    # extract section with the specified group
+    index_loc = page_text.find(f"<td>{order},{index}</td>")
+    if index_loc == -1:
         raise ValueError(f"Group {order},{index} not found")
+    end = index_loc + page_text[index_loc:].find("\n")
+    start = index_loc - page_text[:index_loc][::-1].find("\n")
+    section = page_text[start:end]
 
-    # identify url for that group
-    group_url = BASE_URL + row.iloc[0, 0][1]
-    return group_url
+    # extract first link from this section
+    pattern = r'href="([^"]*)"'
+    match = re.search(pattern, section)
+    return BASE_URL + match.group(1)
 
 
 def get_group_generators(order: int, index: int):
@@ -73,14 +62,21 @@ def get_group_generators(order: int, index: int):
     section = html[loc : loc + end]
 
     # isolate generator text
-    soup = bs4.BeautifulSoup(section, "html.parser")
-    gen_strings = [gen for gen in soup.find("pre").get_text(separator="\n").splitlines() if gen]
+    section = section[section.find("<pre") :]
+    pattern = r">((?:.|\n)*?)<\/pre>"
+    match = re.search(pattern, section)
+    gen_strings = match.group(1).split("<br>\n")
 
     # build generators
     generators = []
-    for gen_str in gen_strings:
-        cycles_str = gen_str[1:-1].split(")(")
+    for string in gen_strings:
+        cycles_str = string[1:-1].split(")(")
         cycles = [tuple(map(int, cycle.split())) for cycle in cycles_str]
+
+        # decrement integers in the cycle by 1 to account for 0-indexing
+        cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
+
+        # add generator
         generators.append(abstract.GroupMember(cycles))
 
     return generators
