@@ -26,7 +26,7 @@ def test_get_group_url() -> None:
     order, index = 2, 1
     table = """<table class="gptable" columns="6" style='width: 70%;'>
 <tr><th width="12%"></th><th width="60%"></th><th width="5%"><a href='T.html'>d</a></th><th width="5%"><a href='R.html'>&rho;</a></th><th width="12%">Label</th><th width="7%">ID</th></tr><tr><td id="c2"><a href="1/C2.html">C<sub>2</sub></a></td><td><a href="cyclic.html">Cyclic</a> group</td><td><a href="T15.html#c2">2</a></td><td><a href="R.html#dim1+">1+</a></td><td>C2</td><td>2,1</td></tr>
-</table>"""  # pylint: disable=line-too-long
+</table>"""  # noqa: E501 (ignore line-too-long)
 
     mock_page = unittest.mock.MagicMock()
     mock_page.read.return_value = table.encode("utf-8")
