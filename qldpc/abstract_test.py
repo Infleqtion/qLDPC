@@ -149,15 +149,10 @@ def test_random_symmetric_subset() -> None:
 
 def test_dicyclic_group() -> None:
     """Dicyclic group."""
-
-    def has_compact_binary_lift(order: int) -> bool:
-        return order == 12
-
     for order in range(4, 21, 4):
-        for binary_lift in [True, False] if has_compact_binary_lift(order) else [False]:
-            group = abstract.DicyclicGroup(order, binary_lift)
-            gen_a, gen_b = group.generators
-            assert gen_a ** (order // 2) == gen_b**4 == group.identity
+        group = abstract.DicyclicGroup(order)
+        gen_a, gen_b = group.generators
+        assert gen_a ** (order // 2) == gen_b**4 == group.identity
 
     with pytest.raises(ValueError, match="positive multiples of 4"):
         abstract.DicyclicGroup(2)

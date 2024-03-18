@@ -666,7 +666,7 @@ class DicyclicGroup(Group):
     - https://groupprops.subwiki.org/wiki/Dicyclic_group
     """
 
-    def __init__(self, order: int, binary_lift: bool = False) -> None:
+    def __init__(self, order: int) -> None:  # noqa: max-complexity
         if not (order > 0 and order % 4 == 0):
             raise ValueError(
                 "Dicyclic groups only supported for orders that are positive multiples of 4"
@@ -678,41 +678,32 @@ class DicyclicGroup(Group):
             )
 
         if order == 4:
-            mat_a = [[2, 0], [0, 2]]
-            mat_b = [[0, 2], [1, 0]]
-            field = 3
+            gen_a = comb.Permutation(0, 2)(1, 3)
+            gen_b = comb.Permutation(0, 3, 2, 1)
 
         elif order == 8:
-            mat_a = [[2, 2], [2, 1]]
-            mat_b = [[0, 2], [1, 0]]
-            field = 3
+            gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            gen_b = comb.Permutation(1, 7, 3, 5)(2, 6, 4, 8)
 
         elif order == 12:
-            mat_a = [[0, 1], [4, 1]]
-            mat_b = [[3, 2], [0, 2]]
-            field = 5
-
-        elif order == 16:
-            mat_a = [[0, 6], [1, 3]]
-            mat_b = [[6, 5], [1, 1]]
-            field = 7
-
-        elif order == 20:
-            mat_a = [[9, 3], [3, 6]]
-            mat_b = [[0, 10], [1, 0]]
-            field = 11
-
-        if order == 12 and binary_lift:
             # Special case with more compact representation:
             # https://math.stackexchange.com/a/2837920
             gen_a = comb.Permutation(1, 2, 3)(4, 6)(5, 7)
             gen_b = comb.Permutation(2, 3)(4, 5, 6, 7)
-            super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
-        else:
-            group = self.from_generating_mats(mat_a, mat_b, field=field)
-            lift = default_lift if binary_lift else group._lift
-            super().__init__(group, lift=lift)
+        elif order == 16:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            gen_b = comb.Permutation(1, 9, 5, 13)(2, 16, 6, 12)(3, 15, 7, 11)(4, 14, 8, 10)
+
+        elif order == 20:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+            )
+            gen_b = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
+                5, 20, 10, 15
+            )
+
+        super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
 
 class QuaternionGroup(Group):
