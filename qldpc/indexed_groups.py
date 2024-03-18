@@ -112,7 +112,7 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
         "iso := IsomorphismPermGroup(G);",
         "permG := Image(iso,G);",
         "gens := GeneratorsOfGroup(permG);",
-        r'for gen in gens do Print(gen, "\n"); od;',
+        r'for gen in gens do Print(gen,"\n"); od;',
         "QUIT;",
     ]
     command_gap = "".join(lines_gap)
