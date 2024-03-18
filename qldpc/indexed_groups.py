@@ -22,6 +22,9 @@ import urllib.request
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
+# TODO: save groups to a local database, and retrieve if present
+
+
 def get_groupnames_url(order: int, index: int) -> str:
     """Get the webpage for an indexed group on GroupNames.org."""
 
