@@ -192,3 +192,11 @@ def test_PSL(field: int = 3) -> None:
 
     with pytest.raises(ValueError, match="not yet supported"):
         abstract.PSL(3, 3)
+
+
+def test_gap_groups() -> None:
+    for index in range(1, 15):
+        assert abstract.GAP16(index).order() == 16
+    for index in range(1, 6):
+        assert abstract.GAP18(index).order() == 18
+        assert abstract.GAP20(index).order() == 20
