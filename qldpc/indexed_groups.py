@@ -27,7 +27,7 @@ GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
-def get_groupnames_url(order: int, index: int) -> str | None:
+def get_group_url(order: int, index: int) -> str | None:
     """Get the webpage for an indexed group on GroupNames.org."""
 
     try:
@@ -44,6 +44,7 @@ def get_groupnames_url(order: int, index: int) -> str | None:
     loc = index_page_html.find(f"<td>{order},{index}</td>")
     if loc == -1:
         raise ValueError(f"Group {order},{index} not found at {index_url}")
+
     end = loc + index_page_html[loc:].find("\n")
     start = loc - index_page_html[:loc][::-1].find("\n")
     section = index_page_html[start:end]
@@ -62,7 +63,7 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
-    group_url = get_groupnames_url(order, index)
+    group_url = get_group_url(order, index)
     if group_url is None:
         # we cannot access the webapage
         return None
