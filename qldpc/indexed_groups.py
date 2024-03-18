@@ -15,9 +15,13 @@
    limitations under the License.
 """
 
+import os
 import re
 import subprocess
 import urllib.request
+
+import diskcache
+import platformdirs
 
 GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
@@ -95,7 +99,7 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     """Get a finite group from the GAP computer algebra system."""
 
     # check that GAP 4 is installed
-    commands = ["script", "-c", "gap --version"]
+    commands = ["script", "-c", "gap --version", os.devnull]
     result = subprocess.run(commands, capture_output=True, text=True)
     lines = result.stdout.split("\n")
     if not len(lines) == 2 and lines[1][:5] == "GAP 4":
@@ -134,18 +138,22 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     return generators
 
 
-# TODO: save groups to a local database, and retrieve if present
-
-
 def get_generators(order: int, index: int) -> GENERATORS_LIST:
     """Try to retrieve GAP group generators."""
     generators: GENERATORS_LIST | None
+
+    cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc"))
+    generators = cache.get((order, index), None)
+    if generators is not None:
+        return generators
+
     for get_generators in [
         get_generators_with_gap,
         get_generators_from_groupnames,
     ]:
         generators = get_generators(order, index)
         if generators is not None:
+            cache[order, index] = generators
             return generators
 
     message = [
