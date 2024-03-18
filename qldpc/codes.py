@@ -37,7 +37,7 @@ from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
 if TYPE_CHECKING:
     from typing_extensions import Self
 
-DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
+DEFAULT_FIELD_ORDER = 2
 
 
 def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
@@ -1380,6 +1380,7 @@ class LPCode(CSSCode):
 # classical and quantum Tanner codes
 
 
+# TODO: add TannerCode construction based on undirected graphs
 class TannerCode(ClassicalCode):
     """Classical Tanner code, as described in DOI:10.1109/TIT.1981.1056404.
 
@@ -1485,3 +1486,6 @@ class QTCode(CSSCode):
         code_x = TannerCode(subgraph_x, subcode_x)
         code_z = TannerCode(subgraph_z, subcode_z)
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
+
+
+# TODO: add ordinary + rotated SurfaceCode and ToricCode
