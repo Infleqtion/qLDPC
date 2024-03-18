@@ -968,39 +968,20 @@ class GAP20(Group):
         assert 0 < index <= 5
 
         if index == 1:
-            """DicyclicGroup(20)."""
-            A = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
-                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
-            )
-            B = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
-                5, 20, 10, 15
-            )
-            super().__init__(comb.PermutationGroup(A, B))
+            super().__init__(DicyclicGroup(20))
 
         elif index == 2:
-            super().__init__(comb.named_groups.CyclicGroup(20))
+            super().__init__(CyclicGroup(20))
 
         elif index == 3:
-            """Frobenius group.
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/F5.html
-            """
-            A = comb.Permutation(1, 2, 3, 4, 5)
-            B = comb.Permutation(2, 3, 5, 4)
-            super().__init__(comb.PermutationGroup(A, B))
+            # Frobenius group
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/F5.html
+            gen_a = comb.Permutation(1, 2, 3, 4, 5)
+            gen_b = comb.Permutation(2, 3, 5, 4)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
         elif index == 4:
-            super().__init__(comb.named_groups.DihedralGroup(10))
+            super().__init__(CyclicGroup(2) * DihedralGroup(5))
 
         elif index == 5:
-            """The direct product of C(2) and C(10).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2xC10.html
-            """
-            A = comb.Permutation(1, 17)(2, 18)(3, 19)(4, 20)(5, 11)(6, 12)(7, 13)(8, 14)(9, 15)(
-                10, 16
-            )
-            B = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
-                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
-            )
-            super().__init__(comb.PermutationGroup(A, B))
+            super().__init__(CyclicGroup(2) * CyclicGroup(10))
