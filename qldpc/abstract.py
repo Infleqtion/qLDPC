@@ -53,8 +53,9 @@ import sympy.core
 
 DEFAULT_FIELD_ORDER = 2
 
+
 ################################################################################
-# groups
+# groups and group members
 
 
 UnknownType = TypeVar("UnknownType")
@@ -88,7 +89,11 @@ class GroupMember(comb.Permutation):
         return self.rank() < other.rank()
 
     def __matmul__(self, other: GroupMember) -> GroupMember:
-        """Take the "tensor product" of two permutations."""
+        """Take the "tensor product" of two group members.
+
+        If group members g_1 and g_2 are, respectively, elements of the groups G_1 and G_2, then the
+        "tensor product" g_1 @ g_2 is an element of the direct product of G_1 and G_2.
+        """
         return GroupMember(self.array_form + [val + self.size for val in other.array_form])
 
 
@@ -145,23 +150,41 @@ class Group:
             isinstance(other, Group) and self._field == other._field and self._group == other._group
         )
 
-    def __matmul__(self, other: Group) -> Group:
+    def __contains__(self, member: GroupMember) -> bool:
+        return comb.Permutation(member.array_form) in self._group
+
+    def __mul__(self, other: Group) -> Group:
         """Direct product of two groups."""
-        if self.field != other.field:
-            raise ValueError("Cannot multiply groups with lifts defined over different fields")
         permutation_group = self._group * other._group
+
+        if self.field == other.field:
+            left_lift = self._lift
+            right_lift = other._lift
+        else:
+            left_lift = right_lift = default_lift
 
         def lift(member: GroupMember) -> galois.FieldArray:
             degree = self._group.degree
             left = member.array_form[:degree]
             right = [index - degree for index in member.array_form[degree:]]
-            matrix = np.kron(self.lift(GroupMember(left)), other.lift(GroupMember(right)))
+            matrix = np.kron(left_lift(GroupMember(left)), right_lift(GroupMember(right)))
             return self.field(matrix)
 
         return Group(permutation_group, self.field.order, lift)
 
-    def __contains__(self, member: GroupMember) -> bool:
-        return comb.Permutation(member.array_form) in self._group
+    def __pow__(self, power: int) -> Group:
+        """Direct product of self multiple times."""
+        assert power > 0
+        return functools.reduce(Group.__mul__, [self] * power)
+
+    @classmethod
+    def product(cls, *groups: Group, repeat: int = 1) -> Group:
+        """Direct product of Groups."""
+        return functools.reduce(Group.__mul__, groups * repeat)
+
+    def to_sympy(self) -> comb.PermutationGroup:
+        """Return the underlying SymPy permutation group."""
+        return self._group
 
     @property
     def field(self) -> type[galois.FieldArray]:
@@ -192,11 +215,6 @@ class Group:
         if seed is not None:
             sympy.core.random.seed(seed)
         return GroupMember(self._group.random())
-
-    @classmethod
-    def product(cls, *groups: Group, repeat: int = 1) -> Group:
-        """Direct product of Groups."""
-        return functools.reduce(cls.__matmul__, groups * repeat)
 
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
@@ -246,12 +264,12 @@ class Group:
     @classmethod
     def from_generating_mats(
         cls,
-        generators: Sequence[npt.NDArray[np.int_] | Sequence[Sequence[int]]],
+        *generators: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
     ) -> Group:
         """Constructs a Group from a given set of generating matrices.
 
-        Goup members are represented by how they permute elements of the group itself.
+        Group members are represented by how they permute elements of the group itself.
         """
         if not generators:
             return TrivialGroup()
@@ -586,7 +604,7 @@ class TrivialGroup(Group):
     def random(self, seed: int | None = None) -> GroupMember:
         """A random (albeit unique) element this group.
 
-        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation."
+        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation.
         """
         return self.identity
 
@@ -622,6 +640,70 @@ class DihedralGroup(Group):
 
     def __init__(self, order: int) -> None:
         super().__init__(comb.named_groups.DihedralGroup(order))
+
+
+class AlternatingGroup(Group):
+    """Alternating group of a specified order."""
+
+    def __init__(self, order: int) -> None:
+        super().__init__(comb.named_groups.AlternatingGroup(order))
+
+
+class SymmetricGroup(Group):
+    """Symmetric group of a specified order."""
+
+    def __init__(self, order: int) -> None:
+        super().__init__(comb.named_groups.SymmetricGroup(order))
+
+
+class DicyclicGroup(Group):
+    """Dicyclic group of order <= 20.
+
+    Generating matrices taken from: https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
+
+    Additional references:
+    - https://en.wikipedia.org/wiki/Dicyclic_group
+    - https://groupprops.subwiki.org/wiki/Dicyclic_group
+    """
+
+    def __init__(self, order: int) -> None:  # noqa: max-complexity
+        if not (order > 0 and order % 4 == 0):
+            raise ValueError(
+                "Dicyclic groups only supported for orders that are positive multiples of 4"
+                + f" (provided: {order})"
+            )
+        if not order <= 20:
+            raise ValueError(
+                f"Dicyclic groups only supported for orders up to 20 (provided: {order})"
+            )
+
+        if order == 4:
+            gen_a = comb.Permutation(0, 2)(1, 3)
+            gen_b = comb.Permutation(0, 3, 2, 1)
+
+        elif order == 8:
+            gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            gen_b = comb.Permutation(1, 7, 3, 5)(2, 6, 4, 8)
+
+        elif order == 12:
+            # Special case with more compact representation:
+            # https://math.stackexchange.com/a/2837920
+            gen_a = comb.Permutation(1, 2, 3)(4, 6)(5, 7)
+            gen_b = comb.Permutation(2, 3)(4, 5, 6, 7)
+
+        elif order == 16:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            gen_b = comb.Permutation(1, 9, 5, 13)(2, 16, 6, 12)(3, 15, 7, 11)(4, 14, 8, 10)
+
+        elif order == 20:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+            )
+            gen_b = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
+                5, 20, 10, 15
+            )
+
+        super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
 
 class QuaternionGroup(Group):
@@ -662,7 +744,7 @@ class QuaternionGroup(Group):
 
 
 ################################################################################
-# "special" named groups
+# special linear (SL) and projective special linear (PSL) groups
 
 
 class SpecialLinearGroup(Group):
@@ -714,7 +796,7 @@ class SpecialLinearGroup(Group):
 
         else:
             # represent group members by how they permute elements of the group
-            group = self.from_generating_mats(self.get_generator_mats())
+            group = self.from_generating_mats(*self.get_generator_mats())
             super().__init__(group)
 
     @property
@@ -759,7 +841,7 @@ class ProjectiveSpecialLinearGroup(Group):
         if self.field.order == 2:
             group = SpecialLinearGroup(dimension, 2)
         elif dimension == 2:
-            group = Group.from_generating_mats(self.get_generator_mats())
+            group = Group.from_generating_mats(*self.get_generator_mats())
         else:
             raise ValueError(
                 "Projective special linear groups with both dimension and field greater than 2 are"
@@ -775,11 +857,12 @@ class ProjectiveSpecialLinearGroup(Group):
     def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
         """Expanding generator matrices for this group, based on arXiv:1807.03879."""
         minus_one = -self.field(1)
-        A = self.field([[1, 1], [0, 1]])
-        B = self.field([[1, minus_one], [0, 1]])
-        C = self.field([[1, 0], [1, 1]])
-        D = self.field([[1, 0], [minus_one, 1]])
-        return A, B, C, D
+        return (
+            self.field([[1, 1], [0, 1]]),
+            self.field([[1, minus_one], [0, 1]]),
+            self.field([[1, 0], [1, 1]]),
+            self.field([[1, 0], [minus_one, 1]]),
+        )
 
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
@@ -793,3 +876,132 @@ class ProjectiveSpecialLinearGroup(Group):
 
 SL = SpecialLinearGroup
 PSL = ProjectiveSpecialLinearGroup
+
+
+################################################################################
+# groups by GAP ID
+# https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
+
+
+class GAP16(Group):
+    """GAP groups of order 16."""
+
+    def __init__(self, index: int) -> None:  # noqa: max-complexity
+        assert 0 < index <= 14
+
+        if index == 1:
+            super().__init__(CyclicGroup(16))
+
+        elif index == 2:
+            super().__init__(CyclicGroup(4) ** 2)
+
+        if index == 3:
+            # semidirect product of C(2) x C(2) and C(4)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^2sC4.html
+            gen_a = comb.Permutation(2, 6)(4, 8)
+            gen_b = comb.Permutation(1, 5)(2, 6)(3, 7)(4, 8)
+            gen_c = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b, gen_c))
+
+        elif index == 4:
+            # semidirect product of C(4) and C(4)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4sC4.html
+            gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)(9, 10, 11, 12)(13, 14, 15, 16)
+            gen_b = comb.Permutation(1, 14, 12, 5)(2, 13, 9, 8)(3, 16, 10, 7)(4, 15, 11, 6)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b))
+
+        elif index == 5:
+            super().__init__(CyclicGroup(2) * CyclicGroup(8))
+
+        elif index == 6:
+            # modular maximal-cyclic group
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/M4(2).html
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
+            gen_b = comb.Permutation(2, 6)(4, 8)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b))
+
+        elif index == 7:
+            super().__init__(DihedralGroup(8))
+
+        elif index == 8:
+            # semidihedral group
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/SD16.html
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
+            gen_b = comb.Permutation(2, 4)(3, 7)(6, 8)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b))
+
+        elif index == 9:
+            super().__init__(DicyclicGroup(16))
+
+        elif index == 10:
+            super().__init__(CyclicGroup(2) ** 2 * CyclicGroup(4))
+
+        elif index == 11:
+            super().__init__(CyclicGroup(2) * DihedralGroup(4))
+
+        elif index == 12:
+            super().__init__(CyclicGroup(2) * DicyclicGroup(8))
+
+        elif index == 13:
+            # Pauli group: central product of C(4) and D(4)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4oD4.html
+            gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            gen_b = comb.Permutation(1, 4, 3, 2)(5, 6, 7, 8)
+            gen_c = comb.Permutation(1, 6)(2, 7)(3, 8)(4, 5)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b, gen_c))
+
+        elif index == 14:
+            super().__init__(CyclicGroup(2) ** 4)
+
+
+class GAP18(Group):
+    """GAP groups of order 18."""
+
+    def __init__(self, index: int) -> None:
+        assert 0 < index <= 5
+
+        if index == 1:
+            super().__init__(DihedralGroup(9))
+
+        elif index == 2:
+            super().__init__(CyclicGroup(18))
+
+        elif index == 3:
+            super().__init__(CyclicGroup(3) * SymmetricGroup(3))
+
+        elif index == 4:
+            # semidirect product of C(3) and S(3)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3sS3.html
+            gen_a = comb.Permutation(1, 2, 3)(4, 5, 6)(7, 8, 9)
+            gen_b = comb.Permutation(1, 5, 8)(2, 6, 9)(3, 4, 7)
+            gen_c = comb.Permutation(2, 3)(4, 9)(5, 8)(6, 7)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b, gen_c))
+
+        elif index == 5:
+            super().__init__(CyclicGroup(3) * CyclicGroup(6))
+
+
+class GAP20(Group):
+    """GAP groups of order 20."""
+
+    def __init__(self, index: int) -> None:
+        assert 0 < index <= 5
+
+        if index == 1:
+            super().__init__(DicyclicGroup(20))
+
+        elif index == 2:
+            super().__init__(CyclicGroup(20))
+
+        elif index == 3:
+            # Frobenius group
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/F5.html
+            gen_a = comb.Permutation(1, 2, 3, 4, 5)
+            gen_b = comb.Permutation(2, 3, 5, 4)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b))
+
+        elif index == 4:
+            super().__init__(CyclicGroup(2) * DihedralGroup(5))
+
+        elif index == 5:
+            super().__init__(CyclicGroup(2) * CyclicGroup(10))

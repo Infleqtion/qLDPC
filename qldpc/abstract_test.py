@@ -32,24 +32,25 @@ def test_permutation_group() -> None:
     assert len(group.generators) == 2
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
+    assert group.to_sympy() == group._group
 
-    assert abstract.Group.from_generating_mats([[[1]]]) == abstract.CyclicGroup(1)
+    assert abstract.Group.from_generating_mats([[1]]) == abstract.CyclicGroup(1)
 
     with pytest.raises(ValueError, match="inconsistent"):
         gen = galois.GF(2)([[1]])
-        abstract.Group.from_generating_mats([gen], field=3)
+        abstract.Group.from_generating_mats(gen, field=3)
 
 
 def test_trivial_group() -> None:
     """Trivial group tests."""
     group = abstract.TrivialGroup()
-    group_squared = group @ group
-    assert group == group_squared
+    group_squared = group**2
+    assert group == group_squared == group * group
     assert group.lift_dim == 1
     assert group_squared.lift_dim == 1
     assert group.random() == group.identity
     assert np.array_equal(group.lift(group.identity), np.array(1, ndmin=2))
-    assert group == abstract.Group.from_generating_mats([])
+    assert group == abstract.Group.from_generating_mats()
 
 
 def test_lift() -> None:
@@ -57,6 +58,8 @@ def test_lift() -> None:
     assert_valid_lift(abstract.TrivialGroup())
     assert_valid_lift(abstract.CyclicGroup(3))
     assert_valid_lift(abstract.DihedralGroup(3))
+    assert_valid_lift(abstract.AlternatingGroup(3))
+    assert_valid_lift(abstract.SymmetricGroup(3))
     assert_valid_lift(abstract.QuaternionGroup())
 
 
@@ -90,8 +93,8 @@ def test_group_product() -> None:
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
 
-    with pytest.raises(ValueError, match="different fields"):
-        _ = abstract.TrivialGroup(2) @ abstract.TrivialGroup(3)
+    # product of groups over different fields results in a group over the binary field
+    assert abstract.TrivialGroup(2) * abstract.TrivialGroup(3) == abstract.TrivialGroup(2)
 
 
 def test_algebra() -> None:
@@ -130,6 +133,34 @@ def test_transpose() -> None:
     assert protograph.T.T == protograph
 
 
+def test_random_symmetric_subset() -> None:
+    """Cover Group.random_symmetric_subset."""
+    group = abstract.CyclicGroup(2) * abstract.CyclicGroup(3)
+    for seed in [0, 1]:
+        subset = group.random_symmetric_subset(size=2, seed=seed)
+        assert subset == {~member for member in subset}
+
+    subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
+    assert subset == {group.identity}
+
+    with pytest.raises(ValueError, match="must have a size between"):
+        group.random_symmetric_subset(size=0)
+
+
+def test_dicyclic_group() -> None:
+    """Dicyclic group."""
+    for order in range(4, 21, 4):
+        group = abstract.DicyclicGroup(order)
+        gen_a, gen_b = group.generators
+        assert gen_a ** (order // 2) == gen_b**4 == group.identity
+
+    with pytest.raises(ValueError, match="positive multiples of 4"):
+        abstract.DicyclicGroup(2)
+
+    with pytest.raises(ValueError, match="orders up to 20"):
+        abstract.DicyclicGroup(24)
+
+
 def test_SL(field: int = 3) -> None:
     """Special linear group."""
     for linear_rep in [False, True]:
@@ -158,15 +189,10 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_random_symmetric_subset() -> None:
-    """Cover Group.random_symmetric_subset."""
-    group = abstract.CyclicGroup(2) @ abstract.CyclicGroup(3)
-    for seed in [0, 1]:
-        subset = group.random_symmetric_subset(size=2, seed=seed)
-        assert subset == {~member for member in subset}
-
-    subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
-    assert subset == {group.identity}
-
-    with pytest.raises(ValueError, match="must have a size between"):
-        group.random_symmetric_subset(size=0)
+def test_gap_groups() -> None:
+    """Test groups by GAP index."""
+    for index in range(1, 15):
+        assert abstract.GAP16(index).order() == 16
+    for index in range(1, 6):
+        assert abstract.GAP18(index).order() == 18
+        assert abstract.GAP20(index).order() == 20
