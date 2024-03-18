@@ -866,108 +866,64 @@ class GAP16(Group):
             super().__init__(CyclicGroup(16))
 
         elif index == 2:
-            """C(4) x C(4).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4^2.html
-            """
             super().__init__(CyclicGroup(4) ** 2)
 
         if index == 3:
-            """The semidirect product of C(2) x C(2) and C(4).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^2sC4.html
-            """
+            # semidirect product of C(2) x C(2) and C(4)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^2sC4.html
             gen_a = comb.Permutation(2, 6)(4, 8)
             gen_b = comb.Permutation(1, 5)(2, 6)(3, 7)(4, 8)
             gen_c = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
             super().__init__(comb.PermutationGroup(gen_a, gen_b, gen_c))
 
         elif index == 4:
-            """The semidirect product of C(4) and C(4).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4sC4.html
-            """
+            # semidirect product of C(4) and C(4)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4sC4.html
             gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)(9, 10, 11, 12)(13, 14, 15, 16)
             gen_b = comb.Permutation(1, 14, 12, 5)(2, 13, 9, 8)(3, 16, 10, 7)(4, 15, 11, 6)
             super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
         elif index == 5:
-            """The direct product of C(2) and C(8).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2xC8.html
-            """
             super().__init__(CyclicGroup(2) * CyclicGroup(8))
 
         elif index == 6:
-            """Modular maximal-cyclic group.
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/M4(2).html
-            """
+            # modular maximal-cyclic group
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/M4(2).html
             gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
             gen_b = comb.Permutation(2, 6)(4, 8)
             super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
         elif index == 7:
-            """DihedralGroup(8).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/D8.html
-            """
             super().__init__(DihedralGroup(8))
 
         elif index == 8:
-            """Semidihedral group.
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/SD16.html
-            """
+            # semidihedral group
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/SD16.html
             gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)
             gen_b = comb.Permutation(2, 4)(3, 7)(6, 8)
             super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
         elif index == 9:
-            """Generalised quaternion group.
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/Q16.html
-            """
-            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
-            gen_b = comb.Permutation(1, 12, 5, 16)(2, 11, 6, 15)(3, 10, 7, 14)(4, 9, 8, 13)
-            super().__init__(comb.PermutationGroup(gen_a, gen_b))
+            super().__init__(DicyclicGroup(16))
 
         elif index == 10:
-            """The direct product of C(2), C(2), and C(4).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^2xC4.html
-            """
             super().__init__(CyclicGroup(2) ** 2 * CyclicGroup(4))
 
         elif index == 11:
-            """The direct product of C(2) and D(4).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2xD4.html
-            """
             super().__init__(CyclicGroup(2) * DihedralGroup(4))
 
         elif index == 12:
-            """The direct product of C(2) and Q(4).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2xQ8.html
-            """
             super().__init__(CyclicGroup(2) * DicyclicGroup(8))
 
         elif index == 13:
-            """Pauli group: central product of C(4) and D(4).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4oD4.html
-            """
+            # Pauli group: central product of C(4) and D(4)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C4oD4.html
             gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
             gen_b = comb.Permutation(1, 4, 3, 2)(5, 6, 7, 8)
             gen_c = comb.Permutation(1, 6)(2, 7)(3, 8)(4, 5)
             super().__init__(comb.PermutationGroup(gen_a, gen_b, gen_c))
 
         elif index == 14:
-            """The direct product of C(2), C(2), C(2), and C(2).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C2^4.html
-            """
             super().__init__(CyclicGroup(2) ** 4)
 
 
