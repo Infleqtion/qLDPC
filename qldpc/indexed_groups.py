@@ -116,7 +116,7 @@ def get_generators_with_gap(order: int, index: int) -> list[list[tuple[int, ...]
     return generators
 
 
-def gap_is_installed() -> bool:
+def gap4_is_installed() -> bool:
     """Is GAP installed?"""
     result = subprocess.run(["script", "-c", "gap --version"], capture_output=True, text=True)
     lines = result.stdout.split("\n")
@@ -140,7 +140,7 @@ def get_generators(order: int, index: int) -> list[list[tuple[int, ...]]]:
 
     First try using a locally installed version of GAP 4.  If that fails, try GroupNames.org.
     """
-    if gap_is_installed():
+    if gap4_is_installed():
         return get_generators_with_gap(order, index)
     elif can_connect_to_groupnames():
         return get_generators_from_groupnames(order, index)
