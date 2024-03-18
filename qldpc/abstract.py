@@ -851,14 +851,12 @@ PSL = ProjectiveSpecialLinearGroup
 
 
 ################################################################################
-# named and indexed groups from GAP
+# groups by GAP ID
+# https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
 
 
 class GAP16(Group):
-    """Group of order 16 based on GAP ID.
-
-    Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
-    """
+    """GAP groups of order 16."""
 
     def __init__(self, index: int) -> None:  # noqa: max-complexity
         assert 0 < index <= 14
@@ -929,10 +927,7 @@ class GAP16(Group):
 
 
 class GAP18(Group):
-    """Group of order 18 based on GAP ID.
-
-    Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
-    """
+    """GAP groups of order 18."""
 
     def __init__(self, index: int) -> None:
         assert 0 < index <= 5
@@ -959,10 +954,7 @@ class GAP18(Group):
 
 
 class GAP20(Group):
-    """Group of order 20 based on GAP ID.
-
-    Source: https://people.maths.bris.ac.uk/~matyd/GroupNames/index.html
-    """
+    """GAP groups of order 20."""
 
     def __init__(self, index: int) -> None:
         assert 0 < index <= 5
