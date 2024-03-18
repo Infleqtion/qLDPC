@@ -33,7 +33,8 @@ def get_groupnames_url(order: int, index: int) -> str | None:
     try:
         # load index
         extra = "index500.html" if order > 60 else ""
-        index_page = urllib.request.urlopen(GROUPNAMES_URL + extra)
+        index_url = GROUPNAMES_URL + extra
+        index_page = urllib.request.urlopen(index_url)
         index_page_html = index_page.read().decode("utf-8")
     except (urllib.error.URLError, urllib.error.HTTPError):
         # we cannot access the webapage
@@ -42,7 +43,7 @@ def get_groupnames_url(order: int, index: int) -> str | None:
     # extract section with the specified group
     loc = index_page_html.find(f"<td>{order},{index}</td>")
     if loc == -1:
-        raise ValueError(f"Group {order},{index} not found")
+        raise ValueError(f"Group {order},{index} not found at {index_url}")
     end = loc + index_page_html[loc:].find("\n")
     start = loc - index_page_html[:loc][::-1].find("\n")
     section = index_page_html[start:end]
