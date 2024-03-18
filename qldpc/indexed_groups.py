@@ -22,9 +22,6 @@ import urllib.request
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
-# TODO: save groups to a local database, and retrieve if present
-
-
 def get_groupnames_url(order: int, index: int) -> str:
     """Get the webpage for an indexed group on GroupNames.org."""
 
@@ -133,6 +130,9 @@ def can_connect_to_groupnames() -> bool:
         return True
     except (urllib.error.URLError, urllib.error.HTTPError):
         return False
+
+
+# TODO: save groups to a local database, and retrieve if present
 
 
 def get_generators(order: int, index: int) -> list[list[tuple[int, ...]]]:
