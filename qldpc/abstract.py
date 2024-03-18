@@ -51,6 +51,8 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 import sympy.core
 
+from qldpc import indexed_groups
+
 DEFAULT_FIELD_ORDER = 2
 
 
@@ -876,3 +878,23 @@ class ProjectiveSpecialLinearGroup(Group):
 
 SL = SpecialLinearGroup
 PSL = ProjectiveSpecialLinearGroup
+
+
+################################################################################
+# groups indexed by GAP and on GroupNames.org
+
+
+class IndexedGroup(Group):
+    """Groups indexed on GroupNames.org."""
+
+    def __init__(self, order: int, index: int, with_GAP: bool = True) -> None:
+        if indexed_groups.gap_is_installed():
+            generators = indexed_groups.get_generators_with_gap(order, index)
+        elif indexed_groups.can_connect_to_groupnames():
+            generators = indexed_groups.get_generators_from_groupnames(order, index)
+        else:
+            raise ValueError(
+                "Cannot build GAP group\nGAP not installed and GroupNames.org is unreachable"
+            )
+        group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
+        super().__init__(group)

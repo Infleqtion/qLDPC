@@ -19,10 +19,6 @@ import re
 import subprocess
 import urllib.request
 
-import sympy.combinatorics as comb
-
-from qldpc import abstract
-
 
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
@@ -52,7 +48,7 @@ def get_groupnames_url(order: int, index: int) -> str:
     return GROUPNAMES_URL + match.group(1)
 
 
-def get_generators_from_groupnames(order: int, index: int) -> list[abstract.GroupMember]:
+def get_generators_from_groupnames(order: int, index: int) -> list[tuple[int, ...]]:
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
@@ -82,13 +78,12 @@ def get_generators_from_groupnames(order: int, index: int) -> list[abstract.Grou
         # decrement integers in the cycle by 1 to account for 0-indexing
         cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
 
-        # add generator
-        generators.append(abstract.GroupMember(cycles))
+        generators.append(cycles)
 
     return generators
 
 
-def get_generators_with_GAP(order: int, index: int) -> list[abstract.GroupMember]:
+def get_generators_with_gap(order: int, index: int) -> list[tuple[int, ...]]:
     """Get a finite group from the GAP computer algebra system."""
     # build GAP command
     gap_lines = [
@@ -117,8 +112,7 @@ def get_generators_with_GAP(order: int, index: int) -> list[abstract.GroupMember
         # decrement integers in the cycle by 1 to account for 0-indexing
         cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
 
-        # add generator
-        generators.append(abstract.GroupMember(cycles))
+        generators.append(cycles)
 
     return generators
 
@@ -137,19 +131,3 @@ def can_connect_to_groupnames() -> bool:
         return True
     except (urllib.error.URLError, urllib.error.HTTPError):
         return False
-
-
-class IndexedGroup(abstract.Group):
-    """Groups indexed on GroupNames.org."""
-
-    def __init__(self, order: int, index: int, with_GAP: bool = True) -> None:
-        if gap_is_installed():
-            generators = get_generators_with_GAP(order, index)
-        elif can_connect_to_groupnames():
-            generators = get_generators_from_groupnames(order, index)
-        else:
-            raise ValueError(
-                "Cannot build GAP group\nGAP not installed and GroupNames.org is unreachable"
-            )
-        group = comb.PermutationGroup(*generators)
-        super().__init__(group)
