@@ -189,10 +189,10 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_gap_groups() -> None:
-    """Test groups by GAP index."""
+def test_indexed_groups() -> None:
+    """Test groups indexed on GroupNames.org."""
     for index in range(1, 15):
-        assert abstract.GAP16(index).order() == 16
+        assert abstract.GroupNames16(index).order() == 16
     for index in range(1, 6):
-        assert abstract.GAP18(index).order() == 18
-        assert abstract.GAP20(index).order() == 20
+        assert abstract.GroupNames18(index).order() == 18
+        assert abstract.GroupNames20(index).order() == 20
