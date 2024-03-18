@@ -90,5 +90,6 @@ class IndexedGroup(abstract.Group):
     """Groups indexed on GroupNames.org."""
 
     def __init__(self, order: int, index: int) -> None:
-        group = comb.PermutationGroup(*get_group_generators(order, index))
+        generators = get_group_generators(order, index)
+        group = comb.PermutationGroup(*generators)
         super().__init__(group)
