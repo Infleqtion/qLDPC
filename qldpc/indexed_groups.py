@@ -19,7 +19,6 @@ import re
 import subprocess
 import urllib.request
 
-
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 

@@ -15,11 +15,11 @@
    limitations under the License.
 """
 
+import unittest.mock
+
 import galois
 import numpy as np
 import pytest
-import unittest.mock
-
 import sympy.combinatorics as comb
 
 from qldpc import abstract
