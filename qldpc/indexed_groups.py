@@ -47,7 +47,7 @@ def get_groupnames_url(order: int, index: int) -> str:
     return GROUPNAMES_URL + match.group(1)
 
 
-def get_generators_from_groupnames(order: int, index: int) -> list[tuple[int, ...]]:
+def get_generators_from_groupnames(order: int, index: int) -> list[list[tuple[int, ...]]]:
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
@@ -82,7 +82,7 @@ def get_generators_from_groupnames(order: int, index: int) -> list[tuple[int, ..
     return generators
 
 
-def get_generators_with_gap(order: int, index: int) -> list[tuple[int, ...]]:
+def get_generators_with_gap(order: int, index: int) -> list[list[tuple[int, ...]]]:
     """Get a finite group from the GAP computer algebra system."""
     # build GAP command
     gap_lines = [

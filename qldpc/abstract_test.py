@@ -191,11 +191,11 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_indexed_groups():
+def test_indexed_groups() -> None:
     """Groups indexed by the GAP computer algebra system."""
     order, index = 2, 1
     desired_group = abstract.CyclicGroup(order)
-    generators = [gen.array_form for gen in desired_group.generators]
+    generators = [tuple(gen.array_form) for gen in desired_group.generators]
 
     with (
         unittest.mock.patch("qldpc.indexed_groups.gap_is_installed", return_value=True),
