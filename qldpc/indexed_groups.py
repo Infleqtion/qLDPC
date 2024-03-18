@@ -27,7 +27,7 @@ from qldpc import abstract
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
-def get_GroupNames_url(order: int, index: int) -> str:
+def get_groupnames_url(order: int, index: int) -> str:
     """Get the webpage for an indexed group on GroupNames.org."""
 
     # load index
@@ -52,11 +52,11 @@ def get_GroupNames_url(order: int, index: int) -> str:
     return GROUPNAMES_URL + match.group(1)
 
 
-def get_generators_from_GroupNames(order: int, index: int) -> list[abstract.GroupMember]:
+def get_generators_from_groupnames(order: int, index: int) -> list[abstract.GroupMember]:
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
-    url = get_GroupNames_url(order, index)
+    url = get_groupnames_url(order, index)
     page = urllib.request.urlopen(url)
     html = page.read().decode("utf-8")
 
@@ -130,7 +130,7 @@ def gap_is_installed() -> bool:
     return len(lines) == 2 and lines[1][:3] == "GAP"
 
 
-def can_connect_to_GroupNames() -> bool:
+def can_connect_to_groupnames() -> bool:
     """Can we connect to GroupNames.org?"""
     try:
         urllib.request.urlopen(GROUPNAMES_URL)
@@ -145,8 +145,8 @@ class IndexedGroup(abstract.Group):
     def __init__(self, order: int, index: int, with_GAP: bool = True) -> None:
         if gap_is_installed():
             generators = get_generators_with_GAP(order, index)
-        elif can_connect_to_GroupNames():
-            generators = get_generators_from_GroupNames(order, index)
+        elif can_connect_to_groupnames():
+            generators = get_generators_from_groupnames(order, index)
         else:
             raise ValueError(
                 "Cannot build GAP group\nGAP not installed and GroupNames.org is unreachable"
