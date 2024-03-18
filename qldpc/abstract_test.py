@@ -44,8 +44,8 @@ def test_permutation_group() -> None:
 def test_trivial_group() -> None:
     """Trivial group tests."""
     group = abstract.TrivialGroup()
-    group_squared = group @ group
-    assert group == group_squared
+    group_squared = group**2
+    assert group == group_squared == group * group
     assert group.lift_dim == 1
     assert group_squared.lift_dim == 1
     assert group.random() == group.identity
@@ -60,7 +60,6 @@ def test_lift() -> None:
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
     assert_valid_lift(abstract.SymmetricGroup(3))
-    assert_valid_lift(abstract.QuaternionGroup())
 
 
 def assert_valid_lift(group: abstract.Group) -> None:
@@ -94,7 +93,7 @@ def test_group_product() -> None:
     assert np.array_equal(table, abstract.Group.from_table(table).table)
 
     # product of groups over different fields results in a group over the binary field
-    assert abstract.TrivialGroup(2) @ abstract.TrivialGroup(3) == abstract.TrivialGroup(2)
+    assert abstract.TrivialGroup(2) * abstract.TrivialGroup(3) == abstract.TrivialGroup(2)
 
 
 def test_algebra() -> None:
@@ -135,7 +134,7 @@ def test_transpose() -> None:
 
 def test_random_symmetric_subset() -> None:
     """Cover Group.random_symmetric_subset."""
-    group = abstract.CyclicGroup(2) @ abstract.CyclicGroup(3)
+    group = abstract.CyclicGroup(2) * abstract.CyclicGroup(3)
     for seed in [0, 1]:
         subset = group.random_symmetric_subset(size=2, seed=seed)
         assert subset == {~member for member in subset}
