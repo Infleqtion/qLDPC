@@ -120,6 +120,15 @@ class ClassicalCode(AbstractCode):
     words must satisfy.  A vector x is a code word iff H @ x = 0.
     """
 
+    _matrix: galois.FieldArray
+
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, ClassicalCode)
+            and self._field is other._field
+            and np.array_equal(self._matrix, other._matrix)
+        )
+
     def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
         return not np.any(self.matrix @ self.field(word))
 
@@ -474,6 +483,8 @@ class QuditCode(AbstractCode):
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
 
+    _matrix: galois.FieldArray
+
     @property
     def num_checks(self) -> int:
         """Number of parity checks (stabilizers) in this code."""
@@ -607,7 +618,6 @@ class CSSCode(QuditCode):
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
-    _field_order: int  # The order of the field over which the CSS code is defined
 
     _conjugate: slice | Sequence[int]
     _codes_equal: bool

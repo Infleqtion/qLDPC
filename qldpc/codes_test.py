@@ -39,6 +39,7 @@ def test_classical_codes() -> None:
         codes.ClassicalCode.repetition(num_bits, field=3),
         codes.ClassicalCode.ring(num_bits, field=3),
     ]:
+        assert code == code
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
@@ -54,13 +55,13 @@ def test_classical_codes() -> None:
     for num_bits in [4, 5, 6]:
         assert codes.ClassicalCode.cordaro_wagner(num_bits).num_bits == num_bits
     for num_bits in [5, 6]:
-        assert codes.ClassicalCode.punctured_hamming(num_bits).num_bits == num_bits
+        assert codes.ClassicalCode.RepSum(num_bits).num_bits == num_bits
 
     num_bits = 7
     with pytest.raises(ValueError, match=f"not {num_bits}"):
         codes.ClassicalCode.cordaro_wagner(7)
     with pytest.raises(ValueError, match=f"not {num_bits}"):
-        codes.ClassicalCode.punctured_hamming(7)
+        codes.ClassicalCode.RepSum(7)
 
     # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
