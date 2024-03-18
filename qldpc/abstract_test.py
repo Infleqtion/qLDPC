@@ -60,6 +60,7 @@ def test_lift() -> None:
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
     assert_valid_lift(abstract.SymmetricGroup(3))
+    assert_valid_lift(abstract.QuaternionGroup())
 
 
 def assert_valid_lift(group: abstract.Group) -> None:

@@ -715,6 +715,43 @@ class DicyclicGroup(Group):
             super().__init__(group, lift=lift)
 
 
+class QuaternionGroup(Group):
+    """Quaternion group: 1, i, j, k, -1, -i, -j, -k."""
+
+    def __init__(self) -> None:
+        table = [
+            [0, 1, 2, 3, 4, 5, 6, 7],
+            [1, 4, 3, 6, 5, 0, 7, 2],
+            [2, 7, 4, 1, 6, 3, 0, 5],
+            [3, 2, 5, 4, 7, 6, 1, 0],
+            [4, 5, 6, 7, 0, 1, 2, 3],
+            [5, 0, 7, 2, 1, 4, 3, 6],
+            [6, 3, 0, 5, 2, 7, 4, 1],
+            [7, 6, 1, 0, 3, 2, 5, 4],
+        ]
+
+        def lift(member: int) -> npt.NDArray[np.int_]:
+            """Representation from https://en.wikipedia.org/wiki/Quaternion_group."""
+            assert 0 <= member < 8
+            sign = 1 if member < 4 else -1
+            base = member % 4  # +/- 1, i, j, k
+            zero = np.zeros((2, 2), dtype=int)
+            unit = np.eye(2, dtype=int)
+            imag = np.array([[0, -1], [1, 0]], dtype=int)
+            if base == 0:  # +/- 1
+                blocks = [[unit, zero], [zero, unit]]
+            elif base == 1:  # +/- i
+                blocks = [[imag, zero], [zero, -imag]]
+            elif base == 2:  # +/- j
+                blocks = [[zero, -unit], [unit, zero]]
+            else:  # if base == 3; +/- k
+                blocks = [[zero, -imag], [-imag, zero]]
+            return sign * np.block(blocks).astype(int).T % 3
+
+        group = Group.from_table(table, integer_lift=lift)
+        super().__init__(group._group, field=3, lift=group._lift)
+
+
 ################################################################################
 # special linear (SL) and projective special linear (PSL) groups
 
