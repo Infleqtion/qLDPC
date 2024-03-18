@@ -9,7 +9,7 @@ import sympy.combinatorics as comb
 from qldpc import abstract
 
 
-base_url = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
+BASE_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
 def get_group_page(order: int, index: int):
@@ -17,7 +17,7 @@ def get_group_page(order: int, index: int):
 
     # load index
     extra = "index500.html" if order > 60 else ""
-    page = urllib.request.urlopen(base_url + extra)
+    page = urllib.request.urlopen(BASE_URL + extra)
     html = page.read().decode("utf-8")
 
     # extract section of groups with a given order
@@ -39,7 +39,7 @@ def get_group_page(order: int, index: int):
         raise ValueError(f"Group {order},{index} not found")
 
     # identify url for that group
-    group_url = base_url + row.iloc[0, 0][1]
+    group_url = BASE_URL + row.iloc[0, 0][1]
     return group_url
 
 
