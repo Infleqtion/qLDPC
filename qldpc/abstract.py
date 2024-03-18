@@ -885,16 +885,9 @@ PSL = ProjectiveSpecialLinearGroup
 
 
 class IndexedGroup(Group):
-    """Groups groups indexed by the GAP computer algebra system."""
+    """Groups indexed by the GAP computer algebra system."""
 
     def __init__(self, order: int, index: int, with_GAP: bool = True) -> None:
-        if indexed_groups.gap_is_installed():
-            generators = indexed_groups.get_generators_with_gap(order, index)
-        elif indexed_groups.can_connect_to_groupnames():
-            generators = indexed_groups.get_generators_from_groupnames(order, index)
-        else:
-            raise ValueError(
-                "Cannot build GAP group\nGAP 4 not installed and GroupNames.org is unreachable"
-            )
+        generators = indexed_groups.get_generators(order, index)
         group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
         super().__init__(group)

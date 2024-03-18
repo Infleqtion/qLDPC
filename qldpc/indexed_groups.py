@@ -133,3 +133,18 @@ def can_connect_to_groupnames() -> bool:
         return True
     except (urllib.error.URLError, urllib.error.HTTPError):
         return False
+
+
+def get_generators(order: int, index: int) -> list[list[tuple[int, ...]]]:
+    """Retrieve GAP group generators somehow.
+
+    First try using a locally installed version of GAP 4.  If that fails, try GroupNames.org.
+    """
+    if gap_is_installed():
+        return get_generators_with_gap(order, index)
+    elif can_connect_to_groupnames():
+        return get_generators_from_groupnames(order, index)
+    else:
+        raise ValueError(
+            "Cannot build GAP group\nGAP 4 not installed and GroupNames.org is unreachable"
+        )
