@@ -395,10 +395,16 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(np.array(strings).T, field=field)
 
     @classmethod
-    def punctured(cls, code: ClassicalCode, removals: Sequence[int]) -> ClassicalCode:
-        """Puncture a code, removing some of its bits."""
+    def puncture(cls, code: ClassicalCode, removals: Sequence[int]) -> ClassicalCode:
+        """Remove bits from a code's code words."""
         bits_to_keep = [bit for bit in range(code.num_bits) if bit not in removals]
         return ~ClassicalCode(code.generator[:, bits_to_keep])
+
+    @classmethod
+    def drop_bits(cls, code: ClassicalCode, removals: Sequence[int]) -> ClassicalCode:
+        """Remove bits from a code's parity checks."""
+        bits_to_keep = [bit for bit in range(code.num_bits) if bit not in removals]
+        return ClassicalCode(code.matrix[:, bits_to_keep])
 
     @classmethod
     def cordaro_wagner(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
