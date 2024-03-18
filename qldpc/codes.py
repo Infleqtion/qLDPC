@@ -122,13 +122,6 @@ class ClassicalCode(AbstractCode):
 
     _matrix: galois.FieldArray
 
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, ClassicalCode)
-            and self._field is other._field
-            and np.array_equal(self._matrix, other._matrix)
-        )
-
     def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
         return not np.any(self.matrix @ self.field(word))
 

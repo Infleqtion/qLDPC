@@ -39,7 +39,6 @@ def test_classical_codes() -> None:
         codes.ClassicalCode.repetition(num_bits, field=3),
         codes.ClassicalCode.ring(num_bits, field=3),
     ]:
-        assert code == code
         assert code.num_bits == num_bits
         assert code.dimension == 1
         assert code.get_distance() == num_bits
