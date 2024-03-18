@@ -938,39 +938,24 @@ class GAP18(Group):
         assert 0 < index <= 5
 
         if index == 1:
-            super().__init__(comb.named_groups.DihedralGroup(9))
+            super().__init__(DihedralGroup(9))
 
         elif index == 2:
-            super().__init__(comb.named_groups.CyclicGroup(18))
+            super().__init__(CyclicGroup(18))
 
         elif index == 3:
-            """The direct product of C(3) and S(3).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3xS3.html
-            """
-            A = comb.Permutation(1, 2, 3)(4, 5, 6)
-            B = comb.Permutation(1, 2, 3)(4, 6, 5)
-            C = comb.Permutation(1, 4)(2, 5)(3, 6)
-            super().__init__(comb.PermutationGroup(A, B, C))
+            super().__init__(CyclicGroup(3) * SymmetricGroup(3))
 
         elif index == 4:
-            """The semidirect product of C(3) and S(3).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3sS3.html
-            """
-            A = comb.Permutation(1, 2, 3)(4, 5, 6)(7, 8, 9)
-            B = comb.Permutation(1, 5, 8)(2, 6, 9)(3, 4, 7)
-            C = comb.Permutation(2, 3)(4, 9)(5, 8)(6, 7)
-            super().__init__(comb.PermutationGroup(A, B, C))
+            # semidirect product of C(3) and S(3)
+            # https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3sS3.html
+            gen_a = comb.Permutation(1, 2, 3)(4, 5, 6)(7, 8, 9)
+            gen_b = comb.Permutation(1, 5, 8)(2, 6, 9)(3, 4, 7)
+            gen_c = comb.Permutation(2, 3)(4, 9)(5, 8)(6, 7)
+            super().__init__(comb.PermutationGroup(gen_a, gen_b, gen_c))
 
         elif index == 5:
-            """The direct product of C(3) and C(6).
-
-            https://people.maths.bris.ac.uk/~matyd/GroupNames/1/C3xC6.html
-            """
-            A = comb.Permutation(1, 12, 15)(2, 7, 16)(3, 8, 17)(4, 9, 18)(5, 10, 13)(6, 11, 14)
-            B = comb.Permutation(1, 2, 3, 4, 5, 6)(7, 8, 9, 10, 11, 12)(13, 14, 15, 16, 17, 18)
-            super().__init__(comb.PermutationGroup(A, B))
+            super().__init__(CyclicGroup(3) * CyclicGroup(6))
 
 
 class GAP20(Group):
