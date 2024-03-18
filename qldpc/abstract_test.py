@@ -20,7 +20,6 @@ import unittest.mock
 import galois
 import numpy as np
 import pytest
-import sympy.combinatorics as comb
 
 from qldpc import abstract
 
