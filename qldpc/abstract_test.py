@@ -187,3 +187,7 @@ def test_PSL(field: int = 3) -> None:
 
     with pytest.raises(ValueError, match="not yet supported"):
         abstract.PSL(3, 3)
+
+
+def test_indexed_groups() -> None:
+    """Groups indexed by the GAP computer algebra system."""

@@ -885,7 +885,7 @@ PSL = ProjectiveSpecialLinearGroup
 
 
 class IndexedGroup(Group):
-    """Groups indexed on GroupNames.org."""
+    """Groups groups indexed by the GAP computer algebra system."""
 
     def __init__(self, order: int, index: int, with_GAP: bool = True) -> None:
         if indexed_groups.gap_is_installed():
