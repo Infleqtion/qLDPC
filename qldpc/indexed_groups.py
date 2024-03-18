@@ -57,7 +57,7 @@ def get_groupnames_url(order: int, index: int) -> str | None:
     return GROUPNAMES_URL + match.group(1)
 
 
-def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST:
+def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | None:
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
