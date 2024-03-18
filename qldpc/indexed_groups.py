@@ -24,16 +24,15 @@ import sympy.combinatorics as comb
 from qldpc import abstract
 
 
-def get_GroupNames_url(
-    order: int,
-    index: int,
-    base_url: str = "https://people.maths.bris.ac.uk/~matyd/GroupNames/",
-) -> str:
+GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
+
+
+def get_GroupNames_url(order: int, index: int) -> str:
     """Get the webpage for an indexed group on GroupNames.org."""
 
     # load index
     extra = "index500.html" if order > 60 else ""
-    page = urllib.request.urlopen(base_url + extra)
+    page = urllib.request.urlopen(GROUPNAMES_URL + extra)
     page_text = page.read().decode("utf-8")
 
     # extract section with the specified group
@@ -50,7 +49,7 @@ def get_GroupNames_url(
     if match is None:
         raise ValueError(f"Webpage for group {order},{index} not found")
 
-    return base_url + match.group(1)
+    return GROUPNAMES_URL + match.group(1)
 
 
 def get_generators_from_GroupNames(order: int, index: int) -> list[abstract.GroupMember]:
@@ -124,20 +123,33 @@ def get_generators_with_GAP(order: int, index: int) -> list[abstract.GroupMember
     return generators
 
 
-def is_GAP_installed() -> bool:
+def gap_is_installed() -> bool:
     """Is GAP installed?"""
     result = subprocess.run(["script", "-c", "gap --version"], capture_output=True, text=True)
     lines = result.stdout.split("\n")
     return len(lines) == 2 and lines[1][:3] == "GAP"
 
 
+def can_connect_to_GroupNames() -> bool:
+    """Can we connect to GroupNames.org?"""
+    try:
+        urllib.request.urlopen(GROUPNAMES_URL)
+        return True
+    except (urllib.error.URLError, urllib.error.HTTPError):
+        return False
+
+
 class IndexedGroup(abstract.Group):
     """Groups indexed on GroupNames.org."""
 
     def __init__(self, order: int, index: int, with_GAP: bool = True) -> None:
-        if is_GAP_installed():
+        if gap_is_installed():
             generators = get_generators_with_GAP(order, index)
-        else:
+        elif can_connect_to_GroupNames():
             generators = get_generators_from_GroupNames(order, index)
+        else:
+            raise ValueError(
+                "Cannot build GAP group\nGAP not installed and GroupNames.org is unreachable"
+            )
         group = comb.PermutationGroup(*generators)
         super().__init__(group)
