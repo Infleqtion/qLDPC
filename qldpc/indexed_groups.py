@@ -120,7 +120,7 @@ def gap_is_installed() -> bool:
     """Is GAP installed?"""
     result = subprocess.run(["script", "-c", "gap --version"], capture_output=True, text=True)
     lines = result.stdout.split("\n")
-    return len(lines) == 2 and lines[1][:3] == "GAP"
+    return len(lines) == 2 and lines[1][:5] == "GAP 4"
 
 
 def can_connect_to_groupnames() -> bool:

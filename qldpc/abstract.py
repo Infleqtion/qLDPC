@@ -894,7 +894,7 @@ class IndexedGroup(Group):
             generators = indexed_groups.get_generators_from_groupnames(order, index)
         else:
             raise ValueError(
-                "Cannot build GAP group\nGAP not installed and GroupNames.org is unreachable"
+                "Cannot build GAP group\nGAP 4 not installed and GroupNames.org is unreachable"
             )
         group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
         super().__init__(group)
