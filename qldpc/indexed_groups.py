@@ -33,19 +33,19 @@ def get_groupnames_url(order: int, index: int) -> str | None:
     try:
         # load index
         extra = "index500.html" if order > 60 else ""
-        page = urllib.request.urlopen(GROUPNAMES_URL + extra)
-        page_text = page.read().decode("utf-8")
+        index_page = urllib.request.urlopen(GROUPNAMES_URL + extra)
+        index_page_html = index_page.read().decode("utf-8")
     except (urllib.error.URLError, urllib.error.HTTPError):
         # we cannot access the webapage
         return None
 
     # extract section with the specified group
-    loc = page_text.find(f"<td>{order},{index}</td>")
+    loc = index_page_html.find(f"<td>{order},{index}</td>")
     if loc == -1:
         raise ValueError(f"Group {order},{index} not found")
-    end = loc + page_text[loc:].find("\n")
-    start = loc - page_text[:loc][::-1].find("\n")
-    section = page_text[start:end]
+    end = loc + index_page_html[loc:].find("\n")
+    start = loc - index_page_html[:loc][::-1].find("\n")
+    section = index_page_html[start:end]
 
     # extract first link from this section
     pattern = r'href="([^"]*)"'
@@ -61,17 +61,17 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
     """Get a finite group by its index on GroupNames.org."""
 
     # load web page for the specified group
-    url = get_groupnames_url(order, index)
-    if url is None:
+    group_url = get_groupnames_url(order, index)
+    if group_url is None:
         # we cannot access the webapage
         return None
-    page = urllib.request.urlopen(url)
-    html = page.read().decode("utf-8")
+    group_page = urllib.request.urlopen(group_url)
+    group_page_html = group_page.read().decode("utf-8")
 
     # extract section with the generators we are after
-    loc = html.find("Permutation representations")
-    end = html[loc:].find("copytext")  # go until the first copy-able text
-    section = html[loc : loc + end]
+    loc = group_page_html.find("Permutation representations")
+    end = group_page_html[loc:].find("copytext")  # go until the first copy-able text
+    section = group_page_html[loc : loc + end]
 
     # isolate generator text
     section = section[section.find("<pre") :]
