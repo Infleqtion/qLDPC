@@ -1,6 +1,6 @@
 import importlib.metadata
 
-from . import abstract, codes, decoder, objects
+from . import abstract, codes, decoder, indexed_groups, objects
 
 __version__ = importlib.metadata.version("qldpc")
 
@@ -9,5 +9,6 @@ __all__ = [
     "abstract",
     "codes",
     "decoder",
+    "indexed_groups",
     "objects",
 ]
