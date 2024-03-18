@@ -829,11 +829,12 @@ class ProjectiveSpecialLinearGroup(Group):
     def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
         """Expanding generator matrices for this group, based on arXiv:1807.03879."""
         minus_one = -self.field(1)
-        A = self.field([[1, 1], [0, 1]])
-        B = self.field([[1, minus_one], [0, 1]])
-        C = self.field([[1, 0], [1, 1]])
-        D = self.field([[1, 0], [minus_one, 1]])
-        return A, B, C, D
+        return (
+            self.field([[1, 1], [0, 1]]),
+            self.field([[1, minus_one], [0, 1]]),
+            self.field([[1, 0], [1, 1]]),
+            self.field([[1, 0], [minus_one, 1]]),
+        )
 
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
