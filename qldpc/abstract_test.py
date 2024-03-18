@@ -195,6 +195,7 @@ def test_PSL(field: int = 3) -> None:
 
 
 def test_gap_groups() -> None:
+    """Test groups by GAP index."""
     for index in range(1, 15):
         assert abstract.GAP16(index).order() == 16
     for index in range(1, 6):
