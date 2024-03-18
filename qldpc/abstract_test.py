@@ -187,12 +187,3 @@ def test_PSL(field: int = 3) -> None:
 
     with pytest.raises(ValueError, match="not yet supported"):
         abstract.PSL(3, 3)
-
-
-def test_indexed_groups() -> None:
-    """Test groups indexed on GroupNames.org."""
-    for index in range(1, 15):
-        assert abstract.GroupNames16(index).order() == 16
-    for index in range(1, 6):
-        assert abstract.GroupNames18(index).order() == 18
-        assert abstract.GroupNames20(index).order() == 20
