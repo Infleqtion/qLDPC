@@ -192,37 +192,36 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_indexed_groups(order: int = 2, index: int = 1):
+def test_indexed_groups():
     """Groups indexed by the GAP computer algebra system."""
-    desired_group = abstract.CyclicGroup(2)
-    print(desired_group.generators)
-    
-    # generators = [(1, 0)]
+    order, index = 2, 1
+    desired_group = abstract.CyclicGroup(order)
+    generators = [gen.array_form for gen in desired_group.generators]
 
-    # with (
-    #     unittest.mock.patch("qldpc.indexed_groups.gap_is_installed", return_value=True),
-    #     unittest.mock.patch(
-    #         "qldpc.indexed_groups.get_generators_with_gap",
-    #         return_value=generators,
-    #     ),
-    # ):
-    #     group = abstract.IndexedGroup(order, index)
-    #     assert group.generators == desired_group.generators
+    with (
+        unittest.mock.patch("qldpc.indexed_groups.gap_is_installed", return_value=True),
+        unittest.mock.patch(
+            "qldpc.indexed_groups.get_generators_with_gap",
+            return_value=generators,
+        ),
+    ):
+        group = abstract.IndexedGroup(order, index)
+        assert group.generators == desired_group.generators
 
-    # with (
-    #     unittest.mock.patch("qldpc.indexed_groups.gap_is_installed", return_value=False),
-    #     unittest.mock.patch("qldpc.indexed_groups.can_connect_to_groupnames", return_value=True),
-    #     unittest.mock.patch(
-    #         "qldpc.indexed_groups.get_generators_from_groupnames",
-    #         return_value=generators,
-    #     ),
-    # ):
-    #     group = abstract.IndexedGroup(order, index)
-    #     assert group.generators == desired_group.generators
+    with (
+        unittest.mock.patch("qldpc.indexed_groups.gap_is_installed", return_value=False),
+        unittest.mock.patch("qldpc.indexed_groups.can_connect_to_groupnames", return_value=True),
+        unittest.mock.patch(
+            "qldpc.indexed_groups.get_generators_from_groupnames",
+            return_value=generators,
+        ),
+    ):
+        group = abstract.IndexedGroup(order, index)
+        assert group.generators == desired_group.generators
 
-    # with (
-    #     unittest.mock.patch("qldpc.indexed_groups.gap_is_installed", return_value=False),
-    #     unittest.mock.patch("qldpc.indexed_groups.can_connect_to_groupnames", return_value=False),
-    #     pytest.raises(ValueError, match="Cannot build GAP group"),
-    # ):
-    #     abstract.IndexedGroup(order, index)
+    with (
+        unittest.mock.patch("qldpc.indexed_groups.gap_is_installed", return_value=False),
+        unittest.mock.patch("qldpc.indexed_groups.can_connect_to_groupnames", return_value=False),
+        pytest.raises(ValueError, match="Cannot build GAP group"),
+    ):
+        abstract.IndexedGroup(order, index)
