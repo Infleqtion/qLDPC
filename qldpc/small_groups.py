@@ -174,7 +174,7 @@ def get_generators(order: int, index: int) -> GENERATORS_LIST:
     generators: GENERATORS_LIST | None
 
     # retrieve generators from cache, if available
-    cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc"))
+    cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc_groups"))
     generators = cache.get((order, index), None)
     if generators is not None:
         return generators

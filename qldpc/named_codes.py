@@ -18,16 +18,24 @@
 import ast
 import re
 
+import diskcache
+import platformdirs
+
 from qldpc.small_groups import gap_is_installed, get_gap_result
 
 
 def get_code(name: str) -> tuple[list[list[int]], int | None]:
     """Retrieve a group from GAP."""
 
-    if not gap_is_installed():
-        raise ValueError("GAP 4 is not installed")
+    # retrieve generators from cache, if available
+    cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc_codes"))
+    checks_field = cache.get(name, None)
+    if checks_field is not None:
+        return checks_field
 
     # run GAP commands
+    if not gap_is_installed():
+        raise ValueError("GAP 4 is not installed")
     commands = [
         'LoadPackage("guava");',
         f"code := {name};",
@@ -56,4 +64,5 @@ def get_code(name: str) -> tuple[list[list[int]], int | None]:
         else:
             checks.append(ast.literal_eval(line))
 
+    cache[name] = checks, field
     return checks, field
