@@ -53,11 +53,14 @@ def test_classical_codes() -> None:
 
     # check dimension of Reed-Solomon and BCH codes
     assert codes.ReedSolomonCode(3, 2).dimension == 2
-    assert codes.BCHCode(15, 7).dimension == 7
+    assert codes.BCHCode(7, 1).dimension == 1
 
     # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+
+    with pytest.raises(ValueError, match=r"2\^m - 1 bits"):
+        codes.BCHCode(2, 1)
 
 
 def test_named_codes(order: int = 2) -> None:
