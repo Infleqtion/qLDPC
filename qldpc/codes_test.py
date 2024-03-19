@@ -74,7 +74,8 @@ def test_special_codes() -> None:
         == code.get_distance_bound(vector=[0] * code.num_bits)
         == 0
     )
-    assert 
+    dual_code = codes.ReedMullerCode(size - order - 1, size)
+    assert np.array_equal((~code).matrix, dual_code.matrix)
 
 
 def test_named_codes(order: int = 2) -> None:
