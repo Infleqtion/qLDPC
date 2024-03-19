@@ -887,7 +887,7 @@ PSL = ProjectiveSpecialLinearGroup
 class IndexedGroup(Group):
     """Groups indexed by the GAP computer algebra system."""
 
-    def __init__(self, order: int, index: int, with_GAP: bool = True) -> None:
+    def __init__(self, order: int, index: int) -> None:
         generators = indexed_groups.get_generators(order, index)
         group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
         super().__init__(group)
