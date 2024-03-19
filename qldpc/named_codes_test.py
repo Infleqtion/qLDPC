@@ -62,4 +62,4 @@ def test_get_code() -> None:
         unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=True),
         unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
-        assert named_codes.get_code("") == ([check], 9)
+        assert named_codes.get_code("") == ([check], 27)
