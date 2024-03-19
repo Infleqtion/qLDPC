@@ -103,7 +103,7 @@ def gap_is_installed() -> bool:
     commands = ["script", "-c", "gap --version", os.devnull]
     result = subprocess.run(commands, capture_output=True, text=True)
     lines = result.stdout.splitlines()
-    return len(lines) == 3 and lines[1].startswith("GAP 4")
+    return len(lines) == 2 and lines[1].startswith("GAP 4")
 
 
 def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:

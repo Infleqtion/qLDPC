@@ -104,7 +104,7 @@ def test_gap_is_installed() -> None:
     """Is GAP 4 installed?"""
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
         assert not small_groups.gap_is_installed()
-    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\nGAP 4\n\n")):
+    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\nGAP 4")):
         assert small_groups.gap_is_installed()
 
 

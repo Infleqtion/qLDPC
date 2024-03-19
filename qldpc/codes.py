@@ -31,7 +31,7 @@ import numpy as np
 import numpy.typing as npt
 
 import qldpc
-from qldpc import abstract, small_codes
+from qldpc import abstract, named_codes
 from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
 
 DEFAULT_FIELD_ORDER = 2
@@ -402,7 +402,7 @@ class NamedCode(ClassicalCode):
     """Named code in the GAP computer algebra system."""
 
     def __init__(self, name: str) -> None:
-        code = small_codes.get_parity_checks(name)
+        code = named_codes.get_parity_checks(name)
         super().__init__(code)
 
 

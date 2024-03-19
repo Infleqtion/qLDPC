@@ -1,4 +1,4 @@
-"""Unit tests for small_codes.py
+"""Unit tests for named_codes.py
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -20,7 +20,7 @@ import unittest.mock
 
 import pytest
 
-from qldpc import small_codes
+from qldpc import named_codes
 
 
 def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
@@ -37,13 +37,13 @@ def test_get_parity_checks() -> None:
         pytest.raises(ValueError, match="not installed"),
         unittest.mock.patch("subprocess.run", return_value=process),
     ):
-        small_codes.get_parity_checks("")
+        named_codes.get_parity_checks("")
 
     name = "RepetitionCode(2)"
     check = [1, 1]
     mock_process = get_mock_process("\n" + str(check))
     with (
-        unittest.mock.patch("qldpc.small_codes.gap_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=True),
         unittest.mock.patch("subprocess.run", return_value=mock_process),
     ):
-        assert small_codes.get_parity_checks(name) == [check]
+        assert named_codes.get_parity_checks(name) == [check]

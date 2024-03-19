@@ -61,7 +61,7 @@ def test_named_codes(order: int = 2) -> None:
     code = codes.ClassicalCode.repetition(order)
     matrix = [list(row) for row in code.matrix.view(np.ndarray)]
 
-    with unittest.mock.patch("qldpc.small_codes.get_parity_checks", return_value=matrix):
+    with unittest.mock.patch("qldpc.named_codes.get_parity_checks", return_value=matrix):
         named_code = codes.NamedCode(f"RepetitionCode({order})")
         assert np.array_equal(named_code.matrix, code.matrix)
 
