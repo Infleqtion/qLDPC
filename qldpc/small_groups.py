@@ -15,12 +15,15 @@
    limitations under the License.
 """
 
+import functools
 import os
 import re
 import subprocess
 import tempfile
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Hashable
+from typing import Any
 
 import diskcache
 import platformdirs
@@ -169,24 +172,42 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     return generators
 
 
+def use_disk_cache(
+    cache_name: str,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Cache new results to disk, and retrieve existing results (if available) from the cache."""
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+
+        @functools.wraps(func)
+        @functools.cache
+        def wrapper(*args: Hashable) -> Any:
+
+            # retrieve results from cache, if available
+            cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
+            generators = cache.get(args, None)
+            if generators is not None:
+                return generators
+
+            # compute results and save to cache
+            result = func(*args)
+            cache[args] = result
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+@use_disk_cache("qldpc_groups")
 def get_generators(order: int, index: int) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
-    generators: GENERATORS_LIST | None
-
-    # retrieve generators from cache, if available
-    cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc_groups"))
-    generators = cache.get((order, index), None)
-    if generators is not None:
-        return generators
-
-    # try to retrieve generators and save them to the cache
     for get_generators in [
         get_generators_with_gap,
         get_generators_from_groupnames,
     ]:
         generators = get_generators(order, index)
         if generators is not None:
-            cache[order, index] = generators
             return generators
 
     # we could not find or retrieve the generators :(
