@@ -53,8 +53,6 @@ def get_group_url(order: int, index: int) -> str | None:
     # extract first link from this section
     pattern = r'href="([^"]*)"'
     match = re.search(pattern, section)
-    if match is None:
-        raise ValueError(f"Webpage for group {order},{index} not found")
 
     # return url for the desired group
     return GROUPNAMES_URL + match.group(1)

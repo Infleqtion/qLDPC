@@ -23,6 +23,11 @@ import pytest
 from qldpc import small_codes
 
 
+def get_mock_process(stdout: str) -> subprocess.CompletedProcess:
+    """Fake process with the given stdout."""
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
+
+
 def test_get_parity_checks() -> None:
     """Retrive parity check matrix from GAP 4."""
 
@@ -36,8 +41,8 @@ def test_get_parity_checks() -> None:
 
     name = "RepetitionCode(2)"
     check = [1, 1]
-    process_1 = subprocess.CompletedProcess(args=[], returncode=0, stdout="\nGAP 4")
-    process_2 = subprocess.CompletedProcess(args=[], returncode=0, stdout=str(check))
+    process_1 = get_mock_process("\nGAP 4\n")
+    process_2 = get_mock_process(str(check))
     with (
         pytest.raises(ValueError, match="not installed"),
         unittest.mock.patch("subprocess.run", side_effects=[process_1, process_2]),

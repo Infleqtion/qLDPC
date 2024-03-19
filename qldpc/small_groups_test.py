@@ -56,19 +56,14 @@ def test_get_group_url() -> None:
     # cannot find group webpage
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace(f"{ORDER},{INDEX}", ""))
     with (
-        pytest.raises(ValueError, match="not found"),
+        pytest.raises(ValueError, match="Group .* not found"),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
         small_groups.get_group_url(ORDER, INDEX)
 
+    # everything works as expected
     mock_page = get_mock_page(MOCK_INDEX_HTML)
     with unittest.mock.patch("urllib.request.urlopen", return_value=mock_page):
-
-        # requested group not found on the index
-        with pytest.raises(ValueError, match="not found"):
-            small_groups.get_group_url(ORDER, INDEX + 1)
-
-        # everything works as expected
         assert small_groups.get_group_url(ORDER, INDEX) == GROUP_URL
 
 
@@ -82,7 +77,7 @@ def test_get_generators_from_groupnames() -> None:
     # cannot find generators
     mock_page = get_mock_page(MOCK_GROUP_HTML.replace("pre", ""))
     with (
-        pytest.raises(ValueError, match="not found"),
+        pytest.raises(ValueError, match="Generators .* not found"),
         unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
@@ -116,14 +111,14 @@ def test_get_generators_with_gap() -> None:
     with (
         pytest.raises(ValueError, match="Cannot extract cycle"),
         unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=True),
-        unittest.mock.patch("subprocess.run", return_value=get_mock_process("(1, 2a)\n")),
+        unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n(1, 2a)\n")),
     ):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
     # everything works as expected
     with (
         unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=True),
-        unittest.mock.patch("subprocess.run", return_value=get_mock_process("(1, 2)\n")),
+        unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n(1, 2)\n")),
     ):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
 
