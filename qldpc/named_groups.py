@@ -192,7 +192,7 @@ def use_disk_cache(
 
             # compute results and save to cache
             result = func(*args, **kwargs)
-            cache[args] = result
+            cache[key] = result
             return result
 
         return wrapper
