@@ -448,6 +448,11 @@ class ReedMullerCode(ClassicalCode):
     """
 
     def __init__(self, order: int, size: int, field: int | None = None) -> None:
+        if not (size >= 0 and 0 <= order < size):
+            raise ValueError(
+                "Reed-Muller code R(r,m) must have m >= 0 and 0 <= r < m\n"
+                + f"Provided: (r,m) = ({order},{size})"
+            )
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         self._matrix = self.field(ReedMullerCode.get_generator(order, size))
         self._matrix = (~self)._matrix

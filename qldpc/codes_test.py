@@ -77,6 +77,9 @@ def test_special_codes() -> None:
     dual_code = codes.ReedMullerCode(size - order - 1, size)
     assert np.array_equal((~code).matrix, dual_code.matrix)
 
+    with pytest.raises(ValueError, match="0 <= r < m"):
+        codes.ReedMullerCode(-1, 0)
+
 
 def test_named_codes(order: int = 2) -> None:
     """Named codes from the GAP computer algebra system."""
