@@ -29,7 +29,7 @@ GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
 def get_group_url(order: int, index: int) -> str | None:
-    """Get the webpage for an indexed group on GroupNames.org."""
+    """Retrieve the webpage of an indexed GAP group on GroupNames.org."""
 
     try:
         # load index
@@ -61,7 +61,7 @@ def get_group_url(order: int, index: int) -> str | None:
 
 
 def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | None:
-    """Get a finite group by its index on GroupNames.org."""
+    """Retrieve GAP group generators from GroupNames.org."""
 
     # load web page for the specified group
     group_url = get_group_url(order, index)
@@ -99,7 +99,7 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
 
 
 def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
-    """Get a finite group from the GAP computer algebra system."""
+    """Retrieve GAP group generators from GAP 4 directly."""
 
     # check that GAP 4 is installed
     commands = ["script", "-c", "gap --version", os.devnull]
@@ -142,7 +142,7 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
 
 
 def get_generators(order: int, index: int) -> GENERATORS_LIST:
-    """Try to retrieve GAP group generators."""
+    """Retrieve GAP group generators."""
     generators: GENERATORS_LIST | None
 
     # retrieve generators from cache, if available
