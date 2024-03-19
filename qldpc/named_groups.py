@@ -186,9 +186,9 @@ def use_disk_cache(
 
             # retrieve results from cache, if available
             cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
-            result = cache.get(args + tuple(kwargs.items()), None)
-            if result is not None:
-                return result
+            key = args + tuple(kwargs.items())
+            if key in cache:
+                return cache[key]
 
             # compute results and save to cache
             result = func(*args, **kwargs)
