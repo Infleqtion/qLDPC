@@ -153,8 +153,7 @@ def test_get_generators() -> None:
     """Retrieve generators somehow."""
 
     # use cache to save/retrieve results
-    mock_cache = {}
-    with unittest.mock.patch("diskcache.Cache", return_value=mock_cache):
+    with unittest.mock.patch("diskcache.Cache", return_value={}):
         # compute and save result to cache
         with unittest.mock.patch(
             "qldpc.small_groups.get_generators_with_gap", return_value=GENERATORS
