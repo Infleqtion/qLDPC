@@ -63,9 +63,9 @@ def test_classical_codes() -> None:
 def test_named_codes(order: int = 2) -> None:
     """Named codes from the GAP computer algebra system."""
     code = codes.RepetitionCode(order)
-    matrix = [list(row) for row in code.matrix.view(np.ndarray)]
+    checks = [list(row) for row in code.matrix.view(np.ndarray)]
 
-    with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(matrix, None)):
+    with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(checks, None)):
         named_code = codes.ClassicalCode.from_name(f"RepetitionCode({order})")
         assert np.array_equal(named_code.matrix, code.matrix)
 
