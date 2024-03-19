@@ -16,6 +16,7 @@
 """
 
 import itertools
+import unittest.mock
 
 import networkx as nx
 import numpy as np
@@ -50,8 +51,19 @@ def test_classical_codes() -> None:
     assert codes.ClassicalCode.repetition(3, 2).rank == codes.ClassicalCode.repetition(3, 3).rank
     assert codes.ClassicalCode.hamming(3, 2).rank == codes.ClassicalCode.hamming(3, 3).rank
 
+    # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+
+
+def test_named_codes(order: int = 2) -> None:
+    """Named codes from the GAP computer algebra system."""
+    code = codes.ClassicalCode.repetition(order)
+    matrix = [list(row) for row in code.matrix.view(np.ndarray)]
+
+    with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(matrix, None)):
+        named_code = codes.ClassicalCode.from_name(f"RepetitionCode({order})")
+        assert np.array_equal(named_code.matrix, code.matrix)
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:

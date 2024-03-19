@@ -22,7 +22,7 @@ import functools
 import itertools
 import random
 from collections.abc import Collection, Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import galois
 import ldpc.mod2
@@ -31,11 +31,8 @@ import numpy as np
 import numpy.typing as npt
 
 import qldpc
-from qldpc import abstract
+from qldpc import abstract, named_codes
 from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
-
-if TYPE_CHECKING:
-    from typing_extensions import Self
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -48,7 +45,7 @@ def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galo
 
 
 ################################################################################
-# template error correction code classes
+# template error correction code class
 
 
 # TODO(?): support sparse parity check matrices
@@ -59,7 +56,7 @@ class AbstractCode(abc.ABC):
 
     def __init__(
         self,
-        matrix: Self | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
     ) -> None:
         """Construct a code from a parity check matrix over a finite field.
@@ -109,6 +106,10 @@ class AbstractCode(abc.ABC):
         """Convert a Tanner graph into a parity check matrix."""
 
 
+################################################################################
+# classical codes
+
+
 class ClassicalCode(AbstractCode):
     """Classical linear error-correcting code over a finite field F_q.
 
@@ -119,6 +120,8 @@ class ClassicalCode(AbstractCode):
     (num_checks, num_bits).  Each row of H represents a linear constraint (a "check") that code
     words must satisfy.  A vector x is a code word iff H @ x = 0.
     """
+
+    _matrix: galois.FieldArray
 
     def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
         return not np.any(self.matrix @ self.field(word))
@@ -339,16 +342,19 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
-        """Construct a random classical code with the given number of bits and nontrivial checks."""
+        """Construct a random classical code with the given number of bits and nontrivial checks.
+
+        Reject parity check matrices that have a row or column of all zeroes.
+        """
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        rows, cols = checks, bits
-        matrix = code_field.Random((rows, cols))
-        for row in range(matrix.shape[0]):
-            if not matrix[row, :].any():
-                matrix[row, np.random.randint(cols)] = code_field.Random(low=1)  # pragma: no cover
-        for col in range(matrix.shape[1]):
-            if not matrix[:, col].any():
-                matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
+
+        def has_zero_row_or_column(matrix: galois.FieldArray) -> bool:
+            """Does the given matrix have a row or column that is all zeroes?"""
+            return any(not row.any() for row in matrix) or any(not col.any() for col in matrix.T)
+
+        while has_zero_row_or_column(matrix := code_field.Random((checks, bits))):
+            pass
+
         return ClassicalCode(matrix)
 
     @classmethod
@@ -373,7 +379,7 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def hamming(cls, rank: int, field: int | None = None) -> ClassicalCode:
-        """Construct a hamming code of a given rank."""
+        """Construct a Hamming code of a given rank."""
         field = field or DEFAULT_FIELD_ORDER
         if field == 2:
             # parity check matrix: columns = all nonzero bitstrings
@@ -389,29 +395,17 @@ class ClassicalCode(AbstractCode):
         ]
         return ClassicalCode(np.array(strings).T, field=field)
 
-    # TODO: add more codes, particularly from code families that are useful for good quantum codes
+    @classmethod
+    def from_name(cls, name: str) -> ClassicalCode:
+        """Named code in the GAP computer algebra system."""
+        matrix, field = named_codes.get_code(name)
+        return ClassicalCode(matrix, field)
+
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 
 
-def _fix_decoder_args_for_nonbinary_fields(
-    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
-) -> None:
-    """Fix decoder arguments for nonbinary number fields.
-
-    If the field has order greater than 2, then we can only decode
-    (a) prime number fields, with
-    (b) an integer-linear program decoder.
-
-    If provided a bound_index, treat the constraint corresponding to this row of the parity check
-    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
-    """
-    if field.order > 2:
-        if field.degree > 1:
-            raise ValueError("Method only supported for prime number fields")
-        decoder_args["with_ILP"] = True
-        decoder_args["modulus"] = field.order
-        if bound_index is not None:
-            decoder_args["lower_bound_row"] = bound_index
+################################################################################
+# quantum codes
 
 
 # TODO:
@@ -436,6 +430,8 @@ class QuditCode(AbstractCode):
 
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
+
+    _matrix: galois.FieldArray
 
     @property
     def num_checks(self) -> int:
@@ -570,7 +566,6 @@ class CSSCode(QuditCode):
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
-    _field_order: int  # The order of the field over which the CSS code is defined
 
     _conjugate: slice | Sequence[int]
     _codes_equal: bool
@@ -964,6 +959,27 @@ class CSSCode(QuditCode):
         else:
             for logical_index in range(self.dimension):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
+
+
+def _fix_decoder_args_for_nonbinary_fields(
+    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
+) -> None:
+    """Fix decoder arguments for nonbinary number fields.
+
+    If the field has order greater than 2, then we can only decode
+    (a) prime number fields, with
+    (b) an integer-linear program decoder.
+
+    If provided a bound_index, treat the constraint corresponding to this row of the parity check
+    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
+    """
+    if field.order > 2:
+        if field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
+        decoder_args["with_ILP"] = True
+        decoder_args["modulus"] = field.order
+        if bound_index is not None:
+            decoder_args["lower_bound_row"] = bound_index
 
 
 ################################################################################

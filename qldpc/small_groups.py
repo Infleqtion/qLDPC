@@ -15,11 +15,15 @@
    limitations under the License.
 """
 
+import functools
 import os
 import re
 import subprocess
+import tempfile
 import urllib.error
 import urllib.request
+from collections.abc import Callable, Hashable
+from typing import Any
 
 import diskcache
 import platformdirs
@@ -51,8 +55,7 @@ def get_group_url(order: int, index: int) -> str | None:
     section = index_page_html[start:end]
 
     # extract first link from this section
-    pattern = r'href="([^"]*)"'
-    match = re.search(pattern, section)
+    match = re.search(r'href="([^"]*)"', section)
     if match is None:
         raise ValueError(f"Webpage for group {order},{index} not found")
 
@@ -78,8 +81,7 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
 
     # isolate generator text
     section = section[section.find("<pre") :]
-    pattern = r">((?:.|\n)*?)<\/pre>"
-    match = re.search(pattern, section)
+    match = re.search(r">((?:.|\n)*?)<\/pre>", section)
     if match is None:
         raise ValueError(f"Generators for group {order},{index} not found")
     gen_strings = match.group(1).split("<br>\n")
@@ -98,67 +100,113 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
     return generators
 
 
-def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
-    """Retrieve GAP group generators from GAP 4 directly."""
-
-    # check that GAP 4 is installed
+def gap_is_installed() -> bool:
+    """Is GAP 4 installed?"""
     commands = ["script", "-c", "gap --version", os.devnull]
     result = subprocess.run(commands, capture_output=True, text=True)
-    lines = result.stdout.split("\n")
-    if not len(lines) == 2 or lines[1][:5] != "GAP 4":
+    lines = result.stdout.splitlines()
+    return len(lines) == 2 and lines[1].startswith("GAP 4")
+
+
+def sanitize_gap_commands(commands: list[str]) -> list[str]:
+    """Sanitize GAP commands: don't format Print statements, and quit at the end."""
+    stream = "__stream__"
+    prefix = [
+        f"{stream} := OutputTextUser();",
+        f"SetPrintFormattingStatus({stream}, false);",
+    ]
+    suffix = ["QUIT;"]
+    commands = [cmd.replace("Print(", f"PrintTo({stream}, ") for cmd in commands]
+    return prefix + commands + suffix
+
+
+def get_gap_result(commands: list[str]) -> subprocess.CompletedProcess[str]:
+    """Get the output from the given GAP commands."""
+    commands = sanitize_gap_commands(commands)
+    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".gap") as script:
+        script.write("\n".join(commands))
+        script_name = script.name
+    shell_commands = ["gap", "-q", "--quitonbreak", script_name]
+    result = subprocess.run(shell_commands, capture_output=True, text=True)
+    os.remove(script_name)
+    return result
+
+
+def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
+    """Retrieve GAP group generators from GAP directly."""
+
+    if not gap_is_installed():
         return None
 
-    # build GAP command
-    lines_gap = [
-        f"G := SmallGroup({order},{index});",
+    # run GAP commands
+    group = f"SmallGroup({order},{index})"
+    commands = [
+        f"G := {group};",
         "iso := IsomorphismPermGroup(G);",
-        "permG := Image(iso,G);",
+        "permG := Image(iso, G);",
         "gens := GeneratorsOfGroup(permG);",
-        r'for gen in gens do Print(gen,"\n"); od;',
-        "QUIT;",
+        r'for gen in gens do Print(gen, "\n"); od;',
     ]
-    command_gap = "".join(lines_gap)
+    result = get_gap_result(commands)
 
-    # run GAP
-    commands = ["gap", "-q", "-c", command_gap]
-    result = subprocess.run(commands, capture_output=True, text=True)
+    if not result.stdout.strip():
+        raise ValueError(f"Group not recognized by GAP: {group}")
 
     # collect generators
     generators = []
-    for line in result.stdout.split("\n")[:-1]:
-        cycles_str = line[1:-1].split(")(")
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
 
+        # extract list of cycles, where each cycle is a tuple of integers
+        cycles_str = line[1:-1].split(")(")
         try:
             cycles = [tuple(map(int, cycle.split(","))) for cycle in cycles_str]
         except ValueError:
-            raise ValueError(f"Cannot extract cycle from string: {line}")
+            raise ValueError(f"Cannot extract cycles from string: {line}")
 
         # decrement integers in the cycle by 1 to account for 0-indexing
         cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
-
         generators.append(cycles)
 
     return generators
 
 
+def use_disk_cache(
+    cache_name: str,
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Cache new results to disk, and retrieve existing results (if available) from the cache."""
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+
+        @functools.wraps(func)
+        def wrapper(*args: Hashable) -> Any:
+
+            # retrieve results from cache, if available
+            cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
+            generators = cache.get(args, None)
+            if generators is not None:
+                return generators
+
+            # compute results and save to cache
+            result = func(*args)
+            cache[args] = result
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+@use_disk_cache("qldpc_groups")
 def get_generators(order: int, index: int) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
-    generators: GENERATORS_LIST | None
-
-    # retrieve generators from cache, if available
-    cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc"))
-    generators = cache.get((order, index), None)
-    if generators is not None:
-        return generators
-
-    # try to retrieve generators and save them to the cache
-    for get_generators in [
+    for get_generators_func in [
         get_generators_with_gap,
         get_generators_from_groupnames,
     ]:
-        generators = get_generators(order, index)
+        generators = get_generators_func(order, index)
         if generators is not None:
-            cache[order, index] = generators
             return generators
 
     # we could not find or retrieve the generators :(
