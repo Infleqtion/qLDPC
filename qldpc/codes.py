@@ -413,10 +413,25 @@ class HammingCode(ClassicalCode):
 
 
 class ReedSolomonCode(ClassicalCode):
-    """Classical Reed-Solomon code."""
+    """Classical Reed-Solomon code.
+
+    Source: https://galois.readthedocs.io/en/v0.3.8/api/galois.ReedSolomon/
+    Reference: https://errorcorrectionzoo.org/c/reed_solomon
+    """
 
     def __init__(self, bits: int, dimension: int) -> None:
         ClassicalCode.__init__(self, galois.ReedSolomon(bits, dimension).H)
+
+
+class BCHCode(ClassicalCode):
+    """Classical binary BCH code code.
+
+    Source: https://galois.readthedocs.io/en/v0.3.8/api/galois.BCH/
+    Reference: https://errorcorrectionzoo.org/c/bch
+    """
+
+    def __init__(self, bits: int, dimension: int) -> None:
+        ClassicalCode.__init__(self, galois.BCH(bits, dimension).H)
 
 
 ################################################################################

@@ -51,8 +51,9 @@ def test_classical_codes() -> None:
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
     assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
-    # check dimension of Reed-Solomon code
+    # check dimension of Reed-Solomon and BCH codes
     assert codes.ReedSolomonCode(3, 2).dimension == 2
+    assert codes.BCHCode(15, 7).dimension == 7
 
     # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
