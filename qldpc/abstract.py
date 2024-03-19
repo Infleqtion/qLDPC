@@ -739,7 +739,7 @@ class QuaternionGroup(Group):
                 blocks = [[zero, -unit], [unit, zero]]
             else:  # if base == 3; +/- k
                 blocks = [[zero, -imag], [-imag, zero]]
-            return sign * np.block(blocks).astype(int).T % 3
+            return sign * np.block(blocks).T % 3
 
         group = Group.from_table(table, integer_lift=lift)
         super().__init__(group._group, field=3, lift=group._lift)

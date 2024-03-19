@@ -445,6 +445,7 @@ class ReedMullerCode(ClassicalCode):
 
     References:
     - https://errorcorrectionzoo.org/c/reed_muller
+    - https://feog.github.io/10-coding.pdf
     """
 
     def __init__(self, order: int, size: int, field: int | None = None) -> None:
@@ -452,14 +453,15 @@ class ReedMullerCode(ClassicalCode):
         self._order = order
         self._size = size
 
+        generator = ReedMullerCode.get_generator(order, size)
+        self._matrix = ClassicalCode(generator, field).generator
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        self._matrix = self.field(ReedMullerCode.get_generator(order, size))
-        self._matrix = (~self)._matrix
 
     @classmethod
     def get_generator(cls, order: int, size: int) -> npt.NDArray[np.int_]:
         """Get the generator matrix for the specified Reed-Muller code."""
         cls._assert_valid_params(order, size)
+
         if order == 0:
             return np.ones(2**size, dtype=int)
         if order == size:

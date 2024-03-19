@@ -67,8 +67,12 @@ def test_special_codes() -> None:
 
     order, size = 1, 3
     code = codes.ReedMullerCode(order, size)
-    assert code.dimension == codes.ClassicalCode.dimension.fget(code)
-    assert code.get_distance_exact() == code.get_distance(bound=True) == 2 ** (size - order)
+    assert code.dimension == codes.ClassicalCode(code.matrix).dimension
+    assert (
+        code.get_distance_exact()
+        == code.get_distance_bound()
+        == codes.ClassicalCode.get_distance_exact(code)
+    )
     assert (
         code.get_distance_exact(vector=[0] * code.num_bits)
         == code.get_distance_bound(vector=[0] * code.num_bits)
