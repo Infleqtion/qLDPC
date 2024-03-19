@@ -33,7 +33,7 @@ def test_get_code() -> None:
 
     # GAP is not installed
     with (
-        pytest.raises(ValueError, match="not installed"),
+        pytest.raises(ValueError, match="GAP 4 is not installed"),
         unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=False),
     ):
         named_codes.get_code("")
@@ -42,6 +42,7 @@ def test_get_code() -> None:
     mock_process = get_mock_process("guava package is not available")
     with (
         pytest.raises(ValueError, match="GAP package GUAVA not available"),
+        unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=True),
         unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
         named_codes.get_code("")
@@ -50,6 +51,7 @@ def test_get_code() -> None:
     mock_process = get_mock_process("\n")
     with (
         pytest.raises(ValueError, match="Code not recognized"),
+        unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=True),
         unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
         named_codes.get_code("")
