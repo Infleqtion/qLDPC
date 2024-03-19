@@ -18,7 +18,8 @@
 import os
 import re
 import subprocess
-import urllib
+import urllib.error
+import urllib.request
 
 import diskcache
 import platformdirs
