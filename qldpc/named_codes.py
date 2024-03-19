@@ -16,9 +16,8 @@
 """
 
 import ast
-import subprocess
 
-from qldpc.small_groups import gap_is_installed
+from qldpc.small_groups import gap_is_installed, get_gap_result
 
 
 def get_parity_checks(name: str) -> list[list[int]]:
@@ -27,19 +26,14 @@ def get_parity_checks(name: str) -> list[list[int]]:
     if not gap_is_installed():
         raise ValueError("GAP 4 is not installed")
 
-    # build GAP command
-    gap_commands = [
+    # run GAP commands
+    commands = [
         'LoadPackage("guava");',
         f"code := {name};",
         "mat := CheckMat(code);",
         r'for vec in mat do Print(List(vec, x -> Int(x)), "\n"); od;',
-        "QUIT;",
     ]
-    gap_command = " ".join(gap_commands)
-
-    # run GAP command
-    commands = ["gap", "-q", "-c", gap_command]
-    result = subprocess.run(commands, capture_output=True, text=True)
+    result = get_gap_result(commands)
 
     # retrieve checks row by row
     checks = []

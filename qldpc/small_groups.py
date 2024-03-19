@@ -18,6 +18,7 @@
 import os
 import re
 import subprocess
+import tempfile
 import urllib.error
 import urllib.request
 
@@ -106,26 +107,50 @@ def gap_is_installed() -> bool:
     return len(lines) == 2 and lines[1].startswith("GAP 4")
 
 
+def sanitize_gap_commands(commands: list[str]) -> list[str]:
+    """Sanitize sequence of GAP commands.
+
+    - Prevent formatting of Print statements
+    - Quit at the end
+    """
+    stream = "__stream__"
+    prefix = [
+        f"{stream} := OutputTextUser();",
+        f"SetPrintFormattingStatus({stream}, false);",
+    ]
+    suffix = ["QUIT;"]
+    commands = [cmd.replace("Print(", f"PrintTo({stream}, ") for cmd in commands]
+    return prefix + commands + suffix
+
+
+def get_gap_result(commands: list[str]) -> subprocess.CompletedProcess[str]:
+    """Get the output from the given GAP commands."""
+    commands = sanitize_gap_commands(commands)
+    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".gap") as script:
+        script.write("\n".join(commands))
+        script_name = script.name
+    print(script_name)
+    shell_commands = ["gap", "-q", "-f", script_name]
+    result = subprocess.run(shell_commands, capture_output=True, text=True)
+    os.remove(script_name)
+    return result
+
+
 def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GAP 4 directly."""
 
     if not gap_is_installed():
         return None
 
-    # build GAP command
-    gap_commands = [
+    # run GAP commands
+    commands = [
         f"G := SmallGroup({order},{index});",
         "iso := IsomorphismPermGroup(G);",
         "permG := Image(iso,G);",
         "gens := GeneratorsOfGroup(permG);",
         r'for gen in gens do Print(gen,"\n"); od;',
-        "QUIT;",
     ]
-    gap_command = " ".join(gap_commands)
-
-    # run GAP command
-    commands = ["gap", "-q", "-c", gap_command]
-    result = subprocess.run(commands, capture_output=True, text=True)
+    result = get_gap_result(commands)
 
     # collect generators
     generators = []
@@ -154,9 +179,9 @@ def get_generators(order: int, index: int) -> GENERATORS_LIST:
 
     # retrieve generators from cache, if available
     cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc"))
-    generators = cache.get((order, index), None)
-    if generators is not None:
-        return generators
+    # generators = cache.get((order, index), None)
+    # if generators is not None:
+    #     return generators
 
     # try to retrieve generators and save them to the cache
     for get_generators in [
