@@ -51,7 +51,7 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 import sympy.core
 
-from qldpc import small_groups
+from qldpc import named_groups
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -381,6 +381,14 @@ class Group:
                     singles.pop()
                 return singles | doubles
 
+    @classmethod
+    def from_name(cls, name: str) -> Group:
+        """Named group in the GAP computer algebra system."""
+        standardized_name = name.strip().replace(" ", "")  # remove whitespace
+        generators = named_groups.get_generators(standardized_name)
+        group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
+        return Group(group)
+
 
 ################################################################################
 # elements of a group algebra
@@ -637,6 +645,13 @@ class CyclicGroup(Group):
         super().__init__(comb.named_groups.CyclicGroup(order))
 
 
+class AbelianGroup(Group):
+    """Direct product of cyclic groups of the specified orders."""
+
+    def __init__(self, *orders: int) -> None:
+        super().__init__(comb.named_groups.AbelianGroup(*orders))
+
+
 class DihedralGroup(Group):
     """Dihedral group of a specified order."""
 
@@ -888,6 +903,7 @@ class SmallGroup(Group):
     """Groups indexed by the GAP computer algebra system."""
 
     def __init__(self, order: int, index: int) -> None:
-        generators = small_groups.get_generators(order, index)
+        name = f"SmallGroup({order},{index})"
+        generators = named_groups.get_generators(name)
         group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
         super().__init__(group)

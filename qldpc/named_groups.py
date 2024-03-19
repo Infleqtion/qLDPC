@@ -1,4 +1,4 @@
-"""Module for loading groups indexed by the GAP computer algebra system
+"""Module for loading groups from the GAP computer algebra system
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -19,7 +19,6 @@ import functools
 import os
 import re
 import subprocess
-import tempfile
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Hashable
@@ -63,8 +62,16 @@ def get_group_url(order: int, index: int) -> str | None:
     return GROUPNAMES_URL + match.group(1)
 
 
-def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | None:
+def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GroupNames.org."""
+
+    # extract order and index of a SmallGroup
+    match = re.match(r"SmallGroup\(([0-9]+),([0-9]+)\)", group)
+    if match:
+        order, index = map(int, match.groups())
+    else:
+        # this group is not indexed in GroupNames.org
+        return None
 
     # load web page for the specified group
     group_url = get_group_url(order, index)
@@ -123,23 +130,18 @@ def sanitize_gap_commands(commands: list[str]) -> list[str]:
 def get_gap_result(commands: list[str]) -> subprocess.CompletedProcess[str]:
     """Get the output from the given GAP commands."""
     commands = sanitize_gap_commands(commands)
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".gap") as script:
-        script.write("\n".join(commands))
-        script_name = script.name
-    shell_commands = ["gap", "-q", "--quitonbreak", script_name]
+    shell_commands = ["gap", "-q", "--quitonbreak", "-c", " ".join(commands)]
     result = subprocess.run(shell_commands, capture_output=True, text=True)
-    os.remove(script_name)
     return result
 
 
-def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
+def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GAP directly."""
 
     if not gap_is_installed():
         return None
 
     # run GAP commands
-    group = f"SmallGroup({order},{index})"
     commands = [
         f"G := {group};",
         "iso := IsomorphismPermGroup(G);",
@@ -184,9 +186,9 @@ def use_disk_cache(
 
             # retrieve results from cache, if available
             cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
-            generators = cache.get(args, None)
-            if generators is not None:
-                return generators
+            result = cache.get(args, None)
+            if result is not None:
+                return result
 
             # compute results and save to cache
             result = func(*args)
@@ -199,21 +201,24 @@ def use_disk_cache(
 
 
 @use_disk_cache("qldpc_groups")
-def get_generators(order: int, index: int) -> GENERATORS_LIST:
+def get_generators(group: str) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
-    for get_generators_func in [
-        get_generators_with_gap,
-        get_generators_from_groupnames,
-    ]:
-        generators = get_generators_func(order, index)
-        if generators is not None:
-            return generators
 
-    # we could not find or retrieve the generators :(
+    generators = get_generators_with_gap(group)
+    if generators is not None:
+        return generators
+
+    generators = get_generators_from_groupnames(group)
+    if generators is not None:
+        return generators
+
     message = [
         "Cannot build GAP group:",
         "- local database does not contain the group",
-        "- GAP 4 not installed",
-        "- GroupNames.org is unreachable",
+        "- GAP 4 is not installed",
     ]
+    if group.startswith("SmallGroup"):
+        message.append("- GroupNames.org is unreachable")
+    else:
+        message.append("- group not indexed by GroupNames.org")
     raise ValueError("\n".join(message))
