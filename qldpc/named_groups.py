@@ -82,7 +82,7 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     group_page_html = group_page.read().decode("utf-8")
 
     # extract section with the generators we are after
-    loc = group_page_html.find("Permutation representations")
+    loc = group_page_html.lower().find("permutation representation")
     end = group_page_html[loc:].find("copytext")  # go until the first copy-able text
     section = group_page_html[loc : loc + end]
 
