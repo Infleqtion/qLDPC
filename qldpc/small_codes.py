@@ -19,13 +19,13 @@ import ast
 import subprocess
 
 
-from qldpc.small_groups import gap4_is_installed
+from qldpc.small_groups import gap_is_installed
 
 
 def get_parity_checks(name: str) -> list[list[int]]:
     """Retrieve a group from GAP."""
 
-    if not gap4_is_installed():
+    if not gap_is_installed():
         raise ValueError("GAP 4 is not installed")
 
     # build GAP command

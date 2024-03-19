@@ -96,7 +96,7 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
     return generators
 
 
-def gap4_is_installed() -> bool:
+def gap_is_installed() -> bool:
     """Is GAP 4 installed?"""
     commands = ["script", "-c", "gap --version", os.devnull]
     result = subprocess.run(commands, capture_output=True, text=True)
@@ -107,7 +107,7 @@ def gap4_is_installed() -> bool:
 def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GAP 4 directly."""
 
-    if not gap4_is_installed():
+    if not gap_is_installed():
         return None
 
     # build GAP command

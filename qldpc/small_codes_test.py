@@ -44,7 +44,7 @@ def test_get_parity_checks() -> None:
     process_1 = get_mock_process("\nGAP 4\n")
     process_2 = get_mock_process(str(check))
     with (
-        unittest.mock.patch("qldpc.small_codes.gap4_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.small_codes.gap_is_installed", return_value=True),
         unittest.mock.patch("subprocess.run", side_effects=[process_1, process_2]),
     ):
         assert small_codes.get_parity_checks(name) == [check]

@@ -92,32 +92,32 @@ def test_get_generators_from_groupnames() -> None:
         assert small_groups.get_generators_from_groupnames(ORDER, INDEX) == GENERATORS
 
 
-def test_gap4_is_installed() -> None:
+def test_gap_is_installed() -> None:
     """Is GAP 4 installed?"""
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
-        assert not small_groups.gap4_is_installed()
+        assert not small_groups.gap_is_installed()
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\nGAP 4\n\n")):
-        assert small_groups.gap4_is_installed()
+        assert small_groups.gap_is_installed()
 
 
 def test_get_generators_with_gap() -> None:
     """Retrive generators from GAP 4."""
 
     # GAP is not installed
-    with unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=False):
+    with unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=False):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
     # cannot extract cycle from string
     with (
         pytest.raises(ValueError, match="Cannot extract cycle"),
-        unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=True),
         unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n(1, 2a)\n")),
     ):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
     # everything works as expected
     with (
-        unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=True),
         unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n(1, 2)\n")),
     ):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
