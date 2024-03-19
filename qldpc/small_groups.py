@@ -98,18 +98,22 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
     return generators
 
 
-def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
-    """Retrieve GAP group generators from GAP 4 directly."""
-
-    # check that GAP 4 is installed
+def gap4_is_installed() -> bool:
+    """Is GAP 4 installed?"""
     commands = ["script", "-c", "gap --version", os.devnull]
     result = subprocess.run(commands, capture_output=True, text=True)
     lines = result.stdout.split("\n")
-    if not len(lines) == 2 or lines[1][:5] != "GAP 4":
+    return len(lines) == 3 and lines[1].startswith("GAP 4")
+
+
+def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
+    """Retrieve GAP group generators from GAP 4 directly."""
+
+    if not gap4_is_installed():
         return None
 
     # build GAP command
-    lines_gap = [
+    gap_commands = [
         f"G := SmallGroup({order},{index});",
         "iso := IsomorphismPermGroup(G);",
         "permG := Image(iso,G);",
@@ -117,15 +121,18 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
         r'for gen in gens do Print(gen,"\n"); od;',
         "QUIT;",
     ]
-    command_gap = "".join(lines_gap)
+    gap_command = " ".join(gap_commands)
 
-    # run GAP
-    commands = ["gap", "-q", "-c", command_gap]
+    # run GAP command
+    commands = ["gap", "-q", "-c", gap_command]
     result = subprocess.run(commands, capture_output=True, text=True)
 
     # collect generators
     generators = []
-    for line in result.stdout.split("\n")[:-1]:
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+
         cycles_str = line[1:-1].split(")(")
 
         try:

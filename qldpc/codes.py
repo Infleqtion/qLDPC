@@ -22,7 +22,7 @@ import functools
 import itertools
 import random
 from collections.abc import Collection, Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import galois
 import ldpc.mod2
@@ -31,11 +31,8 @@ import numpy as np
 import numpy.typing as npt
 
 import qldpc
-from qldpc import abstract
+from qldpc import abstract, small_codes
 from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
-
-if TYPE_CHECKING:
-    from typing_extensions import Self
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -59,7 +56,7 @@ class AbstractCode(abc.ABC):
 
     def __init__(
         self,
-        matrix: Self | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
     ) -> None:
         """Construct a code from a parity check matrix over a finite field.
@@ -407,21 +404,6 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(code.matrix[:, bits_to_keep])
 
     @classmethod
-    def cordaro_wagner(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
-        """Construct Cordaro Wagner Code of length 4, 5, 6."""
-        if num_bits == 4:
-            generator = [[1, 1, 0, 0], [0, 0, 1, 1]]
-        elif num_bits == 5:
-            generator = [[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]
-        elif num_bits == 6:
-            generator = [[1, 1, 0, 0, 1, 1], [0, 0, 1, 1, 1, 1]]
-        else:
-            raise ValueError(
-                f"Cordaro Wagner codes only supported for block length 4, 5, or 6, not {num_bits}"
-            )
-        return ~ClassicalCode(generator, field=field or DEFAULT_FIELD_ORDER)
-
-    @classmethod
     def RepSum(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
         """Construct punctured Hammming Codes [6,3,3] Code."""
         if num_bits == 5:
@@ -436,6 +418,14 @@ class ClassicalCode(AbstractCode):
 
     # TODO: add more codes, particularly from code families that are useful for good quantum codes
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
+
+
+class NamedCode(ClassicalCode):
+    """Named code in the GAP computer algebra system."""
+
+    def __init__(self, name: str) -> None:
+        code = small_codes.get_parity_checks(name)
+        super().__init__(code)
 
 
 def _fix_decoder_args_for_nonbinary_fields(
