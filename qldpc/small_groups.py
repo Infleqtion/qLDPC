@@ -152,6 +152,9 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     ]
     result = get_gap_result(commands)
 
+    if not result.stdout.strip():
+        raise ValueError(f"Group not recognized by GAP: {group}")
+
     # collect generators
     generators = []
     for line in result.stdout.splitlines():
@@ -169,9 +172,6 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
         cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
         generators.append(cycles)
 
-    if not generators:
-        raise ValueError(f"Group not recognized by GAP: {group}")
-
     return generators
 
 
@@ -181,9 +181,9 @@ def get_generators(order: int, index: int) -> GENERATORS_LIST:
 
     # retrieve generators from cache, if available
     cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc"))
-    # generators = cache.get((order, index), None)
-    # if generators is not None:
-    #     return generators
+    generators = cache.get((order, index), None)
+    if generators is not None:
+        return generators
 
     # try to retrieve generators and save them to the cache
     for get_generators in [

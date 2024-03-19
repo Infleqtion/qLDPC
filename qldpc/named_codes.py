@@ -36,7 +36,10 @@ def get_parity_checks(name: str) -> list[list[int]]:
     result = get_gap_result(commands)
 
     if "guava package is not available" in result.stdout:
-        raise ValueError("GAP package GUAVA package is not installed")
+        raise ValueError("GAP package GUAVA not available")
+
+    if not result.stdout.strip():
+        raise ValueError(f"Code not recognized by the GAP package GUAVA: {name}")
 
     # retrieve checks row by row
     checks = []

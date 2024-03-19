@@ -41,7 +41,15 @@ def test_get_parity_checks() -> None:
     # GUAVA is not installed
     mock_process = get_mock_process("guava package is not available")
     with (
-        pytest.raises(ValueError, match="not installed"),
+        pytest.raises(ValueError, match="GAP package GUAVA not available"),
+        unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
+    ):
+        named_codes.get_parity_checks("")
+
+    # code not recognized by GUAVA
+    mock_process = get_mock_process("\n")
+    with (
+        pytest.raises(ValueError, match="Code not recognized"),
         unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
         named_codes.get_parity_checks("")
