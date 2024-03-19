@@ -22,7 +22,7 @@ from qldpc.small_groups import gap_is_installed, get_gap_result, use_disk_cache
 
 
 @use_disk_cache("qldpc_codes")
-def get_code(name: str) -> tuple[list[list[int]], int | None]:
+def get_code(code: str) -> tuple[list[list[int]], int | None]:
     """Retrieve a group from GAP."""
 
     # run GAP commands
@@ -30,7 +30,7 @@ def get_code(name: str) -> tuple[list[list[int]], int | None]:
         raise ValueError("GAP 4 is not installed")
     commands = [
         'LoadPackage("guava");',
-        f"code := {name};",
+        f"code := {code};",
         "mat := CheckMat(code);",
         r'Print(LeftActingDomain(code), "\n");',
         r'for vec in mat do Print(List(vec, x -> Int(x)), "\n"); od;',
@@ -41,7 +41,7 @@ def get_code(name: str) -> tuple[list[list[int]], int | None]:
         raise ValueError("GAP package GUAVA not available")
 
     if not result.stdout.strip():
-        raise ValueError(f"Code not recognized by the GAP package GUAVA: {name}")
+        raise ValueError(f"Code not recognized by the GAP package GUAVA: {code}")
 
     # identify base field and retrieve parity checks
     field: int | None = None

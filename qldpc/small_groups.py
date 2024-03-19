@@ -63,8 +63,14 @@ def get_group_url(order: int, index: int) -> str | None:
     return GROUPNAMES_URL + match.group(1)
 
 
-def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | None:
+def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GroupNames.org."""
+
+    match = re.match(r"SmallGroup\(([0-9]+),([0-9]+)\)", group)
+    if match:
+        order, index = map(int, match.groups())
+    else:
+        return None
 
     # load web page for the specified group
     group_url = get_group_url(order, index)
@@ -132,14 +138,13 @@ def get_gap_result(commands: list[str]) -> subprocess.CompletedProcess[str]:
     return result
 
 
-def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
+def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GAP directly."""
 
     if not gap_is_installed():
         return None
 
     # run GAP commands
-    group = f"SmallGroup({order},{index})"
     commands = [
         f"G := {group};",
         "iso := IsomorphismPermGroup(G);",
@@ -199,21 +204,24 @@ def use_disk_cache(
 
 
 @use_disk_cache("qldpc_groups")
-def get_generators(order: int, index: int) -> GENERATORS_LIST:
+def get_generators(group: str) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
-    for get_generators_func in [
-        get_generators_with_gap,
-        get_generators_from_groupnames,
-    ]:
-        generators = get_generators_func(order, index)
-        if generators is not None:
-            return generators
 
-    # we could not find or retrieve the generators :(
+    generators = get_generators_with_gap(group)
+    if generators is not None:
+        return generators
+
+    generators = get_generators_from_groupnames(group)
+    if generators is not None:
+        return generators
+
     message = [
         "Cannot build GAP group:",
         "- local database does not contain the group",
-        "- GAP 4 not installed",
-        "- GroupNames.org is unreachable",
+        "- GAP 4 is not installed",
     ]
+    if group.startswith("SmallGroup"):
+        message.append("- GroupNames.org is unreachable")
+    else:
+        message.append("- group not indexed by GroupNames.org")
     raise ValueError("\n".join(message))
