@@ -45,7 +45,7 @@ def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galo
 
 
 ################################################################################
-# template error correction code classes
+# template error correction code class
 
 
 # TODO(?): support sparse parity check matrices
@@ -104,6 +104,10 @@ class AbstractCode(abc.ABC):
     @abc.abstractmethod
     def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
+
+
+################################################################################
+# classical codes
 
 
 class ClassicalCode(AbstractCode):
@@ -428,25 +432,8 @@ class NamedCode(ClassicalCode):
         super().__init__(code)
 
 
-def _fix_decoder_args_for_nonbinary_fields(
-    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
-) -> None:
-    """Fix decoder arguments for nonbinary number fields.
-
-    If the field has order greater than 2, then we can only decode
-    (a) prime number fields, with
-    (b) an integer-linear program decoder.
-
-    If provided a bound_index, treat the constraint corresponding to this row of the parity check
-    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
-    """
-    if field.order > 2:
-        if field.degree > 1:
-            raise ValueError("Method only supported for prime number fields")
-        decoder_args["with_ILP"] = True
-        decoder_args["modulus"] = field.order
-        if bound_index is not None:
-            decoder_args["lower_bound_row"] = bound_index
+################################################################################
+# quantum codes
 
 
 # TODO:
@@ -1000,6 +987,27 @@ class CSSCode(QuditCode):
         else:
             for logical_index in range(self.dimension):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
+
+
+def _fix_decoder_args_for_nonbinary_fields(
+    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
+) -> None:
+    """Fix decoder arguments for nonbinary number fields.
+
+    If the field has order greater than 2, then we can only decode
+    (a) prime number fields, with
+    (b) an integer-linear program decoder.
+
+    If provided a bound_index, treat the constraint corresponding to this row of the parity check
+    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
+    """
+    if field.order > 2:
+        if field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
+        decoder_args["with_ILP"] = True
+        decoder_args["modulus"] = field.order
+        if bound_index is not None:
+            decoder_args["lower_bound_row"] = bound_index
 
 
 ################################################################################
