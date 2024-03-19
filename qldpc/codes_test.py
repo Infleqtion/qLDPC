@@ -50,15 +50,9 @@ def test_classical_codes() -> None:
     assert codes.ClassicalCode.repetition(3, 2).rank == codes.ClassicalCode.repetition(3, 3).rank
     assert codes.ClassicalCode.hamming(3, 2).rank == codes.ClassicalCode.hamming(3, 3).rank
 
-    # test Cordaro Wagner and punctured Hamming codes
-    for num_bits in [4, 5, 6]:
-        assert codes.ClassicalCode.cordaro_wagner(num_bits).num_bits == num_bits
+    # test punctured Hamming codes
     for num_bits in [5, 6]:
         assert codes.ClassicalCode.RepSum(num_bits).num_bits == num_bits
-
-    num_bits = 7
-    with pytest.raises(ValueError, match=f"not {num_bits}"):
-        codes.ClassicalCode.cordaro_wagner(7)
     with pytest.raises(ValueError, match=f"not {num_bits}"):
         codes.ClassicalCode.RepSum(7)
 
