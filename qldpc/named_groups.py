@@ -19,7 +19,6 @@ import functools
 import os
 import re
 import subprocess
-import tempfile
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Hashable
@@ -187,9 +186,9 @@ def use_disk_cache(
 
             # retrieve results from cache, if available
             cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
-            generators = cache.get(args, None)
-            if generators is not None:
-                return generators
+            result = cache.get(args, None)
+            if result is not None:
+                return result
 
             # compute results and save to cache
             result = func(*args)
