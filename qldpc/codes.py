@@ -364,6 +364,9 @@ class ClassicalCode(AbstractCode):
         matrix, field = named_codes.get_code(standardized_name)
         return ClassicalCode(matrix, field)
 
+    # TODO(?): maybe add modification options
+    # https://users.math.msu.edu/users/halljo/classes/codenotes/mod.pdf
+
 
 class RepetitionCode(ClassicalCode):
     """Classical repetition code."""
