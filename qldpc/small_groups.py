@@ -202,11 +202,11 @@ def use_disk_cache(
 @use_disk_cache("qldpc_groups")
 def get_generators(order: int, index: int) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
-    for get_generators in [
+    for get_generators_func in [
         get_generators_with_gap,
         get_generators_from_groupnames,
     ]:
-        generators = get_generators(order, index)
+        generators = get_generators_func(order, index)
         if generators is not None:
             return generators
 
