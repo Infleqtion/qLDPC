@@ -448,16 +448,35 @@ class ReedMullerCode(ClassicalCode):
     """
 
     def __init__(self, order: int, size: int, field: int | None = None) -> None:
-        if not (size >= 0 and 0 <= order < size):
-            raise ValueError(
-                "Reed-Muller code R(r,m) must have m >= 0 and 0 <= r < m\n"
-                + f"Provided: (r,m) = ({order},{size})"
-            )
+        self._assert_valid_params(order, size)
+        self._order = order
+        self._size = size
+
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         self._matrix = self.field(ReedMullerCode.get_generator(order, size))
         self._matrix = (~self)._matrix
-        self._order = order
-        self._size = size
+
+    @classmethod
+    def get_generator(cls, order: int, size: int) -> npt.NDArray[np.int_]:
+        """Get the generator matrix for the specified Reed-Muller code."""
+        cls._assert_valid_params(order, size)
+        if order == 0:
+            return np.ones(2**size, dtype=int)
+        if order == size:
+            return np.identity(2**size, dtype=int)
+
+        mat_a = cls.get_generator(order, size - 1)
+        mat_b = cls.get_generator(order - 1, size - 1)
+        mat_z = np.zeros_like(mat_b)
+        return np.block([[mat_a, mat_a], [mat_z, mat_b]]).astype(int)
+
+    @classmethod
+    def _assert_valid_params(self, order: int, size: int) -> None:
+        if not (size >= 0 and 0 <= order <= size):
+            raise ValueError(
+                "Reed-Muller code R(r,m) must have m >= 0 and 0 <= r <= m\n"
+                + f"Provided: (r,m) = ({order},{size})"
+            )
 
     def get_distance_exact(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
@@ -482,19 +501,6 @@ class ReedMullerCode(ClassicalCode):
         if vector is None:
             return self.get_distance_exact()
         return super().get_one_distance_bound(vector=vector, **decoder_args)
-
-    @classmethod
-    def get_generator(cls, order: int, size: int) -> npt.NDArray[np.int_]:
-        """Get the generator matrix for the specified Reed-Muller code."""
-        if order == 0:
-            return np.ones(2**size, dtype=int)
-        if order == size:
-            return np.identity(2**size, dtype=int)
-
-        mat_a = cls.get_generator(order, size - 1)
-        mat_b = cls.get_generator(order - 1, size - 1)
-        mat_z = np.zeros_like(mat_b)
-        return np.block([[mat_a, mat_a], [mat_z, mat_b]]).astype(int)
 
 
 ################################################################################
