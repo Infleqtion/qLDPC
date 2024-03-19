@@ -152,9 +152,16 @@ def test_get_generators_with_gap() -> None:
 def test_get_generators() -> None:
     """Retrieve generators somehow."""
 
-    # retrieve from cache
-    mock_cache = {(ORDER, INDEX): GENERATORS}
+    # use cache to save/retrieve results
+    mock_cache = {}
     with unittest.mock.patch("diskcache.Cache", return_value=mock_cache):
+        # compute and save result to cache
+        with unittest.mock.patch(
+            "qldpc.small_groups.get_generators_with_gap", return_value=GENERATORS
+        ):
+            assert small_groups.get_generators(ORDER, INDEX) == GENERATORS
+
+        # retrieve result from cache
         assert small_groups.get_generators(ORDER, INDEX) == GENERATORS
 
     # retrieve from GAP

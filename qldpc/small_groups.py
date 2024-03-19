@@ -180,7 +180,6 @@ def use_disk_cache(
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 
         @functools.wraps(func)
-        @functools.cache
         def wrapper(*args: Hashable) -> Any:
 
             # retrieve results from cache, if available
