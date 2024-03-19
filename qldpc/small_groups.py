@@ -102,7 +102,7 @@ def gap4_is_installed() -> bool:
     """Is GAP 4 installed?"""
     commands = ["script", "-c", "gap --version", os.devnull]
     result = subprocess.run(commands, capture_output=True, text=True)
-    lines = result.stdout.split("\n")
+    lines = result.stdout.splitlines()
     return len(lines) == 3 and lines[1].startswith("GAP 4")
 
 

@@ -32,6 +32,18 @@ MOCK_INDEX_HTML = """<table class="gptable" columns="6" style='width: 70%;'>
 MOCK_GROUP_HTML = """<b><a href='https://en.wikipedia.org/wiki/Group actions' title='See wikipedia' class='wiki'>Permutation representations of C<sub>2</sub></a></b><br><a id='shl1' class='shl' href="javascript:showhide('shs1','shl1','Regular action on 2 points');"><span class="nsgpn">&#x25ba;</span>Regular action on 2 points</a> - transitive group <a href="../T15.html#2t1">2T1</a><div id='shs1' class='shs'>Generators in S<sub>2</sub><br><pre class='pre' id='textgn1'>(1 2)</pre>&emsp;<button class='copytext' id='copygn1'>Copy</button><br>"""  # pylint: disable=line-too-long  # noqa: E501
 
 
+def get_mock_process(stdout: str) -> subprocess.CompletedProcess:
+    """Fake process with the given stdout."""
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
+
+
+def get_mock_page(text: str) -> unittest.mock.MagicMock:
+    """Fake webpage with the given text."""
+    mock_page = unittest.mock.MagicMock()
+    mock_page.read.return_value = text.encode("utf-8")
+    return mock_page
+
+
 def test_get_group_url() -> None:
     """Retrive url for group webpage on GroupNames.org."""
 
@@ -41,15 +53,16 @@ def test_get_group_url() -> None:
     ):
         assert small_groups.get_group_url(ORDER, INDEX) is None
 
-    mock_page = unittest.mock.MagicMock()
-    mock_page.read.return_value = MOCK_INDEX_HTML.encode("utf-8")
+    # cannot find group webpage
+    mock_page = get_mock_page(MOCK_INDEX_HTML.replace(f"{ORDER},{INDEX}", ""))
+    with (
+        pytest.raises(ValueError, match="not found"),
+        unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
+    ):
+        small_groups.get_group_url(ORDER, INDEX)
+
+    mock_page = get_mock_page(MOCK_INDEX_HTML)
     with unittest.mock.patch("urllib.request.urlopen", return_value=mock_page):
-        # cannot find group webpage
-        with (
-            pytest.raises(ValueError, match="not found"),
-            unittest.mock.patch("re.search", return_value=None),
-        ):
-            small_groups.get_group_url(ORDER, INDEX)
 
         # requested group not found on the index
         with pytest.raises(ValueError, match="not found"):
@@ -66,43 +79,52 @@ def test_get_generators_from_groupnames() -> None:
     with unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=None):
         assert small_groups.get_generators_from_groupnames(ORDER, INDEX) is None
 
-    mock_page = unittest.mock.MagicMock()
-    mock_page.read.return_value = MOCK_GROUP_HTML.encode("utf-8")
+    # cannot find generators
+    mock_page = get_mock_page(MOCK_GROUP_HTML.replace("pre", ""))
+    with (
+        pytest.raises(ValueError, match="not found"),
+        unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=GROUP_URL),
+        unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
+    ):
+        small_groups.get_generators_from_groupnames(ORDER, INDEX)
+
+    # everything works as expected
+    mock_page = get_mock_page(MOCK_GROUP_HTML)
     with (
         unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
-        # cannot find generators
-        with (
-            pytest.raises(ValueError, match="not found"),
-            unittest.mock.patch("re.search", return_value=None),
-        ):
-            small_groups.get_generators_from_groupnames(ORDER, INDEX)
-
-        # everything works as expected
         assert small_groups.get_generators_from_groupnames(ORDER, INDEX) == GENERATORS
+
+
+def test_gap4_is_installed() -> None:
+    """Is GAP 4 installed?"""
+    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
+        assert not small_groups.gap4_is_installed()
+    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\nGAP 4\n\n")):
+        assert small_groups.gap4_is_installed()
 
 
 def test_get_generators_with_gap() -> None:
     """Retrive generators from GAP 4."""
 
     # GAP is not installed
-    process = subprocess.CompletedProcess(args=[], returncode=0, stdout="")
-    with unittest.mock.patch("subprocess.run", return_value=process):
+    with unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=False):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
-    # GAP is not installed
-    process_1 = subprocess.CompletedProcess(args=[], returncode=0, stdout="\nGAP 4")
-    process_2 = subprocess.CompletedProcess(args=[], returncode=0, stdout="\n")
+    # cannot extract cycle from string
     with (
         pytest.raises(ValueError, match="Cannot extract cycle"),
-        unittest.mock.patch("subprocess.run", side_effect=[process_1, process_2]),
+        unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=True),
+        unittest.mock.patch("subprocess.run", return_value=get_mock_process("(1, 2a)\n")),
     ):
-        small_groups.get_generators_with_gap(ORDER, INDEX)
+        assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
     # everything works as expected
-    process_2 = subprocess.CompletedProcess(args=[], returncode=0, stdout="(1, 2)\n")
-    with unittest.mock.patch("subprocess.run", side_effect=[process_1, process_2]):
+    with (
+        unittest.mock.patch("qldpc.small_groups.gap4_is_installed", return_value=True),
+        unittest.mock.patch("subprocess.run", return_value=get_mock_process("(1, 2)\n")),
+    ):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
 
 
