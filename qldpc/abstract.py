@@ -51,7 +51,7 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 import sympy.core
 
-from qldpc import small_groups
+from qldpc import named_groups
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -385,7 +385,7 @@ class Group:
     def from_name(cls, name: str) -> Group:
         """Named group in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
-        generators = small_groups.get_generators(standardized_name)
+        generators = named_groups.get_generators(standardized_name)
         group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
         return Group(group)
 
@@ -903,6 +903,7 @@ class SmallGroup(Group):
     """Groups indexed by the GAP computer algebra system."""
 
     def __init__(self, order: int, index: int) -> None:
-        generators = small_groups.get_generators(order, index)
+        name = f"SmallGroup({order},{index})"
+        generators = named_groups.get_generators(name)
         group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
         super().__init__(group)

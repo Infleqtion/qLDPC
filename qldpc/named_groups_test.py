@@ -1,4 +1,4 @@
-"""Unit tests for small_groups.py
+"""Unit tests for named_groups.py
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -21,12 +21,12 @@ import urllib
 
 import pytest
 
-from qldpc import small_groups
+from qldpc import named_groups
 
 ORDER, INDEX = 2, 1
 GENERATORS = [[(0, 1)]]
 GROUP = f"SmallGroup({ORDER},{INDEX})"
-GROUP_URL = small_groups.GROUPNAMES_URL + "1/C2.html"
+GROUP_URL = named_groups.GROUPNAMES_URL + "1/C2.html"
 MOCK_INDEX_HTML = """<table class="gptable" columns="6" style='width: 70%;'>
 <tr><th width="12%"></th><th width="60%"></th><th width="5%"><a href='T.html'>d</a></th><th width="5%"><a href='R.html'>&rho;</a></th><th width="12%">Label</th><th width="7%">ID</th></tr><tr><td id="c2"><a href="1/C2.html">C<sub>2</sub></a></td><td><a href="cyclic.html">Cyclic</a> group</td><td><a href="T15.html#c2">2</a></td><td><a href="R.html#dim1+">1+</a></td><td>C2</td><td>2,1</td></tr>
 </table>"""  # pylint: disable=line-too-long  # noqa: E501
@@ -47,7 +47,7 @@ def test_get_group_url() -> None:
     with unittest.mock.patch(
         "urllib.request.urlopen", side_effect=urllib.error.URLError("message")
     ):
-        assert small_groups.get_group_url(ORDER, INDEX) is None
+        assert named_groups.get_group_url(ORDER, INDEX) is None
 
     # cannot find group in the index
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace(f"{ORDER},{INDEX}", ""))
@@ -55,7 +55,7 @@ def test_get_group_url() -> None:
         pytest.raises(ValueError, match="Group .* not found"),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
-        small_groups.get_group_url(ORDER, INDEX)
+        named_groups.get_group_url(ORDER, INDEX)
 
     # cannot find link to group webpage
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace("href", ""))
@@ -63,40 +63,40 @@ def test_get_group_url() -> None:
         pytest.raises(ValueError, match="Webpage .* not found"),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
-        small_groups.get_group_url(ORDER, INDEX)
+        named_groups.get_group_url(ORDER, INDEX)
 
     # everything works as expected
     mock_page = get_mock_page(MOCK_INDEX_HTML)
     with unittest.mock.patch("urllib.request.urlopen", return_value=mock_page):
-        assert small_groups.get_group_url(ORDER, INDEX) == GROUP_URL
+        assert named_groups.get_group_url(ORDER, INDEX) == GROUP_URL
 
 
 def test_get_generators_from_groupnames() -> None:
     """Retrive generators from group webpage on GroupNames.org."""
 
     # group not indexed
-    assert small_groups.get_generators_from_groupnames("") is None
+    assert named_groups.get_generators_from_groupnames("") is None
 
     # group url not found
-    with unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=None):
-        assert small_groups.get_generators_from_groupnames(GROUP) is None
+    with unittest.mock.patch("qldpc.named_groups.get_group_url", return_value=None):
+        assert named_groups.get_generators_from_groupnames(GROUP) is None
 
     # cannot find generators
     mock_page = get_mock_page(MOCK_GROUP_HTML.replace("pre", ""))
     with (
         pytest.raises(ValueError, match="Generators .* not found"),
-        unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=GROUP_URL),
+        unittest.mock.patch("qldpc.named_groups.get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
-        small_groups.get_generators_from_groupnames(GROUP)
+        named_groups.get_generators_from_groupnames(GROUP)
 
     # everything works as expected
     mock_page = get_mock_page(MOCK_GROUP_HTML)
     with (
-        unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=GROUP_URL),
+        unittest.mock.patch("qldpc.named_groups.get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
-        assert small_groups.get_generators_from_groupnames(GROUP) == GENERATORS
+        assert named_groups.get_generators_from_groupnames(GROUP) == GENERATORS
 
 
 def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
@@ -107,50 +107,50 @@ def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
 def test_gap_is_installed() -> None:
     """Is GAP 4 installed?"""
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
-        assert not small_groups.gap_is_installed()
+        assert not named_groups.gap_is_installed()
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\nGAP 4")):
-        assert small_groups.gap_is_installed()
+        assert named_groups.gap_is_installed()
 
 
 def test_get_gap_result() -> None:
     """Run GAP commands and retrieve the GAP output."""
     output = "test"
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process(output)):
-        assert small_groups.get_gap_result([]).stdout == output
+        assert named_groups.get_gap_result([]).stdout == output
 
 
 def test_get_generators_with_gap() -> None:
     """Retrive generators from GAP 4."""
 
     # GAP is not installed
-    with unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=False):
-        assert small_groups.get_generators_with_gap(GROUP) is None
+    with unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=False):
+        assert named_groups.get_generators_with_gap(GROUP) is None
 
     # cannot extract cycle from string
     mock_process = get_mock_process("\n(1, 2a)\n")
     with (
         pytest.raises(ValueError, match="Cannot extract cycle"),
-        unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.small_groups.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.named_groups.get_gap_result", return_value=mock_process),
     ):
-        assert small_groups.get_generators_with_gap(GROUP) is None
+        assert named_groups.get_generators_with_gap(GROUP) is None
 
     # group not recognized by GAP
     mock_process = get_mock_process("")
     with (
         pytest.raises(ValueError, match="not recognized by GAP"),
-        unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.small_groups.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.named_groups.get_gap_result", return_value=mock_process),
     ):
-        assert small_groups.get_generators_with_gap(GROUP) is None
+        assert named_groups.get_generators_with_gap(GROUP) is None
 
     # everything works as expected
     mock_process = get_mock_process("\n(1, 2)\n")
     with (
-        unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.small_groups.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.named_groups.get_gap_result", return_value=mock_process),
     ):
-        assert small_groups.get_generators_with_gap(GROUP) == GENERATORS
+        assert named_groups.get_generators_with_gap(GROUP) == GENERATORS
 
 
 def test_get_generators() -> None:
@@ -160,38 +160,38 @@ def test_get_generators() -> None:
     with unittest.mock.patch("diskcache.Cache", return_value={}):
         # compute and save result to cache
         with unittest.mock.patch(
-            "qldpc.small_groups.get_generators_with_gap", return_value=GENERATORS
+            "qldpc.named_groups.get_generators_with_gap", return_value=GENERATORS
         ):
-            assert small_groups.get_generators(GROUP) == GENERATORS
+            assert named_groups.get_generators(GROUP) == GENERATORS
 
         # retrieve result from cache
-        assert small_groups.get_generators(GROUP) == GENERATORS
+        assert named_groups.get_generators(GROUP) == GENERATORS
 
     # strip cache wrapper
-    if hasattr(small_groups.get_generators, "__wrapped__"):
-        small_groups.get_generators = small_groups.get_generators.__wrapped__
+    if hasattr(named_groups.get_generators, "__wrapped__"):
+        named_groups.get_generators = named_groups.get_generators.__wrapped__
 
     # retrieve from GAP
     with (
-        unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=GENERATORS),
+        unittest.mock.patch("qldpc.named_groups.get_generators_with_gap", return_value=GENERATORS),
     ):
-        assert small_groups.get_generators(GROUP) == GENERATORS
+        assert named_groups.get_generators(GROUP) == GENERATORS
 
     # retrieve from GroupNames.org
     with (
-        unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=None),
+        unittest.mock.patch("qldpc.named_groups.get_generators_with_gap", return_value=None),
         unittest.mock.patch(
-            "qldpc.small_groups.get_generators_from_groupnames", return_value=GENERATORS
+            "qldpc.named_groups.get_generators_from_groupnames", return_value=GENERATORS
         ),
     ):
-        assert small_groups.get_generators(GROUP) == GENERATORS
+        assert named_groups.get_generators(GROUP) == GENERATORS
 
     # fail to retrieve from anywhere :(
     with (
-        unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=None),
-        unittest.mock.patch("qldpc.small_groups.get_generators_from_groupnames", return_value=None),
+        unittest.mock.patch("qldpc.named_groups.get_generators_with_gap", return_value=None),
+        unittest.mock.patch("qldpc.named_groups.get_generators_from_groupnames", return_value=None),
     ):
         with pytest.raises(ValueError, match="Cannot build GAP group"):
-            small_groups.get_generators(GROUP)
+            named_groups.get_generators(GROUP)
         with pytest.raises(ValueError, match="Cannot build GAP group"):
-            small_groups.get_generators("CyclicGroup(2)")
+            named_groups.get_generators("CyclicGroup(2)")

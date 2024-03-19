@@ -1,4 +1,4 @@
-"""Module for loading groups indexed by the GAP computer algebra system
+"""Module for loading groups from the GAP computer algebra system
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 

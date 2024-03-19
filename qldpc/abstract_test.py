@@ -192,17 +192,18 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_small_groups() -> None:
+def test_named_groups() -> None:
     """Groups indexed by the GAP computer algebra system."""
     order, index = 2, 1
     group_name = f"CyclicGroup({order})"
     desired_group = abstract.CyclicGroup(order)
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
 
-    with unittest.mock.patch("qldpc.small_groups.get_generators", return_value=generators):
-        group = abstract.SmallGroup(order, index)
+    group: abstract.Group
+    with unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators):
+        group = abstract.Group.from_name(group_name)
         assert group.generators == desired_group.generators
 
-    with unittest.mock.patch("qldpc.small_groups.get_generators", return_value=generators):
-        group = abstract.Group.from_name(group_name)
+    with unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators):
+        group = abstract.SmallGroup(order, index)
         assert group.generators == desired_group.generators
