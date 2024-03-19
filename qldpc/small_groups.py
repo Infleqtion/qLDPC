@@ -106,11 +106,7 @@ def gap_is_installed() -> bool:
 
 
 def sanitize_gap_commands(commands: list[str]) -> list[str]:
-    """Sanitize sequence of GAP commands.
-
-    - Prevent formatting of Print statements
-    - Quit at the end
-    """
+    """Sanitize GAP commands: don't format Print statements, and quit at the end."""
     stream = "__stream__"
     prefix = [
         f"{stream} := OutputTextUser();",
