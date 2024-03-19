@@ -32,8 +32,8 @@ def get_code(name: str) -> tuple[list[list[int]], int | None]:
         'LoadPackage("guava");',
         f"code := {name};",
         "mat := CheckMat(code);",
-        r'for vec in mat do Print(List(vec, x -> Int(x)), "\n"); od;',
         r'Print(LeftActingDomain(code), "\n");',
+        r'for vec in mat do Print(List(vec, x -> Int(x)), "\n"); od;',
     ]
     result = get_gap_result(commands)
 
@@ -43,17 +43,16 @@ def get_code(name: str) -> tuple[list[list[int]], int | None]:
     if not result.stdout.strip():
         raise ValueError(f"Code not recognized by the GAP package GUAVA: {name}")
 
-    # retrieve checks row by row
+    # identify base field and retrieve parity checks
+    field: int | None = None
     checks = []
-    field = None
     for line in result.stdout.splitlines():
         if not line.strip():
             continue
 
-        match = re.search(r"GF\(([0-9]+(\^[0-9]+)?)\)", line)
-        if match:
-            base, exponent, *_ = map(int, (match.group(1) + "^1").split("^"))
-            field = base**exponent
+        if field is None and (match := re.search(r"GF\(([0-9]+(\^[0-9]+)?)\)", line)):
+            base, exponent, *_ = (match.group(1) + "^1").split("^")
+            field = int(base) ** int(exponent)
         else:
             checks.append(ast.literal_eval(line))
 
