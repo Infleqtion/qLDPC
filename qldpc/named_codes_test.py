@@ -32,18 +32,24 @@ def test_get_parity_checks() -> None:
     """Retrive parity check matrix from GAP 4."""
 
     # GAP is not installed
-    process = subprocess.CompletedProcess(args=[], returncode=0, stdout="")
     with (
         pytest.raises(ValueError, match="not installed"),
-        unittest.mock.patch("subprocess.run", return_value=process),
+        unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=False),
     ):
         named_codes.get_parity_checks("")
 
-    name = "RepetitionCode(2)"
+    # GUAVA is not installed
+    mock_process = get_mock_process("guava package is not available")
+    with (
+        pytest.raises(ValueError, match="not installed"),
+        unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
+    ):
+        named_codes.get_parity_checks("")
+
     check = [1, 1]
     mock_process = get_mock_process("\n" + str(check))
     with (
         unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=True),
-        unittest.mock.patch("subprocess.run", return_value=mock_process),
+        unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
-        assert named_codes.get_parity_checks(name) == [check]
+        assert named_codes.get_parity_checks("") == [check]

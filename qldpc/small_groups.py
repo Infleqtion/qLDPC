@@ -129,15 +129,14 @@ def get_gap_result(commands: list[str]) -> subprocess.CompletedProcess[str]:
     with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".gap") as script:
         script.write("\n".join(commands))
         script_name = script.name
-    print(script_name)
-    shell_commands = ["gap", "-q", "-f", script_name]
+    shell_commands = ["gap", "-q", "--quitonbreak", script_name]
     result = subprocess.run(shell_commands, capture_output=True, text=True)
     os.remove(script_name)
     return result
 
 
 def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
-    """Retrieve GAP group generators from GAP 4 directly."""
+    """Retrieve GAP group generators from GAP directly."""
 
     if not gap_is_installed():
         return None
@@ -146,9 +145,9 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     commands = [
         f"G := SmallGroup({order},{index});",
         "iso := IsomorphismPermGroup(G);",
-        "permG := Image(iso,G);",
+        "permG := Image(iso, G);",
         "gens := GeneratorsOfGroup(permG);",
-        r'for gen in gens do Print(gen,"\n"); od;',
+        r'for gen in gens do Print(gen, "\n"); od;',
     ]
     result = get_gap_result(commands)
 
@@ -158,12 +157,12 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
         if not line.strip():
             continue
 
+        # extract list of cycles, where each cycle is a tuple of integers
         cycles_str = line[1:-1].split(")(")
-
         try:
             cycles = [tuple(map(int, cycle.split(","))) for cycle in cycles_str]
         except ValueError:
-            raise ValueError(f"Cannot extract cycle from string: {line}")
+            raise ValueError(f"Cannot extract cycles from string: {line}")
 
         # decrement integers in the cycle by 1 to account for 0-indexing
         cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]

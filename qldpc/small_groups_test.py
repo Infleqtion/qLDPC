@@ -116,17 +116,19 @@ def test_get_generators_with_gap() -> None:
         assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
     # cannot extract cycle from string
+    mock_process = get_mock_process("\n(1, 2a)\n")
     with (
         pytest.raises(ValueError, match="Cannot extract cycle"),
         unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n(1, 2a)\n")),
+        unittest.mock.patch("qldpc.small_groups.get_gap_result", return_value=mock_process),
     ):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
     # everything works as expected
+    mock_process = get_mock_process("\n(1, 2)\n")
     with (
         unittest.mock.patch("qldpc.small_groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n(1, 2)\n")),
+        unittest.mock.patch("qldpc.small_groups.get_gap_result", return_value=mock_process),
     ):
         assert small_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
 
