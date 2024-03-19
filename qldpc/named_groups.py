@@ -182,16 +182,16 @@ def use_disk_cache(
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 
         @functools.wraps(func)
-        def wrapper(*args: Hashable) -> Any:
+        def wrapper(*args: Hashable, **kwargs: Hashable) -> Any:
 
             # retrieve results from cache, if available
             cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
-            result = cache.get(args, None)
+            result = cache.get(args + tuple(kwargs.items()), None)
             if result is not None:
                 return result
 
             # compute results and save to cache
-            result = func(*args)
+            result = func(*args, **kwargs)
             cache[args] = result
             return result
 
