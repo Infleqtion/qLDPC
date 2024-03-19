@@ -395,15 +395,13 @@ class ClassicalCode(AbstractCode):
         ]
         return ClassicalCode(np.array(strings).T, field=field)
 
+    @classmethod
+    def from_name(cls, name: str) -> ClassicalCode:
+        """Named code in the GAP computer algebra system."""
+        matrix = named_codes.get_parity_checks(name)
+        return ClassicalCode(matrix)
+
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
-
-
-class NamedCode(ClassicalCode):
-    """Named code in the GAP computer algebra system."""
-
-    def __init__(self, name: str) -> None:
-        code = named_codes.get_parity_checks(name)
-        super().__init__(code)
 
 
 ################################################################################
