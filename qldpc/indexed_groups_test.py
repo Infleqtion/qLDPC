@@ -98,7 +98,7 @@ def test_get_generators_with_gap() -> None:
 
     process_2 = subprocess.CompletedProcess(args=[], returncode=0, stdout="(1, 2)\n")
     with unittest.mock.patch("subprocess.run", side_effect=[process_1, process_2]):
-        indexed_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
+        assert indexed_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
 
 
 def test_get_generators() -> None:
