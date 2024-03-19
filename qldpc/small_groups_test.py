@@ -32,11 +32,6 @@ MOCK_INDEX_HTML = """<table class="gptable" columns="6" style='width: 70%;'>
 MOCK_GROUP_HTML = """<b><a href='https://en.wikipedia.org/wiki/Group actions' title='See wikipedia' class='wiki'>Permutation representations of C<sub>2</sub></a></b><br><a id='shl1' class='shl' href="javascript:showhide('shs1','shl1','Regular action on 2 points');"><span class="nsgpn">&#x25ba;</span>Regular action on 2 points</a> - transitive group <a href="../T15.html#2t1">2T1</a><div id='shs1' class='shs'>Generators in S<sub>2</sub><br><pre class='pre' id='textgn1'>(1 2)</pre>&emsp;<button class='copytext' id='copygn1'>Copy</button><br>"""  # pylint: disable=line-too-long  # noqa: E501
 
 
-def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
-    """Fake process with the given stdout."""
-    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
-
-
 def get_mock_page(text: str) -> unittest.mock.MagicMock:
     """Fake webpage with the given text."""
     mock_page = unittest.mock.MagicMock()
@@ -100,12 +95,24 @@ def test_get_generators_from_groupnames() -> None:
         assert small_groups.get_generators_from_groupnames(ORDER, INDEX) == GENERATORS
 
 
+def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
+    """Fake process with the given stdout."""
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
+
+
 def test_gap_is_installed() -> None:
     """Is GAP 4 installed?"""
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
         assert not small_groups.gap_is_installed()
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\nGAP 4")):
         assert small_groups.gap_is_installed()
+
+
+def test_get_gap_result() -> None:
+    """Run GAP commands and retrieve the GAP output."""
+    output = "test"
+    with unittest.mock.patch("subprocess.run", return_value=get_mock_process(output)):
+        assert small_groups.get_gap_result([]).stdout == output
 
 
 def test_get_generators_with_gap() -> None:
