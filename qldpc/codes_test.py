@@ -51,13 +51,38 @@ def test_classical_codes() -> None:
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
     assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
-    # check dimension of Reed-Solomon and BCH codes
-    assert codes.ReedSolomonCode(3, 2).dimension == 2
-    assert codes.BCHCode(15, 7).dimension == 7
-
     # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+
+
+def test_special_codes() -> None:
+    """Reed-Solomon, BCH, and Reed-Muller codes."""
+    assert codes.ReedSolomonCode(3, 2).dimension == 2
+
+    bits, dimension = 7, 4
+    assert codes.BCHCode(bits, dimension).dimension == dimension
+    with pytest.raises(ValueError, match=r"2\^m - 1 bits"):
+        codes.BCHCode(bits - 1, dimension)
+
+    order, size = 1, 3
+    code = codes.ReedMullerCode(order, size)
+    assert code.dimension == codes.ClassicalCode(code.matrix).dimension
+    assert (
+        code.get_distance_exact()
+        == code.get_distance_bound()
+        == codes.ClassicalCode.get_distance_exact(code)
+    )
+    assert (
+        code.get_distance_exact(vector=[0] * code.num_bits)
+        == code.get_distance_bound(vector=[0] * code.num_bits)
+        == 0
+    )
+    dual_code = codes.ReedMullerCode(size - order - 1, size)
+    assert np.array_equal((~code).matrix, dual_code.matrix)
+
+    with pytest.raises(ValueError, match="0 <= r <= m"):
+        codes.ReedMullerCode(-1, 0)
 
 
 def test_named_codes(order: int = 2) -> None:

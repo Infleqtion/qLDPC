@@ -416,7 +416,9 @@ class ReedSolomonCode(ClassicalCode):
     """Classical Reed-Solomon code.
 
     Source: https://galois.readthedocs.io/en/v0.3.8/api/galois.ReedSolomon/
-    Reference: https://errorcorrectionzoo.org/c/reed_solomon
+    References:
+    - https://errorcorrectionzoo.org/c/reed_solomon
+    - https://www.cs.cmu.edu/~venkatg/teaching/codingtheory/notes/notes6.pdf
     """
 
     def __init__(self, bits: int, dimension: int) -> None:
@@ -424,14 +426,83 @@ class ReedSolomonCode(ClassicalCode):
 
 
 class BCHCode(ClassicalCode):
-    """Classical binary BCH code code.
+    """Classical binary BCH code.
 
     Source: https://galois.readthedocs.io/en/v0.3.8/api/galois.BCH/
-    Reference: https://errorcorrectionzoo.org/c/bch
+    References:
+    - https://errorcorrectionzoo.org/c/bch
+    - https://www.cs.cmu.edu/~venkatg/teaching/codingtheory/notes/notes6.pdf
     """
 
     def __init__(self, bits: int, dimension: int) -> None:
+        if "0" in format(bits, "b"):
+            raise ValueError("BCH codes only defined for 2^m - 1 bits with integer m.")
         ClassicalCode.__init__(self, galois.BCH(bits, dimension).H)
+
+
+class ReedMullerCode(ClassicalCode):
+    """Classical Reed-Muller code.
+
+    References:
+    - https://errorcorrectionzoo.org/c/reed_muller
+    - https://feog.github.io/10-coding.pdf
+    """
+
+    def __init__(self, order: int, size: int, field: int | None = None) -> None:
+        self._assert_valid_params(order, size)
+        self._order = order
+        self._size = size
+
+        generator = ReedMullerCode.get_generator(order, size)
+        self._matrix = ClassicalCode(generator, field).generator
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+
+    @classmethod
+    def get_generator(cls, order: int, size: int) -> npt.NDArray[np.int_]:
+        """Get the generator matrix for the specified Reed-Muller code."""
+        cls._assert_valid_params(order, size)
+
+        if order == 0:
+            return np.ones(2**size, dtype=int)
+        if order == size:
+            return np.identity(2**size, dtype=int)
+
+        mat_a = cls.get_generator(order, size - 1)
+        mat_b = cls.get_generator(order - 1, size - 1)
+        mat_z = np.zeros_like(mat_b)
+        return np.block([[mat_a, mat_a], [mat_z, mat_b]]).astype(int)
+
+    @classmethod
+    def _assert_valid_params(self, order: int, size: int) -> None:
+        if not (size >= 0 and 0 <= order <= size):
+            raise ValueError(
+                "Reed-Muller code R(r,m) must have m >= 0 and 0 <= r <= m\n"
+                + f"Provided: (r,m) = ({order},{size})"
+            )
+
+    def get_distance_exact(
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
+    ) -> int:
+        """Minimal weight of a nontrivial code word.
+
+        If passed a vector, compute (by brute force) the minimal Hamming distance between the vector
+        and a code word.
+        """
+        if vector is None:
+            return 2 ** (self._size - self._order)
+        return super().get_distance_exact(vector=vector)
+
+    def get_one_distance_bound(
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
+    ) -> int:
+        """Return a single upper bound on code distance.
+
+        If passed a vector, compute (by decoding) the minimal Hamming distance between the vector
+        and a code word.
+        """
+        if vector is None:
+            return self.get_distance_exact()
+        return super().get_one_distance_bound(vector=vector, **decoder_args)
 
 
 ################################################################################
