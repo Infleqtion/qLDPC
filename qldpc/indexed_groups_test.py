@@ -51,6 +51,10 @@ def test_get_group_url() -> None:
         ):
             indexed_groups.get_group_url(ORDER, INDEX)
 
+        # specific order,index combination not found
+        with pytest.raises(ValueError, match="not found"):
+            indexed_groups.get_group_url(ORDER, INDEX + 1)
+
         # everything works as expected
         assert indexed_groups.get_group_url(ORDER, INDEX) == GROUP_URL
 
