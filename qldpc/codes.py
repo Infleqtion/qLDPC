@@ -398,8 +398,8 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def from_name(cls, name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
-        matrix = named_codes.get_parity_checks(name)
-        return ClassicalCode(matrix)
+        matrix, field = named_codes.get_code(name)
+        return ClassicalCode(matrix, field)
 
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 

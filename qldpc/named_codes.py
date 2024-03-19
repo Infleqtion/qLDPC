@@ -16,11 +16,12 @@
 """
 
 import ast
+import re
 
 from qldpc.small_groups import gap_is_installed, get_gap_result
 
 
-def get_parity_checks(name: str) -> list[list[int]]:
+def get_code(name: str) -> tuple[list[list[int]], int | None]:
     """Retrieve a group from GAP."""
 
     if not gap_is_installed():
@@ -32,6 +33,7 @@ def get_parity_checks(name: str) -> list[list[int]]:
         f"code := {name};",
         "mat := CheckMat(code);",
         r'for vec in mat do Print(List(vec, x -> Int(x)), "\n"); od;',
+        r'Print(LeftActingDomain(code), "\n");',
     ]
     result = get_gap_result(commands)
 
@@ -43,9 +45,16 @@ def get_parity_checks(name: str) -> list[list[int]]:
 
     # retrieve checks row by row
     checks = []
+    field = None
     for line in result.stdout.splitlines():
         if not line.strip():
             continue
-        checks.append(ast.literal_eval(line))
 
-    return checks
+        match = re.search(r"GF\(([0-9]+(\^[0-9]+)?)\)", line)
+        if match:
+            base, exponent, *_ = map(int, (match.group(1) + "^1").split("^"))
+            field = base**exponent
+        else:
+            checks.append(ast.literal_eval(line))
+
+    return checks, field

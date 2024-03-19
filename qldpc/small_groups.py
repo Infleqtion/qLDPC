@@ -52,8 +52,7 @@ def get_group_url(order: int, index: int) -> str | None:
     section = index_page_html[start:end]
 
     # extract first link from this section
-    pattern = r'href="([^"]*)"'
-    match = re.search(pattern, section)
+    match = re.search(r'href="([^"]*)"', section)
     if match is None:
         raise ValueError(f"Webpage for group {order},{index} not found")
 
@@ -79,8 +78,7 @@ def get_generators_from_groupnames(order: int, index: int) -> GENERATORS_LIST | 
 
     # isolate generator text
     section = section[section.find("<pre") :]
-    pattern = r">((?:.|\n)*?)<\/pre>"
-    match = re.search(pattern, section)
+    match = re.search(r">((?:.|\n)*?)<\/pre>", section)
     if match is None:
         raise ValueError(f"Generators for group {order},{index} not found")
     gen_strings = match.group(1).split("<br>\n")

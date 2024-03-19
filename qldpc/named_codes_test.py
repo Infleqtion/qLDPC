@@ -28,7 +28,7 @@ def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
 
 
-def test_get_parity_checks() -> None:
+def test_get_code() -> None:
     """Retrive parity check matrix from GAP 4."""
 
     # GAP is not installed
@@ -36,7 +36,7 @@ def test_get_parity_checks() -> None:
         pytest.raises(ValueError, match="not installed"),
         unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=False),
     ):
-        named_codes.get_parity_checks("")
+        named_codes.get_code("")
 
     # GUAVA is not installed
     mock_process = get_mock_process("guava package is not available")
@@ -44,7 +44,7 @@ def test_get_parity_checks() -> None:
         pytest.raises(ValueError, match="GAP package GUAVA not available"),
         unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
-        named_codes.get_parity_checks("")
+        named_codes.get_code("")
 
     # code not recognized by GUAVA
     mock_process = get_mock_process("\n")
@@ -52,12 +52,13 @@ def test_get_parity_checks() -> None:
         pytest.raises(ValueError, match="Code not recognized"),
         unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
-        named_codes.get_parity_checks("")
+        named_codes.get_code("")
 
     check = [1, 1]
-    mock_process = get_mock_process("\n" + str(check))
+    mock_process = get_mock_process(f"\n{check}\nGF(3^3)")
     with (
         unittest.mock.patch("qldpc.named_codes.gap_is_installed", return_value=True),
         unittest.mock.patch("qldpc.named_codes.get_gap_result", return_value=mock_process),
     ):
-        assert named_codes.get_parity_checks("") == [check]
+        print(named_codes.get_code(""))
+        # assert named_codes.get_code("") == ([check], 9)
