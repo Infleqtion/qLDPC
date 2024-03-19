@@ -673,6 +673,54 @@ class SymmetricGroup(Group):
         super().__init__(comb.named_groups.SymmetricGroup(order))
 
 
+class DicyclicGroup(Group):
+    """Dicyclic group of order <= 20.
+    Generating matrices taken from: https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
+    Additional references:
+    - https://en.wikipedia.org/wiki/Dicyclic_group
+    - https://groupprops.subwiki.org/wiki/Dicyclic_group
+    """
+
+    def __init__(self, order: int) -> None:  # noqa: max-complexity
+        if not (order > 0 and order % 4 == 0):
+            raise ValueError(
+                "Dicyclic groups only supported for orders that are positive multiples of 4"
+                + f" (provided: {order})"
+            )
+        if not order <= 20:
+            raise ValueError(
+                f"Dicyclic groups only supported for orders up to 20 (provided: {order})"
+            )
+
+        if order == 4:
+            gen_a = comb.Permutation(0, 2)(1, 3)
+            gen_b = comb.Permutation(0, 3, 2, 1)
+
+        elif order == 8:
+            gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            gen_b = comb.Permutation(1, 7, 3, 5)(2, 6, 4, 8)
+
+        elif order == 12:
+            # Special case with more compact representation:
+            # https://math.stackexchange.com/a/2837920
+            gen_a = comb.Permutation(1, 2, 3)(4, 6)(5, 7)
+            gen_b = comb.Permutation(2, 3)(4, 5, 6, 7)
+
+        elif order == 16:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            gen_b = comb.Permutation(1, 9, 5, 13)(2, 16, 6, 12)(3, 15, 7, 11)(4, 14, 8, 10)
+
+        elif order == 20:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+            )
+            gen_b = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
+                5, 20, 10, 15
+            )
+
+        super().__init__(comb.PermutationGroup(gen_a, gen_b))
+
+
 class QuaternionGroup(Group):
     """Quaternion group: 1, i, j, k, -1, -i, -j, -k."""
 
