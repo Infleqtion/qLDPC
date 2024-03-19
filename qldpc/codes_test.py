@@ -33,12 +33,12 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 def test_classical_codes() -> None:
     """Construction of a few classical codes."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
-    assert codes.ClassicalCode.hamming(3).get_distance() == 3
+    assert codes.HammingCode(3).get_distance() == 3
 
     num_bits = 2
     for code in [
-        codes.ClassicalCode.repetition(num_bits, field=3),
-        codes.ClassicalCode.ring(num_bits, field=3),
+        codes.RepetitionCode(num_bits, field=3),
+        codes.RingCode(num_bits, field=3),
     ]:
         assert code.num_bits == num_bits
         assert code.dimension == 1
@@ -47,9 +47,12 @@ def test_classical_codes() -> None:
         assert code.get_weight() == 2
         assert code.get_random_word() in code
 
-    # test that rank of repetition and hamming codes is independent of the field
-    assert codes.ClassicalCode.repetition(3, 2).rank == codes.ClassicalCode.repetition(3, 3).rank
-    assert codes.ClassicalCode.hamming(3, 2).rank == codes.ClassicalCode.hamming(3, 3).rank
+    # test that rank of repetition and Hamming codes is independent of the field
+    assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
+    assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
+
+    # check dimension of Reed-Solomon code
+    assert codes.ReedSolomonCode(3, 2).dimension == 2
 
     # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
@@ -58,7 +61,7 @@ def test_classical_codes() -> None:
 
 def test_named_codes(order: int = 2) -> None:
     """Named codes from the GAP computer algebra system."""
-    code = codes.ClassicalCode.repetition(order)
+    code = codes.RepetitionCode(order)
     matrix = [list(row) for row in code.matrix.view(np.ndarray)]
 
     with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(matrix, None)):
@@ -108,7 +111,7 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
 
 def test_distance_from_classical_code(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
-    rep_code = codes.ClassicalCode.repetition(bits, field=2)
+    rep_code = codes.RepetitionCode(bits, field=2)
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
         dist_brute = rep_code.get_distance_exact(vector=vector)
@@ -251,8 +254,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     num_qudits = 2 * width**2
 
     # construct check matrix directly
-    ring = codes.ClassicalCode.ring(width).matrix
-    mat_1 = codes.ClassicalCode.ring(num_qudits // 2).matrix
+    ring = codes.RingCode(width).matrix
+    mat_1 = codes.RingCode(num_qudits // 2).matrix
     mat_2 = np.kron(ring, np.eye(width, dtype=int))
     zero_1 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
@@ -348,15 +351,17 @@ def test_tanner_code() -> None:
 
 def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
     """The surface and toric codes as hypergraph product codes."""
+    bit_code: codes.ClassicalCode
+
     # surface code
-    bit_code = codes.ClassicalCode.repetition(distance, field=field)
+    bit_code = codes.RepetitionCode(distance, field=field)
     code = codes.HGPCode(bit_code)
     assert code.num_qudits == distance**2 + (distance - 1) ** 2
     assert code.dimension == 1
     assert code.get_distance(bound=10) == distance
 
     # toric code
-    bit_code = codes.ClassicalCode.ring(distance, field=field)
+    bit_code = codes.RingCode(distance, field=field)
     code = codes.HGPCode(bit_code)
     assert code.num_qudits == 2 * distance**2
     assert code.dimension == 2
@@ -380,14 +385,14 @@ def test_toric_tanner_code(size: int = 4) -> None:
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode_a = codes.ClassicalCode.repetition(2, field=2)
+    subcode_a = codes.RepetitionCode(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
 
     # verify rotated toric code parameters
     assert code.get_code_params(bound=10) == (size**2, 2, size, 4)
 
     # raise error if constructing QTCode with codes over different fields
-    subcode_b = codes.ClassicalCode.repetition(2, field=subcode_a.field.order**2)
+    subcode_b = codes.RepetitionCode(2, field=subcode_a.field.order**2)
     with pytest.raises(ValueError, match="different fields"):
         code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
@@ -395,5 +400,5 @@ def test_toric_tanner_code(size: int = 4) -> None:
 @pytest.mark.parametrize("field", [3, 4])
 def test_qudit_distance(field: int) -> None:
     """Distance calculations for qudits."""
-    code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
+    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
     assert code.get_distance() == 2

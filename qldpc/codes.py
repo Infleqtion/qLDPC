@@ -358,51 +358,62 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(matrix)
 
     @classmethod
-    def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
-        """Construct a repetition code on the given number of bits."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        matrix = code_field.Zeros((num_bits - 1, num_bits))
-        for row in range(num_bits - 1):
-            matrix[row, row] = 1
-            matrix[row, row + 1] = -code_field(1)
-        return ClassicalCode(matrix)
-
-    @classmethod
-    def ring(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
-        """Construct a repetition code with periodic boundary conditions."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        matrix = code_field.Zeros((num_bits, num_bits))
-        for row in range(num_bits):
-            matrix[row, row] = 1
-            matrix[row, (row + 1) % num_bits] = -code_field(1)
-        return ClassicalCode(matrix)
-
-    @classmethod
-    def hamming(cls, rank: int, field: int | None = None) -> ClassicalCode:
-        """Construct a Hamming code of a given rank."""
-        field = field or DEFAULT_FIELD_ORDER
-        if field == 2:
-            # parity check matrix: columns = all nonzero bitstrings
-            bitstrings = list(itertools.product([0, 1], repeat=rank))
-            return ClassicalCode(np.array(bitstrings[1:]).T)
-
-        # More generally, columns = maximal set of linearly independent strings.
-        # This is achieved by collecting together all strings whose first nonzero element is a 1.
-        strings = [
-            (0,) * top_row + (1,) + rest
-            for top_row in range(rank - 1, -1, -1)
-            for rest in itertools.product(range(field), repeat=rank - top_row - 1)
-        ]
-        return ClassicalCode(np.array(strings).T, field=field)
-
-    @classmethod
     def from_name(cls, name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
         matrix, field = named_codes.get_code(standardized_name)
         return ClassicalCode(matrix, field)
 
-    # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
+
+class RepetitionCode(ClassicalCode):
+    """Classical repetition code."""
+
+    def __init__(self, bits: int, field: int | None = None) -> None:
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._matrix = self.field.Zeros((bits - 1, bits))
+        for row in range(bits - 1):
+            self._matrix[row, row] = 1
+            self._matrix[row, row + 1] = -self.field(1)
+
+
+class RingCode(ClassicalCode):
+    """Classical ring code: repetition code with periodic boundary conditions."""
+
+    def __init__(self, bits: int, field: int | None = None) -> None:
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._matrix = self.field.Zeros((bits, bits))
+        for row in range(bits):
+            self._matrix[row, row] = 1
+            self._matrix[row, (row + 1) % bits] = -self.field(1)
+
+
+class HammingCode(ClassicalCode):
+    """Classical Hamming code."""
+
+    def __init__(self, rank: int, field: int | None = None) -> None:
+        """Construct a Hamming code of a given rank."""
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        if self.field.order == 2:
+            # parity check matrix: columns = all nonzero bitstrings
+            bitstrings = list(itertools.product([0, 1], repeat=rank))
+            self._matrix = self.field(bitstrings[1:]).T
+
+        else:
+            # More generally, columns = [maximal set of linearly independent strings], so collect
+            # together all strings whose first nonzero element is a 1.
+            strings = [
+                (0,) * top_row + (1,) + rest
+                for top_row in range(rank - 1, -1, -1)
+                for rest in itertools.product(range(self.field.order), repeat=rank - top_row - 1)
+            ]
+            self._matrix = self.field(strings).T
+
+
+class ReedSolomonCode(ClassicalCode):
+    """Classical Reed-Solomon code."""
+
+    def __init__(self, bits: int, dimension: int) -> None:
+        ClassicalCode.__init__(self, galois.ReedSolomon(bits, dimension).H)
 
 
 ################################################################################

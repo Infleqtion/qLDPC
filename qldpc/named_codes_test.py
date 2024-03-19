@@ -22,6 +22,10 @@ import pytest
 
 from qldpc import named_codes
 
+# strip cache wrapper
+if hasattr(named_codes.get_code, "__wrapped__"):
+    named_codes.get_code = named_codes.get_code.__wrapped__
+
 
 def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
     """Fake process with the given stdout."""
