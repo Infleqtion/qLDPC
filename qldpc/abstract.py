@@ -51,7 +51,7 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 import sympy.core
 
-from qldpc import indexed_groups
+from qldpc import small_groups
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -884,10 +884,10 @@ PSL = ProjectiveSpecialLinearGroup
 # groups indexed by the GAP computer algebra system
 
 
-class IndexedGroup(Group):
+class SmallGroup(Group):
     """Groups indexed by the GAP computer algebra system."""
 
     def __init__(self, order: int, index: int) -> None:
-        generators = indexed_groups.get_generators(order, index)
+        generators = small_groups.get_generators(order, index)
         group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
         super().__init__(group)

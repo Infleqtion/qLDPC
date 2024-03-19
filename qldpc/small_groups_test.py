@@ -1,4 +1,4 @@
-"""Unit tests for indexed_groups.py
+"""Unit tests for small_groups.py
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -21,11 +21,11 @@ import urllib
 
 import pytest
 
-from qldpc import indexed_groups
+from qldpc import small_groups
 
 ORDER, INDEX = 2, 1
 GENERATORS = [[(0, 1)]]
-GROUP_URL = indexed_groups.GROUPNAMES_URL + "1/C2.html"
+GROUP_URL = small_groups.GROUPNAMES_URL + "1/C2.html"
 MOCK_INDEX_HTML = """<table class="gptable" columns="6" style='width: 70%;'>
 <tr><th width="12%"></th><th width="60%"></th><th width="5%"><a href='T.html'>d</a></th><th width="5%"><a href='R.html'>&rho;</a></th><th width="12%">Label</th><th width="7%">ID</th></tr><tr><td id="c2"><a href="1/C2.html">C<sub>2</sub></a></td><td><a href="cyclic.html">Cyclic</a> group</td><td><a href="T15.html#c2">2</a></td><td><a href="R.html#dim1+">1+</a></td><td>C2</td><td>2,1</td></tr>
 </table>"""  # pylint: disable=line-too-long  # noqa: E501
@@ -39,7 +39,7 @@ def test_get_group_url() -> None:
     with unittest.mock.patch(
         "urllib.request.urlopen", side_effect=urllib.error.URLError("message")
     ):
-        assert indexed_groups.get_group_url(ORDER, INDEX) is None
+        assert small_groups.get_group_url(ORDER, INDEX) is None
 
     mock_page = unittest.mock.MagicMock()
     mock_page.read.return_value = MOCK_INDEX_HTML.encode("utf-8")
@@ -49,27 +49,27 @@ def test_get_group_url() -> None:
             pytest.raises(ValueError, match="not found"),
             unittest.mock.patch("re.search", return_value=None),
         ):
-            indexed_groups.get_group_url(ORDER, INDEX)
+            small_groups.get_group_url(ORDER, INDEX)
 
         # requested group not found on the index
         with pytest.raises(ValueError, match="not found"):
-            indexed_groups.get_group_url(ORDER, INDEX + 1)
+            small_groups.get_group_url(ORDER, INDEX + 1)
 
         # everything works as expected
-        assert indexed_groups.get_group_url(ORDER, INDEX) == GROUP_URL
+        assert small_groups.get_group_url(ORDER, INDEX) == GROUP_URL
 
 
 def test_get_generators_from_groupnames() -> None:
     """Retrive generators from group webpage on GroupNames.org."""
 
     # group url not found
-    with unittest.mock.patch("qldpc.indexed_groups.get_group_url", return_value=None):
-        assert indexed_groups.get_generators_from_groupnames(ORDER, INDEX) is None
+    with unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=None):
+        assert small_groups.get_generators_from_groupnames(ORDER, INDEX) is None
 
     mock_page = unittest.mock.MagicMock()
     mock_page.read.return_value = MOCK_GROUP_HTML.encode("utf-8")
     with (
-        unittest.mock.patch("qldpc.indexed_groups.get_group_url", return_value=GROUP_URL),
+        unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
         # cannot find generators
@@ -77,10 +77,10 @@ def test_get_generators_from_groupnames() -> None:
             pytest.raises(ValueError, match="not found"),
             unittest.mock.patch("re.search", return_value=None),
         ):
-            indexed_groups.get_generators_from_groupnames(ORDER, INDEX)
+            small_groups.get_generators_from_groupnames(ORDER, INDEX)
 
         # everything works as expected
-        assert indexed_groups.get_generators_from_groupnames(ORDER, INDEX) == GENERATORS
+        assert small_groups.get_generators_from_groupnames(ORDER, INDEX) == GENERATORS
 
 
 def test_get_generators_with_gap() -> None:
@@ -89,7 +89,7 @@ def test_get_generators_with_gap() -> None:
     # GAP is not installed
     process = subprocess.CompletedProcess(args=[], returncode=0, stdout="")
     with unittest.mock.patch("subprocess.run", return_value=process):
-        assert indexed_groups.get_generators_with_gap(ORDER, INDEX) is None
+        assert small_groups.get_generators_with_gap(ORDER, INDEX) is None
 
     # GAP is not installed
     process_1 = subprocess.CompletedProcess(args=[], returncode=0, stdout="\nGAP 4")
@@ -98,12 +98,12 @@ def test_get_generators_with_gap() -> None:
         pytest.raises(ValueError, match="Cannot extract cycle"),
         unittest.mock.patch("subprocess.run", side_effect=[process_1, process_2]),
     ):
-        indexed_groups.get_generators_with_gap(ORDER, INDEX)
+        small_groups.get_generators_with_gap(ORDER, INDEX)
 
     # everything works as expected
     process_2 = subprocess.CompletedProcess(args=[], returncode=0, stdout="(1, 2)\n")
     with unittest.mock.patch("subprocess.run", side_effect=[process_1, process_2]):
-        assert indexed_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
+        assert small_groups.get_generators_with_gap(ORDER, INDEX) == GENERATORS
 
 
 def test_get_generators() -> None:
@@ -112,34 +112,30 @@ def test_get_generators() -> None:
     # retrieve from cache
     mock_cache = {(ORDER, INDEX): GENERATORS}
     with unittest.mock.patch("diskcache.Cache", return_value=mock_cache):
-        assert indexed_groups.get_generators(ORDER, INDEX) == GENERATORS
+        assert small_groups.get_generators(ORDER, INDEX) == GENERATORS
 
     # retrieve from GAP
     with (
         unittest.mock.patch("diskcache.Cache", return_value={}),
-        unittest.mock.patch(
-            "qldpc.indexed_groups.get_generators_with_gap", return_value=GENERATORS
-        ),
+        unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=GENERATORS),
     ):
-        assert indexed_groups.get_generators(ORDER, INDEX) == GENERATORS
+        assert small_groups.get_generators(ORDER, INDEX) == GENERATORS
 
     # retrieve from GroupNames.org
     with (
         unittest.mock.patch("diskcache.Cache", return_value={}),
-        unittest.mock.patch("qldpc.indexed_groups.get_generators_with_gap", return_value=None),
+        unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=None),
         unittest.mock.patch(
-            "qldpc.indexed_groups.get_generators_from_groupnames", return_value=GENERATORS
+            "qldpc.small_groups.get_generators_from_groupnames", return_value=GENERATORS
         ),
     ):
-        assert indexed_groups.get_generators(ORDER, INDEX) == GENERATORS
+        assert small_groups.get_generators(ORDER, INDEX) == GENERATORS
 
     # fail to retrieve from anywhere :(
     with (
         pytest.raises(ValueError, match="Cannot build GAP group"),
         unittest.mock.patch("diskcache.Cache", return_value={}),
-        unittest.mock.patch("qldpc.indexed_groups.get_generators_with_gap", return_value=None),
-        unittest.mock.patch(
-            "qldpc.indexed_groups.get_generators_from_groupnames", return_value=None
-        ),
+        unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=None),
+        unittest.mock.patch("qldpc.small_groups.get_generators_from_groupnames", return_value=None),
     ):
-        indexed_groups.get_generators(ORDER, INDEX)
+        small_groups.get_generators(ORDER, INDEX)
