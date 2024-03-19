@@ -881,7 +881,7 @@ PSL = ProjectiveSpecialLinearGroup
 
 
 ################################################################################
-# groups indexed by GAP and on GroupNames.org
+# groups indexed by the GAP computer algebra system
 
 
 class IndexedGroup(Group):
