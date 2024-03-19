@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import subprocess
 import unittest.mock
 import urllib
 
@@ -79,3 +80,28 @@ def test_get_generators_from_groupnames() -> None:
 
         # everything works as expected
         assert indexed_groups.get_generators_from_groupnames(order, index) == generators
+
+
+def test_get_generators_with_gap() -> None:
+    """Retrive generators from GAP 4."""
+
+    order, index = 2, 1
+    generators = [[(0, 1)]]
+
+    # GAP is not installed
+    process = subprocess.CompletedProcess(args=[], returncode=0, stdout="")
+    with unittest.mock.patch("subprocess.run", return_value=process):
+        assert indexed_groups.get_generators_with_gap(order, index) is None
+
+    # GAP is not installed
+    process_1 = subprocess.CompletedProcess(args=[], returncode=0, stdout="\nGAP 4")
+    process_2 = subprocess.CompletedProcess(args=[], returncode=0, stdout="\n")
+    with (
+        pytest.raises(ValueError, match="Cannot extract cycle"),
+        unittest.mock.patch("subprocess.run", side_effect=[process_1, process_2]),
+    ):
+        indexed_groups.get_generators_with_gap(order, index)
+
+    process_2 = subprocess.CompletedProcess(args=[], returncode=0, stdout="(1, 2)\n")
+    with unittest.mock.patch("subprocess.run", side_effect=[process_1, process_2]):
+        indexed_groups.get_generators_with_gap(order, index) == generators

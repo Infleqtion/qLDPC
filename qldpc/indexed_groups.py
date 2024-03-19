@@ -105,7 +105,7 @@ def get_generators_with_gap(order: int, index: int) -> GENERATORS_LIST | None:
     commands = ["script", "-c", "gap --version", os.devnull]
     result = subprocess.run(commands, capture_output=True, text=True)
     lines = result.stdout.split("\n")
-    if not len(lines) == 2 and lines[1][:5] == "GAP 4":
+    if not len(lines) == 2 or lines[1][:5] != "GAP 4":
         return None
 
     # build GAP command
