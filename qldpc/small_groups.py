@@ -66,10 +66,12 @@ def get_group_url(order: int, index: int) -> str | None:
 def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GroupNames.org."""
 
+    # extract order and index of a SmallGroup
     match = re.match(r"SmallGroup\(([0-9]+),([0-9]+)\)", group)
     if match:
         order, index = map(int, match.groups())
     else:
+        # this group is not indexed in GroupNames.org
         return None
 
     # load web page for the specified group

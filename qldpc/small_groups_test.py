@@ -74,6 +74,9 @@ def test_get_group_url() -> None:
 def test_get_generators_from_groupnames() -> None:
     """Retrive generators from group webpage on GroupNames.org."""
 
+    # group not indexed
+    assert small_groups.get_generators_from_groupnames("") is None
+
     # group url not found
     with unittest.mock.patch("qldpc.small_groups.get_group_url", return_value=None):
         assert small_groups.get_generators_from_groupnames(GROUP) is None
@@ -185,8 +188,10 @@ def test_get_generators() -> None:
 
     # fail to retrieve from anywhere :(
     with (
-        pytest.raises(ValueError, match="Cannot build GAP group"),
         unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=None),
         unittest.mock.patch("qldpc.small_groups.get_generators_from_groupnames", return_value=None),
     ):
-        small_groups.get_generators(GROUP)
+        with pytest.raises(ValueError, match="Cannot build GAP group"):
+            small_groups.get_generators(GROUP)
+        with pytest.raises(ValueError, match="Cannot build GAP group"):
+            small_groups.get_generators("CyclicGroup(2)")
