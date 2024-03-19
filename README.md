@@ -22,7 +22,7 @@ Notable features include:
   - Communication with the [GAP](https://www.gap-system.org/) computer algebra system and [GroupNames.org](https://people.maths.bris.ac.uk/~matyd/GroupNames/) for constructing [even more groups](https://docs.gap-system.org/doc/ref/chap50.html).
 - `ClassicalCode`: class for representing classical linear error-correcting codes over finite fields.
   - Varoius pre-defined classical code families.
-  - Communication with the [GAP/GUAVA](https://www.gap-system.org/Packages/guava.html) for [even more codes](https://docs.gap-system.org/pkg/guava/doc/chap5.html).
+  - Communication with the [GAP/GUAVA](https://www.gap-system.org/Packages/guava.html) package for [even more codes](https://docs.gap-system.org/pkg/guava/doc/chap5.html).
 - `QuditCode`: general class for constructing [Galois-qudit codes](https://errorcorrectionzoo.org/c/galois_into_galois).
 - `CSSCode`: general class for constructing [quantum CSS codes](https://errorcorrectionzoo.org/c/css) out of two mutually compatible `ClassicalCode`s.
   - `CSSCode.get_logical_ops`: method to construct a complete basis of nontrivial logical operators for a `CSSCode`.
