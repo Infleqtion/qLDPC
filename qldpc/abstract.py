@@ -675,7 +675,9 @@ class SymmetricGroup(Group):
 
 class DicyclicGroup(Group):
     """Dicyclic group of order <= 20.
+
     Generating matrices taken from: https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
+
     Additional references:
     - https://en.wikipedia.org/wiki/Dicyclic_group
     - https://groupprops.subwiki.org/wiki/Dicyclic_group
