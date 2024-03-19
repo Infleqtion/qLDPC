@@ -398,7 +398,8 @@ class ClassicalCode(AbstractCode):
     @classmethod
     def from_name(cls, name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
-        matrix, field = named_codes.get_code(name)
+        standardized_name = name.strip().replace(" ", "")  # remove whitespace
+        matrix, field = named_codes.get_code(standardized_name)
         return ClassicalCode(matrix, field)
 
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
