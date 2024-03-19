@@ -163,16 +163,18 @@ def test_get_generators() -> None:
         # retrieve result from cache
         assert small_groups.get_generators(ORDER, INDEX) == GENERATORS
 
+    # strip cache wrapper
+    if hasattr(small_groups.get_generators, "__wrapped__"):
+        small_groups.get_generators = small_groups.get_generators.__wrapped__
+
     # retrieve from GAP
     with (
-        unittest.mock.patch("diskcache.Cache", return_value={}),
         unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=GENERATORS),
     ):
         assert small_groups.get_generators(ORDER, INDEX) == GENERATORS
 
     # retrieve from GroupNames.org
     with (
-        unittest.mock.patch("diskcache.Cache", return_value={}),
         unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=None),
         unittest.mock.patch(
             "qldpc.small_groups.get_generators_from_groupnames", return_value=GENERATORS
@@ -183,7 +185,6 @@ def test_get_generators() -> None:
     # fail to retrieve from anywhere :(
     with (
         pytest.raises(ValueError, match="Cannot build GAP group"),
-        unittest.mock.patch("diskcache.Cache", return_value={}),
         unittest.mock.patch("qldpc.small_groups.get_generators_with_gap", return_value=None),
         unittest.mock.patch("qldpc.small_groups.get_generators_from_groupnames", return_value=None),
     ):
