@@ -15,6 +15,8 @@
    limitations under the License.
 """
 
+import unittest.mock
+
 import galois
 import numpy as np
 import pytest
@@ -190,9 +192,11 @@ def test_PSL(field: int = 3) -> None:
 
 
 def test_indexed_groups() -> None:
-    """Test groups indexed on GroupNames.org."""
-    for index in range(1, 15):
-        assert abstract.GroupNames16(index).order() == 16
-    for index in range(1, 6):
-        assert abstract.GroupNames18(index).order() == 18
-        assert abstract.GroupNames20(index).order() == 20
+    """Groups indexed by the GAP computer algebra system."""
+    order, index = 2, 1
+    desired_group = abstract.CyclicGroup(order)
+    generators = [tuple(gen.array_form) for gen in desired_group.generators]
+
+    with unittest.mock.patch("qldpc.indexed_groups.get_generators", return_value=generators):
+        group = abstract.IndexedGroup(order, index)
+        assert group.generators == desired_group.generators
