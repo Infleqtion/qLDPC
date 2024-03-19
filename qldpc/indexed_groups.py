@@ -18,7 +18,7 @@
 import os
 import re
 import subprocess
-import urllib.request
+import urllib
 
 import diskcache
 import platformdirs
