@@ -19,6 +19,7 @@ You can also `pip install -e 'qLDPC[dev]'` to additionally install some developm
 
 Notable features include:
 - `abstract.py`: module for basic abstract algebra (groups, algebras, and representations thereof).
+  - Various pre-defined groups (mostly borrowed from [SymPy](https://docs.sympy.org/latest/modules/combinatorics/named_groups.html)).
   - Communication with the [GAP](https://www.gap-system.org/) computer algebra system and [GroupNames.org](https://people.maths.bris.ac.uk/~matyd/GroupNames/) for constructing [even more groups](https://docs.gap-system.org/doc/ref/chap50.html).
 - `ClassicalCode`: class for representing classical linear error-correcting codes over finite fields.
   - Various pre-defined classical code families.

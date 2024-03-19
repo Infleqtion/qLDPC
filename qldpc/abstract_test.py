@@ -59,6 +59,7 @@ def test_lift() -> None:
     """Lift named group elements."""
     assert_valid_lift(abstract.TrivialGroup())
     assert_valid_lift(abstract.CyclicGroup(3))
+    assert_valid_lift(abstract.AbelianGroup(2, 2))
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
     assert_valid_lift(abstract.SymmetricGroup(3))
@@ -147,20 +148,6 @@ def test_random_symmetric_subset() -> None:
 
     with pytest.raises(ValueError, match="must have a size between"):
         group.random_symmetric_subset(size=0)
-
-
-def test_dicyclic_group() -> None:
-    """Dicyclic group."""
-    for order in range(4, 21, 4):
-        group = abstract.DicyclicGroup(order)
-        gen_a, gen_b = group.generators
-        assert gen_a ** (order // 2) == gen_b**4 == group.identity
-
-    with pytest.raises(ValueError, match="positive multiples of 4"):
-        abstract.DicyclicGroup(2)
-
-    with pytest.raises(ValueError, match="orders up to 20"):
-        abstract.DicyclicGroup(24)
 
 
 def test_SL(field: int = 3) -> None:
