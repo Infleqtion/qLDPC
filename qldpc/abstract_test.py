@@ -200,3 +200,7 @@ def test_small_groups() -> None:
     with unittest.mock.patch("qldpc.small_groups.get_generators", return_value=generators):
         group = abstract.SmallGroup(order, index)
         assert group.generators == desired_group.generators
+
+    with unittest.mock.patch("qldpc.small_groups.get_generators", return_value=generators):
+        group = abstract.Group.from_name(f"CyclicGroup({order})")
+        assert group.generators == desired_group.generators
