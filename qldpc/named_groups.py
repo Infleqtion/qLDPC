@@ -131,12 +131,8 @@ def sanitize_gap_commands(commands: list[str]) -> list[str]:
 def get_gap_result(commands: list[str]) -> subprocess.CompletedProcess[str]:
     """Get the output from the given GAP commands."""
     commands = sanitize_gap_commands(commands)
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".gap") as script:
-        script.write("\n".join(commands))
-        script_name = script.name
-    shell_commands = ["gap", "-q", "--quitonbreak", script_name]
+    shell_commands = ["gap", "-q", "--quitonbreak", "-c", " ".join(commands)]
     result = subprocess.run(shell_commands, capture_output=True, text=True)
-    os.remove(script_name)
     return result
 
 
