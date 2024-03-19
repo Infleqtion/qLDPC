@@ -426,7 +426,7 @@ class ReedSolomonCode(ClassicalCode):
 
 
 class BCHCode(ClassicalCode):
-    """Classical binary BCH code code.
+    """Classical binary BCH code.
 
     Source: https://galois.readthedocs.io/en/v0.3.8/api/galois.BCH/
     References:
@@ -438,6 +438,54 @@ class BCHCode(ClassicalCode):
         if "0" in format(bits, "b"):
             raise ValueError("BCH codes only defined for 2^m - 1 bits with integer m.")
         ClassicalCode.__init__(self, galois.BCH(bits, dimension).H)
+
+
+class ReedMullerCode(ClassicalCode):
+    """Classical Reed-Muller code.
+
+    References:
+    - https://errorcorrectionzoo.org/c/reed_muller
+    """
+
+    def __init__(self, order: int, size: int, field: int | None = None) -> None:
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._matrix = self.field(ReedMullerCode.get_generator(order, size))
+        self._matrix = (~self)._matrix
+        self._order = order
+        self._size = size
+
+    def get_distance_exact(
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
+    ) -> int:
+        """Minimal weight of a nontrivial code word.
+
+        If passed a vector, compute (by brute force) the minimal Hamming distance between the vector
+        and a code word.
+        """
+        if vector is None:
+            return 2 ** (self._size - self._order)
+        return super().get_distance_exact(vector=vector)
+
+    def get_one_distance_bound(
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
+    ) -> int:
+        """Return a single upper bound on code distance."""
+        if vector is None:
+            return self.get_distance_exact()
+        return super().get_one_distance_bound(vector=vector, **decoder_args)
+
+    @classmethod
+    def get_generator(cls, order: int, size: int) -> npt.NDArray[np.int_]:
+        """Get the generator matrix for the specified Reed-Muller code."""
+        if order == 0:
+            return np.ones(2**size, dtype=int)
+        if order == size:
+            return np.identity(2**size, dtype=int)
+
+        mat_a = cls.get_generator(order, size - 1)
+        mat_b = cls.get_generator(order - 1, size - 1)
+        mat_z = np.zeros_like(mat_b)
+        return np.block([[mat_a, mat_a], [mat_z, mat_b]]).astype(int)
 
 
 ################################################################################

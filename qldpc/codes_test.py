@@ -18,6 +18,7 @@
 import itertools
 import unittest.mock
 
+import math
 import networkx as nx
 import numpy as np
 import pytest
@@ -51,16 +52,29 @@ def test_classical_codes() -> None:
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
     assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
-    # check dimension of Reed-Solomon and BCH codes
-    assert codes.ReedSolomonCode(3, 2).dimension == 2
-    assert codes.BCHCode(7, 1).dimension == 1
-
     # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
 
+
+def test_special_codes() -> None:
+    """Reed-Solomon, BCH, and Reed-Muller codes."""
+    assert codes.ReedSolomonCode(3, 2).dimension == 2
+
+    bits, dimension = 7, 4
+    assert codes.BCHCode(bits, dimension).dimension == dimension
     with pytest.raises(ValueError, match=r"2\^m - 1 bits"):
-        codes.BCHCode(2, 1)
+        codes.BCHCode(bits - 1, dimension)
+
+    order, size = 1, 3
+    code = codes.ReedMullerCode(order, size)
+    assert code.dimension == codes.ClassicalCode.dimension.fget(code)
+    assert code.get_distance_exact() == code.get_distance(bound=True) == 2 ** (size - order)
+    assert (
+        code.get_distance_exact(vector=[0] * code.num_bits)
+        == code.get_distance_bound(vector=[0] * code.num_bits)
+        == 0
+    )
 
 
 def test_named_codes(order: int = 2) -> None:
