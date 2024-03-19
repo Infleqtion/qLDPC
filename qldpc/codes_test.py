@@ -18,7 +18,6 @@
 import itertools
 import unittest.mock
 
-import math
 import networkx as nx
 import numpy as np
 import pytest
@@ -75,6 +74,7 @@ def test_special_codes() -> None:
         == code.get_distance_bound(vector=[0] * code.num_bits)
         == 0
     )
+    assert 
 
 
 def test_named_codes(order: int = 2) -> None:

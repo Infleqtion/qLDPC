@@ -469,7 +469,11 @@ class ReedMullerCode(ClassicalCode):
     def get_one_distance_bound(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
     ) -> int:
-        """Return a single upper bound on code distance."""
+        """Return a single upper bound on code distance.
+
+        If passed a vector, compute (by decoding) the minimal Hamming distance between the vector
+        and a code word.
+        """
         if vector is None:
             return self.get_distance_exact()
         return super().get_one_distance_bound(vector=vector, **decoder_args)
