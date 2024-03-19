@@ -18,7 +18,6 @@
 import ast
 import subprocess
 
-
 from qldpc.small_groups import gap_is_installed
 
 
@@ -44,7 +43,7 @@ def get_parity_checks(name: str) -> list[list[int]]:
 
     # retrieve checks row by row
     checks = []
-    for line in result.stdout.splitlines()[1:]:
+    for line in result.stdout.splitlines():
         if not line.strip():
             continue
         checks.append(ast.literal_eval(line))

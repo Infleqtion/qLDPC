@@ -16,6 +16,7 @@
 """
 
 import itertools
+import unittest.mock
 
 import networkx as nx
 import numpy as np
@@ -50,15 +51,19 @@ def test_classical_codes() -> None:
     assert codes.ClassicalCode.repetition(3, 2).rank == codes.ClassicalCode.repetition(3, 3).rank
     assert codes.ClassicalCode.hamming(3, 2).rank == codes.ClassicalCode.hamming(3, 3).rank
 
-    # test punctured Hamming codes
-    for num_bits in [5, 6]:
-        assert codes.ClassicalCode.RepSum(num_bits).num_bits == num_bits
-    with pytest.raises(ValueError, match=f"not {num_bits}"):
-        codes.ClassicalCode.RepSum(7)
-
     # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+
+
+def test_named_codes(order: int = 2) -> None:
+    """Named codes from the GAP computer algebra system."""
+    code = codes.ClassicalCode.repetition(order)
+    matrix = [list(row) for row in code.matrix.view(np.ndarray)]
+
+    with unittest.mock.patch("qldpc.small_codes.get_parity_checks", return_value=matrix):
+        named_code = codes.NamedCode(f"RepetitionCode({order})")
+        assert np.array_equal(named_code.matrix, code.matrix)
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:

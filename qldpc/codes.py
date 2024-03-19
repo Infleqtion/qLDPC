@@ -395,32 +395,6 @@ class ClassicalCode(AbstractCode):
         ]
         return ClassicalCode(np.array(strings).T, field=field)
 
-    @classmethod
-    def puncture(cls, code: ClassicalCode, removals: Sequence[int]) -> ClassicalCode:
-        """Remove bits from a code's code words."""
-        bits_to_keep = [bit for bit in range(code.num_bits) if bit not in removals]
-        return ~ClassicalCode(code.generator[:, bits_to_keep])
-
-    @classmethod
-    def drop_bits(cls, code: ClassicalCode, removals: Sequence[int]) -> ClassicalCode:
-        """Remove bits from a code's parity checks."""
-        bits_to_keep = [bit for bit in range(code.num_bits) if bit not in removals]
-        return ClassicalCode(code.matrix[:, bits_to_keep])
-
-    @classmethod
-    def RepSum(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
-        """Construct punctured Hammming Codes [6,3,3] Code."""
-        if num_bits == 5:
-            generator = [[1, 0, 1, 1, 0], [0, 1, 1, 0, 1]]
-        elif num_bits == 6:
-            generator = [[1, 0, 0, 1, 1, 0], [0, 1, 0, 1, 0, 1], [0, 0, 1, 0, 1, 1]]
-        else:
-            raise ValueError(
-                f"Punctured Hamming codes only supported for block length 5 or 6, not {num_bits}"
-            )
-        return ~ClassicalCode(generator, field=field or DEFAULT_FIELD_ORDER)
-
-    # TODO: add more codes, particularly from code families that are useful for good quantum codes
     # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
 
 

@@ -32,7 +32,7 @@ MOCK_INDEX_HTML = """<table class="gptable" columns="6" style='width: 70%;'>
 MOCK_GROUP_HTML = """<b><a href='https://en.wikipedia.org/wiki/Group actions' title='See wikipedia' class='wiki'>Permutation representations of C<sub>2</sub></a></b><br><a id='shl1' class='shl' href="javascript:showhide('shs1','shl1','Regular action on 2 points');"><span class="nsgpn">&#x25ba;</span>Regular action on 2 points</a> - transitive group <a href="../T15.html#2t1">2T1</a><div id='shs1' class='shs'>Generators in S<sub>2</sub><br><pre class='pre' id='textgn1'>(1 2)</pre>&emsp;<button class='copytext' id='copygn1'>Copy</button><br>"""  # pylint: disable=line-too-long  # noqa: E501
 
 
-def get_mock_process(stdout: str) -> subprocess.CompletedProcess:
+def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
     """Fake process with the given stdout."""
     return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
 
@@ -53,10 +53,18 @@ def test_get_group_url() -> None:
     ):
         assert small_groups.get_group_url(ORDER, INDEX) is None
 
-    # cannot find group webpage
+    # cannot find group in the index
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace(f"{ORDER},{INDEX}", ""))
     with (
         pytest.raises(ValueError, match="Group .* not found"),
+        unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
+    ):
+        small_groups.get_group_url(ORDER, INDEX)
+
+    # cannot find link to group webpage
+    mock_page = get_mock_page(MOCK_INDEX_HTML.replace("href", ""))
+    with (
+        pytest.raises(ValueError, match="Webpage .* not found"),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
         small_groups.get_group_url(ORDER, INDEX)
