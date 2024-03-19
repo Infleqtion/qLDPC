@@ -1467,7 +1467,7 @@ class TannerCode(ClassicalCode):
     A Tanner code T(G,C) is constructed from:
     [1] A bipartite "half-regular" graph G.  That is, a graph...
         ... with two sets of nodes, V and W.
-        ... in which all nodes in W have degree n.
+        ... in which all nodes in V have degree n.
     [2] A classical code C on n bits.
 
     For convenience, we make G directed, with edges directed from V to W.  The node sets V and W can
