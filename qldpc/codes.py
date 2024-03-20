@@ -110,6 +110,8 @@ class AbstractCode(abc.ABC):
 # classical codes
 
 
+# TODO:
+# - add code concatenation
 class ClassicalCode(AbstractCode):
     """Classical linear error-correcting code over a finite field F_q.
 
@@ -510,6 +512,7 @@ class ReedMullerCode(ClassicalCode):
 
 
 # TODO:
+# - add code concatenation
 # - add is_CSS method to figure out whether this is a CSS Code
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
 #   - also compute and store sub-codes, if CSS
