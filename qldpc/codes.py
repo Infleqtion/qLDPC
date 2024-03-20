@@ -1601,7 +1601,12 @@ class SurfaceCode(CSSCode):
         if cols is None:
             cols = rows
 
+        # save known distances
+        self._exact_distance_x = self.cols = cols
+        self._exact_distance_z = self.rows = rows
+
         if rotated:
+            # The rotated surface only "works" for qubits.  I am not sure why...
             field = field or 2
             if field != 2:
                 raise ValueError("Rotated surface code only supported for qubits")

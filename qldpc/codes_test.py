@@ -366,8 +366,8 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_planar_codes(rows: int = 3, cols: int = 2) -> None:
-    """The surface and toric codes."""
+def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
+    """Surface codes."""
     # "ordinary"/original surface code
     code = codes.SurfaceCode(rows, cols, rotated=False, field=3)
     assert code.dimension == 1
@@ -379,23 +379,23 @@ def test_planar_codes(rows: int = 3, cols: int = 2) -> None:
     code = codes.SurfaceCode(rows, cols, rotated=True, field=2)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
-    assert code.get_distance_exact(codes.Pauli.X) == cols
-    assert code.get_distance_exact(codes.Pauli.Z) == rows
+    assert (
+        code.get_distance(codes.Pauli.X)
+        == codes.CSSCode.get_distance_exact(code, codes.Pauli.X)
+        == cols
+    )
+    assert (
+        code.get_distance(codes.Pauli.Z)
+        == codes.CSSCode.get_distance_exact(code, codes.Pauli.Z)
+        == rows
+    )
     with pytest.raises(ValueError, match="only supported for qubits"):
         codes.SurfaceCode(rows, cols, rotated=True, field=3)
 
 
-def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
-    """The surface and toric codes as hypergraph product codes."""
-    bit_code: codes.ClassicalCode
-
-    # surface code
-    bit_code = codes.RepetitionCode(distance, field=field)
-    code = codes.HGPCode(bit_code)
-    assert code.num_qudits == distance**2 + (distance - 1) ** 2
-    assert code.dimension == 1
-    assert code.get_distance(bound=10) == distance
-
+def test_toric_code(rows: int = 2, cols: int = 2, field: int = 3) -> None:
+    """Toric codes."""
+    distance = 2
     # toric code
     bit_code = codes.RingCode(distance, field=field)
     code = codes.HGPCode(bit_code)
