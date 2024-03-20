@@ -909,13 +909,16 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    def get_logical_ops(self) -> galois.FieldArray:
+    def get_logical_ops(self, pauli: Literal[Pauli.X, Pauli.Z] | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
         code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
         physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
+
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of the specified type.
 
         In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
         by this method are the unit shift and phase operators that generate all logical X-type and
@@ -924,6 +927,12 @@ class CSSCode(QuditCode):
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified and generalized for qudits.
         """
+        assert pauli in [None, Pauli.X, Pauli.Z]
+
+        # if requested, retrieve logical operators of one type only
+        if pauli is not None:
+            return self.get_logical_ops()[pauli]
+
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
             return self._logical_ops
@@ -1017,7 +1026,9 @@ class CSSCode(QuditCode):
         noncommuting_ops_found = False
         while not noncommuting_ops_found:
             op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
-            op_b = self.get_random_logical_op(pauli, ensure_nontrivial=False)
+            op_b = self.get_random_logical_op(
+                ~pauli, ensure_nontrivial=False  # type:ignore[arg-type]
+            )
             noncommuting_ops_found = bool(np.any(op_a @ op_b))
 
         return op_a
@@ -1036,7 +1047,7 @@ class CSSCode(QuditCode):
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
-        all_dual_ops = self.get_logical_ops()[~pauli]
+        all_dual_ops = self.get_logical_ops(~pauli)  # type:ignore[arg-type]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
         dual_op_index = code.num_checks + logical_index
 
