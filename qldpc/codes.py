@@ -1600,6 +1600,8 @@ class SurfaceCode(CSSCode):
 
     Actually there are two variants: "ordinary" and "rotated" surface codes.
     The rotated code is more qubit-efficient.
+
+    The rotated surface code with conjugate=True is the XZZX code in arXiv:2009.07851.
     """
 
     def __init__(
