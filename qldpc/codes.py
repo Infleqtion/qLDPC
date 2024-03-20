@@ -1568,4 +1568,30 @@ class QTCode(CSSCode):
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
 
 
+class SurfaceCode(CSSCode):
+    """The good ol' surface code."""
+
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        rotated: bool = True,
+        field: int | None = None,
+        *,
+        conjugate: slice | Sequence[int] | None = (),
+    ) -> None:
+        if cols is None:
+            cols = rows
+        if not rotated:
+            code_a = RepetitionCode(rows, field=field)
+            code_b = RepetitionCode(cols, field=field)
+            code = HGPCode(code_a, code_b)
+            matrix_x = code.matrix_x
+            matrix_z = code.matrix_z
+        else:
+            matrix_x = np.zeros(..., dtype=int)
+            matrix_z = np.zeros(..., dtype=int)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+
+
 # TODO: add ordinary + rotated SurfaceCode and ToricCode
