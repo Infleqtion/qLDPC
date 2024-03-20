@@ -173,7 +173,7 @@ def test_SL(field: int = 3) -> None:
         assert np.array_equal(group.lift(gens[0]), mats[0])
         assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
 
-    assert len(list(abstract.SL.iter_mats(2, 2))) == abstract.SL(2, 2).order()
+    assert len(list(abstract.SL.iter_mats(2, 2))) == abstract.SL(2, 2).order
 
     # cover representation with different generators
     assert len(abstract.SL(2, 5).generators) == 2
@@ -185,8 +185,8 @@ def test_PSL(field: int = 3) -> None:
     assert group.generators == abstract.SL(2, 2).generators
     assert group.dimension == 2
 
-    assert len(list(abstract.PSL.iter_mats(2, 2))) == abstract.PSL(2, 2).order()
-    assert abstract.PSL(2, 3).order() == 24
+    assert len(list(abstract.PSL.iter_mats(2, 2))) == abstract.PSL(2, 2).order
+    assert abstract.PSL(2, 3).order == 24
 
     with pytest.raises(ValueError, match="not yet supported"):
         abstract.PSL(3, 3)
