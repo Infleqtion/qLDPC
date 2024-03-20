@@ -419,10 +419,10 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
         assert sum(row_x) == sum(row_z)
 
 
-def test_toric_codes(field: int = 3) -> None:
+def test_toric_codes(field: int = 2) -> None:
     """Ordinary and rotated toric codes."""
     # "ordinary"/original toric code
-    rows, cols = 4, 2
+    rows, cols = 5, 2
     code = codes.ToricCode(rows, cols, rotated=False, field=field)
     assert code.dimension == 2
     assert code.num_qudits == 2 * rows * cols
@@ -431,8 +431,23 @@ def test_toric_codes(field: int = 3) -> None:
     print()
     print(code.get_distance_exact(codes.Pauli.X))
     print(code.get_distance_exact(codes.Pauli.Z))
+    print()
+    print()
+    print()
     # assert code.get_distance(codes.Pauli.X, bound=10) == cols
     # assert code.get_distance(codes.Pauli.Z, bound=10) == rows
+
+    rows, cols = 6, 4
+    code = codes.ToricCode(rows, cols, rotated=True, field=field)
+    assert code.dimension == 2
+    assert code.num_qudits == rows * cols
+    print()
+    print()
+    print()
+    print(code.get_distance_exact(codes.Pauli.X))
+    print(code.get_distance_exact(codes.Pauli.Z))
+    print()
+    print()
 
 
 def test_qudit_distance(field: int = 3) -> None:

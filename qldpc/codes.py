@@ -1758,9 +1758,7 @@ class ToricCode(CSSCode):
         qubits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
-            group_x = abstract.Group.abstract.CyclicGroup(rows)
-            group_z = abstract.Group.abstract.CyclicGroup(cols)
-            group = group_x * group_z
+            group = abstract.CyclicGroup(rows) * abstract.CyclicGroup(cols)
             shift_x, shift_y = group.generators
             subset_a = [shift_x, ~shift_x]
             subset_b = [shift_y, ~shift_y]
