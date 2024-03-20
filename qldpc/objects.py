@@ -70,15 +70,15 @@ class Pauli(enum.Enum):
     @property
     def index(self) -> int:
         """Numerical index for Pauli operators."""
+        return self.__index__()
+
+    def __index__(self) -> int:
+        """Allow indexing arrays with Pauli operators."""
         if self == Pauli.X:
             return 0
         if self == Pauli.Z:
             return 1
         raise AttributeError(f"No index for {self}.")
-
-    def __index__(self) -> int:
-        """Allow indexing arrays with Pauli operators."""
-        return self.index
 
 
 class QuditOperator:
