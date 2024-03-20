@@ -392,10 +392,15 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
     with pytest.raises(ValueError, match="only supported for qubits"):
         codes.SurfaceCode(rows, cols, rotated=True, field=3)
 
+    # test that the rotated surface code with conjugate=True is an XZZX code
+    code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2, conjugate=True)
+    for row in code.matrix.view(np.ndarray):
+        row_x, row_z = row[: code.num_qubits], row[-code.num_qubits :]
+        assert sum(row_x) == sum(row_z)
 
-def test_toric_codes(rows: int = 2, cols: int = 2, field: int = 3) -> None:
+
+def test_toric_codes(distance: int = 2, field: int = 3) -> None:
     """Ordinary and rotated toric codes."""
-    distance = 2
     # toric code
     bit_code = codes.RingCode(distance, field=field)
     code = codes.HGPCode(bit_code)

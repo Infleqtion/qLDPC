@@ -687,7 +687,7 @@ class CSSCode(QuditCode):
         if not skip_validation and not self.is_valid:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
-        self._conjugate = conjugate or ()
+        self._conjugated_qubits = conjugate or ()
         self._codes_equal = self.code_x == self.code_z
 
     @functools.cached_property
@@ -706,7 +706,12 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.code_x.matrix), self.code_x.matrix],
             ]
         )
-        return self.field(self.conjugate(matrix, self._conjugate))
+        return self.field(self.conjugate(matrix, self.conjugated_qubits))
+
+    @property
+    def conjugated_qubits(self) -> slice | Sequence[int]:
+        """Which qubits are conjugated?"""
+        return self._conjugated_qubits
 
     @property
     def num_checks(self) -> int:
@@ -1604,7 +1609,7 @@ class SurfaceCode(CSSCode):
         rotated: bool = True,
         field: int | None = None,
         *,
-        conjugate: slice | Sequence[int] | None = (),
+        conjugate: bool = False,
     ) -> None:
         if cols is None:
             cols = rows
@@ -1613,19 +1618,42 @@ class SurfaceCode(CSSCode):
         self._exact_distance_x = self.cols = cols
         self._exact_distance_z = self.rows = rows
 
+        # which qubits should be Hadamard-transformed?
+        qubits_to_conjugate: slice | Sequence[int] | None
+
         if rotated:
             # The rotated surface only "works" for qubits.  I am not sure why...
             field = field or 2
             if field != 2:
                 raise ValueError("Rotated surface code only supported for qubits")
             matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
+
+            if conjugate:
+                # Hadamard-transform qubits in a checkerboard pattern
+                qubits_to_conjugate = [
+                    idx
+                    for idx, (row, col) in enumerate(np.ndindex(rows, cols))
+                    if row % 2 == col % 2
+                ]
+
+            else:
+                qubits_to_conjugate = None
+
         else:
-            matrix_a = RepetitionCode(rows, field).matrix
-            matrix_b = RepetitionCode(cols, field).matrix
-            matrix_x, matrix_z = HGPCode.get_matrix_product(matrix_a, matrix_b)
+            code_a = RepetitionCode(rows, field)
+            code_b = RepetitionCode(cols, field)
+            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            matrix_x = code_ab.code_x.matrix
+            matrix_z = code_ab.code_z.matrix
+            qubits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
-            self, matrix_x, matrix_z, field=field, conjugate=conjugate, skip_validation=True
+            self,
+            matrix_x,
+            matrix_z,
+            field=field,
+            conjugate=qubits_to_conjugate,
+            skip_validation=True,
         )
 
     @classmethod
