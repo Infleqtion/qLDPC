@@ -423,8 +423,12 @@ def test_toric_tanner_code(size: int = 4) -> None:
         code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
 
-@pytest.mark.parametrize("field", [3, 4])
-def test_qudit_distance(field: int) -> None:
+def test_qudit_distance(field: int = 3) -> None:
     """Distance calculations for qudits."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=field))
-    assert code.get_distance() == 2
+    assert (
+        code.get_distance()
+        == code.get_distance(codes.Pauli.X)
+        == code.get_distance(codes.Pauli.Z)
+        == 2
+    )
