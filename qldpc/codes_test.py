@@ -367,7 +367,7 @@ def test_tanner_code() -> None:
 
 
 def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
-    """Surface codes."""
+    """Ordinary and rotated surface codes."""
     # "ordinary"/original surface code
     code = codes.SurfaceCode(rows, cols, rotated=False, field=3)
     assert code.dimension == 1
@@ -393,8 +393,8 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
         codes.SurfaceCode(rows, cols, rotated=True, field=3)
 
 
-def test_toric_code(rows: int = 2, cols: int = 2, field: int = 3) -> None:
-    """Toric codes."""
+def test_toric_codes(rows: int = 2, cols: int = 2, field: int = 3) -> None:
+    """Ordinary and rotated toric codes."""
     distance = 2
     # toric code
     bit_code = codes.RingCode(distance, field=field)
