@@ -1678,5 +1678,7 @@ class SurfaceCode(CSSCode):
 
         return np.array(checks_x), np.array(checks_z)
 
+    # TODO: add exact distances
+
 
 # TODO: add ordinary + rotated ToricCode
