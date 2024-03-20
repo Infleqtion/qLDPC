@@ -1017,7 +1017,7 @@ class CSSCode(QuditCode):
         noncommuting_ops_found = False
         while not noncommuting_ops_found:
             op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
-            op_b = self.get_random_logical_op(pauli, ensure_nontrivial=False)
+            op_b = self.get_random_logical_op(~pauli, ensure_nontrivial=False)
             noncommuting_ops_found = bool(np.any(op_a @ op_b))
 
         return op_a
