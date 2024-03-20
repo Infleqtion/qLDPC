@@ -377,19 +377,21 @@ def test_tanner_code() -> None:
 
 def test_planar_codes(rows: int = 3, cols: int = 2) -> None:
     """The surface and toric codes."""
+    # "ordinary"/original surface code
     code = codes.SurfaceCode(rows, cols, rotated=False, field=3)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
     assert code.get_distance(codes.Pauli.X, bound=10) == cols
     assert code.get_distance(codes.Pauli.Z, bound=10) == rows
 
+    # rotated surface code
     code = codes.SurfaceCode(rows, cols, rotated=True, field=2)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
-    assert code.get_distance(codes.Pauli.X, bound=10) == rows
-    # assert code.get_distance(codes.Pauli.Z, bound=10) == cols
-    # with pytest.raises(ValueError, "only supported for qubits"):
-    #     codes.SurfaceCode(rows, cols, rotated=True, field=3)
+    assert code.get_distance_exact(codes.Pauli.X) == rows
+    assert code.get_distance_exact(codes.Pauli.Z) == cols
+    with pytest.raises(ValueError, match="only supported for qubits"):
+        codes.SurfaceCode(rows, cols, rotated=True, field=3)
     print()
     print("X-type checks")
     print()
