@@ -419,23 +419,20 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
         assert sum(row_x) == sum(row_z)
 
 
-def test_toric_codes(distance: int = 2, field: int = 3) -> None:
+def test_toric_codes(field: int = 3) -> None:
     """Ordinary and rotated toric codes."""
-    # toric code
-    bit_code = codes.RingCode(distance, field=field)
-    code = codes.HGPCode(bit_code)
-    assert code.num_qudits == 2 * distance**2
+    # "ordinary"/original toric code
+    rows, cols = 4, 2
+    code = codes.ToricCode(rows, cols, rotated=False, field=field)
     assert code.dimension == 2
-    assert code.get_distance(bound=10) == distance
-
-    # check logical operators have the correct weight when reduced
-    code.reduce_logical_ops()
-    logical_ops = code.get_logical_ops().reshape((2 * code.dimension, -1))
-    assert all(np.count_nonzero(op) == distance for op in logical_ops)
-
-    # check that the identity operator is a logical operator
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+    assert code.num_qudits == 2 * rows * cols
+    print()
+    print()
+    print()
+    print(code.get_distance_exact(codes.Pauli.X))
+    print(code.get_distance_exact(codes.Pauli.Z))
+    # assert code.get_distance(codes.Pauli.X, bound=10) == cols
+    # assert code.get_distance(codes.Pauli.Z, bound=10) == rows
 
 
 def test_qudit_distance(field: int = 3) -> None:

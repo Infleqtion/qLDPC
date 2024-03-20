@@ -1735,4 +1735,52 @@ class SurfaceCode(CSSCode):
         return np.array(checks_x), np.array(checks_z)
 
 
-# TODO: add ordinary + rotated ToricCode
+class ToricCode(CSSCode):
+    """Surface code with periodic bounary conditions, encoding two logical qudits."""
+
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        rotated: bool = True,
+        field: int | None = None,
+        *,
+        conjugate: bool = False,
+    ) -> None:
+        if cols is None:
+            cols = rows
+
+        # # save known distances
+        # self._exact_distance_x = self.cols = cols
+        # self._exact_distance_z = self.rows = rows
+
+        # which qubits should be Hadamard-transformed?
+        qubits_to_conjugate: slice | Sequence[int] | None
+
+        if rotated:
+            group_x = abstract.Group.abstract.CyclicGroup(rows)
+            group_z = abstract.Group.abstract.CyclicGroup(cols)
+            group = group_x * group_z
+            shift_x, shift_y = group.generators
+            subset_a = [shift_x, ~shift_x]
+            subset_b = [shift_y, ~shift_y]
+            subcode_a = RepetitionCode(2, field=2)
+            code = QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+
+        else:
+            code_a = RingCode(rows, field)
+            code_b = RingCode(cols, field)
+            code = HGPCode(code_a, code_b, field, conjugate=conjugate)
+
+        matrix_x = code.code_x.matrix
+        matrix_z = code.code_z.matrix
+        qubits_to_conjugate = code.conjugated_qubits
+
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            field=field,
+            conjugate=qubits_to_conjugate,
+            skip_validation=True,
+        )
