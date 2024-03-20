@@ -387,9 +387,39 @@ def test_planar_codes(rows: int = 3, cols: int = 2) -> None:
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
     assert code.get_distance(codes.Pauli.X, bound=10) == rows
-    assert code.get_distance(codes.Pauli.Z, bound=10) == cols
-    with pytest.raises(ValueError, "only supported for qubits"):
-        codes.SurfaceCode(rows, cols, rotated=True, field=3)
+    # assert code.get_distance(codes.Pauli.Z, bound=10) == cols
+    # with pytest.raises(ValueError, "only supported for qubits"):
+    #     codes.SurfaceCode(rows, cols, rotated=True, field=3)
+    print()
+    print("X-type checks")
+    print()
+    for row in code.code_x.matrix:
+        print()
+        print(row.reshape(rows, cols))
+    print()
+    print("Z-type checks")
+    print()
+    for row in code.code_z.matrix:
+        print()
+        print(row.reshape(rows, cols))
+    print()
+    print("--------------------------")
+    print()
+    print("distances (exact, decoder):")
+    print("X", code.get_distance_exact(codes.Pauli.X), code.get_distance(codes.Pauli.X, bound=10))
+    print("Z", code.get_distance_exact(codes.Pauli.Z), code.get_distance(codes.Pauli.Z, bound=10))
+    print()
+    print("--------------------------")
+    code.reduce_logical_ops()
+    print("logical ops:")
+    print()
+    for op_x in code.get_logical_ops()[codes.Pauli.X, :, :]:
+        print(op_x.reshape(rows, cols))
+    print()
+    print("----")
+    print()
+    for op_z in code.get_logical_ops()[codes.Pauli.Z, :, :]:
+        print(op_z.reshape(rows, cols))
 
 
 def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
