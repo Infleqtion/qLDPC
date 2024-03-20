@@ -1639,8 +1639,8 @@ class SurfaceCode(CSSCode):
 
         Here:
         - Circles (○) denote data qubits (of which there are 5×5 = 25 total).
-        - Tiles with a dot (⋅) denote X-type parity checks (12 total).
-        - Tiles with a square (▪) denote Z-type parity checks (12 total).
+        - Tiles with a square (▪) denote X-type parity checks (12 total).
+        - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
         """
 
         def get_check(
@@ -1652,40 +1652,40 @@ class SurfaceCode(CSSCode):
 
         checks_x = []
 
-        # top row
-        for col in range(1, cols - 1, 2):
-            row_indices = [0, 0]
-            col_indices = [col, col + 1]
-            checks_x.append(get_check(row_indices, col_indices))
-        # bulk
-        for row in range(0, rows - 1):
-            for col in range(row % 2, cols - 1, 2):
-                row_indices = [row, row, row + 1, row + 1]
-                col_indices = [col, col + 1, col, col + 1]
-                checks_x.append(get_check(row_indices, col_indices))
-        # bottom row
-        for col in range(1 - rows % 2, cols - 1, 2):
-            row_indices = [rows - 1, rows - 1]
-            col_indices = [col, col + 1]
-            checks_x.append(get_check(row_indices, col_indices))
-
-        checks_z = []
-
         # left column
         for row in range(0, rows - 1, 2):
             row_indices = [row, row + 1]
             col_indices = [0, 0]
-            checks_z.append(get_check(row_indices, col_indices))
+            checks_x.append(get_check(row_indices, col_indices))
         # bulk
         for col in range(0, cols - 1):
             for row in range(1 - col % 2, rows - 1, 2):
                 row_indices = [row, row + 1, row, row + 1]
                 col_indices = [col, col, col + 1, col + 1]
-                checks_z.append(get_check(row_indices, col_indices))
+                checks_x.append(get_check(row_indices, col_indices))
         # right column
         for row in range(cols % 2, rows - 1, 2):
             row_indices = [row, row + 1]
             col_indices = [cols - 1, cols - 1]
+            checks_x.append(get_check(row_indices, col_indices))
+
+        checks_z = []
+
+        # top row
+        for col in range(1, cols - 1, 2):
+            row_indices = [0, 0]
+            col_indices = [col, col + 1]
+            checks_z.append(get_check(row_indices, col_indices))
+        # bulk
+        for row in range(0, rows - 1):
+            for col in range(row % 2, cols - 1, 2):
+                row_indices = [row, row, row + 1, row + 1]
+                col_indices = [col, col + 1, col, col + 1]
+                checks_z.append(get_check(row_indices, col_indices))
+        # bottom row
+        for col in range(1 - rows % 2, cols - 1, 2):
+            row_indices = [rows - 1, rows - 1]
+            col_indices = [col, col + 1]
             checks_z.append(get_check(row_indices, col_indices))
 
         return np.array(checks_x), np.array(checks_z)

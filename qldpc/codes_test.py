@@ -379,8 +379,8 @@ def test_planar_codes(rows: int = 3, cols: int = 2) -> None:
     code = codes.SurfaceCode(rows, cols, rotated=True, field=2)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
-    assert code.get_distance_exact(codes.Pauli.X) == rows
-    assert code.get_distance_exact(codes.Pauli.Z) == cols
+    assert code.get_distance_exact(codes.Pauli.X) == cols
+    assert code.get_distance_exact(codes.Pauli.Z) == rows
     with pytest.raises(ValueError, match="only supported for qubits"):
         codes.SurfaceCode(rows, cols, rotated=True, field=3)
 
