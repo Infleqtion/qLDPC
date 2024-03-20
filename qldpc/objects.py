@@ -310,6 +310,8 @@ class CayleyComplex:
         subgraph_x = nx.DiGraph()
         subgraph_z = nx.DiGraph()
         half_group, _ = nx.bipartite.sets(self.graph)
+        # TODO: make sure we are sorting correctly.
+        # See Section 4.2 of https://arxiv.org/pdf/2206.07571.pdf
         for gg, aa, bb in itertools.product(half_group, self.subset_a, self.subset_b):
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
