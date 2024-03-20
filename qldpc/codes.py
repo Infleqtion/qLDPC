@@ -605,8 +605,8 @@ class QuditCode(AbstractCode):
         for check in range(self.num_checks):
             ops = []
             for qudit in range(self.num_qudits):
-                val_x = matrix[check, Pauli.X.index, qudit]
-                val_z = matrix[check, Pauli.Z.index, qudit]
+                val_x = matrix[check, Pauli.X, qudit]
+                val_z = matrix[check, Pauli.Z, qudit]
                 vals_xz = (val_x, val_z)
                 if self.field.order == 2:
                     ops.append(str(Pauli(vals_xz)))
@@ -1029,7 +1029,7 @@ class CSSCode(QuditCode):
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
-        all_dual_ops = self.get_logical_ops()[(~pauli).index]
+        all_dual_ops = self.get_logical_ops()[~pauli]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
         dual_op_index = code.num_checks + logical_index
 
@@ -1047,7 +1047,7 @@ class CSSCode(QuditCode):
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
-        self._logical_ops[pauli.index, logical_index] = candidate_logical_op
+        self._logical_ops[pauli, logical_index] = candidate_logical_op
 
     def reduce_logical_ops(
         self, pauli: Literal[Pauli.X, Pauli.Z] | None = None, **decoder_args: object

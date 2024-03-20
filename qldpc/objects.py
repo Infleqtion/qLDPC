@@ -76,6 +76,10 @@ class Pauli(enum.Enum):
             return 1
         raise AttributeError(f"No index for {self}.")
 
+    def __index__(self) -> int:
+        """Allow indexing arrays with Pauli operators."""
+        return self.index
+
 
 class QuditOperator:
     """A qudit operator of the form X(val_x)*Z(val_z)."""
