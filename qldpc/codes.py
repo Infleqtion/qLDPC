@@ -803,7 +803,7 @@ class CSSCode(QuditCode):
         # save the exact distance and return
         if pauli == Pauli.X:
             self._exact_distance_x = distance
-        if pauli == Pauli.X:
+        if pauli == Pauli.Z:
             self._exact_distance_z = distance
         return distance
 
