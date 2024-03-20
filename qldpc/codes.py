@@ -917,6 +917,9 @@ class CSSCode(QuditCode):
         code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
         physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
 
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of the specified type.
+
         In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
         by this method are the unit shift and phase operators that generate all logical X-type and
         Z-type qudit operators.
