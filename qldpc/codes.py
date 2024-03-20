@@ -1665,6 +1665,14 @@ class SurfaceCode(CSSCode):
             _cols = [cols - 1, cols - 1]
             checks_z.append(get_check(_rows, _cols))
 
+        for check in checks_x:
+            print()
+            print(check.reshape(rows, cols))
+        print("-----------------------")
+        for check in checks_z:
+            print()
+            print(check.reshape(rows, cols))
+
         return np.array(checks_x), np.array(checks_z)
 
 
