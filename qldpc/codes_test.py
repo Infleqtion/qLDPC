@@ -366,6 +366,26 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
+def test_toric_tanner_code(size: int = 4) -> None:
+    """Rotated toric code as a quantum Tanner code."""
+    assert size % 2 == 0, "Rotated toric QTCode construction only works for even side lengths"
+
+    group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
+    shift_x, shift_y = group.generators
+    subset_a = [shift_x, ~shift_x]
+    subset_b = [shift_y, ~shift_y]
+    subcode_a = codes.RepetitionCode(2, field=2)
+    code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+
+    # verify rotated toric code parameters
+    assert code.get_code_params(bound=10) == (size**2, 2, size, 4)
+
+    # raise error if constructing QTCode with codes over different fields
+    subcode_b = codes.RepetitionCode(2, field=subcode_a.field.order**2)
+    with pytest.raises(ValueError, match="different fields"):
+        code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
+
+
 def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
     """Ordinary and rotated surface codes."""
     # "ordinary"/original surface code
@@ -416,26 +436,6 @@ def test_toric_codes(distance: int = 2, field: int = 3) -> None:
     # check that the identity operator is a logical operator
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
-
-
-def test_toric_tanner_code(size: int = 4) -> None:
-    """Rotated toric code as a quantum Tanner code."""
-    assert size % 2 == 0, "Rotated toric QTCode construction only works for even side lengths"
-
-    group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
-    shift_x, shift_y = group.generators
-    subset_a = [shift_x, ~shift_x]
-    subset_b = [shift_y, ~shift_y]
-    subcode_a = codes.RepetitionCode(2, field=2)
-    code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
-
-    # verify rotated toric code parameters
-    assert code.get_code_params(bound=10) == (size**2, 2, size, 4)
-
-    # raise error if constructing QTCode with codes over different fields
-    subcode_b = codes.RepetitionCode(2, field=subcode_a.field.order**2)
-    with pytest.raises(ValueError, match="different fields"):
-        code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
 
 
 def test_qudit_distance(field: int = 3) -> None:
