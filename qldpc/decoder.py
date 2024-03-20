@@ -166,4 +166,8 @@ def decode(
     if decoder_args.pop("with_ILP", False):
         return decode_with_ILP(matrix, syndrome, **decoder_args)
 
+    if decoder_args.pop("with_MWPM", False):
+        return decode_with_MWPM(matrix, syndrome, **decoder_args)
+
+    decoder_args.pop("with_BP_OSD", None)
     return decode_with_BP_OSD(matrix, syndrome, **decoder_args)

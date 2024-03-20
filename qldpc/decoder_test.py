@@ -36,7 +36,7 @@ def test_decoding() -> None:
     error = np.array([1, 1], dtype=int)
     assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=False))
     assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=True))
-    assert np.allclose(error, decoder.decode_with_MWPM(matrix, syndrome))
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_MWPM=True))
 
     # decode over trinary field
     modulus = 3
