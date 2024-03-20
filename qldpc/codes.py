@@ -1583,12 +1583,12 @@ class SurfaceCode(CSSCode):
         if cols is None:
             cols = rows
 
-        if not rotated:
+        if rotated:
+            matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
+        else:
             matrix_a = RepetitionCode(rows, field=field).matrix
             matrix_b = RepetitionCode(cols, field=field).matrix
             matrix_x, matrix_z = HGPCode.get_matrix_product(matrix_a, matrix_b)
-        else:
-            matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
 
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
