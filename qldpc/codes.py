@@ -1586,8 +1586,16 @@ class QTCode(CSSCode):
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
 
 
+################################################################################
+# common quantum codes
+
+
 class SurfaceCode(CSSCode):
-    """The good ol' surface code."""
+    """The one and only!
+
+    Actually there are two variants: "ordinary" and "rotated" surface codes.
+    The rotated code is more qubit-efficient.
+    """
 
     def __init__(
         self,
@@ -1694,8 +1702,6 @@ class SurfaceCode(CSSCode):
             checks_z.append(get_check(row_indices, col_indices))
 
         return np.array(checks_x), np.array(checks_z)
-
-    # TODO: add exact distances
 
 
 # TODO: add ordinary + rotated ToricCode
