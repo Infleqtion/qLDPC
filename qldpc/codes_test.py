@@ -420,9 +420,6 @@ def test_toric_codes(field: int = 2) -> None:
     print()
     print(code.get_distance_exact(codes.Pauli.X))
     print(code.get_distance_exact(codes.Pauli.Z))
-    print()
-    print()
-    print()
     # assert code.get_distance(codes.Pauli.X, bound=10) == cols
     # assert code.get_distance(codes.Pauli.Z, bound=10) == rows
 
@@ -436,8 +433,8 @@ def test_toric_codes(field: int = 2) -> None:
     print()
     print(code.get_distance_exact(codes.Pauli.X))
     print(code.get_distance_exact(codes.Pauli.Z))
-    print()
-    print()
+    # assert code.get_distance(codes.Pauli.X, bound=10) == cols
+    # assert code.get_distance(codes.Pauli.Z, bound=10) == rows
 
     # # verify rotated toric code parameters
     # assert code.get_code_params(bound=10) == (size**2, 2, size, 4)

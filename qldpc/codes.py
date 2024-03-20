@@ -1758,6 +1758,10 @@ class ToricCode(CSSCode):
         qubits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
+            if not rows % 2 == cols % 2 == 0:
+                raise ValueError(
+                    f"Rotated toric code only valid for even side lengths, not ({rows},{cols})"
+                )
             group = abstract.CyclicGroup(rows) * abstract.CyclicGroup(cols)
             shift_x, shift_y = group.generators
             subset_a = [shift_x, ~shift_x]
