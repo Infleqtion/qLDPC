@@ -124,6 +124,7 @@ class ClassicalCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
+    _exact_distance: int | None = None
 
     def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
         return not np.any(self.matrix @ self.field(word))
@@ -250,9 +251,16 @@ class ClassicalCode(AbstractCode):
         """
         if vector is not None:
             words = self.words() - self.field(vector)[np.newaxis, :]
-        else:
-            words = self.words()[1:]
-        return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+            return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+
+        # if we know the exact code distance, return it
+        if self._exact_distance is not None:
+            return self._exact_distance
+
+        # we do not know the exact distance, so compute it
+        words = self.words()[1:]
+        self._exact_distance = np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+        return self._exact_distance
 
     def get_distance_bound(
         self,
@@ -397,6 +405,7 @@ class HammingCode(ClassicalCode):
 
     def __init__(self, rank: int, field: int | None = None) -> None:
         """Construct a Hamming code of a given rank."""
+        self._exact_distance = 3
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         if self.field.order == 2:
             # parity check matrix: columns = all nonzero bitstrings
@@ -452,6 +461,7 @@ class ReedMullerCode(ClassicalCode):
 
     def __init__(self, order: int, size: int, field: int | None = None) -> None:
         self._assert_valid_params(order, size)
+        self._exact_distance = 2 ** (size - order)
         self._order = order
         self._size = size
 
@@ -481,30 +491,6 @@ class ReedMullerCode(ClassicalCode):
                 "Reed-Muller code R(r,m) must have m >= 0 and 0 <= r <= m\n"
                 + f"Provided: (r,m) = ({order},{size})"
             )
-
-    def get_distance_exact(
-        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
-    ) -> int:
-        """Minimal weight of a nontrivial code word.
-
-        If passed a vector, compute (by brute force) the minimal Hamming distance between the vector
-        and a code word.
-        """
-        if vector is None:
-            return 2 ** (self._size - self._order)
-        return super().get_distance_exact(vector=vector)
-
-    def get_one_distance_bound(
-        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
-    ) -> int:
-        """Return a single upper bound on code distance.
-
-        If passed a vector, compute (by decoding) the minimal Hamming distance between the vector
-        and a code word.
-        """
-        if vector is None:
-            return self.get_distance_exact()
-        return super().get_one_distance_bound(vector=vector, **decoder_args)
 
 
 ################################################################################
@@ -536,6 +522,8 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
+    _exact_distance_x: int | None = None
+    _exact_distance_z: int | None = None
 
     @property
     def num_checks(self) -> int:
@@ -674,6 +662,8 @@ class CSSCode(QuditCode):
     _conjugate: slice | Sequence[int]
     _codes_equal: bool
     _logical_ops: galois.FieldArray | None = None
+    _exact_distance_x: int | None = None
+    _exact_distance_z: int | None = None
 
     def __init__(
         self,
@@ -791,17 +781,31 @@ class CSSCode(QuditCode):
                 self.get_distance_exact(Pauli.Z, vector=vector),
             )
 
-        code_x = self.code_x if pauli == Pauli.X else self.code_z
-        code_z = self.code_z if pauli == Pauli.X else self.code_x
-
         if vector is not None:
+            code_z = self.code_z if pauli == Pauli.X else self.code_x
             ops_x = code_z.words()
             vector = self.field(vector)
             return min(np.count_nonzero(word - vector) for word in ops_x)
 
+        # if we know the exact code distance, return it
+        if pauli == Pauli.X and self._exact_distance_x is not None:
+            return self._exact_distance_x
+        if pauli == Pauli.Z and self._exact_distance_z is not None:
+            return self._exact_distance_z
+
+        # we do not know the exact distance, so compute it
+        code_x = self.code_x if pauli == Pauli.X else self.code_z
+        code_z = self.code_z if pauli == Pauli.X else self.code_x
         dual_code_x = ~code_x
         nontrivial_ops_x = (word for word in code_z.words() if word not in dual_code_x)
-        return min(np.count_nonzero(word) for word in nontrivial_ops_x)
+        distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
+
+        # save the exact distance and return
+        if pauli == Pauli.X:
+            self._exact_distance_x = distance
+        if pauli == Pauli.X:
+            self._exact_distance_z = distance
+        return distance
 
     def get_distance_bound(
         self,
@@ -1088,9 +1092,6 @@ def _fix_decoder_args_for_nonbinary_fields(
 
 ################################################################################
 # bicycle and quasi-cyclic codes
-
-
-# TODO: add special/simpler cases of code distance calculations and bounds, if and where available
 
 
 class GBCode(CSSCode):
