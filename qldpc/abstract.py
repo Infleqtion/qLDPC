@@ -390,6 +390,14 @@ class Group:
         return Group(group)
 
 
+class SmallGroup(Group):
+    """Group indexed by the GAP computer algebra system."""
+
+    def __init__(self, order: int, index: int) -> None:
+        name = f"SmallGroup({order},{index})"
+        super().__init__(Group.from_name(name))
+
+
 ################################################################################
 # elements of a group algebra
 
@@ -893,17 +901,3 @@ class ProjectiveSpecialLinearGroup(Group):
 
 SL = SpecialLinearGroup
 PSL = ProjectiveSpecialLinearGroup
-
-
-################################################################################
-# groups indexed by the GAP computer algebra system
-
-
-class SmallGroup(Group):
-    """Groups indexed by the GAP computer algebra system."""
-
-    def __init__(self, order: int, index: int) -> None:
-        name = f"SmallGroup({order},{index})"
-        generators = named_groups.get_generators(name)
-        group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
-        super().__init__(group)
