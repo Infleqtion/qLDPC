@@ -1513,6 +1513,9 @@ class TannerCode(ClassicalCode):
         )
 
 
+# TODO: investigate construction in
+# https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
+# see also Section 7 of https://arxiv.org/abs/2206.07571
 class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex
 
@@ -1584,13 +1587,18 @@ class SurfaceCode(CSSCode):
             cols = rows
 
         if rotated:
+            field = field or 2
+            if field != 2:
+                raise ValueError("Rotated surface code only supported for qubits")
             matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
         else:
-            matrix_a = RepetitionCode(rows, field=field).matrix
-            matrix_b = RepetitionCode(cols, field=field).matrix
+            matrix_a = RepetitionCode(rows, field).matrix
+            matrix_b = RepetitionCode(cols, field).matrix
             matrix_x, matrix_z = HGPCode.get_matrix_product(matrix_a, matrix_b)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field=field, conjugate=conjugate, skip_validation=True
+        )
 
     @classmethod
     def get_rotated_checks(
@@ -1631,47 +1639,39 @@ class SurfaceCode(CSSCode):
 
         # top row
         for col in range(1, cols - 1, 2):
-            _rows = [0, 0]
-            _cols = [col, col + 1]
-            checks_x.append(get_check(_rows, _cols))
+            row_indices = [0, 0]
+            col_indices = [col, col + 1]
+            checks_x.append(get_check(row_indices, col_indices))
         # bulk
         for row in range(0, rows - 1):
             for col in range(row % 2, cols - 1, 2):
-                _rows = [row, row, row + 1, row + 1]
-                _cols = [col, col + 1, col, col + 1]
-                checks_x.append(get_check(_rows, _cols))
+                row_indices = [row, row, row + 1, row + 1]
+                col_indices = [col, col + 1, col, col + 1]
+                checks_x.append(get_check(row_indices, col_indices))
         # bottom row
         for col in range(1 - rows % 2, cols - 1, 2):
-            _rows = [rows - 1, rows - 1]
-            _cols = [col, col + 1]
-            checks_x.append(get_check(_rows, _cols))
+            row_indices = [rows - 1, rows - 1]
+            col_indices = [col, col + 1]
+            checks_x.append(get_check(row_indices, col_indices))
 
         checks_z = []
 
         # left column
         for row in range(0, rows - 1, 2):
-            _rows = [row, row + 1]
-            _cols = [0, 0]
-            checks_z.append(get_check(_rows, _cols))
+            row_indices = [row, row + 1]
+            col_indices = [0, 0]
+            checks_z.append(get_check(row_indices, col_indices))
         # bulk
         for col in range(0, cols - 1):
             for row in range(1 - col % 2, rows - 1, 2):
-                _rows = [row, row + 1, row, row + 1]
-                _cols = [col, col, col + 1, col + 1]
-                checks_z.append(get_check(_rows, _cols))
+                row_indices = [row, row + 1, row, row + 1]
+                col_indices = [col, col, col + 1, col + 1]
+                checks_z.append(get_check(row_indices, col_indices))
         # right column
         for row in range(cols % 2, rows - 1, 2):
-            _rows = [row, row + 1]
-            _cols = [cols - 1, cols - 1]
-            checks_z.append(get_check(_rows, _cols))
-
-        for check in checks_x:
-            print()
-            print(check.reshape(rows, cols))
-        print("-----------------------")
-        for check in checks_z:
-            print()
-            print(check.reshape(rows, cols))
+            row_indices = [row, row + 1]
+            col_indices = [cols - 1, cols - 1]
+            checks_z.append(get_check(row_indices, col_indices))
 
         return np.array(checks_x), np.array(checks_z)
 
