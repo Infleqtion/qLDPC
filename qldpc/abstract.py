@@ -193,6 +193,7 @@ class Group:
         """Base field of this group."""
         return self._field
 
+    @property
     def order(self) -> int:
         """Number of members in this group."""
         return self._group.order()
@@ -234,7 +235,7 @@ class Group:
         return np.array(
             [members[aa * bb] for aa in self.generate() for bb in self.generate()],
             dtype=int,
-        ).reshape((self.order(),) * 2)
+        ).reshape(self.order, self.order)
 
     @classmethod
     def from_table(
@@ -343,10 +344,10 @@ class Group:
         WARNING: not all groups have symmetric subsets of arbitrary size.  If called with a poor
         choice of group and subset size, this method may never terminate.
         """
-        if not 0 < size <= self.order():
+        if not 0 < size <= self.order:
             raise ValueError(
                 "A random symmetric subset of this group must have a size between 1 and"
-                f" {self.order()} (provided: {size})"
+                f" {self.order} (provided: {size})"
             )
         if seed is not None:
             sympy.core.random.seed(seed)
