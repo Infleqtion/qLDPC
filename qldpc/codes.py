@@ -1584,17 +1584,89 @@ class SurfaceCode(CSSCode):
             cols = rows
 
         if not rotated:
-            code_a = RepetitionCode(rows, field=field)
-            code_b = RepetitionCode(cols, field=field)
-            code = HGPCode(code_a, code_b)
-            matrix_x = code.matrix_x
-            matrix_z = code.matrix_z
+            matrix_a = RepetitionCode(rows, field=field).matrix
+            matrix_b = RepetitionCode(cols, field=field).matrix
+            matrix_x, matrix_z = HGPCode.get_matrix_product(matrix_a, matrix_b)
 
         else:
-            matrix_x = np.zeros(..., dtype=int)
-            matrix_z = np.zeros(..., dtype=int)
+            matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
 
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
+    @classmethod
+    def get_rotated_checks(
+        cls, rows: int, cols: int
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build X-sector and Z-sector parity check matrices.
 
-# TODO: add ordinary + rotated SurfaceCode and ToricCode
+        Example 5x5 rotated surface code layout:
+
+                 ―――     ―――
+                | ⋅ |   | ⋅ |
+         ―――○―――○―――○―――○―――○
+        | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+         ―――○―――○―――○―――○―――○―――
+            | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+         ―――○―――○―――○―――○―――○―――
+        | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+         ―――○―――○―――○―――○―――○―――
+            | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+            ○―――○―――○―――○―――○―――
+            | ⋅ |   | ⋅ |
+             ―――     ―――
+
+        Here:
+        - Circles (○) denote data qubits (of which there are 5×5 = 25 total).
+        - Tiles with a dot (⋅) denote X-type parity checks (12 total).
+        - Tiles with a square (▪) denote Z-type parity checks (12 total).
+        """
+
+        def get_check(
+            row_indices: Sequence[int], col_indices: Sequence[int]
+        ) -> npt.NDArray[np.int_]:
+            check = np.zeros((rows, cols), dtype=int)
+            check[row_indices, col_indices] = 1
+            return check.ravel()
+
+        checks_x = []
+
+        # top row
+        for col in range(1, cols - 1, 2):
+            _rows = [0, 0]
+            _cols = [col, col + 1]
+            checks_x.append(get_check(_rows, _cols))
+        # bulk
+        for row in range(0, rows - 1):
+            for col in range(row % 2, cols - 1, 2):
+                _rows = [row, row, row + 1, row + 1]
+                _cols = [col, col + 1, col, col + 1]
+                checks_x.append(get_check(_rows, _cols))
+        # bottom row
+        for col in range(1 - rows % 2, cols - 1, 2):
+            _rows = [rows - 1, rows - 1]
+            _cols = [col, col + 1]
+            checks_x.append(get_check(_rows, _cols))
+
+        checks_z = []
+
+        # left column
+        for row in range(0, rows - 1, 2):
+            _rows = [row, row + 1]
+            _cols = [0, 0]
+            checks_z.append(get_check(_rows, _cols))
+        # bulk
+        for col in range(0, cols - 1):
+            for row in range(1 - col % 2, rows - 1, 2):
+                _rows = [row, row + 1, row, row + 1]
+                _cols = [col, col, col + 1, col + 1]
+                checks_z.append(get_check(_rows, _cols))
+        # right column
+        for row in range(cols % 2, rows - 1, 2):
+            _rows = [row, row + 1]
+            _cols = [cols - 1, cols - 1]
+            checks_z.append(get_check(_rows, _cols))
+
+        return np.array(checks_x), np.array(checks_z)
+
+
+# TODO: add ordinary + rotated ToricCode
