@@ -1663,19 +1663,19 @@ class SurfaceCode(CSSCode):
 
         Example 5x5 rotated surface code layout:
 
-                 ―――     ―――
-                | ⋅ |   | ⋅ |
-         ―――○―――○―――○―――○―――○
-        | × | ⋅ | × | ⋅ | × |
-         ―――○―――○―――○―――○―――○―――
-            | × | ⋅ | × | ⋅ | × |
-         ―――○―――○―――○―――○―――○―――
-        | × | ⋅ | × | ⋅ | × |
-         ―――○―――○―――○―――○―――○―――
-            | × | ⋅ | × | ⋅ | × |
-            ○―――○―――○―――○―――○―――
-            | ⋅ |   | ⋅ |
              ―――     ―――
+            | ⋅ |   | ⋅ |
+            ○―――○―――○―――○―――○―――
+            | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+        | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+            | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+        | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○
+                | ⋅ |   | ⋅ |
+                 ―――     ―――
 
         Here:
         - Circles (○) denote data qubits (of which there are 5×5 = 25 total).
@@ -1705,12 +1705,12 @@ class SurfaceCode(CSSCode):
                     continue
 
                 if row % 2 == col % 2:
-                    if 0 <= col < cols - 1:
-                        # no Z-type parity checks on the left/right boundaries
-                        checks_z.append(check)
-                elif 0 <= row < rows - 1:
-                    # no Z-type parity checks on the top/bottom boundaries
-                    checks_x.append(check)
+                    if 0 <= row < rows - 1:
+                        # no X-type parity checks on the top/bottom boundaries
+                        checks_x.append(check)
+                elif 0 <= col < cols - 1:
+                    # no Z-type parity checks on the left/right boundaries
+                    checks_z.append(check)
 
         return np.array(checks_x), np.array(checks_z)
 
@@ -1801,8 +1801,8 @@ class ToricCode(CSSCode):
                 col_indices = [col, col, col + 1, col + 1]
                 check = get_check(row_indices, col_indices)
                 if row % 2 == col % 2:
-                    checks_z.append(check)
-                else:
                     checks_x.append(check)
+                else:
+                    checks_z.append(check)
 
         return np.array(checks_x), np.array(checks_z)
