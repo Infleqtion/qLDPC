@@ -1631,9 +1631,7 @@ class SurfaceCode(CSSCode):
             if conjugate:
                 # Hadamard-transform qubits in a checkerboard pattern
                 qubits_to_conjugate = [
-                    idx
-                    for idx, (row, col) in enumerate(np.ndindex(rows, cols))
-                    if row % 2 == col % 2
+                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
                 ]
 
             else:
@@ -1756,19 +1754,12 @@ class ToricCode(CSSCode):
 
         if rotated:
             # rotated toric code
-            if not rows % 2 == cols % 2 == 0 and rows >= 4 and cols >= 4:
+            if not (rows % 2 == cols % 2 == 0 and rows >= 4 and cols >= 4):
                 raise ValueError(
                     "The rotated toric code must have even side lengths of at least four, not"
                     + f" ({rows},{cols})"
                 )
-            group = abstract.CyclicGroup(rows) * abstract.CyclicGroup(cols)
-            shift_x, shift_y = group.generators
-            subset_a = [shift_x, ~shift_x]
-            subset_b = [shift_y, ~shift_y]
-            subcode_a = RepetitionCode(2, field=field)
-            code = QTCode(subset_a, subset_b, subcode_a)
-            matrix_x = code.code_x.matrix
-            matrix_z = code.code_z.matrix
+            matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)
 
             if conjugate:
                 # Hadamard-transform qubits in a checkerboard pattern
@@ -1783,10 +1774,10 @@ class ToricCode(CSSCode):
             # "original" toric code
             code_a = RingCode(rows, field)
             code_b = RingCode(cols, field)
-            code = HGPCode(code_a, code_b, field, conjugate=conjugate)
-            matrix_x = code.code_x.matrix
-            matrix_z = code.code_z.matrix
-            qubits_to_conjugate = code.conjugated_qubits
+            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            matrix_x = code_ab.code_x.matrix
+            matrix_z = code_ab.code_z.matrix
+            qubits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
             self,
@@ -1796,3 +1787,37 @@ class ToricCode(CSSCode):
             conjugate=qubits_to_conjugate,
             skip_validation=True,
         )
+
+    @classmethod
+    def get_rotated_checks(
+        cls, rows: int, cols: int
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build X-sector and Z-sector parity check matrices.
+
+        Same as in SurfaceCode.get_rotated_checks, but with periodic boundary conditions.
+        """
+
+        def get_check(
+            row_indices: Sequence[int], col_indices: Sequence[int]
+        ) -> npt.NDArray[np.int_]:
+            check = np.zeros((rows, cols), dtype=int)
+            check[row_indices, col_indices] = 1
+            return check.ravel()
+
+        checks_x = []
+        checks_z = []
+        for row in range(rows):
+            for col in range(cols):
+                row_indices = np.array([row, row + 1, row, row + 1]) % rows
+                col_indices = np.array([col, col, col + 1, col + 1]) % cols
+                check = get_check(row_indices, col_indices)
+                if row % 2 == col % 2:
+                    checks_x.append(check)
+                else:
+                    checks_z.append(check)
+
+        return np.array(checks_x), np.array(checks_z)
+
+
+# rows, cols = 6, 4
+# code = ToricCode(rows, cols, rotated=True, conjugate=True)

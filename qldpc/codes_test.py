@@ -410,40 +410,37 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
 def test_toric_codes(field: int = 3) -> None:
     """Ordinary and rotated toric codes."""
 
-    # # "ordinary"/original toric code
-    # rows, cols = 5, 2
-    # code = codes.ToricCode(rows, cols, rotated=False, field=field)
-    # assert code.dimension == 2
-    # assert code.num_qudits == 2 * rows * cols
+    # "ordinary"/original toric code
+    rows, cols = 5, 2
+    code = codes.ToricCode(rows, cols, rotated=False, field=field)
+    assert code.dimension == 2
+    assert code.num_qudits == 2 * rows * cols
 
-    # # check minimal logical operator weights
-    # code.reduce_logical_ops(with_ILP=True)
-    # assert (
-    #     {rows, cols}
-    #     == {sum(op) for op in code.get_logical_ops(codes.Pauli.X).view(np.ndarray)}
-    #     == {sum(op) for op in code.get_logical_ops(codes.Pauli.Z).view(np.ndarray)}
-    # )
+    # check minimal logical operator weights
+    code.reduce_logical_ops(with_ILP=True)
+    assert (
+        {rows, cols}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.X).view(np.ndarray)}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.Z).view(np.ndarray)}
+    )
 
-    # # rotated toric code
-    # distance = 4
-    # code = codes.ToricCode(distance, rotated=True, field=field)
-    # assert code.dimension == 2
-    # assert code.num_qudits == distance**2
-    # assert code.get_distance() == distance
+    # rotated toric code
+    distance = 4
+    code = codes.ToricCode(distance, rotated=True, field=field)
+    assert code.dimension == 2
+    assert code.num_qudits == distance**2
+    assert code.get_distance() == distance
 
     # rotated toric XZZX code
     rows, cols = 6, 4
     code = codes.ToricCode(rows, cols, rotated=True, field=field, conjugate=True)
     for row in code.matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
-        # assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
-        print()
-        print(row_x)
-        print(row_z)
+        assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
 
-    # # rotated toric code must have even side lengths
-    # with pytest.raises(ValueError, match="must have even side lengths"):
-    #     code = codes.ToricCode(3, rotated=True)
+    # rotated toric code must have even side lengths
+    with pytest.raises(ValueError, match="must have even side lengths"):
+        code = codes.ToricCode(3, rotated=True)
 
 
 def test_quantum_distance(field: int = 2) -> None:
