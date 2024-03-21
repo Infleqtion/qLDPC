@@ -366,9 +366,19 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_quantum_tanner() -> None:
-    """Cover quantum Tanner code."""
-    # raise error if constructing QTCode with codes over different fields
+def test_toric_tanner_code(size: int = 4) -> None:
+    """Rotated toric code as a quantum Tanner code."""
+    group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
+    shift_x, shift_y = group.generators
+    subset_a = [shift_x, ~shift_x]
+    subset_b = [shift_y, ~shift_y]
+    subcode_a = codes.RepetitionCode(2, field=2)
+    code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+    assert code.get_code_params() == (size**2, 2, size, 4)
+
+
+def test_invalid_quantum_tanner() -> None:
+    """Raise error if constructing QTCode with codes over different fields."""
     subcode_a = codes.RepetitionCode(2, field=2)
     subcode_b = codes.RepetitionCode(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
