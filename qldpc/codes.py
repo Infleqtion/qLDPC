@@ -1500,6 +1500,9 @@ class TannerCode(ClassicalCode):
     sorts E(v) by the value of the "sort" attribute attached to each edge.  If there is no "sort"
     attribute, its value is treated as corresponding neighbor of v.
 
+    Tanner codes can similarly be defined on regular (undirected) graphs G' = (V',E') by placing
+    checks on V' and bits on E'.
+
     Notes:
     - If the subcode C has m checks, its parity matrix has shape (m,n).
     - The code T(G,C) has |W| bits and |V|m checks.
