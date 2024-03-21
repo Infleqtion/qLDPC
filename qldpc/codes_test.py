@@ -432,8 +432,8 @@ def test_toric_codes(field: int = 3) -> None:
     # assert code.get_distance() == distance
 
     # rotated toric XZZX code
-    distance = 4
-    code = codes.ToricCode(distance, rotated=True, field=field, conjugate=True)
+    rows, cols = 6, 4
+    code = codes.ToricCode(rows, cols, rotated=True, field=field, conjugate=True)
     for row in code.matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         # assert np.count_nonzero(row_x) == np.count_nonzero(row_z)

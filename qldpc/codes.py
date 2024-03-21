@@ -1756,9 +1756,10 @@ class ToricCode(CSSCode):
 
         if rotated:
             # rotated toric code
-            if not rows % 2 == cols % 2 == 0:
+            if not rows % 2 == cols % 2 == 0 and rows >= 4 and cols >= 4:
                 raise ValueError(
-                    f"The rotated toric code must have even side lengths, not ({rows},{cols})"
+                    f"The rotated toric code must have even side lengths of at least four, not"
+                    + f" ({rows},{cols})"
                 )
             group = abstract.CyclicGroup(rows) * abstract.CyclicGroup(cols)
             shift_x, shift_y = group.generators
