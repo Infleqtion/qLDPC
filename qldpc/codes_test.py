@@ -347,9 +347,15 @@ def test_tanner_code() -> None:
     """Classical Tanner codes on random regular graphs."""
     subcode = codes.ClassicalCode.random(5, 3)
     subgraph = nx.random_regular_graph(subcode.num_bits, subcode.num_bits * 2 + 2)
+
+    tag = "sort_label"
+    for node_a, node_b in subgraph.edges:
+        subgraph[node_a][node_b]["sort"] = {node_a: tag, node_b: tag}
+
     code = codes.TannerCode(subgraph, subcode)
     assert code.num_bits == subgraph.number_of_edges()
     assert code.num_checks == subgraph.number_of_nodes() * code.subcode.num_checks
+    assert all(code.subgraph.get_edge_data(*edge)["sort"] == tag for edge in code.subgraph.edges)
 
 
 def test_toric_tanner_code(size: int = 4) -> None:

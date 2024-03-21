@@ -1511,7 +1511,7 @@ class TannerCode(ClassicalCode):
     def __init__(self, subgraph: nx.Graph, subcode: ClassicalCode) -> None:
         """Construct a classical Tanner code."""
         if not isinstance(subgraph, nx.DiGraph):
-            subgraph = TannerCode.to_directed(subgraph)
+            subgraph = TannerCode.as_directed_subgraph(subgraph)
 
         self.subgraph = subgraph
         self.subcode = subcode
@@ -1536,7 +1536,7 @@ class TannerCode(ClassicalCode):
         )
 
     @classmethod
-    def to_directed(self, subgraph: nx.Graph) -> nx.DiGraph:
+    def as_directed_subgraph(self, subgraph: nx.Graph) -> nx.DiGraph:
         """Convert an undirected graph for a Tanner code into a directed graph for the same code."""
         directed_subgraph = nx.DiGraph()
         for node_a, node_b, edge_data in subgraph.edges(data=True):
