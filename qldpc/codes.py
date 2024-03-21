@@ -22,7 +22,7 @@ import functools
 import itertools
 import random
 from collections.abc import Collection, Hashable, Iterable, Sequence
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 import galois
 import ldpc.mod2
@@ -31,13 +31,10 @@ import numpy as np
 import numpy.typing as npt
 
 import qldpc
-from qldpc import abstract
+from qldpc import abstract, named_codes
 from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
 
-if TYPE_CHECKING:
-    from typing_extensions import Self
-
-DEFAULT_FIELD_ORDER = abstract.DEFAULT_FIELD_ORDER
+DEFAULT_FIELD_ORDER = 2
 
 
 def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
@@ -48,7 +45,7 @@ def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galo
 
 
 ################################################################################
-# template error correction code classes
+# template error correction code class
 
 
 # TODO(?): support sparse parity check matrices
@@ -59,7 +56,7 @@ class AbstractCode(abc.ABC):
 
     def __init__(
         self,
-        matrix: Self | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
     ) -> None:
         """Construct a code from a parity check matrix over a finite field.
@@ -109,6 +106,12 @@ class AbstractCode(abc.ABC):
         """Convert a Tanner graph into a parity check matrix."""
 
 
+################################################################################
+# classical codes
+
+
+# TODO:
+# - add code concatenation
 class ClassicalCode(AbstractCode):
     """Classical linear error-correcting code over a finite field F_q.
 
@@ -119,6 +122,9 @@ class ClassicalCode(AbstractCode):
     (num_checks, num_bits).  Each row of H represents a linear constraint (a "check") that code
     words must satisfy.  A vector x is a code word iff H @ x = 0.
     """
+
+    _matrix: galois.FieldArray
+    _exact_distance: int | None = None
 
     def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
         return not np.any(self.matrix @ self.field(word))
@@ -267,9 +273,16 @@ class ClassicalCode(AbstractCode):
         """
         if vector is not None:
             words = self.words() - self.field(vector)[np.newaxis, :]
-        else:
-            words = self.words()[1:]
-        return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+            return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+
+        # if we know the exact code distance, return it
+        if self._exact_distance is not None:
+            return self._exact_distance
+
+        # we do not know the exact distance, so compute it
+        words = self.words()[1:]
+        self._exact_distance = np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+        return self._exact_distance
 
     def get_distance_bound(
         self,
@@ -361,82 +374,154 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
-        """Construct a random classical code with the given number of bits and nontrivial checks."""
+        """Construct a random classical code with the given number of bits and nontrivial checks.
+
+        Reject parity check matrices that have a row or column of all zeroes.
+        """
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        rows, cols = checks, bits
-        matrix = code_field.Random((rows, cols))
-        for row in range(matrix.shape[0]):
-            if not matrix[row, :].any():
-                matrix[row, np.random.randint(cols)] = code_field.Random(low=1)  # pragma: no cover
-        for col in range(matrix.shape[1]):
-            if not matrix[:, col].any():
-                matrix[np.random.randint(rows), col] = code_field.Random(low=1)  # pragma: no cover
+
+        def has_zero_row_or_column(matrix: galois.FieldArray) -> bool:
+            """Does the given matrix have a row or column that is all zeroes?"""
+            return any(not row.any() for row in matrix) or any(not col.any() for col in matrix.T)
+
+        while has_zero_row_or_column(matrix := code_field.Random((checks, bits))):
+            pass
+
         return ClassicalCode(matrix)
 
     @classmethod
-    def repetition(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
-        """Construct a repetition code on the given number of bits."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        matrix = code_field.Zeros((num_bits - 1, num_bits))
-        for row in range(num_bits - 1):
-            matrix[row, row] = 1
-            matrix[row, row + 1] = -code_field(1)
-        return ClassicalCode(matrix)
+    def from_name(cls, name: str) -> ClassicalCode:
+        """Named code in the GAP computer algebra system."""
+        standardized_name = name.strip().replace(" ", "")  # remove whitespace
+        matrix, field = named_codes.get_code(standardized_name)
+        return ClassicalCode(matrix, field)
 
-    @classmethod
-    def ring(cls, num_bits: int, field: int | None = None) -> ClassicalCode:
-        """Construct a repetition code with periodic boundary conditions."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        matrix = code_field.Zeros((num_bits, num_bits))
-        for row in range(num_bits):
-            matrix[row, row] = 1
-            matrix[row, (row + 1) % num_bits] = -code_field(1)
-        return ClassicalCode(matrix)
+    # TODO(?): maybe add modification options such as puncturing and shortening
+    # https://users.math.msu.edu/users/halljo/classes/codenotes/mod.pdf
+    # https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.122.230501
 
-    @classmethod
-    def hamming(cls, rank: int, field: int | None = None) -> ClassicalCode:
-        """Construct a hamming code of a given rank."""
-        field = field or DEFAULT_FIELD_ORDER
-        if field == 2:
+
+class RepetitionCode(ClassicalCode):
+    """Classical repetition code."""
+
+    def __init__(self, bits: int, field: int | None = None) -> None:
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._matrix = self.field.Zeros((bits - 1, bits))
+        for row in range(bits - 1):
+            self._matrix[row, row] = 1
+            self._matrix[row, row + 1] = -self.field(1)
+
+
+class RingCode(ClassicalCode):
+    """Classical ring code: repetition code with periodic boundary conditions."""
+
+    def __init__(self, bits: int, field: int | None = None) -> None:
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._matrix = self.field.Zeros((bits, bits))
+        for row in range(bits):
+            self._matrix[row, row] = 1
+            self._matrix[row, (row + 1) % bits] = -self.field(1)
+
+
+class HammingCode(ClassicalCode):
+    """Classical Hamming code."""
+
+    def __init__(self, rank: int, field: int | None = None) -> None:
+        """Construct a Hamming code of a given rank."""
+        self._exact_distance = 3
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        if self.field.order == 2:
             # parity check matrix: columns = all nonzero bitstrings
             bitstrings = list(itertools.product([0, 1], repeat=rank))
-            return ClassicalCode(np.array(bitstrings[1:]).T)
+            self._matrix = self.field(bitstrings[1:]).T
 
-        # More generally, columns = maximal set of nonzero, linearly independent strings.
-        # This is achieved by collecting together all strings whose first nonzero element is a 1.
-        strings = [
-            (0,) * top_row + (1,) + rest
-            for top_row in range(rank - 1, -1, -1)
-            for rest in itertools.product(range(field), repeat=rank - top_row - 1)
-        ]
-        return ClassicalCode(np.array(strings).T, field=field)
-
-    # TODO: add more codes, particularly from code families that are useful for good quantum codes
-    # see https://mhostetter.github.io/galois/latest/api/#forward-error-correction
+        else:
+            # More generally, columns = [maximal set of linearly independent strings], so collect
+            # together all strings whose first nonzero element is a 1.
+            strings = [
+                (0,) * top_row + (1,) + rest
+                for top_row in range(rank - 1, -1, -1)
+                for rest in itertools.product(range(self.field.order), repeat=rank - top_row - 1)
+            ]
+            self._matrix = self.field(strings).T
 
 
-def _fix_decoder_args_for_nonbinary_fields(
-    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
-) -> None:
-    """Fix decoder arguments for nonbinary number fields.
+class ReedSolomonCode(ClassicalCode):
+    """Classical Reed-Solomon code.
 
-    If the field has order greater than 2, then we can only decode
-    (a) prime number fields, with
-    (b) an integer-linear program decoder.
-
-    If provided a bound_index, treat the constraint corresponding to this row of the parity check
-    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
+    Source: https://galois.readthedocs.io/en/v0.3.8/api/galois.ReedSolomon/
+    References:
+    - https://errorcorrectionzoo.org/c/reed_solomon
+    - https://www.cs.cmu.edu/~venkatg/teaching/codingtheory/notes/notes6.pdf
     """
-    if field.order > 2:
-        if field.degree > 1:
-            raise ValueError("Method only supported for prime number fields")
-        decoder_args["with_ILP"] = True
-        decoder_args["modulus"] = field.order
-        if bound_index is not None:
-            decoder_args["lower_bound_row"] = bound_index
+
+    def __init__(self, bits: int, dimension: int) -> None:
+        ClassicalCode.__init__(self, galois.ReedSolomon(bits, dimension).H)
+
+
+class BCHCode(ClassicalCode):
+    """Classical binary BCH code.
+
+    Source: https://galois.readthedocs.io/en/v0.3.8/api/galois.BCH/
+    References:
+    - https://errorcorrectionzoo.org/c/bch
+    - https://www.cs.cmu.edu/~venkatg/teaching/codingtheory/notes/notes6.pdf
+    """
+
+    def __init__(self, bits: int, dimension: int) -> None:
+        if "0" in format(bits, "b"):
+            raise ValueError("BCH codes only defined for 2^m - 1 bits with integer m.")
+        ClassicalCode.__init__(self, galois.BCH(bits, dimension).H)
+
+
+class ReedMullerCode(ClassicalCode):
+    """Classical Reed-Muller code.
+
+    References:
+    - https://errorcorrectionzoo.org/c/reed_muller
+    - https://feog.github.io/10-coding.pdf
+    """
+
+    def __init__(self, order: int, size: int, field: int | None = None) -> None:
+        self._assert_valid_params(order, size)
+        self._exact_distance = 2 ** (size - order)
+        self._order = order
+        self._size = size
+
+        generator = ReedMullerCode.get_generator(order, size)
+        self._matrix = ClassicalCode(generator, field).generator
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+
+    @classmethod
+    def get_generator(cls, order: int, size: int) -> npt.NDArray[np.int_]:
+        """Get the generator matrix for the specified Reed-Muller code."""
+        cls._assert_valid_params(order, size)
+
+        if order == 0:
+            return np.ones(2**size, dtype=int)
+        if order == size:
+            return np.identity(2**size, dtype=int)
+
+        mat_a = cls.get_generator(order, size - 1)
+        mat_b = cls.get_generator(order - 1, size - 1)
+        mat_z = np.zeros_like(mat_b)
+        return np.block([[mat_a, mat_a], [mat_z, mat_b]]).astype(int)
+
+    @classmethod
+    def _assert_valid_params(self, order: int, size: int) -> None:
+        if not (size >= 0 and 0 <= order <= size):
+            raise ValueError(
+                "Reed-Muller code R(r,m) must have m >= 0 and 0 <= r <= m\n"
+                + f"Provided: (r,m) = ({order},{size})"
+            )
+
+
+################################################################################
+# quantum codes
 
 
 # TODO:
+# - add code concatenation
 # - add is_CSS method to figure out whether this is a CSS Code
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
 #   - also compute and store sub-codes, if CSS
@@ -458,6 +543,10 @@ class QuditCode(AbstractCode):
 
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
+
+    _matrix: galois.FieldArray
+    _exact_distance_x: int | None = None
+    _exact_distance_z: int | None = None
 
     @property
     def num_checks(self) -> int:
@@ -530,8 +619,8 @@ class QuditCode(AbstractCode):
         for check in range(self.num_checks):
             ops = []
             for qudit in range(self.num_qudits):
-                val_x = matrix[check, Pauli.X.index, qudit]
-                val_z = matrix[check, Pauli.Z.index, qudit]
+                val_x = matrix[check, Pauli.X, qudit]
+                val_z = matrix[check, Pauli.Z, qudit]
                 vals_xz = (val_x, val_z)
                 if self.field.order == 2:
                     ops.append(str(Pauli(vals_xz)))
@@ -592,11 +681,12 @@ class CSSCode(QuditCode):
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
-    _field_order: int  # The order of the field over which the CSS code is defined
 
     _conjugate: slice | Sequence[int]
     _codes_equal: bool
     _logical_ops: galois.FieldArray | None = None
+    _exact_distance_x: int | None = None
+    _exact_distance_z: int | None = None
 
     def __init__(
         self,
@@ -620,7 +710,7 @@ class CSSCode(QuditCode):
         if not skip_validation and not self.is_valid:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
-        self._conjugate = conjugate or ()
+        self._conjugated_qubits = conjugate or ()
         self._codes_equal = self.code_x == self.code_z
 
     @functools.cached_property
@@ -639,7 +729,12 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.code_x.matrix), self.code_x.matrix],
             ]
         )
-        return self.field(self.conjugate(matrix, self._conjugate))
+        return self.field(self.conjugate(matrix, self.conjugated_qubits))
+
+    @property
+    def conjugated_qubits(self) -> slice | Sequence[int]:
+        """Which qubits are conjugated?"""
+        return self._conjugated_qubits
 
     @property
     def num_checks(self) -> int:
@@ -714,17 +809,31 @@ class CSSCode(QuditCode):
                 self.get_distance_exact(Pauli.Z, vector=vector),
             )
 
-        code_x = self.code_x if pauli == Pauli.X else self.code_z
-        code_z = self.code_z if pauli == Pauli.X else self.code_x
-
         if vector is not None:
+            code_z = self.code_z if pauli == Pauli.X else self.code_x
             ops_x = code_z.words()
             vector = self.field(vector)
             return min(np.count_nonzero(word - vector) for word in ops_x)
 
+        # if we know the exact code distance, return it
+        if pauli == Pauli.X and self._exact_distance_x is not None:
+            return self._exact_distance_x
+        if pauli == Pauli.Z and self._exact_distance_z is not None:
+            return self._exact_distance_z
+
+        # we do not know the exact distance, so compute it
+        code_x = self.code_x if pauli == Pauli.X else self.code_z
+        code_z = self.code_z if pauli == Pauli.X else self.code_x
         dual_code_x = ~code_x
         nontrivial_ops_x = (word for word in code_z.words() if word not in dual_code_x)
-        return min(np.count_nonzero(word) for word in nontrivial_ops_x)
+        distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
+
+        # save the exact distance and return
+        if pauli == Pauli.X:
+            self._exact_distance_x = distance
+        if pauli == Pauli.Z:
+            self._exact_distance_z = distance
+        return distance
 
     def get_distance_bound(
         self,
@@ -828,13 +937,16 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    def get_logical_ops(self) -> galois.FieldArray:
+    def get_logical_ops(self, pauli: Literal[Pauli.X, Pauli.Z] | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
         code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
         physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
+
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of the specified type.
 
         In the case of qudits with dimension > 2, the "Pauli-X" and "Pauli-Z" operators constructed
         by this method are the unit shift and phase operators that generate all logical X-type and
@@ -843,6 +955,12 @@ class CSSCode(QuditCode):
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified and generalized for qudits.
         """
+        assert pauli in [None, Pauli.X, Pauli.Z]
+
+        # if requested, retrieve logical operators of one type only
+        if pauli is not None:
+            return self.get_logical_ops()[pauli]
+
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
             return self._logical_ops
@@ -936,17 +1054,19 @@ class CSSCode(QuditCode):
         noncommuting_ops_found = False
         while not noncommuting_ops_found:
             op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
-            op_b = self.get_random_logical_op(pauli, ensure_nontrivial=False)
+            op_b = self.get_random_logical_op(
+                ~pauli, ensure_nontrivial=False  # type:ignore[arg-type]
+            )
             noncommuting_ops_found = bool(np.any(op_a @ op_b))
 
         return op_a
 
-    def minimize_logical_op(
+    def reduce_logical_op(
         self, pauli: Literal[Pauli.X, Pauli.Z], logical_index: int, **decoder_args: object
     ) -> None:
-        """Minimize the weight of a logical operator.
+        """Reduce the weight of a logical operator.
 
-        A minimum-weight logical operator is found by enforcing that it has a trivial syndrome, and
+        A minimal-weight logical operator is found by enforcing that it has a trivial syndrome, and
         that it commutes with all logical operators except its dual.  This is essentially the same
         method as that used in CSSCode.get_one_distance_bound.
         """
@@ -955,7 +1075,7 @@ class CSSCode(QuditCode):
 
         # effective check matrix = syndromes and other logical operators
         code = self.code_z if pauli == Pauli.X else self.code_x
-        all_dual_ops = self.get_logical_ops()[(~pauli).index]
+        all_dual_ops = self.get_logical_ops(~pauli)  # type:ignore[arg-type]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
         dual_op_index = code.num_checks + logical_index
 
@@ -973,14 +1093,44 @@ class CSSCode(QuditCode):
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
-        self._logical_ops[pauli.index, logical_index] = candidate_logical_op
+        self._logical_ops[pauli, logical_index] = candidate_logical_op
+
+    def reduce_logical_ops(
+        self, pauli: Literal[Pauli.X, Pauli.Z] | None = None, **decoder_args: object
+    ) -> None:
+        """Reduce the weight of all logical operators."""
+        assert pauli in [None, Pauli.X, Pauli.Z]
+        if pauli is None:
+            self.reduce_logical_ops(Pauli.X, **decoder_args)
+            self.reduce_logical_ops(Pauli.Z, **decoder_args)
+        else:
+            for logical_index in range(self.dimension):
+                self.reduce_logical_op(pauli, logical_index, **decoder_args)
+
+
+def _fix_decoder_args_for_nonbinary_fields(
+    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
+) -> None:
+    """Fix decoder arguments for nonbinary number fields.
+
+    If the field has order greater than 2, then we can only decode
+    (a) prime number fields, with
+    (b) an integer-linear program decoder.
+
+    If provided a bound_index, treat the constraint corresponding to this row of the parity check
+    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
+    """
+    if field.order > 2:
+        if field.degree > 1:
+            raise ValueError("Method only supported for prime number fields")
+        decoder_args["with_ILP"] = True
+        decoder_args["modulus"] = field.order
+        if bound_index is not None:
+            decoder_args["lower_bound_row"] = bound_index
 
 
 ################################################################################
 # bicycle and quasi-cyclic codes
-
-
-# TODO: add special/simpler cases of code distance calculations and bounds, if and where available
 
 
 class GBCode(CSSCode):
@@ -1156,27 +1306,37 @@ class HGPCode(CSSCode):
         code_b = ClassicalCode(code_b, field)
         field = code_a.field.order
 
+        # use a matrix-based hypergraph product to identify X-sector and Z-sector parity checks
+        matrix_x, matrix_z = HGPCode.get_matrix_product(code_a.matrix, code_b.matrix)
+
         # identify the number of qudits in each sector
         self.sector_size = np.outer(
             [code_a.num_bits, code_a.num_checks],
             [code_b.num_bits, code_b.num_checks],
         )
+
+        # identify which qudits to conjugate (Hadamard-transform)
         qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
-        # construct the nontrivial blocks of the parity check matrices
-        matrix_a = code_a.matrix
-        matrix_b = code_b.matrix
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+        )
+
+    @classmethod
+    def get_matrix_product(
+        cls, matrix_a: npt.NDArray[np.int_], matrix_b: npt.NDArray[np.int_]
+    ) -> nx.DiGraph:
+        """Hypergraph product of two parity check matrices."""
+        # construct the nontrivial blocks of the final parity check matrices
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
         mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
         mat_H1_Im2_T = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b.T)
 
-        # construct the parity check matrices
+        # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.block([mat_H1_In2, -mat_Im1_H2_T])
         matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
-        CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
-        )
+        return matrix_x, matrix_z
 
     @classmethod
     def get_graph_product(
@@ -1256,12 +1416,14 @@ class LPCode(CSSCode):
 
     A lifted product code is essentially the same as a hypergraph product code, except that the
     parity check matrices are "protographs", or matrices whose entries are members of a group
-    algebra over the field {0, 1}.  Each of these entries can be "lifted" to a representation as
-    orthogonal matrices over a finite field, in which case the protograph is interpreted as a block
-    matrix; this is called "lifting" the protograph.
+    algebra over the field Z_2 ~ {0,1}.  Each of these entries can be "lifted" to a representation
+    as orthogonal matrices over a finite field, in which case the protograph is interpreted as a
+    block matrix; this is called "lifting" the protograph.
 
     Notes:
     - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
+    - A lifted product code with protographs whose entries get lifted to 1×1 matrices is a
+        hypergraph product code of the lifted protographs.
 
     References:
     - https://errorcorrectionzoo.org/c/lifted_product
@@ -1278,7 +1440,34 @@ class LPCode(CSSCode):
         *,
         conjugate: bool = False,
     ) -> None:
-        """Same hypergraph product as in the HGPCode, but with protographs.
+        """Lifted product of two protographs, as in arXiv:2012.04068."""
+        if protograph_b is None:
+            protograph_b = protograph_a
+        protograph_a = abstract.Protograph(protograph_a)
+        protograph_b = abstract.Protograph(protograph_b)
+        field = protograph_a.field.order
+
+        # identify X-sector and Z-sector parity checks
+        matrix_x, matrix_z = LPCode.get_matrix_product(protograph_a, protograph_b)
+
+        # identify the number of qudits in each sector
+        self.sector_size = protograph_a.group.lift_dim * np.outer(
+            protograph_a.shape[::-1],
+            protograph_b.shape[::-1],
+        )
+
+        # identify which qudits to conjugate (Hadamard-transform)
+        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
+
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+        )
+
+    @classmethod
+    def get_matrix_product(
+        cls, protograph_a: abstract.Protograph, protograph_b: abstract.Protograph
+    ) -> nx.DiGraph:
+        """Matrix-based hypergraph product similar to that in HGPCode, but with protographs.
 
         There is one crucial subtlety when computing the hypergraph product of protographs.  When
         taking the transpose of a protograph, P --> P.T, we also need to transpose the individual
@@ -1292,37 +1481,22 @@ class LPCode(CSSCode):
         this reason, we need to take the transpose of a protograph "manually" when using it for the
         hypergraph product.
         """
-        if protograph_b is None:
-            protograph_b = protograph_a
-        protograph_a = abstract.Protograph(protograph_a)
-        protograph_b = abstract.Protograph(protograph_b)
-        field = protograph_a.field.order
-
-        # identify the number of qudits in each sector
-        self.sector_size = protograph_a.group.lift_dim * np.outer(
-            protograph_a.shape[::-1],
-            protograph_b.shape[::-1],
-        )
-        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
-
         # identify sub-matrices and their transposes
         matrix_a = protograph_a.matrix
         matrix_b = protograph_b.matrix
         matrix_a_T = protograph_a.T.matrix
         matrix_b_T = protograph_b.T.matrix
 
-        # construct the nontrivial blocks in the matrix
+        # construct the nontrivial blocks of the final parity check matrices
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
         mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
         mat_H1_Im2_T = np.kron(matrix_a_T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b_T)
 
-        # construct the parity check matrices
+        # construct the X-sector and Z-sector parity check matrices
         matrix_x = abstract.Protograph(np.block([mat_H1_In2, -mat_Im1_H2_T])).lift()
         matrix_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T])).lift()
-        CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
-        )
+        return matrix_x, matrix_z
 
 
 ################################################################################
@@ -1335,7 +1509,7 @@ class TannerCode(ClassicalCode):
     A Tanner code T(G,C) is constructed from:
     [1] A bipartite "half-regular" graph G.  That is, a graph...
         ... with two sets of nodes, V and W.
-        ... in which all nodes in W have degree n.
+        ... in which all nodes in V have degree n.
     [2] A classical code C on n bits.
 
     For convenience, we make G directed, with edges directed from V to W.  The node sets V and W can
@@ -1348,6 +1522,9 @@ class TannerCode(ClassicalCode):
     sorts E(v) by the value of the "sort" attribute attached to each edge.  If there is no "sort"
     attribute, its value is treated as corresponding neighbor of v.
 
+    Tanner codes can similarly be defined on regular (undirected) graphs G' = (V',E') by placing
+    checks on V' and bits on E'.
+
     Notes:
     - If the subcode C has m checks, its parity matrix has shape (m,n).
     - The code T(G,C) has |W| bits and |V|m checks.
@@ -1356,8 +1533,11 @@ class TannerCode(ClassicalCode):
     subgraph: nx.DiGraph
     subcode: ClassicalCode
 
-    def __init__(self, subgraph: nx.DiGraph, subcode: ClassicalCode) -> None:
+    def __init__(self, subgraph: nx.Graph, subcode: ClassicalCode) -> None:
         """Construct a classical Tanner code."""
+        if not isinstance(subgraph, nx.DiGraph):
+            subgraph = TannerCode.as_directed_subgraph(subgraph)
+
         self.subgraph = subgraph
         self.subcode = subcode
         sources = [node for node in subgraph if subgraph.in_degree(node) == 0]
@@ -1380,7 +1560,23 @@ class TannerCode(ClassicalCode):
             key=lambda neighbor: self.subgraph[node][neighbor].get("sort", neighbor),
         )
 
+    @classmethod
+    def as_directed_subgraph(self, subgraph: nx.Graph) -> nx.DiGraph:
+        """Convert an undirected graph for a Tanner code into a directed graph for the same code."""
+        directed_subgraph = nx.DiGraph()
+        for node_a, node_b, edge_data in subgraph.edges(data=True):
+            edge = frozenset([node_a, node_b])
+            directed_subgraph.add_edge(node_a, edge)
+            directed_subgraph.add_edge(node_b, edge)
+            if (sort_data := edge_data.pop("sort", None)) is not None:
+                directed_subgraph[node_a][edge]["sort"] = sort_data[node_a]
+                directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
+        return directed_subgraph
 
+
+# TODO: investigate construction in
+# https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
+# see also Section 7 of https://arxiv.org/abs/2206.07571
 class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex
 
@@ -1434,3 +1630,222 @@ class QTCode(CSSCode):
         code_x = TannerCode(subgraph_x, subcode_x)
         code_z = TannerCode(subgraph_z, subcode_z)
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
+
+
+################################################################################
+# common quantum codes
+
+
+class SurfaceCode(CSSCode):
+    """The one and only!
+
+    Actually, there are two variants: "ordinary" and "rotated" surface codes.
+    The rotated code is more qubit-efficient.
+
+    If constructed with conjugate=True, every other qubit is Hadamard-transformed in a checkerboard
+    pattern.  The rotated surface code with conjugate=True is the XZZX code in arXiv:2009.07851.
+    """
+
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        rotated: bool = True,
+        field: int | None = None,
+        *,
+        conjugate: bool = False,
+    ) -> None:
+        if cols is None:
+            cols = rows
+
+        # save known distances
+        self._exact_distance_x = cols
+        self._exact_distance_z = rows
+
+        # which qubits should be Hadamard-transformed?
+        qubits_to_conjugate: slice | Sequence[int] | None
+
+        if rotated:
+            # rotated surface code
+            matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
+
+            if conjugate:
+                # Hadamard-transform qubits in a checkerboard pattern
+                qubits_to_conjugate = [
+                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
+                ]
+
+            else:
+                qubits_to_conjugate = None
+
+        else:
+            # "original" surface code
+            code_a = RepetitionCode(rows, field)
+            code_b = RepetitionCode(cols, field)
+            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            matrix_x = code_ab.code_x.matrix
+            matrix_z = code_ab.code_z.matrix
+            qubits_to_conjugate = code_ab.conjugated_qubits
+
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            field=field,
+            conjugate=qubits_to_conjugate,
+            skip_validation=True,
+        )
+
+    @classmethod
+    def get_rotated_checks(
+        cls, rows: int, cols: int
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build X-sector and Z-sector parity check matrices.
+
+        Example 5x5 rotated surface code layout:
+
+             ―――     ―――
+            | ⋅ |   | ⋅ |
+            ○―――○―――○―――○―――○―――
+            | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+        | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+            | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+        | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○
+                | ⋅ |   | ⋅ |
+                 ―――     ―――
+
+        Here:
+        - Circles (○) denote data qubits (of which there are 5×5 = 25 total).
+        - Tiles with a cross (×) denote X-type parity checks (12 total).
+        - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
+
+        Reference: https://errorcorrectionzoo.org/c/rotated_surface
+        """
+
+        def get_check(
+            row_indices: Sequence[int], col_indices: Sequence[int]
+        ) -> npt.NDArray[np.int_]:
+            """Check on the qubits with the given indices, dropping any that are out of bounds."""
+            check = np.zeros((rows, cols), dtype=int)
+            for row, col in zip(row_indices, col_indices):
+                if 0 <= row < rows and 0 <= col < cols:
+                    check[row, col] = 1
+            return check.ravel()
+
+        checks_x = []
+        checks_z = []
+        for row in range(-1, rows):
+            for col in range(-1, cols):
+                row_indices = [row, row + 1, row, row + 1]
+                col_indices = [col, col, col + 1, col + 1]
+                check = get_check(row_indices, col_indices)
+
+                if np.count_nonzero(check) not in [2, 4]:
+                    continue
+
+                if row % 2 == col % 2:
+                    if 0 <= row < rows - 1:
+                        # no X-type parity checks on the top/bottom boundaries
+                        checks_x.append(check)
+                elif 0 <= col < cols - 1:
+                    # no Z-type parity checks on the left/right boundaries
+                    checks_z.append(check)
+
+        return np.array(checks_x), np.array(checks_z)
+
+
+class ToricCode(CSSCode):
+    """Surface code with periodic bounary conditions, encoding two logical qudits.
+
+    Reference: https://errorcorrectionzoo.org/c/surface
+    """
+
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        rotated: bool = True,
+        field: int | None = None,
+        *,
+        conjugate: bool = False,
+    ) -> None:
+        if cols is None:
+            cols = rows
+
+        # save known distances
+        self._exact_distance_x = self._exact_distance_z = min(rows, cols)
+
+        # which qubits should be Hadamard-transformed?
+        qubits_to_conjugate: slice | Sequence[int] | None
+
+        if rotated:
+            # rotated toric code
+            if not (rows % 2 == cols % 2 == 0 and rows >= 4 and cols >= 4):
+                raise ValueError(
+                    "The rotated toric code must have even side lengths of at least four, not"
+                    + f" ({rows},{cols})"
+                )
+            matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)
+
+            if conjugate:
+                # Hadamard-transform qubits in a checkerboard pattern
+                qubits_to_conjugate = [
+                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
+                ]
+
+            else:
+                qubits_to_conjugate = None
+
+        else:
+            # "original" toric code
+            code_a = RingCode(rows, field)
+            code_b = RingCode(cols, field)
+            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            matrix_x = code_ab.code_x.matrix
+            matrix_z = code_ab.code_z.matrix
+            qubits_to_conjugate = code_ab.conjugated_qubits
+
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            field=field,
+            conjugate=qubits_to_conjugate,
+            skip_validation=True,
+        )
+
+    @classmethod
+    def get_rotated_checks(
+        cls, rows: int, cols: int
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build X-sector and Z-sector parity check matrices.
+
+        Same as in SurfaceCode.get_rotated_checks, but with periodic boundary conditions.
+        """
+
+        def get_check(
+            row_indices: Sequence[int], col_indices: Sequence[int]
+        ) -> npt.NDArray[np.int_]:
+            """Check on the qubits with the given indices, with periodic boundary conditions."""
+            check = np.zeros((rows, cols), dtype=int)
+            for row, col in zip(row_indices, col_indices):
+                check[row % rows, col % cols] = 1
+            return check.ravel()
+
+        checks_x = []
+        checks_z = []
+        for row in range(rows):
+            for col in range(cols):
+                row_indices = [row, row + 1, row, row + 1]
+                col_indices = [col, col, col + 1, col + 1]
+                check = get_check(row_indices, col_indices)
+                if row % 2 == col % 2:
+                    checks_x.append(check)
+                else:
+                    checks_z.append(check)
+
+        return np.array(checks_x), np.array(checks_z)

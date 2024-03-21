@@ -16,6 +16,7 @@
 """
 
 import itertools
+import unittest.mock
 
 import networkx as nx
 import numpy as np
@@ -32,12 +33,12 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 def test_classical_codes() -> None:
     """Construction of a few classical codes."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
-    assert codes.ClassicalCode.hamming(3).get_distance() == 3
+    assert codes.HammingCode(3).get_distance() == 3
 
     num_bits = 2
     for code in [
-        codes.ClassicalCode.repetition(num_bits, field=3),
-        codes.ClassicalCode.ring(num_bits, field=3),
+        codes.RepetitionCode(num_bits, field=3),
+        codes.RingCode(num_bits, field=3),
     ]:
         assert code.num_bits == num_bits
         assert code.dimension == 1
@@ -46,12 +47,43 @@ def test_classical_codes() -> None:
         assert code.get_weight() == 2
         assert code.get_random_word() in code
 
-    # test that rank of repetition and hamming codes is independent of the field
-    assert codes.ClassicalCode.repetition(3, 2).rank == codes.ClassicalCode.repetition(3, 3).rank
-    assert codes.ClassicalCode.hamming(3, 2).rank == codes.ClassicalCode.hamming(3, 3).rank
+    # test that rank of repetition and Hamming codes is independent of the field
+    assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
+    assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
+    # test invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+
+
+def test_special_codes() -> None:
+    """Reed-Solomon, BCH, and Reed-Muller codes."""
+    assert codes.ReedSolomonCode(3, 2).dimension == 2
+
+    bits, dimension = 7, 4
+    assert codes.BCHCode(bits, dimension).dimension == dimension
+    with pytest.raises(ValueError, match=r"2\^m - 1 bits"):
+        codes.BCHCode(bits - 1, dimension)
+
+    order, size = 1, 3
+    code = codes.ReedMullerCode(order, size)
+    assert code.dimension == codes.ClassicalCode(code.matrix).dimension
+
+    dual_code = codes.ReedMullerCode(size - order - 1, size)
+    assert np.array_equal((~code).matrix, dual_code.matrix)
+
+    with pytest.raises(ValueError, match="0 <= r <= m"):
+        codes.ReedMullerCode(-1, 0)
+
+
+def test_named_codes(order: int = 2) -> None:
+    """Named codes from the GAP computer algebra system."""
+    code = codes.RepetitionCode(order)
+    checks = [list(row) for row in code.matrix.view(np.ndarray)]
+
+    with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(checks, None)):
+        named_code = codes.ClassicalCode.from_name(f"RepetitionCode({order})")
+        assert np.array_equal(named_code.matrix, code.matrix)
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
@@ -96,7 +128,7 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
 
 def test_distance_from_classical_code(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
-    rep_code = codes.ClassicalCode.repetition(bits, field=2)
+    rep_code = codes.RepetitionCode(bits, field=2)
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
         dist_brute = rep_code.get_distance_exact(vector=vector)
@@ -141,7 +173,7 @@ def test_logical_ops() -> None:
     # minimizing logical operator weight only supported for prime number fields
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
     with pytest.raises(ValueError, match="prime number fields"):
-        code.minimize_logical_op(codes.Pauli.X, 0)
+        code.reduce_logical_op(codes.Pauli.X, 0)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
@@ -239,8 +271,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     num_qudits = 2 * width**2
 
     # construct check matrix directly
-    ring = codes.ClassicalCode.ring(width).matrix
-    mat_1 = codes.ClassicalCode.ring(num_qudits // 2).matrix
+    ring = codes.RingCode(width).matrix
+    mat_1 = codes.RingCode(num_qudits // 2).matrix
     mat_2 = np.kron(ring, np.eye(width, dtype=int))
     zero_1 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
@@ -312,76 +344,112 @@ def test_lifted_product_codes() -> None:
 
 
 def test_tanner_code() -> None:
-    """Classical Tanner code construction.
+    """Classical Tanner codes on random regular graphs."""
+    subcode = codes.ClassicalCode.random(5, 3)
+    subgraph = nx.random_regular_graph(subcode.num_bits, subcode.num_bits * 2 + 2)
 
-    In order to construct a random Tanner code, we need to construct a random regular directed
-    bipartite graph.  To this end, we first construct a random regular graph G = (V,E), and then
-    build a directed bipartite graph G' with vertex sets (V,E).  The edges in G' have the form
-    (v, {v,w}), where v is in V and {v,w} is in E.
-    """
-    subcode = codes.ClassicalCode.random(10, 5)
-    graph = nx.random_regular_graph(subcode.num_bits, subcode.num_bits * 2 + 2)
-    subgraph = nx.DiGraph()
-    for edge in graph.edges:
-        subgraph.add_edge(edge[0], edge)
-        subgraph.add_edge(edge[1], edge)
-    num_sources = sum(1 for node in subgraph if subgraph.in_degree(node) == 0)
-    num_sinks = subgraph.number_of_nodes() - num_sources
+    tag = "sort_label"
+    for node_a, node_b in subgraph.edges:
+        subgraph[node_a][node_b]["sort"] = {node_a: tag, node_b: tag}
 
-    # build a classical Tanner code and check that it has the right number of checks/bits
     code = codes.TannerCode(subgraph, subcode)
-    assert code.num_bits == num_sinks
-    assert code.num_checks == num_sources * code.subcode.num_checks
-
-
-def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
-    """The surface and toric codes as hypergraph product codes."""
-    # surface code
-    bit_code = codes.ClassicalCode.repetition(distance, field=field)
-    code = codes.HGPCode(bit_code)
-    assert code.num_qudits == distance**2 + (distance - 1) ** 2
-    assert code.dimension == 1
-    assert code.get_distance(bound=10) == distance
-
-    # toric code
-    bit_code = codes.ClassicalCode.ring(distance, field=field)
-    code = codes.HGPCode(bit_code)
-    assert code.num_qudits == 2 * distance**2
-    assert code.dimension == 2
-    assert code.get_distance(bound=10) == distance
-
-    # check that a logical X operator has correct weight when minimzed
-    code.minimize_logical_op(codes.Pauli.X, 0)
-    op = code.get_logical_ops()[codes.Pauli.X.index, 0]
-    assert np.count_nonzero(op) == distance
-
-    # check that the identity operator is a logical operator
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+    assert code.num_bits == subgraph.number_of_edges()
+    assert code.num_checks == subgraph.number_of_nodes() * code.subcode.num_checks
+    assert all(code.subgraph.get_edge_data(*edge)["sort"] == tag for edge in code.subgraph.edges)
 
 
 def test_toric_tanner_code(size: int = 4) -> None:
     """Rotated toric code as a quantum Tanner code."""
-    assert size % 2 == 0, "QTCode rotated toric code construction only works for even side lengths"
-
     group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode_a = codes.ClassicalCode.repetition(2, field=2)
+    subcode_a = codes.RepetitionCode(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+    assert code.get_code_params() == (size**2, 2, size, 4)
 
-    # verify rotated toric code parameters
-    assert code.get_code_params(bound=10) == (size**2, 2, size, 4)
 
-    # raise error if constructing QTCode with codes over different fields
-    subcode_b = codes.ClassicalCode.repetition(2, field=subcode_a.field.order**2)
+def test_invalid_quantum_tanner() -> None:
+    """Raise error if constructing QTCode with codes over different fields."""
+    subcode_a = codes.RepetitionCode(2, field=2)
+    subcode_b = codes.RepetitionCode(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
-        code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
+        codes.QTCode([], [], subcode_a, subcode_b)
 
 
-@pytest.mark.parametrize("field", [3, 4])
-def test_qudit_distance(field: int) -> None:
-    """Distance calculations for qudits."""
-    code = codes.HGPCode(codes.ClassicalCode.repetition(2, field=field))
+def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
+    """Ordinary and rotated surface codes."""
+
+    # "ordinary"/original surface code
+    code = codes.SurfaceCode(rows, cols, rotated=False, field=field)
+    assert code.dimension == 1
+    assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
+    assert code.get_distance(codes.Pauli.X, bound=10) == cols
+    assert code.get_distance(codes.Pauli.Z, bound=10) == rows
+
+    # rotated surface code
+    code = codes.SurfaceCode(rows, cols, rotated=True, field=field)
+    assert code.dimension == 1
+    assert code.num_qudits == rows * cols
+    assert (
+        code.get_distance(codes.Pauli.X)
+        == codes.CSSCode.get_distance_exact(code, codes.Pauli.X)
+        == cols
+    )
+    assert (
+        code.get_distance(codes.Pauli.Z)
+        == codes.CSSCode.get_distance_exact(code, codes.Pauli.Z)
+        == rows
+    )
+
+    # test that the rotated surface code with conjugate=True is an XZZX code
+    code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2, conjugate=True)
+    for row in code.matrix:
+        row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
+        assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
+
+
+def test_toric_codes(field: int = 3) -> None:
+    """Ordinary and rotated toric codes."""
+
+    # "ordinary"/original toric code
+    rows, cols = 5, 2
+    code = codes.ToricCode(rows, cols, rotated=False, field=field)
+    assert code.dimension == 2
+    assert code.num_qudits == 2 * rows * cols
+
+    # check minimal logical operator weights
+    code.reduce_logical_ops(with_ILP=True)
+    assert (
+        {rows, cols}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.X).view(np.ndarray)}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.Z).view(np.ndarray)}
+    )
+
+    # rotated toric code
+    distance = 4
+    code = codes.ToricCode(distance, rotated=True, field=field)
+    assert code.dimension == 2
+    assert code.num_qudits == distance**2
+    assert codes.CSSCode.get_distance(code) == distance
+
+    # rotated toric XZZX code
+    rows, cols = 6, 4
+    code = codes.ToricCode(rows, cols, rotated=True, field=field, conjugate=True)
+    for row in code.matrix:
+        row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
+        assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
+
+    # rotated toric code must have even side lengths
+    with pytest.raises(ValueError, match="must have even side lengths"):
+        codes.ToricCode(3, rotated=True)
+
+
+def test_quantum_distance(field: int = 2) -> None:
+    """Distance calculations for qudit codes."""
+    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
     assert code.get_distance() == 2
+
+    # assert that the identity is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)

@@ -51,10 +51,13 @@ import numpy.typing as npt
 import sympy.combinatorics as comb
 import sympy.core
 
+from qldpc import named_groups
+
 DEFAULT_FIELD_ORDER = 2
 
+
 ################################################################################
-# groups
+# groups and group members
 
 
 UnknownType = TypeVar("UnknownType")
@@ -88,7 +91,11 @@ class GroupMember(comb.Permutation):
         return self.rank() < other.rank()
 
     def __matmul__(self, other: GroupMember) -> GroupMember:
-        """Take the "tensor product" of two permutations."""
+        """Take the "tensor product" of two group members.
+
+        If group members g_1 and g_2 are, respectively, elements of the groups G_1 and G_2, then the
+        "tensor product" g_1 @ g_2 is an element of the direct product of G_1 and G_2.
+        """
         return GroupMember(self.array_form + [val + self.size for val in other.array_form])
 
 
@@ -145,29 +152,48 @@ class Group:
             isinstance(other, Group) and self._field == other._field and self._group == other._group
         )
 
-    def __matmul__(self, other: Group) -> Group:
+    def __contains__(self, member: GroupMember) -> bool:
+        return comb.Permutation(member.array_form) in self._group
+
+    def __mul__(self, other: Group) -> Group:
         """Direct product of two groups."""
-        if self.field != other.field:
-            raise ValueError("Cannot multiply groups with lifts defined over different fields")
         permutation_group = self._group * other._group
+
+        if self.field == other.field:
+            left_lift = self._lift
+            right_lift = other._lift
+        else:
+            left_lift = right_lift = default_lift
 
         def lift(member: GroupMember) -> galois.FieldArray:
             degree = self._group.degree
             left = member.array_form[:degree]
             right = [index - degree for index in member.array_form[degree:]]
-            matrix = np.kron(self.lift(GroupMember(left)), other.lift(GroupMember(right)))
+            matrix = np.kron(left_lift(GroupMember(left)), right_lift(GroupMember(right)))
             return self.field(matrix)
 
         return Group(permutation_group, self.field.order, lift)
 
-    def __contains__(self, member: GroupMember) -> bool:
-        return comb.Permutation(member.array_form) in self._group
+    def __pow__(self, power: int) -> Group:
+        """Direct product of self multiple times."""
+        assert power > 0
+        return functools.reduce(Group.__mul__, [self] * power)
+
+    @classmethod
+    def product(cls, *groups: Group, repeat: int = 1) -> Group:
+        """Direct product of Groups."""
+        return functools.reduce(Group.__mul__, groups * repeat)
+
+    def to_sympy(self) -> comb.PermutationGroup:
+        """Return the underlying SymPy permutation group."""
+        return self._group
 
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field of this group."""
         return self._field
 
+    @property
     def order(self) -> int:
         """Number of members in this group."""
         return self._group.order()
@@ -193,11 +219,6 @@ class Group:
             sympy.core.random.seed(seed)
         return GroupMember(self._group.random())
 
-    @classmethod
-    def product(cls, *groups: Group, repeat: int = 1) -> Group:
-        """Direct product of Groups."""
-        return functools.reduce(cls.__matmul__, groups * repeat)
-
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
         return self.field(self._lift(member))
@@ -214,7 +235,7 @@ class Group:
         return np.array(
             [members[aa * bb] for aa in self.generate() for bb in self.generate()],
             dtype=int,
-        ).reshape((self.order(),) * 2)
+        ).reshape(self.order, self.order)
 
     @classmethod
     def from_table(
@@ -246,12 +267,12 @@ class Group:
     @classmethod
     def from_generating_mats(
         cls,
-        generators: Sequence[npt.NDArray[np.int_] | Sequence[Sequence[int]]],
+        *generators: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
     ) -> Group:
         """Constructs a Group from a given set of generating matrices.
 
-        Goup members are represented by how they permute elements of the group itself.
+        Group members are represented by how they permute elements of the group itself.
         """
         if not generators:
             return TrivialGroup()
@@ -323,10 +344,10 @@ class Group:
         WARNING: not all groups have symmetric subsets of arbitrary size.  If called with a poor
         choice of group and subset size, this method may never terminate.
         """
-        if not 0 < size <= self.order():
+        if not 0 < size <= self.order:
             raise ValueError(
                 "A random symmetric subset of this group must have a size between 1 and"
-                f" {self.order()} (provided: {size})"
+                f" {self.order} (provided: {size})"
             )
         if seed is not None:
             sympy.core.random.seed(seed)
@@ -360,6 +381,22 @@ class Group:
                 if num_extra % 2:
                     singles.pop()
                 return singles | doubles
+
+    @classmethod
+    def from_name(cls, name: str) -> Group:
+        """Named group in the GAP computer algebra system."""
+        standardized_name = name.strip().replace(" ", "")  # remove whitespace
+        generators = named_groups.get_generators(standardized_name)
+        group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
+        return Group(group)
+
+
+class SmallGroup(Group):
+    """Group indexed by the GAP computer algebra system."""
+
+    def __init__(self, order: int, index: int) -> None:
+        name = f"SmallGroup({order},{index})"
+        super().__init__(Group.from_name(name))
 
 
 ################################################################################
@@ -586,7 +623,7 @@ class TrivialGroup(Group):
     def random(self, seed: int | None = None) -> GroupMember:
         """A random (albeit unique) element this group.
 
-        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation."
+        Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation.
         """
         return self.identity
 
@@ -617,11 +654,82 @@ class CyclicGroup(Group):
         super().__init__(comb.named_groups.CyclicGroup(order))
 
 
+class AbelianGroup(Group):
+    """Direct product of cyclic groups of the specified orders."""
+
+    def __init__(self, *orders: int) -> None:
+        super().__init__(comb.named_groups.AbelianGroup(*orders))
+
+
 class DihedralGroup(Group):
     """Dihedral group of a specified order."""
 
     def __init__(self, order: int) -> None:
         super().__init__(comb.named_groups.DihedralGroup(order))
+
+
+class AlternatingGroup(Group):
+    """Alternating group of a specified order."""
+
+    def __init__(self, order: int) -> None:
+        super().__init__(comb.named_groups.AlternatingGroup(order))
+
+
+class SymmetricGroup(Group):
+    """Symmetric group of a specified order."""
+
+    def __init__(self, order: int) -> None:
+        super().__init__(comb.named_groups.SymmetricGroup(order))
+
+
+class DicyclicGroup(Group):
+    """Dicyclic group of order <= 20.
+
+    Generating matrices taken from: https://people.maths.bris.ac.uk/~matyd/GroupNames/dicyclic.html
+
+    Additional references:
+    - https://en.wikipedia.org/wiki/Dicyclic_group
+    - https://groupprops.subwiki.org/wiki/Dicyclic_group
+    """
+
+    def __init__(self, order: int) -> None:  # noqa: max-complexity
+        if not (order > 0 and order % 4 == 0):
+            raise ValueError(
+                "Dicyclic groups only supported for orders that are positive multiples of 4"
+                + f" (provided: {order})"
+            )
+        if not order <= 20:
+            raise ValueError(
+                f"Dicyclic groups only supported for orders up to 20 (provided: {order})"
+            )
+
+        if order == 4:
+            gen_a = comb.Permutation(0, 2)(1, 3)
+            gen_b = comb.Permutation(0, 3, 2, 1)
+
+        elif order == 8:
+            gen_a = comb.Permutation(1, 2, 3, 4)(5, 6, 7, 8)
+            gen_b = comb.Permutation(1, 7, 3, 5)(2, 6, 4, 8)
+
+        elif order == 12:
+            # Special case with more compact representation:
+            # https://math.stackexchange.com/a/2837920
+            gen_a = comb.Permutation(1, 2, 3)(4, 6)(5, 7)
+            gen_b = comb.Permutation(2, 3)(4, 5, 6, 7)
+
+        elif order == 16:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8)(9, 10, 11, 12, 13, 14, 15, 16)
+            gen_b = comb.Permutation(1, 9, 5, 13)(2, 16, 6, 12)(3, 15, 7, 11)(4, 14, 8, 10)
+
+        elif order == 20:
+            gen_a = comb.Permutation(1, 2, 3, 4, 5, 6, 7, 8, 9, 10)(
+                11, 12, 13, 14, 15, 16, 17, 18, 19, 20
+            )
+            gen_b = comb.Permutation(1, 14, 6, 19)(2, 13, 7, 18)(3, 12, 8, 17)(4, 11, 9, 16)(
+                5, 20, 10, 15
+            )
+
+        super().__init__(comb.PermutationGroup(gen_a, gen_b))
 
 
 class QuaternionGroup(Group):
@@ -655,14 +763,14 @@ class QuaternionGroup(Group):
                 blocks = [[zero, -unit], [unit, zero]]
             else:  # if base == 3; +/- k
                 blocks = [[zero, -imag], [-imag, zero]]
-            return sign * np.block(blocks).astype(int).T % 3
+            return sign * np.block(blocks).T % 3
 
         group = Group.from_table(table, integer_lift=lift)
         super().__init__(group._group, field=3, lift=group._lift)
 
 
 ################################################################################
-# "special" named groups
+# special linear (SL) and projective special linear (PSL) groups
 
 
 class SpecialLinearGroup(Group):
@@ -714,7 +822,7 @@ class SpecialLinearGroup(Group):
 
         else:
             # represent group members by how they permute elements of the group
-            group = self.from_generating_mats(self.get_generator_mats())
+            group = self.from_generating_mats(*self.get_generator_mats())
             super().__init__(group)
 
     @property
@@ -759,7 +867,7 @@ class ProjectiveSpecialLinearGroup(Group):
         if self.field.order == 2:
             group = SpecialLinearGroup(dimension, 2)
         elif dimension == 2:
-            group = Group.from_generating_mats(self.get_generator_mats())
+            group = Group.from_generating_mats(*self.get_generator_mats())
         else:
             raise ValueError(
                 "Projective special linear groups with both dimension and field greater than 2 are"
@@ -775,11 +883,12 @@ class ProjectiveSpecialLinearGroup(Group):
     def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
         """Expanding generator matrices for this group, based on arXiv:1807.03879."""
         minus_one = -self.field(1)
-        A = self.field([[1, 1], [0, 1]])
-        B = self.field([[1, minus_one], [0, 1]])
-        C = self.field([[1, 0], [1, 1]])
-        D = self.field([[1, 0], [minus_one, 1]])
-        return A, B, C, D
+        return (
+            self.field([[1, 1], [0, 1]]),
+            self.field([[1, minus_one], [0, 1]]),
+            self.field([[1, 0], [1, 1]]),
+            self.field([[1, 0], [minus_one, 1]]),
+        )
 
     @classmethod
     def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
