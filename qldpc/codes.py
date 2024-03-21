@@ -1618,8 +1618,8 @@ class SurfaceCode(CSSCode):
             cols = rows
 
         # save known distances
-        self._exact_distance_x = self.cols = cols
-        self._exact_distance_z = self.rows = rows
+        self._exact_distance_x = cols
+        self._exact_distance_z = rows
 
         # which qubits should be Hadamard-transformed?
         qubits_to_conjugate: slice | Sequence[int] | None
@@ -1750,9 +1750,8 @@ class ToricCode(CSSCode):
         if cols is None:
             cols = rows
 
-        # # save known distances
-        # self._exact_distance_x = self.cols = cols
-        # self._exact_distance_z = self.rows = rows
+        # save known distances
+        self._exact_distance_x = self._exact_distance_z = min(rows, cols)
 
         # which qubits should be Hadamard-transformed?
         qubits_to_conjugate: slice | Sequence[int] | None
@@ -1766,7 +1765,7 @@ class ToricCode(CSSCode):
             shift_x, shift_y = group.generators
             subset_a = [shift_x, ~shift_x]
             subset_b = [shift_y, ~shift_y]
-            subcode_a = RepetitionCode(2, field=2)
+            subcode_a = RepetitionCode(2, field=field)
             code = QTCode(subset_a, subset_b, subcode_a, bipartite=False)
 
         else:

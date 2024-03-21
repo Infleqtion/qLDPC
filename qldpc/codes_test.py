@@ -377,6 +377,7 @@ def test_quantum_tanner() -> None:
 
 def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
     """Ordinary and rotated surface codes."""
+
     # "ordinary"/original surface code
     code = codes.SurfaceCode(rows, cols, rotated=False, field=3)
     assert code.dimension == 1
@@ -408,36 +409,29 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
         assert sum(row_x) == sum(row_z)
 
 
-def test_toric_codes(field: int = 2) -> None:
+def test_toric_codes(field: int = 3) -> None:
     """Ordinary and rotated toric codes."""
+
     # "ordinary"/original toric code
     rows, cols = 5, 2
     code = codes.ToricCode(rows, cols, rotated=False, field=field)
     assert code.dimension == 2
     assert code.num_qudits == 2 * rows * cols
-    print()
-    print()
-    print()
-    print(code.get_distance_exact(codes.Pauli.X))
-    print(code.get_distance_exact(codes.Pauli.Z))
-    # assert code.get_distance(codes.Pauli.X, bound=10) == cols
-    # assert code.get_distance(codes.Pauli.Z, bound=10) == rows
+
+    # check minimal logical operator weights
+    code.reduce_logical_ops(with_ILP=True)
+    assert (
+        {rows, cols}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.X).view(np.ndarray)}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.Z).view(np.ndarray)}
+    )
 
     # rotated toric code
-    rows, cols = 6, 4
+    rows, cols = 4, 6
     code = codes.ToricCode(rows, cols, rotated=True, field=field)
     assert code.dimension == 2
     assert code.num_qudits == rows * cols
-    print()
-    print()
-    print()
-    print(code.get_distance_exact(codes.Pauli.X))
-    print(code.get_distance_exact(codes.Pauli.Z))
-    # assert code.get_distance(codes.Pauli.X, bound=10) == cols
-    # assert code.get_distance(codes.Pauli.Z, bound=10) == rows
-
-    # # verify rotated toric code parameters
-    # assert code.get_code_params(bound=10) == (size**2, 2, size, 4)
+    assert code.get_distance() == min(rows, cols)
 
 
 def test_qudit_distance(field: int = 3) -> None:
