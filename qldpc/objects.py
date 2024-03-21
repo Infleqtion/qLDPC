@@ -310,10 +310,9 @@ class CayleyComplex:
         )
 
     def subgraphs(self) -> tuple[nx.DiGraph, nx.DiGraph]:
-        """Build the subgraphs used to build a quantum Tanner code.
+        """Build the subgraphs that are used to construct a quantum Tanner code.
 
-        Thes subgraphs consist of directed graphs, with directed edges that go from a group member
-        to a face of the Cayley complex.  Each face looks like:
+        These subgraphs are defined using the faces of a Cayley complex.  Each face looks like:
 
          g ―――――――――― gb
 
@@ -321,12 +320,11 @@ class CayleyComplex:
 
         ag ――――――――― agb
 
-        The induced subgraphs are then:
+        where f(g,a,b) = {g, ab, gb, agb}.  Specifically, the (directed) subgraphs are:
         - subgraph_0 with edges ( g, f(g,a,b)), and
-        - subgraph_1 with edges (ag, f(g,a,b)),
-        where f(g,a,b) = {g, ab, gb, agb}.  The subgraphs define a CSS code whose X-type parity
-        checks are a classical Tanner code on subgraph_0, and Z-type parity checks are a classical
-        Tanner code on subgraph_1.
+        - subgraph_1 with edges (ag, f(g,a,b)).
+        These subgraphs define a CSS code whose X-type parity checks are a classical Tanner code on
+        subgraph_0, and Z-type parity checks are a classical Tanner code on subgraph_1.
 
         As a matter of practice, defining Tanner codes on subgraph_0 and subgrah_1 requires choosing
         an ordering on the edges incident to every source node of these graphs.  If the group G is
@@ -337,8 +335,8 @@ class CayleyComplex:
         """
         subgraph_0 = nx.DiGraph()
         subgraph_1 = nx.DiGraph()
-        half_group, _ = nx.bipartite.sets(self.graph)
-        for gg, aa, bb in itertools.product(half_group, self.subset_a, self.subset_b):
+        nodes_0, _ = nx.bipartite.sets(self.graph)
+        for gg, aa, bb in itertools.product(nodes_0, self.subset_a, self.subset_b):
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
             subgraph_0.add_edge(gg, face, sort=(aa, bb))
