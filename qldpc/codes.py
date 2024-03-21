@@ -1625,6 +1625,7 @@ class SurfaceCode(CSSCode):
         qubits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
+            # rotated surface code
             matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
 
             if conjugate:
@@ -1639,6 +1640,7 @@ class SurfaceCode(CSSCode):
                 qubits_to_conjugate = None
 
         else:
+            # "original" surface code
             code_a = RepetitionCode(rows, field)
             code_b = RepetitionCode(cols, field)
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
@@ -1753,6 +1755,7 @@ class ToricCode(CSSCode):
         qubits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
+            # rotated toric code
             if not rows % 2 == cols % 2 == 0:
                 raise ValueError(
                     f"The rotated toric code must have even side lengths, not ({rows},{cols})"
@@ -1763,26 +1766,26 @@ class ToricCode(CSSCode):
             subset_b = [shift_y, ~shift_y]
             subcode_a = RepetitionCode(2, field=field)
             code = QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+            matrix_x = code.code_x.matrix
+            matrix_z = code.code_z.matrix
 
             if conjugate:
                 # Hadamard-transform qubits in a checkerboard pattern
                 qubits_to_conjugate = [
-                    idx
-                    for idx, (row, col) in enumerate(np.ndindex(rows, cols))
-                    if row % 2 == col % 2
+                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
                 ]
 
             else:
                 qubits_to_conjugate = None
 
         else:
+            # "original" toric code
             code_a = RingCode(rows, field)
             code_b = RingCode(cols, field)
             code = HGPCode(code_a, code_b, field, conjugate=conjugate)
-
-        matrix_x = code.code_x.matrix
-        matrix_z = code.code_z.matrix
-        qubits_to_conjugate = code.conjugated_qubits
+            matrix_x = code.code_x.matrix
+            matrix_z = code.code_z.matrix
+            qubits_to_conjugate = code.conjugated_qubits
 
         CSSCode.__init__(
             self,
