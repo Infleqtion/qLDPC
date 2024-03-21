@@ -429,7 +429,7 @@ def test_toric_codes(field: int = 3) -> None:
     code = codes.ToricCode(distance, rotated=True, field=field)
     assert code.dimension == 2
     assert code.num_qudits == distance**2
-    assert code.get_distance() == distance
+    assert codes.CSSCode.get_distance(code) == distance
 
     # rotated toric XZZX code
     rows, cols = 6, 4
@@ -440,7 +440,7 @@ def test_toric_codes(field: int = 3) -> None:
 
     # rotated toric code must have even side lengths
     with pytest.raises(ValueError, match="must have even side lengths"):
-        code = codes.ToricCode(3, rotated=True)
+        codes.ToricCode(3, rotated=True)
 
 
 def test_quantum_distance(field: int = 2) -> None:
