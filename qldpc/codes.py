@@ -1686,47 +1686,29 @@ class SurfaceCode(CSSCode):
         def get_check(
             row_indices: Sequence[int], col_indices: Sequence[int]
         ) -> npt.NDArray[np.int_]:
+            """Get a check on the qubits with the given indices, any that are out of bounds."""
             check = np.zeros((rows, cols), dtype=int)
-            check[row_indices, col_indices] = 1
+            for row, col in zip(row_indices, col_indices):
+                if 0 <= row < rows and 0 <= col < cols:
+                    check[row, col] = 1
             return check.ravel()
 
         checks_x = []
-
-        # left column
-        for row in range(0, rows - 1, 2):
-            row_indices = [row, row + 1]
-            col_indices = [0, 0]
-            checks_x.append(get_check(row_indices, col_indices))
-        # bulk
-        for col in range(0, cols - 1):
-            for row in range(1 - col % 2, rows - 1, 2):
+        checks_z = []
+        for row in range(-1, rows):
+            for col in range(-1, cols):
                 row_indices = [row, row + 1, row, row + 1]
                 col_indices = [col, col, col + 1, col + 1]
-                checks_x.append(get_check(row_indices, col_indices))
-        # right column
-        for row in range(cols % 2, rows - 1, 2):
-            row_indices = [row, row + 1]
-            col_indices = [cols - 1, cols - 1]
-            checks_x.append(get_check(row_indices, col_indices))
+                check = get_check(row_indices, col_indices)
 
-        checks_z = []
+                if np.count_nonzero(check) not in [2, 4]:
+                    continue
 
-        # top row
-        for col in range(1, cols - 1, 2):
-            row_indices = [0, 0]
-            col_indices = [col, col + 1]
-            checks_z.append(get_check(row_indices, col_indices))
-        # bulk
-        for row in range(0, rows - 1):
-            for col in range(row % 2, cols - 1, 2):
-                row_indices = [row, row, row + 1, row + 1]
-                col_indices = [col, col + 1, col, col + 1]
-                checks_z.append(get_check(row_indices, col_indices))
-        # bottom row
-        for col in range(1 - rows % 2, cols - 1, 2):
-            row_indices = [rows - 1, rows - 1]
-            col_indices = [col, col + 1]
-            checks_z.append(get_check(row_indices, col_indices))
+                if row % 2 == col % 2:
+                    if 0 <= col < cols - 1:
+                        checks_z.append(check)
+                elif 0 <= row < rows - 1:
+                    checks_x.append(check)
 
         return np.array(checks_x), np.array(checks_z)
 
@@ -1800,20 +1782,22 @@ class ToricCode(CSSCode):
         def get_check(
             row_indices: Sequence[int], col_indices: Sequence[int]
         ) -> npt.NDArray[np.int_]:
+            """Get a check on the qubits with the given indices with periodic boundary conditions."""
             check = np.zeros((rows, cols), dtype=int)
-            check[row_indices, col_indices] = 1
+            for row, col in zip(row_indices, col_indices):
+                check[row % rows, col % cols] = 1
             return check.ravel()
 
         checks_x = []
         checks_z = []
         for row in range(rows):
             for col in range(cols):
-                row_indices = np.array([row, row + 1, row, row + 1]) % rows
-                col_indices = np.array([col, col, col + 1, col + 1]) % cols
+                row_indices = [row, row + 1, row, row + 1]
+                col_indices = [col, col, col + 1, col + 1]
                 check = get_check(row_indices, col_indices)
                 if row % 2 == col % 2:
-                    checks_x.append(check)
-                else:
                     checks_z.append(check)
+                else:
+                    checks_x.append(check)
 
         return np.array(checks_x), np.array(checks_z)
