@@ -374,8 +374,9 @@ class ClassicalCode(AbstractCode):
         matrix, field = named_codes.get_code(standardized_name)
         return ClassicalCode(matrix, field)
 
-    # TODO(?): maybe add modification options
+    # TODO(?): maybe add modification options such as puncturing and shortening
     # https://users.math.msu.edu/users/halljo/classes/codenotes/mod.pdf
+    # https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.122.230501
 
 
 class RepetitionCode(ClassicalCode):
@@ -1480,7 +1481,6 @@ class LPCode(CSSCode):
 # classical and quantum Tanner codes
 
 
-# TODO: add TannerCode construction based on undirected graphs
 class TannerCode(ClassicalCode):
     """Classical Tanner code, as described in DOI:10.1109/TIT.1981.1056404.
 
@@ -1508,8 +1508,11 @@ class TannerCode(ClassicalCode):
     subgraph: nx.DiGraph
     subcode: ClassicalCode
 
-    def __init__(self, subgraph: nx.DiGraph, subcode: ClassicalCode) -> None:
+    def __init__(self, subgraph: nx.Graph, subcode: ClassicalCode) -> None:
         """Construct a classical Tanner code."""
+        if not isinstance(subgraph, nx.DiGraph):
+            subgraph = TannerCode.to_directed(subgraph)
+
         self.subgraph = subgraph
         self.subcode = subcode
         sources = [node for node in subgraph if subgraph.in_degree(node) == 0]
@@ -1531,6 +1534,19 @@ class TannerCode(ClassicalCode):
             self.subgraph.neighbors(node),
             key=lambda neighbor: self.subgraph[node][neighbor].get("sort", neighbor),
         )
+
+    @classmethod
+    def to_directed(self, subgraph: nx.Graph) -> nx.DiGraph:
+        """Convert an undirected graph for a Tanner code into a directed graph for the same code."""
+        directed_subgraph = nx.DiGraph()
+        for node_a, node_b, edge_data in subgraph.edges(data=True):
+            edge = frozenset([node_a, node_b])
+            directed_subgraph.add_edge(node_a, edge)
+            directed_subgraph.add_edge(node_b, edge)
+            if (sort_data := edge_data.pop("sort", None)) is not None:
+                directed_subgraph[node_a][edge]["sort"] = sort_data[node_a]
+                directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
+        return directed_subgraph
 
 
 # TODO: investigate construction in
