@@ -1784,7 +1784,7 @@ class ToricCode(CSSCode):
         def get_check(
             row_indices: Sequence[int], col_indices: Sequence[int]
         ) -> npt.NDArray[np.int_]:
-            """Get a check on the qubits with the given indices with periodic boundary conditions."""
+            """Get a check on the qubits with the given indices and periodic boundary conditions."""
             check = np.zeros((rows, cols), dtype=int)
             for row, col in zip(row_indices, col_indices):
                 check[row % rows, col % cols] = 1
