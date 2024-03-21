@@ -337,8 +337,8 @@ class CayleyComplex:
         """
         subgraph_0 = nx.DiGraph()
         subgraph_1 = nx.DiGraph()
-        nodes_0, _ = nx.bipartite.sets(self.graph)
-        for gg, aa, bb in itertools.product(nodes_0, self.subset_a, self.subset_b):
+        half_group, _ = nx.bipartite.sets(self.graph)
+        for gg, aa, bb in itertools.product(half_group, self.subset_a, self.subset_b):
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
             subgraph_0.add_edge(gg, face, sort=(aa, bb))
