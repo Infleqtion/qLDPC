@@ -1706,8 +1706,10 @@ class SurfaceCode(CSSCode):
 
                 if row % 2 == col % 2:
                     if 0 <= col < cols - 1:
+                        # no Z-type parity checks on the left/right boundaries
                         checks_z.append(check)
                 elif 0 <= row < rows - 1:
+                    # no Z-type parity checks on the top/bottom boundaries
                     checks_x.append(check)
 
         return np.array(checks_x), np.array(checks_z)
