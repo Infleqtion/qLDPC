@@ -345,7 +345,7 @@ def test_lifted_product_codes() -> None:
 
 def test_tanner_code() -> None:
     """Classical Tanner codes on random regular graphs."""
-    subcode = codes.ClassicalCode.random(10, 5)
+    subcode = codes.ClassicalCode.random(5, 3)
     subgraph = nx.random_regular_graph(subcode.num_bits, subcode.num_bits * 2 + 2)
     code = codes.TannerCode(subgraph, subcode)
     assert code.num_bits == subgraph.number_of_edges()
