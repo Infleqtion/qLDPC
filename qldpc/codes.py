@@ -1666,20 +1666,20 @@ class SurfaceCode(CSSCode):
                  ―――     ―――
                 | ⋅ |   | ⋅ |
          ―――○―――○―――○―――○―――○
-        | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+        | × | ⋅ | × | ⋅ | × |
          ―――○―――○―――○―――○―――○―――
-            | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+            | × | ⋅ | × | ⋅ | × |
          ―――○―――○―――○―――○―――○―――
-        | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+        | × | ⋅ | × | ⋅ | × |
          ―――○―――○―――○―――○―――○―――
-            | ▪ | ⋅ | ▪ | ⋅ | ▪ |
+            | × | ⋅ | × | ⋅ | × |
             ○―――○―――○―――○―――○―――
             | ⋅ |   | ⋅ |
              ―――     ―――
 
         Here:
         - Circles (○) denote data qubits (of which there are 5×5 = 25 total).
-        - Tiles with a square (▪) denote X-type parity checks (12 total).
+        - Tiles with a cross (×) denote X-type parity checks (12 total).
         - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
         """
 
