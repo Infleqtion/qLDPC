@@ -1817,7 +1817,3 @@ class ToricCode(CSSCode):
                     checks_z.append(check)
 
         return np.array(checks_x), np.array(checks_z)
-
-
-# rows, cols = 6, 4
-# code = ToricCode(rows, cols, rotated=True, conjugate=True)
