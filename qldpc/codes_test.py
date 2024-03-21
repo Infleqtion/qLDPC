@@ -457,3 +457,7 @@ def test_quantum_distance(field: int = 2) -> None:
     """Distance calculations for qudit codes."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=field))
     assert code.get_distance() == 2
+
+    # assert that the identity is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
