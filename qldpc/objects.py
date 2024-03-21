@@ -330,15 +330,9 @@ class CayleyComplex:
 
         As a matter of practice, defining Tanner codes on subgraph_0 and subgrah_1 requires choosing
         an ordering on the edges incident to every source node of these graphs.  If the group G is
-        equipped with a total order, a natural ordering is induced by labeling edges by elements of
-        A ⊗ B in such a way that:
-
-        [3] Any node g is "across from" node agb in the sense that g and agb are connected by face
-            f(g,a,b) through edges labeled (a, b) and (a^-1, b^-1).
-
-        The inverse label (a^-1, b^-1) is required for consistency, as the label (a, b) for edges
-        incident to node agb is "reserved" for connecting agb to aagbb.  Consistency similarly
-        forces assigning the label (a^-1, b) to edge (ag, f(g,a,b)) in subgraph_1.
+        equipped with a total order, a natural ordering of edges incident to every source node is
+        induced by assigning the label (a, b) to edge (g, f(g,a,b)).  Consistency then requires that
+        edge (ag, f(g,a,b)) has label (a^-1, b).
         """
         subgraph_0 = nx.DiGraph()
         subgraph_1 = nx.DiGraph()
