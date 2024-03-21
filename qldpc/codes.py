@@ -1681,6 +1681,8 @@ class SurfaceCode(CSSCode):
         - Circles (○) denote data qubits (of which there are 5×5 = 25 total).
         - Tiles with a cross (×) denote X-type parity checks (12 total).
         - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
+
+        Reference: https://errorcorrectionzoo.org/c/rotated_surface
         """
 
         def get_check(
