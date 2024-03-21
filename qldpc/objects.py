@@ -332,7 +332,8 @@ class CayleyComplex:
         an ordering on the edges incident to every source node of these graphs.  If the group G is
         equipped with a total order, a natural ordering of edges incident to every source node is
         induced by assigning the label (a, b) to edge (g, f(g,a,b)).  Consistency then requires that
-        edge (ag, f(g,a,b)) has label (a^-1, b).
+        edge (ag, f(g,a,b)) has label (a^-1, b), as can be verified by defining g' = ag and
+        checking that f(g,a,b) = f(g',a^-1,b).
         """
         subgraph_0 = nx.DiGraph()
         subgraph_1 = nx.DiGraph()
