@@ -344,26 +344,18 @@ def test_lifted_product_codes() -> None:
 
 
 def test_tanner_code() -> None:
-    """Classical Tanner code construction.
+    """Classical Tanner codes on random regular graphs."""
+    subcode = codes.ClassicalCode.random(5, 3)
+    subgraph = nx.random_regular_graph(subcode.num_bits, subcode.num_bits * 2 + 2)
 
-    In order to construct a random Tanner code, we need to construct a random regular directed
-    bipartite graph.  To this end, we first construct a random regular graph G = (V,E), and then
-    build a directed bipartite graph G' with vertex sets (V,E).  The edges in G' have the form
-    (v, {v,w}), where v is in V and {v,w} is in E.
-    """
-    subcode = codes.ClassicalCode.random(10, 5)
-    graph = nx.random_regular_graph(subcode.num_bits, subcode.num_bits * 2 + 2)
-    subgraph = nx.DiGraph()
-    for edge in graph.edges:
-        subgraph.add_edge(edge[0], edge)
-        subgraph.add_edge(edge[1], edge)
-    num_sources = sum(1 for node in subgraph if subgraph.in_degree(node) == 0)
-    num_sinks = subgraph.number_of_nodes() - num_sources
+    tag = "sort_label"
+    for node_a, node_b in subgraph.edges:
+        subgraph[node_a][node_b]["sort"] = {node_a: tag, node_b: tag}
 
-    # build a classical Tanner code and check that it has the right number of checks/bits
     code = codes.TannerCode(subgraph, subcode)
-    assert code.num_bits == num_sinks
-    assert code.num_checks == num_sources * code.subcode.num_checks
+    assert code.num_bits == subgraph.number_of_edges()
+    assert code.num_checks == subgraph.number_of_nodes() * code.subcode.num_checks
+    assert all(code.subgraph.get_edge_data(*edge)["sort"] == tag for edge in code.subgraph.edges)
 
 
 def test_toric_tanner_code(size: int = 4) -> None:
