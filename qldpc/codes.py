@@ -1766,7 +1766,7 @@ class ToricCode(CSSCode):
             subset_a = [shift_x, ~shift_x]
             subset_b = [shift_y, ~shift_y]
             subcode_a = RepetitionCode(2, field=field)
-            code = QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+            code = QTCode(subset_a, subset_b, subcode_a)
             matrix_x = code.code_x.matrix
             matrix_z = code.code_z.matrix
 
