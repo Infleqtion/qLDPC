@@ -320,5 +320,5 @@ class CayleyComplex:
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
             subgraph_x.add_edge(gg, face, sort=(aa, bb))
-            subgraph_z.add_edge(aa_gg, face, sort=(aa, bb))
+            subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
         return subgraph_x, subgraph_z
