@@ -1716,7 +1716,10 @@ class SurfaceCode(CSSCode):
 
 
 class ToricCode(CSSCode):
-    """Surface code with periodic bounary conditions, encoding two logical qudits."""
+    """Surface code with periodic bounary conditions, encoding two logical qudits.
+
+    Reference: https://errorcorrectionzoo.org/c/surface
+    """
 
     def __init__(
         self,
