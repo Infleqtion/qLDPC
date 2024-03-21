@@ -1755,7 +1755,7 @@ class ToricCode(CSSCode):
         if rotated:
             if not rows % 2 == cols % 2 == 0:
                 raise ValueError(
-                    f"The rotated toric code musth have even side lengths, not ({rows},{cols})"
+                    f"The rotated toric code must have even side lengths, not ({rows},{cols})"
                 )
             group = abstract.CyclicGroup(rows) * abstract.CyclicGroup(cols)
             shift_x, shift_y = group.generators
@@ -1763,6 +1763,17 @@ class ToricCode(CSSCode):
             subset_b = [shift_y, ~shift_y]
             subcode_a = RepetitionCode(2, field=field)
             code = QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+
+            if conjugate:
+                # Hadamard-transform qubits in a checkerboard pattern
+                qubits_to_conjugate = [
+                    idx
+                    for idx, (row, col) in enumerate(np.ndindex(rows, cols))
+                    if row % 2 == col % 2
+                ]
+
+            else:
+                qubits_to_conjugate = None
 
         else:
             code_a = RingCode(rows, field)

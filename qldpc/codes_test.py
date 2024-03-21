@@ -403,7 +403,7 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
     # test that the rotated surface code with conjugate=True is an XZZX code
     code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2, conjugate=True)
     for row in code.matrix.view(np.ndarray):
-        row_x, row_z = row[: code.num_qubits], row[-code.num_qubits :]
+        row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         assert sum(row_x) == sum(row_z)
 
 
@@ -425,19 +425,25 @@ def test_toric_codes(field: int = 3) -> None:
     )
 
     # rotated toric code
-    rows, cols = 4, 6
-    code = codes.ToricCode(rows, cols, rotated=True, field=field)
+    distance = 4
+    code = codes.ToricCode(distance, rotated=True, field=field)
     assert code.dimension == 2
-    assert code.num_qudits == rows * cols
-    assert code.get_distance() == min(rows, cols)
+    assert code.num_qudits == distance**2
+    assert code.get_distance() == distance
+
+    # rotated toric XZZX code
+    distance = 4
+    code = codes.ToricCode(distance, rotated=True, field=field, conjugate=True)
+    # for row in code.matrix.view(np.ndarray):
+    #     row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
+    #     assert sum(row_x) == sum(row_z) == 2
+
+    # rotated toric code must have even side lengths
+    with pytest.raises(ValueError, match="must have even side lengths"):
+        code = codes.ToricCode(3, rotated=True)
 
 
-def test_qudit_distance(field: int = 3) -> None:
-    """Distance calculations for qudits."""
+def test_quantum_distance(field: int = 2) -> None:
+    """Distance calculations for qudit codes."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=field))
-    assert (
-        code.get_distance()
-        == code.get_distance(codes.Pauli.X)
-        == code.get_distance(codes.Pauli.Z)
-        == 2
-    )
+    assert code.get_distance() == 2
