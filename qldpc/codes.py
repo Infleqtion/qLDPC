@@ -1625,10 +1625,6 @@ class SurfaceCode(CSSCode):
         qubits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
-            # The rotated surface only "works" for qubits.  I am not sure why...
-            field = field or 2
-            if field != 2:
-                raise ValueError("Rotated surface code only supported for qubits")
             matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
 
             if conjugate:

@@ -375,18 +375,18 @@ def test_quantum_tanner() -> None:
         codes.QTCode([], [], subcode_a, subcode_b)
 
 
-def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
+def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
     """Ordinary and rotated surface codes."""
 
     # "ordinary"/original surface code
-    code = codes.SurfaceCode(rows, cols, rotated=False, field=3)
+    code = codes.SurfaceCode(rows, cols, rotated=False, field=field)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
     assert code.get_distance(codes.Pauli.X, bound=10) == cols
     assert code.get_distance(codes.Pauli.Z, bound=10) == rows
 
     # rotated surface code
-    code = codes.SurfaceCode(rows, cols, rotated=True, field=2)
+    code = codes.SurfaceCode(rows, cols, rotated=True, field=field)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
     assert (
@@ -399,8 +399,6 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
         == codes.CSSCode.get_distance_exact(code, codes.Pauli.Z)
         == rows
     )
-    with pytest.raises(ValueError, match="only supported for qubits"):
-        codes.SurfaceCode(rows, cols, rotated=True, field=3)
 
     # test that the rotated surface code with conjugate=True is an XZZX code
     code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2, conjugate=True)
