@@ -366,60 +366,98 @@ def test_tanner_code() -> None:
     assert code.num_checks == num_sources * code.subcode.num_checks
 
 
-def test_surface_HGP_codes(distance: int = 2, field: int = 3) -> None:
-    """The surface and toric codes as hypergraph product codes."""
-    bit_code: codes.ClassicalCode
-
-    # surface code
-    bit_code = codes.RepetitionCode(distance, field=field)
-    code = codes.HGPCode(bit_code)
-    assert code.num_qudits == distance**2 + (distance - 1) ** 2
-    assert code.dimension == 1
-    assert code.get_distance(bound=10) == distance
-
-    # toric code
-    bit_code = codes.RingCode(distance, field=field)
-    code = codes.HGPCode(bit_code)
-    assert code.num_qudits == 2 * distance**2
-    assert code.dimension == 2
-    assert code.get_distance(bound=10) == distance
-
-    # check logical operators have the correct weight when reduced
-    code.reduce_logical_ops()
-    logical_ops = code.get_logical_ops().reshape((2 * code.dimension, -1))
-    assert all(np.count_nonzero(op) == distance for op in logical_ops)
-
-    # check that the identity operator is a logical operator
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
-
-
 def test_toric_tanner_code(size: int = 4) -> None:
     """Rotated toric code as a quantum Tanner code."""
-    assert size % 2 == 0, "Rotated toric QTCode construction only works for even side lengths"
-
     group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
     subcode_a = codes.RepetitionCode(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
+    assert code.get_code_params() == (size**2, 2, size, 4)
 
-    # verify rotated toric code parameters
-    assert code.get_code_params(bound=10) == (size**2, 2, size, 4)
 
-    # raise error if constructing QTCode with codes over different fields
-    subcode_b = codes.RepetitionCode(2, field=subcode_a.field.order**2)
+def test_invalid_quantum_tanner() -> None:
+    """Raise error if constructing QTCode with codes over different fields."""
+    subcode_a = codes.RepetitionCode(2, field=2)
+    subcode_b = codes.RepetitionCode(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
-        code = codes.QTCode(subset_a, subset_b, subcode_a, subcode_b)
+        codes.QTCode([], [], subcode_a, subcode_b)
 
 
-def test_qudit_distance(field: int = 3) -> None:
-    """Distance calculations for qudits."""
-    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
+def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
+    """Ordinary and rotated surface codes."""
+
+    # "ordinary"/original surface code
+    code = codes.SurfaceCode(rows, cols, rotated=False, field=field)
+    assert code.dimension == 1
+    assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
+    assert code.get_distance(codes.Pauli.X, bound=10) == cols
+    assert code.get_distance(codes.Pauli.Z, bound=10) == rows
+
+    # rotated surface code
+    code = codes.SurfaceCode(rows, cols, rotated=True, field=field)
+    assert code.dimension == 1
+    assert code.num_qudits == rows * cols
     assert (
-        code.get_distance()
-        == code.get_distance(codes.Pauli.X)
-        == code.get_distance(codes.Pauli.Z)
-        == 2
+        code.get_distance(codes.Pauli.X)
+        == codes.CSSCode.get_distance_exact(code, codes.Pauli.X)
+        == cols
     )
+    assert (
+        code.get_distance(codes.Pauli.Z)
+        == codes.CSSCode.get_distance_exact(code, codes.Pauli.Z)
+        == rows
+    )
+
+    # test that the rotated surface code with conjugate=True is an XZZX code
+    code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2, conjugate=True)
+    for row in code.matrix:
+        row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
+        assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
+
+
+def test_toric_codes(field: int = 3) -> None:
+    """Ordinary and rotated toric codes."""
+
+    # "ordinary"/original toric code
+    rows, cols = 5, 2
+    code = codes.ToricCode(rows, cols, rotated=False, field=field)
+    assert code.dimension == 2
+    assert code.num_qudits == 2 * rows * cols
+
+    # check minimal logical operator weights
+    code.reduce_logical_ops(with_ILP=True)
+    assert (
+        {rows, cols}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.X).view(np.ndarray)}
+        == {sum(op) for op in code.get_logical_ops(codes.Pauli.Z).view(np.ndarray)}
+    )
+
+    # rotated toric code
+    distance = 4
+    code = codes.ToricCode(distance, rotated=True, field=field)
+    assert code.dimension == 2
+    assert code.num_qudits == distance**2
+    assert codes.CSSCode.get_distance(code) == distance
+
+    # rotated toric XZZX code
+    rows, cols = 6, 4
+    code = codes.ToricCode(rows, cols, rotated=True, field=field, conjugate=True)
+    for row in code.matrix:
+        row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
+        assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
+
+    # rotated toric code must have even side lengths
+    with pytest.raises(ValueError, match="must have even side lengths"):
+        codes.ToricCode(3, rotated=True)
+
+
+def test_quantum_distance(field: int = 2) -> None:
+    """Distance calculations for qudit codes."""
+    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
+    assert code.get_distance() == 2
+
+    # assert that the identity is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)

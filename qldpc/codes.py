@@ -687,7 +687,7 @@ class CSSCode(QuditCode):
         if not skip_validation and not self.is_valid:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
-        self._conjugate = conjugate or ()
+        self._conjugated_qubits = conjugate or ()
         self._codes_equal = self.code_x == self.code_z
 
     @functools.cached_property
@@ -706,7 +706,12 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.code_x.matrix), self.code_x.matrix],
             ]
         )
-        return self.field(self.conjugate(matrix, self._conjugate))
+        return self.field(self.conjugate(matrix, self.conjugated_qubits))
+
+    @property
+    def conjugated_qubits(self) -> slice | Sequence[int]:
+        """Which qubits are conjugated?"""
+        return self._conjugated_qubits
 
     @property
     def num_checks(self) -> int:
@@ -1528,6 +1533,9 @@ class TannerCode(ClassicalCode):
         )
 
 
+# TODO: investigate construction in
+# https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
+# see also Section 7 of https://arxiv.org/abs/2206.07571
 class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex
 
@@ -1583,4 +1591,215 @@ class QTCode(CSSCode):
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
 
 
-# TODO: add ordinary + rotated SurfaceCode and ToricCode
+################################################################################
+# common quantum codes
+
+
+class SurfaceCode(CSSCode):
+    """The one and only!
+
+    Actually, there are two variants: "ordinary" and "rotated" surface codes.
+    The rotated code is more qubit-efficient.
+
+    If constructed with conjugate=True, every other qubit is Hadamard-transformed in a checkerboard
+    pattern.  The rotated surface code with conjugate=True is the XZZX code in arXiv:2009.07851.
+    """
+
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        rotated: bool = True,
+        field: int | None = None,
+        *,
+        conjugate: bool = False,
+    ) -> None:
+        if cols is None:
+            cols = rows
+
+        # save known distances
+        self._exact_distance_x = cols
+        self._exact_distance_z = rows
+
+        # which qubits should be Hadamard-transformed?
+        qubits_to_conjugate: slice | Sequence[int] | None
+
+        if rotated:
+            # rotated surface code
+            matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
+
+            if conjugate:
+                # Hadamard-transform qubits in a checkerboard pattern
+                qubits_to_conjugate = [
+                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
+                ]
+
+            else:
+                qubits_to_conjugate = None
+
+        else:
+            # "original" surface code
+            code_a = RepetitionCode(rows, field)
+            code_b = RepetitionCode(cols, field)
+            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            matrix_x = code_ab.code_x.matrix
+            matrix_z = code_ab.code_z.matrix
+            qubits_to_conjugate = code_ab.conjugated_qubits
+
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            field=field,
+            conjugate=qubits_to_conjugate,
+            skip_validation=True,
+        )
+
+    @classmethod
+    def get_rotated_checks(
+        cls, rows: int, cols: int
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build X-sector and Z-sector parity check matrices.
+
+        Example 5x5 rotated surface code layout:
+
+                 ―――     ―――
+                | ⋅ |   | ⋅ |
+         ―――○―――○―――○―――○―――○
+        | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+            | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+        | × | ⋅ | × | ⋅ | × |
+         ―――○―――○―――○―――○―――○―――
+            | × | ⋅ | × | ⋅ | × |
+            ○―――○―――○―――○―――○―――
+            | ⋅ |   | ⋅ |
+             ―――     ―――
+
+        Here:
+        - Circles (○) denote data qubits (of which there are 5×5 = 25 total).
+        - Tiles with a cross (×) denote X-type parity checks (12 total).
+        - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
+        """
+
+        def get_check(
+            row_indices: Sequence[int], col_indices: Sequence[int]
+        ) -> npt.NDArray[np.int_]:
+            """Get a check on the qubits with the given indices, any that are out of bounds."""
+            check = np.zeros((rows, cols), dtype=int)
+            for row, col in zip(row_indices, col_indices):
+                if 0 <= row < rows and 0 <= col < cols:
+                    check[row, col] = 1
+            return check.ravel()
+
+        checks_x = []
+        checks_z = []
+        for row in range(-1, rows):
+            for col in range(-1, cols):
+                row_indices = [row, row + 1, row, row + 1]
+                col_indices = [col, col, col + 1, col + 1]
+                check = get_check(row_indices, col_indices)
+
+                if np.count_nonzero(check) not in [2, 4]:
+                    continue
+
+                if row % 2 == col % 2:
+                    if 0 <= col < cols - 1:
+                        # no Z-type parity checks on the left/right boundaries
+                        checks_z.append(check)
+                elif 0 <= row < rows - 1:
+                    # no Z-type parity checks on the top/bottom boundaries
+                    checks_x.append(check)
+
+        return np.array(checks_x), np.array(checks_z)
+
+
+class ToricCode(CSSCode):
+    """Surface code with periodic bounary conditions, encoding two logical qudits."""
+
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        rotated: bool = True,
+        field: int | None = None,
+        *,
+        conjugate: bool = False,
+    ) -> None:
+        if cols is None:
+            cols = rows
+
+        # save known distances
+        self._exact_distance_x = self._exact_distance_z = min(rows, cols)
+
+        # which qubits should be Hadamard-transformed?
+        qubits_to_conjugate: slice | Sequence[int] | None
+
+        if rotated:
+            # rotated toric code
+            if not (rows % 2 == cols % 2 == 0 and rows >= 4 and cols >= 4):
+                raise ValueError(
+                    "The rotated toric code must have even side lengths of at least four, not"
+                    + f" ({rows},{cols})"
+                )
+            matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)
+
+            if conjugate:
+                # Hadamard-transform qubits in a checkerboard pattern
+                qubits_to_conjugate = [
+                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
+                ]
+
+            else:
+                qubits_to_conjugate = None
+
+        else:
+            # "original" toric code
+            code_a = RingCode(rows, field)
+            code_b = RingCode(cols, field)
+            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            matrix_x = code_ab.code_x.matrix
+            matrix_z = code_ab.code_z.matrix
+            qubits_to_conjugate = code_ab.conjugated_qubits
+
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            field=field,
+            conjugate=qubits_to_conjugate,
+            skip_validation=True,
+        )
+
+    @classmethod
+    def get_rotated_checks(
+        cls, rows: int, cols: int
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build X-sector and Z-sector parity check matrices.
+
+        Same as in SurfaceCode.get_rotated_checks, but with periodic boundary conditions.
+        """
+
+        def get_check(
+            row_indices: Sequence[int], col_indices: Sequence[int]
+        ) -> npt.NDArray[np.int_]:
+            """Get a check on the qubits with the given indices and periodic boundary conditions."""
+            check = np.zeros((rows, cols), dtype=int)
+            for row, col in zip(row_indices, col_indices):
+                check[row % rows, col % cols] = 1
+            return check.ravel()
+
+        checks_x = []
+        checks_z = []
+        for row in range(rows):
+            for col in range(cols):
+                row_indices = [row, row + 1, row, row + 1]
+                col_indices = [col, col, col + 1, col + 1]
+                check = get_check(row_indices, col_indices)
+                if row % 2 == col % 2:
+                    checks_z.append(check)
+                else:
+                    checks_x.append(check)
+
+        return np.array(checks_x), np.array(checks_z)
