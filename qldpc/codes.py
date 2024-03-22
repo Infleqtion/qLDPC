@@ -1145,7 +1145,10 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-# TODO: allow initializing from sympy polynomials
+# TODO
+# - maybe change conventions to Hx = [A, B], Hz = [A.T, B,T]
+# - allow initializing from sympy polynomials
+# - restrict to three terms in term_a and term_b?
 class QCCode(GBCode):
     """Quasi-cyclic (QC) code.
 
