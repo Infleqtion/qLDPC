@@ -293,7 +293,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     assert np.array_equal(np.block(matrix), code.matrix)
 
 
-def test_cyclic_codes() -> None:
+def test_cyclic_codes(field: int = 3) -> None:
     """Quasi-cyclic codes from arXiv:2308.07915."""
     dims: tuple[int, ...]
 
@@ -308,16 +308,13 @@ def test_cyclic_codes() -> None:
     dims = (15, 3)
     terms_a = [("x", 9), ("y", 1), ("y", 2)]
     terms_b = [("x", 0), ("x", 2), ("x", 7)]
-    code = codes.QCCode(dims, terms_a, terms_b, field=2)
+    code = codes.QCCode(dims, terms_a, terms_b, field=3)
     assert code.num_qudits == 90
     assert code.dimension == 8
     assert code.get_weight() == 6
 
     with pytest.raises(ValueError, match="does not match"):
         codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
-
-    with pytest.raises(ValueError, match="not supported"):
-        codes.QCCode(dims, terms_a, terms_b, field=3)
 
 
 def test_GB_code_error() -> None:

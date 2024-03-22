@@ -1144,7 +1144,7 @@ class GBCode(CSSCode):
 
         matrix_x = np.block([matrix_a, matrix_b])
         matrix_z = np.block([matrix_b.T, -matrix_a.T])
-        CSSCode.__init__(self, matrix_x, matrix_z, conjugate=conjugate, skip_validation=True)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
 # TODO
@@ -1180,9 +1180,6 @@ class QCCode(GBCode):
         conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a quasi-cyclic code."""
-        if field and field != 2:
-            raise ValueError("Non-boolean (field > 2) quasi-cyclic codes are not supported")
-
         if terms_b is None:
             terms_b = terms_a  # pragma: no cover
 
@@ -1202,8 +1199,8 @@ class QCCode(GBCode):
         # build defining matrices of a generalized bicycle code
         members_a = [generators[symbols.index(ss)] ** pp for ss, pp in terms_a]
         members_b = [generators[symbols.index(ss)] ** pp for ss, pp in terms_b]
-        matrix_a = abstract.Element(group, *members_a).lift()
-        matrix_b = abstract.Element(group, *members_b).lift()
+        matrix_a = abstract.Element(group, *members_a).lift().view(np.ndarray)
+        matrix_b = abstract.Element(group, *members_b).lift().view(np.ndarray)
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
 
 
