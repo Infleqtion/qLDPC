@@ -1114,11 +1114,11 @@ def _fix_decoder_args_for_nonbinary_fields(
 class GBCode(CSSCode):
     """Generalized bicycle (GB) code.
 
-    A GBCode code is built out of two square matrices A and B, which are combined as
-    - matrix_x = [A,  B.T], and
-    - matrix_z = [B, -A.T],
-    to form the parity check matrices of a CSSCode.  As long as A and B commute, the parity check
-    matrices matrix_x and matrix_z satisfy the requirements of a CSSCode by construction.
+    A GBCode code is built out of two matrices A and B, which are combined as
+    - matrix_x = [A, B], and
+    - matrix_z = [B.T, -A.T],
+    to form the parity check matrices of a CSSCode.  If A and B commute, the parity check matrices
+    matrix_x and matrix_z satisfy the requirements of a CSSCode.
 
     References:
     - https://arxiv.org/abs/2012.04068
@@ -1142,8 +1142,8 @@ class GBCode(CSSCode):
         if not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this GBCode are incompatible")
 
-        matrix_x = np.block([matrix_a, matrix_b.T])
-        matrix_z = np.block([matrix_b, -matrix_a.T])
+        matrix_x = np.block([matrix_a, matrix_b])
+        matrix_z = np.block([matrix_b.T, -matrix_a.T])
         CSSCode.__init__(self, matrix_x, matrix_z, conjugate=conjugate, skip_validation=True)
 
 
@@ -1156,8 +1156,8 @@ class QCCode(GBCode):
     Inspired by arXiv:2308.07915.
 
     A quasi-cyclic code is a CSS code with subcode parity check matrices
-    - matrix_x = [A,  B.T], and
-    - matrix_z = [B, -A.T],
+    - matrix_x = [A, B], and
+    - matrix_z = [B.T, -A.T],
     where A and B are block matrices identified with elements of a multivariate polynomial ring.
     Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
     and each x_i is the generator of a cyclic group of order R_i.
