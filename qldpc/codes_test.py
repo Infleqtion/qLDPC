@@ -322,10 +322,10 @@ def test_cyclic_codes() -> None:
 
 def test_GB_code_error() -> None:
     """Raise error when trying to construct incompatible generalized bicycle codes."""
-    matrix_a = [[1, 0], [0, -1]]
+    matrix_a = [[1, 0], [0, 2]]
     matrix_b = [[0, 1], [1, 0]]
     with pytest.raises(ValueError, match="incompatible"):
-        codes.GBCode(matrix_a, matrix_b)
+        codes.GBCode(matrix_a, matrix_b, field=3)
 
 
 def test_lifted_product_codes() -> None:

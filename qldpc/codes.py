@@ -1111,15 +1111,14 @@ def _fix_decoder_args_for_nonbinary_fields(
 # bicycle and quasi-cyclic codes
 
 
-# TODO(?): maybe change conventions to Hx = [A, B], Hz = [A.T, B,T]
 class GBCode(CSSCode):
     """Generalized bicycle (GB) code.
 
-    A GBCode code is built out of two square matrices A and B, which are combined as
-    - matrix_x = [A, B.T], and
-    - matrix_z = [B, A.T],
-    to form the parity check matrices of a CSSCode.  As long as A and B.T commute, the parity check
-    matrices matrix_x and matrix_z satisfy the requirements of a CSSCode by construction.
+    A GBCode code is built out of two matrices A and B, which are combined as
+    - matrix_x = [A, B], and
+    - matrix_z = [B.T, -A.T],
+    to form the parity check matrices of a CSSCode.  If A and B commute, the parity check matrices
+    matrix_x and matrix_z satisfy the requirements of a CSSCode.
 
     References:
     - https://arxiv.org/abs/2012.04068
@@ -1136,17 +1135,19 @@ class GBCode(CSSCode):
         """Construct a generalized bicycle code."""
         if matrix_b is None:
             matrix_b = matrix_a  # pragma: no cover
-        matrix_a = np.array(matrix_a)
-        matrix_b = np.array(matrix_b)
-        if not np.array_equal(matrix_a @ matrix_b.T, matrix_b.T @ matrix_a):
+
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        matrix_a = code_field(matrix_a)
+        matrix_b = code_field(matrix_b)
+        if not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this GBCode are incompatible")
-        matrix_x = np.block([matrix_a, matrix_b.T])
-        matrix_z = np.block([matrix_b, matrix_a.T])
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+
+        matrix_x = np.block([matrix_a, matrix_b])
+        matrix_z = np.block([matrix_b.T, -matrix_a.T])
+        CSSCode.__init__(self, matrix_x, matrix_z, conjugate=conjugate, skip_validation=True)
 
 
 # TODO
-# - maybe change conventions to Hx = [A, B], Hz = [A.T, B,T]
 # - allow initializing from sympy polynomials
 # - restrict to three terms in term_a and term_b?
 class QCCode(GBCode):
@@ -1155,8 +1156,8 @@ class QCCode(GBCode):
     Inspired by arXiv:2308.07915.
 
     A quasi-cyclic code is a CSS code with subcode parity check matrices
-    - matrix_x = [A, B.T], and
-    - matrix_z = [B, A.T],
+    - matrix_x = [A, B], and
+    - matrix_z = [B.T, -A.T],
     where A and B are block matrices identified with elements of a multivariate polynomial ring.
     Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
     and each x_i is the generator of a cyclic group of order R_i.
@@ -1277,8 +1278,8 @@ class HGPCode(CSSCode):
 
         The parity check matrices of the hypergraph product code are:
 
-        matrix_x = [H1 ⊗ In2, -Im1 ⊗ H2.T]
-        matrix_z = [In1 ⊗ H2,  H1.T ⊗ Im2]
+        matrix_x = [H1 ⊗ In2,  Im1 ⊗ H2.T]
+        matrix_z = [In1 ⊗ H2, -H1.T ⊗ Im2]
 
         Here (H1, H2) == (matrix_a, matrix_b), and I[m/n][1/2] are identity matrices,
         with (m1, n1) = H1.shape and (m2, n2) = H2.shape.
@@ -1317,8 +1318,8 @@ class HGPCode(CSSCode):
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b.T)
 
         # construct the X-sector and Z-sector parity check matrices
-        matrix_x = np.block([mat_H1_In2, -mat_Im1_H2_T])
-        matrix_z = np.block([mat_In1_H2, mat_H1_Im2_T])
+        matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
+        matrix_z = np.block([mat_In1_H2, -mat_H1_Im2_T])
         return matrix_x, matrix_z
 
     @classmethod
@@ -1350,8 +1351,8 @@ class HGPCode(CSSCode):
 
             # special treatment of qudits in the (1, 1) sector
             if not node_qudit[0].is_data:
-                # account for the minus sign in the X-type subcode
-                if not node_check[0].is_data:
+                # account for the minus sign in the Z-type subcode
+                if node_check[0].is_data:
                     op = -op
                 # flip X <--> Z operators for the conjugated code
                 if conjugate:
@@ -1477,8 +1478,8 @@ class LPCode(CSSCode):
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b_T)
 
         # construct the X-sector and Z-sector parity check matrices
-        matrix_x = abstract.Protograph(np.block([mat_H1_In2, -mat_Im1_H2_T])).lift()
-        matrix_z = abstract.Protograph(np.block([mat_In1_H2, mat_H1_Im2_T])).lift()
+        matrix_x = abstract.Protograph(np.block([mat_H1_In2, mat_Im1_H2_T])).lift()
+        matrix_z = abstract.Protograph(np.block([mat_In1_H2, -mat_H1_Im2_T])).lift()
         return matrix_x, matrix_z
 
 
