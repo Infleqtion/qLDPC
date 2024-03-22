@@ -1111,14 +1111,13 @@ def _fix_decoder_args_for_nonbinary_fields(
 # bicycle and quasi-cyclic codes
 
 
-# TODO(?): maybe change conventions to Hx = [A, B], Hz = [A.T, B,T]
 class GBCode(CSSCode):
     """Generalized bicycle (GB) code.
 
     A GBCode code is built out of two square matrices A and B, which are combined as
-    - matrix_x = [A, B.T], and
-    - matrix_z = [B, A.T],
-    to form the parity check matrices of a CSSCode.  As long as A and B.T commute, the parity check
+    - matrix_x = [A, B], and
+    - matrix_z = [B.T, -A.T],
+    to form the parity check matrices of a CSSCode.  As long as A and B commute, the parity check
     matrices matrix_x and matrix_z satisfy the requirements of a CSSCode by construction.
 
     References:
@@ -1138,15 +1137,14 @@ class GBCode(CSSCode):
             matrix_b = matrix_a  # pragma: no cover
         matrix_a = np.array(matrix_a)
         matrix_b = np.array(matrix_b)
-        if not np.array_equal(matrix_a @ matrix_b.T, matrix_b.T @ matrix_a):
+        if not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this GBCode are incompatible")
-        matrix_x = np.block([matrix_a, matrix_b.T])
-        matrix_z = np.block([matrix_b, matrix_a.T])
+        matrix_x = np.block([matrix_a, matrix_b])
+        matrix_z = np.block([matrix_b.T, -matrix_a.T])
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
 # TODO
-# - maybe change conventions to Hx = [A, B], Hz = [A.T, B,T]
 # - allow initializing from sympy polynomials
 # - restrict to three terms in term_a and term_b?
 class QCCode(GBCode):
@@ -1155,8 +1153,8 @@ class QCCode(GBCode):
     Inspired by arXiv:2308.07915.
 
     A quasi-cyclic code is a CSS code with subcode parity check matrices
-    - matrix_x = [A, B.T], and
-    - matrix_z = [B, A.T],
+    - matrix_x = [A, B], and
+    - matrix_z = [B.T, -A.T],
     where A and B are block matrices identified with elements of a multivariate polynomial ring.
     Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
     and each x_i is the generator of a cyclic group of order R_i.
