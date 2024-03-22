@@ -1135,13 +1135,16 @@ class GBCode(CSSCode):
         """Construct a generalized bicycle code."""
         if matrix_b is None:
             matrix_b = matrix_a  # pragma: no cover
-        matrix_a = np.array(matrix_a)
-        matrix_b = np.array(matrix_b)
+
+        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        matrix_a = code_field(matrix_a)
+        matrix_b = code_field(matrix_b)
         if not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this GBCode are incompatible")
+
         matrix_x = np.block([matrix_a, matrix_b])
         matrix_z = np.block([matrix_b.T, -matrix_a.T])
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+        CSSCode.__init__(self, matrix_x, matrix_z, conjugate=conjugate, skip_validation=True)
 
 
 # TODO
