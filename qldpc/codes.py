@@ -1111,6 +1111,7 @@ def _fix_decoder_args_for_nonbinary_fields(
 # bicycle and quasi-cyclic codes
 
 
+# TODO(?): maybe change conventions to Hx = [A, B], Hz = [A.T, B,T]
 class GBCode(CSSCode):
     """Generalized bicycle (GB) code.
 
