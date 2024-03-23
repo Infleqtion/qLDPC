@@ -150,20 +150,6 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-def test_dicyclic_group() -> None:
-    """Dicyclic group."""
-    for order in range(4, 21, 4):
-        group = abstract.DicyclicGroup(order)
-        gen_a, gen_b = group.generators
-        assert gen_a ** (order // 2) == gen_b**4 == group.identity
-
-    with pytest.raises(ValueError, match="positive multiples of 4"):
-        abstract.DicyclicGroup(2)
-
-    with pytest.raises(ValueError, match="orders up to 20"):
-        abstract.DicyclicGroup(24)
-
-
 def test_SL(field: int = 3) -> None:
     """Special linear group."""
     for linear_rep in [False, True]:
@@ -192,18 +178,23 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_named_groups() -> None:
+def test_small_group() -> None:
     """Groups indexed by the GAP computer algebra system."""
     order, index = 2, 1
-    group_name = f"CyclicGroup({order})"
     desired_group = abstract.CyclicGroup(order)
+
+    # invalid group index
+    with (
+        pytest.raises(ValueError, match="Index for SmallGroup"),
+        unittest.mock.patch("qldpc.named_groups.get_small_group_number", return_value=index),
+    ):
+        abstract.SmallGroup(order, 0)
+
+    # everything works as expected
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
-
-    group: abstract.Group
-    with unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators):
-        group = abstract.Group.from_name(group_name)
-        assert group.generators == desired_group.generators
-
-    with unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators):
+    with (
+        unittest.mock.patch("qldpc.abstract.SmallGroup.number", return_value=index),
+        unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators),
+    ):
         group = abstract.SmallGroup(order, index)
         assert group.generators == desired_group.generators

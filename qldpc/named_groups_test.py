@@ -116,7 +116,7 @@ def test_get_gap_result() -> None:
     """Run GAP commands and retrieve the GAP output."""
     output = "test"
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process(output)):
-        assert named_groups.get_gap_result([]).stdout == output
+        assert named_groups.get_gap_result().stdout == output
 
 
 def test_get_generators_with_gap() -> None:
@@ -195,3 +195,36 @@ def test_get_generators() -> None:
             named_groups.get_generators(GROUP)
         with pytest.raises(ValueError, match="Cannot build GAP group"):
             named_groups.get_generators("CyclicGroup(2)")
+
+
+def test_get_small_group_number() -> None:
+    """Retrieve the number of groups of some order."""
+    # strip cache wrapper
+    if hasattr(named_groups.get_small_group_number, "__wrapped__"):
+        named_groups.get_small_group_number = named_groups.get_small_group_number.__wrapped__
+
+    order, number = 16, 14
+    text = rf"<td>{order},{number}</td>"
+
+    # fail to determine group number
+    with (
+        pytest.raises(ValueError, match="Cannot determine"),
+        unittest.mock.patch("qldpc.named_groups.maybe_get_webpage", return_value=None),
+        unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=False),
+    ):
+        named_groups.get_small_group_number(order)
+
+    # retrieve from GAP
+    mock_process = get_mock_process(str(number))
+    with (
+        unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=True),
+        unittest.mock.patch("qldpc.named_groups.get_gap_result", return_value=mock_process),
+    ):
+        assert named_groups.get_small_group_number(order) == number
+
+    # retrieve from GroupNames.org
+    with (
+        unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=False),
+        unittest.mock.patch("qldpc.named_groups.maybe_get_webpage", return_value=text),
+    ):
+        assert named_groups.get_small_group_number(order) == number
