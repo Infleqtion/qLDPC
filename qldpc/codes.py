@@ -151,7 +151,7 @@ class ClassicalCode(AbstractCode):
         """Convert a Tanner graph into a parity check matrix."""
         num_bits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_bits
-        field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
+        field = getattr(graph, "order", DEFAULT_FIELD_ORDER)
         matrix = galois.GF(field).Zeros((num_checks, num_bits))
         for node_c, node_b, data in graph.edges(data=True):
             matrix[node_c.index, node_b.index] = data.get("val", 1)
