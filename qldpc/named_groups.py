@@ -21,7 +21,7 @@ import re
 import subprocess
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Hashable
+from collections.abc import Callable, Hashable, Sequence
 from typing import Any
 
 import diskcache
@@ -31,7 +31,7 @@ GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
-def maybe_get_webpage(order: int):
+def maybe_get_webpage(order: int) -> str | None:
     """Try to retrieve the webpage listing all groups up to a given order."""
     try:
         url = GROUPNAMES_URL + ("index500.html" if order > 60 else "")
@@ -122,7 +122,7 @@ def gap_is_installed() -> bool:
     return len(lines) == 2 and lines[1].startswith("GAP 4")
 
 
-def sanitize_gap_commands(commands: list[str]) -> list[str]:
+def sanitize_gap_commands(commands: Sequence[str]) -> tuple[str, ...]:
     """Sanitize GAP commands: don't format Print statements, and quit at the end."""
     stream = "__stream__"
     prefix = [
@@ -131,7 +131,7 @@ def sanitize_gap_commands(commands: list[str]) -> list[str]:
     ]
     suffix = ["QUIT;"]
     commands = [cmd.replace("Print(", f"PrintTo({stream}, ") for cmd in commands]
-    return prefix + commands + suffix
+    return tuple(prefix + commands + suffix)
 
 
 def get_gap_result(*commands: str) -> subprocess.CompletedProcess[str]:
@@ -232,7 +232,7 @@ def get_generators(group: str) -> GENERATORS_LIST:
 
 
 @use_disk_cache("qldpc_groups")
-def get_number_small_groups(order: int) -> int:
+def get_small_group_number(order: int) -> int:
     """Get the number of 'SmallGroup's of a given order."""
     if gap_is_installed():
         command = f"Print(NumberSmallGroups({order}));"

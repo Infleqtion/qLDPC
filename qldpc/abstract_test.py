@@ -178,7 +178,7 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_named_groups() -> None:
+def test_small_group() -> None:
     """Groups indexed by the GAP computer algebra system."""
     order, index = 2, 1
     desired_group = abstract.CyclicGroup(order)
@@ -186,7 +186,7 @@ def test_named_groups() -> None:
     # invalid group index
     with (
         pytest.raises(ValueError, match="Index for SmallGroup"),
-        unittest.mock.patch("qldpc.named_groups.get_number_small_groups", return_value=index),
+        unittest.mock.patch("qldpc.named_groups.get_small_group_number", return_value=index),
     ):
         abstract.SmallGroup(order, 0)
 

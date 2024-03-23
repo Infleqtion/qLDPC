@@ -35,7 +35,7 @@ def get_code(code: str) -> tuple[list[list[int]], int | None]:
         r'Print(LeftActingDomain(code), "\n");',
         r'for vec in mat do Print(List(vec, x -> Int(x)), "\n"); od;',
     ]
-    result = get_gap_result(commands)
+    result = get_gap_result(*commands)
 
     if "guava package is not available" in result.stdout:
         raise ValueError("GAP package GUAVA not available")

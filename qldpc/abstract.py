@@ -726,9 +726,9 @@ class SmallGroup(Group):
         super().__init__(Group.from_name(name))
 
     @classmethod
-    def number(cls, order) -> int:
+    def number(cls, order: int) -> int:
         """The number of groups of a given order."""
-        return named_groups.get_number_small_groups(order)
+        return named_groups.get_small_group_number(order)
 
 
 ################################################################################
