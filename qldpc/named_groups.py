@@ -31,27 +31,34 @@ GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
-def get_group_url(order: int, index: int) -> str | None:
-    """Retrieve the webpage of an indexed GAP group on GroupNames.org."""
-
+def maybe_get_webpage(order: int):
+    """Try to retrieve the webpage listing all groups up to a given order."""
     try:
-        # load index
-        extra = "index500.html" if order > 60 else ""
-        index_url = GROUPNAMES_URL + extra
-        index_page = urllib.request.urlopen(index_url)
-        index_page_html = index_page.read().decode("utf-8")
+        url = GROUPNAMES_URL + ("index500.html" if order > 60 else "")
+        page = urllib.request.urlopen(url)
+        return page.read().decode("utf-8")
     except (urllib.error.URLError, urllib.error.HTTPError):
         # we cannot access the webapage
         return None
 
-    # extract section with the specified group
-    loc = index_page_html.find(f"<td>{order},{index}</td>")
-    if loc == -1:
-        raise ValueError(f"Group {order},{index} not found at {index_url}")
 
-    end = loc + index_page_html[loc:].find("\n")
-    start = loc - index_page_html[:loc][::-1].find("\n")
-    section = index_page_html[start:end]
+def get_group_url(order: int, index: int) -> str | None:
+    """Retrieve the webpage of an indexed GAP group on GroupNames.org."""
+
+    # get the HTML for the page with all groups
+    page_html = maybe_get_webpage(order)
+    if page_html is None:
+        # we cannot access the webapage
+        return None
+
+    # extract section with the specified group
+    loc = page_html.find(f"<td>{order},{index}</td>")
+    if loc == -1:
+        raise ValueError(f"Group {order},{index} not found on GroupNames.org")
+
+    end = loc + page_html[loc:].find("\n")
+    start = loc - page_html[:loc][::-1].find("\n")
+    section = page_html[start:end]
 
     # extract first link from this section
     match = re.search(r'href="([^"]*)"', section)
@@ -127,7 +134,7 @@ def sanitize_gap_commands(commands: list[str]) -> list[str]:
     return prefix + commands + suffix
 
 
-def get_gap_result(commands: list[str]) -> subprocess.CompletedProcess[str]:
+def get_gap_result(*commands: str) -> subprocess.CompletedProcess[str]:
     """Get the output from the given GAP commands."""
     commands = sanitize_gap_commands(commands)
     shell_commands = ["gap", "-q", "--quitonbreak", "-c", " ".join(commands)]
@@ -149,7 +156,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
         "gens := GeneratorsOfGroup(permG);",
         r'for gen in gens do Print(gen, "\n"); od;',
     ]
-    result = get_gap_result(commands)
+    result = get_gap_result(*commands)
 
     if not result.stdout.strip():
         raise ValueError(f"Group not recognized by GAP: {group}")
@@ -222,3 +229,20 @@ def get_generators(group: str) -> GENERATORS_LIST:
     else:
         message.append("- group not indexed by GroupNames.org")
     raise ValueError("\n".join(message))
+
+
+@use_disk_cache("qldpc_groups")
+def get_number_small_groups(order: int) -> int:
+    """Get the number of 'SmallGroup's of a given order."""
+    if gap_is_installed():
+        command = f"Print(NumberSmallGroups({order}));"
+        return int(get_gap_result(command).stdout)
+
+    # get the HTML for the page with all groups
+    page_html = maybe_get_webpage(order)
+    if page_html is None:
+        # we cannot access the webapage
+        raise ValueError("Cannot determine the number of small groups")
+
+    matches = re.findall(rf"<td>{order},([0-9]+)</td>", page_html)
+    return max(int(match) for match in matches)

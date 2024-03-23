@@ -715,9 +715,10 @@ class SmallGroup(Group):
     """Group indexed by the GAP computer algebra system."""
 
     def __init__(self, order: int, index: int) -> None:
-        if not 1 <= index <= (order_max := SmallGroup.number(order)):
+        num_groups = SmallGroup.number(order)
+        if not 1 <= index <= num_groups:
             raise ValueError(
-                f"Index for SmallGroup of order {order} must be between 1 and {order_max}"
+                f"Index for SmallGroup of order {order} must be between 1 and {num_groups}"
                 + f" (provided: {index})"
             )
 
@@ -727,7 +728,7 @@ class SmallGroup(Group):
     @classmethod
     def number(cls, order) -> int:
         """The number of groups of a given order."""
-        return NotImplemented
+        return named_groups.get_number_small_groups(order)
 
 
 ################################################################################
