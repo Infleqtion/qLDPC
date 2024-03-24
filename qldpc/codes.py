@@ -392,19 +392,17 @@ class ClassicalCode(AbstractCode):
         matrix, field = named_codes.get_code(standardized_name)
         return ClassicalCode(matrix, field)
 
-    def puncture(self, bits: Collection[int] | int) -> ClassicalCode:
+    def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
 
         To delete bits from the code, we remove the corresponding columns from its generator matrix.
         """
-        if isinstance(bits, int):
-            bits = [bits]
         assert all(0 <= bit < self.num_bits for bit in bits)
         bits_to_keep = [bit for bit in range(self.num_bits) if bit not in bits]
         generator = [word[bits_to_keep] for word in self.generator]
         return ClassicalCode.from_generator(generator, self.field.order)
 
-    def shorten(self, bits: Collection[int] | int) -> ClassicalCode:
+    def shorten(self, *bits: int) -> ClassicalCode:
         """Shorten a code to the words that are zero on the specified bits, and delete those bits.
 
         To shorten a code on a given bit, we:
@@ -412,8 +410,6 @@ class ClassicalCode(AbstractCode):
         - row-reduce the generator matrix into the form [ identity_matrix, other_stuff ], and
         - delete the first row and column from the generator matrix.
         """
-        if isinstance(bits, int):
-            bits = [bits]
         assert all(0 <= bit < self.num_bits for bit in bits)
         generator = self.generator
         for bit in sorted(bits, reverse=True):
