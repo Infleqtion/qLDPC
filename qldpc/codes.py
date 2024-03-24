@@ -369,7 +369,7 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def from_generator(
-        self, generator: npt.NDArray[np.int_], field: int | None = None
+        self, generator: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
     ) -> ClassicalCode:
         """Construct a ClassicalCode from a generator matrix."""
         return ~ClassicalCode(generator, field)
@@ -381,9 +381,33 @@ class ClassicalCode(AbstractCode):
         matrix, field = named_codes.get_code(standardized_name)
         return ClassicalCode(matrix, field)
 
-    # TODO(?): maybe add modification options such as puncturing and shortening
-    # https://users.math.msu.edu/users/halljo/classes/codenotes/mod.pdf
-    # https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.122.230501
+    def puncture(self, bits: Collection[int] | int) -> ClassicalCode:
+        """Delete the specified bits from a code.
+
+        To delete bits from the code, we remove the corresponding columns from its generator matrix.
+        """
+        if isinstance(bits, int):
+            bits = [bits]
+        assert all(0 <= bit < self.num_bits for bit in bits)
+        bits_to_keep = [bit for bit in range(self.num_bits) if bit not in bits]
+        generator = [word[bits_to_keep] for word in self.generator]
+        return ClassicalCode.from_generator(generator, self.field.order)
+
+    def shorten(self, bits: Collection[int] | int) -> ClassicalCode:
+        """Shorten a code to the words that are zero on the specified bits, and delete those bits.
+
+        To shorten a code on a given bit, we:
+        - move the bit to the first position,
+        - row-reduce the generator matrix into the form [ identity_matrix, other_stuff ]
+        - delete the first row and column from the generator matrix.
+        """
+        if isinstance(bits, int):
+            bits = [bits]
+        assert all(0 <= bit < self.num_bits for bit in bits)
+        generator = self.generator
+        for bit in sorted(bits, reverse=True):
+            generator = np.roll(generator, -bit, axis=1).row_reduce()[1:, 1:]
+        return ClassicalCode.from_generator(generator)
 
 
 class RepetitionCode(ClassicalCode):

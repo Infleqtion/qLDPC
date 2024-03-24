@@ -31,7 +31,7 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 
 
 def test_classical_codes() -> None:
-    """Construction of a few classical codes."""
+    """Classical code constructions."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
     assert codes.HammingCode(3).get_distance() == 3
 
@@ -60,6 +60,18 @@ def test_classical_codes() -> None:
     assert np.array_equal(
         code.generator, codes.ClassicalCode.from_generator(code.generator).generator
     )
+
+    # puncture a code
+    assert np.array_equal(
+        codes.ClassicalCode.from_generator(code.generator[:, 1:]).matrix,
+        code.puncture(0).matrix,
+    )
+
+    # shortening a repetition code yields a trivial code
+    num_bits = 3
+    code = codes.RepetitionCode(num_bits)
+    words = [[0] * (num_bits - 1)]
+    assert np.array_equal(code.shorten(0).words(), words)
 
 
 def test_special_codes() -> None:
