@@ -500,6 +500,7 @@ class ReedMullerCode(ClassicalCode):
 
 # TODO:
 # - add code concatenation
+# - investigate weight reduction: https://arxiv.org/abs/2402.05228
 # - add is_CSS method to figure out whether this is a CSS Code
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
 #   - also compute and store sub-codes, if CSS
