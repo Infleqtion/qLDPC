@@ -406,7 +406,7 @@ class ClassicalCode(AbstractCode):
         assert all(0 <= bit < self.num_bits for bit in bits)
         generator = self.generator
         for bit in sorted(bits, reverse=True):
-            generator = np.roll(generator, -bit, axis=1)  # shift columns to put the target bit at 0
+            generator = np.roll(generator, -bit, axis=1)  # put the target bit in the first column
             generator = generator.row_reduce()[1:, 1:]
             generator = np.roll(generator, bit, axis=1)  # shift columns back
         return ClassicalCode.from_generator(generator)
