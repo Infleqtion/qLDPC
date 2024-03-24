@@ -368,6 +368,13 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(matrix)
 
     @classmethod
+    def from_generator(
+        self, generator: npt.NDArray[np.int_], field: int | None = None
+    ) -> ClassicalCode:
+        """Construct a ClassicalCode from a generator matrix."""
+        return ~ClassicalCode(generator, field)
+
+    @classmethod
     def from_name(cls, name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace

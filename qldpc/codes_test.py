@@ -47,13 +47,19 @@ def test_classical_codes() -> None:
         assert code.get_weight() == 2
         assert code.get_random_word() in code
 
-    # test that rank of repetition and Hamming codes is independent of the field
+    # that rank of repetition and Hamming codes is independent of the field
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
     assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
-    # test invalid classical code construction
+    # invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+
+    # construct a code from its generator matrix
+    code = codes.ClassicalCode.random(5, 3)
+    assert np.array_equal(
+        code.generator, codes.ClassicalCode.from_generator(code.generator).generator
+    )
 
 
 def test_special_codes() -> None:
