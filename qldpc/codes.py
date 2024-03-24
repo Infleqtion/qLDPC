@@ -162,6 +162,17 @@ class ClassicalCode(AbstractCode):
         """Generator of this code: a matrix whose rows for a basis for code words."""
         return self.matrix.null_space()
 
+    def __eq__(self, other: object) -> bool:
+        """Equality test between two classical codes."""
+        return (
+            isinstance(other, ClassicalCode)
+            and self.field is other.field
+            and (
+                np.array_equal(self.matrix, other.matrix)
+                or np.array_equal(self.generator, other.generator)
+            )
+        )
+
     def words(self) -> galois.FieldArray:
         """Code words of this code."""
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
@@ -406,9 +417,9 @@ class ClassicalCode(AbstractCode):
         assert all(0 <= bit < self.num_bits for bit in bits)
         generator = self.generator
         for bit in sorted(bits, reverse=True):
-            generator = np.roll(generator, -bit, axis=1)  # put the target bit in the first column
-            generator = generator.row_reduce()[1:, 1:]  # row reduce and delete first row/column
-            generator = np.roll(generator, bit, axis=1)  # shift columns back
+            generator = np.roll(generator, -bit, axis=1)  # type:ignore[assignment]
+            generator = generator.row_reduce()[1:, 1:]
+            generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
         return ClassicalCode.from_generator(generator)
 
 

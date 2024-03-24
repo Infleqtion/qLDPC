@@ -57,15 +57,10 @@ def test_classical_codes() -> None:
 
     # construct a code from its generator matrix
     code = codes.ClassicalCode.random(5, 3)
-    assert np.array_equal(
-        code.generator, codes.ClassicalCode.from_generator(code.generator).generator
-    )
+    assert code == codes.ClassicalCode.from_generator(code.generator)
 
     # puncture a code
-    assert np.array_equal(
-        codes.ClassicalCode.from_generator(code.generator[:, 1:]).matrix,
-        code.puncture(0).matrix,
-    )
+    assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
 
     # shortening a repetition code yields a trivial code
     num_bits = 3
@@ -86,9 +81,7 @@ def test_special_codes() -> None:
     order, size = 1, 3
     code = codes.ReedMullerCode(order, size)
     assert code.dimension == codes.ClassicalCode(code.matrix).dimension
-
-    dual_code = codes.ReedMullerCode(size - order - 1, size)
-    assert np.array_equal((~code).matrix, dual_code.matrix)
+    assert ~code == codes.ReedMullerCode(size - order - 1, size)
 
     with pytest.raises(ValueError, match="0 <= r <= m"):
         codes.ReedMullerCode(-1, 0)
@@ -100,8 +93,7 @@ def test_named_codes(order: int = 2) -> None:
     checks = [list(row) for row in code.matrix.view(np.ndarray)]
 
     with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(checks, None)):
-        named_code = codes.ClassicalCode.from_name(f"RepetitionCode({order})")
-        assert np.array_equal(named_code.matrix, code.matrix)
+        assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
