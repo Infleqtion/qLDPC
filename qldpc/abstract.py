@@ -730,6 +730,12 @@ class SmallGroup(Group):
         """The number of groups of a given order."""
         return named_groups.get_small_group_number(order)
 
+    @classmethod
+    def generator(cls, order: int) -> Iterator[SmallGroup]:
+        """Iterator over all groups of a given order."""
+        for ii in range(SmallGroup.number(order)):
+            yield SmallGroup(order, ii + 1)
+
 
 ################################################################################
 # special linear (SL) and projective special linear (PSL) groups
