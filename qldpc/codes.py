@@ -409,7 +409,7 @@ class ClassicalCode(AbstractCode):
 
         To shorten a code on a given bit, we:
         - move the bit to the first position,
-        - row-reduce the generator matrix into the form [ identity_matrix, other_stuff ]
+        - row-reduce the generator matrix into the form [ identity_matrix, other_stuff ], and
         - delete the first row and column from the generator matrix.
         """
         if isinstance(bits, int):
