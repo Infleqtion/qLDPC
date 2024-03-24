@@ -196,5 +196,5 @@ def test_small_group() -> None:
         unittest.mock.patch("qldpc.abstract.SmallGroup.number", return_value=index),
         unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators),
     ):
-        group = abstract.SmallGroup(order, index)
-        assert group.generators == desired_group.generators
+        assert abstract.SmallGroup(order, index).generators == desired_group.generators
+        assert list(abstract.SmallGroup.generator(order)) == [desired_group]

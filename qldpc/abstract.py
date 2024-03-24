@@ -733,8 +733,8 @@ class SmallGroup(Group):
     @classmethod
     def generator(cls, order: int) -> Iterator[SmallGroup]:
         """Iterator over all groups of a given order."""
-        for index in range(SmallGroup.number(order)):
-            yield SmallGroup(order, index + 1)
+        for ii in range(SmallGroup.number(order)):
+            yield SmallGroup(order, ii + 1)
 
 
 ################################################################################
