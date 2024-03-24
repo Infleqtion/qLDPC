@@ -105,18 +105,10 @@ def test_cayley_complex() -> None:
 
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
-    """Run various sanity checks on a Cayley complex."""
-    # assert that the complex has the right number of vertices, edges, and faces
+    """Assert that a Cayley complex has the correct number of vertices, edges, and faces."""
     size_g = cayplex.group.order
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
     assert cayplex.graph.number_of_nodes() == size_g
     assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
     assert len(cayplex.faces) == size_g * size_a * size_b // 4
-
-    # check that the subgraphs have the correct number of nodes, edges, and node degrees
-    for graph in cayplex.subgraphs():
-        assert graph.number_of_nodes() == len(cayplex.faces) + size_g / 2
-        assert graph.number_of_edges() == len(cayplex.faces) * 2
-        sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
-        assert {graph.out_degree(node) for node in sources} == {size_a * size_b}

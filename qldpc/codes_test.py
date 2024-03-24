@@ -22,7 +22,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from qldpc import abstract, codes
+from qldpc import abstract, codes, objects
 
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
@@ -355,6 +355,33 @@ def test_tanner_code() -> None:
     assert all(code.subgraph.get_edge_data(*edge)["sort"] == tag for edge in code.subgraph.edges)
 
 
+def test_quantum_tanner() -> None:
+    """Quantum Tanner code."""
+    # build the subgraphs of a quantum Tanner code
+    group = abstract.CyclicGroup(12)
+    subset_a = group.random_symmetric_subset(4)
+    subset_b = group.random_symmetric_subset(4)
+    cayplex = objects.CayleyComplex(subset_a, subset_b)
+    subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(cayplex)
+
+    # assert that subgraphs have the right number of nodes, edges, and node degrees
+    size_g = cayplex.group.order
+    size_a = len(cayplex.subset_a)
+    size_b = len(cayplex.subset_b)
+    num_faces = len(cayplex.faces)
+    for graph in [subgraph_x, subgraph_z]:
+        assert graph.number_of_nodes() == num_faces + size_g / 2
+        assert graph.number_of_edges() == num_faces * 2
+        sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
+        assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
+
+    # raise error if constructing QTCode with codes over different fields
+    subcode_a = codes.RepetitionCode(2, field=2)
+    subcode_b = codes.RepetitionCode(2, field=3)
+    with pytest.raises(ValueError, match="different fields"):
+        codes.QTCode([], [], subcode_a, subcode_b)
+
+
 def test_toric_tanner_code(size: int = 4) -> None:
     """Rotated toric code as a quantum Tanner code."""
     group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
@@ -364,14 +391,6 @@ def test_toric_tanner_code(size: int = 4) -> None:
     subcode_a = codes.RepetitionCode(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
     assert code.get_code_params() == (size**2, 2, size, 4)
-
-
-def test_invalid_quantum_tanner() -> None:
-    """Raise error if constructing QTCode with codes over different fields."""
-    subcode_a = codes.RepetitionCode(2, field=2)
-    subcode_b = codes.RepetitionCode(2, field=3)
-    with pytest.raises(ValueError, match="different fields"):
-        codes.QTCode([], [], subcode_a, subcode_b)
 
 
 def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
