@@ -1560,17 +1560,17 @@ class TannerCode(ClassicalCode):
 # https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
 # see also Section 7 of https://arxiv.org/abs/2206.07571
 class QTCode(CSSCode):
-    """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex
+    """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex.
 
     Altogether, a quantum Tanner code is defined by:
     - two symmetric (self-inverse) subsets A and B of a group G, and
     - two classical codes C_A and C_B, respectively with block lengths |A| and |B|.
 
     The X-type parity checks of a quantum Tanner code are the checks of a classical Tanner code
-    whose generating graph is the subgraph_0 of the Cayley complex (A,B).  The subcode of this
+    whose generating graph is the subgraph_x of the Cayley complex (A,B).  The subcode of this
     classical Tanner code is ~(C_A ⊗ C_B), where ~C is the dual code to C.
 
-    The Z-type parity checks are similarly defined with subgraph_1 and subcode ~(~C_A ⊗ ~C_B).
+    The Z-type parity checks are similarly defined with subgraph_z and subcode ~(~C_A ⊗ ~C_B).
 
     Notes:
     - "Good" quantum Tanner code: projective special linear group and random classical codes.
@@ -1606,12 +1606,46 @@ class QTCode(CSSCode):
         assert code_a.num_bits == len(self.complex.subset_a)
         assert code_b.num_bits == len(self.complex.subset_b)
 
-        subgraph_x, subgraph_z = self.complex.subgraphs()
+        subgraph_x, subgraph_z = QTCode.get_subgraphs(self.complex)
         subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         code_x = TannerCode(subgraph_x, subcode_x)
         code_z = TannerCode(subgraph_z, subcode_z)
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
+
+    @classmethod
+    def get_subgraphs(cls, cayplex: CayleyComplex) -> tuple[nx.DiGraph, nx.DiGraph]:
+        """Build the subgraphs of the inner (classical) Tanner codes for a quantum Tanner code.
+
+        These subgraphs are defined using the faces of a Cayley complex.  Each face looks like:
+
+         g ―――――――――― gb
+
+         |  f(g,a,b)  |
+
+        ag ――――――――― agb
+
+        where f(g,a,b) = {g, ab, gb, agb}.  Specifically, the (directed) subgraphs are:
+        - subgraph_x with edges ( g, f(g,a,b)), and
+        - subgraph_z with edges (ag, f(g,a,b)).
+        Classical Tanner codes on these subgraphs are used as to construct quantum Tanner code.
+
+        As a matter of practice, defining classical Tanner codes on subgraph_x and subgraph_z
+        requires choosing an ordering on the edges incident to every source node of these graphs.
+        If the group G is equipped with a total order, a natural ordering of edges incident to every
+        source node is induced by assigning the label (a, b) to edge (g, f(g,a,b)).  Consistency
+        then requires that edge (ag, f(g,a,b)) has label (a^-1, b), as verified by defining g' = ag
+        and checking that f(g,a,b) = f(g',a^-1,b).
+        """
+        subgraph_x = nx.DiGraph()
+        subgraph_z = nx.DiGraph()
+        nodes_x, _ = nx.bipartite.sets(cayplex.graph)
+        for gg, aa, bb in itertools.product(nodes_x, cayplex.subset_a, cayplex.subset_b):
+            aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
+            face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
+            subgraph_x.add_edge(gg, face, sort=(aa, bb))
+            subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
+        return subgraph_x, subgraph_z
 
 
 ################################################################################
