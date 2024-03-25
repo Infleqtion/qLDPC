@@ -167,8 +167,8 @@ def test_logical_ops() -> None:
     logicals = code.get_logical_ops()
     logicals_x, logicals_z = logicals[0], logicals[1]
     assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
-    assert not np.any(code.code_z.matrix @ logicals_x.T)
-    assert not np.any(code.code_x.matrix @ logicals_z.T)
+    assert not np.any(code.matrix_z @ logicals_x.T)
+    assert not np.any(code.matrix_x @ logicals_z.T)
 
     # minimizing logical operator weight only supported for prime number fields
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
