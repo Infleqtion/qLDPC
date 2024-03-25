@@ -574,7 +574,7 @@ class Protograph(npt.NDArray[np.object_]):
         tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
         rows = tensor.shape[0] * tensor.shape[1]
         cols = tensor.shape[2] * tensor.shape[3]
-        return self.group.field(tensor.reshape(rows, cols))
+        return self.field(tensor.reshape(rows, cols))
 
     @property
     def T(self) -> Protograph:
