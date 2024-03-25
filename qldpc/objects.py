@@ -387,16 +387,26 @@ class ChainComplex:
             return np.vstack([np.kron(op_a, iden_b), np.kron(iden_a, op_b)])
 
         ops = []
+        print()
+        print()
         for degree in range(1, chain_a.length + chain_b.length + 1):
             min_degree_a = max(degree - chain_b.length, 0)
             max_degree_a = chain_a.length
+            print(degree)
+            print([(dd, degree - dd) for dd in range(min_degree_a, max_degree_a + 1)])
             degree_ops = [
                 _joint_op(chain_a.op(dd), chain_b.op(degree - dd), dd)
                 for dd in range(min_degree_a, max_degree_a + 1)
             ]
             ops.append(functools.reduce(direct_sum, degree_ops))
 
-        # return ChainComplex(chain_a.op(1))  ###########################################
+        ######################################################################################
+        print()
+        print()
+        print([op.shape for op in ops])
+        print(chain_a.field(ops[0]) @ chain_a.field(ops[1]))
+        return ChainComplex(ops[0])
+        ######################################################################################
         return ChainComplex(*ops)
 
 
