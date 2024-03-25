@@ -373,6 +373,14 @@ class ChainComplex:
             return self.field.Zeros((self.ops[-1].shape[1], 0))
         return self.ops[degree - 1]
 
+    def dual(self) -> ChainComplex:
+        """Dual to this chain complex."""
+        dual_ops = [op.T for op in self.ops[::-1]]
+        return ChainComplex(*dual_ops)
+
+    def __invert__(self) -> ChainComplex:
+        return self.dual()
+
     @classmethod
     def tensor_product(  # noqa: C901 ignore complexity check
         cls,

@@ -124,8 +124,8 @@ def test_chain_complex(field: int = 3) -> None:
     assert not np.any(two_chain.op(0))
     assert not np.any(two_chain.op(two_chain.length + 1))
 
-    # tensor product of two-complexes
-    objects.ChainComplex.tensor_product(two_chain, two_chain, field)
+    # tensor product of a two-complex and its dual
+    objects.ChainComplex.tensor_product(two_chain, ~two_chain, field)
 
     # invalid chain complex constructions
     with pytest.raises(ValueError, match="Inconsistent base fields"):
