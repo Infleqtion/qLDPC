@@ -23,6 +23,8 @@ import itertools
 from collections.abc import Collection
 
 import networkx as nx
+import numpy as np
+import numpy.typing as npt
 
 from qldpc import abstract
 
@@ -308,3 +310,37 @@ class CayleyComplex:
             aa * gg != gg * bb
             for gg, aa, bb in itertools.product(group.generate(), subset_a, subset_b)
         )
+
+
+class ChainComplex:
+    """Chain complex, defined by its boundary operators.
+
+    References:
+    - https://en.wikipedia.org/wiki/Chain_complex
+    - https://arxiv.org/abs/1810.01519
+    """
+
+    _ops: tuple[npt.NDArray[np.int_], ...]
+
+    def __init__(self, *ops: npt.NDArray[np.int_]) -> None:
+        if any(np.any(op_a @ op_b) for op_a, op_b in zip(ops, ops[1:])):
+            raise ValueError(
+                "Condition for a chain complex not satisfied:\n"
+                "Neighboring boundary operators of a chain complex must compose to zero"
+            )
+        self._ops = ops
+
+    @property
+    def ops(self) -> tuple[npt.NDArray[np.int_], ...]:
+        """The boundary operators of this chain complex."""
+        return self._ops
+
+    @property
+    def boundary_op(self, degree: int) -> npt.NDArray[np.int_]:
+        """The boundary operator of this chain complex that acts on the module of a given degree."""
+        return self._ops[degree]
+
+    @classmethod
+    def tensor_product(chain_a: ChainComplex, chain_b: ChainComplex) -> ChainComplex:
+        """Take the tensor product of two chain complexes."""
+        return NotImplemented
