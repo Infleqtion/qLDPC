@@ -324,11 +324,11 @@ class ChainComplex:
     {} <--[d_0] A_0 <--[d_1] A_1 <-- ... <--[d_n] A_n <--[d_{n+1}] {}
 
     Here j is called the "degree" of A_j, and d_j : A_j --> A_{j-1} is a "boundary operator" or
-    "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j_1} = 0.
+    "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j-1} = 0.
 
     In practice, we represent a chain complex by the boundary operators (d_1, d_2, ..., d_n), which
-    are in turn represented by matrices over (a) a finite field or (b) a group algebra.  The
-    boundary operators d_0 and d_{n+1} are formally treated as 0×dim(A_0) and dim(A_n)×0 matrices.
+    are in turn represented by matrices over a finite field.  The boundary operators d_0 and d_{n+1}
+    are formally treated as 0 × dim(A_0) and dim(A_n) × 0 matrices.
 
     References:
     - https://en.wikipedia.org/wiki/Chain_complex
@@ -406,13 +406,14 @@ class ChainComplex:
 
         [1] P_k = ⨁_{i+j=k} A_i ⊗ B_j.
 
+        Elements of P_2, for example, can be written as vectors [a_2 ⊗ b_0, a_1 ⊗ b_1, a_0 ⊗ b_2],
+        that concatenate different a_i ⊗ b_j ∈ A_i ⊗ B_j.
+
         The boundary operator d_k in C_P is defined by its action on each "sector" (i, j), namely
 
-        [2] d_{i+j}(a ⊗ b) = d_i^A(a) ⊗ b + (-1)^i a ⊗ d_j^B(b),
+        [2] d_{i+j}(a_i ⊗ b_j) = d_i^A(a_i) ⊗ b_j + (-1)^i a_i ⊗ d_j^B(b_j),
 
-        where a ∈ A_i, b ∈ B_j, and d_i^A, d_j^B are boundary operators of C_A and C_B.  The total
-        boundary operator d_k of C_P is then a direct sum of boundary operators defined on sectors
-        (i, j) with i+j=k.
+        where d_i^A and d_j^B are boundary operators of C_A and C_B.
 
         In practice, to construct a boundary operator d_k we build a block matrix whose rows and
         columns correspond, respectively, to sectors of P_{k-1} and P_k.  We then populate this
