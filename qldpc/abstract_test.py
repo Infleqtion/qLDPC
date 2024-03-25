@@ -117,8 +117,9 @@ def test_protograph() -> None:
     matrix = np.random.randint(2, size=(3, 3))
     protograph = abstract.TrivialGroup.to_protograph(matrix)
     assert protograph.group == abstract.TrivialGroup()
-    assert np.array_equal(protograph.lift(), matrix)
     assert protograph.field == abstract.TrivialGroup().field
+    assert np.array_equal(protograph.lift(), matrix)
+    assert np.array_equal(protograph, abstract.Protograph(protograph))
 
     with pytest.raises(ValueError, match="Cannot determine underlying group"):
         abstract.Protograph([])
