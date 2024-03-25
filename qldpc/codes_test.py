@@ -202,6 +202,16 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers(["I", "I I"], field)
 
 
+def test_quantum_distance(field: int = 2) -> None:
+    """Distance calculations for qudit codes."""
+    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
+    assert code.get_distance() == 2
+
+    # assert that the identity is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+
+
 @pytest.mark.parametrize("field", [2, 3])
 def test_graph_product(
     field: int,
@@ -467,37 +477,17 @@ def test_toric_codes(field: int = 3) -> None:
         codes.ToricCode(3, rotated=True)
 
 
-def test_quantum_distance(field: int = 2) -> None:
-    """Distance calculations for qudit codes."""
-    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
-    assert code.get_distance() == 2
-
-    # assert that the identity is a logical operator
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
-
-
-def test_multi_dimensional_codes(size: int = 3, field: int = 2) -> None:
+def test_generalized_surface(size: int = 3, field: int = 2) -> None:
     """Multi-dimensional surface and toric codes."""
-
-    def get_code(base_code: codes.ClassicalCode, dim: int) -> codes.CSSCode:
-        """Build a CSS code from a dim-fold tensor product of classical base codes."""
-        chain = functools.reduce(
-            objects.ChainComplex.dual_tensor_product,
-            [objects.ChainComplex(base_code.matrix)] * dim,
-        )
-        matrix_x, matrix_z = chain.op(1), chain.op(2).T
-        return codes.CSSCode(matrix_x, matrix_z)
-
     for dim in [2, 3, 4]:
         # surface code
-        code = get_code(codes.RepetitionCode(size, field), dim)
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=False, field=field)
         assert code.dimension == 1
         assert code.get_distance(codes.Pauli.Z, bound=10) == size
         assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
 
         # toric code
-        code = get_code(codes.RingCode(size, field), dim)
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=True, field=field)
         assert code.dimension == dim
         assert code.num_qudits == dim * size**dim
         assert code.get_distance(codes.Pauli.Z, bound=10) == size
