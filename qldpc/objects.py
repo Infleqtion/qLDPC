@@ -21,7 +21,7 @@ import dataclasses
 import enum
 import functools
 import itertools
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
 
 import galois
 import networkx as nx
@@ -330,6 +330,7 @@ class ChainComplex:
     _ops: tuple[galois.FieldArray, ...]
 
     def __init__(self, *ops: npt.NDArray[np.int_], field: int | None = None) -> None:
+        # TODO: get field from ops
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         self._ops = tuple(self.field(op) for op in ops)
         for degree in range(1, self.length):
@@ -356,6 +357,10 @@ class ChainComplex:
         """The length of this chain complex."""
         return len(self.ops)
 
+    def dim(self, degree: int) -> int:
+        """The dimension of the module of the given degree."""
+        return self.op(degree).shape[1]
+
     def op(self, degree: int) -> npt.NDArray[np.int_]:
         """The boundary operator of this chain complex that acts on the module of a given degree."""
         assert 0 <= degree <= self.length + 1
@@ -376,47 +381,45 @@ class ChainComplex:
             chain_a = ChainComplex(chain_a)
         if not isinstance(chain_b, ChainComplex):
             chain_b = ChainComplex(chain_b)
+        if chain_a.field is not chain_b.field:
+            raise ValueError("Cannot take tensor product of chain complexes over different fields")
+        chain_field = chain_a.field
 
-        def _joint_op(
-            op_a: npt.NDArray[np.int_], op_b: npt.NDArray[np.int_], deg_a: int
-        ) -> npt.NDArray[np.int_]:
-            iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype) * (-1) ** deg_a
-            iden_b = np.identity(op_b.shape[1], dtype=op_b.dtype)
-            if deg_a % 2:
-                iden_a *= -1
-            return np.vstack([np.kron(op_a, iden_b), np.kron(iden_a, op_b)])
+        def get_degree_pairs(degree: int) -> Iterator[int]:
+            min_degree_a = max(degree - chain_b.length, 0)
+            max_degree_a = min(chain_a.length, degree)
+            for dd in range(min_degree_a, max_degree_a + 1):
+                yield dd, degree - dd
+
+        def get_block_index(deg_a: int, deg_b: int) -> int:
+            min_degree_a = max(deg_a + deg_b - chain_b.length, 0)
+            return deg_a - min_degree_a
+
+        def get_zero_block(row_degs: tuple[int, int], col_degs: tuple[int, int]) -> tuple[int, int]:
+            row_deg_a, row_deg_b = row_degs
+            col_deg_a, col_deg_b = col_degs
+            rows = chain_a.dim(row_deg_a) * chain_b.dim(row_deg_b)
+            cols = chain_a.dim(col_deg_a) * chain_b.dim(col_deg_b)
+            return chain_field.Zeros((rows, cols))
 
         ops = []
-        print()
-        print()
         for degree in range(1, chain_a.length + chain_b.length + 1):
-            min_degree_a = max(degree - chain_b.length, 0)
-            max_degree_a = chain_a.length
-            print(degree)
-            print([(dd, degree - dd) for dd in range(min_degree_a, max_degree_a + 1)])
-            degree_ops = [
-                _joint_op(chain_a.op(dd), chain_b.op(degree - dd), dd)
-                for dd in range(min_degree_a, max_degree_a + 1)
+            blocks = [
+                [get_zero_block(row_degs, col_degs) for col_degs in get_degree_pairs(degree)]
+                for row_degs in get_degree_pairs(degree - 1)
             ]
-            ops.append(functools.reduce(direct_sum, degree_ops))
+            for col, (deg_a, deg_b) in enumerate(get_degree_pairs(degree)):
+                op_a = chain_a.op(deg_a)
+                op_b = chain_a.op(deg_b)
+                if deg_a:
+                    row = get_block_index(deg_a - 1, deg_b)
+                    iden_b = np.identity(op_b.shape[1], dtype=op_b.dtype)
+                    blocks[row][col] = np.kron(op_a, iden_b)
+                if deg_b:
+                    row = get_block_index(deg_a, deg_b - 1)
+                    iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype)
+                    blocks[row][col] = np.kron(iden_a, op_b)
 
-        ######################################################################################
-        print()
-        print()
-        print([op.shape for op in ops])
-        print(chain_a.field(ops[0]) @ chain_a.field(ops[1]))
-        return ChainComplex(ops[0])
-        ######################################################################################
+            ops.append(np.block(blocks))
+
         return ChainComplex(*ops)
-
-
-def direct_sum(mat_a: npt.NDArray[np.int_], mat_b: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-    """Direct sum of two matrices."""
-    shape_ab = (mat_a.shape[0], mat_b.shape[1])
-    shape_ba = (mat_b.shape[0], mat_a.shape[1])
-    return np.block(
-        [
-            [mat_a, np.zeros(shape_ab, dtype=mat_b.dtype)],
-            [np.zeros(shape_ba, dtype=mat_b.dtype), mat_b],
-        ]
-    )
