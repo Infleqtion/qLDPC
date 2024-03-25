@@ -431,7 +431,6 @@ class ChainComplex:
             return chain_field.Zeros((rows, cols))
 
         ops: list[npt.NDArray[np.int_]] = []
-        print()
         for degree in range(1, chain_a.length + chain_b.length + 1):
             # fill in zeros for the total boundary operator as a block matrix
             blocks = [
@@ -440,7 +439,6 @@ class ChainComplex:
             ]
 
             # fill in nonzero blocks of the total boundary operator
-            print(degree)
             for col, (deg_a, deg_b) in enumerate(get_degree_pairs(degree)):
                 op_a = chain_a.op(deg_a)
                 op_b = chain_b.op(deg_b)
@@ -448,17 +446,10 @@ class ChainComplex:
                     row = get_block_index(deg_a - 1, deg_b)
                     iden_b = np.identity(op_b.shape[1], dtype=op_b.dtype)
                     blocks[row][col] = np.kron(op_a, iden_b)
-                    print("", row, col)
-                    print("", deg_a, deg_b)
-                    print(blocks[row][col])
                 if deg_b:
                     row = get_block_index(deg_a, deg_b - 1)
                     iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype)
                     blocks[row][col] = np.kron(iden_a, op_b) * (-1) ** deg_a
-                    print("", row, col)
-                    print("", deg_a, deg_b)
-                    print(blocks[row][col])
-            print()
 
             ops.append(np.block(blocks))
 
