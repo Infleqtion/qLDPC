@@ -477,7 +477,7 @@ def test_toric_codes(field: int = 3) -> None:
         codes.ToricCode(3, rotated=True)
 
 
-def test_generalized_surface(size: int = 3, field: int = 2) -> None:
+def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
     """Multi-dimensional surface and toric codes."""
 
     # recover ordinary surface code in 2D
@@ -501,3 +501,6 @@ def test_generalized_surface(size: int = 3, field: int = 2) -> None:
         assert code.num_qudits == dim * size**dim
         assert code.get_distance(codes.Pauli.Z, bound=10) == size
         assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
+
+    with pytest.raises(ValueError, match=">= 2"):
+        codes.GeneralizedSurfaceCode(size, dim=1)

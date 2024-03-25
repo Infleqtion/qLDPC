@@ -1862,13 +1862,22 @@ class GeneralizedSurfaceCode(CSSCode):
         *,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
+        if dim < 2:
+            raise ValueError(
+                f"The dimension of a generalized surface code should be >= 2 (provided: {dim})"
+            )
         if periodic:
             base_code = RingCode(size, field)
         else:
             base_code = RepetitionCode(size, field)
-        chain = functools.reduce(
-            ChainComplex.dual_tensor_product,
-            [ChainComplex(base_code.matrix)] * dim,
-        )
+
+        base_chain = ChainComplex(base_code.matrix)
+        chain = ChainComplex(base_code.matrix)
+        for _ in range(dim - 1):
+            chain = ChainComplex.tensor_product(chain, base_chain.T)
+
+            # to reduce computational overhead, remove chain links that we don't care about
+            chain = ChainComplex(*chain.ops[:2])
+
         matrix_x, matrix_z = chain.op(1), chain.op(2).T
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
