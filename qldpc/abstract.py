@@ -539,7 +539,7 @@ class Protograph(npt.NDArray[np.object_]):
     def __new__(cls, array: npt.NDArray[np.object_] | Sequence[Sequence[object]]) -> Protograph:
         protograph = np.asarray(array).view(cls)
 
-        # identify base group
+        # identify the base group for this protograph
         group = None
         if hasattr(array, "group"):
             group = array.group
@@ -548,11 +548,10 @@ class Protograph(npt.NDArray[np.object_]):
                 if hasattr(value, "group"):
                     group = value.group
                     break
-
         if group is None:
             raise ValueError("Cannot determine underlying group for a protograh")
-
         protograph._group = group
+
         return protograph
 
     @property
