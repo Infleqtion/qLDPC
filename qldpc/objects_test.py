@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import galois
 import numpy as np
 import pytest
 
@@ -112,3 +113,16 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     assert cayplex.graph.number_of_nodes() == size_g
     assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
     assert len(cayplex.faces) == size_g * size_a * size_b // 4
+
+
+def test_chain_complex(field: int = 2) -> None:
+    """Chain complex construction and errors."""
+    # take a tensor product of 1-complexes
+    mat = galois.GF(field).Random((3, 5))
+    chain = objects.ChainComplex.tensor_product(mat, mat)
+    assert not np.any(chain.op(0))
+    assert not np.any(chain.op(chain.length + 1))
+
+    # invalid chain complex
+    with pytest.raises(ValueError, match="must compose to zero"):
+        objects.ChainComplex(mat, mat)

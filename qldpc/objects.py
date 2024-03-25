@@ -19,14 +19,18 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import functools
 import itertools
 from collections.abc import Collection
 
+import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 
 from qldpc import abstract
+
+DEFAULT_FIELD_ORDER = 2
 
 
 class Pauli(enum.Enum):
@@ -319,17 +323,28 @@ class ChainComplex:
     References:
     - https://en.wikipedia.org/wiki/Chain_complex
     - https://arxiv.org/abs/1810.01519
+    - https://arxiv.org/abs/2103.06309
     """
 
-    _ops: tuple[npt.NDArray[np.int_], ...]
+    _field: type[galois.FieldArray]
+    _ops: tuple[galois.FieldArray, ...]
 
-    def __init__(self, *ops: npt.NDArray[np.int_]) -> None:
-        if any(np.any(op_a @ op_b) for op_a, op_b in zip(ops, ops[1:])):
-            raise ValueError(
-                "Condition for a chain complex not satisfied:\n"
-                "Neighboring boundary operators of a chain complex must compose to zero"
-            )
-        self._ops = ops
+    def __init__(self, *ops: npt.NDArray[np.int_], field: int | None = None) -> None:
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._ops = tuple(self.field(op) for op in ops)
+        for degree in range(1, self.length):
+            op_a = self.op(degree)
+            op_b = self.op(degree + 1)
+            if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
+                raise ValueError(
+                    "Condition for a chain complex not satisfied:\n"
+                    "Neighboring boundary operators of a chain complex must compose to zero"
+                )
+
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """The base field of this chain complex."""
+        return self._field
 
     @property
     def ops(self) -> tuple[npt.NDArray[np.int_], ...]:
@@ -337,11 +352,61 @@ class ChainComplex:
         return self._ops
 
     @property
-    def boundary_op(self, degree: int) -> npt.NDArray[np.int_]:
+    def length(self) -> tuple[npt.NDArray[np.int_], ...]:
+        """The length of this chain complex."""
+        return len(self.ops)
+
+    def op(self, degree: int) -> npt.NDArray[np.int_]:
         """The boundary operator of this chain complex that acts on the module of a given degree."""
-        return self._ops[degree]
+        assert 0 <= degree <= self.length + 1
+        if degree == 0:
+            return self.field.Zeros((0, self.ops[0].shape[0]))
+        if degree == len(self._ops) + 1:
+            return self.field.Zeros((self.ops[-1].shape[1], 0))
+        return self.ops[degree - 1]
 
     @classmethod
-    def tensor_product(chain_a: ChainComplex, chain_b: ChainComplex) -> ChainComplex:
+    def tensor_product(
+        cls,
+        chain_a: ChainComplex | npt.NDArray[np.int_],
+        chain_b: ChainComplex | npt.NDArray[np.int_],
+    ) -> ChainComplex:
         """Take the tensor product of two chain complexes."""
-        return NotImplemented
+        if not isinstance(chain_a, ChainComplex):
+            chain_a = ChainComplex(chain_a)
+        if not isinstance(chain_b, ChainComplex):
+            chain_b = ChainComplex(chain_b)
+
+        def _joint_op(
+            op_a: npt.NDArray[np.int_], op_b: npt.NDArray[np.int_], deg_a: int
+        ) -> npt.NDArray[np.int_]:
+            iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype) * (-1) ** deg_a
+            iden_b = np.identity(op_b.shape[1], dtype=op_b.dtype)
+            if deg_a % 2:
+                iden_a *= -1
+            return np.vstack([np.kron(op_a, iden_b), np.kron(iden_a, op_b)])
+
+        ops = []
+        for degree in range(1, chain_a.length + chain_b.length + 1):
+            min_degree_a = max(degree - chain_b.length, 0)
+            max_degree_a = chain_a.length
+            degree_ops = [
+                _joint_op(chain_a.op(dd), chain_b.op(degree - dd), dd)
+                for dd in range(min_degree_a, max_degree_a + 1)
+            ]
+            ops.append(functools.reduce(direct_sum, degree_ops))
+
+        # return ChainComplex(chain_a.op(1))  ###########################################
+        return ChainComplex(*ops)
+
+
+def direct_sum(mat_a: npt.NDArray[np.int_], mat_b: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+    """Direct sum of two matrices."""
+    shape_ab = (mat_a.shape[0], mat_b.shape[1])
+    shape_ba = (mat_b.shape[0], mat_a.shape[1])
+    return np.block(
+        [
+            [mat_a, np.zeros(shape_ab, dtype=mat_b.dtype)],
+            [np.zeros(shape_ba, dtype=mat_b.dtype), mat_b],
+        ]
+    )
