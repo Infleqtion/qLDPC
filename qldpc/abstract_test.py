@@ -117,10 +117,17 @@ def test_protograph() -> None:
     matrix = np.random.randint(2, size=(3, 3))
     protograph = abstract.TrivialGroup.to_protograph(matrix)
     assert protograph.group == abstract.TrivialGroup()
-    assert 1 * protograph == protograph * 1 == protograph
-    assert protograph == abstract.Protograph(protograph)
-    assert np.array_equal(protograph.lift(), matrix)
     assert protograph.field == abstract.TrivialGroup().field
+    assert np.array_equal(protograph.lift(), matrix)
+
+    # fail to construct a valid protograph
+    with pytest.raises(ValueError, match="must be Element-valued"):
+        abstract.Protograph([[0]])
+    with pytest.raises(ValueError, match="Inconsistent base groups"):
+        groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
+        abstract.Protograph([[abstract.Element(group) for group in groups]])
+    with pytest.raises(ValueError, match="Cannot determine underlying group"):
+        abstract.Protograph([])
 
 
 def test_transpose() -> None:
@@ -133,7 +140,7 @@ def test_transpose() -> None:
     x0, x1, x2, x3 = group.generate()
     matrix = [[x0, 0, x1], [x2, 0, x3]]
     protograph = abstract.Protograph.build(group, matrix)
-    assert protograph.T.T == protograph
+    assert np.array_equal(protograph.T.T, protograph)
 
 
 def test_random_symmetric_subset() -> None:

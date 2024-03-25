@@ -455,11 +455,15 @@ class Element:
             # multiply group members by 'other'
             for member, val in self:
                 new_element._vec[member * other] = val
+            return new_element
 
-        # collect and multiply pairs of terms from 'self' and 'other'
-        for (aa, x_a), (bb, y_b) in itertools.product(self, other):
-            new_element._vec[aa * bb] += x_a * y_b
-        return new_element
+        if isinstance(other, Element):
+            # collect and multiply pairs of terms from 'self' and 'other'
+            for (aa, x_a), (bb, y_b) in itertools.product(self, other):
+                new_element._vec[aa * bb] += x_a * y_b
+            return new_element
+
+        return NotImplemented  # pragma: no cover
 
     def __rmul__(self, other: int | GroupMember) -> Element:
         if isinstance(other, int):
@@ -527,43 +531,37 @@ class Element:
 # protographs: Element-valued matrices
 
 
-ObjectMatrix = npt.NDArray[np.object_] | Sequence[Sequence[object]]
+class Protograph(npt.NDArray[np.object_]):
+    """Array whose entries are members of a group algebra over a finite field."""
 
+    _group: Group
 
-class Protograph:
-    """Matrix with Element entries."""
+    def __new__(
+        cls, array: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
+    ) -> Protograph:
+        protograph = np.asarray(array).view(cls)
 
-    _matrix: npt.NDArray[np.object_]
+        # identify the base group for this protograph
+        for value in protograph.ravel():
+            if not isinstance(value, Element):
+                raise ValueError(
+                    "Requirement failed: all entries of a protograph must be Element-valued"
+                )
+            else:
+                if not (group is None or group == value.group):
+                    raise ValueError("Inconsistent base groups provided for protograph")
+                group = value.group
 
-    def __init__(self, matrix: Protograph | ObjectMatrix) -> None:
-        if isinstance(matrix, Protograph):
-            self._matrix = matrix.matrix
-        else:
-            self._matrix = np.array(matrix, ndmin=2)
+        if group is None:
+            raise ValueError("Cannot determine underlying group for a protograh")
+        protograph._group = group
 
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, Protograph) and np.array_equal(self._matrix, other._matrix)
-
-    def __rmul__(self, val: int) -> Protograph:
-        return Protograph(self._matrix * val)
-
-    def __mul__(self, val: int) -> Protograph:
-        return val * self
-
-    @property
-    def matrix(self) -> npt.NDArray[np.object_]:
-        """Element-valued numpy matrix of this protograph."""
-        return self._matrix
-
-    @property
-    def shape(self) -> tuple[int, ...]:
-        """Dimensions (shape) of this protograph."""
-        return self._matrix.shape
+        return protograph
 
     @property
     def group(self) -> Group:
-        """Group associated with this protograph."""
-        return self._matrix[0, 0].group
+        """Base group of this protograph."""
+        return self._group
 
     @property
     def field(self) -> type[galois.FieldArray]:
@@ -572,30 +570,32 @@ class Protograph:
 
     def lift(self) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
-        vals = [val.lift() for val in self.matrix.ravel()]
+        vals = [val.lift() for val in self.ravel()]
         tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
         rows = tensor.shape[0] * tensor.shape[1]
         cols = tensor.shape[2] * tensor.shape[3]
-        return tensor.reshape(rows, cols)  # type:ignore[return-value]
+        return self.field(tensor.reshape(rows, cols))
 
     @property
     def T(self) -> Protograph:
-        """Transpose of this protograph, which also transposes every matrix entry."""
-        entries = [entry.T for entry in self._matrix.ravel()]
-        return Protograph(np.array(entries).reshape(self._matrix.shape).T)
+        """Transpose of this protograph, which also transposes every array entry."""
+        vals = [val.T for val in self.ravel()]
+        return Protograph(np.array(vals, dtype=object).reshape(self.shape).T)
 
     @classmethod
-    def build(cls, group: Group, matrix: ObjectMatrix, *, field: int = 2) -> Protograph:
+    def build(
+        cls, group: Group, array: npt.NDArray[np.object_] | Sequence[Sequence[object]]
+    ) -> Protograph:
         """Construct a protograph.
 
-        The constructed protograph is built from (i) a group, and (ii) a matrix populated by group
+        The constructed protograph is built from (i) a group, and (ii) an array populated by group
         members or zero/"falsy" entries.  The protograph is obtained by elevating the group memebers
         to elements of the group algebra (over the prime number field).  Zero/"falsy" entries of the
         matrix are interpreted as zeros of the group algebra.
         """
-        matrix = np.array(matrix)
-        vals = [Element(group, member) if member else Element(group) for member in matrix.ravel()]
-        return Protograph(np.array(vals, dtype=object).reshape(matrix.shape))
+        array = np.array(array, dtype=object)
+        vals = [Element(group, member) if member else Element(group) for member in array.ravel()]
+        return Protograph(np.array(vals, dtype=object).reshape(array.shape))
 
 
 ################################################################################
