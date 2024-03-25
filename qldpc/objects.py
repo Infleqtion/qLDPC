@@ -317,7 +317,17 @@ class CayleyComplex:
 
 # TODO: investigate the lifted product for chain complexes: https://arxiv.org/pdf/2012.04068.pdf
 class ChainComplex:
-    """Chain complex, defined by its boundary operators.
+    """Chain complex: a sequence modules with "boundary operators" that map between them.
+
+    An n-chain complex with modules (A_0, A_1, ..., A_n) can be written as
+
+    {} <--[d_0] A_0 <--[d_1] A_1 <-- ... <--[d_n] A_n <--[d_{n+1}] {}
+
+    Here d_j : A_j --> A_{j-1} is a "boundary operator" or "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j_1} = 0.
+
+    In practice, we define a chain complex by the boundary operators (d_1, d_2, ..., d_n), which are
+    in turn represented by matrices over (a) a finite field or (b) a group algebra.  The boundary
+    operators d_0 and d_{n+1} are formally treated as 0 × dim(A_0) and dim(A_n) × 0 matrices.
 
     References:
     - https://en.wikipedia.org/wiki/Chain_complex
