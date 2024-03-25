@@ -532,7 +532,7 @@ class Element:
 
 
 class Protograph(npt.NDArray[np.object_]):
-    """Array whose entries are members of a group algebra over Z_2."""
+    """Array whose entries are members of a group algebra over a finite field."""
 
     _group: Group
 
