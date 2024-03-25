@@ -385,7 +385,7 @@ class ChainComplex:
         return self.ops[degree - 1]
 
     def dual(self) -> ChainComplex:
-        """Dual to this chain complex."""
+        """Dual to this chain complex: reversed order of transposed boundary operators."""
         dual_ops = [op.T for op in self.ops[::-1]]
         return ChainComplex(*dual_ops)
 
