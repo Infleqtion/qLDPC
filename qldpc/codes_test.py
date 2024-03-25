@@ -479,7 +479,16 @@ def test_toric_codes(field: int = 3) -> None:
 
 def test_generalized_surface(size: int = 3, field: int = 2) -> None:
     """Multi-dimensional surface and toric codes."""
-    for dim in [2, 3, 4]:
+
+    # recover ordinary surface code in 2D
+    code = codes.GeneralizedSurfaceCode(size, dim=2, periodic=False, field=field)
+    assert np.array_equal(code.matrix, codes.SurfaceCode(size, rotated=False, field=field).matrix)
+
+    # recover ordinary toric code in 2D
+    code = codes.GeneralizedSurfaceCode(size, dim=2, periodic=True, field=field)
+    assert np.array_equal(code.matrix, codes.ToricCode(size, rotated=False, field=field).matrix)
+
+    for dim in [3, 4]:
         # surface code
         code = codes.GeneralizedSurfaceCode(size, dim, periodic=False, field=field)
         assert code.dimension == 1
