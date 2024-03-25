@@ -122,10 +122,10 @@ def test_protograph() -> None:
 
     # fail to construct a valid protograph
     with pytest.raises(ValueError, match="must be Element-valued"):
-        abstract.Protograph([0])
+        abstract.Protograph([[0]])
     with pytest.raises(ValueError, match="Inconsistent base groups"):
         groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
-        abstract.Protograph([abstract.Element(group) for group in groups])
+        abstract.Protograph([[abstract.Element(group) for group in groups]])
     with pytest.raises(ValueError, match="Cannot determine underlying group"):
         abstract.Protograph([])
 
