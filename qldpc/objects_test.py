@@ -115,7 +115,7 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     assert len(cayplex.faces) == size_g * size_a * size_b // 4
 
 
-def test_chain_complex(field: int = 2) -> None:
+def test_chain_complex(field: int = 3) -> None:
     """Chain complex construction and errors."""
     # take a tensor product of two 1-complexes
     mat = galois.GF(field).Random((3, 5))
@@ -131,5 +131,5 @@ def test_chain_complex(field: int = 2) -> None:
         objects.ChainComplex(mat, mat)
     with pytest.raises(ValueError, match="different fields"):
         objects.ChainComplex.tensor_product(
-            one_chain, objects.ChainComplex(mat.view(np.ndarray), field=field + 1)
+            one_chain, objects.ChainComplex(mat.view(np.ndarray), field=field**2)
         )

@@ -424,4 +424,4 @@ class ChainComplex:
 
             ops.append(np.block(blocks))
 
-        return ChainComplex(*ops)
+        return ChainComplex(*ops, field=chain_field.order)
