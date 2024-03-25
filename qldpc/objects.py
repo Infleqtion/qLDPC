@@ -382,16 +382,19 @@ class ChainComplex:
         chain_field = chain_a.field
 
         def get_degree_pairs(degree: int) -> Iterator[int]:
+            """Pairs of chain degrees that add up to the given total degree."""
             min_degree_a = max(degree - chain_b.length, 0)
             max_degree_a = min(chain_a.length, degree)
             for dd in range(min_degree_a, max_degree_a + 1):
                 yield dd, degree - dd
 
         def get_block_index(deg_a: int, deg_b: int) -> int:
+            """Index of the "factor" with the given chain degrees in the direct sum of two chains."""
             min_degree_a = max(deg_a + deg_b - chain_b.length, 0)
             return deg_a - min_degree_a
 
         def get_zero_block(row_degs: tuple[int, int], col_degs: tuple[int, int]) -> tuple[int, int]:
+            """Get a zero matrix to fill a block in a total boundary operator."""
             row_deg_a, row_deg_b = row_degs
             col_deg_a, col_deg_b = col_degs
             rows = chain_a.dim(row_deg_a) * chain_b.dim(row_deg_b)
@@ -400,10 +403,13 @@ class ChainComplex:
 
         ops = []
         for degree in range(1, chain_a.length + chain_b.length + 1):
+            # fill in zeros for the total boundary operator as a block matrix
             blocks = [
                 [get_zero_block(row_degs, col_degs) for col_degs in get_degree_pairs(degree)]
                 for row_degs in get_degree_pairs(degree - 1)
             ]
+
+            # fill in nonzero blocks of the total boundary operator
             for col, (deg_a, deg_b) in enumerate(get_degree_pairs(degree)):
                 op_a = chain_a.op(deg_a)
                 op_b = chain_b.op(deg_b)
