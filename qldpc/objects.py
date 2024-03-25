@@ -378,12 +378,13 @@ class ChainComplex:
         cls,
         chain_a: ChainComplex | npt.NDArray[np.int_],
         chain_b: ChainComplex | npt.NDArray[np.int_],
+        field: int | None = None,
     ) -> ChainComplex:
         """Take the tensor product of two chain complexes."""
         if not isinstance(chain_a, ChainComplex):
-            chain_a = ChainComplex(chain_a)
+            chain_a = ChainComplex(chain_a, field=field)
         if not isinstance(chain_b, ChainComplex):
-            chain_b = ChainComplex(chain_b)
+            chain_b = ChainComplex(chain_b, field=field)
         if chain_a.field is not chain_b.field:
             raise ValueError("Cannot take tensor product of chain complexes over different fields")
         chain_field = chain_a.field
