@@ -473,19 +473,3 @@ class ChainComplex:
             ops.append(np.block(blocks))
 
         return ChainComplex(*ops, field=chain_field.order)
-
-    @classmethod
-    def dual_tensor_product(
-        cls,
-        chain_a: ChainComplex | npt.NDArray[np.int_],
-        chain_b: ChainComplex | npt.NDArray[np.int_],
-        field: int | None = None,
-    ) -> ChainComplex:
-        """Tensor product of a chain complex and the dual of another chain complex.
-
-        This is useful for taking the n-fold tensor product of many chain complexes with
-        functools.reduce(ChainComplex.dual_tensor_product, ...).
-
-        See ChainComplex.tensor_product for additional information.
-        """
-        return ChainComplex.tensor_product(chain_a, chain_b.T, field)
