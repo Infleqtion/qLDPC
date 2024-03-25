@@ -384,13 +384,11 @@ class ChainComplex:
             return self.field.Zeros((self.ops[-1].shape[1], 0))
         return self.ops[degree - 1]
 
-    def dual(self) -> ChainComplex:
-        """Dual to this chain complex: reversed order of transposed boundary operators."""
+    @property
+    def T(self) -> ChainComplex:
+        """Transpose and reverse the order of the boundary operators in this chain complex."""
         dual_ops = [op.T for op in self.ops[::-1]]
         return ChainComplex(*dual_ops)
-
-    def __invert__(self) -> ChainComplex:
-        return self.dual()
 
     @classmethod
     def tensor_product(  # noqa: C901 ignore complexity check
@@ -475,3 +473,19 @@ class ChainComplex:
             ops.append(np.block(blocks))
 
         return ChainComplex(*ops, field=chain_field.order)
+
+    @classmethod
+    def dual_tensor_product(
+        cls,
+        chain_a: ChainComplex | npt.NDArray[np.int_],
+        chain_b: ChainComplex | npt.NDArray[np.int_],
+        field: int | None = None,
+    ) -> ChainComplex:
+        """Tensor product of a chain complex and the dual of another chain complex.
+
+        This is useful for taking the n-fold tensor product of many chain complexes with
+        functools.reduce(ChainComplex.dual_tensor_product, ...).
+
+        See ChainComplex.tensor_product for additional information.
+        """
+        return ChainComplex.tensor_product(chain_a, chain_b.T, field)
