@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import dataclasses
 import enum
-import functools
 import itertools
 from collections.abc import Collection, Iterator
 
@@ -397,7 +396,7 @@ class ChainComplex:
                 yield dd, degree - dd
 
         def get_block_index(deg_a: int, deg_b: int) -> int:
-            """Index of the "factor" with the given chain degrees in the direct sum of two chains."""
+            """Index of the "factor" with the given degrees in the direct sum of two chains."""
             min_degree_a = max(deg_a + deg_b - chain_b.length, 0)
             return deg_a - min_degree_a
 
