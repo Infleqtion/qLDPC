@@ -323,7 +323,8 @@ class ChainComplex:
 
     {} <--[d_0] A_0 <--[d_1] A_1 <-- ... <--[d_n] A_n <--[d_{n+1}] {}
 
-    Here d_j : A_j --> A_{j-1} is a "boundary operator" or "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j_1} = 0.
+    Here j is called the "degree" of A_j, and d_j : A_j --> A_{j-1} is a "boundary operator" or
+    "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j_1} = 0.
 
     In practice, we define a chain complex by the boundary operators (d_1, d_2, ..., d_n), which are
     in turn represented by matrices over (a) a finite field or (b) a group algebra.  The boundary
