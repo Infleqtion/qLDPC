@@ -43,7 +43,7 @@ import copy
 import functools
 import itertools
 from collections.abc import Callable, Iterator, Sequence
-from typing import Any, TypeVar
+from typing import TypeVar
 
 import galois
 import numpy as np
@@ -536,15 +536,15 @@ class Protograph(npt.NDArray[np.object_]):
 
     _group: Group
 
-    def __new__(cls, input_array: Any) -> Protograph:
-        array = np.asarray(input_array).view(cls)
+    def __new__(cls, array: npt.NDArray[np.object_] | Sequence[Sequence[object]]) -> Protograph:
+        protograph = np.asarray(array).view(cls)
 
         # identify base group
         group = None
-        if hasattr(input_array, "group"):
-            group = input_array.group
+        if hasattr(array, "group"):
+            group = array.group
         else:
-            for value in array.ravel():
+            for value in protograph.ravel():
                 if hasattr(value, "group"):
                     group = value.group
                     break
@@ -552,8 +552,8 @@ class Protograph(npt.NDArray[np.object_]):
         if group is None:
             raise ValueError("Cannot determine underlying group for a protograh")
 
-        array._group = group
-        return array
+        protograph._group = group
+        return protograph
 
     @property
     def group(self) -> Group:
@@ -580,7 +580,9 @@ class Protograph(npt.NDArray[np.object_]):
         return Protograph(np.array(vals, dtype=object).reshape(self.shape).T)
 
     @classmethod
-    def build(cls, group: Group, array: Any) -> Protograph:
+    def build(
+        cls, group: Group, array: npt.NDArray[np.object_] | Sequence[Sequence[object]]
+    ) -> Protograph:
         """Construct a protograph.
 
         The constructed protograph is built from (i) a group, and (ii) an array populated by group

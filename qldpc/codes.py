@@ -1430,10 +1430,8 @@ class LPCode(CSSCode):
 
     def __init__(
         self,
-        protograph_a: abstract.Protograph | npt.NDArray[np.object_] | Sequence[Sequence[object]],
-        protograph_b: (
-            abstract.Protograph | npt.NDArray[np.object_] | Sequence[Sequence[object]] | None
-        ) = None,
+        protograph_a: npt.NDArray[np.object_] | Sequence[Sequence[object]],
+        protograph_b: npt.NDArray[np.object_] | Sequence[Sequence[object]] | None = None,
         *,
         conjugate: bool = False,
     ) -> None:
