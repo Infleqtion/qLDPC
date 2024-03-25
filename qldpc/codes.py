@@ -1866,6 +1866,8 @@ class GeneralizedSurfaceCode(CSSCode):
             raise ValueError(
                 f"The dimension of a generalized surface code should be >= 2 (provided: {dim})"
             )
+
+        base_code: ClassicalCode
         if periodic:
             base_code = RingCode(size, field)
         else:
