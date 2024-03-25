@@ -117,11 +117,15 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
 
 def test_chain_complex(field: int = 3) -> None:
     """Chain complex construction and errors."""
-    # take a tensor product of two 1-complexes
-    mat = np.random.randint(field, size=(3, 5))
-    chain = objects.ChainComplex.tensor_product(mat, mat, field)
-    assert not np.any(chain.op(0))
-    assert not np.any(chain.op(chain.length + 1))
+
+    # tensor product of one-complexes
+    mat = np.random.randint(field, size=(2, 3))
+    two_chain = objects.ChainComplex.tensor_product(mat, mat, field)
+    assert not np.any(two_chain.op(0))
+    assert not np.any(two_chain.op(two_chain.length + 1))
+
+    # tensor product of two-complexes
+    objects.ChainComplex.tensor_product(two_chain, two_chain, field)
 
     # invalid chain complex constructions
     with pytest.raises(ValueError, match="Inconsistent base fields"):
