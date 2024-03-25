@@ -122,7 +122,7 @@ def test_chain_complex(field: int = 3) -> None:
     mat = np.random.randint(field, size=(2, 3))
     two_chain = objects.ChainComplex.tensor_product(mat, mat, field)
     assert not np.any(two_chain.op(0))
-    assert not np.any(two_chain.op(two_chain.length + 1))
+    assert not np.any(two_chain.op(two_chain.num_links + 1))
 
     # tensor product of a two-complex and its dual
     objects.ChainComplex.tensor_product(two_chain, ~two_chain, field)

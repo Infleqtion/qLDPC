@@ -347,7 +347,7 @@ class ChainComplex:
         self._field = fields.pop() if fields else galois.GF(DEFAULT_FIELD_ORDER)
 
         self._ops = tuple(self.field(op) for op in ops)
-        for degree in range(1, self.links):
+        for degree in range(1, self.num_links):
             op_a = self.op(degree)
             op_b = self.op(degree + 1)
             if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
@@ -367,7 +367,7 @@ class ChainComplex:
         return self._ops
 
     @property
-    def links(self) -> int:
+    def num_links(self) -> int:
         """The number of "internal" links in this chain complex."""
         return len(self.ops)
 
@@ -377,7 +377,7 @@ class ChainComplex:
 
     def op(self, degree: int) -> npt.NDArray[np.int_]:
         """The boundary operator of this chain complex that acts on the module of a given degree."""
-        assert 0 <= degree <= self.links + 1
+        assert 0 <= degree <= self.num_links + 1
         if degree == 0:
             return self.field.Zeros((0, self.ops[0].shape[0]))
         if degree == len(self._ops) + 1:
@@ -431,14 +431,14 @@ class ChainComplex:
 
         def get_degree_pairs(degree: int) -> Iterator[tuple[int, int]]:
             """Pairs of degrees that add up to the given total degree."""
-            min_deg_a = max(degree - chain_b.links, 0)
-            max_deg_a = min(chain_a.links, degree)
+            min_deg_a = max(degree - chain_b.num_links, 0)
+            max_deg_a = min(chain_a.num_links, degree)
             for deg_a in range(max_deg_a, min_deg_a - 1, -1):
                 yield deg_a, degree - deg_a
 
         def get_block_index(deg_a: int, deg_b: int) -> int:
             """Index of the "sector" with the given degrees in the direct sum of two chains."""
-            max_deg_a = min(chain_a.links, deg_a + deg_b)
+            max_deg_a = min(chain_a.num_links, deg_a + deg_b)
             return max_deg_a - deg_a
 
         def get_zero_block(
@@ -452,7 +452,7 @@ class ChainComplex:
             return chain_field.Zeros((rows, cols))
 
         ops: list[npt.NDArray[np.int_]] = []
-        for degree in range(1, chain_a.links + chain_b.links + 1):
+        for degree in range(1, chain_a.num_links + chain_b.num_links + 1):
             # fill in zero blocks of the total boundary operator
             blocks = [
                 [get_zero_block(row_degs, col_degs) for col_degs in get_degree_pairs(degree)]
