@@ -15,7 +15,6 @@
    limitations under the License.
 """
 
-import functools
 import itertools
 import unittest.mock
 
