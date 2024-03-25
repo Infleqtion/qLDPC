@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import functools
 import itertools
 import unittest.mock
 
@@ -474,3 +475,30 @@ def test_quantum_distance(field: int = 2) -> None:
     # assert that the identity is a logical operator
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+
+
+def test_multi_dimensional_codes(size: int = 3, field: int = 2) -> None:
+    """Multi-dimensional surface and toric codes."""
+
+    def get_code(base_code: codes.ClassicalCode, dim: int) -> codes.CSSCode:
+        """Build a CSS code from a dim-fold tensor product of classical base codes."""
+        chain = functools.reduce(
+            objects.ChainComplex.dual_tensor_product,
+            [objects.ChainComplex(base_code.matrix)] * dim,
+        )
+        matrix_x, matrix_z = chain.op(1), chain.op(2).T
+        return codes.CSSCode(matrix_x, matrix_z)
+
+    for dim in [2, 3, 4]:
+        # surface code
+        code = get_code(codes.RepetitionCode(size, field), dim)
+        assert code.dimension == 1
+        assert code.get_distance(codes.Pauli.Z, bound=10) == size
+        assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
+
+        # toric code
+        code = get_code(codes.RingCode(size, field), dim)
+        assert code.dimension == dim
+        assert code.num_qudits == dim * size**dim
+        assert code.get_distance(codes.Pauli.Z, bound=10) == size
+        assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)

@@ -393,8 +393,8 @@ class ChainComplex:
     @classmethod
     def tensor_product(  # noqa: C901 ignore complexity check
         cls,
-        chain_a: ChainComplex | npt.NDArray[np.int_],
-        chain_b: ChainComplex | npt.NDArray[np.int_],
+        chain_a: ChainComplex | galois.FieldArray | npt.NDArray[np.int_],
+        chain_b: ChainComplex | galois.FieldArray | npt.NDArray[np.int_],
         field: int | None = None,
     ) -> ChainComplex:
         """Tensor product of two chain complexes.
@@ -477,8 +477,8 @@ class ChainComplex:
     @classmethod
     def dual_tensor_product(
         cls,
-        chain_a: ChainComplex | npt.NDArray[np.int_],
-        chain_b: ChainComplex | npt.NDArray[np.int_],
+        chain_a: ChainComplex | galois.FieldArray | npt.NDArray[np.int_],
+        chain_b: ChainComplex | galois.FieldArray | npt.NDArray[np.int_],
         field: int | None = None,
     ) -> ChainComplex:
         """Tensor product of a chain complex and the dual of another chain complex.
