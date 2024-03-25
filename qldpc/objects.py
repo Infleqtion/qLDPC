@@ -356,7 +356,7 @@ class ChainComplex:
         return self._ops
 
     @property
-    def length(self) -> tuple[npt.NDArray[np.int_], ...]:
+    def length(self) -> int:
         """The length of this chain complex."""
         return len(self.ops)
 
@@ -388,7 +388,7 @@ class ChainComplex:
             raise ValueError("Cannot take tensor product of chain complexes over different fields")
         chain_field = chain_a.field
 
-        def get_degree_pairs(degree: int) -> Iterator[int]:
+        def get_degree_pairs(degree: int) -> Iterator[tuple[int, int]]:
             """Pairs of chain degrees that add up to the given total degree."""
             min_degree_a = max(degree - chain_b.length, 0)
             max_degree_a = min(chain_a.length, degree)
