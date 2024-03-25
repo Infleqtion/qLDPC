@@ -20,11 +20,16 @@ from __future__ import annotations
 import dataclasses
 import enum
 import itertools
-from collections.abc import Collection
+from collections.abc import Collection, Iterator
 
+import galois
 import networkx as nx
+import numpy as np
+import numpy.typing as npt
 
 from qldpc import abstract
+
+DEFAULT_FIELD_ORDER = 2
 
 
 class Pauli(enum.Enum):
@@ -308,3 +313,165 @@ class CayleyComplex:
             aa * gg != gg * bb
             for gg, aa, bb in itertools.product(group.generate(), subset_a, subset_b)
         )
+
+
+# TODO: investigate the lifted product for chain complexes: https://arxiv.org/pdf/2012.04068.pdf
+class ChainComplex:
+    """Chain complex: a sequence modules with "boundary operators" that map between them.
+
+    An n-chain complex with modules (A_0, A_1, ..., A_n) can be written as
+
+    {} <--[d_0] A_0 <--[d_1] A_1 <-- ... <--[d_n] A_n <--[d_{n+1}] {}
+
+    Here j is called the "degree" of A_j, and d_j : A_j --> A_{j-1} is a "boundary operator" or
+    "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j_1} = 0.
+
+    In practice, we represent a chain complex by the boundary operators (d_1, d_2, ..., d_n), which
+    are in turn represented by matrices over (a) a finite field or (b) a group algebra.  The
+    boundary operators d_0 and d_{n+1} are formally treated as 0×dim(A_0) and dim(A_n)×0 matrices.
+
+    References:
+    - https://en.wikipedia.org/wiki/Chain_complex
+    - https://arxiv.org/abs/1810.01519
+    - https://arxiv.org/abs/2103.06309
+    """
+
+    _field: type[galois.FieldArray]
+    _ops: tuple[galois.FieldArray, ...]
+
+    def __init__(self, *ops: npt.NDArray[np.int_], field: int | None = None) -> None:
+        fields = set(type(op) for op in ops if isinstance(op, galois.FieldArray))
+        fields |= set([galois.GF(field)]) if field is not None else set()
+        if len(fields) > 1:
+            raise ValueError("Inconsistent base fields provided for chain complex")
+        self._field = fields.pop() if fields else galois.GF(DEFAULT_FIELD_ORDER)
+
+        self._ops = tuple(self.field(op) for op in ops)
+        for degree in range(1, self.num_links):
+            op_a = self.op(degree)
+            op_b = self.op(degree + 1)
+            if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
+                raise ValueError(
+                    "Condition for a chain complex not satisfied:\n"
+                    "Neighboring boundary operators of a chain complex must compose to zero"
+                )
+
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """The base field of this chain complex."""
+        return self._field
+
+    @property
+    def ops(self) -> tuple[npt.NDArray[np.int_], ...]:
+        """The boundary operators of this chain complex."""
+        return self._ops
+
+    @property
+    def num_links(self) -> int:
+        """The number of "internal" links in this chain complex."""
+        return len(self.ops)
+
+    def dim(self, degree: int) -> int:
+        """The dimension of the module of the given degree."""
+        return self.op(degree).shape[1]
+
+    def op(self, degree: int) -> npt.NDArray[np.int_]:
+        """The boundary operator of this chain complex that acts on the module of a given degree."""
+        assert 0 <= degree <= self.num_links + 1
+        if degree == 0:
+            return self.field.Zeros((0, self.ops[0].shape[0]))
+        if degree == len(self._ops) + 1:
+            return self.field.Zeros((self.ops[-1].shape[1], 0))
+        return self.ops[degree - 1]
+
+    def dual(self) -> ChainComplex:
+        """Dual to this chain complex: reversed order of transposed boundary operators."""
+        dual_ops = [op.T for op in self.ops[::-1]]
+        return ChainComplex(*dual_ops)
+
+    def __invert__(self) -> ChainComplex:
+        return self.dual()
+
+    @classmethod
+    def tensor_product(  # noqa: C901 ignore complexity check
+        cls,
+        chain_a: ChainComplex | npt.NDArray[np.int_],
+        chain_b: ChainComplex | npt.NDArray[np.int_],
+        field: int | None = None,
+    ) -> ChainComplex:
+        """Tensor product of two chain complexes.
+
+        The tensor product of chain complexes C_A and C_B, respectively with modules (A_0, A_1, ...)
+        and (B_0, B_1, ...), is a new chain complex C_P with modules (P_0, P_1, ...).  The module
+        P_k of degree k can be written as a direct sum of tensor products A_i ⊗ B_j for which i+j=k,
+        that is:
+
+        [1] P_k = ⨁_{i+j=k} A_i ⊗ B_j.
+
+        The boundary operator d_k in C_P is defined by its action on each "sector" (i, j), namely
+
+        [2] d_{i+j}(a ⊗ b) = d_i^A(a) ⊗ b + (-1)^i a ⊗ d_j^B(b),
+
+        where a ∈ A_i, b ∈ B_j, and d_i^A, d_j^B are boundary operators of C_A and C_B.  The total
+        boundary operator d_k of C_P is then a direct sum of boundary operators defined on sectors
+        (i, j) with i+j=k.
+
+        In practice, to construct a boundary operator d_k we build a block matrix whose rows and
+        columns correspond, respectively, to sectors of P_{k-1} and P_k.  We then populate this
+        block matrix by the maps between sectors of P_k and P_{k-1} that are induced by the
+        definition of d_{i+j}.
+        """
+        if not isinstance(chain_a, ChainComplex):
+            chain_a = ChainComplex(chain_a, field=field)
+        if not isinstance(chain_b, ChainComplex):
+            chain_b = ChainComplex(chain_b, field=field)
+        if chain_a.field is not chain_b.field:
+            raise ValueError("Cannot take tensor product of chain complexes over different fields")
+        chain_field = chain_a.field
+
+        def get_degree_pairs(degree: int) -> Iterator[tuple[int, int]]:
+            """Pairs of degrees that add up to the given total degree."""
+            min_deg_a = max(degree - chain_b.num_links, 0)
+            max_deg_a = min(chain_a.num_links, degree)
+            for deg_a in range(max_deg_a, min_deg_a - 1, -1):
+                yield deg_a, degree - deg_a
+
+        def get_block_index(deg_a: int, deg_b: int) -> int:
+            """Index of the "sector" with the given degrees in the direct sum of two chains."""
+            max_deg_a = min(chain_a.num_links, deg_a + deg_b)
+            return max_deg_a - deg_a
+
+        def get_zero_block(
+            row_degs: tuple[int, int], col_degs: tuple[int, int]
+        ) -> npt.NDArray[np.int_]:
+            """Get a zero matrix to fill in a block of a total boundary operator."""
+            row_deg_a, row_deg_b = row_degs
+            col_deg_a, col_deg_b = col_degs
+            rows = chain_a.dim(row_deg_a) * chain_b.dim(row_deg_b)
+            cols = chain_a.dim(col_deg_a) * chain_b.dim(col_deg_b)
+            return chain_field.Zeros((rows, cols))
+
+        ops: list[npt.NDArray[np.int_]] = []
+        for degree in range(1, chain_a.num_links + chain_b.num_links + 1):
+            # fill in zero blocks of the total boundary operator
+            blocks = [
+                [get_zero_block(row_degs, col_degs) for col_degs in get_degree_pairs(degree)]
+                for row_degs in get_degree_pairs(degree - 1)
+            ]
+
+            # fill in nonzero blocks of the total boundary operator
+            for col, (deg_a, deg_b) in enumerate(get_degree_pairs(degree)):
+                op_a = chain_a.op(deg_a)
+                op_b = chain_b.op(deg_b)
+                if deg_a:
+                    row = get_block_index(deg_a - 1, deg_b)
+                    iden_b = np.identity(op_b.shape[1], dtype=op_b.dtype)
+                    blocks[row][col] = np.kron(op_a, iden_b)
+                if deg_b:
+                    row = get_block_index(deg_a, deg_b - 1)
+                    iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype)
+                    blocks[row][col] = np.kron(iden_a, op_b) * (-1) ** deg_a
+
+            ops.append(np.block(blocks))
+
+        return ChainComplex(*ops, field=chain_field.order)

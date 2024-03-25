@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import galois
 import numpy as np
 import pytest
 
@@ -112,3 +113,24 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     assert cayplex.graph.number_of_nodes() == size_g
     assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
     assert len(cayplex.faces) == size_g * size_a * size_b // 4
+
+
+def test_chain_complex(field: int = 3) -> None:
+    """Chain complex construction and errors."""
+
+    # tensor product of one-complexes
+    mat = np.random.randint(field, size=(2, 3))
+    two_chain = objects.ChainComplex.tensor_product(mat, mat, field)
+    assert not np.any(two_chain.op(0))
+    assert not np.any(two_chain.op(two_chain.num_links + 1))
+
+    # tensor product of a two-complex and its dual
+    objects.ChainComplex.tensor_product(two_chain, ~two_chain, field)
+
+    # invalid chain complex constructions
+    with pytest.raises(ValueError, match="Inconsistent base fields"):
+        objects.ChainComplex(galois.GF(field)(mat), field=field**2)
+    with pytest.raises(ValueError, match="boundary operators .* must compose to zero"):
+        objects.ChainComplex(mat, mat, field=field)
+    with pytest.raises(ValueError, match="different fields"):
+        objects.ChainComplex.tensor_product(galois.GF(field)(mat), galois.GF(field**2)(mat))

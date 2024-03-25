@@ -1286,11 +1286,15 @@ class HGPCode(CSSCode):
 
         The parity check matrices of the hypergraph product code are:
 
-        matrix_x = [H1 ⊗ In2,  Im1 ⊗ H2.T]
-        matrix_z = [In1 ⊗ H2, -H1.T ⊗ Im2]
+        matrix_x = [ H1 ⊗ In2, Im1 ⊗ H2.T]
+        matrix_z = [-In1 ⊗ H2, H1.T ⊗ Im2]
 
         Here (H1, H2) == (matrix_a, matrix_b), and I[m/n][1/2] are identity matrices,
         with (m1, n1) = H1.shape and (m2, n2) = H2.shape.
+
+        A minus sign in one sector of matrix_x or matrix_z is necessary to satisfy CSS code
+        requirements with nonbinary fields.  The placement of this sign is chosen for consistency
+        with the tensor product of chain complexes.
         """
         if code_b is None:
             code_b = code_a
@@ -1327,7 +1331,7 @@ class HGPCode(CSSCode):
 
         # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
-        matrix_z = np.block([mat_In1_H2, -mat_H1_Im2_T])
+        matrix_z = np.block([-mat_In1_H2, mat_H1_Im2_T])
         return matrix_x, matrix_z
 
     @classmethod
@@ -1357,14 +1361,13 @@ class HGPCode(CSSCode):
                 # make this a X-type operator
                 op = ~op
 
-            # special treatment of qudits in the (1, 1) sector
-            if not node_qudit[0].is_data:
-                # account for the minus sign in the Z-type subcode
-                if node_check[0].is_data:
-                    op = -op
-                # flip X <--> Z operators for the conjugated code
-                if conjugate:
-                    op = ~op
+            # for a conjugated code, flip X <--> Z operators in the (1, 1) sector
+            if conjugate and not node_qudit[0].is_data:
+                op = ~op
+
+            # account for the minus sign in the (0, 0) sector of the Z-type subcode
+            if node_qudit[0].is_data and node_check[0].is_data:
+                op = -op
 
             graph[node_check][node_qudit][QuditOperator] = op
 
@@ -1487,7 +1490,7 @@ class LPCode(CSSCode):
 
         # construct the X-sector and Z-sector parity check matrices
         matrix_x = abstract.Protograph(np.block([mat_H1_In2, mat_Im1_H2_T])).lift()
-        matrix_z = abstract.Protograph(np.block([mat_In1_H2, -mat_H1_Im2_T])).lift()
+        matrix_z = abstract.Protograph(np.block([-mat_In1_H2, mat_H1_Im2_T])).lift()
         return matrix_x, matrix_z
 
 

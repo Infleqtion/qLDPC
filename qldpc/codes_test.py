@@ -208,14 +208,19 @@ def test_graph_product(
     bits_checks_b: tuple[int, int] = (3, 2),
     conjugate: bool = True,
 ) -> None:
-    """Equivalency of matrix-based and graph-based hypergraph products."""
+    """Equivalency of matrix-based, graph-based, and chain-based hypergraph products."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
 
     code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph, conjugate=conjugate)
-    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+    chain = objects.ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
+    matrix_x, matrix_z = chain.op(1), chain.op(2).T
+
     assert nx.utils.graphs_equal(code.graph, graph)
+    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+    assert np.array_equal(code.matrix_x, matrix_x)
+    assert np.array_equal(code.matrix_z, matrix_z)
 
 
 def test_trivial_lift(
