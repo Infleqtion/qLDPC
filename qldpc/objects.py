@@ -330,8 +330,12 @@ class ChainComplex:
     _ops: tuple[galois.FieldArray, ...]
 
     def __init__(self, *ops: npt.NDArray[np.int_], field: int | None = None) -> None:
-        # TODO: get field from ops
-        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        fields = set(type(op) for op in ops if isinstance(op, galois.FieldArray))
+        fields |= set([galois.GF(field)]) if field is not None else set()
+        if len(fields) > 1:
+            raise ValueError("Inconsistent base fields provided for chain complex")
+        self._field = fields.pop() if fields else galois.GF(DEFAULT_FIELD_ORDER)
+
         self._ops = tuple(self.field(op) for op in ops)
         for degree in range(1, self.length):
             op_a = self.op(degree)
@@ -410,7 +414,7 @@ class ChainComplex:
             ]
             for col, (deg_a, deg_b) in enumerate(get_degree_pairs(degree)):
                 op_a = chain_a.op(deg_a)
-                op_b = chain_a.op(deg_b)
+                op_b = chain_b.op(deg_b)
                 if deg_a:
                     row = get_block_index(deg_a - 1, deg_b)
                     iden_b = np.identity(op_b.shape[1], dtype=op_b.dtype)
