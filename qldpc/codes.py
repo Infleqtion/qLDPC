@@ -1327,7 +1327,7 @@ class HGPCode(CSSCode):
 
         # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
-        matrix_z = np.block([mat_In1_H2, -mat_H1_Im2_T])
+        matrix_z = np.block([-mat_In1_H2, mat_H1_Im2_T])
         return matrix_x, matrix_z
 
     @classmethod
