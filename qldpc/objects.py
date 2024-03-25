@@ -326,9 +326,9 @@ class ChainComplex:
     Here j is called the "degree" of A_j, and d_j : A_j --> A_{j-1} is a "boundary operator" or
     "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j_1} = 0.
 
-    In practice, we define a chain complex by the boundary operators (d_1, d_2, ..., d_n), which are
-    in turn represented by matrices over (a) a finite field or (b) a group algebra.  The boundary
-    operators d_0 and d_{n+1} are formally treated as 0 × dim(A_0) and dim(A_n) × 0 matrices.
+    In practice, we represent a chain complex by the boundary operators (d_1, d_2, ..., d_n), which
+    are in turn represented by matrices over (a) a finite field or (b) a group algebra.  The
+    boundary operators d_0 and d_{n+1} are formally treated as 0×dim(A_0) and dim(A_n)×0 matrices.
 
     References:
     - https://en.wikipedia.org/wiki/Chain_complex
@@ -420,7 +420,9 @@ class ChainComplex:
             min_degree_a = max(deg_a + deg_b - chain_b.length, 0)
             return deg_a - min_degree_a
 
-        def get_zero_block(row_degs: tuple[int, int], col_degs: tuple[int, int]) -> tuple[int, int]:
+        def get_zero_block(
+            row_degs: tuple[int, int], col_degs: tuple[int, int]
+        ) -> npt.NDArray[np.int_]:
             """Get a zero matrix to fill a block in a total boundary operator."""
             row_deg_a, row_deg_b = row_degs
             col_deg_a, col_deg_b = col_degs
@@ -428,7 +430,7 @@ class ChainComplex:
             cols = chain_a.dim(col_deg_a) * chain_b.dim(col_deg_b)
             return chain_field.Zeros((rows, cols))
 
-        ops = []
+        ops: list[npt.NDArray[np.int_]] = []
         for degree in range(1, chain_a.length + chain_b.length + 1):
             # fill in zeros for the total boundary operator as a block matrix
             blocks = [
