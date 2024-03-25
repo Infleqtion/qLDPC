@@ -536,18 +536,22 @@ class Protograph(npt.NDArray[np.object_]):
 
     _group: Group
 
-    def __new__(cls, array: npt.NDArray[np.object_] | Sequence[Sequence[object]]) -> Protograph:
+    def __new__(
+        cls, array: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
+    ) -> Protograph:
         protograph = np.asarray(array).view(cls)
 
         # identify the base group for this protograph
-        group = None
-        if hasattr(array, "group"):
-            group = array.group
-        else:
-            for value in protograph.ravel():
-                if hasattr(value, "group"):
-                    group = value.group
-                    break
+        for value in protograph.ravel():
+            if not isinstance(value, Element):
+                raise ValueError(
+                    "Requirement failed: all entries of a protograph must be Element-valued"
+                )
+            else:
+                if not (group is None or group == value.group):
+                    raise ValueError("Inconsistent base groups provided for protograph")
+                group = value.group
+
         if group is None:
             raise ValueError("Cannot determine underlying group for a protograh")
         protograph._group = group
