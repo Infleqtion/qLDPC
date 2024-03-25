@@ -696,7 +696,7 @@ class CSSCode(QuditCode):
     def is_valid(self) -> bool:
         """Is this a valid CSS code?"""
         return self.code_x.num_bits == self.code_z.num_bits and not np.any(
-            self.code_x.matrix @ self.code_z.matrix.T
+            self.matrix_x @ self.matrix_z.T
         )
 
     @functools.cached_property
@@ -704,11 +704,21 @@ class CSSCode(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [self.code_z.matrix, np.zeros_like(self.code_z.matrix)],
-                [np.zeros_like(self.code_x.matrix), self.code_x.matrix],
+                [self.matrix_z, np.zeros_like(self.matrix_z)],
+                [np.zeros_like(self.matrix_x), self.matrix_x],
             ]
         )
         return self.field(self.conjugate(matrix, self.conjugated_qubits))
+
+    @property
+    def matrix_x(self) -> galois.FieldArray:
+        """X-type parity checks."""
+        return self.code_x.matrix
+
+    @property
+    def matrix_z(self) -> galois.FieldArray:
+        """Z-type parity checks."""
+        return self.code_z.matrix
 
     @property
     def conjugated_qubits(self) -> slice | Sequence[int]:
@@ -718,12 +728,12 @@ class CSSCode(QuditCode):
     @property
     def num_checks(self) -> int:
         """Number of parity checks in this code."""
-        return self.code_x.matrix.shape[0] + self.code_z.matrix.shape[0]
+        return self.matrix_x.shape[0] + self.matrix_z.shape[0]
 
     @property
     def num_qudits(self) -> int:
         """Number of data qudits in this code."""
-        return self.code_x.matrix.shape[1]
+        return self.matrix_x.shape[1]
 
     @property
     def dimension(self) -> int:
@@ -974,8 +984,8 @@ class CSSCode(QuditCode):
             return matrix_RRE, pivots, other
 
         # identify check matrices for X/Z-type errors, and the current qudit locations
-        checks_x: npt.NDArray[np.int_] = self.code_z.matrix
-        checks_z: npt.NDArray[np.int_] = self.code_x.matrix
+        checks_x: npt.NDArray[np.int_] = self.matrix_z
+        checks_z: npt.NDArray[np.int_] = self.matrix_x
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
@@ -1699,8 +1709,8 @@ class SurfaceCode(CSSCode):
             code_a = RepetitionCode(rows, field)
             code_b = RepetitionCode(cols, field)
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
-            matrix_x = code_ab.code_x.matrix
-            matrix_z = code_ab.code_z.matrix
+            matrix_x = code_ab.matrix_x
+            matrix_z = code_ab.matrix_z
             qubits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
@@ -1821,8 +1831,8 @@ class ToricCode(CSSCode):
             code_a = RingCode(rows, field)
             code_b = RingCode(cols, field)
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
-            matrix_x = code_ab.code_x.matrix
-            matrix_z = code_ab.code_z.matrix
+            matrix_x = code_ab.matrix_x
+            matrix_z = code_ab.matrix_z
             qubits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
