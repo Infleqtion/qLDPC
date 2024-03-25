@@ -201,6 +201,16 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers(["I", "I I"], field)
 
 
+def test_quantum_distance(field: int = 2) -> None:
+    """Distance calculations for qudit codes."""
+    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
+    assert code.get_distance() == 2
+
+    # assert that the identity is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+
+
 @pytest.mark.parametrize("field", [2, 3])
 def test_graph_product(
     field: int,
@@ -464,13 +474,3 @@ def test_toric_codes(field: int = 3) -> None:
     # rotated toric code must have even side lengths
     with pytest.raises(ValueError, match="must have even side lengths"):
         codes.ToricCode(3, rotated=True)
-
-
-def test_quantum_distance(field: int = 2) -> None:
-    """Distance calculations for qudit codes."""
-    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
-    assert code.get_distance() == 2
-
-    # assert that the identity is a logical operator
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
