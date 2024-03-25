@@ -312,6 +312,7 @@ class CayleyComplex:
         )
 
 
+# TODO: investigate the lifted product for chain complexes: https://arxiv.org/pdf/2012.04068.pdf
 class ChainComplex:
     """Chain complex, defined by its boundary operators.
 
