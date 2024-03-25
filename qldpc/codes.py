@@ -1848,7 +1848,7 @@ class ToricCode(CSSCode):
 
 
 class GeneralizedSurfaceCode(CSSCode):
-    """Multi-dimensional surface or toric code.
+    """Surface or toric code defined on a multi-dimensional hypercubic lattice.
 
     Reference: https://errorcorrectionzoo.org/c/higher_dimensional_surface
     """
