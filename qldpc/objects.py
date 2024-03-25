@@ -420,7 +420,7 @@ class ChainComplex:
                 if deg_b:
                     row = get_block_index(deg_a, deg_b - 1)
                     iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype)
-                    blocks[row][col] = np.kron(iden_a, op_b)
+                    blocks[row][col] = np.kron(iden_a, op_b) * (-1) ** deg_a
 
             ops.append(np.block(blocks))
 
