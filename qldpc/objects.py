@@ -375,8 +375,16 @@ class ChainComplex:
         return self.ops[degree - 1]
 
     @classmethod
-    def tensor_product(cls, chain_a: ChainComplex, chain_b: ChainComplex) -> ChainComplex:
+    def tensor_product(  # noqa: C901 ignore complexity check
+        cls,
+        chain_a: ChainComplex | npt.NDArray[np.int_],
+        chain_b: ChainComplex | npt.NDArray[np.int_],
+    ) -> ChainComplex:
         """Take the tensor product of two chain complexes."""
+        if not isinstance(chain_a, ChainComplex):
+            chain_a = ChainComplex(chain_a)
+        if not isinstance(chain_b, ChainComplex):
+            chain_b = ChainComplex(chain_b)
         if chain_a.field is not chain_b.field:
             raise ValueError("Cannot take tensor product of chain complexes over different fields")
         chain_field = chain_a.field
