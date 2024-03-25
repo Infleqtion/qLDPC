@@ -1320,7 +1320,9 @@ class HGPCode(CSSCode):
 
     @classmethod
     def get_matrix_product(
-        cls, matrix_a: npt.NDArray[np.int_], matrix_b: npt.NDArray[np.int_]
+        cls,
+        matrix_a: npt.NDArray[np.int_ | np.object_],
+        matrix_b: npt.NDArray[np.int_ | np.object_],
     ) -> nx.DiGraph:
         """Hypergraph product of two parity check matrices."""
         # construct the nontrivial blocks of the final parity check matrices
@@ -1411,9 +1413,9 @@ class LPCode(CSSCode):
 
     A lifted product code is essentially the same as a hypergraph product code, except that the
     parity check matrices are "protographs", or matrices whose entries are members of a group
-    algebra over the field Z_2 ~ {0,1}.  Each of these entries can be "lifted" to a representation
-    as orthogonal matrices over a finite field, in which case the protograph is interpreted as a
-    block matrix; this is called "lifting" the protograph.
+    algebra over a finite field F_q.  Each of these entries can be "lifted" to a representation as
+    orthogonal matrices over F_q, in which case the protograph is interpreted as a block matrix;
+    this is called "lifting" the protograph.
 
     Notes:
     - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
@@ -1443,7 +1445,9 @@ class LPCode(CSSCode):
         field = protograph_a.field.order
 
         # identify X-sector and Z-sector parity checks
-        matrix_x, matrix_z = LPCode.get_matrix_product(protograph_a, protograph_b)
+        matrix_x, matrix_z = HGPCode.get_matrix_product(protograph_a, protograph_b)
+        matrix_x = abstract.Protograph(matrix_x).lift()
+        matrix_z = abstract.Protograph(matrix_z).lift()
 
         # identify the number of qudits in each sector
         self.sector_size = protograph_a.group.lift_dim * np.outer(
@@ -1457,41 +1461,6 @@ class LPCode(CSSCode):
         CSSCode.__init__(
             self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
         )
-
-    @classmethod
-    def get_matrix_product(
-        cls, protograph_a: abstract.Protograph, protograph_b: abstract.Protograph
-    ) -> nx.DiGraph:
-        """Matrix-based hypergraph product similar to that in HGPCode, but with protographs.
-
-        There is one crucial subtlety when computing the hypergraph product of protographs.  When
-        taking the transpose of a protograph, P --> P.T, we also need to transpose the individual
-        (algebra-valued) entries of the protograph.  That is,
-
-        P = ⌈ a, b ⌉  ==>  P.T = ⌈ a.T, c.T ⌉
-            ⌊ c, d ⌋             ⌊ b.T, d.T ⌋.
-
-        If we simply take the hypergraph product of two protograph matrices directly, numpy will not
-        know to take the transpose of matrix entries when taking the transpose of a matrix.  For
-        this reason, we need to take the transpose of a protograph "manually" when using it for the
-        hypergraph product.
-        """
-        # identify sub-matrices and their transposes
-        matrix_a = protograph_a.matrix
-        matrix_b = protograph_b.matrix
-        matrix_a_T = protograph_a.T.matrix
-        matrix_b_T = protograph_b.T.matrix
-
-        # construct the nontrivial blocks of the final parity check matrices
-        mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
-        mat_H1_Im2_T = np.kron(matrix_a_T, np.eye(matrix_b.shape[0], dtype=int))
-        mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b_T)
-
-        # construct the X-sector and Z-sector parity check matrices
-        matrix_x = abstract.Protograph(np.block([mat_H1_In2, mat_Im1_H2_T])).lift()
-        matrix_z = abstract.Protograph(np.block([-mat_In1_H2, mat_H1_Im2_T])).lift()
-        return matrix_x, matrix_z
 
 
 ################################################################################
