@@ -347,7 +347,7 @@ class ChainComplex:
         self._field = fields.pop() if fields else galois.GF(DEFAULT_FIELD_ORDER)
 
         self._ops = tuple(self.field(op) for op in ops)
-        for degree in range(1, self.length):
+        for degree in range(1, self.links):
             op_a = self.op(degree)
             op_b = self.op(degree + 1)
             if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
@@ -367,8 +367,8 @@ class ChainComplex:
         return self._ops
 
     @property
-    def length(self) -> int:
-        """The length of this chain complex."""
+    def links(self) -> int:
+        """The number of "internal" links in this chain complex."""
         return len(self.ops)
 
     def dim(self, degree: int) -> int:
@@ -377,7 +377,7 @@ class ChainComplex:
 
     def op(self, degree: int) -> npt.NDArray[np.int_]:
         """The boundary operator of this chain complex that acts on the module of a given degree."""
-        assert 0 <= degree <= self.length + 1
+        assert 0 <= degree <= self.links + 1
         if degree == 0:
             return self.field.Zeros((0, self.ops[0].shape[0]))
         if degree == len(self._ops) + 1:
@@ -399,7 +399,28 @@ class ChainComplex:
         chain_b: ChainComplex | npt.NDArray[np.int_],
         field: int | None = None,
     ) -> ChainComplex:
-        """Take the tensor product of two chain complexes."""
+        """Tensor product of two chain complexes.
+
+        The tensor product of chain complexes C_A and C_B, respectively with modules (A_0, A_1, ...)
+        and (B_0, B_1, ...), is a new chain complex C_P with modules (P_0, P_1, ...).  The module
+        P_k of degree k can be written as a direct sum of tensor products A_i ⊗ B_j for which i+j=k,
+        that is:
+
+        [1] P_k = ⨁_{i+j=k} A_i ⊗ B_j.
+
+        The boundary operator d_k in C_P is defined by its action on each "sector" (i, j), namely
+
+        [2] d_{i+j}(a ⊗ b) = d_i^A(a) ⊗ b + (-1)^i a ⊗ d_j^B(b),
+
+        where a ∈ A_i, b ∈ B_j, and d_i^A, d_j^B are boundary operators of C_A and C_B.  The total
+        boundary operator d_k of C_P is then a direct sum of boundary operators defined on sectors
+        (i, j) with i+j=k.
+
+        In practice, to construct a boundary operator d_k we build a block matrix whose rows and
+        columns correspond, respectively, to sectors of P_{k-1} and P_k.  We then populate this
+        block matrix by the maps between sectors of P_k and P_{k-1} that are induced by the
+        definition of d_{i+j}.
+        """
         if not isinstance(chain_a, ChainComplex):
             chain_a = ChainComplex(chain_a, field=field)
         if not isinstance(chain_b, ChainComplex):
@@ -409,21 +430,21 @@ class ChainComplex:
         chain_field = chain_a.field
 
         def get_degree_pairs(degree: int) -> Iterator[tuple[int, int]]:
-            """Pairs of chain degrees that add up to the given total degree."""
-            min_deg_a = max(degree - chain_b.length, 0)
-            max_deg_a = min(chain_a.length, degree)
+            """Pairs of degrees that add up to the given total degree."""
+            min_deg_a = max(degree - chain_b.links, 0)
+            max_deg_a = min(chain_a.links, degree)
             for deg_a in range(max_deg_a, min_deg_a - 1, -1):
                 yield deg_a, degree - deg_a
 
         def get_block_index(deg_a: int, deg_b: int) -> int:
-            """Index of the "factor" with the given degrees in the direct sum of two chains."""
-            max_deg_a = min(chain_a.length, deg_a + deg_b)
+            """Index of the "sector" with the given degrees in the direct sum of two chains."""
+            max_deg_a = min(chain_a.links, deg_a + deg_b)
             return max_deg_a - deg_a
 
         def get_zero_block(
             row_degs: tuple[int, int], col_degs: tuple[int, int]
         ) -> npt.NDArray[np.int_]:
-            """Get a zero matrix to fill a block in a total boundary operator."""
+            """Get a zero matrix to fill in a block of a total boundary operator."""
             row_deg_a, row_deg_b = row_degs
             col_deg_a, col_deg_b = col_degs
             rows = chain_a.dim(row_deg_a) * chain_b.dim(row_deg_b)
@@ -431,8 +452,8 @@ class ChainComplex:
             return chain_field.Zeros((rows, cols))
 
         ops: list[npt.NDArray[np.int_]] = []
-        for degree in range(1, chain_a.length + chain_b.length + 1):
-            # fill in zeros for the total boundary operator as a block matrix
+        for degree in range(1, chain_a.links + chain_b.links + 1):
+            # fill in zero blocks of the total boundary operator
             blocks = [
                 [get_zero_block(row_degs, col_degs) for col_degs in get_degree_pairs(degree)]
                 for row_degs in get_degree_pairs(degree - 1)
