@@ -131,8 +131,8 @@ class ClassicalCode(AbstractCode):
     ) -> bool:
         """Does this code contain the given word(s)?
 
-        If passed a code, interpret "words" to be "all words in the given code", which are spanned
-        by the code's generator matrix.
+        If passed a ClassicalCode for "words", interpret it to mean "all words in the given code",
+        which are spanned by the code's generator matrix.
         """
         if isinstance(words, ClassicalCode):
             words = words.generator
