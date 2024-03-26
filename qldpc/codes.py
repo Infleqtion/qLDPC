@@ -1790,7 +1790,8 @@ class SurfaceCode(CSSCode):
                 col_indices = [col, col, col + 1, col + 1]
                 check = get_check(row_indices, col_indices)
 
-                if np.count_nonzero(check) not in [2, 4]:
+                # exclude exterior corner tiles that only touch one data qubit
+                if np.count_nonzero(check) == 1:
                     continue
 
                 if row % 2 == col % 2:
