@@ -1907,14 +1907,11 @@ class GeneralizedSurfaceCode(CSSCode):
                 f"The dimension of a generalized surface code should be >= 2 (provided: {dim})"
             )
 
-        base_code: ClassicalCode
-        if periodic:
-            base_code = RingCode(size, field)
-        else:
-            base_code = RepetitionCode(size, field)
+        base_code = RingCode(size, field) if periodic else RepetitionCode(size, field)
 
-        link = ChainComplex(base_code.matrix.T)
+        # build a chain complex one link at a time
         chain = ChainComplex(base_code.matrix)
+        link = ChainComplex(base_code.matrix.T)
         for _ in range(dim - 1):
             chain = ChainComplex.tensor_product(chain, link)
 
