@@ -183,8 +183,8 @@ class ClassicalCode(AbstractCode):
     def equiv(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> bool:
         """Test equivalence between two classical codes.
 
-        Two classical codes are equivalent if they have the same code words.  The code words of
-        classical codes C_A and C_B are spanned by their generator matrices, G_A and G_B.
+        Two classical codes are equivalent if they have the same code words.  Equivalently, codes
+        C_a and C_b are equivalent if they contain each other, C_a ⊆ C_b and C_b ⊆ C_a.
         """
         return code_a.field is code_b.field and code_a in code_b and code_b in code_a
 
