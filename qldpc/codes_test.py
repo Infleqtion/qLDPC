@@ -501,6 +501,7 @@ def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
         # surface code
         code = codes.GeneralizedSurfaceCode(size, dim, periodic=False, field=field)
         assert code.dimension == 1
+        assert code.num_qudits == size**dim + (dim - 1) * size ** (dim - 2) * (size - 1) ** 2
         assert code.get_distance(codes.Pauli.Z, bound=10) == size
         assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
 
