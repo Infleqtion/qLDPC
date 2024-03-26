@@ -162,6 +162,17 @@ class ClassicalCode(AbstractCode):
         """Generator of this code: a matrix whose rows for a basis for code words."""
         return self.matrix.null_space()
 
+    def __eq__(self, other: object) -> bool:
+        """Equality test between two classical codes."""
+        return (
+            isinstance(other, ClassicalCode)
+            and self.field is other.field
+            and (
+                np.array_equal(self.matrix, other.matrix)
+                or np.array_equal(self.generator, other.generator)
+            )
+        )
+
     def words(self) -> galois.FieldArray:
         """Code words of this code."""
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
@@ -368,15 +379,44 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode(matrix)
 
     @classmethod
+    def from_generator(
+        self, generator: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
+    ) -> ClassicalCode:
+        """Construct a ClassicalCode from a generator matrix."""
+        return ~ClassicalCode(generator, field)
+
+    @classmethod
     def from_name(cls, name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
         matrix, field = named_codes.get_code(standardized_name)
         return ClassicalCode(matrix, field)
 
-    # TODO(?): maybe add modification options such as puncturing and shortening
-    # https://users.math.msu.edu/users/halljo/classes/codenotes/mod.pdf
-    # https://journals.aps.org/prl/abstract/10.1103/PhysRevLett.122.230501
+    def puncture(self, *bits: int) -> ClassicalCode:
+        """Delete the specified bits from a code.
+
+        To delete bits from the code, we remove the corresponding columns from its generator matrix.
+        """
+        assert all(0 <= bit < self.num_bits for bit in bits)
+        bits_to_keep = [bit for bit in range(self.num_bits) if bit not in bits]
+        generator = [word[bits_to_keep] for word in self.generator]
+        return ClassicalCode.from_generator(generator, self.field.order)
+
+    def shorten(self, *bits: int) -> ClassicalCode:
+        """Shorten a code to the words that are zero on the specified bits, and delete those bits.
+
+        To shorten a code on a given bit, we:
+        - move the bit to the first position,
+        - row-reduce the generator matrix into the form [ identity_matrix, other_stuff ], and
+        - delete the first row and column from the generator matrix.
+        """
+        assert all(0 <= bit < self.num_bits for bit in bits)
+        generator = self.generator
+        for bit in sorted(bits, reverse=True):
+            generator = np.roll(generator, -bit, axis=1)  # type:ignore[assignment]
+            generator = generator.row_reduce()[1:, 1:]
+            generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
+        return ClassicalCode.from_generator(generator)
 
 
 class RepetitionCode(ClassicalCode):
