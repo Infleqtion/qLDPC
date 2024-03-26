@@ -129,7 +129,7 @@ class ClassicalCode(AbstractCode):
     def __contains__(
         self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]] | ClassicalCode
     ) -> bool:
-        """Does this code contain this given word(s)?
+        """Does this code contain the given word(s)?
 
         If passed a code, interpret "words" to be "all words in the given code", which are spanned
         by the code's generator matrix.
