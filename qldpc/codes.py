@@ -1873,10 +1873,10 @@ class GeneralizedSurfaceCode(CSSCode):
         else:
             base_code = RepetitionCode(size, field)
 
-        base_chain = ChainComplex(base_code.matrix)
+        link = ChainComplex(base_code.matrix.T)
         chain = ChainComplex(base_code.matrix)
         for _ in range(dim - 1):
-            chain = ChainComplex.tensor_product(chain, base_chain.T)
+            chain = ChainComplex.tensor_product(chain, link)
 
             # to reduce computational overhead, remove chain links that we don't care about
             chain = ChainComplex(*chain.ops[:2])
