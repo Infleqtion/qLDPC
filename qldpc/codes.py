@@ -32,7 +32,7 @@ import numpy.typing as npt
 
 import qldpc
 from qldpc import abstract, named_codes
-from qldpc.objects import CayleyComplex, Node, Pauli, QuditOperator
+from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -1885,3 +1885,41 @@ class ToricCode(CSSCode):
                     checks_z.append(check)
 
         return np.array(checks_x), np.array(checks_z)
+
+
+class GeneralizedSurfaceCode(CSSCode):
+    """Surface or toric code defined on a multi-dimensional hypercubic lattice.
+
+    Reference: https://errorcorrectionzoo.org/c/higher_dimensional_surface
+    """
+
+    def __init__(
+        self,
+        size: int,
+        dim: int,
+        periodic: bool = False,
+        field: int | None = None,
+        *,
+        conjugate: slice | Sequence[int] | None = (),
+    ) -> None:
+        if dim < 2:
+            raise ValueError(
+                f"The dimension of a generalized surface code should be >= 2 (provided: {dim})"
+            )
+
+        base_code: ClassicalCode
+        if periodic:
+            base_code = RingCode(size, field)
+        else:
+            base_code = RepetitionCode(size, field)
+
+        link = ChainComplex(base_code.matrix.T)
+        chain = ChainComplex(base_code.matrix)
+        for _ in range(dim - 1):
+            chain = ChainComplex.tensor_product(chain, link)
+
+            # to reduce computational overhead, remove chain links that we don't care about
+            chain = ChainComplex(*chain.ops[:2])
+
+        matrix_x, matrix_z = chain.op(1), chain.op(2).T
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)

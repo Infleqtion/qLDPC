@@ -484,3 +484,32 @@ def test_toric_codes(field: int = 3) -> None:
     # rotated toric code must have even side lengths
     with pytest.raises(ValueError, match="must have even side lengths"):
         codes.ToricCode(3, rotated=True)
+
+
+def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
+    """Multi-dimensional surface and toric codes."""
+
+    # recover ordinary surface code in 2D
+    code = codes.GeneralizedSurfaceCode(size, dim=2, periodic=False, field=field)
+    assert np.array_equal(code.matrix, codes.SurfaceCode(size, rotated=False, field=field).matrix)
+
+    # recover ordinary toric code in 2D
+    code = codes.GeneralizedSurfaceCode(size, dim=2, periodic=True, field=field)
+    assert np.array_equal(code.matrix, codes.ToricCode(size, rotated=False, field=field).matrix)
+
+    for dim in [3, 4]:
+        # surface code
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=False, field=field)
+        assert code.dimension == 1
+        assert code.get_distance(codes.Pauli.Z, bound=10) == size
+        assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
+
+        # toric code
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=True, field=field)
+        assert code.dimension == dim
+        assert code.num_qudits == dim * size**dim
+        assert code.get_distance(codes.Pauli.Z, bound=10) == size
+        assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
+
+    with pytest.raises(ValueError, match=">= 2"):
+        codes.GeneralizedSurfaceCode(size, dim=1)
