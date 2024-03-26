@@ -781,9 +781,19 @@ class CSSCode(QuditCode):
         return self._conjugated_qubits
 
     @property
+    def num_checks_x(self) -> int:
+        """Number of X-type parity checks in this code."""
+        return self.matrix_x.shape[0]
+
+    @property
+    def num_checks_z(self) -> int:
+        """Number of X-type parity checks in this code."""
+        return self.matrix_z.shape[0]
+
+    @property
     def num_checks(self) -> int:
         """Number of parity checks in this code."""
-        return self.matrix_x.shape[0] + self.matrix_z.shape[0]
+        return self.num_checks_x + self.num_checks_z
 
     @property
     def num_qudits(self) -> int:
@@ -1795,7 +1805,8 @@ class SurfaceCode(CSSCode):
                 col_indices = [col, col, col + 1, col + 1]
                 check = get_check(row_indices, col_indices)
 
-                if np.count_nonzero(check) not in [2, 4]:
+                # exclude exterior corner tiles that only touch one data qubit
+                if np.count_nonzero(check) == 1:
                     continue
 
                 if row % 2 == col % 2:
