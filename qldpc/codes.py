@@ -34,7 +34,7 @@ import sympy.combinatorics as comb
 
 import qldpc
 from qldpc import abstract, named_codes
-from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
+from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditOperator
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -825,7 +825,7 @@ class CSSCode(QuditCode):
 
     def get_distance(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        pauli: PauliXZ | None = None,
         *,
         bound: int | bool | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
@@ -848,10 +848,7 @@ class CSSCode(QuditCode):
         return self.get_distance_bound(pauli, num_trials=int(bound), vector=vector, **decoder_args)
 
     def get_distance_exact(
-        self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
+        self, pauli: PauliXZ | None, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
     ) -> int:
         """Compute the minimal weight of a nontrivial code word by brute force.
 
@@ -893,7 +890,7 @@ class CSSCode(QuditCode):
 
     def get_distance_bound(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        pauli: PauliXZ | None = None,
         num_trials: int = 1,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
@@ -915,7 +912,7 @@ class CSSCode(QuditCode):
 
     def get_one_distance_bound(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        pauli: PauliXZ | None = None,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
@@ -993,7 +990,7 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    def get_logical_ops(self, pauli: Literal[Pauli.X, Pauli.Z] | None = None) -> galois.FieldArray:
+    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -1094,7 +1091,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], *, ensure_nontrivial: bool = False
+        self, pauli: PauliXZ, *, ensure_nontrivial: bool = False
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
@@ -1117,9 +1114,7 @@ class CSSCode(QuditCode):
 
         return op_a
 
-    def reduce_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], logical_index: int, **decoder_args: object
-    ) -> None:
+    def reduce_logical_op(self, pauli: PauliXZ, logical_index: int, **decoder_args: object) -> None:
         """Reduce the weight of a logical operator.
 
         A minimal-weight logical operator is found by enforcing that it has a trivial syndrome, and
@@ -1151,9 +1146,7 @@ class CSSCode(QuditCode):
         assert self._logical_ops is not None
         self._logical_ops[pauli, logical_index] = candidate_logical_op
 
-    def reduce_logical_ops(
-        self, pauli: Literal[Pauli.X, Pauli.Z] | None = None, **decoder_args: object
-    ) -> None:
+    def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: object) -> None:
         """Reduce the weight of all logical operators."""
         assert pauli in [None, Pauli.X, Pauli.Z]
         if pauli is None:
@@ -1225,10 +1218,7 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-CyclicIndexMap = Callable[
-    [int, int, int | Literal[Pauli.X, Pauli.Z], tuple[int, int]],
-    tuple[int, int],
-]
+QCCIndexMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
 
 
 # TODO:
@@ -1353,7 +1343,7 @@ class QCCode(GBCode):
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     @functools.cache
-    def get_toric_layout_data(self) -> Sequence[tuple[tuple[int, int], CyclicIndexMap]]:
+    def get_toric_layout_data(self) -> Sequence[tuple[tuple[int, int], QCCIndexMap]]:
         """Get toric layout data, if any, as discussed in arXiv:2308.07915."""
         if not nx.is_weakly_connected(self.graph):
             return []
@@ -1374,6 +1364,19 @@ class QCCode(GBCode):
                 and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
             ):
                 toric_terms.append((a_1, a_2, b_1, b_2))
+
+        def index_map(
+            ii: int,
+            jj: int,
+            sector: int | PauliXZ,
+            sector_shifts: dict[int | PauliXZ, tuple[int, int]],
+            torus_shape: tuple[int, int],
+        ) -> tuple[int, int]:
+            """Map from "original" check/qubit indices to "shifted" check/qubit indices."""
+            s_i = (ii - sector_shifts[sector][0]) % self.orders[0]
+            s_j = (jj - sector_shifts[sector][1]) % self.orders[1]
+            s_a, s_b = index_map_dict[s_i, s_j]
+            return s_a % torus_shape[0], s_b % torus_shape[1]
 
         layout_data = []
         for a_1, a_2, b_1, b_2 in toric_terms:
@@ -1410,29 +1413,20 @@ class QCCode(GBCode):
                 Pauli.Z: self.get_exponents(b_1),
             }
 
-            def index_map(
-                ii: int,
-                jj: int,
-                sector: int | Literal[Pauli.X, Pauli.Z],
-                torus_shape: tuple[int, int],
-            ) -> tuple[int, int]:
-                """Map from "original" check/qubit indices to "shifted" check/qubit indices."""
-                s_i = (ii - sector_shifts[sector][0]) % self.orders[0]
-                s_j = (jj - sector_shifts[sector][1]) % self.orders[1]
-                s_a, s_b = index_map_dict[s_i, s_j]
-                return s_a % torus_shape[0], s_b % torus_shape[1]
-
-            layout_data.append((torus_shape, index_map))
+            _index_map = functools.partial(
+                index_map, sector_shifts=sector_shifts, torus_shape=torus_shape
+            )
+            layout_data.append((torus_shape, _index_map))
 
         return layout_data
 
     def get_shifted_checks(
-        self, torus_shape: tuple[int, int], index_map: CyclicIndexMap
+        self, torus_shape: tuple[int, int], index_map: QCCIndexMap
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Shift qubits and return new X-type and Z-type parity check matrices."""
 
         # loop over each of X-type and Z-type parity checks
-        paulis_xz: list[Literal[Pauli.X, Pauli.Z]] = [Pauli.X, Pauli.Z]
+        paulis_xz: list[PauliXZ] = [Pauli.X, Pauli.Z]
         for pauli in paulis_xz:
             matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
             old_checks = matrix.reshape(*self.orders, 2, *self.orders)
@@ -1440,11 +1434,11 @@ class QCCode(GBCode):
 
             # loop over every check
             for c_i, c_j in np.ndindex(*self.orders):
-                c_a, c_b = index_map(c_i, c_j, pauli, torus_shape)
+                c_a, c_b = index_map(c_i, c_j, pauli)
 
                 # loop over every qubit
                 for sector, d_i, d_j in zip(*np.where(old_checks[c_i, c_j])):
-                    d_a, d_b = index_map(d_i, d_j, sector, torus_shape)
+                    d_a, d_b = index_map(d_i, d_j, sector)
                     new_checks[c_a, c_b, sector, d_a, d_b] = old_checks[c_i, c_j, sector, d_i, d_j]
 
             # save the shifted checks to an X/Z parity check matrix as appropriate

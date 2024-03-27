@@ -21,6 +21,7 @@ import dataclasses
 import enum
 import itertools
 from collections.abc import Collection, Iterator
+from typing import Literal
 
 import galois
 import networkx as nx
@@ -84,6 +85,9 @@ class Pauli(enum.Enum):
         if self == Pauli.Z:
             return 1
         raise AttributeError(f"No index for {self}.")
+
+
+PauliXZ = Literal[Pauli.X, Pauli.Z]
 
 
 class QuditOperator:
