@@ -1317,7 +1317,7 @@ class QCCode(GBCode):
 
     def get_exponents(
         self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> tuple[int, ...]:
+    ) -> tuple[int, int]:
         """Get the exponents of a term, for example converting x**2 y**4 into the (2, 4)."""
         exponents = {}
         if isinstance(expr, sympy.Symbol):
@@ -1329,7 +1329,7 @@ class QCCode(GBCode):
             for factor in expr.args:
                 base, exp = factor.as_base_exp()
                 exponents[base] = exp
-        return tuple(exponents.get(symbol, 0) for symbol in self.symbols)
+        return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     def get_toric_params(self) -> tuple[int, ...] | None:
         """Get toric layout parameters, if any, as discussed in arXiv:2308.07915."""
