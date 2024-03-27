@@ -1225,7 +1225,11 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-LayoutData = tuple[tuple[int, int], Callable[[int, int, str], tuple[int, int]]]
+CyclicIndexMap = Callable[
+    [int, int, int | Literal[Pauli.X, Pauli.Z], tuple[int, int]],
+    tuple[int, int],
+]
+LayoutData = tuple[tuple[int, int], CyclicIndexMap]
 
 
 # TODO:
@@ -1399,50 +1403,53 @@ class QCCode(GBCode):
                 for aa, bb in np.ndindex(torus_shape)
             }
             sector_shifts = {
-                "L": (0, 0),
-                "R": self.get_exponents(a_2 ** (-1) * b_1),
-                "X": self.get_exponents(a_2 ** (-1)),
-                "Z": self.get_exponents(b_1),
+                0: (0, 0),
+                1: self.get_exponents(a_2 ** (-1) * b_1),
+                Pauli.X: self.get_exponents(a_2 ** (-1)),
+                Pauli.Z: self.get_exponents(b_1),
             }
 
-            def index_map(ii: int, jj: int, sector: str) -> tuple[int, int]:
+            def index_map(
+                ii: int, jj: int, sector: int | Literal[Pauli.X, Pauli.Z], shape: tuple[int, int]
+            ) -> tuple[int, int]:
                 s_i = (ii - sector_shifts[sector][0]) % self.orders[0]
                 s_j = (jj - sector_shifts[sector][1]) % self.orders[1]
                 s_a, s_b = index_map_dict[s_i, s_j]
-                return s_a % torus_shape[0], s_b % torus_shape[1]
+                return s_a % shape[0], s_b % shape[1]
 
             layout_data.append((torus_shape, index_map))
 
         return layout_data
 
     def get_shifted_checks(
-        self, pauli: Literal["X", "Z"], xx: int, yy: int, layout_data: LayoutData
-    ) -> tuple[tuple[int, int], ...]:
-        """Get the relative shifts from a check operator to the qubits it is checking."""
-        torus_shape, index_map = layout_data
-        print(torus_shape)
-        matrix = self.matrix_x if pauli == "X" else self.matrix_z
-        checks = matrix.reshape(*self.orders, 2, *self.orders)
-        shifts = set()
-        for c_i, c_j in np.ndindex(*self.orders):
-            c_a, c_b = index_map(c_i, c_j, pauli)
-            for sector, label in enumerate(["L", "R"]):
-                d_mat = checks[c_i, c_j, sector, :, :]
-                d_rows, d_cols = np.where(d_mat)
-                for d_i, d_j in zip(*np.where(d_mat)):
-                    d_a, d_b = index_map(d_i, d_j, label)
-                    shift = ((d_a - c_a) % torus_shape[0], (d_b - c_b) % torus_shape[1])
-                    shifts.add(shift)
+        self, torus_shape: tuple[int, int], index_map: CyclicIndexMap
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Shift qubits and return new X-type and Z-type parity check matrices."""
 
-        shifts = {
-            (
-                xx if xx <= torus_shape[0] / 2 else xx - torus_shape[0],
-                yy if yy <= torus_shape[1] / 2 else yy - torus_shape[1],
-            )
-            for xx, yy in shifts
-        }
-        print(shifts)
-        exit()
+        # loop over each of X-type and Z-type parity checks
+        paulis_xz: list[Literal[Pauli.X, Pauli.Z]] = [Pauli.X, Pauli.Z]
+        for pauli in paulis_xz:
+            matrix = self.matrix_x if pauli == "X" else self.matrix_z
+            old_checks = matrix.reshape(*self.orders, 2, *self.orders)
+            new_checks = self.field.Zeros((*torus_shape, 2, *torus_shape))
+
+            # loop over every check
+            for c_i, c_j in np.ndindex(*self.orders):
+                c_a, c_b = index_map(c_i, c_j, pauli, torus_shape)
+
+                # loop over every qubit
+                for sector, d_i, d_j in zip(*np.where(old_checks[c_i, c_j])):
+                    d_a, d_b = index_map(d_i, d_j, sector, torus_shape)
+                    new_checks[c_a, c_b, sector, d_a, d_b] = old_checks[c_i, c_j, sector, d_i, d_j]
+
+            # save the shifted checks to an X/Z parity check matrix as appropriate
+            if pauli == Pauli.X:
+                matrix_x = new_checks.reshape(self.matrix_x.shape)
+            else:
+                assert pauli == Pauli.Z
+                matrix_z = new_checks.reshape(self.matrix_z.shape)
+
+        return matrix_x, matrix_z
 
 
 ################################################################################
