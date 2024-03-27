@@ -106,7 +106,7 @@ def test_algebra() -> None:
     zero = abstract.Element(group)
     one = abstract.Element(group).one()
     assert zero.group == group
-    assert one + one + one == group.identity + 2 * one == -one + one == one - one == zero
+    assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
     assert group.identity * one == one * group.identity == one**2 == one
     assert np.array_equal(zero.lift(), np.array(0, ndmin=2))
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))

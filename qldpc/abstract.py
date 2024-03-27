@@ -424,41 +424,47 @@ class Element:
     def __iter__(self) -> Iterator[tuple[GroupMember, galois.FieldArray]]:
         yield from self._vec.items()
 
-    def __add__(self, other: GroupMember | Element) -> Element:
-        new_element = self.copy()
+    def __add__(self, other: int | GroupMember | Element) -> Element:
+        if isinstance(other, int):
+            return self + other * self.one()
 
         if isinstance(other, GroupMember):
+            new_element = self.copy()
             new_element._vec[other] += self.field(1)
             return new_element
 
-        # isinstance(other, Element)
-        for member, val in other:
-            new_element._vec[member] += val
-        return new_element
+        if isinstance(other, Element):
+            new_element = self.copy()
+            for member, val in other:
+                new_element._vec[member] += val
+            return new_element
 
-    def __sub__(self, other: GroupMember | Element) -> Element:
+        return NotImplemented  # pragma: no cover
+
+    def __sub__(self, other: Element | GroupMember | int) -> Element:
         return self + (-1) * other
 
     def __radd__(self, other: GroupMember) -> Element:
         return self + other
 
     def __mul__(self, other: int | GroupMember | Element) -> Element:
-        new_element = self.zero()
-
         if isinstance(other, int):
             # multiply coefficients by 'other'
+            new_element = self.zero()
             for member, val in self:
                 new_element._vec[member] = val * other
             return new_element
 
         if isinstance(other, GroupMember):
             # multiply group members by 'other'
+            new_element = self.zero()
             for member, val in self:
                 new_element._vec[member * other] = val
             return new_element
 
         if isinstance(other, Element):
             # collect and multiply pairs of terms from 'self' and 'other'
+            new_element = self.zero()
             for (aa, x_a), (bb, y_b) in itertools.product(self, other):
                 new_element._vec[aa * bb] += x_a * y_b
             return new_element
@@ -469,11 +475,13 @@ class Element:
         if isinstance(other, int):
             return self * other
 
-        # multiply group members by "other"
-        new_element = self.zero()
-        for member, val in self:
-            new_element._vec[other * member] = val
-        return new_element
+        if isinstance(other, GroupMember):
+            new_element = self.zero()
+            for member, val in self:
+                new_element._vec[other * member] = val
+            return new_element
+
+        return NotImplemented  # pragma: no cover
 
     def __neg__(self) -> Element:
         return self * (-1)
