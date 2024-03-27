@@ -340,6 +340,9 @@ def test_cyclic_codes(field: int = 3) -> None:
     assert code.dimension == 8
     assert code.get_weight() == 6
 
+    with pytest.raises(ValueError, match="Could not match"):
+        codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
+
 
 def test_GB_code_error() -> None:
     """Raise error when trying to construct incompatible generalized bicycle codes."""
