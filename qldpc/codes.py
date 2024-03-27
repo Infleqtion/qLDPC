@@ -1225,9 +1225,7 @@ QCCIndexMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
 # - allow initializing from matrices of coefficients
 # - maybe generalize to higher dimensions
 class QCCode(GBCode):
-    """Quasi-cyclic (QC) code.
-
-    Inspired by arXiv:2308.07915.
+    """Quasi-cyclic (QC) codes from arXiv:2308.07915.
 
     A quasi-cyclic code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
