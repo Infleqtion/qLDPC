@@ -21,7 +21,7 @@ import abc
 import functools
 import itertools
 import random
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from typing import Literal
 
 import galois
@@ -1225,6 +1225,9 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
+LayoutData = tuple[tuple[int, int], Callable[[int, int, str], tuple[int, int]]]
+
+
 # TODO:
 # - allow initializing from matrices of coefficients
 # - maybe generalize to higher dimensions
@@ -1332,7 +1335,7 @@ class QCCode(GBCode):
 
     def get_exponents(
         self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> tuple[int, ...]:
+    ) -> tuple[int, int]:
         """Get the exponents of a term, for example converting x**2 y**4 into the (2, 4)."""
         exponents = {}
         if isinstance(expr, sympy.Symbol):
@@ -1344,12 +1347,13 @@ class QCCode(GBCode):
             for factor in expr.args:
                 base, exp = factor.as_base_exp()
                 exponents[base] = exp
-        return tuple(exponents.get(symbol, 0) for symbol in self.symbols)
+        return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
-    def get_toric_params(self) -> tuple[int, ...] | None:
-        """Get toric layout parameters, if any, as discussed in arXiv:2308.07915."""
+    @functools.cache
+    def get_toric_layout_data(self) -> Sequence[LayoutData]:
+        """Get toric layout data, if any, as discussed in arXiv:2308.07915."""
         if not nx.is_weakly_connected(self.graph):
-            return None
+            return []
 
         # identify individual terms in the polynomials
         terms_a = self.poly_a.as_expr().args
@@ -1368,10 +1372,7 @@ class QCCode(GBCode):
             ):
                 toric_terms.append((a_1, a_2, b_1, b_2))
 
-        if not toric_terms:
-            return None
-
-        plaquette_maps = []
+        layout_data = []
         for a_1, a_2, b_1, b_2 in toric_terms:
             shift_a = a_1 * a_2 ** (-1)
             shift_b = b_1 * b_2 ** (-1)
@@ -1385,19 +1386,63 @@ class QCCode(GBCode):
                 i = a p + b r  mod order(x),
                 j = b q + b s  mod order(y).
             """
-            gen_a = self.to_group_member(shift_a)  # g
-            gen_b = self.to_group_member(shift_b)  # h
-            exps_a = self.get_exponents(shift_a)  # (p, q)
-            exps_b = self.get_exponents(shift_b)  # (u, v)
-            plaquette_map = {
+            gen_g = self.to_group_member(shift_a)
+            gen_h = self.to_group_member(shift_b)
+            pp, qq = self.get_exponents(shift_a)
+            rr, ss = self.get_exponents(shift_b)
+            torus_shape: tuple[int, int] = (gen_g.order(), gen_h.order())
+            index_map_dict = {
                 (
-                    (aa * exps_a[0] + bb * exps_b[0]) % self.orders[0],
-                    (aa * exps_a[1] + bb * exps_b[1]) % self.orders[1],
+                    (aa * pp + bb * rr) % self.orders[0],
+                    (aa * qq + bb * ss) % self.orders[1],
                 ): (aa, bb)
-                for aa in range(gen_a.order())
-                for bb in range(gen_b.order())
+                for aa, bb in np.ndindex(torus_shape)
             }
-            plaquette_maps.append(plaquette_map)
+            sector_shifts = {
+                "L": (0, 0),
+                "R": self.get_exponents(a_2 ** (-1) * b_1),
+                "X": self.get_exponents(a_2 ** (-1)),
+                "Z": self.get_exponents(b_1),
+            }
+
+            def index_map(ii: int, jj: int, sector: str) -> tuple[int, int]:
+                s_i = (ii - sector_shifts[sector][0]) % self.orders[0]
+                s_j = (jj - sector_shifts[sector][1]) % self.orders[1]
+                s_a, s_b = index_map_dict[s_i, s_j]
+                return s_a % torus_shape[0], s_b % torus_shape[1]
+
+            layout_data.append((torus_shape, index_map))
+
+        return layout_data
+
+    def get_shifted_checks(
+        self, pauli: Literal["X", "Z"], xx: int, yy: int, layout_data: LayoutData
+    ) -> tuple[tuple[int, int], ...]:
+        """Get the relative shifts from a check operator to the qubits it is checking."""
+        torus_shape, index_map = layout_data
+        print(torus_shape)
+        matrix = self.matrix_x if pauli == "X" else self.matrix_z
+        checks = matrix.reshape(*self.orders, 2, *self.orders)
+        shifts = set()
+        for c_i, c_j in np.ndindex(*self.orders):
+            c_a, c_b = index_map(c_i, c_j, pauli)
+            for sector, label in enumerate(["L", "R"]):
+                d_mat = checks[c_i, c_j, sector, :, :]
+                d_rows, d_cols = np.where(d_mat)
+                for d_i, d_j in zip(*np.where(d_mat)):
+                    d_a, d_b = index_map(d_i, d_j, label)
+                    shift = ((d_a - c_a) % torus_shape[0], (d_b - c_b) % torus_shape[1])
+                    shifts.add(shift)
+
+        shifts = {
+            (
+                xx if xx <= torus_shape[0] / 2 else xx - torus_shape[0],
+                yy if yy <= torus_shape[1] / 2 else yy - torus_shape[1],
+            )
+            for xx, yy in shifts
+        }
+        print(shifts)
+        exit()
 
 
 ################################################################################
