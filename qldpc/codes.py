@@ -1221,12 +1221,11 @@ class QCCode(GBCode):
     Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
     and each x_i is the generator of a cyclic group of order R_i.
 
-    We (tentatively) restrict the coefficients A_{ij} to be in {0, 1}.
-
     A quasi-cyclic code is defined by...
-    [1] sequence (R_0, R_1, ...) of cyclic group orders (one per variable, x_i), and
-    [2] sequences of nonzero terms in A and B, with the term x_i^j identified by the tuple (i, j).
-    The polynomial A = x + y^3 + z^2, for example, is identified by [(0, 1), (1, 3), (2, 2)].
+    [1] sequence of cyclic group orders, and
+    [2] two sympy polynomials, with as many free variables as there are cyclic group orders.
+    By default, group orders are associated with free variables in lexicographic order.  The
+    assignment of a group order to each variable can be made explicit with a dictionary.
     """
 
     def __init__(
@@ -1247,20 +1246,18 @@ class QCCode(GBCode):
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
         if len(symbols) != len(orders) or (
-            isinstance(orders, dict) and set(orders.keys()) != symbols
+            isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
         ):
-            raise ValueError(
-                f"Could not match symbols ({symbols}) to group orders for a QCCode ({orders})"
-            )
+            raise ValueError(f"Could not match symbols {symbols} to group orders {orders}")
 
         # identify cyclic group orders
         if isinstance(orders, dict):
-            self.orders = orders
+            self.orders = {symbol: order for symbol, order in orders.items() if symbol in symbols}
         else:
             self.orders = {}
-            for symbol, dim in zip(symbols, orders):
+            for symbol, order in zip(symbols, orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
-                self.orders[symbol] = dim
+                self.orders[symbol] = order
 
         # identify the values that the symbols take
         self.group = abstract.AbelianGroup(*self.orders.values(), product_lift=True)
