@@ -1381,8 +1381,8 @@ class QCCode(GBCode):
             shift_b = b_1 * b_2 ** (-1)
             """
             For generators of the form
-                g = x^p y^q,
-                h = x^u y^v,
+                g = x^p y^q  <-- shift_a,
+                h = x^u y^v  <-- shift_b,
             build a plaquette_map (dictionary) that maps (i, j) --> (a, b), where
                 x^i y^j = g^a h^b.
             Equivalently, we want
@@ -1401,6 +1401,8 @@ class QCCode(GBCode):
                 ): (aa, bb)
                 for aa, bb in np.ndindex(torus_shape)
             }
+            # figure out how to shift qubits in each sector:
+            # 0/1 for data qubits, X/Z for check qubits
             sector_shifts = {
                 0: (0, 0),
                 1: self.get_exponents(a_2 ** (-1) * b_1),
@@ -1409,12 +1411,16 @@ class QCCode(GBCode):
             }
 
             def index_map(
-                ii: int, jj: int, sector: int | Literal[Pauli.X, Pauli.Z], shape: tuple[int, int]
+                ii: int,
+                jj: int,
+                sector: int | Literal[Pauli.X, Pauli.Z],
+                torus_shape: tuple[int, int],
             ) -> tuple[int, int]:
+                """Map from "original" check/qubit indices to "shifted" check/qubit indices."""
                 s_i = (ii - sector_shifts[sector][0]) % self.orders[0]
                 s_j = (jj - sector_shifts[sector][1]) % self.orders[1]
                 s_a, s_b = index_map_dict[s_i, s_j]
-                return s_a % shape[0], s_b % shape[1]
+                return s_a % torus_shape[0], s_b % torus_shape[1]
 
             layout_data.append((torus_shape, index_map))
 
@@ -1428,7 +1434,7 @@ class QCCode(GBCode):
         # loop over each of X-type and Z-type parity checks
         paulis_xz: list[Literal[Pauli.X, Pauli.Z]] = [Pauli.X, Pauli.Z]
         for pauli in paulis_xz:
-            matrix = self.matrix_x if pauli == "X" else self.matrix_z
+            matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
             old_checks = matrix.reshape(*self.orders, 2, *self.orders)
             new_checks = self.field.Zeros((*torus_shape, 2, *torus_shape))
 
