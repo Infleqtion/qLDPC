@@ -1262,10 +1262,13 @@ class QCCode(GBCode):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 orders_dict[symbol] = order
             orders = orders_dict
+        self.symbols = tuple(orders.keys())
+        self.orders = tuple(orders.values())
 
         # identify the group generator associated with each symbol
         self.group = abstract.AbelianGroup(*orders.values(), product_lift=True)
-        self.symbols = {symbol: gen for symbol, gen in zip(orders.keys(), self.group.generators)}
+        self.gens = self.group.generators
+        self.symbol_gens = dict(zip(self.symbols, self.gens))
 
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
@@ -1299,22 +1302,22 @@ class QCCode(GBCode):
         if isinstance(expr, sympy.Integer):
             return self.group.identity
         if isinstance(expr, sympy.Symbol):
-            return self.symbols[expr]
+            return self.symbol_gens[expr]
         if isinstance(expr, sympy.Pow):
             base, exp = expr.as_base_exp()
-            return self.symbols[base] ** exp
+            return self.symbol_gens[base] ** exp
         if isinstance(expr, sympy.Mul):
             output = self.group.identity
             for factor in expr.args:
                 if not isinstance(factor, sympy.Integer):
                     base, exp = factor.as_base_exp()
-                    output *= self.symbols[base] ** exp
+                    output *= self.symbol_gens[base] ** exp
             return output
         return NotImplemented  # pragma: no cover
 
     def get_exponents(
         self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> dict[sympy.Symbol, int]:
+    ) -> tuple[int, ...]:
         """Get the exponents of a term, for example converting x**2 y**4 into the (2, 4)."""
         exponents = {}
         if isinstance(expr, sympy.Symbol):
@@ -1326,7 +1329,7 @@ class QCCode(GBCode):
             for factor in expr.args:
                 base, exp = factor.as_base_exp()
                 exponents[base] = exp
-        return exponents
+        return tuple(exponents.get(symbol, 0) for symbol in self.symbols)
 
     def get_toric_params(self) -> tuple[int, ...] | None:
         """Get toric layout parameters, if any, as discussed in arXiv:2308.07915."""
@@ -1342,8 +1345,8 @@ class QCCode(GBCode):
         for (a_1, a_2), (b_1, b_2) in itertools.product(
             itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
         ):
-            gen_a = self.to_group_member(a_1) * ~self.to_group_member(a_2)
-            gen_b = self.to_group_member(b_1) * ~self.to_group_member(b_2)
+            gen_a = self.to_group_member(a_1 * a_2 ** (-1))
+            gen_b = self.to_group_member(b_1 * b_2 ** (-1))
             if (
                 gen_a.order() * gen_b.order() == self.group.order
                 and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
@@ -1353,13 +1356,15 @@ class QCCode(GBCode):
         if not toric_terms:
             return None
 
-        coordinate_shifts = []
+        plaquette_maps = []
         for a_1, a_2, b_1, b_2 in toric_terms:
-            print()
-            print(a_1, self.get_exponents(a_1))
-            print(a_2, self.get_exponents(a_2))
-            print(b_1, self.get_exponents(b_1))
-            print(b_2, self.get_exponents(b_2))
+            exps_a = self.get_exponents(a_1 * a_2 ** (-1))
+            exps_b = self.get_exponents(b_1 * b_2 ** (-1))
+            plaquette_map = {
+                (aa * exps_a[0] + bb * exps_b[0], aa * exps_a[1] + bb * exps_b[1]): (aa, bb)
+                for aa, bb in np.ndindex(self.orders)
+            }
+            plaquette_maps.append(plaquette_map)
 
 
 ################################################################################
