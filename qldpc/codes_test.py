@@ -320,8 +320,6 @@ def test_twisted_XZZX(width: int = 3) -> None:
 
 def test_cyclic_codes(field: int = 3) -> None:
     """Quasi-cyclic codes from arXiv:2308.07915."""
-    dims: tuple[int, ...]
-
     from sympy.abc import x, y
 
     dims = (6, 6)
