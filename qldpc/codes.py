@@ -127,8 +127,17 @@ class ClassicalCode(AbstractCode):
     _matrix: galois.FieldArray
     _exact_distance: int | None = None
 
-    def __contains__(self, word: npt.NDArray[np.int_] | Sequence[int]) -> bool:
-        return not np.any(self.matrix @ self.field(word))
+    def __contains__(
+        self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]] | ClassicalCode
+    ) -> bool:
+        """Does this code contain the given word(s)?
+
+        If passed a ClassicalCode for "words", interpret it to mean "all words in the given code",
+        which are spanned by the code's generator matrix.
+        """
+        if isinstance(words, ClassicalCode):
+            words = words.generator
+        return not np.any(self.matrix @ self.field(words).T)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -164,15 +173,21 @@ class ClassicalCode(AbstractCode):
         return self.matrix.null_space()
 
     def __eq__(self, other: object) -> bool:
-        """Equality test between two classical codes."""
+        """Equality test between two classical code instances."""
         return (
             isinstance(other, ClassicalCode)
             and self.field is other.field
-            and (
-                np.array_equal(self.matrix, other.matrix)
-                or np.array_equal(self.generator, other.generator)
-            )
+            and np.array_equal(self.matrix, other.matrix)
         )
+
+    @classmethod
+    def equiv(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> bool:
+        """Test equivalence between two classical codes.
+
+        Two classical codes are equivalent if they have the same code words.  Equivalently, codes
+        C_a and C_b are equivalent if they contain each other, C_a ⊆ C_b and C_b ⊆ C_a.
+        """
+        return code_a.field is code_b.field and code_a in code_b and code_b in code_a
 
     def words(self) -> galois.FieldArray:
         """Code words of this code."""
