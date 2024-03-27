@@ -1365,17 +1365,18 @@ class QCCode(GBCode):
             ):
                 toric_terms.append((a_1, a_2, b_1, b_2))
 
-        def index_map(
+        def full_index_map(
             ii: int,
             jj: int,
             sector: int | PauliXZ,
+            grid_map: dict[tuple[int, int], tuple[int, int]],
             sector_shifts: dict[int | PauliXZ, tuple[int, int]],
             torus_shape: tuple[int, int],
         ) -> tuple[int, int]:
             """Map from "original" check/qubit indices to "shifted" check/qubit indices."""
             s_i = (ii - sector_shifts[sector][0]) % self.orders[0]
             s_j = (jj - sector_shifts[sector][1]) % self.orders[1]
-            s_a, s_b = index_map_dict[s_i, s_j]
+            s_a, s_b = grid_map[s_i, s_j]
             return s_a % torus_shape[0], s_b % torus_shape[1]
 
         layout_data = []
@@ -1386,7 +1387,7 @@ class QCCode(GBCode):
             For generators of the form
                 g = x^p y^q  <-- shift_a,
                 h = x^u y^v  <-- shift_b,
-            build a plaquette_map (dictionary) that maps (i, j) --> (a, b), where
+            build a grid_map (dictionary) that maps (i, j) --> (a, b), where
                 x^i y^j = g^a h^b.
             Equivalently, we want
                 i = a p + b r  mod order(x),
@@ -1397,7 +1398,7 @@ class QCCode(GBCode):
             pp, qq = self.get_exponents(shift_a)
             rr, ss = self.get_exponents(shift_b)
             torus_shape: tuple[int, int] = (gen_g.order(), gen_h.order())
-            index_map_dict = {
+            grid_map = {
                 (
                     (aa * pp + bb * rr) % self.orders[0],
                     (aa * qq + bb * ss) % self.orders[1],
@@ -1413,10 +1414,13 @@ class QCCode(GBCode):
                 Pauli.Z: self.get_exponents(b_1),
             }
 
-            _index_map = functools.partial(
-                index_map, sector_shifts=sector_shifts, torus_shape=torus_shape
+            index_map = functools.partial(
+                full_index_map,
+                grid_map=grid_map,
+                sector_shifts=sector_shifts,
+                torus_shape=torus_shape,
             )
-            layout_data.append((torus_shape, _index_map))
+            layout_data.append((torus_shape, index_map))
 
         return layout_data
 
