@@ -29,6 +29,7 @@ import ldpc.mod2
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import sympy
 
 import qldpc
 from qldpc import abstract, named_codes
@@ -1227,42 +1228,72 @@ class QCCode(GBCode):
 
     A quasi-cyclic code is defined by...
     [1] sequence (R_0, R_1, ...) of cyclic group orders (one per variable, x_i), and
-    [2] a list of nonzero terms in A and B, with the term x_i^j identified by the tuple (i, j).
+    [2] sequences of nonzero terms in A and B, with the term x_i^j identified by the tuple (i, j).
     The polynomial A = x + y^3 + z^2, for example, is identified by [(0, 1), (1, 3), (2, 2)].
     """
 
     def __init__(
         self,
-        dims: Sequence[int],
-        terms_a: Collection[tuple[Hashable, int]],
-        terms_b: Collection[tuple[Hashable, int]] | None = None,
+        dims: Sequence[int] | dict[sympy.Symbol, int],
+        poly_a: sympy.Basic,
+        poly_b: sympy.Basic | None = None,
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a quasi-cyclic code."""
-        if terms_b is None:
-            terms_b = terms_a  # pragma: no cover
+        if poly_b is None:
+            poly_b = poly_a  # pragma: no cover
+        poly_a = sympy.Poly(poly_a)
+        poly_b = sympy.Poly(poly_b)
 
         # identify the symbols used to denote cyclic group generators
-        symbols = tuple({symbol for symbol, _ in list(terms_a) + list(terms_b)})
-        if len(symbols) != len(dims):
-            raise ValueError(
-                f"Number of cyclic group orders, {dims}, does not match the number of generator"
-                f" symbols, {symbols}"
-            )
+        symbols = poly_a.free_symbols | poly_b.free_symbols
+        if len(symbols) != len(dims) or (isinstance(dims, dict) and set(dims.keys()) != symbols):
+            raise ValueError("Could not match symbols to group orders for a QCCode")
+        if not isinstance(dims, dict):
+            dims = {symbol: dim for symbol, dim in zip(sorted(symbols, key=str), dims)}
 
-        # identify the base cyclic groups, their product, and the generators
-        groups = [abstract.CyclicGroup(dim) for dim in dims]
+        # identify the values that the symbols take
+        groups = [abstract.CyclicGroup(dim) for dim in dims.values()]
         group = abstract.Group.product(*groups)
-        generators = group.generators
+        symbol_values = {
+            symbol: abstract.Element(group, gen)
+            for symbol, gen in zip(dims.keys(), group.generators)
+        }
 
         # build defining matrices of a generalized bicycle code
-        members_a = [generators[symbols.index(ss)] ** pp for ss, pp in terms_a]
-        members_b = [generators[symbols.index(ss)] ** pp for ss, pp in terms_b]
-        matrix_a = abstract.Element(group, *members_a).lift().view(np.ndarray)
-        matrix_b = abstract.Element(group, *members_b).lift().view(np.ndarray)
+
+        def evaluate_sympy(
+            expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
+        ) -> abstract.Element:
+            """Evaluate a sympy expression according to a given dictionary of symbol mappings."""
+            # evaluate simple cases
+            if isinstance(expr, sympy.Integer):
+                return int(expr) * abstract.Element(group, group.identity)
+            if isinstance(expr, sympy.Symbol):
+                return symbol_values[expr]
+            if isinstance(expr, sympy.Pow):
+                base, exp = expr.as_base_exp()
+                return symbol_values[base] ** exp
+
+            # evaluate a polynomial
+            poly = abstract.Element(group)
+            for term in sympy.Poly(expr).as_expr().args:
+                poly += functools.reduce(
+                    abstract.Element.__mul__,
+                    [evaluate_sympy(factor) for factor in term.as_ordered_factors()],
+                )
+            return poly
+
+        matrix_a = evaluate_sympy(poly_a).lift().view(np.ndarray)
+        matrix_b = evaluate_sympy(poly_b).lift().view(np.ndarray)
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
+
+    def get_toric_layout(self) -> tuple[int, ...] | None:
+        """Get toric layout parameters, if any, as discussed in arXiv:2308.07915."""
+        if not nx.is_weakly_connected(self.graph):
+            return None
 
 
 ################################################################################
