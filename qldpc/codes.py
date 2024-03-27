@@ -1259,7 +1259,7 @@ class QCCode(GBCode):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 self.orders[symbol] = order
 
-        # identify the values that the symbols take
+        # identify the values (in a group algebra) that the symbols take
         self.group = abstract.AbelianGroup(*self.orders.values(), product_lift=True)
         self.symbols = {
             symbol: abstract.Element(self.group, gen)
