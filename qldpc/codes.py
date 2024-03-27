@@ -1390,18 +1390,18 @@ class QCCode(GBCode):
             build a grid_map (dictionary) that maps (i, j) --> (a, b), where
                 x^i y^j = g^a h^b.
             Equivalently, we want
-                i = a p + b r  mod order(x),
-                j = b q + b s  mod order(y).
+                i = a p + b u  mod order(x),
+                j = b q + b v  mod order(y).
             """
             gen_g = self.to_group_member(shift_a)
             gen_h = self.to_group_member(shift_b)
             pp, qq = self.get_exponents(shift_a)
-            rr, ss = self.get_exponents(shift_b)
+            uu, vv = self.get_exponents(shift_b)
             torus_shape: tuple[int, int] = (gen_g.order(), gen_h.order())
             grid_map = {
                 (
-                    (aa * pp + bb * rr) % self.orders[0],
-                    (aa * qq + bb * ss) % self.orders[1],
+                    (aa * pp + bb * uu) % self.orders[0],
+                    (aa * qq + bb * vv) % self.orders[1],
                 ): (aa, bb)
                 for aa, bb in np.ndindex(torus_shape)
             }
