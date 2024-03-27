@@ -30,6 +30,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import sympy
+import sympy.combinatorics as comb
 
 import qldpc
 from qldpc import abstract, named_codes
@@ -1209,6 +1210,9 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
+# TODO:
+# - allow initializing from matrices of coefficients
+# - maybe generalize to higher dimensions
 class QCCode(GBCode):
     """Quasi-cyclic (QC) code.
 
@@ -1217,20 +1221,21 @@ class QCCode(GBCode):
     A quasi-cyclic code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T],
-    where A and B are block matrices identified with elements of a multivariate polynomial ring.
-    Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
-    and each x_i is the generator of a cyclic group of order R_i.
+    where A = A_{ij} x^i y^j and B = B_{ij} x^i y^j are bivariate polynomials.  Here
+    - A_{ij} and B_{ij} are scalar coefficients (over some finite field),
+    - x generates a group of order R_x,
+    - y generates a group of order R_y.
 
     A quasi-cyclic code is defined by...
-    [1] sequence of cyclic group orders, and
-    [2] two sympy polynomials, with as many free variables as there are cyclic group orders.
-    By default, group orders are associated with free variables in lexicographic order.  The
-    assignment of a group order to each variable can be made explicit with a dictionary.
+    [1] two cyclic group orders, and
+    [2] two sympy polynomials in two variables.
+    By default, group orders are associated in lexicographic order with free variables of the
+    polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
     """
 
     def __init__(
         self,
-        orders: Sequence[int] | dict[sympy.Symbol, int],
+        orders: tuple[int, int] | dict[sympy.Symbol, int],
         poly_a: sympy.Basic,
         poly_b: sympy.Basic | None = None,
         field: int | None = None,
@@ -1245,26 +1250,22 @@ class QCCode(GBCode):
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) != len(orders) or (
+        if len(symbols) < len(orders) or (
             isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
         ):
             raise ValueError(f"Could not match symbols {symbols} to group orders {orders}")
 
-        # identify cyclic group orders
-        if isinstance(orders, dict):
-            self.orders = {symbol: order for symbol, order in orders.items() if symbol in symbols}
-        else:
-            self.orders = {}
+        # identify cyclic group orders with symbols in the polynomials
+        if not isinstance(orders, dict):
+            orders_dict = {}
             for symbol, order in zip(symbols, orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
-                self.orders[symbol] = order
+                orders_dict[symbol] = order
+            orders = orders_dict
 
-        # identify the values (in a group algebra) that the symbols take
-        self.group = abstract.AbelianGroup(*self.orders.values(), product_lift=True)
-        self.symbols = {
-            symbol: abstract.Element(self.group, gen)
-            for symbol, gen in zip(self.orders.keys(), self.group.generators)
-        }
+        # identify the group generator associated with each symbol
+        self.group = abstract.AbelianGroup(*orders.values(), product_lift=True)
+        self.symbols = {symbol: gen for symbol, gen in zip(orders.keys(), self.group.generators)}
 
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
@@ -1278,14 +1279,11 @@ class QCCode(GBCode):
         """Convert a sympy expression into an element of a group algebra."""
         # evaluate simple cases
         if isinstance(expr, sympy.Integer):
-            return int(expr) * abstract.Element(self.group, self.group.identity)
-        if isinstance(expr, sympy.Symbol):
-            return self.symbols[expr]
-        if isinstance(expr, sympy.Pow):
-            base, exp = expr.as_base_exp()
-            return self.symbols[base] ** exp
+            return int(expr) * abstract.Element(self.group, self.to_group_member(expr))
+        if isinstance(expr, (sympy.Symbol, sympy.Pow)):
+            return abstract.Element(self.group, self.to_group_member(expr))
 
-        # evaluate a polynomial
+        # evaluate a product or polynomial
         element = abstract.Element(self.group)
         for term in expr.as_expr().args:
             element += functools.reduce(
@@ -1293,6 +1291,75 @@ class QCCode(GBCode):
                 [self.eval(factor) for factor in term.as_ordered_factors()],
             )
         return element
+
+    def to_group_member(
+        self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+    ) -> abstract.GroupMember:
+        """Convert a sympy expression into an associated member of this code's base group."""
+        if isinstance(expr, sympy.Integer):
+            return self.group.identity
+        if isinstance(expr, sympy.Symbol):
+            return self.symbols[expr]
+        if isinstance(expr, sympy.Pow):
+            base, exp = expr.as_base_exp()
+            return self.symbols[base] ** exp
+        if isinstance(expr, sympy.Mul):
+            output = self.group.identity
+            for factor in expr.args:
+                if not isinstance(factor, sympy.Integer):
+                    base, exp = factor.as_base_exp()
+                    output *= self.symbols[base] ** exp
+            return output
+        return NotImplemented  # pragma: no cover
+
+    def get_exponents(
+        self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+    ) -> dict[sympy.Symbol, int]:
+        """Get the exponents of a term, for example converting x**2 y**4 into the (2, 4)."""
+        exponents = {}
+        if isinstance(expr, sympy.Symbol):
+            exponents[expr] = 1
+        elif isinstance(expr, sympy.Pow):
+            base, exp = expr.as_base_exp()
+            exponents[base] = exp
+        elif isinstance(expr, sympy.Mul):
+            for factor in expr.args:
+                base, exp = factor.as_base_exp()
+                exponents[base] = exp
+        return exponents
+
+    def get_toric_params(self) -> tuple[int, ...] | None:
+        """Get toric layout parameters, if any, as discussed in arXiv:2308.07915."""
+        if not nx.is_weakly_connected(self.graph):
+            return None
+
+        # identify individual terms in the polynomials
+        terms_a = self.poly_a.as_expr().args
+        terms_b = self.poly_b.as_expr().args
+
+        # find combinations of terms that enable a toric layout
+        toric_terms = []
+        for (a_1, a_2), (b_1, b_2) in itertools.product(
+            itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
+        ):
+            gen_a = self.to_group_member(a_1) * ~self.to_group_member(a_2)
+            gen_b = self.to_group_member(b_1) * ~self.to_group_member(b_2)
+            if (
+                gen_a.order() * gen_b.order() == self.group.order
+                and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
+            ):
+                toric_terms.append((a_1, a_2, b_1, b_2))
+
+        if not toric_terms:
+            return None
+
+        coordinate_shifts = []
+        for a_1, a_2, b_1, b_2 in toric_terms:
+            print()
+            print(a_1, self.get_exponents(a_1))
+            print(a_2, self.get_exponents(a_2))
+            print(b_1, self.get_exponents(b_1))
+            print(b_2, self.get_exponents(b_2))
 
 
 ################################################################################
