@@ -1317,7 +1317,7 @@ class QCCode(GBCode):
 
     def get_exponents(
         self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> tuple[int, int]:
+    ) -> tuple[int, ...]:
         """Get the exponents of a term, for example converting x**2 y**4 into the (2, 4)."""
         exponents = {}
         if isinstance(expr, sympy.Symbol):
@@ -1329,7 +1329,7 @@ class QCCode(GBCode):
             for factor in expr.args:
                 base, exp = factor.as_base_exp()
                 exponents[base] = exp
-        return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
+        return tuple(exponents.get(symbol, 0) for symbol in self.symbols)
 
     def get_toric_params(self) -> tuple[int, ...] | None:
         """Get toric layout parameters, if any, as discussed in arXiv:2308.07915."""
@@ -1358,11 +1358,29 @@ class QCCode(GBCode):
 
         plaquette_maps = []
         for a_1, a_2, b_1, b_2 in toric_terms:
-            exps_a = self.get_exponents(a_1 * a_2 ** (-1))
-            exps_b = self.get_exponents(b_1 * b_2 ** (-1))
+            shift_a = a_1 * a_2 ** (-1)
+            shift_b = b_1 * b_2 ** (-1)
+            """
+            For generators of the form
+                g = x^p y^q,
+                h = x^u y^v,
+            build a plaquette_map (dictionary) that maps (i, j) --> (a, b), where
+                x^i y^j = g^a h^b.
+            Equivalently, we want
+                i = a p + b r  mod order(x),
+                j = b q + b s  mod order(y).
+            """
+            gen_a = self.to_group_member(shift_a)  # g
+            gen_b = self.to_group_member(shift_b)  # h
+            exps_a = self.get_exponents(shift_a)  # (p, q)
+            exps_b = self.get_exponents(shift_b)  # (u, v)
             plaquette_map = {
-                (aa * exps_a[0] + bb * exps_b[0], aa * exps_a[1] + bb * exps_b[1]): (aa, bb)
-                for aa, bb in np.ndindex(self.orders)
+                (
+                    (aa * exps_a[0] + bb * exps_b[0]) % self.orders[0],
+                    (aa * exps_a[1] + bb * exps_b[1]) % self.orders[1],
+                ): (aa, bb)
+                for aa in range(gen_a.order())
+                for bb in range(gen_b.order())
             }
             plaquette_maps.append(plaquette_map)
 
