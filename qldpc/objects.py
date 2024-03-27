@@ -215,7 +215,7 @@ class CayleyComplex:
 
     In fact, condition [2] can be enforced at no added cost by taking the double cover of G and
     modifying members of A and B as:
-    - G --> G ⊗ Z_2,
+    - G --> G ⨂ Z_2,
     - a --> (a,1), and
     - b --> (b,1),
     where Z_2 ~ {0,1} is the 2-element group (under addition), such that (a,1) * (g,i) = (ag,i+1)
@@ -224,7 +224,7 @@ class CayleyComplex:
 
     If requirement [1] is not satisfied, then we can construct a "quadripartite" complex that
     enforces [1] and [2] by taking the quadruple cover of G and modifying members of A and B as:
-    - G -->  G ⊗ Z_2 ⊗ Z_2,
+    - G -->  G ⨂ Z_2 ⨂ Z_2,
     - a --> (a,1,0), and
     - b --> (b,0,1),
     where similarly to before (a,1,0) * (g,i,j) = (ag,i+1,j) and (g,i,j) * (b,0,1) = (gb,i,j+1).
@@ -401,17 +401,17 @@ class ChainComplex:
 
         The tensor product of chain complexes C_A and C_B, respectively with modules (A_0, A_1, ...)
         and (B_0, B_1, ...), is a new chain complex C_P with modules (P_0, P_1, ...).  The module
-        P_k of degree k can be written as a direct sum of tensor products A_i ⊗ B_j for which i+j=k,
+        P_k of degree k can be written as a direct sum of tensor products A_i ⨂ B_j for which i+j=k,
         that is:
 
-        [1] P_k = ⨁_{i+j=k} A_i ⊗ B_j.
+        [1] P_k = ⨁_{i+j=k} A_i ⨂ B_j.
 
-        Elements of P_2, for example, can be written as vectors [a_2 ⊗ b_0, a_1 ⊗ b_1, a_0 ⊗ b_2],
-        that concatenate different a_i ⊗ b_j ∈ A_i ⊗ B_j.
+        Elements of P_2, for example, can be written as vectors [a_2 ⨂ b_0, a_1 ⨂ b_1, a_0 ⨂ b_2],
+        that concatenate different a_i ⨂ b_j ∈ A_i ⨂ B_j.
 
         The boundary operator d_k in C_P is defined by its action on each "sector" (i, j), namely
 
-        [2] d_{i+j}(a_i ⊗ b_j) = d_i^A(a_i) ⊗ b_j + (-1)^i a_i ⊗ d_j^B(b_j),
+        [2] d_{i+j}(a_i ⨂ b_j) = d_i^A(a_i) ⨂ b_j + (-1)^i a_i ⨂ d_j^B(b_j),
 
         where d_i^A and d_j^B are boundary operators of C_A and C_B.
 

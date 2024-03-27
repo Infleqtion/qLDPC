@@ -197,13 +197,13 @@ class ClassicalCode(AbstractCode):
 
     @classmethod
     def tensor_product(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
-        """Tensor product C_a ⊗ C_b of two codes C_a and C_b.
+        """Tensor product C_a ⨂ C_b of two codes C_a and C_b.
 
         Let G_a and G_b respectively denote the generators C_a and C_b.
-        Definition: C_a ⊗ C_b is the code whose generators are G_a ⊗ G_b.
+        Definition: C_a ⨂ C_b is the code whose generators are G_a ⨂ G_b.
 
-        Observation: G_a ⊗ G_b is the check matrix of ~(C_a ⊗ C_b).
-        We therefore construct ~(C_a ⊗ C_b) and return its dual ~~(C_a ⊗ C_b) = C_a ⊗ C_b.
+        Observation: G_a ⨂ G_b is the check matrix of ~(C_a ⨂ C_b).
+        We therefore construct ~(C_a ⨂ C_b) and return its dual ~~(C_a ⨂ C_b) = C_a ⨂ C_b.
         """
         if code_a.field is not code_b.field:
             raise ValueError("Cannot take tensor product of codes over different fields")
@@ -1366,8 +1366,8 @@ class HGPCode(CSSCode):
 
         The parity check matrices of the hypergraph product code are:
 
-        matrix_x = [ H1 ⊗ In2, Im1 ⊗ H2.T]
-        matrix_z = [-In1 ⊗ H2, H1.T ⊗ Im2]
+        matrix_x = [ H1 ⨂ In2, Im1 ⨂ H2.T]
+        matrix_z = [-In1 ⨂ H2, H1.T ⨂ Im2]
 
         Here (H1, H2) == (matrix_a, matrix_b), and I[m/n][1/2] are identity matrices,
         with (m1, n1) = H1.shape and (m2, n2) = H2.shape.
@@ -1628,9 +1628,9 @@ class QTCode(CSSCode):
 
     The X-type parity checks of a quantum Tanner code are the checks of a classical Tanner code
     whose generating graph is the subgraph_x of the Cayley complex (A,B).  The subcode of this
-    classical Tanner code is ~(C_A ⊗ C_B), where ~C is the dual code to C.
+    classical Tanner code is ~(C_A ⨂ C_B), where ~C is the dual code to C.
 
-    The Z-type parity checks are similarly defined with subgraph_z and subcode ~(~C_A ⊗ ~C_B).
+    The Z-type parity checks are similarly defined with subgraph_z and subcode ~(~C_A ⨂ ~C_B).
 
     Notes:
     - "Good" quantum Tanner code: projective special linear group and random classical codes.

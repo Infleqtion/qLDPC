@@ -657,7 +657,7 @@ class CyclicGroup(Group):
 class AbelianGroup(Group):
     """Direct product of cyclic groups of the specified orders.
 
-    By default an AbelianGroup member of the form ∏_i g_i^{a_i}, where {g_i} are the generators of
+    By default, an AbelianGroup member of the form ∏_i g_i^{a_i}, where {g_i} are the generators of
     the group, gets lifted to a direct sum ⨁_i L(g_i)^{a_i}.  If an AbelianGroup is initalized with
     product_lift=True, the group members get lifted to a Kronecker product ⨂_i L(g_i)^{a_i}.
     """
