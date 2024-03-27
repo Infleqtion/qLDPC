@@ -330,7 +330,7 @@ def test_cyclic_codes(field: int = 3) -> None:
     assert code.dimension == 12
     assert code.get_weight() == 6
 
-    dims = (15, 3)
+    dims = {x: 15, y: 3}
     terms_a = x**9 + y + y**2
     terms_b = 1 + x**2 + x**7
     code = codes.QCCode(dims, terms_a, terms_b, field=3)
