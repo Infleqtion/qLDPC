@@ -21,7 +21,7 @@ import abc
 import functools
 import itertools
 import random
-from collections.abc import Collection, Hashable, Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Literal
 
 import galois
@@ -1209,9 +1209,6 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-# TODO
-# - allow initializing from sympy polynomials
-# - restrict to three terms in term_a and term_b?
 class QCCode(GBCode):
     """Quasi-cyclic (QC) code.
 
@@ -1234,7 +1231,7 @@ class QCCode(GBCode):
 
     def __init__(
         self,
-        dims: Sequence[int] | dict[sympy.Symbol, int],
+        orders: Sequence[int] | dict[sympy.Symbol, int],
         poly_a: sympy.Basic,
         poly_b: sympy.Basic | None = None,
         field: int | None = None,
@@ -1244,55 +1241,61 @@ class QCCode(GBCode):
         """Construct a quasi-cyclic code."""
         if poly_b is None:
             poly_b = poly_a  # pragma: no cover
-        poly_a = sympy.Poly(poly_a)
-        poly_b = sympy.Poly(poly_b)
+        self.poly_a = sympy.Poly(poly_a)
+        self.poly_b = sympy.Poly(poly_b)
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) != len(dims) or (isinstance(dims, dict) and set(dims.keys()) != symbols):
-            raise ValueError("Could not match symbols to group orders for a QCCode")
-        if not isinstance(dims, dict):
-            dims = {symbol: dim for symbol, dim in zip(sorted(symbols, key=str), dims)}
+        if len(symbols) != len(orders) or (
+            isinstance(orders, dict) and set(orders.keys()) != symbols
+        ):
+            raise ValueError(
+                f"Could not match symbols ({symbols}) to group orders for a QCCode ({orders})"
+            )
+
+        # identify cyclic group orders
+        if isinstance(orders, dict):
+            self.orders = orders
+        else:
+            self.orders = {}
+            for symbol, dim in zip(symbols, orders):
+                assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
+                self.orders[symbol] = dim
 
         # identify the values that the symbols take
-        groups = [abstract.CyclicGroup(dim) for dim in dims.values()]
-        group = abstract.Group.product(*groups)
-        symbol_values = {
-            symbol: abstract.Element(group, gen)
-            for symbol, gen in zip(dims.keys(), group.generators)
+        self.group = abstract.AbelianGroup(*self.orders.values(), product_lift=True)
+        self.symbols = {
+            symbol: abstract.Element(self.group, gen)
+            for symbol, gen in zip(self.orders.keys(), self.group.generators)
         }
 
-        def evaluate_sympy(
-            expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
-        ) -> abstract.Element:
-            """Evaluate a sympy expression according to a given dictionary of symbol mappings."""
-            # evaluate simple cases
-            if isinstance(expr, sympy.Integer):
-                return int(expr) * abstract.Element(group, group.identity)
-            if isinstance(expr, sympy.Symbol):
-                return symbol_values[expr]
-            if isinstance(expr, sympy.Pow):
-                base, exp = expr.as_base_exp()
-                return symbol_values[base] ** exp
-
-            # evaluate a polynomial
-            poly = abstract.Element(group)
-            for term in sympy.Poly(expr).as_expr().args:
-                poly += functools.reduce(
-                    abstract.Element.__mul__,
-                    [evaluate_sympy(factor) for factor in term.as_ordered_factors()],
-                )
-            return poly
-
         # build defining matrices of a generalized bicycle code
-        matrix_a = evaluate_sympy(poly_a).lift().view(np.ndarray)
-        matrix_b = evaluate_sympy(poly_b).lift().view(np.ndarray)
+        matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
+        matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
 
-    def get_toric_layout(self) -> tuple[int, ...] | None:
-        """Get toric layout parameters, if any, as discussed in arXiv:2308.07915."""
-        if not nx.is_weakly_connected(self.graph):
-            return None
+    def eval(
+        self,
+        expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
+    ) -> abstract.Element:
+        """Convert a sympy expression into an element of a group algebra."""
+        # evaluate simple cases
+        if isinstance(expr, sympy.Integer):
+            return int(expr) * abstract.Element(self.group, self.group.identity)
+        if isinstance(expr, sympy.Symbol):
+            return self.symbols[expr]
+        if isinstance(expr, sympy.Pow):
+            base, exp = expr.as_base_exp()
+            return self.symbols[base] ** exp
+
+        # evaluate a polynomial
+        element = abstract.Element(self.group)
+        for term in expr.as_expr().args:
+            element += functools.reduce(
+                abstract.Element.__mul__,
+                [self.eval(factor) for factor in term.as_ordered_factors()],
+            )
+        return element
 
 
 ################################################################################
