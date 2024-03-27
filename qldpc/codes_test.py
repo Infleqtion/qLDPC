@@ -57,7 +57,7 @@ def test_classical_codes() -> None:
 
     # construct a code from its generator matrix
     code = codes.ClassicalCode.random(5, 3)
-    assert code == codes.ClassicalCode.from_generator(code.generator)
+    assert codes.ClassicalCode.equiv(code, codes.ClassicalCode.from_generator(code.generator))
 
     # puncture a code
     assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
