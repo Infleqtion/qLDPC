@@ -1229,7 +1229,6 @@ CyclicIndexMap = Callable[
     [int, int, int | Literal[Pauli.X, Pauli.Z], tuple[int, int]],
     tuple[int, int],
 ]
-LayoutData = tuple[tuple[int, int], CyclicIndexMap]
 
 
 # TODO:
@@ -1354,7 +1353,7 @@ class QCCode(GBCode):
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     @functools.cache
-    def get_toric_layout_data(self) -> Sequence[LayoutData]:
+    def get_toric_layout_data(self) -> Sequence[tuple[tuple[int, int], CyclicIndexMap]]:
         """Get toric layout data, if any, as discussed in arXiv:2308.07915."""
         if not nx.is_weakly_connected(self.graph):
             return []
