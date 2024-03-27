@@ -59,7 +59,8 @@ def test_lift() -> None:
     """Lift named group elements."""
     assert_valid_lift(abstract.TrivialGroup())
     assert_valid_lift(abstract.CyclicGroup(3))
-    assert_valid_lift(abstract.AbelianGroup(2, 2))
+    assert_valid_lift(abstract.AbelianGroup(2, 3))
+    assert_valid_lift(abstract.AbelianGroup(2, 3, product_lift=True))
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
     assert_valid_lift(abstract.SymmetricGroup(3))

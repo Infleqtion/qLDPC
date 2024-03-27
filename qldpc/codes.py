@@ -21,7 +21,7 @@ import abc
 import functools
 import itertools
 import random
-from collections.abc import Collection, Hashable, Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Literal
 
 import galois
@@ -29,6 +29,7 @@ import ldpc.mod2
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import sympy
 
 import qldpc
 from qldpc import abstract, named_codes
@@ -1208,9 +1209,6 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-# TODO
-# - allow initializing from sympy polynomials
-# - restrict to three terms in term_a and term_b?
 class QCCode(GBCode):
     """Quasi-cyclic (QC) code.
 
@@ -1223,46 +1221,78 @@ class QCCode(GBCode):
     Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
     and each x_i is the generator of a cyclic group of order R_i.
 
-    We (tentatively) restrict the coefficients A_{ij} to be in {0, 1}.
-
     A quasi-cyclic code is defined by...
-    [1] sequence (R_0, R_1, ...) of cyclic group orders (one per variable, x_i), and
-    [2] a list of nonzero terms in A and B, with the term x_i^j identified by the tuple (i, j).
-    The polynomial A = x + y^3 + z^2, for example, is identified by [(0, 1), (1, 3), (2, 2)].
+    [1] sequence of cyclic group orders, and
+    [2] two sympy polynomials, with as many free variables as there are cyclic group orders.
+    By default, group orders are associated with free variables in lexicographic order.  The
+    assignment of a group order to each variable can be made explicit with a dictionary.
     """
 
     def __init__(
         self,
-        dims: Sequence[int],
-        terms_a: Collection[tuple[Hashable, int]],
-        terms_b: Collection[tuple[Hashable, int]] | None = None,
+        orders: Sequence[int] | dict[sympy.Symbol, int],
+        poly_a: sympy.Basic,
+        poly_b: sympy.Basic | None = None,
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a quasi-cyclic code."""
-        if terms_b is None:
-            terms_b = terms_a  # pragma: no cover
+        if poly_b is None:
+            poly_b = poly_a  # pragma: no cover
+        self.poly_a = sympy.Poly(poly_a)
+        self.poly_b = sympy.Poly(poly_b)
 
         # identify the symbols used to denote cyclic group generators
-        symbols = tuple({symbol for symbol, _ in list(terms_a) + list(terms_b)})
-        if len(symbols) != len(dims):
-            raise ValueError(
-                f"Number of cyclic group orders, {dims}, does not match the number of generator"
-                f" symbols, {symbols}"
-            )
+        symbols = poly_a.free_symbols | poly_b.free_symbols
+        if len(symbols) != len(orders) or (
+            isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
+        ):
+            raise ValueError(f"Could not match symbols {symbols} to group orders {orders}")
 
-        # identify the base cyclic groups, their product, and the generators
-        groups = [abstract.CyclicGroup(dim) for dim in dims]
-        group = abstract.Group.product(*groups)
-        generators = group.generators
+        # identify cyclic group orders
+        if isinstance(orders, dict):
+            self.orders = {symbol: order for symbol, order in orders.items() if symbol in symbols}
+        else:
+            self.orders = {}
+            for symbol, order in zip(symbols, orders):
+                assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
+                self.orders[symbol] = order
+
+        # identify the values (in a group algebra) that the symbols take
+        self.group = abstract.AbelianGroup(*self.orders.values(), product_lift=True)
+        self.symbols = {
+            symbol: abstract.Element(self.group, gen)
+            for symbol, gen in zip(self.orders.keys(), self.group.generators)
+        }
 
         # build defining matrices of a generalized bicycle code
-        members_a = [generators[symbols.index(ss)] ** pp for ss, pp in terms_a]
-        members_b = [generators[symbols.index(ss)] ** pp for ss, pp in terms_b]
-        matrix_a = abstract.Element(group, *members_a).lift().view(np.ndarray)
-        matrix_b = abstract.Element(group, *members_b).lift().view(np.ndarray)
+        matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
+        matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
+
+    def eval(
+        self,
+        expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
+    ) -> abstract.Element:
+        """Convert a sympy expression into an element of a group algebra."""
+        # evaluate simple cases
+        if isinstance(expr, sympy.Integer):
+            return int(expr) * abstract.Element(self.group, self.group.identity)
+        if isinstance(expr, sympy.Symbol):
+            return self.symbols[expr]
+        if isinstance(expr, sympy.Pow):
+            base, exp = expr.as_base_exp()
+            return self.symbols[base] ** exp
+
+        # evaluate a polynomial
+        element = abstract.Element(self.group)
+        for term in expr.as_expr().args:
+            element += functools.reduce(
+                abstract.Element.__mul__,
+                [self.eval(factor) for factor in term.as_ordered_factors()],
+            )
+        return element
 
 
 ################################################################################

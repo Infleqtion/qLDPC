@@ -320,26 +320,26 @@ def test_twisted_XZZX(width: int = 3) -> None:
 
 def test_cyclic_codes(field: int = 3) -> None:
     """Quasi-cyclic codes from arXiv:2308.07915."""
-    dims: tuple[int, ...]
+    from sympy.abc import x, y
 
     dims = (6, 6)
-    terms_a = [("x", 3), ("y", 1), ("y", 2)]
-    terms_b = [("y", 3), ("x", 1), ("x", 2)]
+    terms_a = x**3 + y + y**2
+    terms_b = y**3 + x + x**2
     code = codes.QCCode(dims, terms_a, terms_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
     assert code.get_weight() == 6
 
-    dims = (15, 3)
-    terms_a = [("x", 9), ("y", 1), ("y", 2)]
-    terms_b = [("x", 0), ("x", 2), ("x", 7)]
-    code = codes.QCCode(dims, terms_a, terms_b, field=3)
+    dims_dict = {x: 15, y: 3}
+    terms_a = x**9 + y + y**2
+    terms_b = 1 + x**2 + x**7
+    code = codes.QCCode(dims_dict, terms_a, terms_b, field=3)
     assert code.num_qudits == 90
     assert code.dimension == 8
     assert code.get_weight() == 6
 
-    with pytest.raises(ValueError, match="does not match"):
-        codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
+    with pytest.raises(ValueError, match="Could not match"):
+        codes.QCCode({}, terms_a, terms_b, field=2)
 
 
 def test_GB_code_error() -> None:
