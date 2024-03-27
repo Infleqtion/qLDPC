@@ -1262,8 +1262,6 @@ class QCCode(GBCode):
             for symbol, gen in zip(dims.keys(), group.generators)
         }
 
-        # build defining matrices of a generalized bicycle code
-
         def evaluate_sympy(
             expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
         ) -> abstract.Element:
@@ -1286,6 +1284,7 @@ class QCCode(GBCode):
                 )
             return poly
 
+        # build defining matrices of a generalized bicycle code
         matrix_a = evaluate_sympy(poly_a).lift().view(np.ndarray)
         matrix_b = evaluate_sympy(poly_b).lift().view(np.ndarray)
         GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
