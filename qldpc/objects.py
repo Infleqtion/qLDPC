@@ -320,7 +320,6 @@ class CayleyComplex:
         )
 
 
-# TODO: investigate the lifted product for chain complexes: https://arxiv.org/pdf/2012.04068.pdf
 class ChainComplex:
     """Chain complex: a sequence modules with "boundary operators" that map between them.
 
@@ -342,19 +341,50 @@ class ChainComplex:
     """
 
     _field: type[galois.FieldArray]
-    _ops: tuple[galois.FieldArray, ...]
+    _ops: tuple[npt.NDArray[np.int_] | abstract.Protograph, ...]
 
-    def __init__(self, *ops: npt.NDArray[np.int_], field: int | None = None) -> None:
-        fields = set(type(op) for op in ops if isinstance(op, galois.FieldArray))
-        fields |= set([galois.GF(field)]) if field is not None else set()
-        if len(fields) > 1:
-            raise ValueError("Inconsistent base fields provided for chain complex")
+    # if boundary operators are defined over a group algebra, keep track of their base group
+    _group: abstract.Group | None
+
+    def __init__(
+        self,
+        *ops: npt.NDArray[np.int_] | abstract.Protograph,
+        field: int | None = None,
+        skip_validation: bool = False,
+    ) -> None:
+        # check that either all or none of the operators are defined over a group algebra
+        if not (
+            all(isinstance(op, abstract.Protograph) for op in ops)
+            or not any(isinstance(op, abstract.Protograph) for op in ops)
+        ):
+            raise ValueError("Invalid or inconsistent operator types provided for a ChainComplex")
+
+        # identify the base field and group for the boundary operators of this chain complex
+        fields = set([galois.GF(field)]) if field is not None else set()
+        groups = set()
+        for op in ops:
+            if isinstance(op, abstract.Protograph):
+                fields.add(op.field)
+                groups.add(op.group)
+            elif isinstance(op, galois.FieldArray):
+                fields.add(type(op))
+        if len(fields) > 1 or len(groups) > 1:
+            raise ValueError("Inconsistent base fields (or groups) provided for chain complex")
         self._field = fields.pop() if fields else galois.GF(DEFAULT_FIELD_ORDER)
+        self._group = groups.pop() if groups else None
 
-        self._ops = tuple(self.field(op) for op in ops)
-        for degree in range(1, self.num_links):
-            op_a = self.op(degree)
-            op_b = self.op(degree + 1)
+        # identify the boundary operators of this chain complex
+        if self._group is None:
+            self._ops = tuple(self.field(op) for op in ops)
+        else:
+            self._ops = ops
+
+        if not skip_validation:
+            self._validate_ops()
+
+    def _validate_ops(self) -> None:
+        """Validate the consistency of this the boundary operators in this chain complex."""
+        for op_a, op_b in zip(self.ops, self.ops[1:]):
             if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
                 raise ValueError(
                     "Condition for a chain complex not satisfied:\n"
@@ -367,20 +397,31 @@ class ChainComplex:
         return self._field
 
     @property
-    def ops(self) -> tuple[npt.NDArray[np.int_], ...]:
-        """The boundary operators of this chain complex."""
-        return self._ops
+    def group(self) -> abstract.Group | None:
+        """The base group of this chain complex."""
+        return self._group
 
     @property
     def num_links(self) -> int:
         """The number of "internal" links in this chain complex."""
         return len(self.ops)
 
+    @property
+    def ops(self) -> tuple[npt.NDArray[np.int_] | abstract.Protograph, ...]:
+        """The boundary operators of this chain complex."""
+        return self._ops
+
     def dim(self, degree: int) -> int:
         """The dimension of the module of the given degree."""
         return self.op(degree).shape[1]
 
-    def op(self, degree: int) -> npt.NDArray[np.int_]:
+    @property
+    def T(self) -> ChainComplex:
+        """Transpose and reverse the order of the boundary operators in this chain complex."""
+        dual_ops = [op.T for op in self.ops[::-1]]
+        return ChainComplex(*dual_ops, skip_validation=True)
+
+    def op(self, degree: int) -> npt.NDArray[np.int_] | abstract.Protograph:
         """The boundary operator of this chain complex that acts on the module of a given degree."""
         assert 0 <= degree <= self.num_links + 1
         if degree == 0:
@@ -389,17 +430,11 @@ class ChainComplex:
             return self.field.Zeros((self.ops[-1].shape[1], 0))
         return self.ops[degree - 1]
 
-    @property
-    def T(self) -> ChainComplex:
-        """Transpose and reverse the order of the boundary operators in this chain complex."""
-        dual_ops = [op.T for op in self.ops[::-1]]
-        return ChainComplex(*dual_ops)
-
     @classmethod
     def tensor_product(  # noqa: C901 ignore complexity check
         cls,
-        chain_a: ChainComplex | galois.FieldArray | npt.NDArray[np.int_],
-        chain_b: ChainComplex | galois.FieldArray | npt.NDArray[np.int_],
+        chain_a: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.Protograph,
+        chain_b: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.Protograph,
         field: int | None = None,
     ) -> ChainComplex:
         """Tensor product of two chain complexes.
@@ -429,8 +464,8 @@ class ChainComplex:
             chain_a = ChainComplex(chain_a, field=field)
         if not isinstance(chain_b, ChainComplex):
             chain_b = ChainComplex(chain_b, field=field)
-        if chain_a.field is not chain_b.field:
-            raise ValueError("Cannot take tensor product of chain complexes over different fields")
+        if chain_a.field is not chain_b.field or chain_a.group != chain_b.group:
+            raise ValueError("Incompatible chain complexes: different base fields or groups")
         chain_field = chain_a.field
 
         def get_degree_pairs(degree: int) -> Iterator[tuple[int, int]]:
@@ -455,7 +490,7 @@ class ChainComplex:
             cols = chain_a.dim(col_deg_a) * chain_b.dim(col_deg_b)
             return chain_field.Zeros((rows, cols))
 
-        ops: list[npt.NDArray[np.int_]] = []
+        ops = []
         for degree in range(1, chain_a.num_links + chain_b.num_links + 1):
             # fill in zero blocks of the total boundary operator
             blocks = [
@@ -470,12 +505,18 @@ class ChainComplex:
                 if deg_a:
                     row = get_block_index(deg_a - 1, deg_b)
                     iden_b = np.identity(op_b.shape[1], dtype=op_b.dtype)
-                    blocks[row][col] = np.kron(op_a, iden_b)
+                    blocks[row][col] = np.kron(op_a, iden_b)  # type:ignore[assignment,arg-type]
                 if deg_b:
                     row = get_block_index(deg_a, deg_b - 1)
                     iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype)
-                    blocks[row][col] = np.kron(iden_a, op_b) * (-1) ** deg_a
+                    blocks[row][col] = (
+                        np.kron(iden_a, op_b) * (-1) ** deg_a  # type:ignore[arg-type]
+                    )
 
             ops.append(np.block(blocks))
 
-        return ChainComplex(*ops, field=chain_field.order)
+        if chain_a.group is None:
+            ops = [chain_field(op) for op in ops]
+        else:
+            ops = [abstract.Protograph(op) for op in ops]
+        return ChainComplex(*ops, skip_validation=True)

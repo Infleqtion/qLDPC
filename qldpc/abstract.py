@@ -152,6 +152,9 @@ class Group:
             isinstance(other, Group) and self._field == other._field and self._group == other._group
         )
 
+    def __hash__(self) -> int:
+        return hash(self._group)
+
     def __contains__(self, member: GroupMember) -> bool:
         return comb.Permutation(member.array_form) in self._group
 
@@ -421,6 +424,9 @@ class Element:
             and all(self._vec[member] == other._vec[member] for member in other._vec)
         )
 
+    def __bool__(self) -> bool:
+        return any(self._vec.values())
+
     def __iter__(self) -> Iterator[tuple[GroupMember, galois.FieldArray]]:
         yield from self._vec.items()
 
@@ -592,7 +598,9 @@ class Protograph(npt.NDArray[np.object_]):
 
     @classmethod
     def build(
-        cls, group: Group, array: npt.NDArray[np.object_] | Sequence[Sequence[object]]
+        cls,
+        group: Group,
+        array: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]],
     ) -> Protograph:
         """Construct a protograph.
 
@@ -603,7 +611,8 @@ class Protograph(npt.NDArray[np.object_]):
         """
         array = np.array(array, dtype=object)
         vals = [Element(group, member) if member else Element(group) for member in array.ravel()]
-        return Protograph(np.array(vals, dtype=object).reshape(array.shape))
+        vals_array = np.array(vals, dtype=object).reshape(array.shape)
+        return Protograph(vals_array, group)
 
 
 ################################################################################
