@@ -59,7 +59,8 @@ def test_lift() -> None:
     """Lift named group elements."""
     assert_valid_lift(abstract.TrivialGroup())
     assert_valid_lift(abstract.CyclicGroup(3))
-    assert_valid_lift(abstract.AbelianGroup(2, 2))
+    assert_valid_lift(abstract.AbelianGroup(2, 3))
+    assert_valid_lift(abstract.AbelianGroup(2, 3, product_lift=True))
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
     assert_valid_lift(abstract.SymmetricGroup(3))
@@ -106,7 +107,7 @@ def test_algebra() -> None:
     zero = abstract.Element(group)
     one = abstract.Element(group).one()
     assert zero.group == group
-    assert one + one + one == group.identity + 2 * one == -one + one == one - one == zero
+    assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
     assert group.identity * one == one * group.identity == one**2 == one
     assert np.array_equal(zero.lift(), np.array(0, ndmin=2))
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
@@ -117,10 +118,17 @@ def test_protograph() -> None:
     matrix = np.random.randint(2, size=(3, 3))
     protograph = abstract.TrivialGroup.to_protograph(matrix)
     assert protograph.group == abstract.TrivialGroup()
-    assert 1 * protograph == protograph * 1 == protograph
-    assert protograph == abstract.Protograph(protograph)
-    assert np.array_equal(protograph.lift(), matrix)
     assert protograph.field == abstract.TrivialGroup().field
+    assert np.array_equal(protograph.lift(), matrix)
+
+    # fail to construct a valid protograph
+    with pytest.raises(ValueError, match="must be Element-valued"):
+        abstract.Protograph([[0]])
+    with pytest.raises(ValueError, match="Inconsistent base groups"):
+        groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
+        abstract.Protograph([[abstract.Element(group) for group in groups]])
+    with pytest.raises(ValueError, match="Cannot determine underlying group"):
+        abstract.Protograph([])
 
 
 def test_transpose() -> None:
@@ -133,7 +141,7 @@ def test_transpose() -> None:
     x0, x1, x2, x3 = group.generate()
     matrix = [[x0, 0, x1], [x2, 0, x3]]
     protograph = abstract.Protograph.build(group, matrix)
-    assert protograph.T.T == protograph
+    assert np.array_equal(protograph.T.T, protograph)
 
 
 def test_random_symmetric_subset() -> None:
@@ -148,20 +156,6 @@ def test_random_symmetric_subset() -> None:
 
     with pytest.raises(ValueError, match="must have a size between"):
         group.random_symmetric_subset(size=0)
-
-
-def test_dicyclic_group() -> None:
-    """Dicyclic group."""
-    for order in range(4, 21, 4):
-        group = abstract.DicyclicGroup(order)
-        gen_a, gen_b = group.generators
-        assert gen_a ** (order // 2) == gen_b**4 == group.identity
-
-    with pytest.raises(ValueError, match="positive multiples of 4"):
-        abstract.DicyclicGroup(2)
-
-    with pytest.raises(ValueError, match="orders up to 20"):
-        abstract.DicyclicGroup(24)
 
 
 def test_SL(field: int = 3) -> None:
@@ -192,18 +186,23 @@ def test_PSL(field: int = 3) -> None:
         abstract.PSL(3, 3)
 
 
-def test_named_groups() -> None:
+def test_small_group() -> None:
     """Groups indexed by the GAP computer algebra system."""
     order, index = 2, 1
-    group_name = f"CyclicGroup({order})"
     desired_group = abstract.CyclicGroup(order)
+
+    # invalid group index
+    with (
+        pytest.raises(ValueError, match="Index for SmallGroup"),
+        unittest.mock.patch("qldpc.named_groups.get_small_group_number", return_value=index),
+    ):
+        abstract.SmallGroup(order, 0)
+
+    # everything works as expected
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
-
-    group: abstract.Group
-    with unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators):
-        group = abstract.Group.from_name(group_name)
-        assert group.generators == desired_group.generators
-
-    with unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators):
-        group = abstract.SmallGroup(order, index)
-        assert group.generators == desired_group.generators
+    with (
+        unittest.mock.patch("qldpc.abstract.SmallGroup.number", return_value=index),
+        unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators),
+    ):
+        assert abstract.SmallGroup(order, index).generators == desired_group.generators
+        assert list(abstract.SmallGroup.generator(order)) == [desired_group]

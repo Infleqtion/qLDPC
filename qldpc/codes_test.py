@@ -22,7 +22,7 @@ import networkx as nx
 import numpy as np
 import pytest
 
-from qldpc import abstract, codes
+from qldpc import abstract, codes, objects
 
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
@@ -31,7 +31,7 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 
 
 def test_classical_codes() -> None:
-    """Construction of a few classical codes."""
+    """Classical code constructions."""
     assert codes.ClassicalCode.random(5, 3).num_bits == 5
     assert codes.HammingCode(3).get_distance() == 3
 
@@ -47,13 +47,26 @@ def test_classical_codes() -> None:
         assert code.get_weight() == 2
         assert code.get_random_word() in code
 
-    # test that rank of repetition and Hamming codes is independent of the field
+    # that rank of repetition and Hamming codes is independent of the field
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
     assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
-    # test invalid classical code construction
+    # invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+
+    # construct a code from its generator matrix
+    code = codes.ClassicalCode.random(5, 3)
+    assert codes.ClassicalCode.equiv(code, codes.ClassicalCode.from_generator(code.generator))
+
+    # puncture a code
+    assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
+
+    # shortening a repetition code yields a trivial code
+    num_bits = 3
+    code = codes.RepetitionCode(num_bits)
+    words = [[0] * (num_bits - 1)]
+    assert np.array_equal(code.shorten(0).words(), words)
 
 
 def test_special_codes() -> None:
@@ -68,9 +81,7 @@ def test_special_codes() -> None:
     order, size = 1, 3
     code = codes.ReedMullerCode(order, size)
     assert code.dimension == codes.ClassicalCode(code.matrix).dimension
-
-    dual_code = codes.ReedMullerCode(size - order - 1, size)
-    assert np.array_equal((~code).matrix, dual_code.matrix)
+    assert ~code == codes.ReedMullerCode(size - order - 1, size)
 
     with pytest.raises(ValueError, match="0 <= r <= m"):
         codes.ReedMullerCode(-1, 0)
@@ -82,8 +93,7 @@ def test_named_codes(order: int = 2) -> None:
     checks = [list(row) for row in code.matrix.view(np.ndarray)]
 
     with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(checks, None)):
-        named_code = codes.ClassicalCode.from_name(f"RepetitionCode({order})")
-        assert np.array_equal(named_code.matrix, code.matrix)
+        assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
@@ -167,8 +177,8 @@ def test_logical_ops() -> None:
     logicals = code.get_logical_ops()
     logicals_x, logicals_z = logicals[0], logicals[1]
     assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
-    assert not np.any(code.code_z.matrix @ logicals_x.T)
-    assert not np.any(code.code_x.matrix @ logicals_z.T)
+    assert not np.any(code.matrix_z @ logicals_x.T)
+    assert not np.any(code.matrix_x @ logicals_z.T)
 
     # minimizing logical operator weight only supported for prime number fields
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
@@ -201,6 +211,16 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers(["I", "I I"], field)
 
 
+def test_quantum_distance(field: int = 2) -> None:
+    """Distance calculations for qudit codes."""
+    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
+    assert code.get_distance() == 2
+
+    # assert that the identity is a logical operator
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+
+
 @pytest.mark.parametrize("field", [2, 3])
 def test_graph_product(
     field: int,
@@ -208,14 +228,19 @@ def test_graph_product(
     bits_checks_b: tuple[int, int] = (3, 2),
     conjugate: bool = True,
 ) -> None:
-    """Equivalency of matrix-based and graph-based hypergraph products."""
+    """Equivalency of matrix-based, graph-based, and chain-based hypergraph products."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
 
     code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph, conjugate=conjugate)
-    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+    chain = objects.ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
+    matrix_x, matrix_z = chain.op(1), chain.op(2).T
+
     assert nx.utils.graphs_equal(code.graph, graph)
+    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+    assert np.array_equal(code.matrix_x, matrix_x)
+    assert np.array_equal(code.matrix_z, matrix_z)
 
 
 def test_trivial_lift(
@@ -293,39 +318,62 @@ def test_twisted_XZZX(width: int = 3) -> None:
     assert np.array_equal(np.block(matrix), code.matrix)
 
 
-def test_cyclic_codes() -> None:
-    """Quasi-cyclic codes from arXiv:2308.07915."""
-    dims: tuple[int, ...]
+def test_cyclic_codes(field: int = 3) -> None:
+    """Quasi-cyclic codes from arXiv:2308.07915 and arXiv:2311.16980."""
+    from sympy.abc import x, y
 
+    # first code in Table 3 of arXiv:2308.07915
     dims = (6, 6)
-    terms_a = [("x", 3), ("y", 1), ("y", 2)]
-    terms_b = [("y", 3), ("x", 1), ("x", 2)]
-    code = codes.QCCode(dims, terms_a, terms_b, field=2)
+    poly_a = x**3 + y + y**2
+    poly_b = y**3 + x + x**2
+    code = codes.QCCode(dims, poly_a, poly_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
     assert code.get_weight() == 6
 
-    dims = (15, 3)
-    terms_a = [("x", 9), ("y", 1), ("y", 2)]
-    terms_b = [("x", 0), ("x", 2), ("x", 7)]
-    code = codes.QCCode(dims, terms_a, terms_b, field=2)
-    assert code.num_qudits == 90
-    assert code.dimension == 8
+    # last code in Table II of arXiv:2311.16980
+    dims_dict = {x: 12, y: 4}
+    poly_a = 1 + y + x * y + x**9
+    poly_b = 1 + x**2 + x**7 + x**9 * y**2
+    code = codes.QCCode(dims_dict, poly_a, poly_b, field=2)
+    assert code.num_qudits == 96
+    assert code.dimension == 10
+    assert code.get_weight() == 8
+
+    # [[144, 12, 12]] code in Table 3 and Figure 2 of arXiv:2308.07915
+    dims = (12, 6)
+    poly_a = x**3 + y + y**2
+    poly_b = y**3 + x + x**2
+    code = codes.QCCode(dims, poly_a, poly_b, field=2)
+    assert code.num_qudits == 144
+    assert code.dimension == 12
     assert code.get_weight() == 6
 
-    with pytest.raises(ValueError, match="does not match"):
-        codes.QCCode((2, 3, 4), terms_a, terms_b, field=2)
+    # check that every check qubit addresses its neighboring data qubits
+    unit_shifts = {(0, 1), (1, 0), (0, -1), (-1, 0)}
+    for plaquette_map, torus_shape in code.get_toric_mappings():
+        shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape)
+        assert unit_shifts.issubset(shifts_x)
+        assert unit_shifts.issubset(shifts_z)
 
-    with pytest.raises(ValueError, match="not supported"):
-        codes.QCCode(dims, terms_a, terms_b, field=3)
+    # check a case with no toric mappings
+    dims = (6, 6)
+    poly_a = 1 + y + y**2
+    poly_b = y**3 + x**2 + x**4
+    code = codes.QCCode(dims, poly_a, poly_b, field=2)
+    assert not code.get_toric_mappings()
+
+    # fail to match cyclic group orders to free variables
+    with pytest.raises(ValueError, match="Could not match"):
+        codes.QCCode({}, poly_a, poly_b, field=2)
 
 
 def test_GB_code_error() -> None:
     """Raise error when trying to construct incompatible generalized bicycle codes."""
-    matrix_a = [[1, 0], [0, -1]]
+    matrix_a = [[1, 0], [0, 2]]
     matrix_b = [[0, 1], [1, 0]]
     with pytest.raises(ValueError, match="incompatible"):
-        codes.GBCode(matrix_a, matrix_b)
+        codes.GBCode(matrix_a, matrix_b, field=3)
 
 
 def test_lifted_product_codes() -> None:
@@ -358,6 +406,33 @@ def test_tanner_code() -> None:
     assert all(code.subgraph.get_edge_data(*edge)["sort"] == tag for edge in code.subgraph.edges)
 
 
+def test_quantum_tanner() -> None:
+    """Quantum Tanner code."""
+    # build the subgraphs of a quantum Tanner code
+    group = abstract.CyclicGroup(12)
+    subset_a = group.random_symmetric_subset(4)
+    subset_b = group.random_symmetric_subset(4)
+    cayplex = objects.CayleyComplex(subset_a, subset_b)
+    subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(cayplex)
+
+    # assert that subgraphs have the right number of nodes, edges, and node degrees
+    size_g = cayplex.group.order
+    size_a = len(cayplex.subset_a)
+    size_b = len(cayplex.subset_b)
+    num_faces = len(cayplex.faces)
+    for graph in [subgraph_x, subgraph_z]:
+        assert graph.number_of_nodes() == num_faces + size_g / 2
+        assert graph.number_of_edges() == num_faces * 2
+        sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
+        assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
+
+    # raise error if constructing QTCode with codes over different fields
+    subcode_a = codes.RepetitionCode(2, field=2)
+    subcode_b = codes.RepetitionCode(2, field=3)
+    with pytest.raises(ValueError, match="different fields"):
+        codes.QTCode([], [], subcode_a, subcode_b)
+
+
 def test_toric_tanner_code(size: int = 4) -> None:
     """Rotated toric code as a quantum Tanner code."""
     group = abstract.Group.product(abstract.CyclicGroup(size), repeat=2)
@@ -367,14 +442,6 @@ def test_toric_tanner_code(size: int = 4) -> None:
     subcode_a = codes.RepetitionCode(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
     assert code.get_code_params() == (size**2, 2, size, 4)
-
-
-def test_invalid_quantum_tanner() -> None:
-    """Raise error if constructing QTCode with codes over different fields."""
-    subcode_a = codes.RepetitionCode(2, field=2)
-    subcode_b = codes.RepetitionCode(2, field=3)
-    with pytest.raises(ValueError, match="different fields"):
-        codes.QTCode([], [], subcode_a, subcode_b)
 
 
 def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
@@ -445,11 +512,35 @@ def test_toric_codes(field: int = 3) -> None:
         codes.ToricCode(3, rotated=True)
 
 
-def test_quantum_distance(field: int = 2) -> None:
-    """Distance calculations for qudit codes."""
-    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
-    assert code.get_distance() == 2
+def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
+    """Multi-dimensional surface and toric codes."""
 
-    # assert that the identity is a logical operator
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+    # recover ordinary surface code in 2D
+    assert np.array_equal(
+        codes.GeneralizedSurfaceCode(size, dim=2, periodic=False, field=field).matrix,
+        codes.SurfaceCode(size, rotated=False, field=field).matrix,
+    )
+
+    # recover ordinary toric code in 2D
+    assert np.array_equal(
+        codes.GeneralizedSurfaceCode(size, dim=2, periodic=True, field=field).matrix,
+        codes.ToricCode(size, rotated=False, field=field).matrix,
+    )
+
+    for dim in [3, 4]:
+        # surface code
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=False, field=field)
+        assert code.dimension == 1
+        assert code.num_qudits == size**dim + (dim - 1) * size ** (dim - 2) * (size - 1) ** 2
+        assert code.get_distance(codes.Pauli.Z, bound=10) == size
+        assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
+
+        # toric code
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=True, field=field)
+        assert code.dimension == dim
+        assert code.num_qudits == dim * size**dim
+        assert code.get_distance(codes.Pauli.Z, bound=10) == size
+        assert code.get_distance(codes.Pauli.X, bound=10) == size ** (dim - 1)
+
+    with pytest.raises(ValueError, match=">= 2"):
+        codes.GeneralizedSurfaceCode(size, dim=1)

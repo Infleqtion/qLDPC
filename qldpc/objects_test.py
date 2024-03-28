@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import galois
 import numpy as np
 import pytest
 
@@ -105,8 +106,7 @@ def test_cayley_complex() -> None:
 
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
-    """Run various sanity checks on a Cayley complex."""
-    # assert that the complex has the right number of vertices, edges, and faces
+    """Assert that a Cayley complex has the correct number of vertices, edges, and faces."""
     size_g = cayplex.group.order
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
@@ -114,9 +114,23 @@ def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
     assert len(cayplex.faces) == size_g * size_a * size_b // 4
 
-    # check that the subgraphs have the correct number of nodes, edges, and node degrees
-    for graph in cayplex.subgraphs():
-        assert graph.number_of_nodes() == len(cayplex.faces) + size_g / 2
-        assert graph.number_of_edges() == len(cayplex.faces) * 2
-        sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
-        assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
+
+def test_chain_complex(field: int = 3) -> None:
+    """Chain complex construction and errors."""
+
+    # tensor product of one-complexes
+    mat = np.random.randint(field, size=(2, 3))
+    two_chain = objects.ChainComplex.tensor_product(mat, mat, field)
+    assert not np.any(two_chain.op(0))
+    assert not np.any(two_chain.op(two_chain.num_links + 1))
+
+    # tensor product of a two-complex and its dual
+    objects.ChainComplex.tensor_product(two_chain, two_chain.T, field)
+
+    # invalid chain complex constructions
+    with pytest.raises(ValueError, match="Inconsistent base fields"):
+        objects.ChainComplex(galois.GF(field)(mat), field=field**2)
+    with pytest.raises(ValueError, match="boundary operators .* must compose to zero"):
+        objects.ChainComplex(mat, mat, field=field)
+    with pytest.raises(ValueError, match="different fields"):
+        objects.ChainComplex.tensor_product(galois.GF(field)(mat), galois.GF(field**2)(mat))
