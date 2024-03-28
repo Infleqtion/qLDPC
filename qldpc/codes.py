@@ -1502,8 +1502,8 @@ class QCCode(GBCode):
         yy = 2 * bb + int(sector in [Pauli.Z, 1])
         if open_boundaries:
             assert torus_shape is not None, "Cannot fold a torus without knowing its shape"
-            xx = 2 * xx if xx < torus_shape[0] else 2 * (2 * torus_shape[0] - xx) + 1
-            yy = 2 * yy if yy < torus_shape[1] else 2 * (2 * torus_shape[1] - yy) + 1
+            xx = 2 * xx if xx < torus_shape[0] else (2 * torus_shape[0] - 1 - xx) * 2 + 1
+            yy = 2 * yy if yy < torus_shape[1] else (2 * torus_shape[1] - 1 - yy) * 2 + 1
         return xx, yy
 
     def get_check_shifts(
