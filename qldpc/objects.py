@@ -341,7 +341,7 @@ class ChainComplex:
     """
 
     _field: type[galois.FieldArray]
-    _ops: tuple[galois.FieldArray, ...] | tuple[abstract.Protograph, ...]
+    _ops: tuple[npt.NDArray[np.int_] | abstract.Protograph, ...]
 
     # if boundary operators are defined over a group algebra, keep track of their base group
     _group: abstract.Group | None
@@ -385,7 +385,7 @@ class ChainComplex:
     def _validate_ops(self) -> None:
         """Validate the consistency of this the boundary operators in this chain complex."""
         for op_a, op_b in zip(self.ops, self.ops[1:]):
-            if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):  # type:ignore[operator]
+            if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
                 raise ValueError(
                     "Condition for a chain complex not satisfied:\n"
                     "Neighboring boundary operators of a chain complex must compose to zero"
@@ -402,7 +402,7 @@ class ChainComplex:
         return len(self.ops)
 
     @property
-    def ops(self) -> tuple[npt.NDArray[np.int_], ...] | tuple[abstract.Protograph, ...]:
+    def ops(self) -> tuple[npt.NDArray[np.int_] | abstract.Protograph, ...]:
         """The boundary operators of this chain complex."""
         return self._ops
 

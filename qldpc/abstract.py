@@ -598,7 +598,9 @@ class Protograph(npt.NDArray[np.object_]):
 
     @classmethod
     def build(
-        cls, group: Group, array: npt.NDArray[np.object_] | Sequence[Sequence[object]]
+        cls,
+        group: Group,
+        array: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]],
     ) -> Protograph:
         """Construct a protograph.
 
