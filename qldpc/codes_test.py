@@ -319,27 +319,53 @@ def test_twisted_XZZX(width: int = 3) -> None:
 
 
 def test_cyclic_codes(field: int = 3) -> None:
-    """Quasi-cyclic codes from arXiv:2308.07915."""
+    """Quasi-cyclic codes from arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y
 
+    # first code in Table 3 of arXiv:2308.07915
     dims = (6, 6)
-    terms_a = x**3 + y + y**2
-    terms_b = y**3 + x + x**2
-    code = codes.QCCode(dims, terms_a, terms_b, field=2)
+    poly_a = x**3 + y + y**2
+    poly_b = y**3 + x + x**2
+    code = codes.QCCode(dims, poly_a, poly_b, field=2)
     assert code.num_qudits == 72
     assert code.dimension == 12
     assert code.get_weight() == 6
 
-    dims_dict = {x: 15, y: 3}
-    terms_a = x**9 + y + y**2
-    terms_b = 1 + x**2 + x**7
-    code = codes.QCCode(dims_dict, terms_a, terms_b, field=3)
-    assert code.num_qudits == 90
-    assert code.dimension == 8
+    # last code in Table II of arXiv:2311.16980
+    dims_dict = {x: 12, y: 4}
+    poly_a = 1 + y + x * y + x**9
+    poly_b = 1 + x**2 + x**7 + x**9 * y**2
+    code = codes.QCCode(dims_dict, poly_a, poly_b, field=2)
+    assert code.num_qudits == 96
+    assert code.dimension == 10
+    assert code.get_weight() == 8
+
+    # [[144, 12, 12]] code in Table 3 and Figure 2 of arXiv:2308.07915
+    dims = (12, 6)
+    poly_a = x**3 + y + y**2
+    poly_b = y**3 + x + x**2
+    code = codes.QCCode(dims, poly_a, poly_b, field=2)
+    assert code.num_qudits == 144
+    assert code.dimension == 12
     assert code.get_weight() == 6
 
+    # check that every check qubit addresses its neighboring data qubits
+    unit_shifts = {(0, 1), (1, 0), (0, -1), (-1, 0)}
+    for plaquette_map, torus_shape in code.get_toric_mappings():
+        shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape)
+        assert unit_shifts.issubset(shifts_x)
+        assert unit_shifts.issubset(shifts_z)
+
+    # check a case with no toric mappings
+    dims = (6, 6)
+    poly_a = 1 + y + y**2
+    poly_b = y**3 + x**2 + x**4
+    code = codes.QCCode(dims, poly_a, poly_b, field=2)
+    assert not code.get_toric_mappings()
+
+    # fail to match cyclic group orders to free variables
     with pytest.raises(ValueError, match="Could not match"):
-        codes.QCCode({}, terms_a, terms_b, field=2)
+        codes.QCCode({}, poly_a, poly_b, field=2)
 
 
 def test_GB_code_error() -> None:

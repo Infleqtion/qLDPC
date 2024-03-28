@@ -21,7 +21,7 @@ import abc
 import functools
 import itertools
 import random
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Iterable, Sequence
 from typing import Literal
 
 import galois
@@ -30,10 +30,19 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import sympy
+import sympy.combinatorics as comb
 
 import qldpc
 from qldpc import abstract, named_codes
-from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
+from qldpc.objects import (
+    PAULIS_XZ,
+    CayleyComplex,
+    ChainComplex,
+    Node,
+    Pauli,
+    PauliXZ,
+    QuditOperator,
+)
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -824,7 +833,7 @@ class CSSCode(QuditCode):
 
     def get_distance(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        pauli: PauliXZ | None = None,
         *,
         bound: int | bool | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
@@ -847,17 +856,14 @@ class CSSCode(QuditCode):
         return self.get_distance_bound(pauli, num_trials=int(bound), vector=vector, **decoder_args)
 
     def get_distance_exact(
-        self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
+        self, pauli: PauliXZ | None, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
     ) -> int:
         """Compute the minimal weight of a nontrivial code word by brute force.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
         (possibly trivial) X-type or Z-type logical operator, as applicable.
         """
-        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert pauli is None or pauli in PAULIS_XZ
         if pauli is None:
             return min(
                 self.get_distance_exact(Pauli.X, vector=vector),
@@ -892,7 +898,7 @@ class CSSCode(QuditCode):
 
     def get_distance_bound(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        pauli: PauliXZ | None = None,
         num_trials: int = 1,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
@@ -914,7 +920,7 @@ class CSSCode(QuditCode):
 
     def get_one_distance_bound(
         self,
-        pauli: Literal[Pauli.X, Pauli.Z] | None = None,
+        pauli: PauliXZ | None = None,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
@@ -953,8 +959,8 @@ class CSSCode(QuditCode):
         presumably one of low Hamming weight, since decoders try to find low-weight solutions.
         Return the Hamming weight |w_x|.
         """
-        assert pauli in [None, Pauli.X, Pauli.Z]
-        pauli = pauli or random.choice([Pauli.X, Pauli.Z])
+        assert pauli is None or pauli in PAULIS_XZ
+        pauli = pauli or random.choice(PAULIS_XZ)
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
@@ -992,7 +998,7 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    def get_logical_ops(self, pauli: Literal[Pauli.X, Pauli.Z] | None = None) -> galois.FieldArray:
+    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial X-type and Z-type logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -1010,7 +1016,7 @@ class CSSCode(QuditCode):
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified and generalized for qudits.
         """
-        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert pauli is None or pauli in PAULIS_XZ
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
@@ -1093,7 +1099,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], *, ensure_nontrivial: bool = False
+        self, pauli: PauliXZ, *, ensure_nontrivial: bool = False
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
@@ -1116,9 +1122,7 @@ class CSSCode(QuditCode):
 
         return op_a
 
-    def reduce_logical_op(
-        self, pauli: Literal[Pauli.X, Pauli.Z], logical_index: int, **decoder_args: object
-    ) -> None:
+    def reduce_logical_op(self, pauli: PauliXZ, logical_index: int, **decoder_args: object) -> None:
         """Reduce the weight of a logical operator.
 
         A minimal-weight logical operator is found by enforcing that it has a trivial syndrome, and
@@ -1150,11 +1154,9 @@ class CSSCode(QuditCode):
         assert self._logical_ops is not None
         self._logical_ops[pauli, logical_index] = candidate_logical_op
 
-    def reduce_logical_ops(
-        self, pauli: Literal[Pauli.X, Pauli.Z] | None = None, **decoder_args: object
-    ) -> None:
+    def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: object) -> None:
         """Reduce the weight of all logical operators."""
-        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert pauli is None or pauli in PAULIS_XZ
         if pauli is None:
             self.reduce_logical_ops(Pauli.X, **decoder_args)
             self.reduce_logical_ops(Pauli.Z, **decoder_args)
@@ -1224,33 +1226,35 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-class QCCode(GBCode):
-    """Quasi-cyclic (QC) code.
+QuasiCyclicPlaquetteMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
 
-    Inspired by arXiv:2308.07915.
+
+class QCCode(GBCode):
+    """Quasi-cyclic (QC) codes from arXiv:2308.07915.
 
     A quasi-cyclic code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T],
-    where A and B are block matrices identified with elements of a multivariate polynomial ring.
-    Specifically, we can expand (say) A = sum_{i,j} A_{ij} x_i^j, where A_{ij} are coefficients
-    and each x_i is the generator of a cyclic group of order R_i.
+    where A = A_{ij} x^i y^j and B = B_{ij} x^i y^j are bivariate polynomials.  Here:
+    - A_{ij} and B_{ij} are scalar coefficients (over some finite field),
+    - x generates a group of order R_x, and
+    - y generates a group of order R_y.
 
     A quasi-cyclic code is defined by...
-    [1] sequence of cyclic group orders, and
-    [2] two sympy polynomials, with as many free variables as there are cyclic group orders.
-    By default, group orders are associated with free variables in lexicographic order.  The
-    assignment of a group order to each variable can be made explicit with a dictionary.
+    [1] two cyclic group orders, and
+    [2] two sympy polynomials in two variables.
+    By default, group orders are associated in lexicographic order with free variables of the
+    polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
     """
 
     def __init__(
         self,
-        orders: Sequence[int] | dict[sympy.Symbol, int],
+        orders: tuple[int, int] | dict[sympy.Symbol, int],
         poly_a: sympy.Basic,
         poly_b: sympy.Basic | None = None,
         field: int | None = None,
         *,
-        conjugate: slice | Sequence[int] = (),
+        conjugate: bool = False,
     ) -> None:
         """Construct a quasi-cyclic code."""
         if poly_b is None:
@@ -1260,31 +1264,36 @@ class QCCode(GBCode):
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) != len(orders) or (
+        if len(symbols) < len(orders) or (
             isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
         ):
             raise ValueError(f"Could not match symbols {symbols} to group orders {orders}")
 
-        # identify cyclic group orders
-        if isinstance(orders, dict):
-            self.orders = {symbol: order for symbol, order in orders.items() if symbol in symbols}
-        else:
-            self.orders = {}
+        # identify cyclic group orders with symbols in the polynomials
+        if not isinstance(orders, dict):
+            orders_dict = {}
             for symbol, order in zip(symbols, orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
-                self.orders[symbol] = order
+                orders_dict[symbol] = order
+            orders = orders_dict
+        self.symbols = tuple(orders.keys())
+        self.orders = tuple(orders.values())
 
-        # identify the values (in a group algebra) that the symbols take
-        self.group = abstract.AbelianGroup(*self.orders.values(), product_lift=True)
-        self.symbols = {
-            symbol: abstract.Element(self.group, gen)
-            for symbol, gen in zip(self.orders.keys(), self.group.generators)
-        }
+        # identify the group generator associated with each symbol
+        self.group = abstract.AbelianGroup(*orders.values(), product_lift=True)
+        self.gens = self.group.generators
+        self.symbol_gens = dict(zip(self.symbols, self.gens))
+
+        # hadamard-transform qubits in the "R" sector
+        num_qudits = self.group.order * 2
+        qudits_to_conjugate: slice | Sequence[int] = (
+            slice(num_qudits // 2, num_qudits + 1) if conjugate else ()
+        )
 
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
         matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
-        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
+        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=qudits_to_conjugate)
 
     def eval(
         self,
@@ -1293,14 +1302,11 @@ class QCCode(GBCode):
         """Convert a sympy expression into an element of a group algebra."""
         # evaluate simple cases
         if isinstance(expr, sympy.Integer):
-            return int(expr) * abstract.Element(self.group, self.group.identity)
-        if isinstance(expr, sympy.Symbol):
-            return self.symbols[expr]
-        if isinstance(expr, sympy.Pow):
-            base, exp = expr.as_base_exp()
-            return self.symbols[base] ** exp
+            return int(expr) * abstract.Element(self.group, self.to_group_member(expr))
+        if isinstance(expr, (sympy.Symbol, sympy.Pow)):
+            return abstract.Element(self.group, self.to_group_member(expr))
 
-        # evaluate a polynomial
+        # evaluate a product or polynomial
         element = abstract.Element(self.group)
         for term in expr.as_expr().args:
             element += functools.reduce(
@@ -1308,6 +1314,198 @@ class QCCode(GBCode):
                 [self.eval(factor) for factor in term.as_ordered_factors()],
             )
         return element
+
+    def to_group_member(
+        self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+    ) -> abstract.GroupMember:
+        """Convert a sympy expression into an associated member of this code's base group."""
+        if isinstance(expr, sympy.Integer):
+            return self.group.identity
+        if isinstance(expr, sympy.Symbol):
+            return self.symbol_gens[expr]
+        if isinstance(expr, sympy.Pow):
+            base, exp = expr.as_base_exp()
+            return self.symbol_gens[base] ** exp
+        if isinstance(expr, sympy.Mul):
+            output = self.group.identity
+            for factor in expr.args:
+                if not isinstance(factor, sympy.Integer):
+                    base, exp = factor.as_base_exp()
+                    output *= self.symbol_gens[base] ** exp
+            return output
+        return NotImplemented  # pragma: no cover
+
+    def get_exponents(
+        self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+    ) -> tuple[int, int]:
+        """Get the exponents of a term, for example converting x**2 y**4 into (2, 4)."""
+        exponents = {}
+        if isinstance(expr, sympy.Symbol):
+            exponents[expr] = 1
+        elif isinstance(expr, sympy.Pow):
+            base, exp = expr.as_base_exp()
+            exponents[base] = exp
+        elif isinstance(expr, sympy.Mul):
+            for factor in expr.args:
+                base, exp = factor.as_base_exp()
+                exponents[base] = exp
+        return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
+
+    @functools.cache
+    def get_toric_mappings(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
+        """Get plaquette mappings that arrange qubits in a toric layout.
+
+        Each plaquette looks like:
+            L X
+            Z R
+        where L and R are data qubits, and X and Z are checks.  In a toric layout, plaquettes are
+        arranged in a grid, and each check addresses all of its neighboring data qubits, as well as
+        a few far-away qubits.
+        """
+        if not nx.is_weakly_connected(self.graph):
+            # a connected tanner graph is a baseline requirement for a toric mapping to exist
+            return []
+
+        # identify individual terms in the polynomials
+        terms_a = self.poly_a.as_expr().args
+        terms_b = self.poly_b.as_expr().args
+
+        # find combinations of terms that enable a toric layout
+        toric_params = []
+        for (a_1, a_2), (b_1, b_2) in itertools.product(
+            itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
+        ):
+            gen_a = self.to_group_member(a_1 * a_2 ** (-1))
+            gen_b = self.to_group_member(b_1 * b_2 ** (-1))
+            if (
+                gen_a.order() * gen_b.order() == self.group.order
+                and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
+            ):
+                toric_params.append((a_1, a_2, b_1, b_2))
+
+        # identify torus shapes and qubit-to-plaquette mappings
+        layout_data = []
+        for a_1, a_2, b_1, b_2 in toric_params:
+            shift_a = a_1 * a_2 ** (-1)
+            shift_b = b_1 * b_2 ** (-1)
+            """
+            For generators of the form
+                g = x^p y^q  <-- shift_a,
+                h = x^u y^v  <-- shift_b,
+            build a grid_map (dictionary) that maps (i, j) --> (a, b), where
+                x^i y^j = g^a h^b.
+            Equivalently, we want
+                i = a p + b u  mod order(x),
+                j = b q + b v  mod order(y).
+            """
+            gen_g = self.to_group_member(shift_a)
+            gen_h = self.to_group_member(shift_b)
+            pp, qq = self.get_exponents(shift_a)
+            uu, vv = self.get_exponents(shift_b)
+            torus_shape: tuple[int, int] = (gen_g.order(), gen_h.order())
+            grid_map = {
+                (
+                    (aa * pp + bb * uu) % self.orders[0],
+                    (aa * qq + bb * vv) % self.orders[1],
+                ): (aa, bb)
+                for aa, bb in np.ndindex(torus_shape)
+            }
+            # figure out how to shift qubits in each sector:
+            # (0 <--> L) or (1 <--> R) for data qubits, and X or Z for check qubits
+            sector_shifts = {
+                0: (0, 0),  # "L" data qubits
+                1: self.get_exponents(a_2 ** (-1) * b_1),  # "R" data qubits
+                Pauli.X: self.get_exponents(a_2 ** (-1)),  # "X" check qubits
+                Pauli.Z: self.get_exponents(b_1),  # "Z" check qubits
+            }
+
+            plaquette_map = functools.partial(
+                self.full_plaquette_map,
+                grid_map=grid_map,
+                sector_shifts=sector_shifts,
+                torus_shape=torus_shape,
+            )
+            layout_data.append((plaquette_map, torus_shape))
+
+        return layout_data
+
+    def full_plaquette_map(
+        self,
+        ii: int,
+        jj: int,
+        qubit_sector: int | PauliXZ,
+        grid_map: dict[tuple[int, int], tuple[int, int]],
+        sector_shifts: dict[int | PauliXZ, tuple[int, int]],
+        torus_shape: tuple[int, int],
+    ) -> tuple[int, int]:
+        """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
+        s_i = (ii - sector_shifts[qubit_sector][0]) % self.orders[0]
+        s_j = (jj - sector_shifts[qubit_sector][1]) % self.orders[1]
+        s_a, s_b = grid_map[s_i, s_j]
+        return s_a % torus_shape[0], s_b % torus_shape[1]
+
+    def get_toric_checks(
+        self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build X-type and Z-type parity check matrices for a toric layout."""
+
+        # loop over each of X-type and Z-type parity checks
+        for pauli in PAULIS_XZ:
+            matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
+            old_checks = matrix.reshape(*self.orders, 2, *self.orders)
+            new_checks = self.field.Zeros((*torus_shape, 2, *torus_shape))
+
+            # loop over every check
+            for c_i, c_j in np.ndindex(*self.orders):
+                c_a, c_b = plaquette_map(c_i, c_j, pauli)
+
+                # loop over every qubit
+                for sector, d_i, d_j in zip(*np.where(old_checks[c_i, c_j])):
+                    d_a, d_b = plaquette_map(d_i, d_j, sector)
+                    new_checks[c_a, c_b, sector, d_a, d_b] = old_checks[c_i, c_j, sector, d_i, d_j]
+
+            # save the shifted checks to an X/Z parity check matrix as appropriate
+            if pauli == Pauli.X:
+                matrix_x = new_checks.reshape(self.matrix_x.shape)
+            else:
+                assert pauli == Pauli.Z
+                matrix_z = new_checks.reshape(self.matrix_z.shape)
+
+        return matrix_x, matrix_z
+
+    def get_check_shifts(
+        self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
+    ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+        """Get the relative positions of data qubits addressed by X-type and Z-type check qubits."""
+        # identify the parity check matrices
+        matrix_x, matrix_z = self.get_toric_checks(plaquette_map, torus_shape)
+
+        def get_loc(aa: int, bb: int, corner: int | PauliXZ) -> tuple[int, int]:
+            """Get the location of a qubit on the torus."""
+            return 2 * aa + int(corner in [1, Pauli.X]), 2 * bb + int(corner in [1, Pauli.Z])
+
+        # relative coordinates, organized by stabilizer type
+        shifts: dict[PauliXZ, set[tuple[int, int]]] = {}
+
+        paulis_xz: list[PauliXZ] = [Pauli.X, Pauli.Z]
+        for pauli in paulis_xz:
+            shifts[pauli] = set()
+            matrix = matrix_x if pauli == Pauli.X else matrix_z
+
+            # identify the location and support of one check qubit
+            c_a, c_b = get_loc(0, 0, pauli)
+            check = matrix[0].reshape(2, *torus_shape)
+
+            # identify the relative position of all data qubits addressed by this check
+            for sector, aa, bb in zip(*np.where(check)):
+                d_a, d_b = get_loc(aa, bb, sector)  # position of this data qubit
+                shift_a = (d_a - c_a) % (2 * torus_shape[0])
+                shift_b = (d_b - c_b) % (2 * torus_shape[1])
+                shift_a = shift_a if shift_a <= torus_shape[0] else shift_a - 2 * torus_shape[0]
+                shift_b = shift_b if shift_b <= torus_shape[1] else shift_b - 2 * torus_shape[1]
+                shifts[pauli].add((shift_a, shift_b))
+
+        return shifts[Pauli.X], shifts[Pauli.Z]
 
 
 ################################################################################
@@ -1754,7 +1952,7 @@ class SurfaceCode(CSSCode):
         self._exact_distance_z = rows
 
         # which qubits should be Hadamard-transformed?
-        qubits_to_conjugate: slice | Sequence[int] | None
+        qudits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
             # rotated surface code
@@ -1762,12 +1960,12 @@ class SurfaceCode(CSSCode):
 
             if conjugate:
                 # Hadamard-transform qubits in a checkerboard pattern
-                qubits_to_conjugate = [
+                qudits_to_conjugate = [
                     idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
                 ]
 
             else:
-                qubits_to_conjugate = None
+                qudits_to_conjugate = None
 
         else:
             # "original" surface code
@@ -1776,14 +1974,14 @@ class SurfaceCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qubits_to_conjugate = code_ab.conjugated_qubits
+            qudits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
             self,
             matrix_x,
             matrix_z,
             field=field,
-            conjugate=qubits_to_conjugate,
+            conjugate=qudits_to_conjugate,
             skip_validation=True,
         )
 
@@ -1872,7 +2070,7 @@ class ToricCode(CSSCode):
         self._exact_distance_x = self._exact_distance_z = min(rows, cols)
 
         # which qubits should be Hadamard-transformed?
-        qubits_to_conjugate: slice | Sequence[int] | None
+        qudits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
             # rotated toric code
@@ -1885,12 +2083,12 @@ class ToricCode(CSSCode):
 
             if conjugate:
                 # Hadamard-transform qubits in a checkerboard pattern
-                qubits_to_conjugate = [
+                qudits_to_conjugate = [
                     idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
                 ]
 
             else:
-                qubits_to_conjugate = None
+                qudits_to_conjugate = None
 
         else:
             # "original" toric code
@@ -1899,14 +2097,14 @@ class ToricCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qubits_to_conjugate = code_ab.conjugated_qubits
+            qudits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
             self,
             matrix_x,
             matrix_z,
             field=field,
-            conjugate=qubits_to_conjugate,
+            conjugate=qudits_to_conjugate,
             skip_validation=True,
         )
 
