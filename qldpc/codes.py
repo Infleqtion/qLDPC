@@ -1501,7 +1501,7 @@ class QCCode(GBCode):
         xx = 2 * aa + int(sector in [Pauli.X, 1])
         yy = 2 * bb + int(sector in [Pauli.Z, 1])
         if open_boundaries:
-            assert torus_shape is not None, "Cannot fold torus without knowing its shape"
+            assert torus_shape is not None, "Cannot fold a torus without knowing its shape"
             xx = xx if xx < torus_shape[0] else torus_shape[0] - xx
             yy = yy if yy < torus_shape[1] else torus_shape[1] - yy
         return xx, yy
