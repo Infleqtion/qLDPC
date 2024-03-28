@@ -375,9 +375,9 @@ class ChainComplex:
 
         # identify the boundary operators of this chain complex
         if self._group is None:
-            self._ops = ops  # type:ignore[assignment]
-        else:
             self._ops = tuple(self.field(op) for op in ops)
+        else:
+            self._ops = ops
 
         if not skip_validation:
             self._validate_ops()
@@ -462,7 +462,6 @@ class ChainComplex:
         if chain_a.field is not chain_b.field or chain_a._group != chain_b._group:
             raise ValueError("Incompatible chain complexes: different base fields or groups")
         chain_field = chain_a.field
-        minus_one = -chain_field(1)
 
         def get_degree_pairs(degree: int) -> Iterator[tuple[int, int]]:
             """Pairs of degrees that add up to the given total degree."""
@@ -506,7 +505,7 @@ class ChainComplex:
                     row = get_block_index(deg_a, deg_b - 1)
                     iden_a = np.identity(op_a.shape[1], dtype=op_a.dtype)
                     blocks[row][col] = (
-                        np.kron(iden_a, op_b) * minus_one**deg_a  # type:ignore[arg-type]
+                        np.kron(iden_a, op_b) * (-1) ** deg_a  # type:ignore[arg-type]
                     )
 
             ops.append(np.block(blocks))
