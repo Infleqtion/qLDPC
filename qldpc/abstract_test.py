@@ -35,6 +35,7 @@ def test_permutation_group() -> None:
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
     assert group.to_sympy() == group._group
+    assert hash(group) == hash(group.to_sympy())
 
     assert abstract.Group.from_generating_mats([[1]]) == abstract.CyclicGroup(1)
 
@@ -106,6 +107,7 @@ def test_algebra() -> None:
     group = abstract.TrivialGroup(field=3)
     zero = abstract.Element(group)
     one = abstract.Element(group).one()
+    assert bool(one) and not bool(zero)
     assert zero.group == group
     assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
     assert group.identity * one == one * group.identity == one**2 == one
