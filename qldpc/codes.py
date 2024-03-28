@@ -1272,7 +1272,7 @@ class QCCode(GBCode):
         # identify cyclic group orders with symbols in the polynomials
         if not isinstance(orders, dict):
             orders_dict = {}
-            for symbol, order in zip(symbols, orders):
+            for symbol, order in zip(sorted(symbols, key=str), orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 orders_dict[symbol] = order
             orders = orders_dict
@@ -1519,24 +1519,21 @@ class QCCode(GBCode):
         # identify the parity check matrices
         matrix_x, matrix_z = self.get_toric_checks(plaquette_map, torus_shape)
 
-        # relative coordinates, organized by stabilizer type
+        # Identify the plaquettes on which we need to examine check qubits.  If we have periodic
+        # boundaries, all plaquettes "look the same", so we only need to consider one of them.
+        # Otherwise, we generally need to consider all plaquettes.
+        plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
+
+        # sets of relative coordinates, organized by stabilizer type
         shifts: dict[PauliXZ, set[tuple[int, int]]] = {}
-
-        if not open_boundaries:
-            # all plaquettes "look the same", so we only need to consider one of them
-            plaquettes = [(0, 0)]
-        else:
-            plaquettes = [(aa, bb) for aa, bb in np.ndindex(*torus_shape)]
-
-        paulis_xz: list[PauliXZ] = [Pauli.X, Pauli.Z]
-        for pauli in paulis_xz:
+        for pauli in PAULIS_XZ:
             shifts[pauli] = set()
 
-            # organize checks on the torus
+            # organize checks by plaquette on the torus
             shape = (*torus_shape, 2, *torus_shape)
             checks = (matrix_x if pauli == Pauli.X else matrix_z).reshape(shape)
 
-            # loop over all plaquettes
+            # loop over all plaquettes we need to consider
             for p_a, p_b in plaquettes:
 
                 # identify the location of a check qubit, and the support of its stabilizer
