@@ -489,6 +489,9 @@ class Element:
     def __pow__(self, power: int) -> Element:
         return functools.reduce(Element.__mul__, [self] * power, self.one())
 
+    def __bool__(self) -> bool:
+        return any(self._vec.values())
+
     def copy(self) -> Element:
         """Copy of self."""
         element = self.zero()
@@ -603,7 +606,8 @@ class Protograph(npt.NDArray[np.object_]):
         """
         array = np.array(array, dtype=object)
         vals = [Element(group, member) if member else Element(group) for member in array.ravel()]
-        return Protograph(np.array(vals, dtype=object).reshape(array.shape))
+        vals_array = np.array(vals, dtype=object).reshape(array.shape)
+        return Protograph(vals_array, group)
 
 
 ################################################################################

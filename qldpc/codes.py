@@ -2222,4 +2222,6 @@ class GeneralizedSurfaceCode(CSSCode):
             chain = ChainComplex(*chain.ops[:2])
 
         matrix_x, matrix_z = chain.op(1), chain.op(2).T
+        assert not isinstance(matrix_x, abstract.Protograph)
+        assert not isinstance(matrix_z, abstract.Protograph)
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)

@@ -257,9 +257,17 @@ def test_trivial_lift(
     protograph_b = abstract.TrivialGroup.to_protograph(code_b.matrix, field)
     code_LP = codes.LPCode(protograph_a, protograph_b)
 
-    assert np.array_equal(code_HGP.matrix, code_LP.matrix)
+    assert np.array_equal(code_HGP.matrix_x, code_LP.matrix_x)
+    assert np.array_equal(code_HGP.matrix_z, code_LP.matrix_z)
     assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)
     assert np.array_equal(code_HGP.sector_size, code_LP.sector_size)
+
+    chain = objects.ChainComplex.tensor_product(protograph_a, protograph_b.T)
+    matrix_x, matrix_z = chain.op(1), chain.op(2).T
+    assert isinstance(matrix_x, abstract.Protograph)
+    assert isinstance(matrix_z, abstract.Protograph)
+    assert np.array_equal(matrix_x.lift(), code_HGP.matrix_x)
+    assert np.array_equal(matrix_z.lift(), code_HGP.matrix_z)
 
 
 def test_lift() -> None:
