@@ -222,7 +222,7 @@ def test_quantum_distance(field: int = 2) -> None:
 
 
 @pytest.mark.parametrize("field", [2, 3])
-def test_graph_product(
+def test_hypergraph_products(
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),

@@ -152,6 +152,9 @@ class Group:
             isinstance(other, Group) and self._field == other._field and self._group == other._group
         )
 
+    def __hash__(self) -> int:
+        return hash(self._group)
+
     def __contains__(self, member: GroupMember) -> bool:
         return comb.Permutation(member.array_form) in self._group
 

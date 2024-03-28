@@ -345,7 +345,7 @@ class ChainComplex:
     _ops: tuple[galois.FieldArray, ...] | tuple[abstract.Protograph, ...]
 
     # if boundary operators are defined over a group algebra, keep track of their base group
-    _group: abstract.Group | None = None
+    _group: abstract.Group | None
 
     def __init__(
         self,
@@ -353,18 +353,26 @@ class ChainComplex:
         field: int | None = None,
         skip_validation: bool = False,
     ) -> None:
-        # identify the base field for the boundary operators of this chain complex
-        if all(isinstance(op, abstract.Protograph) for op in ops):
-            fields = set(op.field for op in ops if isinstance(op, abstract.Protograph))
-            self._group = ops[0].group
-        elif all(isinstance(op, np.ndarray) for op in ops):
-            fields = set(type(op) for op in ops if isinstance(op, galois.FieldArray))
-        else:
+        # check that either all or none of the operators are defined over a group algebra
+        if not (
+            all(isinstance(op, abstract.Protograph) for op in ops)
+            or not any(isinstance(op, abstract.Protograph) for op in ops)
+        ):
             raise ValueError("Invalid or inconsistent operator types provided for a ChainComplex")
-        fields |= set([galois.GF(field)]) if field is not None else set()
-        if len(fields) > 1:
-            raise ValueError("Inconsistent base fields provided for chain complex")
+
+        # identify the base field and group for the boundary operators of this chain complex
+        fields = set([galois.GF(field)]) if field is not None else set()
+        groups = set()
+        for op in ops:
+            if isinstance(op, abstract.Protograph):
+                fields.add(op.field)
+                groups.add(op.group)
+            elif isinstance(op, galois.FieldArray):
+                fields.add(type(op))
+        if len(fields) > 1 or len(groups) > 1:
+            raise ValueError("Inconsistent base fields (or groups) provided for chain complex")
         self._field = fields.pop() if fields else galois.GF(DEFAULT_FIELD_ORDER)
+        self._group = groups.pop() if groups else None
 
         # identify the boundary operators of this chain complex
         self._ops = tuple(self.field(op) for op in ops) if self._group is None else ops
