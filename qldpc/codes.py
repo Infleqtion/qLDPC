@@ -1272,7 +1272,7 @@ class QCCode(GBCode):
         # identify cyclic group orders with symbols in the polynomials
         if not isinstance(orders, dict):
             orders_dict = {}
-            for symbol, order in zip(symbols, orders):
+            for symbol, order in zip(sorted(symbols, key=str), orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 orders_dict[symbol] = order
             orders = orders_dict
