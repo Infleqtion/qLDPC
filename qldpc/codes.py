@@ -1411,7 +1411,7 @@ class QCCode(GBCode):
             gen_h = self.to_group_member(shift_b)
             pp, qq = self.get_exponents(shift_a)
             uu, vv = self.get_exponents(shift_b)
-            torus_shape: tuple[int, int] = (gen_g.order(), gen_h.order())
+            torus_shape: tuple[int, int] = (int(gen_g.order()), int(gen_h.order()))
             grid_map = {
                 (
                     (aa * pp + bb * uu) % self.orders[0],
@@ -1504,7 +1504,7 @@ class QCCode(GBCode):
             assert torus_shape is not None, "Cannot fold a torus without knowing its shape"
             xx = 2 * xx if xx < torus_shape[0] else (2 * torus_shape[0] - 1 - xx) * 2 + 1
             yy = 2 * yy if yy < torus_shape[1] else (2 * torus_shape[1] - 1 - yy) * 2 + 1
-        return xx, yy
+        return int(xx), int(yy)
 
     def get_check_shifts(
         self,
@@ -1522,8 +1522,7 @@ class QCCode(GBCode):
         # Identify the plaquettes on which we need to examine check qubits.  If we have periodic
         # boundaries, all plaquettes "look the same", so we only need to consider one of them.
         # Otherwise, we generally need to consider all plaquettes.
-        # plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
-        plaquettes = [(0, 0)]
+        plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
 
         # sets of relative coordinates, organized by stabilizer type
         shifts: dict[PauliXZ, set[tuple[int, int]]] = {}

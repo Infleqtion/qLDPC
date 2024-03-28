@@ -358,6 +358,7 @@ def test_cyclic_codes(field: int = 3) -> None:
         assert unit_shifts.issubset(shifts_z)
 
         shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape, open_boundaries=True)
+        assert unit_shifts.issubset(shifts_x | shifts_z)
         assert pair_shifts.issubset(shifts_x | shifts_z)
 
     # check a case with no toric mappings
