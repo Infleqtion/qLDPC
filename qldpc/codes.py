@@ -1285,15 +1285,15 @@ class QCCode(GBCode):
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
         # hadamard-transform qubits in the "R" sector
-        num_qubits = self.group.order * 2
-        qubits_to_conjugate: slice | Sequence[int] = (
-            slice(num_qubits // 2, num_qubits + 1) if conjugate else ()
+        num_qudits = self.group.order * 2
+        qudits_to_conjugate: slice | Sequence[int] = (
+            slice(num_qudits // 2, num_qudits + 1) if conjugate else ()
         )
 
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
         matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
-        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=qubits_to_conjugate)
+        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=qudits_to_conjugate)
 
     def eval(
         self,
@@ -1363,6 +1363,7 @@ class QCCode(GBCode):
         a few far-away qubits.
         """
         if not nx.is_weakly_connected(self.graph):
+            # a connected tanner graph is a baseline requirement for a toric mapping to exist
             return []
 
         # identify individual terms in the polynomials
@@ -1951,7 +1952,7 @@ class SurfaceCode(CSSCode):
         self._exact_distance_z = rows
 
         # which qubits should be Hadamard-transformed?
-        qubits_to_conjugate: slice | Sequence[int] | None
+        qudits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
             # rotated surface code
@@ -1959,12 +1960,12 @@ class SurfaceCode(CSSCode):
 
             if conjugate:
                 # Hadamard-transform qubits in a checkerboard pattern
-                qubits_to_conjugate = [
+                qudits_to_conjugate = [
                     idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
                 ]
 
             else:
-                qubits_to_conjugate = None
+                qudits_to_conjugate = None
 
         else:
             # "original" surface code
@@ -1973,14 +1974,14 @@ class SurfaceCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qubits_to_conjugate = code_ab.conjugated_qubits
+            qudits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
             self,
             matrix_x,
             matrix_z,
             field=field,
-            conjugate=qubits_to_conjugate,
+            conjugate=qudits_to_conjugate,
             skip_validation=True,
         )
 
@@ -2069,7 +2070,7 @@ class ToricCode(CSSCode):
         self._exact_distance_x = self._exact_distance_z = min(rows, cols)
 
         # which qubits should be Hadamard-transformed?
-        qubits_to_conjugate: slice | Sequence[int] | None
+        qudits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
             # rotated toric code
@@ -2082,12 +2083,12 @@ class ToricCode(CSSCode):
 
             if conjugate:
                 # Hadamard-transform qubits in a checkerboard pattern
-                qubits_to_conjugate = [
+                qudits_to_conjugate = [
                     idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
                 ]
 
             else:
-                qubits_to_conjugate = None
+                qudits_to_conjugate = None
 
         else:
             # "original" toric code
@@ -2096,14 +2097,14 @@ class ToricCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qubits_to_conjugate = code_ab.conjugated_qubits
+            qudits_to_conjugate = code_ab.conjugated_qubits
 
         CSSCode.__init__(
             self,
             matrix_x,
             matrix_z,
             field=field,
-            conjugate=qubits_to_conjugate,
+            conjugate=qudits_to_conjugate,
             skip_validation=True,
         )
 
