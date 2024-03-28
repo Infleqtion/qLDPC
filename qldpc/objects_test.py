@@ -128,6 +128,12 @@ def test_chain_complex(field: int = 3) -> None:
     four_chain = objects.ChainComplex.tensor_product(two_chain, two_chain.T, field)
     four_chain._validate_ops()
 
+    # tensor product of one-complexes over a group algebra
+    protograph = abstract.Protograph.build(abstract.TrivialGroup(field), mat)
+    two_chain = objects.ChainComplex.tensor_product(protograph, protograph, field)
+    assert not np.any(two_chain.op(0))
+    assert not np.any(two_chain.op(two_chain.num_links + 1))
+
     # invalid chain complex constructions
     with pytest.raises(ValueError, match="inconsistent operator types"):
         objects.ChainComplex(mat, abstract.TrivialGroup.to_protograph([[0]]))
