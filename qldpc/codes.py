@@ -35,11 +35,11 @@ import sympy.combinatorics as comb
 import qldpc
 from qldpc import abstract, named_codes
 from qldpc.objects import (
+    PAULIS_XZ,
     CayleyComplex,
     ChainComplex,
     Node,
     Pauli,
-    PAULIS_XZ,
     PauliXZ,
     QuditOperator,
 )
@@ -1235,9 +1235,9 @@ class QCCode(GBCode):
     A quasi-cyclic code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T],
-    where A = A_{ij} x^i y^j and B = B_{ij} x^i y^j are bivariate polynomials.  Here
+    where A = A_{ij} x^i y^j and B = B_{ij} x^i y^j are bivariate polynomials.  Here:
     - A_{ij} and B_{ij} are scalar coefficients (over some finite field),
-    - x generates a group of order R_x,
+    - x generates a group of order R_x, and
     - y generates a group of order R_y.
 
     A quasi-cyclic code is defined by...
@@ -1338,7 +1338,7 @@ class QCCode(GBCode):
     def get_exponents(
         self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
     ) -> tuple[int, int]:
-        """Get the exponents of a term, for example converting x**2 y**4 into the (2, 4)."""
+        """Get the exponents of a term, for example converting x**2 y**4 into (2, 4)."""
         exponents = {}
         if isinstance(expr, sympy.Symbol):
             exponents[expr] = 1
@@ -1352,8 +1352,16 @@ class QCCode(GBCode):
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     @functools.cache
-    def get_toric_layout_data(self) -> Sequence[tuple[tuple[int, int], QuasiCyclicPlaquetteMap]]:
-        """Get toric layout data, if any, as discussed in arXiv:2308.07915."""
+    def get_toric_mapping(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
+        """Get plaquette mappings that arrange qubits in a toric layout.
+
+        Each plaquette looks like:
+            L X
+            Z R
+        where L and R are data qubits, and X and Z are checks.  In a toric layout, plaquettes are
+        arranged in a grid, and each check addresses all of its neighboring data qubits, as well as
+        a few far-away qubits.
+        """
         if not nx.is_weakly_connected(self.graph):
             return []
 
@@ -1416,7 +1424,7 @@ class QCCode(GBCode):
                 sector_shifts=sector_shifts,
                 torus_shape=torus_shape,
             )
-            layout_data.append((torus_shape, plaquette_map))
+            layout_data.append((plaquette_map, torus_shape))
 
         return layout_data
 
@@ -1435,10 +1443,10 @@ class QCCode(GBCode):
         s_a, s_b = grid_map[s_i, s_j]
         return s_a % torus_shape[0], s_b % torus_shape[1]
 
-    def get_shifted_checks(
-        self, torus_shape: tuple[int, int], plaquette_map: QuasiCyclicPlaquetteMap
+    def get_toric_checks(
+        self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Shift qubits and return new X-type and Z-type parity check matrices."""
+        """Build X-type and Z-type parity check matrices for a toric layout."""
 
         # loop over each of X-type and Z-type parity checks
         for pauli in PAULIS_XZ:
