@@ -397,6 +397,11 @@ class ChainComplex:
         return self._field
 
     @property
+    def group(self) -> abstract.Group | None:
+        """The base group of this chain complex."""
+        return self._group
+
+    @property
     def num_links(self) -> int:
         """The number of "internal" links in this chain complex."""
         return len(self.ops)
@@ -459,7 +464,7 @@ class ChainComplex:
             chain_a = ChainComplex(chain_a, field=field)
         if not isinstance(chain_b, ChainComplex):
             chain_b = ChainComplex(chain_b, field=field)
-        if chain_a.field is not chain_b.field or chain_a._group != chain_b._group:
+        if chain_a.field is not chain_b.field or chain_a.group != chain_b.group:
             raise ValueError("Incompatible chain complexes: different base fields or groups")
         chain_field = chain_a.field
 
@@ -510,7 +515,7 @@ class ChainComplex:
 
             ops.append(np.block(blocks))
 
-        if chain_a._group is None:
+        if chain_a.group is None:
             ops = [chain_field(op) for op in ops]
         else:
             ops = [abstract.Protograph(op) for op in ops]
