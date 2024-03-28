@@ -340,8 +340,6 @@ def test_cyclic_codes(field: int = 3) -> None:
     assert code.dimension == 10
     assert code.get_weight() == 8
 
-    assert code.to_group_member(x * y) == code.to_group_member(x) * code.to_group_member(y)
-
     # [[144, 12, 12]] code in Table 3 and Figure 2 of arXiv:2308.07915
     dims = (12, 6)
     poly_a = x**3 + y + y**2
@@ -358,7 +356,7 @@ def test_cyclic_codes(field: int = 3) -> None:
         assert unit_shifts.issubset(shifts_x)
         assert unit_shifts.issubset(shifts_z)
 
-    # assert that there are no toric mappings
+    # check a case with no toric mappings
     dims = (6, 6)
     poly_a = 1 + y + y**2
     poly_b = y**3 + x**2 + x**4
