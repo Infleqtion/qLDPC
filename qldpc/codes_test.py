@@ -351,15 +351,15 @@ def test_cyclic_codes(field: int = 3) -> None:
 
     # check that every check qubit addresses its neighboring data qubits
     unit_shifts = {(0, 1), (1, 0), (0, -1), (-1, 0)}
-    pair_shifts = {(0, 2), (2, 0), (0, -2), (-2, 0)}
+    pair_shifts = {(0, 2), (2, 0), (0, -2), (-2, 0)} | unit_shifts
     for plaquette_map, torus_shape in code.get_toric_mappings():
         shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape)
         assert unit_shifts.issubset(shifts_x)
         assert unit_shifts.issubset(shifts_z)
 
         shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape, open_boundaries=True)
-        assert unit_shifts.issubset(shifts_x | shifts_z)
-        assert pair_shifts.issubset(shifts_x | shifts_z)
+        assert pair_shifts.issubset(shifts_z)
+        assert pair_shifts.issubset(shifts_z)
 
     # check a case with no toric mappings
     dims = (6, 6)
