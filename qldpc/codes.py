@@ -1472,6 +1472,40 @@ class QCCode(GBCode):
 
         return matrix_x, matrix_z
 
+    def get_check_shifts(
+        self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
+    ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
+        """Get the relative positions of data qubits addressed by X-type and Z-type check qubits."""
+        # identify the parity check matrices
+        matrix_x, matrix_z = self.get_toric_checks(plaquette_map, torus_shape)
+
+        def get_loc(aa: int, bb: int, corner: int | PauliXZ) -> tuple[int, int]:
+            """Get the location of a qubit on the torus."""
+            return 2 * aa + int(corner in [1, Pauli.X]), 2 * bb + int(corner in [1, Pauli.Z])
+
+        # relative coordinates, organized by stabilizer type
+        shifts: dict[PauliXZ, set[tuple[int, int]]] = {}
+
+        paulis_xz: list[PauliXZ] = [Pauli.X, Pauli.Z]
+        for pauli in paulis_xz:
+            shifts[pauli] = set()
+            matrix = matrix_x if pauli == Pauli.X else matrix_z
+
+            # identify the location and support of one check qubit
+            c_a, c_b = get_loc(0, 0, pauli)
+            check = matrix[0].reshape(2, *torus_shape)
+
+            # identify the relative position of all data qubits addressed by this check
+            for sector, aa, bb in zip(*np.where(check)):
+                d_a, d_b = get_loc(aa, bb, sector)  # position of this data qubit
+                shift_a = (d_a - c_a) % (2 * torus_shape[0])
+                shift_b = (d_b - c_b) % (2 * torus_shape[1])
+                shift_a = shift_a if shift_a <= torus_shape[0] else shift_a - 2 * torus_shape[0]
+                shift_b = shift_b if shift_b <= torus_shape[1] else shift_b - 2 * torus_shape[1]
+                shifts[pauli].add((shift_a, shift_b))
+
+        return shifts[Pauli.X], shifts[Pauli.Z]
+
 
 ################################################################################
 # hypergraph and lifted product codes
