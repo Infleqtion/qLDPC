@@ -34,7 +34,15 @@ import sympy.combinatorics as comb
 
 import qldpc
 from qldpc import abstract, named_codes
-from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditOperator
+from qldpc.objects import (
+    CayleyComplex,
+    ChainComplex,
+    Node,
+    Pauli,
+    PAULIS_XZ,
+    PauliXZ,
+    QuditOperator,
+)
 
 DEFAULT_FIELD_ORDER = 2
 
@@ -855,7 +863,7 @@ class CSSCode(QuditCode):
         If provided a vector, compute the minimum Hamming distance between this vector and a
         (possibly trivial) X-type or Z-type logical operator, as applicable.
         """
-        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert pauli is None or pauli in PAULIS_XZ
         if pauli is None:
             return min(
                 self.get_distance_exact(Pauli.X, vector=vector),
@@ -951,8 +959,8 @@ class CSSCode(QuditCode):
         presumably one of low Hamming weight, since decoders try to find low-weight solutions.
         Return the Hamming weight |w_x|.
         """
-        assert pauli in [None, Pauli.X, Pauli.Z]
-        pauli = pauli or random.choice([Pauli.X, Pauli.Z])
+        assert pauli is None or pauli in PAULIS_XZ
+        pauli = pauli or random.choice(PAULIS_XZ)
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
@@ -1008,7 +1016,7 @@ class CSSCode(QuditCode):
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified and generalized for qudits.
         """
-        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert pauli is None or pauli in PAULIS_XZ
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
@@ -1148,7 +1156,7 @@ class CSSCode(QuditCode):
 
     def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: object) -> None:
         """Reduce the weight of all logical operators."""
-        assert pauli in [None, Pauli.X, Pauli.Z]
+        assert pauli is None or pauli in PAULIS_XZ
         if pauli is None:
             self.reduce_logical_ops(Pauli.X, **decoder_args)
             self.reduce_logical_ops(Pauli.Z, **decoder_args)
@@ -1218,12 +1226,9 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-QCCIndexMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
+QuasiCyclicPlaquetteMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
 
 
-# TODO:
-# - allow initializing from matrices of coefficients
-# - maybe generalize to higher dimensions
 class QCCode(GBCode):
     """Quasi-cyclic (QC) codes from arXiv:2308.07915.
 
@@ -1249,7 +1254,7 @@ class QCCode(GBCode):
         poly_b: sympy.Basic | None = None,
         field: int | None = None,
         *,
-        conjugate: slice | Sequence[int] = (),
+        conjugate: bool = False,
     ) -> None:
         """Construct a quasi-cyclic code."""
         if poly_b is None:
@@ -1279,10 +1284,16 @@ class QCCode(GBCode):
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
+        # hadamard-transform qubits in the "R" sector
+        num_qubits = self.group.order * 2
+        qubits_to_conjugate: slice | Sequence[int] = (
+            slice(num_qubits // 2, num_qubits + 1) if conjugate else ()
+        )
+
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
         matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
-        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=conjugate)
+        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=qubits_to_conjugate)
 
     def eval(
         self,
@@ -1341,7 +1352,7 @@ class QCCode(GBCode):
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     @functools.cache
-    def get_toric_layout_data(self) -> Sequence[tuple[tuple[int, int], QCCIndexMap]]:
+    def get_toric_layout_data(self) -> Sequence[tuple[tuple[int, int], QuasiCyclicPlaquetteMap]]:
         """Get toric layout data, if any, as discussed in arXiv:2308.07915."""
         if not nx.is_weakly_connected(self.graph):
             return []
@@ -1351,7 +1362,7 @@ class QCCode(GBCode):
         terms_b = self.poly_b.as_expr().args
 
         # find combinations of terms that enable a toric layout
-        toric_terms = []
+        toric_params = []
         for (a_1, a_2), (b_1, b_2) in itertools.product(
             itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
         ):
@@ -1361,24 +1372,11 @@ class QCCode(GBCode):
                 gen_a.order() * gen_b.order() == self.group.order
                 and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
             ):
-                toric_terms.append((a_1, a_2, b_1, b_2))
+                toric_params.append((a_1, a_2, b_1, b_2))
 
-        def full_index_map(
-            ii: int,
-            jj: int,
-            sector: int | PauliXZ,
-            grid_map: dict[tuple[int, int], tuple[int, int]],
-            sector_shifts: dict[int | PauliXZ, tuple[int, int]],
-            torus_shape: tuple[int, int],
-        ) -> tuple[int, int]:
-            """Map from "original" check/qubit indices to "shifted" check/qubit indices."""
-            s_i = (ii - sector_shifts[sector][0]) % self.orders[0]
-            s_j = (jj - sector_shifts[sector][1]) % self.orders[1]
-            s_a, s_b = grid_map[s_i, s_j]
-            return s_a % torus_shape[0], s_b % torus_shape[1]
-
+        # identify torus shapes and qubit-to-plaquette mappings
         layout_data = []
-        for a_1, a_2, b_1, b_2 in toric_terms:
+        for a_1, a_2, b_1, b_2 in toric_params:
             shift_a = a_1 * a_2 ** (-1)
             shift_b = b_1 * b_2 ** (-1)
             """
@@ -1404,43 +1402,57 @@ class QCCode(GBCode):
                 for aa, bb in np.ndindex(torus_shape)
             }
             # figure out how to shift qubits in each sector:
-            # 0/1 for data qubits, X/Z for check qubits
+            # (0 <--> L) or (1 <--> R) for data qubits, and X or Z for check qubits
             sector_shifts = {
-                0: (0, 0),
-                1: self.get_exponents(a_2 ** (-1) * b_1),
-                Pauli.X: self.get_exponents(a_2 ** (-1)),
-                Pauli.Z: self.get_exponents(b_1),
+                0: (0, 0),  # "L" data qubits
+                1: self.get_exponents(a_2 ** (-1) * b_1),  # "R" data qubits
+                Pauli.X: self.get_exponents(a_2 ** (-1)),  # "X" check qubits
+                Pauli.Z: self.get_exponents(b_1),  # "Z" check qubits
             }
 
-            index_map = functools.partial(
-                full_index_map,
+            plaquette_map = functools.partial(
+                self.full_plaquette_map,
                 grid_map=grid_map,
                 sector_shifts=sector_shifts,
                 torus_shape=torus_shape,
             )
-            layout_data.append((torus_shape, index_map))
+            layout_data.append((torus_shape, plaquette_map))
 
         return layout_data
 
+    def full_plaquette_map(
+        self,
+        ii: int,
+        jj: int,
+        qubit_sector: int | PauliXZ,
+        grid_map: dict[tuple[int, int], tuple[int, int]],
+        sector_shifts: dict[int | PauliXZ, tuple[int, int]],
+        torus_shape: tuple[int, int],
+    ) -> tuple[int, int]:
+        """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
+        s_i = (ii - sector_shifts[qubit_sector][0]) % self.orders[0]
+        s_j = (jj - sector_shifts[qubit_sector][1]) % self.orders[1]
+        s_a, s_b = grid_map[s_i, s_j]
+        return s_a % torus_shape[0], s_b % torus_shape[1]
+
     def get_shifted_checks(
-        self, torus_shape: tuple[int, int], index_map: QCCIndexMap
+        self, torus_shape: tuple[int, int], plaquette_map: QuasiCyclicPlaquetteMap
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Shift qubits and return new X-type and Z-type parity check matrices."""
 
         # loop over each of X-type and Z-type parity checks
-        paulis_xz: list[PauliXZ] = [Pauli.X, Pauli.Z]
-        for pauli in paulis_xz:
+        for pauli in PAULIS_XZ:
             matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
             old_checks = matrix.reshape(*self.orders, 2, *self.orders)
             new_checks = self.field.Zeros((*torus_shape, 2, *torus_shape))
 
             # loop over every check
             for c_i, c_j in np.ndindex(*self.orders):
-                c_a, c_b = index_map(c_i, c_j, pauli)
+                c_a, c_b = plaquette_map(c_i, c_j, pauli)
 
                 # loop over every qubit
                 for sector, d_i, d_j in zip(*np.where(old_checks[c_i, c_j])):
-                    d_a, d_b = index_map(d_i, d_j, sector)
+                    d_a, d_b = plaquette_map(d_i, d_j, sector)
                     new_checks[c_a, c_b, sector, d_a, d_b] = old_checks[c_i, c_j, sector, d_i, d_j]
 
             # save the shifted checks to an X/Z parity check matrix as appropriate

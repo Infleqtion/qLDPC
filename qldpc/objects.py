@@ -88,6 +88,7 @@ class Pauli(enum.Enum):
 
 
 PauliXZ = Literal[Pauli.X, Pauli.Z]
+PAULIS_XZ: list[PauliXZ] = [Pauli.X, Pauli.Z]
 
 
 class QuditOperator:
