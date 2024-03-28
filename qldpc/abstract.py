@@ -424,6 +424,9 @@ class Element:
             and all(self._vec[member] == other._vec[member] for member in other._vec)
         )
 
+    def __bool__(self) -> bool:
+        return any(self._vec.values())
+
     def __iter__(self) -> Iterator[tuple[GroupMember, galois.FieldArray]]:
         yield from self._vec.items()
 
@@ -491,9 +494,6 @@ class Element:
 
     def __pow__(self, power: int) -> Element:
         return functools.reduce(Element.__mul__, [self] * power, self.one())
-
-    def __bool__(self) -> bool:
-        return any(self._vec.values())
 
     def copy(self) -> Element:
         """Copy of self."""
