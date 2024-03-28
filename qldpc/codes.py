@@ -1502,8 +1502,8 @@ class QCCode(GBCode):
         yy = 2 * bb + int(sector in [Pauli.Z, 1])
         if open_boundaries:
             assert torus_shape is not None, "Cannot fold a torus without knowing its shape"
-            xx = xx if xx < torus_shape[0] else torus_shape[0] - xx
-            yy = yy if yy < torus_shape[1] else torus_shape[1] - yy
+            xx = 2 * xx if xx < torus_shape[0] else 2 * (2 * torus_shape[0] - xx) + 1
+            yy = 2 * yy if yy < torus_shape[1] else 2 * (2 * torus_shape[1] - yy) + 1
         return xx, yy
 
     def get_check_shifts(
@@ -1522,7 +1522,8 @@ class QCCode(GBCode):
         # Identify the plaquettes on which we need to examine check qubits.  If we have periodic
         # boundaries, all plaquettes "look the same", so we only need to consider one of them.
         # Otherwise, we generally need to consider all plaquettes.
-        plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
+        # plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
+        plaquettes = [(0, 0)]
 
         # sets of relative coordinates, organized by stabilizer type
         shifts: dict[PauliXZ, set[tuple[int, int]]] = {}
