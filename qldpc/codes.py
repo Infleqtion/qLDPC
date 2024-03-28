@@ -1360,7 +1360,16 @@ class QCCode(GBCode):
             Z R
         where L and R are data qubits, and X and Z are checks.  In a toric layout, plaquettes are
         arranged in a grid, and each check addresses all of its neighboring data qubits, as well as
-        a few far-away qubits.
+        a few far-away qubits.  This method returns a "plaquette mapping" and torus dimensions
+        (shape) for all toric layouts of this code.
+
+        Each plaquette on the torus is nominally indexed by coordinates (i, j).  Each plaquette
+        mapping then takes:
+        - the plaquettes x-coordinate i
+        - the plaquettes y-coordinate j
+        - a qubit sector: 0, 1, Pauli.X, or Pauli.Z (respectively, for L, R, X, or Z),
+        - the dimensions (shape) of the toric layout (a pair of integers for torus width/height).
+        The plaquette mapping returns the coordinates of the new plaquette for the specified qubit.
         """
         if not nx.is_weakly_connected(self.graph):
             # a connected tanner graph is a baseline requirement for a toric mapping to exist
