@@ -1657,7 +1657,12 @@ class HGPCode(CSSCode):
         qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
         CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+            self,
+            matrix_x.astype(int),
+            matrix_z.astype(int),
+            field,
+            conjugate=qudits_to_conjugate,
+            skip_validation=True,
         )
 
     @classmethod
@@ -1665,7 +1670,7 @@ class HGPCode(CSSCode):
         cls,
         matrix_a: npt.NDArray[np.int_ | np.object_],
         matrix_b: npt.NDArray[np.int_ | np.object_],
-    ) -> nx.DiGraph:
+    ) -> tuple[npt.NDArray[np.int_ | np.object_], npt.NDArray[np.int_ | np.object_]]:
         """Hypergraph product of two parity check matrices."""
         # construct the nontrivial blocks of the final parity check matrices
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
@@ -1786,8 +1791,6 @@ class LPCode(CSSCode):
 
         # identify X-sector and Z-sector parity checks
         matrix_x, matrix_z = HGPCode.get_matrix_product(protograph_a, protograph_b)
-        matrix_x = abstract.Protograph(matrix_x).lift()
-        matrix_z = abstract.Protograph(matrix_z).lift()
 
         # identify the number of qudits in each sector
         self.sector_size = protograph_a.group.lift_dim * np.outer(
@@ -1799,7 +1802,12 @@ class LPCode(CSSCode):
         qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
         CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=qudits_to_conjugate, skip_validation=True
+            self,
+            abstract.Protograph(matrix_x.astype(object)).lift(),
+            abstract.Protograph(matrix_z.astype(object)).lift(),
+            field,
+            conjugate=qudits_to_conjugate,
+            skip_validation=True,
         )
 
 
