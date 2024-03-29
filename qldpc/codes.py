@@ -1768,6 +1768,9 @@ class LPCode(CSSCode):
     - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
     - A lifted product code with protographs whose entries get lifted to 1×1 matrices is a
         hypergraph product code of the lifted protographs.
+    - One way to get an LPCode: take a classical code with parity check matrix H and multiply it by
+        a diagonal matrix D = diag(a_1, a_2, ... a_n), where all {a_j} are elements of a group
+        algebra.  The protograph P = H @ D can then be used for one of the protographs of an LPCode.
 
     References:
     - https://errorcorrectionzoo.org/c/lifted_product
