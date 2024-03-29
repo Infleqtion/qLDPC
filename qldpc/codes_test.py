@@ -502,7 +502,7 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
 
 
-def test_toric_codes(field: int = 3) -> None:
+def test_toric_codes(field: int = 2) -> None:
     """Ordinary and rotated toric codes."""
 
     # "ordinary"/original toric code
@@ -520,7 +520,7 @@ def test_toric_codes(field: int = 3) -> None:
     )
 
     # rotated toric code
-    distance = 4
+    distance = 3
     code = codes.ToricCode(distance, rotated=True, field=field)
     assert code.dimension == 2
     assert code.num_qudits == distance**2
@@ -532,10 +532,6 @@ def test_toric_codes(field: int = 3) -> None:
     for row in code.matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
-
-    # rotated toric code must have even side lengths
-    with pytest.raises(ValueError, match="must have even side lengths"):
-        codes.ToricCode(3, rotated=True)
 
 
 def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
