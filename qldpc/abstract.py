@@ -551,9 +551,9 @@ class Protograph(npt.NDArray[np.object_]):
     _group: Group
 
     def __new__(
-        cls, array: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
+        cls, data: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
     ) -> Protograph:
-        protograph = np.asarray(array).view(cls)
+        protograph = np.asarray(data).view(cls)
 
         # identify the base group for this protograph
         for value in protograph.ravel():
@@ -600,7 +600,7 @@ class Protograph(npt.NDArray[np.object_]):
     def build(
         cls,
         group: Group,
-        array: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]],
+        data: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]],
     ) -> Protograph:
         """Construct a protograph.
 
@@ -609,10 +609,9 @@ class Protograph(npt.NDArray[np.object_]):
         to elements of the group algebra (over the prime number field).  Zero/"falsy" entries of the
         matrix are interpreted as zeros of the group algebra.
         """
-        array = np.array(array, dtype=object)
+        array = np.asarray(data)
         vals = [Element(group, member) if member else Element(group) for member in array.ravel()]
-        vals_array = np.array(vals, dtype=object).reshape(array.shape)
-        return Protograph(vals_array, group)
+        return Protograph(np.array(vals).reshape(array.shape), group)
 
 
 ################################################################################
@@ -638,15 +637,15 @@ class TrivialGroup(Group):
 
     @classmethod
     def to_protograph(
-        cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
+        cls, data: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
     ) -> Protograph:
         """Convert a matrix of 0s and 1s into a protograph of the trivial group."""
-        matrix = np.array(matrix)
+        array = np.asarray(data)
         group = TrivialGroup(field)
         zero = Element(group)
         unit = Element(group, group.identity)
-        terms = np.array([val * unit if val else zero for val in matrix.ravel()], dtype=object)
-        return Protograph(terms.reshape(matrix.shape))
+        terms = [val * unit if val else zero for val in array.ravel()]
+        return Protograph(np.array(terms).reshape(array.shape))
 
 
 class CyclicGroup(Group):

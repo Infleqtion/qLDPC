@@ -302,6 +302,7 @@ def test_lift() -> None:
 def test_twisted_XZZX(width: int = 3) -> None:
     """Verify twisted XZZX code in Eqs.(29) and (32) of arXiv:2202.01702v3."""
     num_qudits = 2 * width**2
+    code: codes.CSSCode
 
     # construct check matrix directly
     ring = codes.RingCode(width).matrix
@@ -311,10 +312,12 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
     zero_3 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
-    matrix = [
-        [mat_1, zero_2, zero_3, mat_2.T],
-        [zero_1, -mat_1.T, mat_2, zero_4],
-    ]
+    matrix = np.block(
+        [
+            [mat_1, zero_2, zero_3, mat_2.T],
+            [zero_1, -mat_1.T, mat_2, zero_4],
+        ]
+    )
 
     # construct lifted product code
     group = abstract.CyclicGroup(num_qudits // 2)
@@ -323,7 +326,17 @@ def test_twisted_XZZX(width: int = 3) -> None:
     element_a = unit - shift**width
     element_b = unit - shift
     code = codes.LPCode([[element_a]], [[element_b]], conjugate=True)
-    assert np.array_equal(np.block(matrix), code.matrix)
+    assert np.array_equal(matrix, code.matrix)
+
+    # same construction with a chain complex
+    protograph_a = abstract.Protograph([[element_a]])
+    protograph_b = abstract.Protograph([[element_b]])
+    chain = objects.ChainComplex.tensor_product(protograph_a, protograph_b.T)
+    matrix_x, matrix_z = chain.op(1), chain.op(2).T
+    assert isinstance(matrix_x, abstract.Protograph)
+    assert isinstance(matrix_z, abstract.Protograph)
+    code = codes.CSSCode(matrix_x.lift(), matrix_z.lift(), conjugate=code.conjugated_qubits)
+    assert np.array_equal(matrix, code.matrix)
 
 
 def test_cyclic_codes(field: int = 3) -> None:

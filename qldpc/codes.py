@@ -82,7 +82,7 @@ class AbstractCode(abc.ABC):
             self._matrix = matrix
         else:
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-            self._matrix = self.field(np.array(matrix))
+            self._matrix = self.field(np.asarray(matrix))
 
         if field is not None and field != self.field.order:
             raise ValueError(
