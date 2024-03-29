@@ -2134,11 +2134,6 @@ class ToricCode(CSSCode):
 
         if rotated:
             # rotated toric code
-            if not (rows % 2 == cols % 2 == 0 and rows >= 4 and cols >= 4):
-                raise ValueError(
-                    "The rotated toric code must have even side lengths of at least four, not"
-                    + f" ({rows},{cols})"
-                )
             matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)
 
             if conjugate:
