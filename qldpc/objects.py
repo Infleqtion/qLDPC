@@ -331,8 +331,9 @@ class ChainComplex:
     "differential".  Neighboring boundary operators annihilate, in the sense that d_j d_{j-1} = 0.
 
     In practice, we represent a chain complex by the boundary operators (d_1, d_2, ..., d_n), which
-    are in turn represented by matrices over a finite field.  The boundary operators d_0 and d_{n+1}
-    are formally treated as 0 × dim(A_0) and dim(A_n) × 0 matrices.
+    are in turn represented by matrices over (i) a finite field, or (ii) a group algebra.  The
+    boundary operators d_0 and d_{n+1} are formally treated as 0 × dim(A_0) and dim(A_n) × 0
+    matrices.
 
     References:
     - https://en.wikipedia.org/wiki/Chain_complex
