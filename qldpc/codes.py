@@ -1899,11 +1899,23 @@ class QTCode(CSSCode):
     - two symmetric (self-inverse) subsets A and B of a group G, and
     - two classical codes C_A and C_B, respectively with block lengths |A| and |B|.
 
-    The X-type parity checks of a quantum Tanner code are the checks of a classical Tanner code
-    whose generating graph is the subgraph_x of the Cayley complex (A,B).  The subcode of this
-    classical Tanner code is ~(C_A ⨂ C_B), where ~C is the dual code to C.
+    The qudits of a quantum Tanner code live on the faces of a Cayley complex built out of A and B.
+    Each face of the Cayley complex looks like:
 
-    The Z-type parity checks are similarly defined with subgraph_z and subcode ~(~C_A ⨂ ~C_B).
+         g ―――――――――― gb
+
+         |  f(g,a,b)  |
+
+        ag ――――――――― agb
+
+    where (g,a,b) is an element of (G,A,B), and f(g,a,b) = {g, ab, gb, agb}.  We define two
+    (directed) subgraphs on the Cayley complex:
+    - subgraph_x with edges ( g, f(g,a,b)), and
+    - subgraph_z with edges (ag, f(g,a,b)).
+
+    The X-type parity checks of a quantum Tanner code are then given by the classical Tanner code on
+    subgraph_x with subcode ~(C_A ⨂ C_B), where ~C is the dual code to C.  Z-type parity checks are
+    similarly given by the classical Tanner code on subgraph_z with subcode ~(~C_A ⨂ ~C_B).
 
     Notes:
     - "Good" quantum Tanner code: projective special linear group and random classical codes.
