@@ -96,6 +96,14 @@ class AbstractCode(abc.ABC):
         return self._field
 
     @property
+    def field_name(self) -> str:
+        """The name of the base field of this code."""
+        characteristic = self.field.characteristic
+        degree = self.field.degree
+        order = str(characteristic) + (f"^{degree}" if degree > 1 else "")
+        return f"GF({order})"
+
+    @property
     def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
         return self._matrix
@@ -114,6 +122,10 @@ class AbstractCode(abc.ABC):
     @abc.abstractmethod
     def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
+
+    @abc.abstractmethod
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
 
 
 ################################################################################
@@ -135,6 +147,17 @@ class ClassicalCode(AbstractCode):
 
     _matrix: galois.FieldArray
     _exact_distance: int | None = None
+
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        name = type(self).__name__
+        text = ""
+        if self.field.order == 2:
+            text += f"{name} on {self.num_bits} bits"
+        else:
+            text += f"{name} on {self.num_bits} symbols over {self.field_name}"
+        text += f", with parity check matrix\n{self.matrix}"
+        return text
 
     def __contains__(
         self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]] | ClassicalCode
@@ -409,7 +432,7 @@ class ClassicalCode(AbstractCode):
         if seed is not None:
             # generate a random seed that we can "safely" increment to get another "random" seed
             np.random.seed(seed)
-            seed = np.random.randint(np.iinfo(np.int64).min, np.iinfo(np.int64).max + 1)
+            seed = np.random.randint(np.iinfo(np.int64).max + 1)
 
         # repeat until success, rejecting matrices with a zero row or column
         while True:
@@ -610,6 +633,17 @@ class QuditCode(AbstractCode):
     _exact_distance_x: int | None = None
     _exact_distance_z: int | None = None
 
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        name = type(self).__name__
+        text = ""
+        if self.field.order == 2:
+            text += f"{name} on {self.num_qubits} qubits"
+        else:
+            text += f"{name} on {self.num_qudits} qudits over {self.field_name}"
+        text += f", with parity check matrix\n{self.matrix}"
+        return text
+
     @property
     def num_checks(self) -> int:
         """Number of parity checks (stabilizers) in this code."""
@@ -783,6 +817,21 @@ class CSSCode(QuditCode):
             and not np.any(self.matrix_x @ self.matrix_z.T)
         ):
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
+
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        name = type(self).__name__
+        text = ""
+        if self.field.order == 2:
+            text += f"{name} on {self.num_qubits} qubits"
+        else:
+            text += f"{name} on {self.num_qudits} qudits over {self.field_name}"
+        text += f"\nX-type parity checks:\n{self.matrix_x}"
+        text += f"\nZ-type parity checks:\n{self.matrix_z}"
+        if self.conjugated_qubits:
+            qudits = "qubits" if self.field.order == 2 else "qudits"
+            text += f"\n{qudits} conjugated at:\n{self.conjugated_qubits}"
+        return text
 
     @functools.cached_property
     def matrix(self) -> galois.FieldArray:
@@ -2043,6 +2092,8 @@ class QTCode(CSSCode):
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
+        bipartite: bool = False,
+        conjugate: slice | Sequence[int] | None = (),
         one_subset: bool = False,
         seed: int | None = None,
     ) -> QTCode:
@@ -2054,7 +2105,7 @@ class QTCode(CSSCode):
         code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
         subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
         subset_b = group.random_symmetric_subset(code_b.num_bits) if not one_subset else subset_a
-        return QTCode(subset_a, subset_b, code_a, code_b)
+        return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
 
 
 ################################################################################

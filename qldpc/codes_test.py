@@ -32,8 +32,12 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 
 def test_classical_codes() -> None:
     """Classical code constructions."""
-    assert codes.ClassicalCode.random(5, 3, seed=0).num_bits == 5
-    assert codes.HammingCode(3).get_distance() == 3
+    code = codes.ClassicalCode.random(5, 3, seed=0)
+    assert code.num_bits == 5
+    assert "ClassicalCode" in str(code)
+
+    code = codes.ClassicalCode.random(5, 3, field=3, seed=0)
+    assert "GF(3)" in str(code)
 
     num_bits = 2
     for code in [
@@ -46,6 +50,8 @@ def test_classical_codes() -> None:
         assert code.get_distance(bound=10) == num_bits
         assert code.get_weight() == 2
         assert code.get_random_word() in code
+
+    assert codes.HammingCode(3).get_distance() == 3
 
     # that rank of repetition and Hamming codes is independent of the field
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
@@ -232,6 +238,21 @@ def test_quantum_distance() -> None:
     code = codes.HGPCode(trivial_code)
     assert code.dimension == 0
     assert code.get_distance() is np.inf
+
+
+def test_quantum_code_string() -> None:
+    """Human-readable representation of a code."""
+    code = codes.QuditCode([[0]], field=2)
+    assert "qubits" in str(code)
+
+    code = codes.QuditCode([[0]], field=3)
+    assert "GF(3)" in str(code)
+
+    code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    assert "qubits" in str(code)
+
+    code = codes.HGPCode(codes.RepetitionCode(2, field=3), conjugate=True)
+    assert "GF(3)" in str(code) and "conjugated" in str(code)
 
 
 @pytest.mark.parametrize("field", [2, 3])
