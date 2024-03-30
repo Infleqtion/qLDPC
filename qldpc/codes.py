@@ -285,16 +285,18 @@ class ClassicalCode(AbstractCode):
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
-        if self.dimension == 0:
-            return np.inf
-
         if vector is not None:
+            if self.dimension == 0:
+                return np.count_nonzero(vector)
             words = self.words() - self.field(vector)[np.newaxis, :]
             return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
 
         # if we know the exact code distance, return it
         if self._exact_distance is not None:
             return self._exact_distance
+
+        if self.dimension == 0:
+            return np.inf
 
         # we do not know the exact distance, so compute it
         words = self.words()[1:]

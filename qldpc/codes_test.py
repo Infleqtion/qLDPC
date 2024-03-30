@@ -147,6 +147,13 @@ def test_distance_from_classical_code(bits: int = 3) -> None:
         assert dist_brute <= dist_bound
     assert rep_code.get_distance(brute=False) == bits
 
+    # the distance of any vector from a code with dimension-0
+    random_vector = np.random.randint(2, size=2)
+    trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
+    assert trivial_code.dimension == 0
+    assert trivial_code.get_distance() is np.inf
+    assert trivial_code.get_distance(vector=random_vector) == np.count_nonzero(random_vector)
+
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
@@ -211,14 +218,20 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers("I", "I I", field=field)
 
 
-def test_quantum_distance(field: int = 2) -> None:
+def test_quantum_distance() -> None:
     """Distance calculations for qudit codes."""
-    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
+    code = codes.HGPCode(codes.RepetitionCode(2))
     assert code.get_distance() == 2
 
     # assert that the identity is a logical operator
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+
+    # an empty quantum code has distance infinity
+    trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
+    code = codes.HGPCode(trivial_code)
+    assert code.dimension == 0
+    assert code.get_distance() is np.inf
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -569,3 +582,9 @@ def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
 
     with pytest.raises(ValueError, match=">= 2"):
         codes.GeneralizedSurfaceCode(size, dim=1)
+
+
+def test_small_codes() -> None:
+    """Five-qubit and Steane codes."""
+    assert codes.FiveQubitCode().num_qubits == 5
+    assert codes.SteaneCode().num_qubits == 7
