@@ -36,6 +36,9 @@ def test_classical_codes() -> None:
     assert code.num_bits == 5
     assert "ClassicalCode" in str(code)
 
+    code = codes.ClassicalCode.random(5, 3, field=3, seed=0)
+    assert "GF(3)" in str(code)
+
     num_bits = 2
     for code in [
         codes.RepetitionCode(num_bits, field=3),
@@ -224,6 +227,15 @@ def test_quantum_distance(field: int = 2) -> None:
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
 
 
+def test_quantum_code_string() -> None:
+    """Human-readable representation of a code."""
+    code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    assert "qubits" in str(code)
+
+    code = codes.HGPCode(codes.RepetitionCode(2, field=3), conjugate=True)
+    assert "GF(3)" in str(code) and "conjugated" in str(code)
+
+
 @pytest.mark.parametrize("field", [2, 3])
 def test_hypergraph_products(
     field: int,
@@ -330,7 +342,6 @@ def test_twisted_XZZX(width: int = 3) -> None:
     element_b = unit - shift
     code = codes.LPCode([[element_a]], [[element_b]], conjugate=True)
     assert np.array_equal(matrix, code.matrix)
-    assert "LPCode" in str(code)
 
     # same construction with a chain complex
     protograph_a = abstract.Protograph([[element_a]])
@@ -341,7 +352,6 @@ def test_twisted_XZZX(width: int = 3) -> None:
     assert isinstance(matrix_z, abstract.Protograph)
     code = codes.CSSCode(matrix_x.lift(), matrix_z.lift(), conjugate=code.conjugated_qubits)
     assert np.array_equal(matrix, code.matrix)
-    assert "CSSCode" in str(code)
 
 
 def test_cyclic_codes(field: int = 3) -> None:
