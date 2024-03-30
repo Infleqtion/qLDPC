@@ -243,7 +243,7 @@ class ClassicalCode(AbstractCode):
         return self.field(list(vectors)) @ self.generator
 
     def get_random_word(self, *, seed: int | None = None) -> galois.FieldArray:
-        """Random code word: a sum all generating words with random field coefficients."""
+        """Random code word: a sum of all generating words with random field coefficients."""
         num_words = self.generator.shape[0]
         return get_random_array(self.field, num_words, seed=seed) @ self.generator
 
