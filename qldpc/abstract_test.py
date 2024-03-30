@@ -29,7 +29,7 @@ def test_permutation_group() -> None:
     gens = [abstract.GroupMember(seq) for seq in ([0, 1, 2], [1, 2, 0], [2, 0, 1])]
     assert gens[0] < gens[1] < gens[2]
 
-    group = abstract.Group.from_generators(*gens)
+    group = abstract.Group(*gens)
     assert all(perm in group for perm in gens)
     assert len(group.generators) == 2
     assert group.random() in group
