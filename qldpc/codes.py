@@ -2383,6 +2383,6 @@ class FiveQubitCode(QuditCode):
 class SteaneCode(CSSCode):
     """Smallest quantum error-correcting CSS code."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
         code = HammingCode(3)
-        CSSCode.__init__(self, code, code, skip_validation=True)
+        CSSCode.__init__(self, code, code, conjugate=conjugate)
