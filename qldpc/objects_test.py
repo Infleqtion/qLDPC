@@ -107,10 +107,9 @@ def test_cayley_complex() -> None:
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     """Assert that a Cayley complex has the correct number of vertices, edges, and faces."""
-    size_g = cayplex.group.order
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
-    assert cayplex.graph.number_of_nodes() == size_g
+    size_g = cayplex.graph.number_of_nodes()
     assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
     assert len(cayplex.faces) == size_g * size_a * size_b // 4
 

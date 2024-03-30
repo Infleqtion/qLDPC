@@ -242,8 +242,7 @@ class CayleyComplex:
     - https://www.youtube.com/watch?v=orWcstqWGGo
     """
 
-    # identifying data
-    group: abstract.Group
+    # generating data
     subset_a: set[abstract.GroupMember]
     subset_b: set[abstract.GroupMember]
     bipartite: bool
@@ -273,6 +272,11 @@ class CayleyComplex:
                     )
                     raise ValueError(message)
 
+        # save generating data
+        self.subset_a = set(subset_a)
+        self.subset_b = set(subset_b)
+        self.bipartite = bipartite
+
         # take the double cover(s) of the group as appropriate
         identity, shift = abstract.CyclicGroup(2).generate()
         if bipartite:
@@ -288,12 +292,6 @@ class CayleyComplex:
         if bipartite and not CayleyComplex.satisfies_total_no_conjugacy(group, subset_a, subset_b):
             raise ValueError("Provided group and subsets do not satisfy Total No Conjugacy")
 
-        # save identifying data
-        self.group = group
-        self.subset_a = subset_a
-        self.subset_b = subset_b
-        self.bipartite = bipartite
-
         # save geometric data
         self.faces = set()
         self.graph = nx.Graph()
@@ -301,10 +299,10 @@ class CayleyComplex:
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
             self.faces.add(face)
-            self.graph.add_edge(gg, aa_gg)
-            self.graph.add_edge(gg, gg_bb)
-            self.graph.add_edge(aa_gg, aa_gg_bb)
-            self.graph.add_edge(gg_bb, aa_gg_bb)
+            self.graph.add_edge(gg, aa_gg, type="A")
+            self.graph.add_edge(gg, gg_bb, type="B")
+            self.graph.add_edge(aa_gg, aa_gg_bb, type="B")
+            self.graph.add_edge(gg_bb, aa_gg_bb, type="A")
 
     @classmethod
     def satisfies_total_no_conjugacy(

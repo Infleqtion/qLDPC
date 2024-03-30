@@ -32,7 +32,7 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 
 def test_classical_codes() -> None:
     """Classical code constructions."""
-    assert codes.ClassicalCode.random(5, 3).num_bits == 5
+    assert codes.ClassicalCode.random(5, 3, seed=0).num_bits == 5
     assert codes.HammingCode(3).get_distance() == 3
 
     num_bits = 2
@@ -434,26 +434,29 @@ def test_tanner_code() -> None:
 
 def test_quantum_tanner() -> None:
     """Quantum Tanner code."""
-    # build the subgraphs of a quantum Tanner code
+    # random quantum Tanner code
     group = abstract.CyclicGroup(12)
-    subset_a = group.random_symmetric_subset(4)
-    subset_b = group.random_symmetric_subset(4)
-    cayplex = objects.CayleyComplex(subset_a, subset_b)
-    subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(cayplex)
+    subcode = codes.RepetitionCode(4, field=3)
+    code = codes.QTCode.random(group, subcode)
 
     # assert that subgraphs have the right number of nodes, edges, and node degrees
-    size_g = cayplex.group.order
-    size_a = len(cayplex.subset_a)
-    size_b = len(cayplex.subset_b)
-    num_faces = len(cayplex.faces)
+    subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(code.complex)
+    group_size = code.complex.graph.number_of_nodes()
+    num_faces = len(code.complex.faces)
     for graph in [subgraph_x, subgraph_z]:
-        assert graph.number_of_nodes() == num_faces + size_g / 2
+        assert graph.number_of_nodes() == num_faces + group_size / 2
         assert graph.number_of_edges() == num_faces * 2
         sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
-        assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
+        assert {graph.out_degree(node) for node in sources} == {subcode.num_bits**2}
 
-    # raise error if constructing QTCode with codes over different fields
-    subcode_a = codes.RepetitionCode(2, field=2)
+    # raise error if the generating data is underspecified
+    subset_a = code.complex.subset_a
+    subset_b = group.random_symmetric_subset(len(subset_a) - 1)
+    subcode_a = codes.RepetitionCode(len(subset_a), field=2)
+    with pytest.raises(ValueError, match="Underspecified generating data"):
+        codes.QTCode(subset_a, subset_b, subcode_a)
+
+    # raise error if seed codes are over different fields
     subcode_b = codes.RepetitionCode(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
         codes.QTCode([], [], subcode_a, subcode_b)

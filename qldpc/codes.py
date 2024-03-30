@@ -387,10 +387,13 @@ class ClassicalCode(AbstractCode):
         return max(np.count_nonzero(row) for row in self.matrix)
 
     @classmethod
-    def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
-        """Construct a random classical code with the given number of bits and nontrivial checks.
+    def random(
+        cls, bits: int, checks: int, field: int | None = None, *, seed: int | None = None
+    ) -> ClassicalCode:
+        """Construct a random linear code with the given number of bits and checks.
 
-        Reject parity check matrices that have a row or column of all zeroes.
+        Reject any code with trivial checks or unchecked bits, identified by an all-zero row or
+        column in the code's parity check matrix.
         """
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
@@ -398,8 +401,17 @@ class ClassicalCode(AbstractCode):
             """Does the given matrix have a row or column that is all zeroes?"""
             return any(not row.any() for row in matrix) or any(not col.any() for col in matrix.T)
 
-        while has_zero_row_or_column(matrix := code_field.Random((checks, bits))):
-            pass
+        if seed is not None:
+            # generate a random seed that we can "safely" increment to get another "random" seed
+            np.random.seed(seed)
+            seed = np.random.randint(np.iinfo(np.int64).min, np.iinfo(np.int64).max + 1)
+
+        # repeat until success, rejecting matrices with a zero row or column
+        while True:
+            matrix = code_field.Random((checks, bits), seed=seed)
+            seed = seed + 1 if seed is not None else None
+            if not has_zero_row_or_column(matrix):
+                break
 
         return ClassicalCode(matrix)
 
@@ -1206,15 +1218,12 @@ class GBCode(CSSCode):
     def __init__(
         self,
         matrix_a: npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        matrix_b: npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        matrix_b: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a generalized bicycle code."""
-        if matrix_b is None:
-            matrix_b = matrix_a  # pragma: no cover
-
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         matrix_a = code_field(matrix_a)
         matrix_b = code_field(matrix_b)
@@ -1251,14 +1260,12 @@ class QCCode(GBCode):
         self,
         orders: tuple[int, int] | dict[sympy.Symbol, int],
         poly_a: sympy.Basic,
-        poly_b: sympy.Basic | None = None,
+        poly_b: sympy.Basic,
         field: int | None = None,
         *,
         conjugate: bool = False,
     ) -> None:
         """Construct a quasi-cyclic code."""
-        if poly_b is None:
-            poly_b = poly_a  # pragma: no cover
         self.poly_a = sympy.Poly(poly_a)
         self.poly_b = sympy.Poly(poly_b)
 
@@ -1940,23 +1947,33 @@ class QTCode(CSSCode):
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
-        if code_b is None:
-            code_b = code_a
         code_a = ClassicalCode(code_a, field)
-        code_b = ClassicalCode(code_b, field)
+        if code_b is not None:
+            code_b = ClassicalCode(code_b, field)
+        elif len(subset_a) == len(subset_b):
+            code_b = ~code_a
+        else:
+            raise ValueError(
+                "Underspecified generating data for quantum Tanner code:\n"
+                "no seed code provided for one of the generating subsets"
+            )
+
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
-        assert code_a.num_bits == len(self.complex.subset_a)
-        assert code_b.num_bits == len(self.complex.subset_b)
+        code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
+        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
 
-        subgraph_x, subgraph_z = QTCode.get_subgraphs(self.complex)
+    @classmethod
+    def get_subcodes(
+        cls, cayplex: CayleyComplex, code_a: ClassicalCode, code_b: ClassicalCode
+    ) -> tuple[TannerCode, TannerCode]:
+        """Get the classical Tanner subcodes of a quantum Tanner code."""
+        subgraph_x, subgraph_z = QTCode.get_subgraphs(cayplex)
         subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
-        code_x = TannerCode(subgraph_x, subcode_x)
-        code_z = TannerCode(subgraph_z, subcode_z)
-        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
+        return TannerCode(subgraph_x, subcode_x), TannerCode(subgraph_z, subcode_z)
 
     @classmethod
     def get_subgraphs(cls, cayplex: CayleyComplex) -> tuple[nx.DiGraph, nx.DiGraph]:
@@ -1984,13 +2001,47 @@ class QTCode(CSSCode):
         """
         subgraph_x = nx.DiGraph()
         subgraph_z = nx.DiGraph()
-        nodes_x, _ = nx.bipartite.sets(cayplex.graph)
-        for gg, aa, bb in itertools.product(nodes_x, cayplex.subset_a, cayplex.subset_b):
-            aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
-            face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
-            subgraph_x.add_edge(gg, face, sort=(aa, bb))
-            subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
+
+        # identify the nodes "across one diagonal" of the faces
+        graph = cayplex.graph
+        nodes_x, _ = nx.bipartite.sets(graph)
+
+        # build subgraphs with edges oriented from corners to faces
+        for gg in nodes_x:
+            # identify the "A-type" and "B-type" neighbors of this corner
+            neighbors_a = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "A"]
+            neighbors_b = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "B"]
+
+            # loop over all faces containing this corner, and add associated edges to the subgraphs
+            for aa_gg, gg_bb in itertools.product(neighbors_a, neighbors_b):
+                aa = aa_gg * ~gg
+                bb = ~gg * gg_bb
+                face = frozenset([gg, aa_gg, gg_bb, aa * gg * bb])
+                subgraph_x.add_edge(gg, face, sort=(aa, bb))
+                subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
+
         return subgraph_x, subgraph_z
+
+    @classmethod
+    def random(
+        cls,
+        group: abstract.Group,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        field: int | None = None,
+        *,
+        one_subset: bool = False,
+        seed: int | None = None,
+    ) -> QTCode:
+        """Construct a random quantum Tanner code from a base group and seed code(s).
+
+        If only one code C is provided, use its dual ~C for the second code.
+        """
+        code_a = ClassicalCode(code_a, field)
+        code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
+        subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
+        subset_b = group.random_symmetric_subset(code_b.num_bits) if not one_subset else subset_a
+        return QTCode(subset_a, subset_b, code_a, code_b)
 
 
 ################################################################################
