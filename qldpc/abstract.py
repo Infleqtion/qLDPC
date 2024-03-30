@@ -14,15 +14,16 @@
    See the License for the specific language governing permissions and
    limitations under the License.
 
-All groups in this module are finite, and represented under the hood as a Sympy PermutationGroup, or
-a subgroup of the symmetric group.  Group members are essentially represented by Sympy Permutation
-objects.  Groups additionally come equipped with a representation, or "lift", that maps group
-elements to square matrices, such that the group action gets lifted to matrix multiplication.
+All groups in this module are finite, and represented under the hood as a SymPy PermutationGroup, or
+a subgroup of the symmetric group.  Group members subclass the SymPy Permutation class.
+
+Groups additionally come equipped with a representation, or "lift", that maps group elements to
+square matrices, such that the group action gets lifted to matrix multiplication.
 
 !!! WARNINGS !!!
 
 Whereas matrices are "left-acting" (that is, act on objects from the left) by standard convention,
-Sympy permutations are "right-acting", which is to say that the action of two permutations p and q
+SymPy permutations are "right-acting", which is to say that the action of two permutations p and q
 on an integer i compose as (p*q)(i) = q(p(i)) = i^p^q.  To preserve the order of products before and
 after lifting permutations to matrices, which ensures that the lift L(p*q) = L(p) @ L(q), we
 therefore make representations likewise right-acting, which is to say that a permutation matrix M
@@ -30,10 +31,9 @@ transposes a vector v as v --> v @ M.  In practice, this simply means that matri
 transpose of what one might expect.
 
 This module only supports representations of group members by orthogonal matrices over finite
-fields.  The restriction to orthogonal representations is not fundamental, but is convenient for
-identifying the "transpose" a group member p with respect to a representation (lift) L.  This
-transpose is defined as the group member p.T for which L(p.T) = L(p).T.  If the representation is
-orthogonal, then p.T is equal to the inverse ~p = p**-1.
+fields.  The restriction to orthogonal representations allows identifying the "transpose" of a group
+member p with respect to a representation (lift) L, which is defined by enforcing L(p.T) = L(p).T.
+If the representation is orthogonal, then p.T is equal to the inverse ~p = p**-1.
 """
 
 from __future__ import annotations
@@ -64,16 +64,15 @@ UnknownType = TypeVar("UnknownType")
 
 
 class GroupMember(comb.Permutation):
-    """Wrapper for Sympy Permutation class.
+    """Wrapper for SymPy Permutation class.
 
     Supports sorting permutations (by their rank), and taking their tensor product.
     """
 
     def __new__(cls, *args: object, **kwargs: object) -> GroupMember:
         """Allow instantiating a GroupMember from a SymPy Permutation object."""
-        if len(args) == 1 and isinstance(args[0], comb.Permutation):
-            return super().__new__(cls, args[0].array_form, **kwargs)
-        return super().__new__(cls, *args, **kwargs)
+        _args = [arg.array_form if isinstance(arg, comb.Permutation) else arg for arg in args]
+        return super().__new__(cls, *_args, **kwargs)
 
     def __mul__(self, other: UnknownType) -> UnknownType:
         if isinstance(other, comb.Permutation):
@@ -106,7 +105,7 @@ IntegerLift = Callable[[int], npt.NDArray[np.int_]]
 def default_lift(member: GroupMember) -> npt.NDArray[np.int_]:
     """Default lift: represent a permutation object by a permutation matrix.
 
-    For consistency with how Sympy composes permutations, this matrix is right-acting, meaning that
+    For consistency with how SymPy composes permutations, this matrix is right-acting, meaning that
     it acts on a vector p from the right: p --> p @ M.
     """
     matrix = np.zeros((member.size,) * 2, dtype=int)
@@ -118,8 +117,8 @@ def default_lift(member: GroupMember) -> npt.NDArray[np.int_]:
 class Group:
     """Base class for a finite group.
 
-    Under the hood, a Group is represented by a Sympy PermutationGroup.
-    Group elements are represented by Sympy permutations.
+    Under the hood, a Group is represented by a SymPy PermutationGroup.
+    Group elements are represented by SymPy permutations.
 
     A group additionally comes equipped with a "lift", or a representation that maps group elements
     to orthogonal matrices over a finite field.  The group action gets lifted to matrix
@@ -132,20 +131,40 @@ class Group:
     _lift: Lift
 
     def __init__(
+        self, *generators: comb.Permutation, field: int | None = None, lift: Lift | None = None
+    ) -> None:
+        self._init_from_group(comb.PermutationGroup(*generators), field, lift)
+
+    def _init_from_group(
         self,
-        group: Group | comb.PermutationGroup,
+        group: comb.PermutationGroup | Group,
         field: int | None = None,
         lift: Lift | None = None,
     ) -> None:
-        if isinstance(group, Group):
-            assert field is None or field == group._field.order
-            self._group = group._group
-            self._field = group._field
-            self._lift = lift or group._lift
-        else:
+        """Initialize from an existing group."""
+        if isinstance(group, comb.PermutationGroup):
             self._group = group
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
             self._lift = lift if lift is not None else default_lift
+        else:
+            assert isinstance(group, Group)
+            assert field is None or field == group.field.order
+            self._group = group._group
+            self._field = group._field
+            self._lift = lift if lift is not None else group._lift
+
+    def to_sympy(self) -> comb.PermutationGroup:
+        """The underlying SymPy permutation group of this Group."""
+        return self._group
+
+    @classmethod
+    def from_sympy(
+        cls, group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
+    ) -> Group:
+        """Instantiate a Group from a SymPy permutation group."""
+        new_group = Group(field=field, lift=lift)
+        new_group._group = group
+        return new_group
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -155,8 +174,8 @@ class Group:
     def __hash__(self) -> int:
         return hash(self._group)
 
-    def __contains__(self, member: GroupMember) -> bool:
-        return comb.Permutation(member.array_form) in self._group
+    def __contains__(self, member: comb.Permutation) -> bool:
+        return member in self._group
 
     def __mul__(self, other: Group) -> Group:
         """Direct product of two groups."""
@@ -175,7 +194,7 @@ class Group:
             matrix = np.kron(left_lift(GroupMember(left)), right_lift(GroupMember(right)))
             return self.field(matrix)
 
-        return Group(permutation_group, self.field.order, lift)
+        return Group.from_sympy(permutation_group, self.field.order, lift)
 
     def __pow__(self, power: int) -> Group:
         """Direct product of self multiple times."""
@@ -186,10 +205,6 @@ class Group:
     def product(cls, *groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
         return functools.reduce(Group.__mul__, groups * repeat)
-
-    def to_sympy(self) -> comb.PermutationGroup:
-        """Return the underlying SymPy permutation group."""
-        return self._group
 
     @property
     def field(self) -> type[galois.FieldArray]:
@@ -236,7 +251,7 @@ class Group:
         """Multiplication (Cayley) table for this group."""
         members = {member: idx for idx, member in enumerate(self.generate())}
         return np.array(
-            [members[aa * bb] for aa in self.generate() for bb in self.generate()],
+            [members[aa * bb] for aa in members for bb in members],
             dtype=int,
         ).reshape(self.order, self.order)
 
@@ -248,41 +263,32 @@ class Group:
         integer_lift: IntegerLift | None = None,
     ) -> Group:
         """Construct a group from a multiplication (Cayley) table."""
+        members = {GroupMember(row): idx for idx, row in enumerate(table)}
 
         if integer_lift is None:
-            group = comb.PermutationGroup(*[GroupMember(row) for row in table])
-            return Group(group, lift=default_lift)
-
-        members = {GroupMember(row): idx for idx, row in enumerate(table)}
+            return Group(*members, lift=default_lift)
 
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
             return integer_lift(members[member])
 
-        return Group(comb.PermutationGroup(*members.keys()), field, lift)
-
-    @classmethod
-    def from_generators(
-        cls, *generators: GroupMember, field: int | None = None, lift: Lift | None = None
-    ) -> Group:
-        """Construct a group from generators."""
-        return Group(comb.PermutationGroup(*generators), field, lift)
+        return Group(*members, field=field, lift=lift)
 
     @classmethod
     def from_generating_mats(
         cls,
-        *generators: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        *matrices: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
     ) -> Group:
         """Constructs a Group from a given set of generating matrices.
 
         Group members are represented by how they permute elements of the group itself.
         """
-        if not generators:
+        if not matrices:
             return TrivialGroup()
 
         # identify the field we are working over
-        if isinstance(generators[0], galois.FieldArray):
-            base_field = type(generators[0])
+        if isinstance(matrices[0], galois.FieldArray):
+            base_field = type(matrices[0])
         else:
             base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
@@ -293,7 +299,7 @@ class Group:
             )
 
         # keep track of group members and a multiplication table
-        index_to_member = {idx: base_field(gen) for idx, gen in enumerate(generators)}
+        index_to_member = {idx: base_field(gen) for idx, gen in enumerate(matrices)}
         hash_to_index = {hash(gen.data.tobytes()): idx for idx, gen in index_to_member.items()}
         table_as_dict = {}
 
@@ -333,9 +339,8 @@ class Group:
             return index_to_member[permutation_to_index[tuple(member.array_form)]]
 
         # identify generating permutations and build the group itself
-        gen_perms = [GroupMember(table[row]) for row in range(len(generators))]
-        group = comb.PermutationGroup(*gen_perms)
-        return Group(group, base_field.order, lift)
+        generators = [GroupMember(table[row]) for row in range(len(matrices))]
+        return Group(*generators, field=base_field.order, lift=lift)
 
     def random_symmetric_subset(
         self, size: int, *, exclude_identity: bool = False, seed: int | None = None
@@ -389,9 +394,10 @@ class Group:
     def from_name(cls, name: str) -> Group:
         """Named group in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
-        generators = named_groups.get_generators(standardized_name)
-        group = comb.PermutationGroup(*[GroupMember(gen) for gen in generators])
-        return Group(group)
+        generators = [
+            comb.Permutation(gen) for gen in named_groups.get_generators(standardized_name)
+        ]
+        return Group(*generators)
 
 
 ################################################################################
@@ -623,9 +629,8 @@ class TrivialGroup(Group):
 
     def __init__(self, field: int | None = None) -> None:
         super().__init__(
-            comb.PermutationGroup(GroupMember()),
-            field,
-            lambda _: np.array(1, ndmin=2, dtype=int),
+            field=field,
+            lift=lambda _: np.array(1, ndmin=2, dtype=int),
         )
 
     def random(self, seed: int | None = None) -> GroupMember:
@@ -659,7 +664,7 @@ class CyclicGroup(Group):
     """
 
     def __init__(self, order: int) -> None:
-        super().__init__(comb.named_groups.CyclicGroup(order))
+        super()._init_from_group(comb.named_groups.CyclicGroup(order))
 
 
 class AbelianGroup(Group):
@@ -671,33 +676,34 @@ class AbelianGroup(Group):
     """
 
     def __init__(self, *orders: int, product_lift: bool = False) -> None:
+        group: Group | comb.PermutationGroup
         if product_lift:
             groups = [CyclicGroup(order) for order in orders]
             group = Group.product(*groups)
-            super().__init__(group)
         else:
-            super().__init__(comb.named_groups.AbelianGroup(*orders))
+            group = comb.named_groups.AbelianGroup(*orders)
+        super()._init_from_group(group)
 
 
 class DihedralGroup(Group):
     """Dihedral group of a specified order."""
 
     def __init__(self, order: int) -> None:
-        super().__init__(comb.named_groups.DihedralGroup(order))
+        super()._init_from_group(comb.named_groups.DihedralGroup(order))
 
 
 class AlternatingGroup(Group):
     """Alternating group of a specified order."""
 
     def __init__(self, order: int) -> None:
-        super().__init__(comb.named_groups.AlternatingGroup(order))
+        super()._init_from_group(comb.named_groups.AlternatingGroup(order))
 
 
 class SymmetricGroup(Group):
     """Symmetric group of a specified order."""
 
     def __init__(self, order: int) -> None:
-        super().__init__(comb.named_groups.SymmetricGroup(order))
+        super()._init_from_group(comb.named_groups.SymmetricGroup(order))
 
 
 class QuaternionGroup(Group):
@@ -733,8 +739,8 @@ class QuaternionGroup(Group):
                 blocks = [[zero, -imag], [-imag, zero]]
             return sign * np.block(blocks).T % 3
 
-        group = Group.from_table(table, integer_lift=lift)
-        super().__init__(group._group, field=3, lift=group._lift)
+        group = Group.from_table(table, field=3, integer_lift=lift)
+        super()._init_from_group(group)
 
 
 class SmallGroup(Group):
@@ -749,7 +755,7 @@ class SmallGroup(Group):
             )
 
         name = f"SmallGroup({order},{index})"
-        super().__init__(Group.from_name(name))
+        super()._init_from_group(Group.from_name(name))
 
     @classmethod
     def number(cls, order: int) -> int:
@@ -812,12 +818,12 @@ class SpecialLinearGroup(Group):
                     cols.append(out_vec)
                 return np.vstack(cols, dtype=int).T
 
-            super().__init__(comb.PermutationGroup(generators), field, lift)
+            super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
         else:
             # represent group members by how they permute elements of the group
             group = self.from_generating_mats(*self.get_generator_mats())
-            super().__init__(group)
+            super()._init_from_group(group)
 
     @property
     def dimension(self) -> int:
@@ -867,7 +873,7 @@ class ProjectiveSpecialLinearGroup(Group):
                 "Projective special linear groups with both dimension and field greater than 2 are"
                 " not yet supported"
             )
-        super().__init__(group)
+        super()._init_from_group(group)
 
     @property
     def dimension(self) -> int:
