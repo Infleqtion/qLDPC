@@ -63,7 +63,7 @@ def get_random_array(
     cond: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
     seed: int | None = None,
 ) -> galois.FieldArray:
-    """Get a random array of a given shape.
+    """Get a random array over a given finite field with a given shape.
 
     If passed a condition ("cond"), re-sample until the array satisfied that condition.
     """
