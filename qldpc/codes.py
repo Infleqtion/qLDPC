@@ -2059,22 +2059,6 @@ class QTCode(CSSCode):
 # common quantum codes
 
 
-class FiveQubitCode(QuditCode):
-    """Smallest quantum code."""
-
-    def __init__(self) -> None:
-        code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
-        QuditCode.__init__(self, code)
-
-
-class SteaneCode(CSSCode):
-    """Smallest quantum CSS code."""
-
-    def __init__(self) -> None:
-        code = HammingCode(3)
-        CSSCode.__init__(self, code, code)
-
-
 class SurfaceCode(CSSCode):
     """The one and only!
 
@@ -2321,3 +2305,19 @@ class GeneralizedSurfaceCode(CSSCode):
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+
+
+class FiveQubitCode(QuditCode):
+    """Smallest quantum code."""
+
+    def __init__(self) -> None:
+        code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
+        QuditCode.__init__(self, code)
+
+
+class SteaneCode(CSSCode):
+    """Smallest quantum CSS code."""
+
+    def __init__(self) -> None:
+        code = HammingCode(3)
+        CSSCode.__init__(self, code, code)
