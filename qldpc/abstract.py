@@ -394,9 +394,7 @@ class Group:
     def from_name(cls, name: str) -> Group:
         """Named group in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
-        generators = [
-            comb.Permutation(gen) for gen in named_groups.get_generators(standardized_name)
-        ]
+        generators = [GroupMember(gen) for gen in named_groups.get_generators(standardized_name)]
         return Group(*generators)
 
 
