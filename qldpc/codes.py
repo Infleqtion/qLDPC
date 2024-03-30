@@ -387,10 +387,13 @@ class ClassicalCode(AbstractCode):
         return max(np.count_nonzero(row) for row in self.matrix)
 
     @classmethod
-    def random(cls, bits: int, checks: int, field: int | None = None) -> ClassicalCode:
-        """Construct a random classical code with the given number of bits and nontrivial checks.
+    def random(
+        cls, bits: int, checks: int, field: int | None = None, *, seed: int | None = None
+    ) -> ClassicalCode:
+        """Construct a random linear code with the given number of bits and checks.
 
-        Reject parity check matrices that have a row or column of all zeroes.
+        Reject any code with trivial checks or unchecked bits, identified by an all-zero row or
+        column in the code's parity check matrix.
         """
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
@@ -398,8 +401,18 @@ class ClassicalCode(AbstractCode):
             """Does the given matrix have a row or column that is all zeroes?"""
             return any(not row.any() for row in matrix) or any(not col.any() for col in matrix.T)
 
-        while has_zero_row_or_column(matrix := code_field.Random((checks, bits))):
-            pass
+        if seed is not None:
+            # generate a random seed that we can "safely" increment to get another "random" seed
+            np.random.seed(seed)
+            seed = np.random.randint(np.iinfo(np.int64).min, np.iinfo(np.int64).max + 1)
+
+        # repeat until success, rejecting matrices with a zero row or column
+        while True:
+            matrix = code_field.Random((checks, bits), seed=seed)
+            if not has_zero_row_or_column(matrix):
+                break
+            if seed is not None:
+                seed += 1
 
         return ClassicalCode(matrix)
 
@@ -1214,15 +1227,12 @@ class GBCode(CSSCode):
     def __init__(
         self,
         matrix_a: npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        matrix_b: npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        matrix_b: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
     ) -> None:
         """Construct a generalized bicycle code."""
-        if matrix_b is None:
-            matrix_b = matrix_a  # pragma: no cover
-
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         matrix_a = code_field(matrix_a)
         matrix_b = code_field(matrix_b)
@@ -1259,14 +1269,12 @@ class QCCode(GBCode):
         self,
         orders: tuple[int, int] | dict[sympy.Symbol, int],
         poly_a: sympy.Basic,
-        poly_b: sympy.Basic | None = None,
+        poly_b: sympy.Basic,
         field: int | None = None,
         *,
         conjugate: bool = False,
     ) -> None:
         """Construct a quasi-cyclic code."""
-        if poly_b is None:
-            poly_b = poly_a  # pragma: no cover
         self.poly_a = sympy.Poly(poly_a)
         self.poly_b = sympy.Poly(poly_b)
 
@@ -1948,10 +1956,17 @@ class QTCode(CSSCode):
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
-        if code_b is None:
-            code_b = code_a
         code_a = ClassicalCode(code_a, field)
-        code_b = ClassicalCode(code_b, field)
+        if code_b is not None:
+            code_b = ClassicalCode(code_b, field)
+        elif len(subset_a) == len(subset_b):
+            code_b = ~code_a
+        else:
+            raise ValueError(
+                "Cannot instantiate a quantum Tanner code: "
+                "no seed code provided for one of the generating subsets"
+            )
+
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
@@ -1999,6 +2014,30 @@ class QTCode(CSSCode):
             subgraph_x.add_edge(gg, face, sort=(aa, bb))
             subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
         return subgraph_x, subgraph_z
+
+    @classmethod
+    def random(
+        cls,
+        group: abstract.Group,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        field: int | None = None,
+        *,
+        recycle_subset: bool = False,
+        seed: int | None = None,
+    ) -> QTCode:
+        """Construct a random quantum Tanner code from a base group and seed code(s).
+
+        If only one code C is provided, use its dual ~C for the second code.
+        """
+        code_a = ClassicalCode(code_a, field)
+        code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
+        subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
+        if recycle_subset:
+            subset_b = subset_a
+        else:
+            subset_b = group.random_symmetric_subset(code_b.num_bits)
+        return QTCode(subset_a, subset_b, code_a, code_b)
 
 
 ################################################################################
