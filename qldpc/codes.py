@@ -2322,4 +2322,4 @@ class SteaneCode(CSSCode):
 
     def __init__(self) -> None:
         code = HammingCode(3)
-        CSSCode.__init__(self, code, code)
+        CSSCode.__init__(self, code, code, skip_validation=True)
