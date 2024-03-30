@@ -299,10 +299,10 @@ class CayleyComplex:
             aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
             face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
             self.faces.add(face)
-            self.graph.add_edge(gg, aa_gg)
-            self.graph.add_edge(gg, gg_bb)
-            self.graph.add_edge(aa_gg, aa_gg_bb)
-            self.graph.add_edge(gg_bb, aa_gg_bb)
+            self.graph.add_edge(gg, aa_gg, type="A")
+            self.graph.add_edge(gg, gg_bb, type="B")
+            self.graph.add_edge(aa_gg, aa_gg_bb, type="B")
+            self.graph.add_edge(gg_bb, aa_gg_bb, type="A")
 
     @classmethod
     def satisfies_total_no_conjugacy(

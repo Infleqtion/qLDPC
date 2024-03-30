@@ -2001,12 +2001,25 @@ class QTCode(CSSCode):
         """
         subgraph_x = nx.DiGraph()
         subgraph_z = nx.DiGraph()
-        nodes_x, _ = nx.bipartite.sets(cayplex.graph)
-        for gg, aa, bb in itertools.product(nodes_x, cayplex.subset_a, cayplex.subset_b):
-            aa_gg, gg_bb, aa_gg_bb = aa * gg, gg * bb, aa * gg * bb
-            face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
-            subgraph_x.add_edge(gg, face, sort=(aa, bb))
-            subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
+
+        # identify the nodes "across one diagonal" of the faces
+        graph = cayplex.graph
+        nodes_x, _ = nx.bipartite.sets(graph)
+
+        # build subgraphs with edges oriented from corners to faces
+        for gg in nodes_x:
+            # identify the "A-type" and "B-type" neighbors of this corner
+            neighbors_a = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "A"]
+            neighbors_b = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "B"]
+
+            # loop over all faces containing this corner, and add associated edges to the subgraphs
+            for aa_gg, gg_bb in itertools.product(neighbors_a, neighbors_b):
+                aa = aa_gg * ~gg
+                bb = ~gg * gg_bb
+                face = frozenset([gg, aa_gg, gg_bb, aa * gg * bb])
+                subgraph_x.add_edge(gg, face, sort=(aa, bb))
+                subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
+
         return subgraph_x, subgraph_z
 
     @classmethod
