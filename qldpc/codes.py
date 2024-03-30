@@ -74,7 +74,7 @@ class AbstractCode(abc.ABC):
         The base field is taken to be F_2 by default.
         """
         self._matrix: galois.FieldArray
-        if isinstance(matrix, type(self)):
+        if isinstance(matrix, AbstractCode):
             self._field = matrix.field
             self._matrix = matrix.matrix
         elif isinstance(matrix, galois.FieldArray):
