@@ -243,14 +243,9 @@ class CayleyComplex:
     """
 
     # generating data
-    generating_subset_a: set[abstract.GroupMember]
-    generating_subset_b: set[abstract.GroupMember]
-    bipartite: bool
-
-    # identifying data
-    group: abstract.Group
     subset_a: set[abstract.GroupMember]
     subset_b: set[abstract.GroupMember]
+    bipartite: bool
 
     # geometric data
     faces: set[frozenset[abstract.GroupMember]]
@@ -266,9 +261,6 @@ class CayleyComplex:
         """Construct a left-right Cayley complex."""
         if subset_b is None:
             subset_b = subset_a
-        self.generating_subset_a = set(subset_a)
-        self.generating_subset_b = set(subset_b)
-        self.bipartite = bipartite
 
         # assert that the generating subsets are symmetric
         for subset, name in [(subset_a, "subset_a"), (subset_b, "subset_b")]:
@@ -279,6 +271,11 @@ class CayleyComplex:
                         + f"Generating {name} contains {member} but not its inverse, {~member}"
                     )
                     raise ValueError(message)
+
+        # save generating data
+        self.subset_a = set(subset_a)
+        self.subset_b = set(subset_b)
+        self.bipartite = bipartite
 
         # take the double cover(s) of the group as appropriate
         identity, shift = abstract.CyclicGroup(2).generate()
@@ -294,11 +291,6 @@ class CayleyComplex:
         group = abstract.Group.from_generators(*subset_a, *subset_b)
         if bipartite and not CayleyComplex.satisfies_total_no_conjugacy(group, subset_a, subset_b):
             raise ValueError("Provided group and subsets do not satisfy Total No Conjugacy")
-
-        # save identifying data
-        self.group = group
-        self.subset_a = subset_a
-        self.subset_b = subset_b
 
         # save geometric data
         self.faces = set()

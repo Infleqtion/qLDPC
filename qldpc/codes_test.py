@@ -441,18 +441,16 @@ def test_quantum_tanner() -> None:
 
     # assert that subgraphs have the right number of nodes, edges, and node degrees
     subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(code.complex)
-    size_g = code.complex.group.order
-    size_a = len(code.complex.subset_a)
-    size_b = len(code.complex.subset_b)
+    group_size = code.complex.graph.number_of_nodes()
     num_faces = len(code.complex.faces)
     for graph in [subgraph_x, subgraph_z]:
-        assert graph.number_of_nodes() == num_faces + size_g / 2
+        assert graph.number_of_nodes() == num_faces + group_size / 2
         assert graph.number_of_edges() == num_faces * 2
         sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
-        assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
+        assert {graph.out_degree(node) for node in sources} == {subcode.num_bits**2}
 
     # raise error if the generating data is underspecified
-    subset_a = code.complex.generating_subset_a
+    subset_a = code.complex.subset_a
     subset_b = group.random_symmetric_subset(len(subset_a) - 1)
     subcode_a = codes.RepetitionCode(len(subset_a), field=2)
     with pytest.raises(ValueError, match="Underspecified generating data"):

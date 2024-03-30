@@ -1962,15 +1962,18 @@ class QTCode(CSSCode):
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
-        assert code_a.num_bits == len(self.complex.subset_a)
-        assert code_b.num_bits == len(self.complex.subset_b)
+        code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
+        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
 
-        subgraph_x, subgraph_z = QTCode.get_subgraphs(self.complex)
+    @classmethod
+    def get_subcodes(
+        cls, cayplex: CayleyComplex, code_a: ClassicalCode, code_b: ClassicalCode
+    ) -> tuple[TannerCode, TannerCode]:
+        """Get the classical Tanner subcodes of a quantum Tanner code."""
+        subgraph_x, subgraph_z = QTCode.get_subgraphs(cayplex)
         subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
-        code_x = TannerCode(subgraph_x, subcode_x)
-        code_z = TannerCode(subgraph_z, subcode_z)
-        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
+        return TannerCode(subgraph_x, subcode_x), TannerCode(subgraph_z, subcode_z)
 
     @classmethod
     def get_subgraphs(cls, cayplex: CayleyComplex) -> tuple[nx.DiGraph, nx.DiGraph]:
