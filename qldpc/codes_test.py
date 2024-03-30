@@ -242,6 +242,12 @@ def test_quantum_distance() -> None:
 
 def test_quantum_code_string() -> None:
     """Human-readable representation of a code."""
+    code = codes.QuditCode([[0]], field=2)
+    assert "qubits" in str(code)
+
+    code = codes.QuditCode([[0]], field=3)
+    assert "GF(3)" in str(code)
+
     code = codes.HGPCode(codes.RepetitionCode(2, field=2))
     assert "qubits" in str(code)
 
