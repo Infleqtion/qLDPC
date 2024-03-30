@@ -48,7 +48,7 @@ DEFAULT_FIELD_ORDER = 2
 
 
 def get_scrambled_seed(seed: int | None) -> int | None:
-    """Scrample a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
+    """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
     state = np.random.get_state()
     np.random.seed(seed)
     new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
@@ -243,9 +243,9 @@ class ClassicalCode(AbstractCode):
         return self.field(list(vectors)) @ self.generator
 
     def get_random_word(self, *, seed: int | None = None) -> galois.FieldArray:
-        """Random code word: a sum all generators with random field coefficients."""
-        num_generators = self.generator.shape[0]
-        return get_random_array(self.field, num_generators, seed=seed) @ self.generator
+        """Random code word: a sum all generating words with random field coefficients."""
+        num_words = self.generator.shape[0]
+        return get_random_array(self.field, num_words, seed=seed) @ self.generator
 
     def dual(self) -> ClassicalCode:
         """Dual to this code.
@@ -1183,7 +1183,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: PauliXZ, *, ensure_nontrivial: bool = False
+        self, pauli: PauliXZ, *, seed: int | None = None, ensure_nontrivial: bool = False
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
@@ -1193,15 +1193,18 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if not ensure_nontrivial:
-            return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
+            return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word(seed=seed)
 
         # generate random logical ops until we find ones with a nontrivial commutation relation
         noncommuting_ops_found = False
         while not noncommuting_ops_found:
-            op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
+            op_a = self.get_random_logical_op(pauli, seed=seed, ensure_nontrivial=False)
             op_b = self.get_random_logical_op(
-                ~pauli, ensure_nontrivial=False  # type:ignore[arg-type]
+                ~pauli,  # type:ignore[arg-type]
+                seed=seed + 1 if seed is not None else None,
+                ensure_nontrivial=False,
             )
+            seed = seed + 2 if seed is not None else None
             noncommuting_ops_found = bool(np.any(op_a @ op_b))
 
         return op_a
