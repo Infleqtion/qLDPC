@@ -179,7 +179,7 @@ class Group:
 
     def __mul__(self, other: Group) -> Group:
         """Direct product of two groups."""
-        permutation_group = self._group * other._group
+        group = self._group * other._group
 
         if self.field == other.field:
             left_lift = self._lift
@@ -194,7 +194,7 @@ class Group:
             matrix = np.kron(left_lift(GroupMember(left)), right_lift(GroupMember(right)))
             return self.field(matrix)
 
-        return Group.from_sympy(permutation_group, self.field.order, lift)
+        return Group.from_sympy(group, self.field.order, lift)
 
     def __pow__(self, power: int) -> Group:
         """Direct product of self multiple times."""
