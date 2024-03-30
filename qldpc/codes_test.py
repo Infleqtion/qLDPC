@@ -32,7 +32,7 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 
 def test_classical_codes() -> None:
     """Classical code constructions."""
-    assert codes.ClassicalCode.random(5, 3).num_bits == 5
+    assert codes.ClassicalCode.random(5, 3, seed=0).num_bits == 5
     assert codes.HammingCode(3).get_distance() == 3
 
     num_bits = 2
