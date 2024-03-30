@@ -643,7 +643,7 @@ class TrivialGroup(Group):
             lift=lambda _: np.array(1, ndmin=2, dtype=int),
         )
 
-    def random(self, seed: int | None = None) -> GroupMember:
+    def random(self, *, seed: int | None = None) -> GroupMember:
         """A random (albeit unique) element this group.
 
         Necessary to circumvent an error thrown by sympy when "unranking" an empty Permutation.
