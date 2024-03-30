@@ -624,7 +624,7 @@ class Protograph(npt.NDArray[np.object_]):
                 return value
             if isinstance(value, GroupMember):
                 return Element(group, value)
-            return value * Element(group, group.identity)
+            return int(value) * Element(group, group.identity)
 
         vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape), group)
