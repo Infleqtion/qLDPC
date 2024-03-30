@@ -32,8 +32,9 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 
 def test_classical_codes() -> None:
     """Classical code constructions."""
-    assert codes.ClassicalCode.random(5, 3, seed=0).num_bits == 5
-    assert codes.HammingCode(3).get_distance() == 3
+    code = codes.ClassicalCode.random(5, 3, seed=0)
+    assert code.num_bits == 5
+    assert "ClassicalCode" in str(code)
 
     num_bits = 2
     for code in [
@@ -46,6 +47,8 @@ def test_classical_codes() -> None:
         assert code.get_distance(bound=10) == num_bits
         assert code.get_weight() == 2
         assert code.get_random_word() in code
+
+    assert codes.HammingCode(3).get_distance() == 3
 
     # that rank of repetition and Hamming codes is independent of the field
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
@@ -327,6 +330,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     element_b = unit - shift
     code = codes.LPCode([[element_a]], [[element_b]], conjugate=True)
     assert np.array_equal(matrix, code.matrix)
+    assert "LPCode" in str(code)
 
     # same construction with a chain complex
     protograph_a = abstract.Protograph([[element_a]])
@@ -337,6 +341,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     assert isinstance(matrix_z, abstract.Protograph)
     code = codes.CSSCode(matrix_x.lift(), matrix_z.lift(), conjugate=code.conjugated_qubits)
     assert np.array_equal(matrix, code.matrix)
+    assert "CSSCode" in str(code)
 
 
 def test_cyclic_codes(field: int = 3) -> None:

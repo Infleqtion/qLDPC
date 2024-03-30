@@ -115,6 +115,11 @@ class AbstractCode(abc.ABC):
     def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
 
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        name = type(self).__name__
+        return f"{name} over F_{self.field.order} with parity check matrix\n{self.matrix}"
+
 
 ################################################################################
 # classical codes
@@ -775,6 +780,18 @@ class CSSCode(QuditCode):
         return self.code_x.num_bits == self.code_z.num_bits and not np.any(
             self.matrix_x @ self.matrix_z.T
         )
+
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        name = type(self).__name__
+        text = (
+            f"{name} over F_{self.field.order} with...\n"
+            + f"X-type parity checks\n{self.code_x.matrix}\n"
+            + f"Z-type parity checks\n{self.code_z.matrix}"
+        )
+        if self.conjugated_qubits:
+            text += f"\nqudits conjugated at\n{self.conjugated_qubits}"
+        return text
 
     @functools.cached_property
     def matrix(self) -> galois.FieldArray:
@@ -2030,6 +2047,8 @@ class QTCode(CSSCode):
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
+        bipartite: bool = False,
+        conjugate: slice | Sequence[int] | None = (),
         one_subset: bool = False,
         seed: int | None = None,
     ) -> QTCode:
@@ -2041,7 +2060,7 @@ class QTCode(CSSCode):
         code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
         subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
         subset_b = group.random_symmetric_subset(code_b.num_bits) if not one_subset else subset_a
-        return QTCode(subset_a, subset_b, code_a, code_b)
+        return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
 
 
 ################################################################################
