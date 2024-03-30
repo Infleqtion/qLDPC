@@ -60,15 +60,15 @@ def get_random_array(
     field: type[galois.FieldArray],
     shape: int | tuple[int, ...],
     *,
-    cond: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
+    satisfy: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
     seed: int | None = None,
 ) -> galois.FieldArray:
     """Get a random array over a given finite field with a given shape.
 
-    If passed a condition ("cond"), re-sample until the array satisfied that condition.
+    If passed a condition that the array must satisfy, re-sample until the condition is met.
     """
     seed = get_scrambled_seed(seed) if seed is not None else None
-    while not cond(array := field.Random(shape, seed=seed)):
+    while not satisfy(array := field.Random(shape, seed=seed)):
         seed = seed + 1 if seed is not None else None  # pragma: no cover
     return array
 
@@ -398,7 +398,7 @@ class ClassicalCode(AbstractCode):
         valid_candidate_found = False
         while not valid_candidate_found:
             # construct an effective check matrix with a random nonzero word
-            random_word = get_random_array(self.field, self.num_bits, cond=lambda vec: vec.any())
+            random_word = get_random_array(self.field, self.num_bits, satisfy=lambda vec: vec.any())
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             # find a low-weight candidate code word
@@ -445,11 +445,11 @@ class ClassicalCode(AbstractCode):
         """
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
-        def cond(matrix: galois.FieldArray) -> bool:
+        def nontrivial(matrix: galois.FieldArray) -> bool:
             """Return True iff all rows and columns are nonzero."""
             return all(row.any() for row in matrix) and all(col.any() for col in matrix.T)
 
-        matrix = get_random_array(code_field, (checks, bits), cond=cond, seed=seed)
+        matrix = get_random_array(code_field, (checks, bits), satisfy=nontrivial, seed=seed)
         return ClassicalCode(matrix)
 
     @classmethod
