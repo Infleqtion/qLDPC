@@ -242,11 +242,15 @@ class CayleyComplex:
     - https://www.youtube.com/watch?v=orWcstqWGGo
     """
 
+    # generating data
+    generating_subset_a: set[abstract.GroupMember]
+    generating_subset_b: set[abstract.GroupMember]
+    bipartite: bool
+
     # identifying data
     group: abstract.Group
     subset_a: set[abstract.GroupMember]
     subset_b: set[abstract.GroupMember]
-    bipartite: bool
 
     # geometric data
     faces: set[frozenset[abstract.GroupMember]]
@@ -262,6 +266,9 @@ class CayleyComplex:
         """Construct a left-right Cayley complex."""
         if subset_b is None:
             subset_b = subset_a
+        self.generating_subset_a = set(subset_a)
+        self.generating_subset_b = set(subset_b)
+        self.bipartite = bipartite
 
         # assert that the generating subsets are symmetric
         for subset, name in [(subset_a, "subset_a"), (subset_b, "subset_b")]:
@@ -292,7 +299,6 @@ class CayleyComplex:
         self.group = group
         self.subset_a = subset_a
         self.subset_b = subset_b
-        self.bipartite = bipartite
 
         # save geometric data
         self.faces = set()

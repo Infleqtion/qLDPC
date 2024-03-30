@@ -2014,7 +2014,7 @@ class QTCode(CSSCode):
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        recycle_subset: bool = False,
+        one_subset: bool = False,
         seed: int | None = None,
     ) -> QTCode:
         """Construct a random quantum Tanner code from a base group and seed code(s).
@@ -2024,10 +2024,7 @@ class QTCode(CSSCode):
         code_a = ClassicalCode(code_a, field)
         code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
         subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
-        if recycle_subset:
-            subset_b = subset_a
-        else:
-            subset_b = group.random_symmetric_subset(code_b.num_bits)
+        subset_b = group.random_symmetric_subset(code_b.num_bits) if not one_subset else subset_a
         return QTCode(subset_a, subset_b, code_a, code_b)
 
 

@@ -434,17 +434,17 @@ def test_tanner_code() -> None:
 
 def test_quantum_tanner() -> None:
     """Quantum Tanner code."""
-    # build the subgraphs of a quantum Tanner code
+    # random quantum Tanner code
     group = abstract.CyclicGroup(12)
-    subset_a = group.random_symmetric_subset(4)
-    cayplex = objects.CayleyComplex(subset_a)
-    subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(cayplex)
+    subcode = codes.RepetitionCode(4, field=3)
+    code = codes.QTCode.random(group, subcode)
 
     # assert that subgraphs have the right number of nodes, edges, and node degrees
-    size_g = cayplex.group.order
-    size_a = len(cayplex.subset_a)
-    size_b = len(cayplex.subset_b)
-    num_faces = len(cayplex.faces)
+    subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(code.complex)
+    size_g = code.complex.group.order
+    size_a = len(code.complex.subset_a)
+    size_b = len(code.complex.subset_b)
+    num_faces = len(code.complex.faces)
     for graph in [subgraph_x, subgraph_z]:
         assert graph.number_of_nodes() == num_faces + size_g / 2
         assert graph.number_of_edges() == num_faces * 2
@@ -452,6 +452,7 @@ def test_quantum_tanner() -> None:
         assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
 
     # raise error if the generating data is underspecified
+    subset_a = code.complex.generating_subset_a
     subset_b = group.random_symmetric_subset(len(subset_a) - 1)
     subcode_a = codes.RepetitionCode(len(subset_a), field=2)
     with pytest.raises(ValueError, match="Underspecified generating data"):
