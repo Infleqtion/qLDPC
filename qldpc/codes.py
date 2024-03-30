@@ -2361,7 +2361,7 @@ class GeneralizedSurfaceCode(CSSCode):
 
 
 class FiveQubitCode(QuditCode):
-    """Smallest quantum code."""
+    """Smallest quantum error-correcting code."""
 
     def __init__(self) -> None:
         code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
@@ -2369,7 +2369,7 @@ class FiveQubitCode(QuditCode):
 
 
 class SteaneCode(CSSCode):
-    """Smallest quantum CSS code."""
+    """Smallest quantum error-correcting CSS code."""
 
     def __init__(self) -> None:
         code = HammingCode(3)
