@@ -409,10 +409,9 @@ class ClassicalCode(AbstractCode):
         # repeat until success, rejecting matrices with a zero row or column
         while True:
             matrix = code_field.Random((checks, bits), seed=seed)
+            seed = seed + 1 if seed is not None else None
             if not has_zero_row_or_column(matrix):
                 break
-            if seed is not None:
-                seed += 1
 
         return ClassicalCode(matrix)
 
