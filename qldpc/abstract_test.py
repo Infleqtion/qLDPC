@@ -141,7 +141,7 @@ def test_transpose() -> None:
         assert element.T.T == element
 
     x0, x1, x2, x3 = group.generate()
-    matrix = [[x0, 0, x1], [x2, 0, x3]]
+    matrix = [[x0, 0, x1], [x2, 0, abstract.Element(group, x3)]]
     protograph = abstract.Protograph.build(group, matrix)
     assert np.array_equal(protograph.T.T, protograph)
 

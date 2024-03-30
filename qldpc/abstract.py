@@ -608,13 +608,25 @@ class Protograph(npt.NDArray[np.object_]):
     ) -> Protograph:
         """Construct a protograph.
 
-        The constructed protograph is built from (i) a group, and (ii) an array populated by group
-        members or zero/"falsy" entries.  The protograph is obtained by elevating the group memebers
-        to elements of the group algebra (over the prime number field).  Zero/"falsy" entries of the
-        matrix are interpreted as zeros of the group algebra.
+        The constructed protograph is built from:
+        - a group, and
+        - an array populated by
+            (a) elements of the group algebra,
+            (b) group members, or
+            (c) integers.
+        Integers and group members are "elevated" to elements of the group algebra.
         """
         array = np.asarray(data)
-        vals = [Element(group, member) if member else Element(group) for member in array.ravel()]
+
+        def elevate(value: Element | GroupMember | int) -> Element:
+            """Elevate a value to an element of a group algebra."""
+            if isinstance(value, Element):
+                return value
+            if isinstance(value, GroupMember):
+                return Element(group, value)
+            return value * Element(group, group.identity)
+
+        vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape), group)
 
 
