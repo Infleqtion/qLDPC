@@ -203,12 +203,12 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
     code_a = get_random_qudit_code(bits, checks, field)
     stabilizers = code_a.get_stabilizers()
-    code_b = codes.QuditCode.from_stabilizers(stabilizers, field)
+    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field)
     assert np.array_equal(code_a.matrix, code_b.matrix)
     assert stabilizers == code_b.get_stabilizers()
 
     with pytest.raises(ValueError, match="different lengths"):
-        codes.QuditCode.from_stabilizers(["I", "I I"], field)
+        codes.QuditCode.from_stabilizers("I", "I I", field=field)
 
 
 def test_quantum_distance(field: int = 2) -> None:

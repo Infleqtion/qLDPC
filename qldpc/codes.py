@@ -21,7 +21,7 @@ import abc
 import functools
 import itertools
 import random
-from collections.abc import Callable, Collection, Iterable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from typing import Literal
 
 import galois
@@ -266,7 +266,7 @@ class ClassicalCode(AbstractCode):
         bound: int | bool | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
-    ) -> int:
+    ) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial code word.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
@@ -280,11 +280,14 @@ class ClassicalCode(AbstractCode):
 
     def get_distance_exact(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
-    ) -> int:
+    ) -> int | float:
         """Compute the minimal weight of a nontrivial code word by brute force.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
+        if self.dimension == 0:
+            return np.inf
+
         if vector is not None:
             words = self.words() - self.field(vector)[np.newaxis, :]
             return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
@@ -368,7 +371,7 @@ class ClassicalCode(AbstractCode):
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
-    ) -> tuple[int, int, int, int]:
+    ) -> tuple[int, int, int | float, int]:
         """Compute the parameters of this code: [n,k,d,w].
 
         Here:
@@ -582,6 +585,7 @@ class ReedMullerCode(ClassicalCode):
 #   - see https://quantumcomputing.stackexchange.com/questions/15432/
 #   - also compute and store sub-codes, if CSS
 #   - also add QuditCode.to_CSS() -> CSSCode
+# - implement standard methods like get_distance, etc.
 class QuditCode(AbstractCode):
     """Quantum stabilizer code for Galois qudits, with dimension q = p^m for prime p and integer m.
 
@@ -686,7 +690,7 @@ class QuditCode(AbstractCode):
         return stabilizers
 
     @classmethod
-    def from_stabilizers(cls, stabilizers: Iterable[str], field: int | None = None) -> QuditCode:
+    def from_stabilizers(cls, *stabilizers: str, field: int | None = None) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
         check_ops = [stabilizer.split() for stabilizer in stabilizers]
@@ -753,28 +757,30 @@ class CSSCode(QuditCode):
         conjugate: slice | Sequence[int] | None = (),
         skip_validation: bool = False,
     ) -> None:
-        """Construct a CSS code from X-type and Z-type parity checks.
+        """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
 
         Allow specifying local Fourier transformations on the qudits specified by `conjugate`.
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
+
         if field is None and self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field = self.code_x.field
 
-        if not skip_validation and not self.is_valid:
-            raise ValueError("The sub-codes provided for this CSSCode are incompatible")
+        if not skip_validation:
+            self._validate_subcodes()
 
         self._conjugated_qubits = conjugate or ()
         self._codes_equal = self.code_x == self.code_z
 
-    @functools.cached_property
-    def is_valid(self) -> bool:
+    def _validate_subcodes(self) -> None:
         """Is this a valid CSS code?"""
-        return self.code_x.num_bits == self.code_z.num_bits and not np.any(
-            self.matrix_x @ self.matrix_z.T
-        )
+        if not (
+            self.code_x.num_bits == self.code_z.num_bits
+            and not np.any(self.matrix_x @ self.matrix_z.T)
+        ):
+            raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
     @functools.cached_property
     def matrix(self) -> galois.FieldArray:
@@ -829,7 +835,7 @@ class CSSCode(QuditCode):
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
-    ) -> tuple[int, int, int, int]:
+    ) -> tuple[int, int, int | float, int]:
         """Compute the parameters of this code: [[n,k,d,w]].
 
         Here:
@@ -850,7 +856,7 @@ class CSSCode(QuditCode):
         bound: int | bool | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
-    ) -> int:
+    ) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial logical operator.
 
         If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
@@ -869,13 +875,16 @@ class CSSCode(QuditCode):
 
     def get_distance_exact(
         self, pauli: PauliXZ | None, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
-    ) -> int:
+    ) -> int | float:
         """Compute the minimal weight of a nontrivial code word by brute force.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
         (possibly trivial) X-type or Z-type logical operator, as applicable.
         """
         assert pauli is None or pauli in PAULIS_XZ
+        if self.dimension == 0:
+            return np.inf
+
         if pauli is None:
             return min(
                 self.get_distance_exact(Pauli.X, vector=vector),
@@ -2048,6 +2057,22 @@ class QTCode(CSSCode):
 
 ################################################################################
 # common quantum codes
+
+
+class FiveQubitCode(QuditCode):
+    """Smallest quantum code."""
+
+    def __init__(self) -> None:
+        code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
+        QuditCode.__init__(self, code)
+
+
+class SteaneCode(CSSCode):
+    """Smallest quantum CSS code."""
+
+    def __init__(self) -> None:
+        code = HammingCode(3)
+        CSSCode.__init__(self, code, code)
 
 
 class SurfaceCode(CSSCode):
