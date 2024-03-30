@@ -47,11 +47,27 @@ from qldpc.objects import (
 DEFAULT_FIELD_ORDER = 2
 
 
-def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
+def get_scrambled_seed(seed: int | None) -> int | None:
+    """Scrample a seed, allowing us to "safely" increment seeds without collisions."""
+    state = np.random.get_state()
+    np.random.seed(seed)
+    new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
+    np.random.set_state(state)
+    return new_seed
+
+
+def get_random_array(
+    field: type[galois.FieldArray],
+    shape: int | tuple[int, ...],
+    *,
+    seed: int | None = None,
+    nonzero: bool = False,
+) -> galois.FieldArray:
     """Get a random nontrivial vector of a given size."""
-    while not (vec := field.Random(size)).any():
+    seed = get_scrambled_seed(seed) if seed is not None else None
+    while not (array := field.Random(shape, seed=seed)).any() and nonzero:
         pass  # pragma: no cover
-    return vec
+    return array
 
 
 ################################################################################
@@ -226,9 +242,10 @@ class ClassicalCode(AbstractCode):
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
         return self.field(list(vectors)) @ self.generator
 
-    def get_random_word(self) -> galois.FieldArray:
+    def get_random_word(self, *, seed: int | None = None) -> galois.FieldArray:
         """Random code word: a sum all generators with random field coefficients."""
-        return self.field.Random(self.generator.shape[0]) @ self.generator
+        num_generators = self.generator.shape[0]
+        return get_random_array(self.field, num_generators, seed=seed) @ self.generator
 
     def dual(self) -> ClassicalCode:
         """Dual to this code.
@@ -378,7 +395,7 @@ class ClassicalCode(AbstractCode):
         valid_candidate_found = False
         while not valid_candidate_found:
             # construct the effective check matrix
-            random_word = get_random_nontrivial_vec(self.field, self.num_bits)
+            random_word = get_random_array(self.field, self.num_bits, nonzero=True)
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             # find a low-weight candidate code word
@@ -429,14 +446,9 @@ class ClassicalCode(AbstractCode):
             """Does the given matrix have a row or column that is all zeroes?"""
             return any(not row.any() for row in matrix) or any(not col.any() for col in matrix.T)
 
-        if seed is not None:
-            # generate a random seed that we can "safely" increment to get another "random" seed
-            np.random.seed(seed)
-            seed = np.random.randint(np.iinfo(np.int64).max + 1)
-
         # repeat until success, rejecting matrices with a zero row or column
         while True:
-            matrix = code_field.Random((checks, bits), seed=seed)
+            matrix = get_random_array(code_field, (checks, bits), seed=seed)
             seed = seed + 1 if seed is not None else None
             if not has_zero_row_or_column(matrix):
                 break
