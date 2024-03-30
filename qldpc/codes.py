@@ -1238,6 +1238,7 @@ class GBCode(CSSCode):
 QuasiCyclicPlaquetteMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
 
 
+# TODO: example notebook featuring this code
 class QCCode(GBCode):
     """Quasi-cyclic (QC) codes from arXiv:2308.07915.
 
@@ -1899,6 +1900,7 @@ class TannerCode(ClassicalCode):
 # TODO: investigate construction in
 # https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
 # see also Section 7 of https://arxiv.org/abs/2206.07571
+# TODO: example notebook featuring this code
 class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex.
 
