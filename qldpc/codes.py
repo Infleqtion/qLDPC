@@ -48,7 +48,7 @@ DEFAULT_FIELD_ORDER = 2
 
 
 def get_scrambled_seed(seed: int | None) -> int | None:
-    """Scrample a seed, allowing us to "safely" increment seeds without collisions."""
+    """Scrample a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
     state = np.random.get_state()
     np.random.seed(seed)
     new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
