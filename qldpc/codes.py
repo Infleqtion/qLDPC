@@ -96,6 +96,14 @@ class AbstractCode(abc.ABC):
         return self._field
 
     @property
+    def field_name(self) -> str:
+        """The name of the base field of this code."""
+        characteristic = self.field.characteristic
+        degree = self.field.degree
+        order = str(characteristic) + (f"^{degree}" if degree > 1 else "")
+        return f"GF({order})"
+
+    @property
     def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
         return self._matrix
@@ -115,10 +123,9 @@ class AbstractCode(abc.ABC):
     def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
 
+    @abc.abstractmethod
     def __str__(self) -> str:
         """Human-readable representation of this code."""
-        name = type(self).__name__
-        return f"{name} over F_{self.field.order} with parity check matrix\n{self.matrix}"
 
 
 ################################################################################
@@ -140,6 +147,17 @@ class ClassicalCode(AbstractCode):
 
     _matrix: galois.FieldArray
     _exact_distance: int | None = None
+
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        name = type(self).__name__
+        text = ""
+        if self.field.order == 2:
+            text += f"{name} on {self.num_bits} bits"
+        else:
+            text += f"{name} on {self.num_bits} symbols over {self.field_name}"
+        text += f", with parity check matrix\n{self.matrix}"
+        return text
 
     def __contains__(
         self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]] | ClassicalCode
@@ -609,6 +627,17 @@ class QuditCode(AbstractCode):
     _exact_distance_x: int | None = None
     _exact_distance_z: int | None = None
 
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        name = type(self).__name__
+        text = ""
+        if self.field.order == 2:
+            text += f"{name} on {self.num_qubits} qubits"
+        else:
+            text += f"{name} on {self.num_qudits} qudits over {self.field_name}"
+        text += f", with parity check matrix\n{self.matrix}"
+        return text
+
     @property
     def num_checks(self) -> int:
         """Number of parity checks (stabilizers) in this code."""
@@ -784,13 +813,16 @@ class CSSCode(QuditCode):
     def __str__(self) -> str:
         """Human-readable representation of this code."""
         name = type(self).__name__
-        text = (
-            f"{name} over F_{self.field.order} with...\n"
-            + f"X-type parity checks\n{self.code_x.matrix}\n"
-            + f"Z-type parity checks\n{self.code_z.matrix}"
-        )
+        text = ""
+        if self.field.order == 2:
+            text += f"{name} on {self.num_qubits} qubits"
+        else:
+            text += f"{name} on {self.num_qudits} qudits over {self.field_name}"
+        text += f"\nX-type parity checks:\n{self.matrix_x}"
+        text += f"\nZ-type parity checks:\n{self.matrix_z}"
         if self.conjugated_qubits:
-            text += f"\nqudits conjugated at\n{self.conjugated_qubits}"
+            qudits = "qubits" if self.field.order == 2 else "qudits"
+            text += f"\n{qudits} conjugated at:\n{self.conjugated_qubits}"
         return text
 
     @functools.cached_property
