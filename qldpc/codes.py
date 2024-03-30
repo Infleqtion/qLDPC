@@ -559,14 +559,6 @@ class ReedMullerCode(ClassicalCode):
             )
 
 
-class CordaroWagnerCode(ClassicalCode):
-    """Cordaro Wagner code from GAP."""
-
-    def __init__(self, order: int) -> None:
-        name = f"CordaroWagnerCode({order})"
-        ClassicalCode.__init__(self, ClassicalCode.from_name(name))
-
-
 ################################################################################
 # quantum codes
 
