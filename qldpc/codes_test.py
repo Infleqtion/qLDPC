@@ -437,8 +437,7 @@ def test_quantum_tanner() -> None:
     # build the subgraphs of a quantum Tanner code
     group = abstract.CyclicGroup(12)
     subset_a = group.random_symmetric_subset(4)
-    subset_b = group.random_symmetric_subset(4)
-    cayplex = objects.CayleyComplex(subset_a, subset_b)
+    cayplex = objects.CayleyComplex(subset_a)
     subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(cayplex)
 
     # assert that subgraphs have the right number of nodes, edges, and node degrees
@@ -452,8 +451,13 @@ def test_quantum_tanner() -> None:
         sources = [node for node in graph.nodes if graph.in_degree(node) == 0]
         assert {graph.out_degree(node) for node in sources} == {size_a * size_b}
 
-    # raise error if constructing QTCode with codes over different fields
-    subcode_a = codes.RepetitionCode(2, field=2)
+    # raise error if the generating data is underspecified
+    subset_b = group.random_symmetric_subset(len(subset_a) - 1)
+    subcode_a = codes.RepetitionCode(len(subset_a), field=2)
+    with pytest.raises(ValueError, match="Underspecified generating data"):
+        codes.QTCode(subset_a, subset_b, subcode_a)
+
+    # raise error if seed codes are over different fields
     subcode_b = codes.RepetitionCode(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
         codes.QTCode([], [], subcode_a, subcode_b)

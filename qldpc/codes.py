@@ -1954,7 +1954,7 @@ class QTCode(CSSCode):
             code_b = ~code_a
         else:
             raise ValueError(
-                "Cannot instantiate a quantum Tanner code: "
+                "Underspecified generating data for quantum Tanner code:\n"
                 "no seed code provided for one of the generating subsets"
             )
 
