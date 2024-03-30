@@ -63,7 +63,10 @@ def get_random_array(
     cond: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
     seed: int | None = None,
 ) -> galois.FieldArray:
-    """Get a random vector of a given size."""
+    """Get a random array of a given shape.
+
+    If passed a condition ("cond"), re-sample until the array satisfied that condition.
+    """
     seed = get_scrambled_seed(seed) if seed is not None else None
     while not cond(array := field.Random(shape, seed=seed)):
         seed = seed + 1 if seed is not None else None  # pragma: no cover
