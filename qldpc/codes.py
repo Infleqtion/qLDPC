@@ -47,11 +47,30 @@ from qldpc.objects import (
 DEFAULT_FIELD_ORDER = 2
 
 
-def get_random_nontrivial_vec(field: type[galois.FieldArray], size: int) -> galois.FieldArray:
-    """Get a random nontrivial vector of a given size."""
-    while not (vec := field.Random(size)).any():
-        pass  # pragma: no cover
-    return vec
+def get_scrambled_seed(seed: int) -> int:
+    """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
+    state = np.random.get_state()
+    np.random.seed(seed)
+    new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
+    np.random.set_state(state)
+    return new_seed
+
+
+def get_random_array(
+    field: type[galois.FieldArray],
+    shape: int | tuple[int, ...],
+    *,
+    satisfy: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
+    seed: int | None = None,
+) -> galois.FieldArray:
+    """Get a random array over a given finite field with a given shape.
+
+    If passed a condition that the array must satisfy, re-sample until the condition is met.
+    """
+    seed = get_scrambled_seed(seed) if seed is not None else None
+    while not satisfy(array := field.Random(shape, seed=seed)):
+        seed = seed + 1 if seed is not None else None  # pragma: no cover
+    return array
 
 
 ################################################################################
@@ -226,9 +245,10 @@ class ClassicalCode(AbstractCode):
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
         return self.field(list(vectors)) @ self.generator
 
-    def get_random_word(self) -> galois.FieldArray:
-        """Random code word: a sum all generators with random field coefficients."""
-        return self.field.Random(self.generator.shape[0]) @ self.generator
+    def get_random_word(self, *, seed: int | None = None) -> galois.FieldArray:
+        """Random code word: a sum of all generating words with random field coefficients."""
+        num_words = self.generator.shape[0]
+        return get_random_array(self.field, num_words, seed=seed) @ self.generator
 
     def dual(self) -> ClassicalCode:
         """Dual to this code.
@@ -377,8 +397,8 @@ class ClassicalCode(AbstractCode):
 
         valid_candidate_found = False
         while not valid_candidate_found:
-            # construct the effective check matrix
-            random_word = get_random_nontrivial_vec(self.field, self.num_bits)
+            # construct an effective check matrix with a random nonzero word
+            random_word = get_random_array(self.field, self.num_bits, satisfy=lambda vec: vec.any())
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             # find a low-weight candidate code word
@@ -425,22 +445,11 @@ class ClassicalCode(AbstractCode):
         """
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
-        def has_zero_row_or_column(matrix: galois.FieldArray) -> bool:
-            """Does the given matrix have a row or column that is all zeroes?"""
-            return any(not row.any() for row in matrix) or any(not col.any() for col in matrix.T)
+        def nontrivial(matrix: galois.FieldArray) -> bool:
+            """Return True iff all rows and columns are nonzero."""
+            return all(row.any() for row in matrix) and all(col.any() for col in matrix.T)
 
-        if seed is not None:
-            # generate a random seed that we can "safely" increment to get another "random" seed
-            np.random.seed(seed)
-            seed = np.random.randint(np.iinfo(np.int64).max + 1)
-
-        # repeat until success, rejecting matrices with a zero row or column
-        while True:
-            matrix = code_field.Random((checks, bits), seed=seed)
-            seed = seed + 1 if seed is not None else None
-            if not has_zero_row_or_column(matrix):
-                break
-
+        matrix = get_random_array(code_field, (checks, bits), satisfy=nontrivial, seed=seed)
         return ClassicalCode(matrix)
 
     @classmethod
@@ -1171,7 +1180,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: PauliXZ, *, ensure_nontrivial: bool = False
+        self, pauli: PauliXZ, *, ensure_nontrivial: bool = False, seed: int | None = None
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
@@ -1181,15 +1190,18 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if not ensure_nontrivial:
-            return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word()
+            return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word(seed=seed)
 
         # generate random logical ops until we find ones with a nontrivial commutation relation
         noncommuting_ops_found = False
         while not noncommuting_ops_found:
-            op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False)
+            op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False, seed=seed)
             op_b = self.get_random_logical_op(
-                ~pauli, ensure_nontrivial=False  # type:ignore[arg-type]
+                ~pauli,  # type:ignore[arg-type]
+                ensure_nontrivial=False,
+                seed=seed + 1 if seed is not None else None,
             )
+            seed = seed + 2 if seed is not None else None
             noncommuting_ops_found = bool(np.any(op_a @ op_b))
 
         return op_a
