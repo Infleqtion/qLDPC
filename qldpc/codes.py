@@ -432,7 +432,7 @@ class ClassicalCode(AbstractCode):
         if seed is not None:
             # generate a random seed that we can "safely" increment to get another "random" seed
             np.random.seed(seed)
-            seed = np.random.randint(np.iinfo(np.int64).min, np.iinfo(np.int64).max + 1)
+            seed = np.random.randint(np.iinfo(np.int64).max + 1)
 
         # repeat until success, rejecting matrices with a zero row or column
         while True:
