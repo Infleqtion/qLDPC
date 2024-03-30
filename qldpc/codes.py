@@ -47,7 +47,7 @@ from qldpc.objects import (
 DEFAULT_FIELD_ORDER = 2
 
 
-def get_scrambled_seed(seed: int | None) -> int | None:
+def get_scrambled_seed(seed: int) -> int:
     """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
     state = np.random.get_state()
     np.random.seed(seed)
@@ -1183,7 +1183,7 @@ class CSSCode(QuditCode):
         return self._logical_ops
 
     def get_random_logical_op(
-        self, pauli: PauliXZ, *, seed: int | None = None, ensure_nontrivial: bool = False
+        self, pauli: PauliXZ, *, ensure_nontrivial: bool = False, seed: int | None = None
     ) -> galois.FieldArray:
         """Return a random logical operator of a given type.
 
@@ -1198,11 +1198,11 @@ class CSSCode(QuditCode):
         # generate random logical ops until we find ones with a nontrivial commutation relation
         noncommuting_ops_found = False
         while not noncommuting_ops_found:
-            op_a = self.get_random_logical_op(pauli, seed=seed, ensure_nontrivial=False)
+            op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False, seed=seed)
             op_b = self.get_random_logical_op(
                 ~pauli,  # type:ignore[arg-type]
-                seed=seed + 1 if seed is not None else None,
                 ensure_nontrivial=False,
+                seed=seed + 1 if seed is not None else None,
             )
             seed = seed + 2 if seed is not None else None
             noncommuting_ops_found = bool(np.any(op_a @ op_b))
