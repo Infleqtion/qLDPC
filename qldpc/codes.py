@@ -2164,7 +2164,7 @@ class QTCode(CSSCode):
         bipartite = ast.literal_eval(lines[-2].split(":")[-1])
         conjugate = ast.literal_eval(lines[-1].split(":")[-1])
 
-        # load arrays
+        # load integer arrays separated by comments
         arrays = []
         last_index = 0
         for index, line in enumerate(lines):
