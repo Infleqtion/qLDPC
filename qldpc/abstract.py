@@ -866,7 +866,9 @@ class SpecialLinearGroup(Group):
 class ProjectiveSpecialLinearGroup(Group):
     """Projective variant of the special linear group (PSL)."""
 
-    # TODO: support linear representation, similarly to SL
+    # TODO: support linear representation, similarly to SL.
+    # This should straightforward to implement (with a similar construction to that in SL) if we
+    # find a representation of generating matrices of dimension > 2.
 
     _dimension: int
 
