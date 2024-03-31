@@ -496,11 +496,10 @@ def test_quantum_tanner() -> None:
     with pytest.raises(ValueError, match="different fields"):
         codes.QTCode([], [], subcode_a, subcode_b)
 
-    header = "__TEST_HEADER__"
     contents = io.StringIO()
     with unittest.mock.patch("builtins.open", return_value=contents):
         with unittest.mock.patch.object(contents, "close", lambda: None):
-            code.save("path.txt", header)
+            code.save("path.txt", "header")
         with unittest.mock.patch.object(contents, "read", lambda: contents.getvalue()):
             code_copy = codes.QTCode.load("path.txt")
     assert code.code_a == code_copy.code_a
