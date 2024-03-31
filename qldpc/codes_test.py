@@ -496,6 +496,7 @@ def test_quantum_tanner() -> None:
     with pytest.raises(ValueError, match="different fields"):
         codes.QTCode([], [], subcode_a, subcode_b)
 
+    # write to a file, and read from that file
     contents = io.StringIO()
     with unittest.mock.patch("builtins.open", return_value=contents):
         with unittest.mock.patch.object(contents, "close", lambda: None):
