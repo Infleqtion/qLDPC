@@ -18,6 +18,7 @@
 from __future__ import annotations
 
 import abc
+import ast
 import functools
 import itertools
 import random
@@ -2047,6 +2048,8 @@ class QTCode(CSSCode):
         if field is None and code_a.field is not code_b.field:
             raise ValueError("The sub-codes provided for this QTCode are over different fields")
 
+        self.code_a = code_a
+        self.code_b = code_b
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
@@ -2129,6 +2132,53 @@ class QTCode(CSSCode):
         code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
         subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
         subset_b = group.random_symmetric_subset(code_b.num_bits) if not one_subset else subset_a
+        return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
+
+    def save(self, path: str, *headers: str) -> None:
+        """Save the generating data of this code to a file."""
+        subset_a = np.array([gen.array_form for gen in self.complex.subset_a])
+        subset_b = np.array([gen.array_form for gen in self.complex.subset_b])
+        with open(path, "w") as file:
+            for header in headers:
+                file.write(f"# {header}\n")
+            file.write("# subset_a:\n")
+            np.savetxt(file, subset_a, fmt="%d")
+            file.write("# subset_b:\n")
+            np.savetxt(file, subset_b, fmt="%d")
+            file.write("# code_a.matrix:\n")
+            np.savetxt(file, self.code_a.matrix, fmt="%d")
+            file.write("# code_b.matrix:\n")
+            np.savetxt(file, self.code_b.matrix, fmt="%d")
+            file.write(f"# base field: {self.field.order}\n")
+            file.write(f"# bipartite: {self.complex.bipartite}\n")
+            file.write(f"# conjugate: {self.conjugated_qubits}\n")
+
+    @classmethod
+    def load(cls, path: str) -> QTCode:
+        """Load a QTCode from a file."""
+        with open(path, "r") as file:
+            lines = file.read().splitlines()
+
+        # load miscellaneous data
+        field = ast.literal_eval(lines[-3].split(":")[-1])
+        bipartite = ast.literal_eval(lines[-2].split(":")[-1])
+        conjugate = ast.literal_eval(lines[-1].split(":")[-1])
+
+        # load integer arrays separated by comments
+        arrays = []
+        last_index = 0
+        for index, line in enumerate(lines):
+            if line.startswith("#"):
+                if index > last_index + 1:
+                    array = np.genfromtxt(lines[last_index + 1 : index], dtype=int, ndmin=2)
+                    arrays.append(array)
+                last_index = index
+
+        # construct subsets and generating codes
+        subset_a = set(abstract.GroupMember(gen) for gen in arrays[0])
+        subset_b = set(abstract.GroupMember(gen) for gen in arrays[1])
+        code_a = ClassicalCode(arrays[2], field)
+        code_b = ClassicalCode(arrays[3], field)
         return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
 
 
