@@ -52,16 +52,16 @@ def test_get_group_url() -> None:
     # cannot find group in the index
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace(f"{ORDER},{INDEX}", ""))
     with (
-        pytest.raises(ValueError, match="Group .* not found"),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
+        pytest.raises(ValueError, match="Group .* not found"),
     ):
         named_groups.get_group_url(ORDER, INDEX)
 
     # cannot find link to group webpage
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace("href", ""))
     with (
-        pytest.raises(ValueError, match="Webpage .* not found"),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
+        pytest.raises(ValueError, match="Webpage .* not found"),
     ):
         named_groups.get_group_url(ORDER, INDEX)
 
@@ -84,9 +84,9 @@ def test_get_generators_from_groupnames() -> None:
     # cannot find generators
     mock_page = get_mock_page(MOCK_GROUP_HTML.replace("pre", ""))
     with (
-        pytest.raises(ValueError, match="Generators .* not found"),
         unittest.mock.patch("qldpc.named_groups.get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
+        pytest.raises(ValueError, match="Generators .* not found"),
     ):
         named_groups.get_generators_from_groupnames(GROUP)
 
@@ -129,18 +129,18 @@ def test_get_generators_with_gap() -> None:
     # cannot extract cycle from string
     mock_process = get_mock_process("\n(1, 2a)\n")
     with (
-        pytest.raises(ValueError, match="Cannot extract cycle"),
         unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=True),
         unittest.mock.patch("qldpc.named_groups.get_gap_result", return_value=mock_process),
+        pytest.raises(ValueError, match="Cannot extract cycle"),
     ):
         assert named_groups.get_generators_with_gap(GROUP) is None
 
     # group not recognized by GAP
     mock_process = get_mock_process("")
     with (
-        pytest.raises(ValueError, match="not recognized by GAP"),
         unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=True),
         unittest.mock.patch("qldpc.named_groups.get_gap_result", return_value=mock_process),
+        pytest.raises(ValueError, match="not recognized by GAP"),
     ):
         assert named_groups.get_generators_with_gap(GROUP) is None
 
@@ -208,9 +208,9 @@ def test_get_small_group_number() -> None:
 
     # fail to determine group number
     with (
-        pytest.raises(ValueError, match="Cannot determine"),
         unittest.mock.patch("qldpc.named_groups.maybe_get_webpage", return_value=None),
         unittest.mock.patch("qldpc.named_groups.gap_is_installed", return_value=False),
+        pytest.raises(ValueError, match="Cannot determine"),
     ):
         named_groups.get_small_group_number(order)
 

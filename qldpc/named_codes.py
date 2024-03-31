@@ -56,4 +56,7 @@ def get_code(code: str) -> tuple[list[list[int]], int | None]:
         else:
             checks.append(ast.literal_eval(line))
 
+    if not checks:
+        raise ValueError(f"Code exists, but has no parity checks: {code}")
+
     return checks, field
