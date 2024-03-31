@@ -607,5 +607,8 @@ def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
 
 def test_small_codes() -> None:
     """Five-qubit and Steane codes."""
-    assert codes.FiveQubitCode().num_qubits == 5
     assert codes.SteaneCode().num_qubits == 7
+
+    code = codes.FiveQubitCode(conjugate=[1, 2])
+    assert code.num_qubits == 5
+    assert code.get_stabilizers()[0] == "X X X X I"

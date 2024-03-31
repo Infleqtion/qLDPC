@@ -642,6 +642,18 @@ class QuditCode(AbstractCode):
     _exact_distance_x: int | None = None
     _exact_distance_z: int | None = None
 
+    def __init__(
+        self,
+        matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        field: int | None = None,
+        *,
+        conjugate: slice | Sequence[int] | None = (),
+    ) -> None:
+        """Construct a qudit code from a parity check matrix over a finite field."""
+        AbstractCode.__init__(self, matrix, field)
+        if conjugate:
+            self._matrix = self.field(QuditCode.conjugate(self._matrix, conjugate))
+
     def __str__(self) -> str:
         """Human-readable representation of this code."""
         name = type(self).__name__
@@ -2375,9 +2387,9 @@ class GeneralizedSurfaceCode(CSSCode):
 class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
         code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
-        QuditCode.__init__(self, code)
+        QuditCode.__init__(self, code, conjugate=conjugate)
 
 
 class SteaneCode(CSSCode):
