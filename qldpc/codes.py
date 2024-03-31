@@ -2094,7 +2094,7 @@ class QTCode(CSSCode):
 
         # build subgraphs with edges oriented from corners to faces
         for gg in nodes_x:
-            # identify the "A-type" and "B-type" neighbors of this corner
+            # identify neighbors of this node across "A-type" and "B-type" edges of the complex
             neighbors_a = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "A"]
             neighbors_b = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "B"]
 
