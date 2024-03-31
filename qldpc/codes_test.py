@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import io
 import itertools
 import unittest.mock
 
@@ -494,6 +495,20 @@ def test_quantum_tanner() -> None:
     subcode_b = codes.RepetitionCode(2, field=3)
     with pytest.raises(ValueError, match="different fields"):
         codes.QTCode([], [], subcode_a, subcode_b)
+
+    header = "__TEST_HEADER__"
+    contents = io.StringIO()
+    with unittest.mock.patch("builtins.open", return_value=contents):
+        with unittest.mock.patch.object(contents, "close", lambda: None):
+            code.save("path.txt", header)
+        with unittest.mock.patch.object(contents, "read", lambda: contents.getvalue()):
+            code_copy = codes.QTCode.load("path.txt")
+    assert code.code_a == code_copy.code_a
+    assert code.code_b == code_copy.code_b
+    assert code.complex.subset_a == code_copy.complex.subset_a
+    assert code.complex.subset_b == code_copy.complex.subset_b
+    assert code.complex.bipartite == code_copy.complex.bipartite
+    assert code.conjugated_qubits == code_copy.conjugated_qubits
 
 
 def test_toric_tanner_code(size: int = 4) -> None:

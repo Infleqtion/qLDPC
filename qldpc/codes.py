@@ -2170,7 +2170,7 @@ class QTCode(CSSCode):
         for index, line in enumerate(lines):
             if line.startswith("#"):
                 if index > last_index + 1:
-                    array = np.genfromtxt(lines[last_index + 1 : index], dtype=int)
+                    array = np.genfromtxt(lines[last_index + 1 : index], dtype=int, ndmin=2)
                     arrays.append(array)
                 last_index = index
 
