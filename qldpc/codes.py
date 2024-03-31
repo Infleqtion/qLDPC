@@ -111,6 +111,11 @@ class AbstractCode(abc.ABC):
             )
 
     @property
+    def name(self) -> str:
+        """The name of this code."""
+        return getattr(self, "_name", type(self).__name__)
+
+    @property
     def field(self) -> type[galois.FieldArray]:
         """Base field over which this code is defined."""
         return self._field
@@ -170,12 +175,11 @@ class ClassicalCode(AbstractCode):
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
-        name = type(self).__name__
         text = ""
         if self.field.order == 2:
-            text += f"{name} on {self.num_bits} bits"
+            text += f"{self.name} on {self.num_bits} bits"
         else:
-            text += f"{name} on {self.num_bits} symbols over {self.field_name}"
+            text += f"{self.name} on {self.num_bits} symbols over {self.field_name}"
         text += f", with parity check matrix\n{self.matrix}"
         return text
 
@@ -465,7 +469,9 @@ class ClassicalCode(AbstractCode):
         """Named code in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
         matrix, field = named_codes.get_code(standardized_name)
-        return ClassicalCode(matrix, field)
+        code = ClassicalCode(matrix, field)
+        setattr(code, "_name", name)
+        return code
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
@@ -657,12 +663,11 @@ class QuditCode(AbstractCode):
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
-        name = type(self).__name__
         text = ""
         if self.field.order == 2:
-            text += f"{name} on {self.num_qubits} qubits"
+            text += f"{self.name} on {self.num_qubits} qubits"
         else:
-            text += f"{name} on {self.num_qudits} qudits over {self.field_name}"
+            text += f"{self.name} on {self.num_qudits} qudits over {self.field_name}"
         text += f", with parity check matrix\n{self.matrix}"
         return text
 
@@ -842,12 +847,11 @@ class CSSCode(QuditCode):
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
-        name = type(self).__name__
         text = ""
         if self.field.order == 2:
-            text += f"{name} on {self.num_qubits} qubits"
+            text += f"{self.name} on {self.num_qubits} qubits"
         else:
-            text += f"{name} on {self.num_qudits} qudits over {self.field_name}"
+            text += f"{self.name} on {self.num_qudits} qudits over {self.field_name}"
         text += f"\nX-type parity checks:\n{self.matrix_x}"
         text += f"\nZ-type parity checks:\n{self.matrix_z}"
         if self.conjugated_qubits:
