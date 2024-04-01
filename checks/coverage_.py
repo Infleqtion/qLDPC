@@ -4,14 +4,14 @@ import sys
 import checks_superstaq
 
 
-def run_modular() -> int:
+def run_modular(
+    exclude: str | tuple[str] = ("checks/*.py", "experiments/*.py", "*/__init__.py", "*_test.py")
+) -> int:
     """Check that each file is covered by its own data file."""
 
     # start by identifying files that should be covered
     tracked_files = checks_superstaq.check_utils.get_tracked_files("*.py")
-    coverage_files = checks_superstaq.check_utils.exclude_files(
-        tracked_files, ["checks/*.py", "*__init__.py", "*_test.py"]
-    )
+    coverage_files = checks_superstaq.check_utils.exclude_files(tracked_files, exclude)
 
     # run checks on individual files
     exit_codes = {}
