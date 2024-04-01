@@ -4,7 +4,6 @@
 import concurrent.futures
 import hashlib
 import os
-import time
 from collections.abc import Hashable, Iterator
 
 from qldpc import abstract, codes
@@ -45,7 +44,7 @@ def get_mittal_code(length: int) -> codes.ClassicalCode:
     return code
 
 
-def get_base_codes() -> Iterator[tuple[codes.ClassicalCode, int]]:
+def get_base_codes() -> Iterator[tuple[codes.ClassicalCode, str]]:
     """Iterator over classical codes and their identifiers."""
     for rr in [2, 3]:
         yield codes.HammingCode(rr), f"Hamming-{rr}"
@@ -69,8 +68,9 @@ def run_and_save(
 ) -> None:
     """Make a random quantum Tanner code, compute its distance, and save it to a text file.
 
-    Note: the multiprocessing module is handle SymPy PermutationGroup objects properly, so we must
-    instead construct groups here from their identifying data.
+    The multiprocessing module is unable to properly handle SymPy PermutationGroup objects, so we
+    have to construct groups here from their identifying data.  ClassicalCode objects seem to be
+    fine, though.
     """
     group = abstract.SmallGroup(group_order, group_index)
     group_id = f"SmallGroup-{group_order}-{group_index}"
