@@ -36,7 +36,7 @@ def get_mittal_code(length: int) -> codes.ClassicalCode:
     return code
 
 
-def get_groups(max_order: int = 20) -> Iterator[abstract.SmallGroup]:
+def get_small_groups(max_order: int = 20) -> Iterator[abstract.SmallGroup]:
     """Iterator over all finite groups up to a given order."""
     for order in range(2, max_order + 1):
         for index in range(1, abstract.SmallGroup.number(order) + 1):
@@ -59,7 +59,7 @@ if __name__ == "__main__":
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    for group in get_groups():
+    for group in get_small_groups():
         for base_code, base_code_tag in get_codes_with_tags():
             if group.order < base_code.num_bits:
                 # no subset of the group has as many elements as the block length of the code
