@@ -114,15 +114,18 @@ if __name__ == "__main__":
     num_samples = 100  # per choice of group and subcode
     num_trials = 1000  # for code distance calculations
 
-    max_concurrent_tasks = os.cpu_count() or 1
+    max_concurrent_jobs = os.cpu_count() or 1
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_tasks) as executor:
+    # run multiple jobs in parallel
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
 
+        # iterate over all combinations of group, base code, and sample index
         for group_order, group_index in get_small_groups():
             for base_code, base_code_id in get_base_codes():
                 for sample in range(num_samples):
 
+                    # submit this job to the job queue
                     executor.submit(
                         run_and_save,
                         group_order,
@@ -132,7 +135,7 @@ if __name__ == "__main__":
                         sample,
                         num_samples,
                         num_trials,
-                        identify_completion_text=max_concurrent_tasks > 1,
+                        identify_completion_text=max_concurrent_jobs > 1,
                     )
 
                     if base_code.num_bits == group_order:
