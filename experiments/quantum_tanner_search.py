@@ -133,3 +133,7 @@ if __name__ == "__main__":
                         num_trials,
                         identify_completion_text=max_concurrent_tasks > 1,
                     )
+
+                    if base_code.num_bits == group_order:
+                        # there is only one possible instance of this random code
+                        break
