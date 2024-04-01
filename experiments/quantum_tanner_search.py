@@ -57,13 +57,14 @@ if __name__ == "__main__":
     num_samples = 100  # per choice of group and code
     num_trials = 1000  # for code distance calculations
 
+    # the directory in which we're saving data files
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
     for group, (base_code, base_tag) in itertools.product(get_groups(), get_codes_with_tags()):
         if group.order < base_code.num_bits:
-            # no subset of the group has as many elements as the code block length
+            # no subset of the group has as many elements as the block length of the code
             continue
 
         for sample in range(num_samples):
