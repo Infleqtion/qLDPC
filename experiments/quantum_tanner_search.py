@@ -30,13 +30,13 @@ def get_cordaro_wagner_code(length: int) -> codes.ClassicalCode:
 def get_mittal_code(length: int) -> codes.ClassicalCode:
     """Modified Hammming code of a given block length."""
     name = "MittalCode"
-    base_code = codes.HammingCode(3)
+    full_code = codes.HammingCode(3)
     if length == 4:
-        code = base_code.shorten(2, 3).puncture(4)
+        code = full_code.shorten(2, 3).puncture(4)
     elif length == 5:
-        code = base_code.shorten(2, 3)
+        code = full_code.shorten(2, 3)
     elif length == 6:
-        code = base_code.shorten(3)
+        code = full_code.shorten(3)
     else:
         raise ValueError(f"Unrecognized length for {name}: {length}")
     setattr(code, "_name", name)
