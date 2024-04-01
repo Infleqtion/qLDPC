@@ -9,11 +9,11 @@ from collections.abc import Hashable, Iterator
 from qldpc import abstract, codes
 
 
-def get_deterministic_hash(*inputs: Hashable, bytes: int = 4) -> int:
+def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
     """Get a deterministic hash from the given inputs."""
     input_bytes = repr(inputs).encode("utf-8")
     hash_bytes = hashlib.sha256(input_bytes).digest()
-    return int.from_bytes(hash_bytes[:bytes], byteorder="big", signed=False)
+    return int.from_bytes(hash_bytes[:num_bytes], byteorder="big", signed=False)
 
 
 def get_cordaro_wagner_code(length: int) -> codes.ClassicalCode:
