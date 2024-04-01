@@ -82,4 +82,3 @@ if __name__ == "__main__":
             file = f"qtcode_group-{group.order}-{group.index}_{base_tag}_s{seed}.txt"
             path = os.path.join(save_dir, file)
             code.save(path, *headers)
-            exit()
