@@ -3,7 +3,6 @@
 
 import concurrent.futures
 import hashlib
-import itertools
 import os
 from collections.abc import Hashable, Iterator
 
@@ -120,17 +119,17 @@ if __name__ == "__main__":
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_tasks) as executor:
 
-        for (group_order, group_index), (base_code, base_code_id), sample in itertools.product(
-            get_small_groups(), get_base_codes(), range(num_samples)
-        ):
-            executor.submit(
-                run_and_save,
-                group_order,
-                group_index,
-                base_code,
-                base_code_id,
-                sample,
-                num_samples,
-                num_trials,
-                identify_completion_text=max_concurrent_tasks > 1,
-            )
+        for group_order, group_index in get_small_groups():
+            for base_code, base_code_id in get_base_codes():
+                for sample in range(num_samples):
+                    executor.submit(
+                        run_and_save,
+                        group_order,
+                        group_index,
+                        base_code,
+                        base_code_id,
+                        sample,
+                        num_samples,
+                        num_trials,
+                        identify_completion_text=max_concurrent_tasks > 1,
+                    )
