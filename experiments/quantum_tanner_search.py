@@ -77,7 +77,8 @@ def run_and_save(
     group_id = f"SmallGroup-{group_order}-{group_index}"
 
     if group_order < base_code.num_bits:
-        # the base code is too large for this group
+        # No subset of this group can be large enough to have as many elements as there are bits in
+        # the base code, so random quantum Tanner codes with the given input data do not exist.
         return None
 
     seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
@@ -92,9 +93,16 @@ def run_and_save(
         job_id = f"{group_id} {base_code_id} {sample}/{num_samples}"
         print(job_id)
 
-    # construct code and compue its parameters
+    # construct a random code and compute its parameters
     code = codes.QTCode.random(group, base_code, seed=seed)
     code_params = code.get_code_params(bound=num_trials)
+
+    # save code and computed parameters
+    headers = [
+        f"distance trials: {num_trials}",
+        f"code parameters: {code_params}",
+    ]
+    code.save(path, *headers)
 
     if not silent:
         completion_text = ""
@@ -102,12 +110,6 @@ def run_and_save(
             completion_text += f" ({job_id})"
         completion_text += f" code parameters: {code_params}"
         print(completion_text)
-
-    headers = [
-        f"distance trials: {num_trials}",
-        f"code parameters: {code_params}",
-    ]
-    code.save(path, *headers)
 
 
 if __name__ == "__main__":
@@ -139,5 +141,6 @@ if __name__ == "__main__":
                     )
 
                     if base_code.num_bits == group_order:
-                        # there is only one possible instance of this random code
+                        # There is only one instance of this random quantum Tanner code, namely the
+                        # one in which subset_a = subset_b = group, we we only need one sample.
                         break
