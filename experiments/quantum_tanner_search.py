@@ -62,18 +62,22 @@ if __name__ == "__main__":
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    for group, (base_code, base_tag) in itertools.product(get_groups(), get_codes_with_tags()):
+    for group, (base_code, base_code_tag) in itertools.product(get_groups(), get_codes_with_tags()):
         if group.order < base_code.num_bits:
             # no subset of the group has as many elements as the block length of the code
             continue
 
         for sample in range(num_samples):
+            print(group.name, base_code_tag, f"{sample}/{num_samples}")
+
             seed = get_deterministic_hash(group.order, group.index, base_code.matrix.tobytes())
             code = codes.QTCode.random(
                 group, base_code, bipartite=False, one_subset=False, seed=seed
             )
 
             code_params = code.get_code_params(bound=num_trials)
+            print(" code parameters:", code_params)
+
             headers = [
                 f"group: {group}",
                 f"base code: {base_code.name}",
@@ -81,6 +85,6 @@ if __name__ == "__main__":
                 f"code parameters: {code_params}",
             ]
 
-            file = f"qtcode_group-{group.order}-{group.index}_{base_tag}_s{seed}.txt"
+            file = f"qtcode_group-{group.order}-{group.index}_{base_code_tag}_s{seed}.txt"
             path = os.path.join(save_dir, file)
             code.save(path, *headers)
