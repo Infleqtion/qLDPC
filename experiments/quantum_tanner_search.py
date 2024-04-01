@@ -63,7 +63,8 @@ def run_and_save(
     sample: int,
     num_samples: int,
     num_trials: int,
-    identify_completion: bool = True,
+    *,
+    identify_completion: bool = False,
     silent: bool = False,
 ) -> None:
     """Make a random quantum Tanner code, compute its distance, and save it to a text file."""
@@ -101,9 +102,9 @@ if __name__ == "__main__":
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
 
-    # for parallelization: global semaphore and job executor
+    # executor (to run tasks in parallel) and semaphore (to limit the number of concurrent tasks)
+    executor = concurrent.futures.ThreadPoolExecutor()
     semaphore = threading.Semaphore(max_concurrent_tasks)
-    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent_tasks)
 
     for group in get_small_groups():
         group_id = f"SmallGroup-{group.order}-{group.index}"
