@@ -2,8 +2,7 @@
 """Quantum Tanner code search experiment."""
 
 import hashlib
-import multiprocessing
-import multiprocessing.pool
+import concurrent.futures
 import os
 import time
 from collections.abc import Hashable, Iterator
@@ -18,30 +17,6 @@ def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
     return int.from_bytes(hash_bytes[:num_bytes], byteorder="big", signed=False)
 
 
-class CordaroWagnerCode(codes.ClassicalCode):
-    """Cordaro Wagner code with a given block length."""
-
-    def __init__(self, length: int) -> None:
-        code = codes.ClassicalCode.from_name(f"CordaroWagnerCode({length})")
-        codes.ClassicalCode.__init__(self, code)
-
-
-class MittalCode(codes.ClassicalCode):
-    """Modified Hammming code with a given block length."""
-
-    def __init__(self, length: int) -> None:
-        base_code = codes.HammingCode(3)
-        if length == 4:
-            code = base_code.shorten(2, 3).puncture(4)
-        elif length == 5:
-            code = base_code.shorten(2, 3)
-        elif length == 6:
-            code = base_code.shorten(3)
-        else:
-            raise ValueError(f"Unrecognized length for {self.name}: {length}")
-        codes.ClassicalCode.__init__(self, code.matrix)
-
-
 def get_small_groups(max_order: int = 20) -> Iterator[tuple[int, int]]:
     """Finite groups by order and index."""
     for order in range(3, max_order + 1):
@@ -49,11 +24,35 @@ def get_small_groups(max_order: int = 20) -> Iterator[tuple[int, int]]:
             yield order, index
 
 
-def get_codes_and_args() -> Iterator[tuple[codes.ClassicalCode, int]]:
-    """Iterator over classical code classes and arguments."""
-    yield from ((codes.HammingCode(rr), rr) for rr in (2, 3))
-    yield from ((CordaroWagnerCode(nn), nn) for nn in (3, 4, 5, 6))
-    yield from ((MittalCode(nn), nn) for nn in (4, 5, 6))
+def get_cordaro_wagner_code(length: int) -> codes.ClassicalCode:
+    """Cordaro Wagner code with a given block length."""
+    return codes.ClassicalCode.from_name(f"CordaroWagnerCode({length})")
+
+
+def get_mittal_code(length: int) -> codes.ClassicalCode:
+    """Modified Hammming code of a given block length."""
+    name = "MittalCode"
+    base_code = codes.HammingCode(3)
+    if length == 4:
+        code = base_code.shorten(2, 3).puncture(4)
+    elif length == 5:
+        code = base_code.shorten(2, 3)
+    elif length == 6:
+        code = base_code.shorten(3)
+    else:
+        raise ValueError(f"Unrecognized length for {name}: {length}")
+    setattr(code, "_name", name)
+    return code
+
+
+def get_base_codes() -> Iterator[tuple[codes.ClassicalCode, int]]:
+    """Iterator over classical codes and their identifiers."""
+    for rr in [2, 3]:
+        yield codes.HammingCode(rr), f"Hamming-{rr}"
+    for nn in [3, 4, 5, 6]:
+        yield get_cordaro_wagner_code(nn), f"CordaroWagner-{nn}"
+    for nn in [4, 5, 6]:
+        yield get_mittal_code(nn), f"Mittal-{nn}"
 
 
 def run_and_save(
@@ -82,6 +81,8 @@ def run_and_save(
 
     seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
     code = codes.QTCode.random(group, base_code, seed=seed)
+    time.sleep(1)
+    return
 
     code_params = code.get_code_params(bound=num_trials)
     if not silent:
@@ -109,28 +110,20 @@ if __name__ == "__main__":
 
     # multiprocessing options
     max_concurrent_tasks = os.cpu_count() or 1
+    max_concurrent_tasks = 5
     timeout = 0.1  # seconds to wait before re-checking whether we can run start another task
 
-    active_tasks: list[multiprocessing.pool.AsyncResult[None]] = []
-    with multiprocessing.Pool(processes=max_concurrent_tasks) as pool:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_tasks) as executor:
 
         for group_order, group_index in get_small_groups():
-
-            for base_code, code_param in get_codes_and_args():
-                base_code_id = f"{base_code.name}-{code_param}"
-
+            for base_code, base_code_id in get_base_codes():
                 if group_order < base_code.num_bits:
                     # the code is too large for this group
                     continue
 
                 for sample in range(num_samples):
-
-                    # wait until we can start anot another task
-                    while len(active_tasks) >= max_concurrent_tasks:
-                        active_tasks = [task for task in active_tasks if not task.ready()]
-                        time.sleep(timeout)
-
-                    args = (
+                    executor.submit(
+                        run_and_save,
                         group_order,
                         group_index,
                         base_code,
@@ -138,11 +131,5 @@ if __name__ == "__main__":
                         sample,
                         num_samples,
                         num_trials,
+                        identify_completion=max_concurrent_tasks > 1,
                     )
-                    kwargs = dict(identify_completion=max_concurrent_tasks > 1)
-                    task = pool.apply_async(run_and_save, args, kwargs)
-                    active_tasks.append(task)
-
-        # wait for all tasks to complete
-        for task in active_tasks:
-            task.wait()
