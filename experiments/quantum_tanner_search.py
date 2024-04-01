@@ -3,6 +3,7 @@
 
 import concurrent.futures
 import hashlib
+import itertools
 import os
 from collections.abc import Hashable, Iterator
 
@@ -63,7 +64,8 @@ def run_and_save(
     num_samples: int,
     num_trials: int,
     *,
-    identify_completion: bool = False,
+    identify_completion_text: bool = False,
+    override_existing_data: bool = False,
     silent: bool = False,
 ) -> None:
     """Make a random quantum Tanner code, compute its distance, and save it to a text file.
@@ -75,17 +77,29 @@ def run_and_save(
     group = abstract.SmallGroup(group_order, group_index)
     group_id = f"SmallGroup-{group_order}-{group_index}"
 
+    if group_order < base_code.num_bits:
+        # the base code is too large for this group
+        return None
+
+    seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
+    file = f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
+    path = os.path.join(save_dir, file)
+
+    if os.path.isfile(path) and not override_existing_data:
+        # we already have the data for this code, so there is nothing to do
+        return None
+
     if not silent:
         job_id = f"{group_id} {base_code_id} {sample}/{num_samples}"
         print(job_id)
 
-    seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
+    # construct code and compue its parameters
     code = codes.QTCode.random(group, base_code, seed=seed)
-
     code_params = code.get_code_params(bound=num_trials)
+
     if not silent:
         completion_text = ""
-        if identify_completion:
+        if identify_completion_text:
             completion_text += f" ({job_id})"
         completion_text += f" code parameters: {code_params}"
         print(completion_text)
@@ -94,8 +108,6 @@ def run_and_save(
         f"distance trials: {num_trials}",
         f"code parameters: {code_params}",
     ]
-    file = f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
-    path = os.path.join(save_dir, file)
     code.save(path, *headers)
 
 
@@ -108,21 +120,17 @@ if __name__ == "__main__":
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_tasks) as executor:
 
-        for group_order, group_index in get_small_groups():
-            for base_code, base_code_id in get_base_codes():
-                if group_order < base_code.num_bits:
-                    # the code is too large for this group
-                    continue
-
-                for sample in range(num_samples):
-                    executor.submit(
-                        run_and_save,
-                        group_order,
-                        group_index,
-                        base_code,
-                        base_code_id,
-                        sample,
-                        num_samples,
-                        num_trials,
-                        identify_completion=max_concurrent_tasks > 1,
-                    )
+        for (group_order, group_index), (base_code, base_code_id), sample in itertools.product(
+            get_small_groups(), get_base_codes(), range(num_samples)
+        ):
+            executor.submit(
+                run_and_save,
+                group_order,
+                group_index,
+                base_code,
+                base_code_id,
+                sample,
+                num_samples,
+                num_trials,
+                identify_completion_text=max_concurrent_tasks > 1,
+            )
