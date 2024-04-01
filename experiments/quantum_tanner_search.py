@@ -94,7 +94,7 @@ def run_and_save(
 
 if __name__ == "__main__":
     max_concurrent_tasks = os.cpu_count() - 2  # for parallelization
-    num_samples = 100  # per choice of group and code
+    num_samples = 100  # per choice of group and subcode
     num_trials = 1000  # for code distance calculations
 
     # the directory in which we're saving data files
