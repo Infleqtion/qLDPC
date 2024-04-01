@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 import sys
+from collections.abc import Iterable
 
 import checks_superstaq
 
 
 def run_modular(
-    exclude: str | tuple[str] = ("checks/*.py", "experiments/*.py", "*/__init__.py", "*_test.py")
+    exclude: str | Iterable[str] = ("checks/*.py", "experiments/*.py", "*/__init__.py", "*_test.py")
 ) -> int:
     """Check that each file is covered by its own data file."""
 
