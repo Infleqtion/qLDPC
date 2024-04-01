@@ -54,8 +54,9 @@ def get_codes_with_tags() -> Iterator[tuple[codes.ClassicalCode, str]]:
 
 
 if __name__ == "__main__":
-    num_samples = 100
-    num_trials = 1000
+    num_samples = 100  # per choice of group and code
+    num_trials = 1000  # for code distance calculations
+
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
