@@ -71,9 +71,7 @@ if __name__ == "__main__":
             print(group.name, base_code_tag, f"{sample}/{num_samples}")
 
             seed = get_deterministic_hash(group.order, group.index, base_code.matrix.tobytes())
-            code = codes.QTCode.random(
-                group, base_code, bipartite=False, one_subset=False, seed=seed
-            )
+            code = codes.QTCode.random(group, base_code, seed=seed)
 
             code_params = code.get_code_params(bound=num_trials)
             print(" code parameters:", code_params)
