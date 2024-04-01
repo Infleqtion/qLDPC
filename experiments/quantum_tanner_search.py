@@ -53,6 +53,36 @@ def get_codes_and_args() -> Iterator[tuple[codes.ClassicalCode, int]]:
     yield from ((MittalCode(nn), nn) for nn in (4, 5, 6))
 
 
+def run_and_save(
+    group: abstract.SmallGroup,
+    group_tag: int,
+    base_code: codes.ClassicalCode,
+    base_code_tag: str,
+    sample: int,
+    num_samples: int,
+    num_trials: int,
+    silent: bool = False,
+) -> None:
+    """Make a random quantum Tanner code, compute its distance, and save it to a text file."""
+    if not silent:
+        print(group_tag, base_code_tag, f"{sample}/{num_samples}")
+
+    seed = get_deterministic_hash(group.order, group.index, base_code.matrix.tobytes(), sample)
+    code = codes.QTCode.random(group, base_code, seed=seed)
+
+    code_params = code.get_code_params(bound=num_trials)
+    if not silent:
+        print(" code parameters:", code_params)
+
+    headers = [
+        f"distance trials: {num_trials}",
+        f"code parameters: {code_params}",
+    ]
+    file = f"qtcode_{group_tag}_{base_code_tag}_s{seed}.txt"
+    path = os.path.join(save_dir, file)
+    code.save(path, *headers)
+
+
 if __name__ == "__main__":
     num_samples = 100  # per choice of group and code
     num_trials = 1000  # for code distance calculations
@@ -73,20 +103,6 @@ if __name__ == "__main__":
                 continue
 
             for sample in range(num_samples):
-                print(group_tag, base_code_tag, f"{sample}/{num_samples}")
-
-                seed = get_deterministic_hash(
-                    group.order, group.index, base_code.matrix.tobytes(), sample
+                run_and_save(
+                    group, group_tag, base_code, base_code_tag, sample, num_samples, num_trials
                 )
-                code = codes.QTCode.random(group, base_code, seed=seed)
-
-                code_params = code.get_code_params(bound=num_trials)
-                print(" code parameters:", code_params)
-
-                headers = [
-                    f"distance trials: {num_trials}",
-                    f"code parameters: {code_params}",
-                ]
-                file = f"qtcode_{group_tag}_{base_code_tag}_s{seed}.txt"
-                path = os.path.join(save_dir, file)
-                code.save(path, *headers)
