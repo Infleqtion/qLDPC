@@ -73,7 +73,7 @@ if __name__ == "__main__":
                 continue
 
             for sample in range(num_samples):
-                print(group.name, base_code_tag, f"{sample}/{num_samples}")
+                print(group_tag, base_code_tag, f"{sample}/{num_samples}")
 
                 seed = get_deterministic_hash(
                     group.order, group.index, base_code.matrix.tobytes(), sample
