@@ -41,8 +41,8 @@ class MittalCode(codes.ClassicalCode):
         codes.ClassicalCode.__init__(self, code.matrix)
 
 
-def get_small_groups(max_order: int = 20) -> Iterator[abstract.SmallGroup]:
-    """Iterator over all finite groups up to a given order."""
+def get_small_groups(max_order: int = 20) -> Iterator[tuple[int, int]]:
+    """Iterator over all finite groups by order and index."""
     for order in range(3, max_order + 1):
         for index in range(1, abstract.SmallGroup.number(order) + 1):
             yield order, index
@@ -67,7 +67,11 @@ def run_and_save(
     identify_completion: bool = False,
     silent: bool = False,
 ) -> None:
-    """Make a random quantum Tanner code, compute its distance, and save it to a text file."""
+    """Make a random quantum Tanner code, compute its distance, and save it to a text file.
+
+    Note: the multiprocessing module is handle SymPy PermutationGroup objects properly, so we must
+    instead construct groups here from their identifying data.
+    """
     group = abstract.SmallGroup(group_order, group_index)
     group_id = f"SmallGroup-{group_order}-{group_index}"
 
@@ -103,10 +107,10 @@ if __name__ == "__main__":
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
 
     # multiprocessing options
-    max_concurrent_tasks = os.cpu_count() - 2  # for parallelization
+    max_concurrent_tasks = os.cpu_count() or 1
     timeout = 0.1  # seconds to wait before re-checking whether we can run start another task
-    active_tasks = []  # list of currently running tasks
 
+    active_tasks: list[multiprocessing.pool.AsyncResult[None]] = []
     with multiprocessing.Pool(processes=max_concurrent_tasks) as pool:
 
         for group_order, group_index in get_small_groups():
