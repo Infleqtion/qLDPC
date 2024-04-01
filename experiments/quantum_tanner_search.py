@@ -55,7 +55,7 @@ def get_codes_and_args() -> Iterator[tuple[codes.ClassicalCode, int]]:
 
 def run_and_save(
     group: abstract.SmallGroup,
-    group_tag: int,
+    group_tag: str,
     base_code: codes.ClassicalCode,
     base_code_tag: str,
     sample: int,
