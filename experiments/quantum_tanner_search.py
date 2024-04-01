@@ -3,6 +3,7 @@
 
 import hashlib
 import multiprocessing
+import multiprocessing.pool
 import os
 import time
 from collections.abc import Hashable, Iterator
