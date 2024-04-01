@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Quantum Tanner code search experiment."""
-
 import concurrent.futures
 import hashlib
 import os
