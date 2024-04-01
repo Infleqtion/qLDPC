@@ -3,8 +3,8 @@
 
 import concurrent.futures
 import hashlib
+import multiprocessing
 import os
-import threading
 from collections.abc import Hashable, Iterator
 
 from qldpc import abstract, codes
@@ -103,8 +103,8 @@ if __name__ == "__main__":
         os.mkdir(save_dir)
 
     # executor (to run tasks in parallel) and semaphore (to limit the number of concurrent tasks)
-    executor = concurrent.futures.ThreadPoolExecutor()
-    semaphore = threading.Semaphore(max_concurrent_tasks)
+    executor = concurrent.futures.ProcessPoolExecutor()
+    semaphore = multiprocessing.Semaphore(max_concurrent_tasks)
 
     for group in get_small_groups():
         group_id = f"SmallGroup-{group.order}-{group.index}"
