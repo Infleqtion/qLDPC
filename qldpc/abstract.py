@@ -129,19 +129,26 @@ class Group:
     _group: comb.PermutationGroup
     _field: type[galois.FieldArray]
     _lift: Lift
+    _name: str | None = None
 
     def __init__(
-        self, *generators: comb.Permutation, field: int | None = None, lift: Lift | None = None
+        self,
+        *generators: comb.Permutation,
+        field: int | None = None,
+        lift: Lift | None = None,
+        name: str | None = None,
     ) -> None:
-        self._init_from_group(comb.PermutationGroup(*generators), field, lift)
+        self._init_from_group(comb.PermutationGroup(*generators), field, lift, name)
 
     def _init_from_group(
         self,
         group: comb.PermutationGroup | Group,
         field: int | None = None,
         lift: Lift | None = None,
+        name: str | None = None,
     ) -> None:
         """Initialize from an existing group."""
+        self._name = name
         if isinstance(group, comb.PermutationGroup):
             self._group = group
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -152,6 +159,15 @@ class Group:
             self._group = group._group
             self._field = group._field
             self._lift = lift if lift is not None else group._lift
+            self._name = self._name or group._name
+
+    @property
+    def name(self) -> str:
+        """A name for this group.  Uniqueness not guaranteed."""
+        return self._name or f"{type(self).__name__} of order {self.order}"
+
+    def __str__(self) -> str:
+        return self.name
 
     def to_sympy(self) -> comb.PermutationGroup:
         """The underlying SymPy permutation group of this Group."""
@@ -395,7 +411,8 @@ class Group:
         """Named group in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
         generators = [GroupMember(gen) for gen in named_groups.get_generators(standardized_name)]
-        return Group(*generators)
+        group = Group(*generators, name=standardized_name)
+        return group
 
 
 ################################################################################
@@ -641,6 +658,7 @@ class TrivialGroup(Group):
         super().__init__(
             field=field,
             lift=lambda _: np.array(1, ndmin=2, dtype=int),
+            name=TrivialGroup.__name__,
         )
 
     def random(self, *, seed: int | None = None) -> GroupMember:
@@ -692,7 +710,9 @@ class AbelianGroup(Group):
             group = Group.product(*groups)
         else:
             group = comb.named_groups.AbelianGroup(*orders)
-        super()._init_from_group(group)
+        order_text = ",".join(map(str, orders))
+        name = f"AbelianGroup({order_text})"
+        super()._init_from_group(group, name=name)
 
 
 class DihedralGroup(Group):
@@ -750,7 +770,7 @@ class QuaternionGroup(Group):
             return sign * np.block(blocks).T % 3
 
         group = Group.from_table(table, field=3, integer_lift=lift)
-        super()._init_from_group(group)
+        super()._init_from_group(group, name=QuaternionGroup.__name__)
 
 
 class SmallGroup(Group):
@@ -789,6 +809,7 @@ class SpecialLinearGroup(Group):
     _dimension: int
 
     def __init__(self, dimension: int, field: int | None = None, linear_rep: bool = True) -> None:
+        self._name = f"SL({dimension},{field})"
         self._dimension = dimension
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
@@ -873,6 +894,7 @@ class ProjectiveSpecialLinearGroup(Group):
     _dimension: int
 
     def __init__(self, dimension: int, field: int | None = None) -> None:
+        self._name = f"PSL({dimension},{field})"
         self._dimension = dimension
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         group: Group

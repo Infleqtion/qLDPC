@@ -54,6 +54,7 @@ def test_trivial_group() -> None:
     assert group.random() == group.identity
     assert np.array_equal(group.lift(group.identity), np.array(1, ndmin=2))
     assert group == abstract.Group.from_generating_mats()
+    assert str(group) == "TrivialGroup"
 
 
 def test_lift() -> None:
