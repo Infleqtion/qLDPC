@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Quantum Tanner code search experiment."""
 
-import concurrent.futures
 import hashlib
 import multiprocessing
 import os
+import time
 from collections.abc import Hashable, Iterator
 
 from qldpc import abstract, codes
@@ -43,9 +43,9 @@ class MittalCode(codes.ClassicalCode):
 
 def get_small_groups(max_order: int = 20) -> Iterator[abstract.SmallGroup]:
     """Iterator over all finite groups up to a given order."""
-    for order in range(2, max_order + 1):
+    for order in range(3, max_order + 1):
         for index in range(1, abstract.SmallGroup.number(order) + 1):
-            yield abstract.SmallGroup(order, index)
+            yield order, index
 
 
 def get_codes_and_args() -> Iterator[tuple[codes.ClassicalCode, int]]:
@@ -56,8 +56,8 @@ def get_codes_and_args() -> Iterator[tuple[codes.ClassicalCode, int]]:
 
 
 def run_and_save(
-    group: abstract.SmallGroup,
-    group_id: str,
+    group_order: int,
+    group_index: int,
     base_code: codes.ClassicalCode,
     base_code_id: str,
     sample: int,
@@ -68,11 +68,14 @@ def run_and_save(
     silent: bool = False,
 ) -> None:
     """Make a random quantum Tanner code, compute its distance, and save it to a text file."""
+    group = abstract.SmallGroup(group_order, group_index)
+    group_id = f"SmallGroup-{group_order}-{group_index}"
+
     if not silent:
         job_id = f"{group_id} {base_code_id} {sample}/{num_samples}"
         print(job_id)
 
-    seed = get_deterministic_hash(group.order, group.index, base_code.matrix.tobytes(), sample)
+    seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
     code = codes.QTCode.random(group, base_code, seed=seed)
 
     code_params = code.get_code_params(bound=num_trials)
@@ -93,42 +96,48 @@ def run_and_save(
 
 
 if __name__ == "__main__":
-    max_concurrent_tasks = os.cpu_count() - 2  # for parallelization
     num_samples = 100  # per choice of group and subcode
     num_trials = 1000  # for code distance calculations
 
     # the directory in which we're saving data files
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
-    if not os.path.isdir(save_dir):
-        os.mkdir(save_dir)
 
-    # executor (to run tasks in parallel) and semaphore (to limit the number of concurrent tasks)
-    executor = concurrent.futures.ProcessPoolExecutor()
-    semaphore = multiprocessing.Semaphore(max_concurrent_tasks)
+    # multiprocessing options
+    max_concurrent_tasks = os.cpu_count() - 2  # for parallelization
+    timeout = 0.1  # seconds to wait before re-checking whether we can run start another task
+    active_tasks = []  # list of currently running tasks
 
-    for group in get_small_groups():
-        group_id = f"SmallGroup-{group.order}-{group.index}"
+    with multiprocessing.Pool(processes=max_concurrent_tasks) as pool:
 
-        for base_code, code_param in get_codes_and_args():
-            base_code_id = f"{base_code.name}-{code_param}"
+        for group_order, group_index in get_small_groups():
 
-            if group.order < base_code.num_bits:
-                # the code is too large for this group
-                continue
+            for base_code, code_param in get_codes_and_args():
+                base_code_id = f"{base_code.name}-{code_param}"
 
-            for sample in range(num_samples):
-                semaphore.acquire()
-                future = executor.submit(
-                    run_and_save,
-                    group,
-                    group_id,
-                    base_code,
-                    base_code_id,
-                    sample,
-                    num_samples,
-                    num_trials,
-                    identify_completion=True,
-                )
-                future.add_done_callback(lambda _: semaphore.release())
+                if group_order < base_code.num_bits:
+                    # the code is too large for this group
+                    continue
 
-    executor.shutdown(wait=True)
+                for sample in range(num_samples):
+
+                    # wait until we can start anot another task
+                    while len(active_tasks) >= max_concurrent_tasks:
+                        active_tasks = [task for task in active_tasks if not task.ready()]
+                        time.sleep(timeout)
+
+                    args = (
+                        group_order,
+                        group_index,
+                        base_code,
+                        base_code_id,
+                        sample,
+                        num_samples,
+                        num_trials,
+                    )
+                    kwargs = dict(identify_completion=max_concurrent_tasks > 1)
+                    task = pool.apply_async(run_and_save, args, kwargs)
+                    active_tasks.append(task)
+
+        # wait for all tasks to complete
+        for task in active_tasks:
+            task.wait()
