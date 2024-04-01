@@ -2144,8 +2144,7 @@ class QTCode(CSSCode):
         subset_b = np.array([gen.array_form for gen in self.complex.subset_b])
         with open(path, "w") as file:
             for header in headers:
-                lines = header.splitlines()
-                for line in lines:
+                for line in header.splitlines():
                     file.write(f"# {line}\n")
             file.write("# subset_a:\n")
             np.savetxt(file, subset_a, fmt="%d")
