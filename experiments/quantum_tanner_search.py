@@ -15,25 +15,28 @@ def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
     return int.from_bytes(hash_bytes[:num_bytes], byteorder="big", signed=False)
 
 
-def get_cordaro_wagner_code(length: int) -> codes.ClassicalCode:
+class CordaroWagnerCode(codes.ClassicalCode):
     """Cordaro Wagner code with a given block length."""
-    return codes.ClassicalCode.from_name(f"CordaroWagnerCode({length})")
+
+    def __init__(self, length: int) -> None:
+        code = codes.ClassicalCode.from_name(f"CordaroWagnerCode({length})")
+        codes.ClassicalCode.__init__(self, code)
 
 
-def get_mittal_code(length: int) -> codes.ClassicalCode:
-    """Modified Hammming code of a given block length."""
-    name = "MittalCode"
-    base_code = codes.HammingCode(3)
-    if length == 4:
-        code = base_code.shorten(2, 3).puncture(4)
-    elif length == 5:
-        code = base_code.shorten(2, 3)
-    elif length == 6:
-        code = base_code.shorten(3)
-    else:
-        raise ValueError(f"Unrecognized length for {name}: {length}")
-    setattr(code, "_name", name)
-    return code
+class MittalCode(codes.ClassicalCode):
+    """Modified Hammming code with a given block length."""
+
+    def __init__(self, length: int) -> None:
+        base_code = codes.HammingCode(3)
+        if length == 4:
+            code = base_code.shorten(2, 3).puncture(4)
+        elif length == 5:
+            code = base_code.shorten(2, 3)
+        elif length == 6:
+            code = base_code.shorten(3)
+        else:
+            raise ValueError(f"Unrecognized length for {self.name}: {length}")
+        codes.ClassicalCode.__init__(self, code.matrix)
 
 
 def get_small_groups(max_order: int = 20) -> Iterator[abstract.SmallGroup]:
@@ -43,11 +46,11 @@ def get_small_groups(max_order: int = 20) -> Iterator[abstract.SmallGroup]:
             yield abstract.SmallGroup(order, index)
 
 
-def get_codes_with_tags() -> Iterator[tuple[codes.ClassicalCode, str]]:
-    """Iterator over several small classical codes and their identifier tags."""
-    yield from ((codes.HammingCode(rr), f"hamming-{rr}") for rr in [2, 3])
-    yield from ((get_cordaro_wagner_code(nn), f"CW-{nn}") for nn in [3, 4, 5, 6])
-    yield from ((get_mittal_code(nn), f"M-{nn}") for nn in [4, 5, 6])
+def get_codes_and_args() -> Iterator[tuple[codes.ClassicalCode, int]]:
+    """Iterator over classical code classes and arguments."""
+    yield from ((codes.HammingCode(rr), rr) for rr in (2, 3))
+    yield from ((CordaroWagnerCode(nn), nn) for nn in (3, 4, 5, 6))
+    yield from ((MittalCode(nn), nn) for nn in (4, 5, 6))
 
 
 if __name__ == "__main__":
@@ -60,9 +63,13 @@ if __name__ == "__main__":
         os.mkdir(save_dir)
 
     for group in get_small_groups():
-        for base_code, base_code_tag in get_codes_with_tags():
+        group_tag = f"SmallGroup-{group.order}-{group.index}"
+
+        for base_code, code_param in get_codes_and_args():
+            base_code_tag = f"{base_code.name}-{code_param}"
+
             if group.order < base_code.num_bits:
-                # no subset of the group has as many elements as the block length of the code
+                # the code is too large for this group
                 continue
 
             for sample in range(num_samples):
@@ -77,12 +84,9 @@ if __name__ == "__main__":
                 print(" code parameters:", code_params)
 
                 headers = [
-                    f"group: {group}",
-                    f"base code: {base_code.name}",
                     f"distance trials: {num_trials}",
                     f"code parameters: {code_params}",
                 ]
-
-                file = f"qtcode_group-{group.order}-{group.index}_{base_code_tag}_s{seed}.txt"
+                file = f"qtcode_{group_tag}_{base_code_tag}_s{seed}.txt"
                 path = os.path.join(save_dir, file)
                 code.save(path, *headers)
