@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Quantum Tanner code search experiment."""
 
+import concurrent.futures
 import hashlib
 import os
+import threading
 from collections.abc import Hashable, Iterator
 
 from qldpc import abstract, codes
@@ -61,18 +63,24 @@ def run_and_save(
     sample: int,
     num_samples: int,
     num_trials: int,
+    identify_completion: bool = True,
     silent: bool = False,
 ) -> None:
     """Make a random quantum Tanner code, compute its distance, and save it to a text file."""
     if not silent:
-        print(group_id, base_code_id, f"{sample}/{num_samples}")
+        job_id = f"{group_id} {base_code_id} {sample}/{num_samples}"
+        print(job_id)
 
     seed = get_deterministic_hash(group.order, group.index, base_code.matrix.tobytes(), sample)
     code = codes.QTCode.random(group, base_code, seed=seed)
 
     code_params = code.get_code_params(bound=num_trials)
     if not silent:
-        print(" code parameters:", code_params)
+        completion_text = ""
+        if identify_completion:
+            completion_text += f" ({job_id})"
+        completion_text += f" code parameters: {code_params}"
+        print(completion_text)
 
     headers = [
         f"distance trials: {num_trials}",
@@ -84,6 +92,7 @@ def run_and_save(
 
 
 if __name__ == "__main__":
+    max_concurrent_tasks = os.cpu_count() - 2  # for parallelization
     num_samples = 100  # per choice of group and code
     num_trials = 1000  # for code distance calculations
 
@@ -91,6 +100,10 @@ if __name__ == "__main__":
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
     if not os.path.isdir(save_dir):
         os.mkdir(save_dir)
+
+    # for parallelization: global semaphore and job executor
+    semaphore = threading.Semaphore(max_concurrent_tasks)
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_concurrent_tasks)
 
     for group in get_small_groups():
         group_id = f"SmallGroup-{group.order}-{group.index}"
@@ -103,7 +116,9 @@ if __name__ == "__main__":
                 continue
 
             for sample in range(num_samples):
-                run_and_save(
+                semaphore.acquire()
+                future = executor.submit(
+                    run_and_save,
                     group,
                     group_id,
                     base_code,
@@ -111,4 +126,8 @@ if __name__ == "__main__":
                     sample,
                     num_samples,
                     num_trials,
+                    identify_completion=True,
                 )
+                future.add_done_callback(lambda _: semaphore.release())
+
+    executor.shutdown(wait=True)
