@@ -776,6 +776,8 @@ class QuaternionGroup(Group):
 class SmallGroup(Group):
     """Group indexed by the GAP computer algebra system."""
 
+    index: int
+
     def __init__(self, order: int, index: int) -> None:
         num_groups = SmallGroup.number(order)
         if not 1 <= index <= num_groups:
@@ -786,6 +788,7 @@ class SmallGroup(Group):
 
         name = f"SmallGroup({order},{index})"
         super()._init_from_group(Group.from_name(name))
+        self.index = index
 
     @classmethod
     def number(cls, order: int) -> int:
