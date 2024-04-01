@@ -9,7 +9,7 @@ from collections.abc import Hashable, Iterator
 from qldpc import abstract, codes
 
 
-def get_deterministic_hash(*inputs: Hashable, bytes: int = 4):
+def get_deterministic_hash(*inputs: Hashable, bytes: int = 4) -> int:
     """Get a deterministic hash from the given inputs."""
     input_bytes = repr(inputs).encode("utf-8")
     hash_bytes = hashlib.sha256(input_bytes).digest()
@@ -44,7 +44,7 @@ def get_groups(max_order: int = 20) -> Iterator[abstract.SmallGroup]:
             yield abstract.SmallGroup(order, index)
 
 
-def get_codes_with_tags() -> Iterator[codes.ClassicalCode]:
+def get_codes_with_tags() -> Iterator[tuple[codes.ClassicalCode, str]]:
     """Iterator over several small classical codes and their identifier tags."""
     yield from itertools.chain(
         ((codes.HammingCode(rr), f"hamming-{rr}") for rr in [2, 3]),
