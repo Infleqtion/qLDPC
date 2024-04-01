@@ -129,7 +129,7 @@ class Group:
     _group: comb.PermutationGroup
     _field: type[galois.FieldArray]
     _lift: Lift
-    _name: str | None = None
+    _name: str | None
 
     def __init__(
         self,
@@ -159,11 +159,11 @@ class Group:
             self._group = group._group
             self._field = group._field
             self._lift = lift if lift is not None else group._lift
-            self._name = self._name or group._name
+            self._name = self._name or group._name  # explicitly provided name overrides group name
 
     @property
     def name(self) -> str:
-        """A name for this group.  Uniqueness not guaranteed."""
+        """A name for this group, which is not required to uniquely identify the group."""
         return self._name or f"{type(self).__name__} of order {self.order}"
 
     def __str__(self) -> str:
