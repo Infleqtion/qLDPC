@@ -22,7 +22,7 @@ def get_cordaro_wagner_code(length: int) -> codes.ClassicalCode:
 
 
 def get_mittal_code(length: int) -> codes.ClassicalCode:
-    """Modified Hammming codes."""
+    """Modified Hammming codes of a given block length."""
     name = "MittalCode"
     base_code = codes.HammingCode(3)
     if length == 4:
