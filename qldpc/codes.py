@@ -21,6 +21,7 @@ import abc
 import ast
 import functools
 import itertools
+import os
 import random
 from collections.abc import Callable, Collection, Sequence
 from typing import Literal
@@ -2140,20 +2141,34 @@ class QTCode(CSSCode):
 
     def save(self, path: str, *headers: str) -> None:
         """Save the generating data of this code to a file."""
+        # convert subsets to arrays
         subset_a = np.array([gen.array_form for gen in self.complex.subset_a])
         subset_b = np.array([gen.array_form for gen in self.complex.subset_b])
+
+        # create save directory if necessary
+        save_dir = os.path.dirname(os.path.abspath(path))
+        if not os.path.isdir(save_dir):
+            os.mkdir(save_dir)
+
         with open(path, "w") as file:
+            # write provided headers
             for header in headers:
                 for line in header.splitlines():
                     file.write(f"# {line}\n")
+
+            # write subsets
             file.write("# subset_a:\n")
             np.savetxt(file, subset_a, fmt="%d")
             file.write("# subset_b:\n")
             np.savetxt(file, subset_b, fmt="%d")
+
+            # write seed codes
             file.write("# code_a.matrix:\n")
             np.savetxt(file, self.code_a.matrix, fmt="%d")
             file.write("# code_b.matrix:\n")
             np.savetxt(file, self.code_b.matrix, fmt="%d")
+
+            # write other data
             file.write(f"# base field: {self.field.order}\n")
             file.write(f"# bipartite: {self.complex.bipartite}\n")
             file.write(f"# conjugate: {self.conjugated_qubits}\n")
@@ -2161,6 +2176,9 @@ class QTCode(CSSCode):
     @classmethod
     def load(cls, path: str) -> QTCode:
         """Load a QTCode from a file."""
+        if not os.path.isfile(path):
+            raise ValueError(f"Path does not exist: {path}")
+
         with open(path, "r") as file:
             lines = file.read().splitlines()
 
