@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Quantum Tanner code search experiment."""
 
-import hashlib
 import concurrent.futures
+import hashlib
 import os
 import time
 from collections.abc import Hashable, Iterator
