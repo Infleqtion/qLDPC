@@ -81,8 +81,6 @@ def run_and_save(
 
     seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
     code = codes.QTCode.random(group, base_code, seed=seed)
-    time.sleep(1)
-    return
 
     code_params = code.get_code_params(bound=num_trials)
     if not silent:
@@ -105,13 +103,8 @@ if __name__ == "__main__":
     num_samples = 100  # per choice of group and subcode
     num_trials = 1000  # for code distance calculations
 
-    # the directory in which we're saving data files
-    save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
-
-    # multiprocessing options
     max_concurrent_tasks = os.cpu_count() or 1
-    max_concurrent_tasks = 5
-    timeout = 0.1  # seconds to wait before re-checking whether we can run start another task
+    save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_tasks) as executor:
 
