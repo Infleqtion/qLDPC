@@ -55,9 +55,9 @@ def get_codes_and_args() -> Iterator[tuple[codes.ClassicalCode, int]]:
 
 def run_and_save(
     group: abstract.SmallGroup,
-    group_tag: str,
+    group_id: str,
     base_code: codes.ClassicalCode,
-    base_code_tag: str,
+    base_code_id: str,
     sample: int,
     num_samples: int,
     num_trials: int,
@@ -65,7 +65,7 @@ def run_and_save(
 ) -> None:
     """Make a random quantum Tanner code, compute its distance, and save it to a text file."""
     if not silent:
-        print(group_tag, base_code_tag, f"{sample}/{num_samples}")
+        print(group_id, base_code_id, f"{sample}/{num_samples}")
 
     seed = get_deterministic_hash(group.order, group.index, base_code.matrix.tobytes(), sample)
     code = codes.QTCode.random(group, base_code, seed=seed)
@@ -78,7 +78,7 @@ def run_and_save(
         f"distance trials: {num_trials}",
         f"code parameters: {code_params}",
     ]
-    file = f"qtcode_{group_tag}_{base_code_tag}_s{seed}.txt"
+    file = f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
     path = os.path.join(save_dir, file)
     code.save(path, *headers)
 
@@ -93,10 +93,10 @@ if __name__ == "__main__":
         os.mkdir(save_dir)
 
     for group in get_small_groups():
-        group_tag = f"SmallGroup-{group.order}-{group.index}"
+        group_id = f"SmallGroup-{group.order}-{group.index}"
 
         for base_code, code_param in get_codes_and_args():
-            base_code_tag = f"{base_code.name}-{code_param}"
+            base_code_id = f"{base_code.name}-{code_param}"
 
             if group.order < base_code.num_bits:
                 # the code is too large for this group
@@ -104,5 +104,11 @@ if __name__ == "__main__":
 
             for sample in range(num_samples):
                 run_and_save(
-                    group, group_tag, base_code, base_code_tag, sample, num_samples, num_trials
+                    group,
+                    group_id,
+                    base_code,
+                    base_code_id,
+                    sample,
+                    num_samples,
+                    num_trials,
                 )
