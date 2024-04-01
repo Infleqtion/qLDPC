@@ -68,7 +68,9 @@ if __name__ == "__main__":
             for sample in range(num_samples):
                 print(group.name, base_code_tag, f"{sample}/{num_samples}")
 
-                seed = get_deterministic_hash(group.order, group.index, base_code.matrix.tobytes())
+                seed = get_deterministic_hash(
+                    group.order, group.index, base_code.matrix.tobytes(), sample
+                )
                 code = codes.QTCode.random(group, base_code, seed=seed)
 
                 code_params = code.get_code_params(bound=num_trials)
