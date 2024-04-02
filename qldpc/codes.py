@@ -1076,8 +1076,8 @@ class CSSCode(QuditCode):
         presumably one of low Hamming weight, since decoders try to find low-weight solutions.
         Return the Hamming weight |w_x|.
         """
-        assert pauli is None or pauli in PAULIS_XZ
         pauli = pauli or random.choice(PAULIS_XZ)
+        assert pauli in PAULIS_XZ
 
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
