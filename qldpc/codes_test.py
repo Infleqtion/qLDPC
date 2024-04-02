@@ -381,7 +381,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
 
 def test_cyclic_codes(field: int = 3) -> None:
     """Quasi-cyclic codes from arXiv:2308.07915 and arXiv:2311.16980."""
-    from sympy.abc import x, y
+    from sympy.abc import x, y, z
 
     dims: tuple[int, int] | dict[sympy.Symbol, int]
 
@@ -428,6 +428,10 @@ def test_cyclic_codes(field: int = 3) -> None:
     poly_b = y**3 + x**2 + x**4
     code = codes.QCCode(dims, poly_a, poly_b, field=2)
     assert not code.get_toric_mappings()
+
+    # codes with more than 2 symbols are unsupported
+    with pytest.raises(ValueError, match="not supported"):
+        codes.QCCode({}, poly_a, x + y + z, field=2)
 
     # fail to match cyclic group orders to free variables
     with pytest.raises(ValueError, match="Could not match"):
