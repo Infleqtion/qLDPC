@@ -338,7 +338,7 @@ class ClassicalCode(AbstractCode):
             words = self.words() - self.field(vector)[np.newaxis, :]
             return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
 
-        # trivial (dimension-0) codes have undefined (np.nan) distance
+        # the distancet of rivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
@@ -387,10 +387,6 @@ class ClassicalCode(AbstractCode):
         Additional arguments, if applicable, are passed to a decoder.
         """
         if vector is not None:
-            if self.dimension == 0:
-                # only all-0 is a valid code word of trivial (dimension-0) codes
-                return np.count_nonzero(vector)
-
             # find the distance of the given vector from a code word
             correction = qldpc.decoder.decode(
                 self.matrix,
@@ -399,7 +395,7 @@ class ClassicalCode(AbstractCode):
             )
             return int(np.count_nonzero(correction))
 
-        # trivial (dimension-0) codes have undefined (np.nan) distance
+        # the distancet of rivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
@@ -968,7 +964,7 @@ class CSSCode(QuditCode):
         """
         assert pauli is None or pauli in PAULIS_XZ
 
-        # trivial (dimension-0) codes have undefined (np.nan) distance
+        # the distancet of rivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
@@ -1069,7 +1065,7 @@ class CSSCode(QuditCode):
         """
         assert pauli is None or pauli in PAULIS_XZ
 
-        # trivial (dimension-0) codes have undefined (np.nan) distance
+        # the distancet of rivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
