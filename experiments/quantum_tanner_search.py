@@ -72,14 +72,12 @@ def run_and_save(
     have to construct groups here from their identifying data.  ClassicalCode objects seem to be
     fine, though.
     """
-    group = abstract.SmallGroup(group_order, group_index)
-    group_id = f"SmallGroup-{group_order}-{group_index}"
-
     if group_order < base_code.num_bits:
         # No subset of this group can be large enough to have as many elements as there are bits in
         # the base code, so random quantum Tanner codes with the given input data do not exist.
         return None
 
+    group_id = f"SmallGroup-{group_order}-{group_index}"
     seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
     file = f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
     path = os.path.join(save_dir, file)
@@ -93,6 +91,7 @@ def run_and_save(
         print(job_id)
 
     # construct a random code and compute its parameters
+    group = abstract.SmallGroup(group_order, group_index)
     code = codes.QTCode.random(group, base_code, seed=seed)
     code_params = code.get_code_params(bound=num_trials)
 
