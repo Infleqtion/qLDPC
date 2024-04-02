@@ -143,7 +143,7 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
-def test_distance_from_classical_code(bits: int = 3) -> None:
+def test_distance_classical(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.RepetitionCode(bits, field=2)
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
@@ -226,7 +226,7 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers("I", "I I", field=field)
 
 
-def test_quantum_distance() -> None:
+def test_distance_quantum() -> None:
     """Distance calculations for CSS codes."""
     code = codes.HGPCode(codes.RepetitionCode(2))
     assert code.get_distance() == 2

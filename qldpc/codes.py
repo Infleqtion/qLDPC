@@ -172,7 +172,7 @@ class ClassicalCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _exact_distance: int | None = None
+    _exact_distance: int | float | None = None
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
@@ -327,6 +327,19 @@ class ClassicalCode(AbstractCode):
             return self.get_distance_exact(vector=vector)
         return self.get_distance_bound(num_trials=int(bound), vector=vector, **decoder_args)
 
+    def _get_distance_if_known(
+        self, vector: Sequence[int] | npt.NDArray[np.int_] | None
+    ) -> int | float | None:
+        """Retrieve exact distance, if known.  Otherwise return None."""
+        if vector is not None:
+            return np.count_nonzero(vector) if self.dimension == 0 else None
+
+        if self.dimension == 0:
+            # the distance of dimension-0 codes is undefined
+            self._exact_distance = np.nan
+
+        return self._exact_distance
+
     def get_distance_exact(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
     ) -> int | float:
@@ -334,22 +347,18 @@ class ClassicalCode(AbstractCode):
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
+        # if we know the exact code distance, return it
+        if (distance := self._get_distance_if_known(vector)) is not None:
+            return distance
+
         if vector is not None:
             words = self.words() - self.field(vector)[np.newaxis, :]
             return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
 
-        # the distance of trivial (dimension-0) codes is undefined
-        if self.dimension == 0:
-            return np.nan
-
-        # if we know the exact code distance, return it
-        if self._exact_distance is not None:
-            return self._exact_distance
-
-        # we do not know the exact distance, so compute it
         words = self.words()[1:]
-        self._exact_distance = np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
-        return self._exact_distance
+        distance = np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+        self._exact_distance = distance
+        return distance
 
     def get_distance_bound(
         self,
@@ -386,6 +395,10 @@ class ClassicalCode(AbstractCode):
 
         Additional arguments, if applicable, are passed to a decoder.
         """
+        # if we know the exact code distance, return it
+        if (distance := self._get_distance_if_known(vector)) is not None:
+            return distance
+
         if vector is not None:
             # find the distance of the given vector from a code word
             correction = qldpc.decoder.decode(
@@ -394,10 +407,6 @@ class ClassicalCode(AbstractCode):
                 **decoder_args,
             )
             return int(np.count_nonzero(correction))
-
-        # the distance of trivial (dimension-0) codes is undefined
-        if self.dimension == 0:
-            return np.nan
 
         # effective syndrome: a trivial "actual" syndrome, and a nonzero overlap with a random word
         effective_syndrome = np.zeros(self.num_checks + 1, dtype=int)
@@ -650,8 +659,8 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _exact_distance_x: int | None = None
-    _exact_distance_z: int | None = None
+    _exact_distance_x: int | float | None = None
+    _exact_distance_z: int | float | None = None
 
     def __init__(
         self,
@@ -812,8 +821,8 @@ class CSSCode(QuditCode):
     _conjugate: slice | Sequence[int]
     _codes_equal: bool
     _logical_ops: galois.FieldArray | None = None
-    _exact_distance_x: int | None = None
-    _exact_distance_z: int | None = None
+    _exact_distance_x: int | float | None = None
+    _exact_distance_z: int | float | None = None
 
     def __init__(
         self,
@@ -954,6 +963,16 @@ class CSSCode(QuditCode):
             return self.get_distance_exact(pauli, vector=vector)
         return self.get_distance_bound(pauli, num_trials=int(bound), vector=vector, **decoder_args)
 
+    def _get_distance_if_known(self, pauli: PauliXZ | None) -> int | float | None:
+        """Retrieve exact distance, if known.  Otherwise return None."""
+        assert pauli is None or pauli in PAULIS_XZ
+
+        if self.dimension == 0:
+            # the distances of dimension-0 codes are undefined
+            self._exact_distance_x = self._exact_distance_z = np.nan
+
+        return self._exact_distance_x if pauli == Pauli.X else self._exact_distance_z
+
     def get_distance_exact(
         self, pauli: PauliXZ | None, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
     ) -> int | float:
@@ -963,10 +982,6 @@ class CSSCode(QuditCode):
         (possibly trivial) X-type or Z-type logical operator, as applicable.
         """
         assert pauli is None or pauli in PAULIS_XZ
-
-        # the distance of trivial (dimension-0) codes is undefined
-        if self.dimension == 0:
-            return np.nan
 
         if pauli is None:
             return min(
@@ -981,10 +996,8 @@ class CSSCode(QuditCode):
             return min(np.count_nonzero(word - vector) for word in ops_x)
 
         # if we know the exact code distance, return it
-        if pauli == Pauli.X and self._exact_distance_x is not None:
-            return self._exact_distance_x
-        if pauli == Pauli.Z and self._exact_distance_z is not None:
-            return self._exact_distance_z
+        if (distance := self._get_distance_if_known(pauli)) is not None:
+            return distance
 
         # we do not know the exact distance, so compute it
         code_x = self.code_x if pauli == Pauli.X else self.code_z
@@ -1064,13 +1077,9 @@ class CSSCode(QuditCode):
         Return the Hamming weight |w_x|.
         """
         assert pauli is None or pauli in PAULIS_XZ
-
-        # the distance of trivial (dimension-0) codes is undefined
-        if self.dimension == 0:
-            return np.nan
+        pauli = pauli or random.choice(PAULIS_XZ)
 
         # define code_z and pauli_z as if we are computing X-distance
-        pauli = pauli or random.choice(PAULIS_XZ)
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
@@ -1082,6 +1091,10 @@ class CSSCode(QuditCode):
                 **decoder_args,
             )
             return int(np.count_nonzero(correction))
+
+        # if we know the exact code distance, return it
+        if (distance := self._get_distance_if_known(pauli)) is not None:
+            return distance
 
         # construct the effective syndrome
         effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
