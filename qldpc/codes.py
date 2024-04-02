@@ -1417,7 +1417,7 @@ class QCCode(GBCode):
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
-        # hadamard-transform qubits in the "R" sector
+        # if requested, hadamard-transform qubits in the "R" sector
         num_qudits = self.group.order * 2
         qudits_to_conjugate: slice | Sequence[int] = (
             slice(num_qudits // 2, num_qudits + 1) if conjugate else ()
