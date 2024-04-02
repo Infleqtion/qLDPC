@@ -338,9 +338,9 @@ class ClassicalCode(AbstractCode):
             words = self.words() - self.field(vector)[np.newaxis, :]
             return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
 
-        # by convention, trivial (dimension-0) codes have infinite distance
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
-            return np.inf
+            return np.nan
 
         # if we know the exact code distance, return it
         if self._exact_distance is not None:
@@ -387,10 +387,6 @@ class ClassicalCode(AbstractCode):
         Additional arguments, if applicable, are passed to a decoder.
         """
         if vector is not None:
-            if self.dimension == 0:
-                # only all-0 is a valid code word
-                return np.count_nonzero(vector)
-
             # find the distance of the given vector from a code word
             correction = qldpc.decoder.decode(
                 self.matrix,
@@ -399,9 +395,9 @@ class ClassicalCode(AbstractCode):
             )
             return int(np.count_nonzero(correction))
 
-        # by convention, trivial (dimension-0) codes have infinite distance
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
-            return np.inf
+            return np.nan
 
         # effective syndrome: a trivial "actual" syndrome, and a nonzero overlap with a random word
         effective_syndrome = np.zeros(self.num_checks + 1, dtype=int)
@@ -968,9 +964,9 @@ class CSSCode(QuditCode):
         """
         assert pauli is None or pauli in PAULIS_XZ
 
-        # by convention, trivial (dimension-0) codes have infinite distance
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
-            return np.inf
+            return np.nan
 
         if pauli is None:
             return min(
@@ -1069,9 +1065,9 @@ class CSSCode(QuditCode):
         """
         assert pauli is None or pauli in PAULIS_XZ
 
-        # by convention, trivial (dimension-0) codes have infinite distance
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
-            return np.inf
+            return np.nan
 
         # define code_z and pauli_z as if we are computing X-distance
         pauli = pauli or random.choice(PAULIS_XZ)
