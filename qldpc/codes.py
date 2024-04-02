@@ -348,8 +348,8 @@ class ClassicalCode(AbstractCode):
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
         # if we know the exact code distance, return it
-        if (distance := self._get_distance_if_known(vector)) is not None:
-            return distance
+        if (known_distance := self._get_distance_if_known(vector)) is not None:
+            return known_distance
 
         if vector is not None:
             words = self.words() - self.field(vector)[np.newaxis, :]
@@ -396,8 +396,8 @@ class ClassicalCode(AbstractCode):
         Additional arguments, if applicable, are passed to a decoder.
         """
         # if we know the exact code distance, return it
-        if (distance := self._get_distance_if_known(vector)) is not None:
-            return distance
+        if (known_distance := self._get_distance_if_known(vector)) is not None:
+            return known_distance
 
         if vector is not None:
             # find the distance of the given vector from a code word
@@ -996,8 +996,8 @@ class CSSCode(QuditCode):
             return min(np.count_nonzero(word - vector) for word in ops_x)
 
         # if we know the exact code distance, return it
-        if (distance := self._get_distance_if_known(pauli)) is not None:
-            return distance
+        if (known_distance := self._get_distance_if_known(pauli)) is not None:
+            return known_distance
 
         # we do not know the exact distance, so compute it
         code_x = self.code_x if pauli == Pauli.X else self.code_z
@@ -1093,8 +1093,8 @@ class CSSCode(QuditCode):
             return int(np.count_nonzero(correction))
 
         # if we know the exact code distance, return it
-        if (distance := self._get_distance_if_known(pauli)) is not None:
-            return distance
+        if (known_distance := self._get_distance_if_known(pauli)) is not None:
+            return known_distance
 
         # construct the effective syndrome
         effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
