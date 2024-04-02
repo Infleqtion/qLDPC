@@ -146,8 +146,8 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
 def test_distance_classical(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.RepetitionCode(bits, field=2)
-    dist_bound = rep_code.get_distance(bound=True) == bits
-    dist_bound = rep_code.get_distance(bound=False) == bits
+    assert rep_code.get_distance(bound=True) == bits
+    assert rep_code.get_distance(bound=False) == bits
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
         dist_bound = rep_code.get_distance_bound(vector=vector)
