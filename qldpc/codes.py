@@ -1492,9 +1492,9 @@ class QCCode(GBCode):
 
         Each plaquette on the torus is nominally indexed by coordinates (i, j).  Each plaquette
         mapping then takes:
-        - the plaquettes x-coordinate i
-        - the plaquettes y-coordinate j
-        - a qubit sector: 0, 1, Pauli.X, or Pauli.Z (respectively, for L, R, X, or Z),
+        - a plaquette's x-coordinate i
+        - a plaquette's y-coordinate j
+        - a qubit sector: 0, 1, Pauli.X, or Pauli.Z (respectively, for an L, R, X, or Z qubit),
         - the dimensions (shape) of the toric layout (a pair of integers for torus width/height).
         The plaquette mapping returns the coordinates of the new plaquette for the specified qubit.
         """
@@ -1556,7 +1556,7 @@ class QCCode(GBCode):
             }
 
             plaquette_map = functools.partial(
-                self.full_plaquette_map,
+                self._full_plaquette_map,
                 grid_map=grid_map,
                 sector_shifts=sector_shifts,
                 torus_shape=torus_shape,
@@ -1565,7 +1565,7 @@ class QCCode(GBCode):
 
         return layout_data
 
-    def full_plaquette_map(
+    def _full_plaquette_map(
         self,
         ii: int,
         jj: int,
