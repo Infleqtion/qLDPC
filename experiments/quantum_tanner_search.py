@@ -17,7 +17,7 @@ def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
 
 def get_small_groups(max_order: int = 20) -> Iterator[tuple[int, int]]:
     """Finite groups by order and index."""
-    for order in range(3, max_order + 1):
+    for order in range(1, max_order + 1):
         for index in range(1, abstract.SmallGroup.number(order) + 1):
             yield order, index
 
