@@ -338,7 +338,7 @@ class ClassicalCode(AbstractCode):
             words = self.words() - self.field(vector)[np.newaxis, :]
             return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
 
-        # the distancet of rivial (dimension-0) codes is undefined
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
@@ -395,7 +395,7 @@ class ClassicalCode(AbstractCode):
             )
             return int(np.count_nonzero(correction))
 
-        # the distancet of rivial (dimension-0) codes is undefined
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
@@ -964,7 +964,7 @@ class CSSCode(QuditCode):
         """
         assert pauli is None or pauli in PAULIS_XZ
 
-        # the distancet of rivial (dimension-0) codes is undefined
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
@@ -1065,7 +1065,7 @@ class CSSCode(QuditCode):
         """
         assert pauli is None or pauli in PAULIS_XZ
 
-        # the distancet of rivial (dimension-0) codes is undefined
+        # the distance of trivial (dimension-0) codes is undefined
         if self.dimension == 0:
             return np.nan
 
