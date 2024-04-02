@@ -115,6 +115,7 @@ if __name__ == "__main__":
     num_trials = 1000  # for code distance calculations
 
     max_concurrent_jobs = os.cpu_count() or 1
+    max_concurrent_jobs = os.cpu_count() // 2  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
 
     # run multiple jobs in parallel
@@ -140,5 +141,5 @@ if __name__ == "__main__":
 
                     if base_code.num_bits == group_order:
                         # There is only one instance of this random quantum Tanner code, namely the
-                        # one in which subset_a = subset_b = group, we we only need one sample.
+                        # one in which subset_a = subset_b = group, so we only need one sample.
                         break
