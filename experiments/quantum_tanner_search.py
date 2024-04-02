@@ -66,7 +66,7 @@ def run_and_save(
     override_existing_data: bool = False,
     silent: bool = False,
 ) -> None:
-    """Make a random quantum Tanner code, compute its distance, and save it to a text file.
+    """Generate a random quantum Tanner code, compute its distance, and save it to a text file.
 
     The multiprocessing module is unable to properly handle SymPy PermutationGroup objects, so we
     have to construct groups here from their identifying data.  ClassicalCode objects seem to be
@@ -115,6 +115,7 @@ if __name__ == "__main__":
     num_trials = 1000  # for code distance calculations
 
     max_concurrent_jobs = os.cpu_count() or 1
+    max_concurrent_jobs = os.cpu_count() // 2  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
 
     # run multiple jobs in parallel
