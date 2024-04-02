@@ -1384,20 +1384,27 @@ class QCCode(GBCode):
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) < len(orders) or (
+        if len(orders) < len(symbols) or (
             isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
         ):
             raise ValueError(f"Could not match symbols {symbols} to group orders {orders}")
 
         # identify cyclic group orders with symbols in the polynomials
-        if not isinstance(orders, dict):
-            orders_dict = {}
+        if isinstance(orders, dict):
+            symbol_to_order = orders
+        else:
+            symbol_to_order = {}
             for symbol, order in zip(sorted(symbols, key=str), orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
-                orders_dict[symbol] = order
-            orders = orders_dict
-        self.symbols = tuple(orders.keys())
-        self.orders = tuple(orders.values())
+                symbol_to_order[symbol] = order
+
+        # enforce a minimum of 2 symbols by adding placeholders if necessary
+        while len(symbols) < 2:
+            unique_symbol = sympy.Symbol("".join(map(str, symbols)))
+            symbol_to_order[unique_symbol] = 1
+
+        self.symbols = tuple(symbol_to_order.keys())
+        self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
         self.group = abstract.AbelianGroup(*orders.values(), product_lift=True)
@@ -1667,9 +1674,9 @@ class QCCode(GBCode):
                         aa, bb, sector, torus_shape, open_boundaries
                     )
 
-                    # relative position of data qubit from check qubitF
-                    shift_a = (d_a - c_a) % (2 * torus_shape[0])
-                    shift_b = (d_b - c_b) % (2 * torus_shape[1])
+                    # relative position of data qubit from check qubit
+                    shift_a = d_a - c_a
+                    shift_b = d_b - c_b
                     shift_a = shift_a if shift_a <= torus_shape[0] else shift_a - 2 * torus_shape[0]
                     shift_b = shift_b if shift_b <= torus_shape[1] else shift_b - 2 * torus_shape[1]
                     shifts[pauli].add((shift_a, shift_b))
