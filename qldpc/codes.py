@@ -1384,23 +1384,30 @@ class QCCode(GBCode):
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) < len(orders) or (
+        if len(orders) < len(symbols) or (
             isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
         ):
             raise ValueError(f"Could not match symbols {symbols} to group orders {orders}")
 
         # identify cyclic group orders with symbols in the polynomials
-        if not isinstance(orders, dict):
-            orders_dict = {}
+        if isinstance(orders, dict):
+            symbol_to_order = orders
+        else:
+            symbol_to_order = {}
             for symbol, order in zip(sorted(symbols, key=str), orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
-                orders_dict[symbol] = order
-            orders = orders_dict
-        self.symbols = tuple(orders.keys())
-        self.orders = tuple(orders.values())
+                symbol_to_order[symbol] = order
+
+        # enforce a minimum of 2 symbols by adding placeholders if necessary
+        while len(symbol_to_order) < 2:
+            unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
+            symbol_to_order[unique_symbol] = 1
+
+        self.symbols = tuple(symbol_to_order.keys())
+        self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
-        self.group = abstract.AbelianGroup(*orders.values(), product_lift=True)
+        self.group = abstract.AbelianGroup(*self.orders, product_lift=True)
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
@@ -1485,9 +1492,9 @@ class QCCode(GBCode):
 
         Each plaquette on the torus is nominally indexed by coordinates (i, j).  Each plaquette
         mapping then takes:
-        - the plaquettes x-coordinate i
-        - the plaquettes y-coordinate j
-        - a qubit sector: 0, 1, Pauli.X, or Pauli.Z (respectively, for L, R, X, or Z),
+        - a plaquette's x-coordinate i
+        - a plaquette's y-coordinate j
+        - a qubit sector: 0, 1, Pauli.X, or Pauli.Z (respectively, for an L, R, X, or Z qubit),
         - the dimensions (shape) of the toric layout (a pair of integers for torus width/height).
         The plaquette mapping returns the coordinates of the new plaquette for the specified qubit.
         """
@@ -1549,7 +1556,7 @@ class QCCode(GBCode):
             }
 
             plaquette_map = functools.partial(
-                self.full_plaquette_map,
+                self._full_plaquette_map,
                 grid_map=grid_map,
                 sector_shifts=sector_shifts,
                 torus_shape=torus_shape,
@@ -1558,7 +1565,7 @@ class QCCode(GBCode):
 
         return layout_data
 
-    def full_plaquette_map(
+    def _full_plaquette_map(
         self,
         ii: int,
         jj: int,
@@ -1662,16 +1669,19 @@ class QCCode(GBCode):
 
                 # identify the relative position of all data qubits addressed by this check
                 for sector, aa, bb in zip(*np.where(check)):
-                    # position of this data qubit
+                    # relative position of this data qubit from the check qubit
                     d_a, d_b = self.get_toric_qubit_pos(
                         aa, bb, sector, torus_shape, open_boundaries
                     )
+                    shift_a = d_a - c_a
+                    shift_b = d_b - c_b
 
-                    # relative position of data qubit from check qubitF
-                    shift_a = (d_a - c_a) % (2 * torus_shape[0])
-                    shift_b = (d_b - c_b) % (2 * torus_shape[1])
-                    shift_a = shift_a if shift_a <= torus_shape[0] else shift_a - 2 * torus_shape[0]
-                    shift_b = shift_b if shift_b <= torus_shape[1] else shift_b - 2 * torus_shape[1]
+                    # account for periodic boundary conditions, if applicable
+                    if not open_boundaries:
+                        shift_a = (shift_a + torus_shape[0]) % (2 * torus_shape[0]) - torus_shape[0]
+                        shift_b = (shift_b + torus_shape[1]) % (2 * torus_shape[1]) - torus_shape[1]
+
+                    # record relative position
                     shifts[pauli].add((shift_a, shift_b))
 
         return shifts[Pauli.X], shifts[Pauli.Z]
