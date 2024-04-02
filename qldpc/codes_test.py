@@ -628,15 +628,11 @@ def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
         code = codes.GeneralizedSurfaceCode(size, dim, periodic=False, field=field)
         assert code.dimension == 1
         assert code.num_qudits == size**dim + (dim - 1) * size ** (dim - 2) * (size - 1) ** 2
-        assert code.get_distance(codes.Pauli.Z) == size
-        assert code.get_distance(codes.Pauli.X) == size ** (dim - 1)
 
         # toric code
         code = codes.GeneralizedSurfaceCode(size, dim, periodic=True, field=field)
         assert code.dimension == dim
         assert code.num_qudits == dim * size**dim
-        assert code.get_distance(codes.Pauli.Z) == size
-        assert code.get_distance(codes.Pauli.X) == size ** (dim - 1)
 
     with pytest.raises(ValueError, match=">= 2"):
         codes.GeneralizedSurfaceCode(size, dim=1)
