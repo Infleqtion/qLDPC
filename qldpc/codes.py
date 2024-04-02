@@ -1399,15 +1399,15 @@ class QCCode(GBCode):
                 symbol_to_order[symbol] = order
 
         # enforce a minimum of 2 symbols by adding placeholders if necessary
-        while len(symbols) < 2:
-            unique_symbol = sympy.Symbol("".join(map(str, symbols)))
+        while len(symbol_to_order) < 2:
+            unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
             symbol_to_order[unique_symbol] = 1
 
         self.symbols = tuple(symbol_to_order.keys())
         self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
-        self.group = abstract.AbelianGroup(*orders.values(), product_lift=True)
+        self.group = abstract.AbelianGroup(*self.orders, product_lift=True)
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
@@ -1669,16 +1669,19 @@ class QCCode(GBCode):
 
                 # identify the relative position of all data qubits addressed by this check
                 for sector, aa, bb in zip(*np.where(check)):
-                    # position of this data qubit
+                    # relative position of this data qubit from the check qubit
                     d_a, d_b = self.get_toric_qubit_pos(
                         aa, bb, sector, torus_shape, open_boundaries
                     )
-
-                    # relative position of data qubit from check qubit
                     shift_a = d_a - c_a
                     shift_b = d_b - c_b
-                    shift_a = shift_a if shift_a <= torus_shape[0] else shift_a - 2 * torus_shape[0]
-                    shift_b = shift_b if shift_b <= torus_shape[1] else shift_b - 2 * torus_shape[1]
+
+                    # account for periodic boundary conditions, if applicable
+                    if not open_boundaries:
+                        shift_a = (shift_a + torus_shape[0]) % (2 * torus_shape[0]) - torus_shape[0]
+                        shift_b = (shift_b + torus_shape[1]) % (2 * torus_shape[1]) - torus_shape[1]
+
+                    # record relative position
                     shifts[pauli].add((shift_a, shift_b))
 
         return shifts[Pauli.X], shifts[Pauli.Z]
