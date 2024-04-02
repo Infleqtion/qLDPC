@@ -365,8 +365,9 @@ class Group:
 
         Note: this is not a uniformaly random subset, only a "sufficiently random" one.
 
-        WARNING: not all groups have symmetric subsets of arbitrary size.  If called with a poor
-        choice of group and subset size, this method may never terminate.
+        WARNING: if excluding the identity element, not all groups have symmetric subsets of
+        arbitrary size.  If called with a poor choice of group and subset size, this method may
+        never terminate.
         """
         if not 0 < size <= self.order:
             raise ValueError(
