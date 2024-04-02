@@ -154,23 +154,13 @@ def test_distance_from_classical_code(bits: int = 3) -> None:
         assert dist_brute <= dist_bound
     assert rep_code.get_distance(brute=False) == bits
 
-
-def test_infinite_distance() -> None:
-    """The distance of zero-dimensional codes is infinite."""
-    code: codes.AbstractCode
-
-    code = codes.ClassicalCode([[1, 0], [1, 1]])
-    random_vector = np.random.randint(2, size=code.num_bits)
-    assert code.dimension == 0
-    assert code.get_distance_exact() is np.inf
-    assert code.get_distance_bound() is np.inf
-    assert code.get_distance_exact(vector=random_vector) == np.count_nonzero(random_vector)
-    assert code.get_distance_bound(vector=random_vector) == np.count_nonzero(random_vector)
-
-    code = codes.HGPCode(code)
-    assert code.dimension == 0
-    assert code.get_distance(bound=False) is np.inf
-    assert code.get_distance(bound=True) is np.inf
+    trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
+    random_vector = np.random.randint(2, size=trivial_code.num_bits)
+    assert trivial_code.dimension == 0
+    assert trivial_code.get_distance_exact() is np.nan
+    assert trivial_code.get_distance_bound() is np.nan
+    assert trivial_code.get_distance_exact(vector=random_vector) == np.count_nonzero(random_vector)
+    assert trivial_code.get_distance_bound(vector=random_vector) == np.count_nonzero(random_vector)
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -237,7 +227,7 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 
 
 def test_quantum_distance() -> None:
-    """Distance calculations for qudit codes."""
+    """Distance calculations for CSS codes."""
     code = codes.HGPCode(codes.RepetitionCode(2))
     assert code.get_distance() == 2
 
@@ -249,7 +239,8 @@ def test_quantum_distance() -> None:
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
     code = codes.HGPCode(trivial_code)
     assert code.dimension == 0
-    assert code.get_distance() is np.inf
+    assert code.get_distance(bound=False) is np.nan
+    assert code.get_distance(bound=True) is np.nan
 
 
 def test_quantum_code_string() -> None:
