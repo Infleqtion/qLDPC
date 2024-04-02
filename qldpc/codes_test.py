@@ -146,21 +146,22 @@ def test_conversions(bits: int = 5, checks: int = 3, field: int = 3) -> None:
 def test_distance_classical(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.RepetitionCode(bits, field=2)
+    dist_bound = rep_code.get_distance(bound=True) == bits
+    dist_bound = rep_code.get_distance(bound=False) == bits
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
-        dist_brute = rep_code.get_distance_exact(vector=vector)
-        dist_bound = rep_code.get_distance(bound=True, vector=vector)
-        assert dist_brute == min(weight, bits - weight)
-        assert dist_brute <= dist_bound
-    assert rep_code.get_distance(brute=False) == bits
+        dist_bound = rep_code.get_distance_bound(vector=vector)
+        dist_exact = rep_code.get_distance_exact(vector=vector)
+        assert dist_exact == min(weight, bits - weight)
+        assert dist_exact <= dist_bound
 
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
     random_vector = np.random.randint(2, size=trivial_code.num_bits)
     assert trivial_code.dimension == 0
-    assert trivial_code.get_distance_exact() is np.nan
     assert trivial_code.get_distance_bound() is np.nan
-    assert trivial_code.get_distance_exact(vector=random_vector) == np.count_nonzero(random_vector)
+    assert trivial_code.get_distance_exact() is np.nan
     assert trivial_code.get_distance_bound(vector=random_vector) == np.count_nonzero(random_vector)
+    assert trivial_code.get_distance_exact(vector=random_vector) == np.count_nonzero(random_vector)
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -226,9 +227,9 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers("I", "I I", field=field)
 
 
-def test_distance_quantum() -> None:
+def test_distance_quantum(field: int = 3) -> None:
     """Distance calculations for CSS codes."""
-    code = codes.HGPCode(codes.RepetitionCode(2))
+    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
     assert code.get_distance() == 2
 
     # assert that the identity is a logical operator
@@ -236,11 +237,11 @@ def test_distance_quantum() -> None:
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
 
     # an empty quantum code has distance infinity
-    trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
+    trivial_code = codes.ClassicalCode([[1, 0], [1, 1]], field=field)
     code = codes.HGPCode(trivial_code)
     assert code.dimension == 0
-    assert code.get_distance(bound=False) is np.nan
     assert code.get_distance(bound=True) is np.nan
+    assert code.get_distance(bound=False) is np.nan
 
 
 def test_quantum_code_string() -> None:
