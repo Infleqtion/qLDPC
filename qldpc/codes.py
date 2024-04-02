@@ -2462,6 +2462,10 @@ class GeneralizedSurfaceCode(CSSCode):
                 f"The dimension of a generalized surface code should be >= 2 (provided: {dim})"
             )
 
+        # save known distances
+        self._exact_distance_x = size ** (dim - 1)
+        self._exact_distance_z = size
+
         base_code = RingCode(size, field) if periodic else RepetitionCode(size, field)
 
         # build a chain complex one link at a time
