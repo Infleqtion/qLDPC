@@ -227,17 +227,18 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_stabilizers("I", "I I", field=field)
 
 
-def test_distance_quantum(field: int = 3) -> None:
+def test_distance_quantum() -> None:
     """Distance calculations for CSS codes."""
-    code = codes.HGPCode(codes.RepetitionCode(2, field=field))
-    assert code.get_distance() == 2
+    code = codes.HGPCode(codes.RepetitionCode(2, field=3))
+    assert code.get_distance(bound=True) == 2
+    assert code.get_distance(bound=False) == 2
 
     # assert that the identity is a logical operator
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
     assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
 
     # an empty quantum code has distance infinity
-    trivial_code = codes.ClassicalCode([[1, 0], [1, 1]], field=field)
+    trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
     code = codes.HGPCode(trivial_code)
     assert code.dimension == 0
     assert code.get_distance(bound=True) is np.nan
