@@ -323,7 +323,7 @@ class ClassicalCode(AbstractCode):
         Additional arguments, if applicable, are passed to a decoder in
         `ClassicalCode.get_one_distance_bound`.
         """
-        if bound is None:
+        if not bound:
             return self.get_distance_exact(vector=vector)
         return self.get_distance_bound(num_trials=int(bound), vector=vector, **decoder_args)
 
@@ -335,17 +335,16 @@ class ClassicalCode(AbstractCode):
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
         if vector is not None:
-            if self.dimension == 0:
-                return np.count_nonzero(vector)
             words = self.words() - self.field(vector)[np.newaxis, :]
             return np.min(np.count_nonzero(words.view(np.ndarray), axis=1))
+
+        # by convention, trivial (dimension-0) codes have infinite distance
+        if self.dimension == 0:
+            return np.inf
 
         # if we know the exact code distance, return it
         if self._exact_distance is not None:
             return self._exact_distance
-
-        if self.dimension == 0:
-            return np.inf
 
         # we do not know the exact distance, so compute it
         words = self.words()[1:]
@@ -358,7 +357,7 @@ class ClassicalCode(AbstractCode):
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
-    ) -> int:
+    ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
@@ -373,7 +372,7 @@ class ClassicalCode(AbstractCode):
 
     def get_one_distance_bound(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
-    ) -> int:
+    ) -> int | float:
         """Compute a single upper bound on code distance.
 
         The code distance is the minimal Hamming distance between two code words, or equivalently
@@ -388,6 +387,10 @@ class ClassicalCode(AbstractCode):
         Additional arguments, if applicable, are passed to a decoder.
         """
         if vector is not None:
+            if self.dimension == 0:
+                # only all-0 is a valid code word
+                return np.count_nonzero(vector)
+
             # find the distance of the given vector from a code word
             correction = qldpc.decoder.decode(
                 self.matrix,
@@ -395,6 +398,10 @@ class ClassicalCode(AbstractCode):
                 **decoder_args,
             )
             return int(np.count_nonzero(correction))
+
+        # by convention, trivial (dimension-0) codes have infinite distance
+        if self.dimension == 0:
+            return np.inf
 
         # effective syndrome: a trivial "actual" syndrome, and a nonzero overlap with a random word
         effective_syndrome = np.zeros(self.num_checks + 1, dtype=int)
@@ -947,7 +954,7 @@ class CSSCode(QuditCode):
         Additional arguments, if applicable, are passed to a decoder in
         `CSSCode.get_one_distance_bound`.
         """
-        if bound is None:
+        if not bound:
             return self.get_distance_exact(pauli, vector=vector)
         return self.get_distance_bound(pauli, num_trials=int(bound), vector=vector, **decoder_args)
 
@@ -960,6 +967,8 @@ class CSSCode(QuditCode):
         (possibly trivial) X-type or Z-type logical operator, as applicable.
         """
         assert pauli is None or pauli in PAULIS_XZ
+
+        # by convention, trivial (dimension-0) codes have infinite distance
         if self.dimension == 0:
             return np.inf
 
@@ -1002,7 +1011,7 @@ class CSSCode(QuditCode):
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
-    ) -> int:
+    ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
@@ -1023,7 +1032,7 @@ class CSSCode(QuditCode):
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: object,
-    ) -> int:
+    ) -> int | float:
         """Compute a single upper bound on code distance.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
@@ -1059,9 +1068,13 @@ class CSSCode(QuditCode):
         Return the Hamming weight |w_x|.
         """
         assert pauli is None or pauli in PAULIS_XZ
-        pauli = pauli or random.choice(PAULIS_XZ)
+
+        # by convention, trivial (dimension-0) codes have infinite distance
+        if self.dimension == 0:
+            return np.inf
 
         # define code_z and pauli_z as if we are computing X-distance
+        pauli = pauli or random.choice(PAULIS_XZ)
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
 
