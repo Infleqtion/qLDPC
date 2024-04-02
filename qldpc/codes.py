@@ -2463,6 +2463,7 @@ class GeneralizedSurfaceCode(CSSCode):
             )
 
         # save known distances
+        # TODO: find and link source for these
         self._exact_distance_x = size ** (dim - 1)
         self._exact_distance_z = size
 
