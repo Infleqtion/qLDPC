@@ -963,9 +963,9 @@ class CSSCode(QuditCode):
             return self.get_distance_exact(pauli, vector=vector)
         return self.get_distance_bound(pauli, num_trials=int(bound), vector=vector, **decoder_args)
 
-    def _get_distance_if_known(self, pauli: PauliXZ | None) -> int | float | None:
+    def _get_distance_if_known(self, pauli: PauliXZ) -> int | float | None:
         """Retrieve exact distance, if known.  Otherwise return None."""
-        assert pauli is None or pauli in PAULIS_XZ
+        assert pauli in PAULIS_XZ
 
         if self.dimension == 0:
             # the distances of dimension-0 codes are undefined
