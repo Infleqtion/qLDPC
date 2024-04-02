@@ -115,7 +115,6 @@ if __name__ == "__main__":
     num_trials = 1000  # for code distance calculations
 
     max_concurrent_jobs = os.cpu_count() or 1
-    max_concurrent_jobs = os.cpu_count() // 2  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
 
     # run multiple jobs in parallel
