@@ -1369,9 +1369,11 @@ class QCCode(GBCode):
     polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
     """
 
+    _min_symbols: int = 2
+
     def __init__(
         self,
-        orders: tuple[int, int] | dict[sympy.Symbol, int],
+        orders: Sequence[int] | dict[sympy.Symbol, int],
         poly_a: sympy.Basic,
         poly_b: sympy.Basic,
         field: int | None = None,
@@ -1384,6 +1386,10 @@ class QCCode(GBCode):
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
+        if len(symbols) > 2:
+            raise ValueError(
+                f"Quasi-cyclic codes with more than {self._min_symbols} symbols are not supported"
+            )
         if len(orders) < len(symbols) or (
             isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
         ):
@@ -1398,8 +1404,8 @@ class QCCode(GBCode):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 symbol_to_order[symbol] = order
 
-        # enforce a minimum of 2 symbols by adding placeholders if necessary
-        while len(symbol_to_order) < 2:
+        # enforce a minimum number of symbols by adding placeholders if necessary
+        while len(symbol_to_order) < self._min_symbols:
             unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
             symbol_to_order[unique_symbol] = 1
 
