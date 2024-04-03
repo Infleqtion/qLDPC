@@ -71,14 +71,15 @@ def compute_distances(
         return None
 
     if not silent:
-        print(dim_x, dim_y, exponents, communication_distance)
+        start_text = f"{dim_x}, {dim_y}, {exponents}"
+        print(start_text)
 
     code_params = get_code_params(dim_x, dim_y, exponents, num_trials)
 
     if not silent:
         completion_text = " "
         if identify_completion_text:
-            completion_text += f"({dim_x}, {dim_y}, {exponents}) "
+            completion_text += f"{start_text}: "
         completion_text += "code parameters: " + str(code_params)
         print(completion_text)
 
