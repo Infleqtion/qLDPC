@@ -88,7 +88,6 @@ if __name__ == "__main__":
     num_trials = 1000
 
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
-    max_concurrent_jobs = 1
     save_dir = os.path.join(os.path.dirname(__file__), "quasi_cyclic_codes")
 
     # run multiple jobs in parallel
