@@ -434,19 +434,18 @@ class ClassicalCode(AbstractCode):
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
-    ) -> tuple[int, int, int | float, int]:
-        """Compute the parameters of this code: [n,k,d,w].
+    ) -> tuple[int, int, int | float]:
+        """Compute the parameters of this code: [n,k,d].
 
         Here:
         - n is the number of data bits
         - k is the number of encoded ("logical") bits
         - d is the code distance
-        - w is the maximal weight of (i.e., number of bits addressed by) a parity check
 
         Keyword arguments are passed to the calculation of code distance.
         """
         distance = self.get_distance(bound=bound, vector=None, **decoder_args)
-        return self.num_bits, self.dimension, distance, self.get_weight()
+        return self.num_bits, self.dimension, distance
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
@@ -925,19 +924,18 @@ class CSSCode(QuditCode):
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
-    ) -> tuple[int, int, int | float, int]:
-        """Compute the parameters of this code: [[n,k,d,w]].
+    ) -> tuple[int, int, int | float]:
+        """Compute the parameters of this code: [[n,k,d]].
 
         Here:
         - n is the number of data qudits
         - k is the number of encoded ("logical") qudits
         - d is the code distance
-        - w is the maximal weight of (i.e., number of qudits addressed by) a parity check
 
         Keyword arguments are passed to the calculation of code distance.
         """
         distance = self.get_distance(pauli=None, bound=bound, vector=None, **decoder_args)
-        return self.num_qudits, self.dimension, distance, self.get_weight()
+        return self.num_qudits, self.dimension, distance
 
     def get_distance(
         self,

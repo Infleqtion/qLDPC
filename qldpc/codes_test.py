@@ -121,9 +121,9 @@ def test_tensor_product(
     basis = np.reshape(code_ab.generator, (-1, code_a.num_bits, code_b.num_bits))
     assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
 
-    n_a, k_a, d_a, _ = code_a.get_code_params()
-    n_b, k_b, d_b, _ = code_b.get_code_params()
-    n_ab, k_ab, d_ab, _ = code_ab.get_code_params()
+    n_a, k_a, d_a = code_a.get_code_params()
+    n_b, k_b, d_b = code_b.get_code_params()
+    n_ab, k_ab, d_ab = code_ab.get_code_params()
     assert (n_ab, k_ab, d_ab) == (n_a * n_b, k_a * k_b, d_a * d_b)
 
     with pytest.raises(ValueError, match="Cannot take tensor product"):
@@ -546,7 +546,8 @@ def test_toric_tanner_code(size: int = 4) -> None:
     subset_b = [shift_y, ~shift_y]
     subcode_a = codes.RepetitionCode(2, field=2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
-    assert code.get_code_params() == (size**2, 2, size, 4)
+    assert code.get_code_params() == (size**2, 2, size)
+    assert code.get_weight() == 4
 
 
 def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
