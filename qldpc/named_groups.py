@@ -15,17 +15,14 @@
    limitations under the License.
 """
 
-import functools
 import os
 import re
 import subprocess
 import urllib.error
 import urllib.request
-from collections.abc import Callable, Hashable, Sequence
-from typing import Any
+from collections.abc import Sequence
 
-import diskcache
-import platformdirs
+import qldpc.cache
 
 GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
@@ -181,33 +178,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
     return generators
 
 
-def use_disk_cache(
-    cache_name: str,
-) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Cache new results to disk, and retrieve existing results (if available) from the cache."""
-
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-
-        @functools.wraps(func)
-        def wrapper(*args: Hashable, **kwargs: Hashable) -> Any:
-
-            # retrieve results from cache, if available
-            cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
-            key = args + tuple(kwargs.items())
-            if key in cache:
-                return cache[key]
-
-            # compute results and save to cache
-            result = func(*args, **kwargs)
-            cache[key] = result
-            return result
-
-        return wrapper
-
-    return decorator
-
-
-@use_disk_cache("qldpc_groups")
+@qldpc.cache.use_disk_cache("qldpc_groups")
 def get_generators(group: str) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
 
@@ -231,7 +202,7 @@ def get_generators(group: str) -> GENERATORS_LIST:
     raise ValueError("\n".join(message))
 
 
-@use_disk_cache("qldpc_groups")
+@qldpc.cache.use_disk_cache("qldpc_groups")
 def get_small_group_number(order: int) -> int:
     """Get the number of 'SmallGroup's of a given order."""
     if gap_is_installed():
