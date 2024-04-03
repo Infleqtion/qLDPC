@@ -94,19 +94,21 @@ def run_and_save(
     group = abstract.SmallGroup(group_order, group_index)
     code = codes.QTCode.random(group, base_code, seed=seed)
     code_params = code.get_code_params(bound=num_trials)
+    weight = code.get_weight()
 
     # save code and computed parameters
     headers = [
         f"distance trials: {num_trials}",
         f"code parameters: {code_params}",
+        f"stabilizer weight: {weight}",
     ]
     code.save(path, *headers)
 
     if not silent:
-        completion_text = ""
+        completion_text = " "
         if identify_completion_text:
-            completion_text += f" ({job_id})"
-        completion_text += f" code parameters: {code_params}"
+            completion_text += f"({job_id}) "
+        completion_text += "code parameters: " + str(code_params + (weight,))
         print(completion_text)
 
 
