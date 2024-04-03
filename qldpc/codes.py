@@ -2095,6 +2095,17 @@ class QTCode(CSSCode):
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
         CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
 
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, QTCode)
+            and other.code_a == other.code_a
+            and other.code_b == other.code_b
+            and other.complex.subset_a == other.complex.subset_a
+            and other.complex.subset_b == other.complex.subset_b
+            and other.complex.bipartite == other.complex.bipartite
+            and other.conjugated_qubits == other.conjugated_qubits
+        )
+
     @classmethod
     def get_subcodes(
         cls, cayplex: CayleyComplex, code_a: ClassicalCode, code_b: ClassicalCode

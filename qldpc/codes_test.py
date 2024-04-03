@@ -529,13 +529,7 @@ def test_quantum_tanner() -> None:
             unittest.mock.patch.object(contents, "read", lambda: contents.getvalue()),
         ):
             code_copy = codes.QTCode.load("path.txt")
-
-    assert code.code_a == code_copy.code_a
-    assert code.code_b == code_copy.code_b
-    assert code.complex.subset_a == code_copy.complex.subset_a
-    assert code.complex.subset_b == code_copy.complex.subset_b
-    assert code.complex.bipartite == code_copy.complex.bipartite
-    assert code.conjugated_qubits == code_copy.conjugated_qubits
+        assert code_copy == code
 
 
 def test_toric_tanner_code(size: int = 4) -> None:
