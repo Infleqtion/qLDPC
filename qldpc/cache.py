@@ -28,10 +28,10 @@ def use_disk_cache(
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to cache results to disk."""
 
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+    def decorator(function: Callable[..., Any]) -> Callable[..., Any]:
 
-        @functools.wraps(func)
-        def wrapper(*args: Hashable, **kwargs: Hashable) -> Any:
+        @functools.wraps(function)
+        def function_with_cache(*args: Hashable, **kwargs: Hashable) -> Any:
 
             # retrieve results from cache, if available
             cache = diskcache.Cache(platformdirs.user_cache_dir(cache_name))
@@ -40,10 +40,10 @@ def use_disk_cache(
                 return cache[key]
 
             # compute results and save to cache
-            result = func(*args, **kwargs)
+            result = function(*args, **kwargs)
             cache[key] = result
             return result
 
-        return wrapper
+        return function_with_cache
 
     return decorator
