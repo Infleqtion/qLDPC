@@ -18,10 +18,11 @@
 import ast
 import re
 
-from qldpc.named_groups import gap_is_installed, get_gap_result, use_disk_cache
+import qldpc.cache
+from qldpc.named_groups import gap_is_installed, get_gap_result
 
 
-@use_disk_cache("qldpc_codes")
+@qldpc.cache.use_disk_cache("qldpc_codes")
 def get_code(code: str) -> tuple[list[list[int]], int | None]:
     """Retrieve a group from GAP."""
 
