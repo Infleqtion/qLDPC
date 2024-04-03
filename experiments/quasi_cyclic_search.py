@@ -71,7 +71,7 @@ def compute_distances(
 
     code_params = get_code_params(dim_x, dim_y, exponents, num_trials)
     if not silent:
-        print(dim_x, dim_y, exponents, "f{communication_distance:.1f}", code_params)
+        print(dim_x, dim_y, exponents, f"{communication_distance:.1f}", code_params)
 
 
 if __name__ == "__main__":
