@@ -26,7 +26,7 @@ import platformdirs
 def use_disk_cache(
     cache_name: str,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Cache new results to disk, and retrieve existing results (if available) from the cache."""
+    """Decorator to cache results to disk."""
 
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
 
