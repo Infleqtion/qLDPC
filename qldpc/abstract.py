@@ -401,10 +401,12 @@ class Group:
             elif num_extra > 0 and len(singles):
                 # we have overshot, so throw away elements to get down to the right size
                 for _ in range(num_extra // 2):
-                    member = doubles.pop()
+                    member = sorted(doubles)[sympy.core.random.randint(0, len(doubles) - 1)]
+                    doubles.remove(member)
                     doubles.remove(~member)
                 if num_extra % 2:
-                    singles.pop()
+                    member = sorted(singles)[sympy.core.random.randint(0, len(singles) - 1)]
+                    singles.remove(member)
                 return singles | doubles
 
     @classmethod
