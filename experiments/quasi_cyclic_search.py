@@ -62,7 +62,6 @@ def compute_distances(
     exponents: tuple[int, int, int, int],
     num_trials: int,
     *,
-    identify_completion_text: bool = False,
     silent: bool = False,
 ) -> None:
     """Compute communication and code distances."""
@@ -70,18 +69,9 @@ def compute_distances(
     if communication_distance == np.inf:
         return None
 
-    if not silent:
-        start_text = f"{dim_x}, {dim_y}, {exponents}"
-        print(start_text)
-
     code_params = get_code_params(dim_x, dim_y, exponents, num_trials)
-
     if not silent:
-        completion_text = " "
-        if identify_completion_text:
-            completion_text += f"{start_text}: "
-        completion_text += "code parameters: " + str(code_params)
-        print(completion_text)
+        print(dim_x, dim_y, exponents, "f{communication_distance:.1f}", code_params)
 
 
 if __name__ == "__main__":
