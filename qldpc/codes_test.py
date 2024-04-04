@@ -486,7 +486,7 @@ def test_quantum_tanner() -> None:
     # assert that subgraphs have the right number of nodes, edges, and node degrees
     subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(code.complex)
     group_size = code.complex.graph.number_of_nodes()
-    num_faces = len(code.complex.faces)
+    num_faces = code.num_qudits
     for graph in [subgraph_x, subgraph_z]:
         assert graph.number_of_nodes() == num_faces + group_size / 2
         assert graph.number_of_edges() == num_faces * 2
