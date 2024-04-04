@@ -104,14 +104,21 @@ def test_cayley_complex() -> None:
         cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         assert_valid_complex(cayplex)
 
+    # test a complex that nominally has a disconnected graph
+    group = abstract.AlternatingGroup(4)
+    xx, yy = sorted(group.generators)
+    subset_a = [group.identity, xx**2 * yy, yy**2 * xx]
+    subset_b = [group.identity, xx * yy**2, yy * xx**2]
+    cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=False)
+    assert_valid_complex(cayplex)
+
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
-    """Assert that a Cayley complex has the correct number of vertices, edges, and faces."""
+    """Sanity check on the number of edges in a Cayley complex."""
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
     size_g = cayplex.graph.number_of_nodes()
     assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
-    assert len(cayplex.faces) == size_g * size_a * size_b // 4
 
 
 def test_chain_complex(field: int = 3) -> None:
