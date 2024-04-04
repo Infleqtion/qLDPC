@@ -510,8 +510,7 @@ def test_quantum_tanner() -> None:
     with unittest.mock.patch("builtins.open", return_value=contents):
         # save to a file
         with (
-            unittest.mock.patch("os.path.isdir", return_value=False),
-            unittest.mock.patch("os.mkdir", return_value=None),
+            unittest.mock.patch("os.makedirs", return_value=None),
             unittest.mock.patch.object(contents, "close", lambda: None),
         ):
             code.save("path.txt", "header")

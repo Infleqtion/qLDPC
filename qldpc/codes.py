@@ -2194,8 +2194,7 @@ class QTCode(CSSCode):
 
         # create save directory if necessary
         save_dir = os.path.dirname(os.path.abspath(path))
-        if not os.path.isdir(save_dir):
-            os.mkdir(save_dir)
+        os.makedirs(save_dir, exist_ok=True)
 
         with open(path, "w") as file:
             # write provided headers
