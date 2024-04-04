@@ -192,8 +192,7 @@ class CayleyComplex:
          ↓     ↓
         ag  → agb
 
-    This complex may generally be disconnected, so we keep only the component that is connected to
-    the identity element.
+    If the complex is disconnected, we keep only the component connected to the identity element.
 
     After constructing the complex (V,E,F), we can define two bipartite directed graphs:
     - subgraph_x with edges ( g, f(g,a,b)), and
