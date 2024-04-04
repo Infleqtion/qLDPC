@@ -30,8 +30,8 @@ cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc_quasi_cyclic"))
 headers = [
     "AUTHOR: Michael A. Perlin, 2024",
     "quasi-cyclic codes of arXiv:2308.07915, with generating polynomials",
-    "    A = 1 + x + x**E(Ax) * y**E(Ay)",
-    "    B = 1 + y + x**E(Bx) * y**E(By)",
+    "    A = 1 + x + x**ax * y**ay",
+    "    B = 1 + y + x**bx * y**by",
     "here x and y are generators of cyclic groups with orders L and M",
     "code parameters [[n, k, d]] indicate",
     "    n = number of physical qubits",
@@ -44,7 +44,7 @@ headers = [
     "topological 2D codes such as the toric code strictly satisfy r <= 1",
     "to restrict our analysis to codes that outperform the surface code, we only keep track of codes with r > 1",
     "",
-    "L, M, E(Ax), E(Ay), E(Bx), E(By), n, k, d, D, r",
+    "L, M, ax, ay, bx, by, n, k, d, D, r",
 ]
 fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f, %.3f"
 
