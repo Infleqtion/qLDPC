@@ -719,24 +719,24 @@ class AbelianGroup(Group):
 
 
 class DihedralGroup(Group):
-    """Dihedral group: symmetries of a regular polygon with a given number of sides."""
+    """Dihedral group of a specified order."""
 
-    def __init__(self, sides: int) -> None:
-        super()._init_from_group(comb.named_groups.DihedralGroup(sides))
+    def __init__(self, order: int) -> None:
+        super()._init_from_group(comb.named_groups.DihedralGroup(order))
 
 
 class AlternatingGroup(Group):
-    """Alternating group: even permutations of a set with a given number of elements."""
+    """Alternating group of a specified order."""
 
-    def __init__(self, degree: int) -> None:
-        super()._init_from_group(comb.named_groups.AlternatingGroup(degree))
+    def __init__(self, order: int) -> None:
+        super()._init_from_group(comb.named_groups.AlternatingGroup(order))
 
 
 class SymmetricGroup(Group):
-    """Symmetric group: all permutations of a given number of symbols."""
+    """Symmetric group of a specified order."""
 
-    def __init__(self, symbols: int) -> None:
-        super()._init_from_group(comb.named_groups.SymmetricGroup(symbols))
+    def __init__(self, order: int) -> None:
+        super()._init_from_group(comb.named_groups.SymmetricGroup(order))
 
 
 class QuaternionGroup(Group):
