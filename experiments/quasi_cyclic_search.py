@@ -61,12 +61,12 @@ def compute_distances(
     exponents: tuple[int, int, int, int],
     num_trials: int,
     *,
-    communication_distance_cutoff: int | float = np.inf,
+    communication_distance_cutoff: int | float = 10,
     silent: bool = False,
 ) -> None:
     """Compute communication and code distances."""
     communication_distance = get_communication_distance(dim_x, dim_y, exponents)
-    if communication_distance >= communication_distance_cutoff:
+    if communication_distance == np.inf or communication_distance > communication_distance_cutoff:
         return None
 
     code_params = get_code_params(dim_x, dim_y, exponents, num_trials)
@@ -76,7 +76,6 @@ def compute_distances(
 
 if __name__ == "__main__":
     min_order, max_order = 3, 20
-    communication_distance_cutoff = 15
     num_trials = 1000
 
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
@@ -90,11 +89,4 @@ if __name__ == "__main__":
                     range(dim_x), range(dim_y), range(dim_x), range(dim_y)
                 ):
                     # submit this job to the job queue
-                    executor.submit(
-                        compute_distances,
-                        dim_x,
-                        dim_y,
-                        exponents,
-                        num_trials,
-                        communication_distance_cutoff=communication_distance_cutoff,
-                    )
+                    executor.submit(compute_distances, dim_x, dim_y, exponents, num_trials)
