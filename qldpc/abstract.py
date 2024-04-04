@@ -69,17 +69,19 @@ class GroupMember(comb.Permutation):
     Supports sorting permutations (by their rank), and taking their tensor product.
     """
 
-    def __new__(cls, *args: object, **kwargs: object) -> GroupMember:
-        """Allow instantiating a GroupMember from a SymPy Permutation object."""
-        _args = [arg.array_form if isinstance(arg, comb.Permutation) else arg for arg in args]
-        return super().__new__(cls, *_args, **kwargs)
+    @classmethod
+    def from_sympy(cls, other: comb.Permutation) -> GroupMember:
+        """Convert a SymPy Permutation into a GroupMember."""
+        if isinstance(other, GroupMember):
+            return other
+        new = GroupMember()
+        new.__dict__ = other.__dict__
+        return new
 
-    def __mul__(self, other: UnknownType) -> UnknownType:
+    def __mul__(self, other: comb.Permutation) -> GroupMember:
         if isinstance(other, comb.Permutation):
-            return GroupMember(super().__mul__(other))  # type:ignore[return-value]
-        elif hasattr(other, "__rmul__"):
-            return other.__rmul__(self)
-        return NotImplemented  # pragma: no cover
+            return GroupMember.from_sympy(super().__mul__(other))
+        return NotImplemented
 
     def __add__(self, other: UnknownType) -> UnknownType:
         if hasattr(other, "__radd__"):
@@ -190,7 +192,7 @@ class Group:
     def __hash__(self) -> int:
         return hash(self._group)
 
-    def __contains__(self, member: comb.Permutation) -> bool:
+    def __contains__(self, member: GroupMember) -> bool:
         return member in self._group
 
     def __mul__(self, other: Group) -> Group:
@@ -205,9 +207,9 @@ class Group:
 
         def lift(member: GroupMember) -> galois.FieldArray:
             degree = self._group.degree
-            left = member.array_form[:degree]
-            right = [index - degree for index in member.array_form[degree:]]
-            matrix = np.kron(left_lift(GroupMember(left)), right_lift(GroupMember(right)))
+            left = GroupMember(member.array_form[:degree])
+            right = GroupMember([index - degree for index in member.array_form[degree:]])
+            matrix = np.kron(left_lift(left), right_lift(right))
             return self.field(matrix)
 
         return Group.from_sympy(group, self.field.order, lift)
@@ -235,23 +237,22 @@ class Group:
     @property
     def generators(self) -> Sequence[GroupMember]:
         """Generators of this group."""
-        return [GroupMember(member) for member in self._group.generators]
+        return list(map(GroupMember.from_sympy, self._group.generators))
 
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
-        for member in self._group.generate():
-            yield GroupMember(member)
+        yield from map(GroupMember.from_sympy, self._group.generate())
 
     @property
     def identity(self) -> GroupMember:
         """The identity element of this group."""
-        return GroupMember(self._group.identity)
+        return GroupMember.from_sympy(self._group.identity)
 
     def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
         if seed is not None:
             sympy.core.random.seed(seed)
-        return GroupMember(self._group.random())
+        return GroupMember.from_sympy(self._group.random())
 
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
@@ -260,7 +261,7 @@ class Group:
     @functools.cached_property
     def lift_dim(self) -> int:
         """Dimension of the repesentation for this group."""
-        return self._lift(self.generators[0]).shape[0]
+        return self._lift(next(iter(self._group.generators))).shape[0]
 
     @functools.cached_property
     def table(self) -> npt.NDArray[np.int_]:
@@ -300,7 +301,7 @@ class Group:
         Group members are represented by how they permute elements of the group itself.
         """
         if not matrices:
-            return TrivialGroup()
+            return TrivialGroup(field=field)
 
         # identify the field we are working over
         if isinstance(matrices[0], galois.FieldArray):
@@ -380,7 +381,7 @@ class Group:
         singles = set()  # group members equal to their own inverse
         doubles = set()  # pairs of group members and their inverses
         while True:  # sounds dangerous, but bear with me
-            member = GroupMember(self.random())
+            member = self.random()
             if exclude_identity and member == self.identity:
                 continue  # pragma: no cover
 
@@ -754,7 +755,7 @@ class QuaternionGroup(Group):
             [7, 6, 1, 0, 3, 2, 5, 4],
         ]
 
-        def lift(member: int) -> npt.NDArray[np.int_]:
+        def integer_lift(member: int) -> npt.NDArray[np.int_]:
             """Representation from https://en.wikipedia.org/wiki/Quaternion_group."""
             assert 0 <= member < 8
             sign = 1 if member < 4 else -1
@@ -772,7 +773,7 @@ class QuaternionGroup(Group):
                 blocks = [[zero, -imag], [-imag, zero]]
             return sign * np.block(blocks).T % 3
 
-        group = Group.from_table(table, field=3, integer_lift=lift)
+        group = Group.from_table(table, field=3, integer_lift=integer_lift)
         super()._init_from_group(group, name=QuaternionGroup.__name__)
 
 
@@ -838,7 +839,7 @@ class SpecialLinearGroup(Group):
                     next_vec = member @ self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
                     next_index = target_space.index(next_vec.tobytes())
                     perm[index] = next_index
-                generators.append(comb.Permutation(perm))
+                generators.append(GroupMember(perm))
 
             def lift(member: GroupMember) -> npt.NDArray[np.int_]:
                 """Lift a group member to a square matrix.

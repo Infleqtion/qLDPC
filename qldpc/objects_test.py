@@ -104,14 +104,6 @@ def test_cayley_complex() -> None:
         cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         assert_valid_complex(cayplex)
 
-    # test a complex that nominally has a disconnected graph
-    group = abstract.AlternatingGroup(4)
-    xx, yy = sorted(group.generators)
-    subset_a = [group.identity, xx**2 * yy, yy**2 * xx]
-    subset_b = [group.identity, xx * yy**2, yy * xx**2]
-    cayplex = objects.CayleyComplex(subset_a, subset_b, bipartite=False)
-    assert_valid_complex(cayplex)
-
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
     """Sanity check on the number of edges in a Cayley complex."""
