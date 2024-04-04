@@ -68,9 +68,9 @@ def run_and_save(
 ) -> None:
     """Generate a random quantum Tanner code, compute its distance, and save it to a text file.
 
-    The multiprocessing module is unable to properly handle SymPy PermutationGroup objects, so we
-    have to construct groups here from their identifying data.  ClassicalCode objects seem to be
-    fine, though.
+    The multiprocessing module (which calls this method) is unable to properly handle SymPy
+    PermutationGroup objects, so we have to construct groups here from their order and index.
+    Passing ClassicalCode objects seems to be fine, though.
     """
     if group_order < base_code.num_bits:
         # No subset of this group can be large enough to have as many elements as there are bits in
