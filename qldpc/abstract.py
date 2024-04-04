@@ -782,6 +782,7 @@ class SmallGroup(Group):
     index: int
 
     def __init__(self, order: int, index: int) -> None:
+        assert order > 0
         num_groups = SmallGroup.number(order)
         if not 1 <= index <= num_groups:
             raise ValueError(
