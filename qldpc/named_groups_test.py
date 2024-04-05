@@ -23,6 +23,13 @@ import pytest
 
 from qldpc import named_groups
 
+# strip cache wrappers
+assert hasattr(named_groups.get_generators, "__wrapped__")
+assert hasattr(named_groups.get_small_group_number, "__wrapped__")
+named_groups.get_generators = named_groups.get_generators.__wrapped__
+named_groups.get_small_group_number = named_groups.get_small_group_number.__wrapped__
+
+# define global testing variables
 ORDER, INDEX = 2, 1
 GENERATORS = [[(0, 1)]]
 GROUP = f"SmallGroup({ORDER},{INDEX})"
@@ -156,21 +163,6 @@ def test_get_generators_with_gap() -> None:
 def test_get_generators() -> None:
     """Retrieve generators somehow."""
 
-    # use cache to save/retrieve results
-    with unittest.mock.patch("diskcache.Cache", return_value={}):
-        # compute and save result to cache
-        with unittest.mock.patch(
-            "qldpc.named_groups.get_generators_with_gap", return_value=GENERATORS
-        ):
-            assert named_groups.get_generators(GROUP) == GENERATORS
-
-        # retrieve result from cache
-        assert named_groups.get_generators(GROUP) == GENERATORS
-
-    # strip cache wrapper
-    if hasattr(named_groups.get_generators, "__wrapped__"):
-        named_groups.get_generators = named_groups.get_generators.__wrapped__
-
     # retrieve from GAP
     with (
         unittest.mock.patch("qldpc.named_groups.get_generators_with_gap", return_value=GENERATORS),
@@ -199,9 +191,6 @@ def test_get_generators() -> None:
 
 def test_get_small_group_number() -> None:
     """Retrieve the number of groups of some order."""
-    # strip cache wrapper
-    if hasattr(named_groups.get_small_group_number, "__wrapped__"):
-        named_groups.get_small_group_number = named_groups.get_small_group_number.__wrapped__
 
     order, number = 16, 14
     text = rf"<td>{order},{number}</td>"
