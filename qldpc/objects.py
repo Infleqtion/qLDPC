@@ -283,17 +283,23 @@ class CayleyComplex:
     @functools.cached_property
     def graph(self) -> nx.Graph:
         """Graph consisting of the nodes and edges of the complex."""
-        # take the double cover(s) of the group as appropriate
-        identity, shift = abstract.CyclicGroup(2).generate()
-        if self.bipartite:
-            shift_a = shift_b = shift
-        else:
-            shift_a = shift @ identity
-            shift_b = identity @ shift
-        subset_a = set(aa @ shift_a for aa in self.subset_a)
-        subset_b = set(bb @ shift_b for bb in self.subset_b)
+        return CayleyComplex.build_cayley_graph(self.cover_subset_a, self.cover_subset_b)
 
-        return CayleyComplex.build_cayley_graph(subset_a, subset_b)
+    @functools.cached_property
+    def cover_subset_a(self) -> set[abstract.GroupMember]:
+        """Subset induced by taking the double cover(s) of the group for this complex."""
+        identity, shift = abstract.CyclicGroup(2).generate()
+        if not self.bipartite:
+            shift = shift @ identity
+        return set(aa @ shift for aa in self.subset_a)
+
+    @functools.cached_property
+    def cover_subset_b(self) -> set[abstract.GroupMember]:
+        """Subset induced by taking the double cover(s) of the group for this complex."""
+        identity, shift = abstract.CyclicGroup(2).generate()
+        if not self.bipartite:
+            shift = identity @ shift
+        return set(bb @ shift for bb in self.subset_b)
 
     @classmethod
     def build_cayley_graph(
@@ -302,7 +308,7 @@ class CayleyComplex:
         subset_b: set[abstract.GroupMember],
     ) -> None:
         """Build a left-right Cayley graph generated from the identity element of a group."""
-        # identify the
+        # identify the identity element
         member = next(iter(subset_a))
         identity = member * ~member
 
