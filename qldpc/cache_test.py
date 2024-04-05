@@ -24,11 +24,12 @@ def test_use_disk_cache() -> None:
     """Cache function outputs."""
 
     @qldpc.cache.use_disk_cache("test")
-    def get_five() -> int:
+    def get_five(arg: str) -> int:
         return 5
 
     # use cache to save/retrieve results
-    cache = {}
+    cache: dict[tuple[str], int] = {}
     with unittest.mock.patch("diskcache.Cache", return_value=cache):
-        get_five()  # save results
-        assert cache[()] == get_five()  # retrieve results
+        get_five("test")  # save results to cache
+        assert cache == {("test",): 5}  # check cache
+        assert cache[("test",)] == get_five("test")  # retrieve results
