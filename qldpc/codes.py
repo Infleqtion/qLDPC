@@ -2140,26 +2140,37 @@ class QTCode(CSSCode):
         then requires that edge (ag, f(g,a,b)) has label (a^-1, b), as verified by defining g' = ag
         and checking that f(g,a,b) = f(g',a^-1,b).
         """
+        subset_a = cayplex.cover_subset_a
+        subset_b = cayplex.cover_subset_b
+
+        # identify the identity element
+        member = next(iter(subset_a))
+        identity = member * ~member
+
+        # identify the set of nodes for which we still need to add faces
+        nodes_to_add = set([identity])
+
+        # build the subgraphs one node at a time
         subgraph_x = nx.DiGraph()
         subgraph_z = nx.DiGraph()
+        while nodes_to_add:
+            gg = nodes_to_add.pop()
 
-        # identify the nodes "across one diagonal" of the faces
-        graph = cayplex.graph
-        nodes_x, _ = nx.bipartite.sets(graph)
+            # identify nodes we have already covered, and new nodes we may need to cover
+            old_nodes = set(subgraph_x.nodes())
+            new_nodes = set()
 
-        # build subgraphs with edges oriented from corners to faces
-        for gg in nodes_x:
-            # identify neighbors of this node across "A-type" and "B-type" edges of the complex
-            neighbors_a = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "A"]
-            neighbors_b = [hh for hh in graph.neighbors(gg) if graph[gg][hh]["type"] == "B"]
-
-            # loop over all faces containing this corner, and add associated edges to the subgraphs
-            for aa_gg, gg_bb in itertools.product(neighbors_a, neighbors_b):
-                aa = aa_gg * ~gg
-                bb = ~gg * gg_bb
-                face = frozenset([gg, aa_gg, gg_bb, aa * gg * bb])
+            # add all faces adjacent to this node
+            for aa, bb in itertools.product(subset_a, subset_b):
+                aa_gg, gg_bb = aa * gg, gg * bb
+                aa_gg_bb = aa_gg * bb
+                face = frozenset([gg, aa_gg, gg_bb, aa_gg_bb])
                 subgraph_x.add_edge(gg, face, sort=(aa, bb))
                 subgraph_z.add_edge(aa_gg, face, sort=(~aa, bb))
+
+                new_nodes.add(aa_gg_bb)
+
+            nodes_to_add |= new_nodes - old_nodes
 
         return subgraph_x, subgraph_z
 

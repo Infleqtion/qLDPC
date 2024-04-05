@@ -324,7 +324,7 @@ class CayleyComplex:
             old_nodes = set(graph.nodes())
             new_nodes = set()
 
-            # add all A-type and B-type edges to this node
+            # add all A-type and B-type edges adjacent to this node
             for aa in subset_a:
                 aa_gg = aa * gg
                 graph.add_edge(gg, aa_gg, type="A")
