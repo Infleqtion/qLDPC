@@ -83,24 +83,23 @@ def run_and_save(
         nn, kk, dd, comm_dist = params
         cache[dim_x, dim_y, exponents, num_trials] = (nn, kk, dd, comm_dist)
         if not silent:
-            print("", dim_x, dim_y, exponents, params)
+            print(dim_x, dim_y, exponents, params)
 
 
 if __name__ == "__main__":
-    min_order, max_order = 3, 20
-    silent = False
+    min_dim_y = 3
+    min_dim_x = 3
+    max_dim = 10
 
+    silent = False
     cache = qldpc.cache.get_disk_cache(CACHE_NAME)
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
 
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
 
-        for dim_x in range(min_order, max_order + 1):
-            for dim_y in range(min_order, dim_x + 1):
-                if not silent:
-                    print(dim_x, dim_y)
-
+        for dim_x in range(min_dim_x, max_dim + 1):
+            for dim_y in range(min_dim_y, dim_x + 1):
                 for exponents in itertools.product(
                     range(dim_x), range(dim_y), range(dim_x), range(dim_y)
                 ):
