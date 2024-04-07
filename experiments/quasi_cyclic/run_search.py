@@ -94,9 +94,7 @@ if __name__ == "__main__":
     min_order = 3
     max_order = 14
 
-    silent = False
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
-
     cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
 
     # run multiple jobs in parallel
