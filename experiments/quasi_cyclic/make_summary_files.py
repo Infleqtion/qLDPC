@@ -63,7 +63,7 @@ data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_c
 cache = diskcache.Cache(platformdirs.user_cache_dir(CACHE_NAME))
 for key in cache.iterkeys():
     # identify cyclic group orders and polynomial exponents
-    ll, mm, (gg, hh, ii, jj), num_trials = key
+    dim_x, dim_y, (ax, ay, bx, by), num_trials = key
     if num_trials != NUM_TRIALS:
         continue
 
@@ -81,7 +81,7 @@ for key in cache.iterkeys():
         continue
 
     # add a summary of this code to the appropriate group of data
-    code = (ll, mm, gg, hh, ii, jj, nn, kk, dd, comm_dist, merit)
+    code = (dim_x, dim_y, ax, ay, bx, by, nn, kk, dd, comm_dist, merit)
     for cutoff, data in zip(comm_cutoffs, data_groups):
         if comm_dist <= cutoff:
             data.append(code)

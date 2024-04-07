@@ -40,9 +40,9 @@ def get_quasi_cyclic_code_params(
     """
     # construct the code itself
     dims = (dim_x, dim_y)
-    exp_ax, exp_ay, exp_bx, exp_by = exponents
-    poly_a = 1 + x + x**exp_ax * y**exp_ay
-    poly_b = 1 + y + x**exp_bx * y**exp_by
+    ax, ay, bx, by = exponents
+    poly_a = 1 + x + x**ax * y**ay
+    poly_b = 1 + y + x**bx * y**by
     code = qldpc.codes.QCCode(dims, poly_a, poly_b)
 
     if code.dimension == 0:
