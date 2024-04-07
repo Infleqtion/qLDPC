@@ -20,9 +20,7 @@ import os
 import diskcache
 import numpy as np
 import platformdirs
-
 from run_search import CACHE_NAME
-
 
 comm_cutoffs = [5, 8, 10]
 num_trials = 1000

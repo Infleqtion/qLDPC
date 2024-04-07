@@ -25,7 +25,6 @@ from sympy.abc import x, y
 import qldpc
 import qldpc.cache
 
-
 CACHE_NAME = "qldpc_" + os.path.basename(os.path.dirname(__file__))
 
 
