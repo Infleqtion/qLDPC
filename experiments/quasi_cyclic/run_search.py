@@ -100,10 +100,12 @@ if __name__ == "__main__":
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
 
+        # loop over all (dim_x, ax, ay) >= (dim_y, by, bx)
         for dim_x in range(max(MIN_ORDER, min_order), max_order + 1):
             for dim_y in range(MIN_ORDER, dim_x + 1):
-                for exponents in itertools.product(
-                    range(dim_x), range(dim_y), range(dim_x), range(dim_y)
-                ):
-                    # submit this job to the job queue
-                    executor.submit(run_and_save, dim_x, dim_y, exponents, NUM_TRIALS, cache)
+                for ax, ay in itertools.product(range(dim_x), range(dim_y)):
+                    for by, bx in itertools.product(range(dim_y), range(dim_x)):
+                        exponents = (ax, ay, bx, by)
+                        executor.submit(run_and_save, dim_x, dim_y, exponents, NUM_TRIALS, cache)
+                        if (dim_x, ax, ay) == (dim_y, by, bx):
+                            break
