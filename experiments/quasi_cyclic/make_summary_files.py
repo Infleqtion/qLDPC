@@ -44,7 +44,7 @@ headers = [
     "    D = (Euclidean) communication distance required for a 'folded toric layout' of the code",
     "    r = k d^2 / n",
     "topological 2D codes such as the toric code strictly satisfy r <= 1",
-    "to restrict our analysis to codes that outperform the surface code, we only keep track of codes with r > 1",
+    "we only keep track of codes with r > 1",
     "",
     "L, M, ax, ay, bx, by, n, k, d, D, r",
 ]
