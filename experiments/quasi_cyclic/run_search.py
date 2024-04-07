@@ -86,12 +86,13 @@ def run_and_save(
         nn, kk, dd, comm_dist = params
         cache[dim_x, dim_y, exponents, num_trials] = (nn, kk, dd, comm_dist)
         if not silent:
-            print(dim_x, dim_y, exponents, params)
+            merit = kk * dd**2 / nn
+            print(dim_x, dim_y, exponents, nn, kk, dd, f"{comm_dist:.2f}", f"{merit:.2f}")
 
 
 if __name__ == "__main__":
     min_order = 3
-    max_order = 10
+    max_order = 14
 
     silent = False
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
