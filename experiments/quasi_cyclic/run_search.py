@@ -74,12 +74,16 @@ def run_and_save(
     exponents: tuple[int, int, int, int],
     num_trials: int,
     cache: diskcache.Cache,
+    *,
+    silent: bool = False,
 ) -> None:
     """Compute and save quasi-cyclic code parameters."""
     params = get_quasi_cyclic_code_params(dim_x, dim_y, exponents)
     if params is not None:
         nn, kk, dd, comm_dist = params
         cache[dim_x, dim_y, exponents, num_trials] = (nn, kk, dd, comm_dist)
+        if not silent:
+            print(dim_x, dim_y, exponents, params)
 
 
 if __name__ == "__main__":
