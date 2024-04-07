@@ -26,8 +26,10 @@ from sympy.abc import x, y
 import qldpc
 import qldpc.cache
 
-NUM_TRIALS = 1000
-COMMUNICATION_DISTANCE_CUTOFF = 12
+NUM_TRIALS = 1000  # for code distance calculations
+MAX_COMMUNICATION_DISTANCE = 12
+MIN_DIM = 3  # minimum cyclic group order
+
 CACHE_NAME = "qldpc_" + os.path.basename(os.path.dirname(__file__))
 
 
@@ -59,7 +61,7 @@ def get_quasi_cyclic_code_params(
     # minimize distance requirement over possible toric layouts
     comm_distance = min(max_distances)
 
-    if comm_distance > COMMUNICATION_DISTANCE_CUTOFF:
+    if comm_distance > MAX_COMMUNICATION_DISTANCE:
         return None
 
     distance = code.get_distance_bound(num_trials=num_trials)
@@ -87,9 +89,8 @@ def run_and_save(
 
 
 if __name__ == "__main__":
-    min_dim_y = 3
-    min_dim_x = 3
-    max_dim = 10
+    min_order = 3
+    max_order = 10
 
     silent = False
     cache = qldpc.cache.get_disk_cache(CACHE_NAME)
@@ -98,8 +99,8 @@ if __name__ == "__main__":
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
 
-        for dim_x in range(min_dim_x, max_dim + 1):
-            for dim_y in range(min_dim_y, dim_x + 1):
+        for dim_x in range(max(MIN_DIM, min_order), max_order + 1):
+            for dim_y in range(MIN_DIM, dim_x + 1):
                 for exponents in itertools.product(
                     range(dim_x), range(dim_y), range(dim_x), range(dim_y)
                 ):
