@@ -66,7 +66,7 @@ def get_code_params(
     dim_x: int,
     dim_y: int,
     exponents: tuple[int, int, int, int],
-    num_trials: int = NUM_TRIALS,
+    num_trials: int,
 ) -> tuple[int, int, int]:
     """Get the code distance of a quasi-cyclic code."""
     code = get_quasi_cyclic_code(dim_x, dim_y, exponents)

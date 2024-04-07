@@ -73,7 +73,7 @@ for key in cache.iterkeys():
         continue
 
     # code parameters
-    nn, kk, dd = get_code_params(*key)
+    nn, kk, dd = get_code_params(*key, NUM_TRIALS)
 
     # figure of merit, relative to the surface code
     merit = kk * dd**2 / nn
