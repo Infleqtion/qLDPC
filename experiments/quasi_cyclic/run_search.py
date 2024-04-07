@@ -30,7 +30,8 @@ NUM_TRIALS = 1000  # for code distance calculations
 MAX_COMMUNICATION_DISTANCE = 12
 MIN_ORDER = 3  # minimum cyclic group order
 
-CACHE_NAME = "qldpc_" + os.path.basename(os.path.dirname(__file__))
+CACHE_DIR = os.path.dirname(__file__)
+CACHE_NAME = ".code_cache"
 
 
 def get_quasi_cyclic_code_params(
@@ -93,8 +94,9 @@ if __name__ == "__main__":
     max_order = 10
 
     silent = False
-    cache = qldpc.cache.get_disk_cache(CACHE_NAME)
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
+
+    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
 
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:

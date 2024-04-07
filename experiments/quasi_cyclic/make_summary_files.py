@@ -17,10 +17,10 @@
 """
 import os
 
-import diskcache
 import numpy as np
-import platformdirs
-from run_search import CACHE_NAME, NUM_TRIALS
+from run_search import CACHE_DIR, CACHE_NAME, NUM_TRIALS
+
+import qldpc.cache
 
 # Euclidean communication distance "cutoffs" by which to organize results
 comm_cutoffs = [5, 8, 10]
@@ -59,7 +59,7 @@ comm_cutoffs = sorted(comm_cutoffs)
 data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_cutoffs))]
 
 # iterate over all entries in the cache
-cache = diskcache.Cache(platformdirs.user_cache_dir(CACHE_NAME))
+cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
 for key in cache.iterkeys():
     # identify cyclic group orders and polynomial exponents
     dim_x, dim_y, (ax, ay, bx, by), num_trials = key
