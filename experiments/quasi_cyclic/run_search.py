@@ -28,7 +28,7 @@ import qldpc.cache
 
 NUM_TRIALS = 1000  # for code distance calculations
 MAX_COMMUNICATION_DISTANCE = 12
-MIN_DIM = 3  # minimum cyclic group order
+MIN_ORDER = 3  # minimum cyclic group order
 
 CACHE_NAME = "qldpc_" + os.path.basename(os.path.dirname(__file__))
 
@@ -99,8 +99,8 @@ if __name__ == "__main__":
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
 
-        for dim_x in range(max(MIN_DIM, min_order), max_order + 1):
-            for dim_y in range(MIN_DIM, dim_x + 1):
+        for dim_x in range(max(MIN_ORDER, min_order), max_order + 1):
+            for dim_y in range(MIN_ORDER, dim_x + 1):
                 for exponents in itertools.product(
                     range(dim_x), range(dim_y), range(dim_x), range(dim_y)
                 ):
