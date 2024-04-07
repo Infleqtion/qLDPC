@@ -26,6 +26,9 @@ import qldpc
 import qldpc.cache
 
 
+CACHE_NAME = "qldpc_" + os.path.basename(os.path.dirname(__file__))
+
+
 def get_quasi_cyclic_code(
     dim_x: int, dim_y: int, exponents: tuple[int, int, int, int]
 ) -> qldpc.codes.QCCode:
@@ -37,7 +40,7 @@ def get_quasi_cyclic_code(
     return qldpc.codes.QCCode(dims, poly_a, poly_b)
 
 
-@qldpc.cache.use_disk_cache("qldpc_quasi_cyclic")
+@qldpc.cache.use_disk_cache(CACHE_NAME)
 def get_communication_distance(
     dim_x: int, dim_y: int, exponents: tuple[int, int, int, int]
 ) -> float:
@@ -58,7 +61,7 @@ def get_communication_distance(
     return min(max_distances)
 
 
-@qldpc.cache.use_disk_cache("qldpc_quasi_cyclic")
+@qldpc.cache.use_disk_cache(CACHE_NAME)
 def get_code_params(
     dim_x: int, dim_y: int, exponents: tuple[int, int, int, int], num_trials: int
 ) -> tuple[int, int, int]:

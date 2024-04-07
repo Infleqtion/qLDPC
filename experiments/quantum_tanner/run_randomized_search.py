@@ -132,7 +132,7 @@ if __name__ == "__main__":
     num_trials = 1000  # for code distance calculations
 
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
-    save_dir = os.path.join(os.path.dirname(__file__), "quantum_tanner_codes")
+    save_dir = os.path.join(os.path.dirname(__file__), "codes")
 
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:

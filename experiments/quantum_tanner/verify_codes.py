@@ -19,36 +19,32 @@ import functools
 import glob
 import os
 
-import quantum_tanner_search as qts
+import run_randomized_search as search
 
 from qldpc import abstract, codes
 
 file_dir = os.path.dirname(__file__)
-save_dir = os.path.join(file_dir, "quantum_tanner_codes")
+save_dir = os.path.join(file_dir, "codes")
 paths = glob.glob(os.path.join(save_dir, "*.txt"))
 num_paths = len(paths)
 
 
 @functools.cache
-def get_code(code_name: str, code_param: int) -> codes.ClassicalCode:
+def get_code(code_name: str, code_param: str) -> codes.ClassicalCode:
+    """Cached retrieval of a classical code."""
     if code_name == "Hamming":
         return codes.HammingCode(int(code_param))
     elif code_name == "CordaroWagner":
-        return qts.get_cordaro_wagner_code(int(code_param))
+        return search.get_cordaro_wagner_code(int(code_param))
     elif code_name == "Mittal":
-        return qts.get_mittal_code(int(code_param))
-    raise ValueError(f"Code not recognized: {code_name}")
+        return search.get_mittal_code(int(code_param))
+    raise ValueError(f"Code not recognized: {code_name}({code_param})")
 
 
-@functools.cache
-def get_group(group_order: int, group_index: int) -> abstract.SmallGroup:
-    return abstract.SmallGroup(group_order, group_index)
-
-
-for idx, path in enumerate(paths):
-    print(f"{idx}/{num_paths}")
+for pp, path in enumerate(paths):
+    print(f"{pp}/{num_paths}")
     parts = path.split("_")
-    group_order, group_index = parts[-3].split("-")[-2:]
+    group_order, group_index = map(int, parts[-3].split("-")[-2:])
     code_name, code_param = parts[-2].split("-")
     seed = int(parts[-1].strip(".txt")[1:])
 
@@ -57,9 +53,7 @@ for idx, path in enumerate(paths):
     assert os.path.basename(path) == f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
     old_code = codes.QTCode.load(path)
 
-    base_code = get_code(code_name, int(code_param))
-    group = get_group(int(group_order), int(group_index))
+    base_code = get_code(code_name, code_param)
+    group = abstract.SmallGroup(group_order, group_index)
     new_code = codes.QTCode.random(group, base_code, seed=seed)
     assert old_code == new_code
-
-print("done")

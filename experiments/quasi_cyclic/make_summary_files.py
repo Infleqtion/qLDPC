@@ -21,11 +21,15 @@ import diskcache
 import numpy as np
 import platformdirs
 
+from run_search import CACHE_NAME
+
+
 comm_cutoffs = [5, 8, 10]
 num_trials = 1000
 
-save_dir = os.path.join(os.path.dirname(__file__), "quasi_cyclic_codes")
-cache = diskcache.Cache(platformdirs.user_cache_dir("qldpc_quasi_cyclic"))
+dirname = os.path.dirname(__file__)
+save_dir = os.path.join(dirname, "codes")
+
 
 headers = [
     "AUTHOR: Michael A. Perlin, 2024",
@@ -53,6 +57,7 @@ fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f, %.3f"
 data_groups = [[] for _ in range(len(comm_cutoffs))]
 comm_cutoffs = np.array(sorted(comm_cutoffs), dtype=int)
 
+cache = diskcache.Cache(platformdirs.user_cache_dir(CACHE_NAME))
 for key in cache.iterkeys():
     if len(key) != 3:
         continue
