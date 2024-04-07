@@ -25,6 +25,7 @@ from sympy.abc import x, y
 import qldpc
 import qldpc.cache
 
+NUM_TRIALS = 1000
 CACHE_NAME = "qldpc_" + os.path.basename(os.path.dirname(__file__))
 
 
@@ -62,7 +63,10 @@ def get_communication_distance(
 
 @qldpc.cache.use_disk_cache(CACHE_NAME)
 def get_code_params(
-    dim_x: int, dim_y: int, exponents: tuple[int, int, int, int], num_trials: int
+    dim_x: int,
+    dim_y: int,
+    exponents: tuple[int, int, int, int],
+    num_trials: int = NUM_TRIALS,
 ) -> tuple[int, int, int]:
     """Get the code distance of a quasi-cyclic code."""
     code = get_quasi_cyclic_code(dim_x, dim_y, exponents)
@@ -76,7 +80,7 @@ def compute_distances(
     dim_x: int,
     dim_y: int,
     exponents: tuple[int, int, int, int],
-    num_trials: int,
+    num_trials: int = NUM_TRIALS,
     *,
     communication_distance_cutoff: int | float = 10,
     silent: bool = False,
@@ -93,7 +97,6 @@ def compute_distances(
 
 if __name__ == "__main__":
     min_order, max_order = 3, 20
-    num_trials = 1000
 
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
 
@@ -106,4 +109,4 @@ if __name__ == "__main__":
                     range(dim_x), range(dim_y), range(dim_x), range(dim_y)
                 ):
                     # submit this job to the job queue
-                    executor.submit(compute_distances, dim_x, dim_y, exponents, num_trials)
+                    executor.submit(compute_distances, dim_x, dim_y, exponents)

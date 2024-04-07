@@ -20,9 +20,9 @@ import os
 import diskcache
 import numpy as np
 import platformdirs
-from run_search import CACHE_NAME
+from run_search import CACHE_NAME, NUM_TRIALS, get_code_params
 
-num_trials = 1000  # number of code distance trials
+
 comm_cutoffs = [5, 8, 10]  # communication distance "cutoffs" by which to organize results
 
 dirname = os.path.dirname(__file__)
@@ -39,7 +39,8 @@ headers = [
     "    n = number of physical qubits",
     "    k = number of logical qubits",
     "    d = code distance (minimal weight of a nontrivial logical operator)",
-    "code distance is estimated by the method of arXiv:2308.07915, minimizing over 1000 trials",
+    "code distance is estimated by the method of arXiv:2308.07915,"
+    + f" minimizing over {NUM_TRIALS} trials",
     "also included:",
     "    D = (Euclidean) communication distance required for a 'folded toric layout' of the code",
     "    r = k d^2 / n",
@@ -72,7 +73,7 @@ for key in cache.iterkeys():
         continue
 
     # code parameters
-    nn, kk, dd = cache[key + (num_trials,)]
+    nn, kk, dd = get_code_params(*key)
 
     # figure of merit, relative to the surface code
     merit = kk * dd**2 / nn
