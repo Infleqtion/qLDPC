@@ -19,6 +19,7 @@ import concurrent.futures
 import itertools
 import os
 
+import diskcache
 import numpy as np
 from sympy.abc import x, y
 
@@ -26,28 +27,26 @@ import qldpc
 import qldpc.cache
 
 NUM_TRIALS = 1000
+COMMUNICATION_DISTANCE_CUTOFF = 12
 CACHE_NAME = "qldpc_" + os.path.basename(os.path.dirname(__file__))
 
 
-def get_quasi_cyclic_code(
-    dim_x: int, dim_y: int, exponents: tuple[int, int, int, int]
-) -> qldpc.codes.QCCode:
-    """Construct a quasi-cyclic code."""
+def get_quasi_cyclic_code_params(
+    dim_x: int, dim_y: int, exponents: tuple[int, int, int, int], num_trials: int
+) -> tuple[int, int, int, float] | None:
+    """Compute communication distance and code distance for a quasi-cyclic code.
+
+    If the code is trivial or the communication distance is beyond the cutoff, return None.
+    """
+    # construct the code itself
     dims = (dim_x, dim_y)
     exp_ax, exp_ay, exp_bx, exp_by = exponents
     poly_a = 1 + x + x**exp_ax * y**exp_ay
     poly_b = 1 + y + x**exp_bx * y**exp_by
-    return qldpc.codes.QCCode(dims, poly_a, poly_b)
+    code = qldpc.codes.QCCode(dims, poly_a, poly_b)
 
-
-@qldpc.cache.use_disk_cache(CACHE_NAME)
-def get_communication_distance(
-    dim_x: int, dim_y: int, exponents: tuple[int, int, int, int]
-) -> float:
-    """Get communication distance required for a toric layout of a quasi-cyclic code."""
-    code = get_quasi_cyclic_code(dim_x, dim_y, exponents)
     if code.dimension == 0:
-        return np.inf
+        return None
 
     # identify maximum Euclidean distance between check/data qubits required for each toric layout
     max_distances = []
@@ -58,45 +57,34 @@ def get_communication_distance(
         max_distances.append(max(distances))
 
     # minimize distance requirement over possible toric layouts
-    return min(max_distances)
+    comm_distance = min(max_distances)
+
+    if comm_distance > COMMUNICATION_DISTANCE_CUTOFF:
+        return None
+
+    distance = code.get_distance_bound(num_trials=num_trials)
+    assert isinstance(distance, int)
+
+    return code.num_qubits, code.dimension, distance, comm_distance
 
 
-@qldpc.cache.use_disk_cache(CACHE_NAME)
-def get_code_params(
+def run_and_save(
     dim_x: int,
     dim_y: int,
     exponents: tuple[int, int, int, int],
     num_trials: int,
-) -> tuple[int, int, int]:
-    """Get the code distance of a quasi-cyclic code."""
-    code = get_quasi_cyclic_code(dim_x, dim_y, exponents)
-    distance = code.get_distance_bound(num_trials=num_trials)
-    if not isinstance(distance, int):
-        distance = -1
-    return code.num_qubits, code.dimension, distance
-
-
-def compute_distances(
-    dim_x: int,
-    dim_y: int,
-    exponents: tuple[int, int, int, int],
-    num_trials: int = NUM_TRIALS,
-    *,
-    communication_distance_cutoff: int | float = 10,
-    silent: bool = False,
+    cache: diskcache.Cache,
 ) -> None:
-    """Compute communication and code distances."""
-    communication_distance = get_communication_distance(dim_x, dim_y, exponents)
-    if communication_distance == np.inf or communication_distance > communication_distance_cutoff:
-        return None
-
-    code_params = get_code_params(dim_x, dim_y, exponents, num_trials)
-    if not silent:
-        print(dim_x, dim_y, exponents, f"{communication_distance:.1f}", code_params)
+    """Compute and save quasi-cyclic code parameters."""
+    params = get_quasi_cyclic_code_params(dim_x, dim_y, exponents)
+    if params is not None:
+        nn, kk, dd, comm_dist = params
+        cache[dim_x, dim_y, exponents, num_trials] = (nn, kk, dd, comm_dist)
 
 
 if __name__ == "__main__":
     min_order, max_order = 3, 20
+    cache = qldpc.cache.get_disk_cache(CACHE_NAME)
 
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
 
@@ -109,4 +97,4 @@ if __name__ == "__main__":
                     range(dim_x), range(dim_y), range(dim_x), range(dim_y)
                 ):
                     # submit this job to the job queue
-                    executor.submit(compute_distances, dim_x, dim_y, exponents)
+                    executor.submit(run_and_save, dim_x, dim_y, exponents, NUM_TRIALS, cache)

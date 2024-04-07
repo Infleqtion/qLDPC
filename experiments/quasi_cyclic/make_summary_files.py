@@ -20,15 +20,16 @@ import os
 import diskcache
 import numpy as np
 import platformdirs
-from run_search import CACHE_NAME, NUM_TRIALS, get_code_params
+from run_search import CACHE_NAME, NUM_TRIALS
 
 
-comm_cutoffs = [5, 8, 10]  # communication distance "cutoffs" by which to organize results
+# Euclidean communication distance "cutoffs" by which to organize results
+comm_cutoffs = [5, 8, 10]
 
-dirname = os.path.dirname(__file__)
-save_dir = os.path.join(dirname, "codes")
+# directory in which to save results
+save_dir = os.path.join(os.path.dirname(__file__), "codes")
 
-
+# data file headers
 headers = [
     "AUTHOR: Michael A. Perlin, 2024",
     "quasi-cyclic codes of arXiv:2308.07915, with generating polynomials",
@@ -49,6 +50,8 @@ headers = [
     "",
     "L, M, ax, ay, bx, by, n, k, d, D, r",
 ]
+
+# data format
 fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f, %.3f"
 
 ##################################################
@@ -59,32 +62,28 @@ data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_c
 # iterate over all entries in the cache
 cache = diskcache.Cache(platformdirs.user_cache_dir(CACHE_NAME))
 for key in cache.iterkeys():
-    if len(key) != 3:
+    # identify cyclic group orders and polynomial exponents
+    ll, mm, (gg, hh, ii, jj), num_trials = key
+    if num_trials != NUM_TRIALS:
         continue
 
-    # cyclic group orders and polynomial exponents
-    ll, mm, (gg, hh, ii, jj) = key
+    # retrieve code parameters
+    nn, kk, dd, comm_dist = cache[key]
 
-    # communication distance
-    comm = cache[key]
-
-    if comm > comm_cutoffs[-1]:
+    if comm_dist > comm_cutoffs[-1]:
         # we don't care about this code, the communication distance is too large
         continue
 
-    # code parameters
-    nn, kk, dd = get_code_params(*key, NUM_TRIALS)
-
-    # figure of merit, relative to the surface code
+    # figure of merit relative to the surface code
     merit = kk * dd**2 / nn
     if merit <= 1:
         # this code doesn't even beat the surface code, so we don't care about it
         continue
 
     # add a summary of this code to the appropriate group of data
-    code = (ll, mm, gg, hh, ii, jj, nn, kk, dd, comm, merit)
+    code = (ll, mm, gg, hh, ii, jj, nn, kk, dd, comm_dist, merit)
     for cutoff, data in zip(comm_cutoffs, data_groups):
-        if comm <= cutoff:
+        if comm_dist <= cutoff:
             data.append(code)
             break
 
@@ -94,11 +93,11 @@ os.makedirs(save_dir, exist_ok=True)
 header = "\n".join(headers)
 
 # save data groups to files
-for last_comm, comm, data in zip([0] + comm_cutoffs, comm_cutoffs, data_groups):
-    file = f"codes_D{last_comm}-{comm}.csv"
+for last_comm, comm_dist, data in zip([0] + comm_cutoffs, comm_cutoffs, data_groups):
+    file = f"codes_D{last_comm}-{comm_dist}.csv"
     path = os.path.join(save_dir, file)
     np.savetxt(path, data, header=header, fmt=fmt)
-    last_comm = comm
+    last_comm = comm_dist
 
 # save all data
 path = os.path.join(save_dir, "codes_all.csv")

@@ -24,14 +24,20 @@ import diskcache
 import platformdirs
 
 
+def get_disk_cache(cache_name: str, *, cache_dir: str | None = None) -> diskcache.Cache:
+    """Retrieve a dictionary-like cache object."""
+    # identify the path to the cache
+    cache_dir = cache_dir or platformdirs.user_cache_dir()
+    cache_path = os.path.join(cache_dir, cache_name)
+    return diskcache.Cache(cache_path)
+
+
 def use_disk_cache(
     cache_name: str, *, cache_dir: str | None = None
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to cache results to disk."""
 
-    # identify the path to the cache
-    cache_dir = cache_dir or platformdirs.user_cache_dir()
-    cache_path = os.path.join(cache_dir, cache_name)
+    cache = get_disk_cache(cache_name, cache_dir=cache_dir)
 
     def decorator(function: Callable[..., Any]) -> Callable[..., Any]:
 
@@ -39,7 +45,6 @@ def use_disk_cache(
         def function_with_cache(*args: Hashable, **kwargs: Hashable) -> Any:
 
             # retrieve results from cache, if available
-            cache = diskcache.Cache(cache_path)
             key = args + tuple(kwargs.items())
             if key in cache:
                 return cache[key]
