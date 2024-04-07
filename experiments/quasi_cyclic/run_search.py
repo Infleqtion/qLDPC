@@ -36,7 +36,7 @@ CACHE_NAME = ".code_cache"
 
 def get_quasi_cyclic_code_params(
     dim_x: int, dim_y: int, exponents: tuple[int, int, int, int], num_trials: int
-) -> tuple[int, int, int, float] | None:
+) -> tuple[int, int, int | None, float] | None:
     """Compute communication distance and code distance for a quasi-cyclic code.
 
     If the code is trivial or the communication distance is beyond the cutoff, return None.
@@ -63,7 +63,7 @@ def get_quasi_cyclic_code_params(
     comm_distance = min(max_distances)
 
     if comm_distance > MAX_COMMUNICATION_DISTANCE:
-        return None
+        return code.num_qubits, code.dimension, None, comm_distance
 
     distance = code.get_distance_bound(num_trials=num_trials)
     assert isinstance(distance, int)
@@ -85,7 +85,7 @@ def run_and_save(
     if params is not None:
         nn, kk, dd, comm_dist = params
         cache[dim_x, dim_y, exponents, num_trials] = (nn, kk, dd, comm_dist)
-        if not silent:
+        if not silent and dd is not None:
             merit = kk * dd**2 / nn
             print(dim_x, dim_y, exponents, nn, kk, dd, f"{comm_dist:.2f}", f"{merit:.2f}")
 

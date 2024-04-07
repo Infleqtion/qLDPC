@@ -18,7 +18,7 @@
 import os
 
 import numpy as np
-from run_search import CACHE_DIR, CACHE_NAME, NUM_TRIALS
+from run_search import CACHE_DIR, CACHE_NAME, MAX_COMMUNICATION_DISTANCE, NUM_TRIALS
 
 import qldpc.cache
 
@@ -55,7 +55,7 @@ fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f, %.3f"
 
 ##################################################
 
-comm_cutoffs = sorted(comm_cutoffs)
+comm_cutoffs = sorted([cutoff for cutoff in comm_cutoffs if cutoff <= MAX_COMMUNICATION_DISTANCE])
 data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_cutoffs))]
 
 # iterate over all entries in the cache
@@ -69,8 +69,8 @@ for key in cache.iterkeys():
     # retrieve code parameters
     nn, kk, dd, comm_dist = cache[key]
 
-    if comm_dist > comm_cutoffs[-1]:
-        # we don't care about this code, the communication distance is too large
+    if comm_dist > comm_cutoffs[-1] or dd is None:
+        # we don't care about this code
         continue
 
     # figure of merit relative to the surface code
