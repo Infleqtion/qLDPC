@@ -22,7 +22,6 @@ import numpy as np
 import platformdirs
 from run_search import CACHE_NAME, NUM_TRIALS
 
-
 # Euclidean communication distance "cutoffs" by which to organize results
 comm_cutoffs = [5, 8, 10]
 
