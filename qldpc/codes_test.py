@@ -406,7 +406,7 @@ def test_cyclic_codes(field: int = 3) -> None:
     # check that every check qubit addresses its neighboring data qubits
     distance_one_shifts = {(0, 1), (1, 0), (0, -1), (-1, 0)}
     distance_two_shifts = {(0, 2), (2, 0), (0, -2), (-2, 0)} | distance_one_shifts
-    for plaquette_map, torus_shape in code.get_toric_mappings():
+    for plaquette_map, torus_shape in code.toric_mappings:
         shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape)
         assert distance_one_shifts.issubset(shifts_x)
         assert distance_one_shifts.issubset(shifts_z)
@@ -427,7 +427,7 @@ def test_cyclic_codes(field: int = 3) -> None:
     poly_a = 1 + y + y**2
     poly_b = y**3 + x**2 + x**4
     code = codes.QCCode(dims, poly_a, poly_b)
-    assert not code.get_toric_mappings()
+    assert not code.toric_mappings
 
     # codes with more than 2 symbols are unsupported
     with pytest.raises(ValueError, match="not supported"):

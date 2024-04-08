@@ -1482,8 +1482,8 @@ class QCCode(GBCode):
                 exponents[base] = exp
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
-    @functools.cache
-    def get_toric_mappings(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
+    @functools.cached_property
+    def toric_mappings(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
         """Get plaquette mappings that arrange qubits in a toric layout.
 
         Each plaquette looks like:
