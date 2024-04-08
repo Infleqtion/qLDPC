@@ -35,14 +35,13 @@ CACHE_NAME = ".code_cache"
 
 
 def get_quasi_cyclic_code_params(
-    dim_x: int, dim_y: int, exponents: tuple[int, int, int, int], num_trials: int
+    dims: tuple[int, int], exponents: tuple[int, int, int, int], num_trials: int
 ) -> tuple[int, int, int | None, float] | None:
     """Compute communication distance and code distance for a quasi-cyclic code.
 
     If the code is trivial or the communication distance is beyond the cutoff, return None.
     """
     # construct the code itself
-    dims = (dim_x, dim_y)
     ax, ay, bx, by = exponents
     poly_a = 1 + x + x**ax * y**ay
     poly_b = 1 + y + x**bx * y**by
@@ -72,8 +71,7 @@ def get_quasi_cyclic_code_params(
 
 
 def run_and_save(
-    dim_x: int,
-    dim_y: int,
+    dims: tuple[int, int],
     exponents: tuple[int, int, int, int],
     num_trials: int,
     cache: diskcache.Cache,
@@ -81,13 +79,24 @@ def run_and_save(
     silent: bool = False,
 ) -> None:
     """Compute and save quasi-cyclic code parameters."""
-    params = get_quasi_cyclic_code_params(dim_x, dim_y, exponents, num_trials)
+    params = get_quasi_cyclic_code_params(dims, exponents, num_trials)
     if params is not None:
         nn, kk, dd, comm_dist = params
-        cache[dim_x, dim_y, exponents, num_trials] = (nn, kk, dd, comm_dist)
+        cache[dims, exponents, num_trials] = (nn, kk, dd, comm_dist)
         if not silent and dd is not None:
             merit = kk * dd**2 / nn
-            print(dim_x, dim_y, exponents, nn, kk, dd, f"{comm_dist:.2f}", f"{merit:.2f}")
+            print(dims, exponents, (nn, kk, dd), f"{comm_dist:.2f}", f"{merit:.2f}")
+
+
+def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
+    """Are the given code parameters redundant?"""
+    dim_x, dim_y = dims
+    ax, ay, bx, by = exponents
+    return (
+        (dim_x, ax, ay) < (dim_y, by, bx)
+        or (ax, bx) > ((1 - ax) % dim_x, -bx % dim_x)
+        or (by, ay) > ((1 - by) % dim_y, -ay % dim_y)
+    )
 
 
 if __name__ == "__main__":
@@ -102,9 +111,9 @@ if __name__ == "__main__":
 
         for dim_x in range(max(MIN_ORDER, min_order), max_order + 1):
             for dim_y in range(MIN_ORDER, dim_x + 1):
-                for ax, ay, bx, by in itertools.product(
+                dims = (dim_x, dim_y)
+                for exponents in itertools.product(
                     range(dim_x), range(dim_y), range(dim_x), range(dim_y)
                 ):
-                    if (dim_x, ax, ay) >= (dim_y, by, bx):
-                        exponents = (ax, ay, bx, by)
-                        executor.submit(run_and_save, dim_x, dim_y, exponents, NUM_TRIALS, cache)
+                    if not redundant(dims, exponents):
+                        executor.submit(run_and_save, dims, exponents, NUM_TRIALS, cache)
