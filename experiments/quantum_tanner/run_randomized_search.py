@@ -23,6 +23,10 @@ from collections.abc import Hashable, Iterator
 from qldpc import abstract, codes
 
 
+NUM_SAMPLES = 100  # per choice of group and subcode
+NUM_TRIALS = 1000  # for code distance calculations
+
+
 def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
     """Get a deterministic hash from the given inputs."""
     input_bytes = repr(inputs).encode("utf-8")
@@ -74,8 +78,8 @@ def run_and_save(
     base_code: codes.ClassicalCode,
     base_code_id: str,
     sample: int,
-    num_samples: int,
-    num_trials: int,
+    num_samples: int = NUM_SAMPLES,
+    num_trials: int = NUM_TRIALS,
     *,
     identify_completion_text: bool = False,
     override_existing_data: bool = False,
@@ -128,9 +132,6 @@ def run_and_save(
 
 
 if __name__ == "__main__":
-    num_samples = 100  # per choice of group and subcode
-    num_trials = 1000  # for code distance calculations
-
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
     save_dir = os.path.join(os.path.dirname(__file__), "codes")
 
@@ -140,7 +141,7 @@ if __name__ == "__main__":
         # iterate over all combinations of group, base code, and sample index
         for group_order, group_index in get_small_groups():
             for base_code, base_code_id in get_base_codes():
-                for sample in range(num_samples):
+                for sample in range(NUM_SAMPLES):
 
                     # submit this job to the job queue
                     executor.submit(
@@ -150,8 +151,6 @@ if __name__ == "__main__":
                         base_code,
                         base_code_id,
                         sample,
-                        num_samples,
-                        num_trials,
                         identify_completion_text=max_concurrent_jobs > 1,
                     )
 
