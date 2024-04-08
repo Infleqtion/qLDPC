@@ -18,6 +18,7 @@
 import concurrent.futures
 import itertools
 import os
+import sys
 
 import diskcache
 import numpy as np
@@ -100,20 +101,18 @@ def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bo
 
 
 if __name__ == "__main__":
-    min_dim_x = 3
-    max_dim_x = 15
+    dim_x = int(sys.argv[1])
 
-    max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
+    max_concurrent_jobs = num_cpus - 2 if (num_cpus := os.cpu_count()) else 1
     cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
 
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
 
-        for dim_x in range(max(MIN_ORDER, min_dim_x), max_dim_x + 1):
-            for dim_y in range(MIN_ORDER, dim_x + 1):
-                dims = (dim_x, dim_y)
-                for exponents in itertools.product(
-                    range(dim_x), range(dim_y), range(dim_x), range(dim_y)
-                ):
-                    if not redundant(dims, exponents):
-                        executor.submit(run_and_save, dims, exponents, NUM_TRIALS, cache)
+        for dim_y in range(MIN_ORDER, dim_x + 1):
+            dims = (dim_x, dim_y)
+            for exponents in itertools.product(
+                range(dim_x), range(dim_y), range(dim_x), range(dim_y)
+            ):
+                if not redundant(dims, exponents):
+                    executor.submit(run_and_save, dims, exponents, NUM_TRIALS, cache)
