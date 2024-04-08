@@ -101,7 +101,7 @@ def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bo
 
 if __name__ == "__main__":
     min_dim = 3
-    max_dim = 14
+    max_dim = 15
 
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
     cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
