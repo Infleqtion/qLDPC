@@ -22,7 +22,6 @@ from collections.abc import Hashable, Iterator
 
 from qldpc import abstract, codes
 
-
 NUM_SAMPLES = 100  # per choice of group and subcode
 NUM_TRIALS = 1000  # for code distance calculations
 
