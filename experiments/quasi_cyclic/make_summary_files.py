@@ -34,7 +34,7 @@ headers = [
     "quasi-cyclic codes of arXiv:2308.07915, with generating polynomials",
     "    A = 1 + x + x**ax * y**ay",
     "    B = 1 + y + x**bx * y**by",
-    "here x and y are generators of cyclic groups with orders L and M",
+    "here x and y are generators of cyclic groups with orders Rx and Ry",
     "code parameters [[n, k, d]] indicate",
     "    n = number of physical qubits",
     "    k = number of logical qubits",
@@ -47,7 +47,7 @@ headers = [
     "topological 2D codes such as the toric code strictly satisfy r <= 1",
     "we only keep track of codes with r > 1",
     "",
-    "L, M, ax, ay, bx, by, n, k, d, D, r",
+    "Rx, Ry, ax, ay, bx, by, n, k, d, D, r",
 ]
 
 # data format
@@ -62,7 +62,7 @@ data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_c
 cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
 for key in cache.iterkeys():
     # identify cyclic group orders and polynomial exponents
-    dim_x, dim_y, (ax, ay, bx, by), num_trials = key
+    dims, exponents, num_trials = key
     if num_trials != NUM_TRIALS:
         continue
 
@@ -80,7 +80,7 @@ for key in cache.iterkeys():
         continue
 
     # add a summary of this code to the appropriate group of data
-    code = (dim_x, dim_y, ax, ay, bx, by, nn, kk, dd, comm_dist, merit)
+    code = (*dims, *exponents, nn, kk, dd, comm_dist, merit)
     for cutoff, data in zip(comm_cutoffs, data_groups):
         if comm_dist <= cutoff:
             data.append(code)

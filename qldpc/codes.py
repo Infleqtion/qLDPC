@@ -1511,7 +1511,7 @@ class QCCode(GBCode):
         terms_b = self.poly_b.as_expr().args
 
         # find combinations of terms that enable a toric layout
-        toric_params = []
+        toric_params = set()
         for (a_1, a_2), (b_1, b_2) in itertools.product(
             itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
         ):
@@ -1521,7 +1521,10 @@ class QCCode(GBCode):
                 gen_a.order() * gen_b.order() == self.group.order
                 and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
             ):
-                toric_params.append((a_1, a_2, b_1, b_2))
+                toric_params.add((a_1, a_2, b_1, b_2))
+                toric_params.add((a_2, a_1, b_1, b_2))
+                toric_params.add((a_1, a_2, b_2, b_1))
+                toric_params.add((a_2, a_1, b_2, b_1))
 
         # identify torus shapes and qubit-to-plaquette mappings
         layout_data = []
@@ -1529,14 +1532,14 @@ class QCCode(GBCode):
             shift_a = a_1 * a_2 ** (-1)
             shift_b = b_1 * b_2 ** (-1)
             """
-            For generators of the form
+            We want to "change basis" from generators (x, y) to generators (g, h), where
                 g = x^p y^q  <-- shift_a,
-                h = x^u y^v  <-- shift_b,
-            build a grid_map (dictionary) that maps (i, j) --> (a, b), where
+                h = x^u y^v  <-- shift_b.
+            To do so, we build a grid_map (dictionary) that maps (i, j) --> (a, b), where
                 x^i y^j = g^a h^b.
             Equivalently, we want
                 i = a p + b u  mod order(x),
-                j = b q + b v  mod order(y).
+                j = a q + b v  mod order(y).
             """
             gen_g = self.to_group_member(shift_a)
             gen_h = self.to_group_member(shift_b)
