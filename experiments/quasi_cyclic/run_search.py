@@ -100,8 +100,8 @@ def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bo
 
 
 if __name__ == "__main__":
-    min_order = 3
-    max_order = 14
+    min_dim = 3
+    max_dim = 14
 
     max_concurrent_jobs = num_cpus // 2 if (num_cpus := os.cpu_count()) else 1
     cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
 
-        for dim_x in range(max(MIN_ORDER, min_order), max_order + 1):
+        for dim_x in range(max(MIN_ORDER, min_dim), max_dim + 1):
             for dim_y in range(MIN_ORDER, dim_x + 1):
                 dims = (dim_x, dim_y)
                 for exponents in itertools.product(
