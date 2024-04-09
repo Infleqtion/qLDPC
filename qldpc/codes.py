@@ -1492,8 +1492,8 @@ class QCCode(GBCode):
             Z R
         where L and R are data qubits, and X and Z are checks.  In a toric layout, plaquettes are
         arranged in a grid, and each check addresses all of its neighboring data qubits, as well as
-        a few far-away qubits.  This method returns a "plaquette mapping" and torus dimensions
-        (shape) for all toric layouts of this code.
+        a few far-away qubits.  This method returns a "plaquette mapping" (explained below) and
+        the torus dimensions (shape) for all toric layouts of this code.
 
         Each plaquette on the torus is nominally indexed by coordinates (i, j).  Each plaquette
         mapping then takes:
