@@ -1581,7 +1581,8 @@ class QCCode(GBCode):
         """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
         s_i = (ii - sector_shifts[qubit_sector][0]) % self.orders[0]
         s_j = (jj - sector_shifts[qubit_sector][1]) % self.orders[1]
-        return grid_map[s_i, s_j]
+        s_a, s_b = grid_map[s_i, s_j]
+        return s_a, s_b
 
     def get_toric_checks(
         self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
