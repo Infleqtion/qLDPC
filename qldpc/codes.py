@@ -1508,7 +1508,8 @@ class QCCode(GBCode):
         The plaquette map is a function that maps a qubit sector (0, 1, Pauli.X, or Pauli.Z) to a 3D
         tensor.  The tensor is populated by integers in such a way that
             plaquette_map(sector)[i, j] = [a, b]
-        where (i, j) is the "bare" index of a qubit in the given sector before any mapping.
+        where (i, j) is the "bare" index of a qubit in the given sector, and (a, b) correspond to
+        the location of a plaquette on a torus -- the plaquette that the qubit is assigned to.
 
         Bare indices are defined as follows.  We can reshape (say) matrix_z into a tensor checks_z
         with shape (Rx, Ry, 2, Rx, Ry), which has the effect of:
@@ -1545,7 +1546,7 @@ class QCCode(GBCode):
                 toric_params.append((a_2, a_1, b_2, b_1))
 
         # identify torus shapes and qubit-to-plaquette mappings
-        layout_data = []
+        toric_layouts = []
         for a_1, a_2, b_1, b_2 in toric_params:
             shift_a = a_1 * a_2 ** (-1)
             shift_b = b_1 * b_2 ** (-1)
@@ -1572,7 +1573,7 @@ class QCCode(GBCode):
 
             # figure out how to shift qubits in each sector:
             # (0 <--> L) or (1 <--> R) for data qubits, and X or Z for check qubits
-            sector_shifts = {
+            shifts = {
                 0: (0, 0),  # "L" data qubits
                 1: self.get_exponents(a_2 ** (-1) * b_1),  # "R" data qubits
                 Pauli.X: self.get_exponents(a_2 ** (-1)),  # "X" check qubits
@@ -1582,22 +1583,22 @@ class QCCode(GBCode):
             plaquette_map = functools.partial(
                 self._full_plaquette_map,
                 grid_map=grid_map,
-                sector_shifts=sector_shifts,
+                shifts=shifts,
             )
-            layout_data.append((plaquette_map, torus_shape))
+            toric_layouts.append((plaquette_map, torus_shape))
 
-        return layout_data
+        return toric_layouts
 
     def _full_plaquette_map(
         self,
         qubit_sector: int | PauliXZ,
         grid_map: npt.NDArray[np.int_],
-        sector_shifts: dict[int | PauliXZ, tuple[int, int]],
+        shifts: dict[int | PauliXZ, tuple[int, int]],
     ) -> npt.NDArray[np.int_]:
         """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
         return np.roll(
-            np.roll(grid_map, sector_shifts[qubit_sector][0], axis=0),
-            sector_shifts[qubit_sector][1],
+            np.roll(grid_map, shifts[qubit_sector][0], axis=0),
+            shifts[qubit_sector][1],
             axis=1,
         )
 
