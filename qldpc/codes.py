@@ -1512,7 +1512,7 @@ class QCCode(GBCode):
         terms_b = self.poly_b.as_expr().args
 
         # find combinations of terms that enable a toric layout
-        toric_params = set()
+        toric_params = []
         for (a_1, a_2), (b_1, b_2) in itertools.product(
             itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
         ):
@@ -1522,10 +1522,10 @@ class QCCode(GBCode):
                 gen_a.order() * gen_b.order() == self.group.order
                 and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
             ):
-                toric_params.add((a_1, a_2, b_1, b_2))
-                toric_params.add((a_2, a_1, b_1, b_2))
-                toric_params.add((a_1, a_2, b_2, b_1))
-                toric_params.add((a_2, a_1, b_2, b_1))
+                toric_params.append((a_1, a_2, b_1, b_2))
+                toric_params.append((a_2, a_1, b_1, b_2))
+                toric_params.append((a_1, a_2, b_2, b_1))
+                toric_params.append((a_2, a_1, b_2, b_1))
 
         # identify torus shapes and qubit-to-plaquette mappings
         layout_data = []
@@ -1590,31 +1590,37 @@ class QCCode(GBCode):
         """Build X-type and Z-type parity check matrices for a toric layout."""
 
         # identify plaquette map in each qubit sector
-        sector_plaquette_map = {sector: plaquette_map(sector) for sector in [0, 1] + PAULIS_XZ}
+        index_map = {sector: plaquette_map(sector) for sector in [0, 1] + PAULIS_XZ}
 
         # loop over each of X-type and Z-type parity checks
         for pauli in PAULIS_XZ:
+
+            # identify old and new parity check tensors
             matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
             old_checks = matrix.reshape(*self.orders, 2, *self.orders)
-            new_checks = self.field.Zeros((*torus_shape, 2, *torus_shape))
+            new_checks = np.empty((*torus_shape, 2, *torus_shape), dtype=int)
 
-            # loop over every check
-            for c_i, c_j in np.ndindex(*self.orders):
-                c_a, c_b = sector_plaquette_map[pauli][c_i, c_j]
+            # old check matrix with the data qubits permuted
+            new_vals = np.zeros((*self.orders, 2, *torus_shape), dtype=int)
 
-                # loop over every qubit
-                for sector, d_i, d_j in zip(*np.where(old_checks[c_i, c_j])):
-                    d_a, d_b = sector_plaquette_map[sector][d_i, d_j]
-                    new_checks[c_a, c_b, sector, d_a, d_b] = old_checks[c_i, c_j, sector, d_i, d_j]
+            # permute the data qubits in each data qubit sector (0 or 1)
+            for sector in range(2):
+                map_01 = index_map[sector].reshape(-1, 2)
+                old_vals = old_checks[:, :, sector, :, :].reshape(*self.orders, -1)
+                new_vals[:, :, sector, map_01[:, 0], map_01[:, 1]] = old_vals
 
-            # save the shifted checks to an X/Z parity check matrix as appropriate
+            # permute the check qubits in this check qubit sector (X or Z)
+            map_xz = index_map[pauli].reshape(-1, 2)
+            new_checks[map_xz[:, 0], map_xz[:, 1], :] = new_vals.reshape(-1, 2, *torus_shape)
+
+            # save the new check tensor to a parity check matrix
             if pauli == Pauli.X:
                 matrix_x = new_checks.reshape(self.matrix_x.shape)
             else:
                 assert pauli == Pauli.Z
                 matrix_z = new_checks.reshape(self.matrix_z.shape)
 
-        return matrix_x, matrix_z
+        return self.field(matrix_x), self.field(matrix_z)
 
     @classmethod
     def get_toric_qubit_pos(
