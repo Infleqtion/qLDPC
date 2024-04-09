@@ -1535,7 +1535,7 @@ class QCCode(GBCode):
             We want to "change basis" from generators (x, y) to generators (g, h), where
                 g = x^p y^q  <-- shift_a,
                 h = x^u y^v  <-- shift_b.
-            To do so, we build a grid_map (dictionary) that maps (i, j) --> (a, b), where
+            To do so, we build a grid_map that takes (i, j) --> (a, b), where
                 x^i y^j = g^a h^b.
             Equivalently, we want
                 i = a p + b u  mod order(x),
@@ -1546,13 +1546,12 @@ class QCCode(GBCode):
             pp, qq = self.get_exponents(shift_a)
             uu, vv = self.get_exponents(shift_b)
             torus_shape: tuple[int, int] = (int(gen_g.order()), int(gen_h.order()))
-            grid_map = {
-                (
-                    (aa * pp + bb * uu) % self.orders[0],
-                    (aa * qq + bb * vv) % self.orders[1],
-                ): (aa, bb)
-                for aa, bb in np.ndindex(torus_shape)
-            }
+            grid_map = np.empty((*self.orders, 2), dtype=int)
+            for aa, bb in np.ndindex(torus_shape):
+                ii = (aa * pp + bb * uu) % self.orders[0]
+                jj = (aa * qq + bb * vv) % self.orders[1]
+                grid_map[ii, jj] = aa, bb
+
             # figure out how to shift qubits in each sector:
             # (0 <--> L) or (1 <--> R) for data qubits, and X or Z for check qubits
             sector_shifts = {
@@ -1566,7 +1565,6 @@ class QCCode(GBCode):
                 self._full_plaquette_map,
                 grid_map=grid_map,
                 sector_shifts=sector_shifts,
-                torus_shape=torus_shape,
             )
             layout_data.append((plaquette_map, torus_shape))
 
@@ -1579,13 +1577,11 @@ class QCCode(GBCode):
         qubit_sector: int | PauliXZ,
         grid_map: dict[tuple[int, int], tuple[int, int]],
         sector_shifts: dict[int | PauliXZ, tuple[int, int]],
-        torus_shape: tuple[int, int],
     ) -> tuple[int, int]:
         """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
         s_i = (ii - sector_shifts[qubit_sector][0]) % self.orders[0]
         s_j = (jj - sector_shifts[qubit_sector][1]) % self.orders[1]
-        s_a, s_b = grid_map[s_i, s_j]
-        return s_a % torus_shape[0], s_b % torus_shape[1]
+        return grid_map[s_i, s_j]
 
     def get_toric_checks(
         self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
