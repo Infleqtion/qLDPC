@@ -1623,28 +1623,26 @@ class QCCode(GBCode):
         return self.field(matrix_x), self.field(matrix_z)
 
     @classmethod
-    def get_toric_qubit_pos(
+    def get_qubit_coordinate_maps(
         cls,
-        aa: int,
-        bb: int,
         sector: int | PauliXZ,
-        torus_shape: tuple[int, int] | None = None,
+        torus_shape: tuple[int, int],
         open_boundaries: bool = False,
-    ) -> tuple[int, int]:
-        """Get the position of a qubit in the given sector of plaquette (aa, bb) on a torus.
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build arrays that map plaquette coordinates to qubit coordinates.
 
         If open_boundaries=True, "fold" the torus for a qubit layout with open boundaries.
         """
-        if torus_shape is not None:
-            aa = aa % torus_shape[0]
-            bb = bb % torus_shape[1]
-        xx = 2 * aa + int(sector in [Pauli.X, 1])
-        yy = 2 * bb + int(sector in [Pauli.Z, 1])
+        x_map = 2 * np.arange(torus_shape[0]) + int(sector in [Pauli.X, 1])
+        y_map = 2 * np.arange(torus_shape[1]) + int(sector in [Pauli.Z, 1])
         if open_boundaries:
-            assert torus_shape is not None, "Cannot fold a torus without knowing its shape"
-            xx = 2 * xx if xx < torus_shape[0] else (2 * torus_shape[0] - 1 - xx) * 2 + 1
-            yy = 2 * yy if yy < torus_shape[1] else (2 * torus_shape[1] - 1 - yy) * 2 + 1
-        return int(xx), int(yy)
+            half_x = x_map < torus_shape[0]
+            half_y = y_map < torus_shape[1]
+            x_map[half_x] *= 2
+            y_map[half_y] *= 2
+            x_map[~half_x] = (2 * torus_shape[0] - 1 - x_map[~half_x]) * 2 + 1
+            y_map[~half_y] = (2 * torus_shape[1] - 1 - y_map[~half_y]) * 2 + 1
+        return x_map, y_map
 
     def get_check_shifts(
         self,
@@ -1664,6 +1662,12 @@ class QCCode(GBCode):
         # Otherwise, we generally need to consider all plaquettes.
         plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
 
+        # build arrays that map plaquette coordinates to qubit coordinates for each qubit sector
+        qubit_coords = {
+            sector: QCCode.get_qubit_coordinate_maps(sector, torus_shape, open_boundaries)
+            for sector in [0, 1] + PAULIS_XZ
+        }
+
         # sets of relative coordinates, organized by stabilizer type
         shifts: dict[PauliXZ, set[tuple[int, int]]] = {}
         for pauli in PAULIS_XZ:
@@ -1677,15 +1681,15 @@ class QCCode(GBCode):
             for p_a, p_b in plaquettes:
 
                 # identify the location of a check qubit, and the support of its stabilizer
-                c_a, c_b = self.get_toric_qubit_pos(p_a, p_b, pauli, torus_shape, open_boundaries)
+                c_a = qubit_coords[pauli][0][p_a]
+                c_b = qubit_coords[pauli][1][p_b]
                 check = checks[p_a, p_b]
 
                 # identify the relative position of all data qubits addressed by this check
-                for sector, aa, bb in zip(*np.where(check)):
+                for sector, q_a, q_b in zip(*np.where(check)):
                     # relative position of this data qubit from the check qubit
-                    d_a, d_b = self.get_toric_qubit_pos(
-                        aa, bb, sector, torus_shape, open_boundaries
-                    )
+                    d_a = qubit_coords[sector][0][q_a]
+                    d_b = qubit_coords[sector][1][q_b]
                     shift_a = d_a - c_a
                     shift_b = d_b - c_b
 
