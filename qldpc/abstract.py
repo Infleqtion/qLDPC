@@ -540,7 +540,7 @@ class Element:
     def lift(self) -> galois.FieldArray:
         """Lift this element using the underlying group representation."""
         return sum(
-            (val * self._group.lift(member) for member, val in self),
+            (val * self._group.lift(member) for member, val in self if val),
             start=self.field.Zeros((self._group.lift_dim,) * 2),
         )
 
@@ -696,7 +696,14 @@ class CyclicGroup(Group):
     """
 
     def __init__(self, order: int) -> None:
-        super()._init_from_group(comb.named_groups.CyclicGroup(order))
+        field = DEFAULT_FIELD_ORDER
+        identity_mat = np.eye(order, dtype=int)
+
+        # build lift manually, which is faster than the default_lift
+        def lift(member: GroupMember) -> npt.NDArray[np.int_]:
+            return galois.GF(field)(np.roll(identity_mat, member.apply(0), axis=1))
+
+        super()._init_from_group(comb.named_groups.CyclicGroup(order), field, lift)
 
 
 class AbelianGroup(Group):
@@ -708,15 +715,38 @@ class AbelianGroup(Group):
     """
 
     def __init__(self, *orders: int, product_lift: bool = False) -> None:
-        group: Group | comb.PermutationGroup
+        field = DEFAULT_FIELD_ORDER
+        identity_mats = [np.eye(order, dtype=int) for order in orders]
+        vals = [sum(orders[:idx]) for idx in range(len(orders))]
+
+        # identify method to "combine" two cyclic matrices
+        _combine: Callable[[npt.NDArray[np.int_], npt.NDArray[np.int_]], npt.NDArray[np.int_]]
         if product_lift:
-            groups = [CyclicGroup(order) for order in orders]
-            group = Group.product(*groups)
+            _combine = np.kron
+
         else:
-            group = comb.named_groups.AbelianGroup(*orders)
+
+            def _combine(
+                mat_a: npt.NDArray[np.int_], mat_b: npt.NDArray[np.int_]
+            ) -> npt.NDArray[np.int_]:
+                zero_ab = np.zeros((mat_a.shape[0], mat_b.shape[1]), dtype=int)
+                zero_ba = np.zeros((mat_b.shape[0], mat_a.shape[1]), dtype=int)
+                return np.block([[mat_a, zero_ab], [zero_ba, mat_b]])
+
+        # build lift manually, which is faster than the default_lift
+        def lift(member: GroupMember) -> npt.NDArray[np.int_]:
+            shifts = [member.apply(val) - val for val in vals]
+            mats = [
+                np.roll(identity_mat, shift, axis=1)
+                for identity_mat, shift in zip(identity_mats, shifts)
+            ]
+            mat = functools.reduce(_combine, mats)
+            return galois.GF(field)(mat)
+
+        group = comb.named_groups.AbelianGroup(*orders)
         order_text = ",".join(map(str, orders))
         name = f"AbelianGroup({order_text})"
-        super()._init_from_group(group, name=name)
+        super()._init_from_group(group, field, lift, name)
 
 
 class DihedralGroup(Group):
