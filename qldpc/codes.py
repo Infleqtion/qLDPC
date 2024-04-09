@@ -1345,7 +1345,8 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-QuasiCyclicPlaquetteMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
+# map from a "sector" in {0, 1, X, Z} to a coordinate map (i, j) --> (a, b) as a 4D array
+QuasiCyclicPlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
 
 
 # TODO: example notebook featuring this code
@@ -1511,7 +1512,7 @@ class QCCode(GBCode):
         terms_b = self.poly_b.as_expr().args
 
         # find combinations of terms that enable a toric layout
-        toric_params = set()
+        toric_params = []
         for (a_1, a_2), (b_1, b_2) in itertools.product(
             itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
         ):
@@ -1521,10 +1522,10 @@ class QCCode(GBCode):
                 gen_a.order() * gen_b.order() == self.group.order
                 and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
             ):
-                toric_params.add((a_1, a_2, b_1, b_2))
-                toric_params.add((a_2, a_1, b_1, b_2))
-                toric_params.add((a_1, a_2, b_2, b_1))
-                toric_params.add((a_2, a_1, b_2, b_1))
+                toric_params.append((a_1, a_2, b_1, b_2))
+                toric_params.append((a_2, a_1, b_1, b_2))
+                toric_params.append((a_1, a_2, b_2, b_1))
+                toric_params.append((a_2, a_1, b_2, b_1))
 
         # identify torus shapes and qubit-to-plaquette mappings
         layout_data = []
@@ -1535,7 +1536,7 @@ class QCCode(GBCode):
             We want to "change basis" from generators (x, y) to generators (g, h), where
                 g = x^p y^q  <-- shift_a,
                 h = x^u y^v  <-- shift_b.
-            To do so, we build a grid_map (dictionary) that maps (i, j) --> (a, b), where
+            To do so, we build a grid_map that takes (i, j) --> (a, b), where
                 x^i y^j = g^a h^b.
             Equivalently, we want
                 i = a p + b u  mod order(x),
@@ -1546,13 +1547,12 @@ class QCCode(GBCode):
             pp, qq = self.get_exponents(shift_a)
             uu, vv = self.get_exponents(shift_b)
             torus_shape: tuple[int, int] = (int(gen_g.order()), int(gen_h.order()))
-            grid_map = {
-                (
-                    (aa * pp + bb * uu) % self.orders[0],
-                    (aa * qq + bb * vv) % self.orders[1],
-                ): (aa, bb)
-                for aa, bb in np.ndindex(torus_shape)
-            }
+            grid_map = np.empty((*self.orders, 2), dtype=int)
+            for aa, bb in np.ndindex(torus_shape):
+                ii = (aa * pp + bb * uu) % self.orders[0]
+                jj = (aa * qq + bb * vv) % self.orders[1]
+                grid_map[ii, jj] = aa, bb
+
             # figure out how to shift qubits in each sector:
             # (0 <--> L) or (1 <--> R) for data qubits, and X or Z for check qubits
             sector_shifts = {
@@ -1566,7 +1566,6 @@ class QCCode(GBCode):
                 self._full_plaquette_map,
                 grid_map=grid_map,
                 sector_shifts=sector_shifts,
-                torus_shape=torus_shape,
             )
             layout_data.append((plaquette_map, torus_shape))
 
@@ -1574,71 +1573,76 @@ class QCCode(GBCode):
 
     def _full_plaquette_map(
         self,
-        ii: int,
-        jj: int,
         qubit_sector: int | PauliXZ,
-        grid_map: dict[tuple[int, int], tuple[int, int]],
+        grid_map: npt.NDArray[np.int_],
         sector_shifts: dict[int | PauliXZ, tuple[int, int]],
-        torus_shape: tuple[int, int],
-    ) -> tuple[int, int]:
+    ) -> npt.NDArray[np.int_]:
         """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
-        s_i = (ii - sector_shifts[qubit_sector][0]) % self.orders[0]
-        s_j = (jj - sector_shifts[qubit_sector][1]) % self.orders[1]
-        s_a, s_b = grid_map[s_i, s_j]
-        return s_a % torus_shape[0], s_b % torus_shape[1]
+        return np.roll(
+            np.roll(grid_map, sector_shifts[qubit_sector][0], axis=0),
+            sector_shifts[qubit_sector][1],
+            axis=1,
+        )
 
     def get_toric_checks(
         self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Build X-type and Z-type parity check matrices for a toric layout."""
 
+        # identify plaquette map in each qubit sector
+        index_map = {sector: plaquette_map(sector) for sector in [0, 1] + PAULIS_XZ}
+
         # loop over each of X-type and Z-type parity checks
         for pauli in PAULIS_XZ:
+
+            # identify old and new parity check tensors
             matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
             old_checks = matrix.reshape(*self.orders, 2, *self.orders)
-            new_checks = self.field.Zeros((*torus_shape, 2, *torus_shape))
+            new_checks = np.empty((*torus_shape, 2, *torus_shape), dtype=int)
 
-            # loop over every check
-            for c_i, c_j in np.ndindex(*self.orders):
-                c_a, c_b = plaquette_map(c_i, c_j, pauli)
+            # old check matrix with the data qubits permuted
+            new_vals = np.zeros((*self.orders, 2, *torus_shape), dtype=int)
 
-                # loop over every qubit
-                for sector, d_i, d_j in zip(*np.where(old_checks[c_i, c_j])):
-                    d_a, d_b = plaquette_map(d_i, d_j, sector)
-                    new_checks[c_a, c_b, sector, d_a, d_b] = old_checks[c_i, c_j, sector, d_i, d_j]
+            # permute the data qubits in each data qubit sector (0 or 1)
+            for sector in range(2):
+                map_01 = index_map[sector].reshape(-1, 2)
+                old_vals = old_checks[:, :, sector, :, :].reshape(*self.orders, -1)
+                new_vals[:, :, sector, map_01[:, 0], map_01[:, 1]] = old_vals
 
-            # save the shifted checks to an X/Z parity check matrix as appropriate
+            # permute the check qubits in this check qubit sector (X or Z)
+            map_xz = index_map[pauli].reshape(-1, 2)
+            new_checks[map_xz[:, 0], map_xz[:, 1], :] = new_vals.reshape(-1, 2, *torus_shape)
+
+            # save the new check tensor to a parity check matrix
             if pauli == Pauli.X:
                 matrix_x = new_checks.reshape(self.matrix_x.shape)
             else:
                 assert pauli == Pauli.Z
                 matrix_z = new_checks.reshape(self.matrix_z.shape)
 
-        return matrix_x, matrix_z
+        return self.field(matrix_x), self.field(matrix_z)
 
     @classmethod
-    def get_toric_qubit_pos(
+    def get_qubit_coordinate_maps(
         cls,
-        aa: int,
-        bb: int,
         sector: int | PauliXZ,
-        torus_shape: tuple[int, int] | None = None,
+        torus_shape: tuple[int, int],
         open_boundaries: bool = False,
-    ) -> tuple[int, int]:
-        """Get the position of a qubit in the given sector of plaquette (aa, bb) on a torus.
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Build arrays that map plaquette coordinates to qubit coordinates.
 
         If open_boundaries=True, "fold" the torus for a qubit layout with open boundaries.
         """
-        if torus_shape is not None:
-            aa = aa % torus_shape[0]
-            bb = bb % torus_shape[1]
-        xx = 2 * aa + int(sector in [Pauli.X, 1])
-        yy = 2 * bb + int(sector in [Pauli.Z, 1])
+        x_map = 2 * np.arange(torus_shape[0]) + int(sector in [Pauli.X, 1])
+        y_map = 2 * np.arange(torus_shape[1]) + int(sector in [Pauli.Z, 1])
         if open_boundaries:
-            assert torus_shape is not None, "Cannot fold a torus without knowing its shape"
-            xx = 2 * xx if xx < torus_shape[0] else (2 * torus_shape[0] - 1 - xx) * 2 + 1
-            yy = 2 * yy if yy < torus_shape[1] else (2 * torus_shape[1] - 1 - yy) * 2 + 1
-        return int(xx), int(yy)
+            half_x = x_map < torus_shape[0]
+            half_y = y_map < torus_shape[1]
+            x_map[half_x] *= 2
+            y_map[half_y] *= 2
+            x_map[~half_x] = (2 * torus_shape[0] - 1 - x_map[~half_x]) * 2 + 1
+            y_map[~half_y] = (2 * torus_shape[1] - 1 - y_map[~half_y]) * 2 + 1
+        return x_map, y_map
 
     def get_check_shifts(
         self,
@@ -1658,6 +1662,12 @@ class QCCode(GBCode):
         # Otherwise, we generally need to consider all plaquettes.
         plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
 
+        # build arrays that map plaquette coordinates to qubit coordinates for each qubit sector
+        qubit_coords = {
+            sector: QCCode.get_qubit_coordinate_maps(sector, torus_shape, open_boundaries)
+            for sector in [0, 1] + PAULIS_XZ
+        }
+
         # sets of relative coordinates, organized by stabilizer type
         shifts: dict[PauliXZ, set[tuple[int, int]]] = {}
         for pauli in PAULIS_XZ:
@@ -1671,15 +1681,14 @@ class QCCode(GBCode):
             for p_a, p_b in plaquettes:
 
                 # identify the location of a check qubit, and the support of its stabilizer
-                c_a, c_b = self.get_toric_qubit_pos(p_a, p_b, pauli, torus_shape, open_boundaries)
-                check = checks[p_a, p_b]
+                c_a = qubit_coords[pauli][0][p_a]
+                c_b = qubit_coords[pauli][1][p_b]
 
                 # identify the relative position of all data qubits addressed by this check
-                for sector, aa, bb in zip(*np.where(check)):
+                for sector, q_a, q_b in zip(*np.where(checks[p_a, p_b])):
                     # relative position of this data qubit from the check qubit
-                    d_a, d_b = self.get_toric_qubit_pos(
-                        aa, bb, sector, torus_shape, open_boundaries
-                    )
+                    d_a = qubit_coords[sector][0][q_a]
+                    d_b = qubit_coords[sector][1][q_b]
                     shift_a = d_a - c_a
                     shift_b = d_b - c_b
 
