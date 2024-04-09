@@ -1345,7 +1345,8 @@ class GBCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
-QuasiCyclicPlaquetteMap = Callable[[int, int, int | PauliXZ], tuple[int, int]]
+# map from a "sector" in {0, 1, X, Z} to a coordinate map (i, j) --> (a, b) as a 4D array
+QuasiCyclicPlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
 
 
 # TODO: example notebook featuring this code
@@ -1572,22 +1573,24 @@ class QCCode(GBCode):
 
     def _full_plaquette_map(
         self,
-        ii: int,
-        jj: int,
         qubit_sector: int | PauliXZ,
-        grid_map: dict[tuple[int, int], tuple[int, int]],
+        grid_map: npt.NDArray[np.int_],
         sector_shifts: dict[int | PauliXZ, tuple[int, int]],
-    ) -> tuple[int, int]:
+    ) -> npt.NDArray[np.int_]:
         """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
-        s_i = (ii - sector_shifts[qubit_sector][0]) % self.orders[0]
-        s_j = (jj - sector_shifts[qubit_sector][1]) % self.orders[1]
-        s_a, s_b = grid_map[s_i, s_j]
-        return s_a, s_b
+        return np.roll(
+            np.roll(grid_map, sector_shifts[qubit_sector][0], axis=0),
+            sector_shifts[qubit_sector][1],
+            axis=1,
+        )
 
     def get_toric_checks(
         self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Build X-type and Z-type parity check matrices for a toric layout."""
+
+        # identify plaquette map in each qubit sector
+        sector_plaquette_map = {sector: plaquette_map(sector) for sector in [0, 1] + PAULIS_XZ}
 
         # loop over each of X-type and Z-type parity checks
         for pauli in PAULIS_XZ:
@@ -1597,11 +1600,11 @@ class QCCode(GBCode):
 
             # loop over every check
             for c_i, c_j in np.ndindex(*self.orders):
-                c_a, c_b = plaquette_map(c_i, c_j, pauli)
+                c_a, c_b = sector_plaquette_map[pauli][c_i, c_j]
 
                 # loop over every qubit
                 for sector, d_i, d_j in zip(*np.where(old_checks[c_i, c_j])):
-                    d_a, d_b = plaquette_map(d_i, d_j, sector)
+                    d_a, d_b = sector_plaquette_map[sector][d_i, d_j]
                     new_checks[c_a, c_b, sector, d_a, d_b] = old_checks[c_i, c_j, sector, d_i, d_j]
 
             # save the shifted checks to an X/Z parity check matrix as appropriate
