@@ -1431,7 +1431,7 @@ class QCCode(GBCode):
         self,
         expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
     ) -> abstract.Element:
-        """Convert a sympy expression into an element of a group algebra."""
+        """Convert a sympy expression into an element of this code's group algebra."""
         # evaluate simple cases
         if isinstance(expr, sympy.Integer):
             return int(expr) * abstract.Element(self.group, self.to_group_member(expr))
@@ -1470,7 +1470,7 @@ class QCCode(GBCode):
     def get_exponents(
         self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
     ) -> tuple[int, int]:
-        """Get the exponents of a term, for example converting x**2 y**4 into (2, 4)."""
+        """Extract the exponents from a term, for example converting x**2 * y**4 into (2, 4)."""
         exponents = {}
         if isinstance(expr, sympy.Symbol):
             exponents[expr] = 1
@@ -1484,24 +1484,41 @@ class QCCode(GBCode):
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     @functools.cached_property
-    def toric_mappings(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
-        """Get plaquette mappings that arrange qubits in a toric layout.
+    def toric_layouts(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
+        """Get a list of all toric layouts of this code.
 
-        Each plaquette looks like:
+        All qubits of this code can be organized into plaquettes of four qubits that look like:
             L X
             Z R
-        where L and R are data qubits, and X and Z are checks.  In a toric layout, plaquettes are
-        arranged in a grid, and each check addresses all of its neighboring data qubits, as well as
-        a few far-away qubits.  This method returns a "plaquette mapping" (explained below) and
-        the torus dimensions (shape) for all toric layouts of this code.
+        where L and R are data qubits, and X and Z are check qubits.  More specifically:
+        - L and R data qubits are addressed by the left and right halves of matrix_x (or matrix_z).
+        - X check qubits measure X-type parity checks, and are associated with rows of matrix_x.
+        - Z check qubits measure Z-type parity checks, and are associated with rows of matrix_z.
+        We identify sectors L, R, X, and Z respectively by the "index" 0, 1, Pauli.X, and Pauli.Z.
 
-        Each plaquette on the torus is nominally indexed by coordinates (i, j).  Each plaquette
-        mapping then takes:
-        - a plaquette's x-coordinate i
-        - a plaquette's y-coordinate j
-        - a qubit sector: 0, 1, Pauli.X, or Pauli.Z (respectively, for an L, R, X, or Z qubit),
-        - the dimensions (shape) of the toric layout (a pair of integers for torus width/height).
-        The plaquette mapping returns the coordinates of the new plaquette for the specified qubit.
+        A toric layout is one in which plaquettes are arranged on a 2D grid with periodic boundary
+        conditions (that is, a torus), and every check addresses all of its neighboring data qubits
+        (and possibly other data qubits as well).  Not every code is guaranteed to have a toric
+        layout.
+
+        A toric layout is defined by:
+        - a plaquette_map, which maps each qubit to a plaquette on the torus, and
+        - a torus_shape, or the number of plaquettes along each axis of the torus.
+
+        The plaquette map is a function that maps a qubit sector (0, 1, Pauli.X, or Pauli.Z) to a 3D
+        tensor.  The tensor is populated by integers in such a way that
+            plaquette_map(sector)[i, j] = [a, b]
+        where (i, j) is the "bare" index of a qubit in the given sector before any mapping.
+
+        Bare indices are defined as follows.  We can reshape (say) matrix_z into a tensor checks_z
+        with shape (Rx, Ry, 2, Rx, Ry), which has the effect of:
+        - expanding every integer row index into two integers that identify a Z-sector check qubit,
+        - splitting the left and right halves of the matrix into a new 0/1 index that identifies an
+            L/R sector of the data qubits,
+        - expanding every integer "column" index within each data qubit sector into two integers
+            that identify a single data qubit.
+        For example, checks_z[i, j, 0, k, l] is nonzero iff the Z-sector check qubit (i, j)
+        addresses the L-sector data qubit (k, l).
         """
         if not nx.is_weakly_connected(self.graph):
             # a connected tanner graph is a baseline requirement for a toric mapping to exist

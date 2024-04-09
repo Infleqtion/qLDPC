@@ -53,7 +53,7 @@ def get_quasi_cyclic_code_params(
 
     # identify maximum Euclidean distance between check/data qubits required for each toric layout
     max_distances = []
-    for plaquette_map, torus_shape in code.toric_mappings:
+    for plaquette_map, torus_shape in code.toric_layouts:
         shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape, open_boundaries=True)
         distances = set(np.sqrt(xx**2 + yy**2) for xx, yy in shifts_x | shifts_z)
         max_distances.append(max(distances))
