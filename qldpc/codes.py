@@ -1683,10 +1683,9 @@ class QCCode(GBCode):
                 # identify the location of a check qubit, and the support of its stabilizer
                 c_a = qubit_coords[pauli][0][p_a]
                 c_b = qubit_coords[pauli][1][p_b]
-                check = checks[p_a, p_b]
 
                 # identify the relative position of all data qubits addressed by this check
-                for sector, q_a, q_b in zip(*np.where(check)):
+                for sector, q_a, q_b in zip(*np.where(checks[p_a, p_b])):
                     # relative position of this data qubit from the check qubit
                     d_a = qubit_coords[sector][0][q_a]
                     d_b = qubit_coords[sector][1][q_b]
