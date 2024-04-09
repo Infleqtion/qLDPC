@@ -96,9 +96,9 @@ def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bo
     dim_x, dim_y = dims
     ax, ay, bx, by = exponents
     return (
-        (dim_x, ax, ay) < (dim_y, by, bx)
-        or (ax, bx) > ((1 - ax) % dim_x, -bx % dim_x)
-        or (by, ay) > ((1 - by) % dim_y, -ay % dim_y)
+        (dim_x, ax, ay) < (dim_y, by, bx)  # enforce torus width >= height
+        or (ax, bx) > ((1 - ax) % dim_x, -bx % dim_x)  # reflection about x axis
+        or (by, ay) > ((1 - by) % dim_y, -ay % dim_y)  # reflection about y axis
     )
 
 
