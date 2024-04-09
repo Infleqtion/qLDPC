@@ -79,6 +79,9 @@ def run_and_save(
     silent: bool = False,
 ) -> None:
     """Compute and save quasi-cyclic code parameters."""
+    if not silent and exponents == (0, 0, 0, 0):
+        print(dims)
+
     params = get_quasi_cyclic_code_params(dims, exponents, num_trials)
     if params is not None:
         nn, kk, dd, comm_dist = params
