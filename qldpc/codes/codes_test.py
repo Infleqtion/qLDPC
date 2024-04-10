@@ -24,7 +24,8 @@ import numpy as np
 import pytest
 import sympy
 
-from qldpc import abstract, codes, objects
+from qldpc import abstract, codes
+from qldpc.objects import ChainComplex, Pauli, QuditOperator
 
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
@@ -187,8 +188,8 @@ def test_CSS_code() -> None:
 def test_logical_ops() -> None:
     """Logical operator construction."""
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
-    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=False)
-    code.get_random_logical_op(codes.Pauli.X, ensure_nontrivial=True)
+    code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
+    code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
 
     # test that logical operators are dual to each other and have trivial syndromes
     logicals = code.get_logical_ops()
@@ -200,7 +201,7 @@ def test_logical_ops() -> None:
     # minimizing logical operator weight only supported for prime number fields
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
     with pytest.raises(ValueError, match="prime number fields"):
-        code.reduce_logical_op(codes.Pauli.X, 0)
+        code.reduce_logical_op(Pauli.X, 0)
 
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
@@ -211,7 +212,7 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) 
 
     transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
     for node_check, node_qubit, data in code.graph.edges(data=True):
-        vals = data[codes.QuditOperator].value
+        vals = data[QuditOperator].value
         assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals
 
 
@@ -235,8 +236,8 @@ def test_distance_quantum() -> None:
     assert code.get_distance(bound=False) == 2
 
     # assert that the identity is a logical operator
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(codes.Pauli.X, vector=[0] * code.num_qudits, bound=True)
+    assert 0 == code.get_distance(Pauli.X, vector=[0] * code.num_qudits)
+    assert 0 == code.get_distance(Pauli.X, vector=[0] * code.num_qudits, bound=True)
 
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
@@ -274,7 +275,7 @@ def test_hypergraph_products(
 
     code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph, conjugate=conjugate)
-    chain = objects.ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
+    chain = ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
 
     assert nx.utils.graphs_equal(code.graph, graph)
@@ -302,7 +303,7 @@ def test_trivial_lift(
     assert nx.utils.graphs_equal(code_HGP.graph, code_LP.graph)
     assert np.array_equal(code_HGP.sector_size, code_LP.sector_size)
 
-    chain = objects.ChainComplex.tensor_product(protograph_a, protograph_b.T)
+    chain = ChainComplex.tensor_product(protograph_a, protograph_b.T)
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
     assert isinstance(matrix_x, abstract.Protograph)
     assert isinstance(matrix_z, abstract.Protograph)
@@ -371,7 +372,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     # same construction with a chain complex
     protograph_a = abstract.Protograph([[element_a]])
     protograph_b = abstract.Protograph([[element_b]])
-    chain = objects.ChainComplex.tensor_product(protograph_a, protograph_b.T)
+    chain = ChainComplex.tensor_product(protograph_a, protograph_b.T)
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
     assert isinstance(matrix_x, abstract.Protograph)
     assert isinstance(matrix_z, abstract.Protograph)
@@ -550,23 +551,15 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
     code = codes.SurfaceCode(rows, cols, rotated=False, field=field)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
-    assert code.get_distance(codes.Pauli.X, bound=10) == cols
-    assert code.get_distance(codes.Pauli.Z, bound=10) == rows
+    assert code.get_distance(Pauli.X, bound=10) == cols
+    assert code.get_distance(Pauli.Z, bound=10) == rows
 
     # rotated surface code
     code = codes.SurfaceCode(rows, cols, rotated=True, field=field)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
-    assert (
-        code.get_distance(codes.Pauli.X)
-        == codes.CSSCode.get_distance_exact(code, codes.Pauli.X)
-        == cols
-    )
-    assert (
-        code.get_distance(codes.Pauli.Z)
-        == codes.CSSCode.get_distance_exact(code, codes.Pauli.Z)
-        == rows
-    )
+    assert code.get_distance(Pauli.X) == codes.CSSCode.get_distance_exact(code, Pauli.X) == cols
+    assert code.get_distance(Pauli.Z) == codes.CSSCode.get_distance_exact(code, Pauli.Z) == rows
 
     # test that the rotated surface code with conjugate=True is an XZZX code
     code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2, conjugate=True)
@@ -588,8 +581,8 @@ def test_toric_codes(field: int = 2) -> None:
     code.reduce_logical_ops(with_ILP=True)
     assert (
         {rows, cols}
-        == {sum(op) for op in code.get_logical_ops(codes.Pauli.X).view(np.ndarray)}
-        == {sum(op) for op in code.get_logical_ops(codes.Pauli.Z).view(np.ndarray)}
+        == {sum(op) for op in code.get_logical_ops(Pauli.X).view(np.ndarray)}
+        == {sum(op) for op in code.get_logical_ops(Pauli.Z).view(np.ndarray)}
     )
 
     # rotated toric code
