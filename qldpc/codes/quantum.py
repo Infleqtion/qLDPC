@@ -816,7 +816,7 @@ class QTCode(CSSCode):
             and other.complex.subset_a == other.complex.subset_a
             and other.complex.subset_b == other.complex.subset_b
             and other.complex.bipartite == other.complex.bipartite
-            and other.conjugated_qubits == other.conjugated_qubits
+            and other.conjugated == other.conjugated
         )
 
     @classmethod
@@ -941,7 +941,7 @@ class QTCode(CSSCode):
             # write other data
             file.write(f"# base field: {self.field.order}\n")
             file.write(f"# bipartite: {self.complex.bipartite}\n")
-            file.write(f"# conjugate: {self.conjugated_qubits}\n")
+            file.write(f"# conjugate: {self.conjugated}\n")
 
     @classmethod
     def load(cls, path: str) -> QTCode:
@@ -1028,7 +1028,7 @@ class SurfaceCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qudits_to_conjugate = code_ab.conjugated_qubits
+            qudits_to_conjugate = code_ab.conjugated
 
         CSSCode.__init__(
             self,
@@ -1151,7 +1151,7 @@ class ToricCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qudits_to_conjugate = code_ab.conjugated_qubits
+            qudits_to_conjugate = code_ab.conjugated
 
         CSSCode.__init__(
             self,

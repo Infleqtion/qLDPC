@@ -688,7 +688,7 @@ class CSSCode(QuditCode):
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
 
-    _conjugate: slice | Sequence[int]
+    _conjugated: slice | Sequence[int]
     _codes_equal: bool
     _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
@@ -717,7 +717,7 @@ class CSSCode(QuditCode):
         if not skip_validation:
             self._validate_subcodes()
 
-        self._conjugated_qubits = conjugate or ()
+        self._conjugated = conjugate or ()
         self._codes_equal = self.code_x == self.code_z
 
     def _validate_subcodes(self) -> None:
@@ -737,9 +737,9 @@ class CSSCode(QuditCode):
             text += f"{self.name} on {self.num_qudits} qudits over {self.field_name}"
         text += f"\nX-type parity checks:\n{self.matrix_x}"
         text += f"\nZ-type parity checks:\n{self.matrix_z}"
-        if self.conjugated_qubits:
+        if self.conjugated:
             qudits = "qubits" if self.field.order == 2 else "qudits"
-            text += f"\n{qudits} conjugated at:\n{self.conjugated_qubits}"
+            text += f"\n{qudits} conjugated at:\n{self.conjugated}"
         return text
 
     @functools.cached_property
@@ -751,7 +751,7 @@ class CSSCode(QuditCode):
                 [np.zeros_like(self.matrix_x), self.matrix_x],
             ]
         )
-        return self.field(self.conjugate(matrix, self.conjugated_qubits))
+        return self.field(self.conjugate(matrix, self.conjugated))
 
     @property
     def matrix_x(self) -> galois.FieldArray:
@@ -764,9 +764,9 @@ class CSSCode(QuditCode):
         return self.code_z.matrix
 
     @property
-    def conjugated_qubits(self) -> slice | Sequence[int]:
-        """Which qubits are conjugated?"""
-        return self._conjugated_qubits
+    def conjugated(self) -> slice | Sequence[int]:
+        """Which qudits are conjugated?  Conjugated qudits swap their X and Z operators."""
+        return self._conjugated
 
     @property
     def num_checks_x(self) -> int:

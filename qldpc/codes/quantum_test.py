@@ -217,7 +217,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
     assert isinstance(matrix_x, abstract.Protograph)
     assert isinstance(matrix_z, abstract.Protograph)
-    code = codes.CSSCode(matrix_x.lift(), matrix_z.lift(), conjugate=code.conjugated_qubits)
+    code = codes.CSSCode(matrix_x.lift(), matrix_z.lift(), conjugate=code.conjugated)
     assert np.array_equal(matrix, code.matrix)
 
 
