@@ -1,4 +1,4 @@
-"""Quantum error correction codes
+"""Quantum error-correcting codes
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 

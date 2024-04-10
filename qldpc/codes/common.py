@@ -1,4 +1,4 @@
-"""General error correction code classes and methods
+"""General error-correcting code classes and methods
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -62,7 +62,7 @@ def get_random_array(
 
 
 ################################################################################
-# template error correction code class
+# template error-correcting code class
 
 
 # TODO(?): support sparse parity check matrices
