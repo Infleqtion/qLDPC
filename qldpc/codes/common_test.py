@@ -138,6 +138,28 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
     )
 
 
+def test_code_string() -> None:
+    """Human-readable representation of a code."""
+    code = codes.QuditCode([[0]], field=2)
+    assert "qubits" in str(code)
+
+    code = codes.QuditCode([[0]], field=3)
+    assert "GF(3)" in str(code)
+
+    code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    assert "qubits" in str(code)
+
+    code = codes.HGPCode(codes.RepetitionCode(2, field=3), conjugate=True)
+    assert "GF(3)" in str(code) and "conjugated" in str(code)
+
+
+def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
+    """Random qubit code."""
+    assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
+    with pytest.raises(ValueError, match="qubit-only method"):
+        assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
+
+
 @pytest.mark.parametrize("field", [2, 3])
 def test_conversions_quantum(field: int, bits: int = 5, checks: int = 3) -> None:
     """Conversions between matrix and graph representations of a code."""
@@ -146,11 +168,29 @@ def test_conversions_quantum(field: int, bits: int = 5, checks: int = 3) -> None
     assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
 
 
-def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
-    """Random qubit code."""
-    assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
-    with pytest.raises(ValueError, match="qubit-only method"):
-        assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
+@pytest.mark.parametrize("field", [2, 3])
+def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
+    """Stabilizers of a QuditCode."""
+    code_a = get_random_qudit_code(bits, checks, field)
+    stabilizers = code_a.get_stabilizers()
+    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field)
+    assert np.array_equal(code_a.matrix, code_b.matrix)
+    assert stabilizers == code_b.get_stabilizers()
+
+    with pytest.raises(ValueError, match="different lengths"):
+        codes.QuditCode.from_stabilizers("I", "I I", field=field)
+
+
+def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
+    """Apply Pauli deformations to a qudit code."""
+    code = get_random_qudit_code(num_qudits, num_checks, field)
+    conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
+    transformed_matrix = codes.QuditCode.conjugate(code.matrix, conjugate)
+
+    transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
+    for node_check, node_qubit, data in code.graph.edges(data=True):
+        vals = data[QuditOperator].value
+        assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals
 
 
 def test_CSS_code() -> None:
@@ -193,31 +233,6 @@ def test_logical_ops() -> None:
         code.reduce_logical_op(Pauli.X, 0)
 
 
-def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
-    """Apply Pauli deformations to a qudit code."""
-    code = get_random_qudit_code(num_qudits, num_checks, field)
-    conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
-    transformed_matrix = codes.CSSCode.conjugate(code.matrix, conjugate)
-
-    transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
-    for node_check, node_qubit, data in code.graph.edges(data=True):
-        vals = data[QuditOperator].value
-        assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals
-
-
-@pytest.mark.parametrize("field", [2, 3])
-def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
-    """Stabilizers of a QuditCode."""
-    code_a = get_random_qudit_code(bits, checks, field)
-    stabilizers = code_a.get_stabilizers()
-    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field)
-    assert np.array_equal(code_a.matrix, code_b.matrix)
-    assert stabilizers == code_b.get_stabilizers()
-
-    with pytest.raises(ValueError, match="different lengths"):
-        codes.QuditCode.from_stabilizers("I", "I I", field=field)
-
-
 def test_distance_quantum() -> None:
     """Distance calculations for CSS codes."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
@@ -234,18 +249,3 @@ def test_distance_quantum() -> None:
     assert code.dimension == 0
     assert code.get_distance(bound=True) is np.nan
     assert code.get_distance(bound=False) is np.nan
-
-
-def test_code_string() -> None:
-    """Human-readable representation of a code."""
-    code = codes.QuditCode([[0]], field=2)
-    assert "qubits" in str(code)
-
-    code = codes.QuditCode([[0]], field=3)
-    assert "GF(3)" in str(code)
-
-    code = codes.HGPCode(codes.RepetitionCode(2, field=2))
-    assert "qubits" in str(code)
-
-    code = codes.HGPCode(codes.RepetitionCode(2, field=3), conjugate=True)
-    assert "GF(3)" in str(code) and "conjugated" in str(code)
