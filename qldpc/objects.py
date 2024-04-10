@@ -30,8 +30,7 @@ import numpy as np
 import numpy.typing as npt
 
 from qldpc import abstract
-
-DEFAULT_FIELD_ORDER = 2
+from qldpc.abstract import DEFAULT_FIELD_ORDER
 
 
 class Pauli(enum.Enum):
