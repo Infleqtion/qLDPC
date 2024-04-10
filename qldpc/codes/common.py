@@ -1,4 +1,4 @@
-"""General error correction code constructions
+"""General error correction code classes and methods
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -30,8 +30,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 
-import qldpc
-from qldpc import named_codes
+from qldpc import decoder, named_codes
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
 
@@ -388,7 +387,7 @@ class ClassicalCode(AbstractCode):
 
         if vector is not None:
             # find the distance of the given vector from a code word
-            correction = qldpc.decoder.decode(
+            correction = decoder.decode(
                 self.matrix,
                 self.matrix @ self.field(vector),
                 **decoder_args,
@@ -407,7 +406,7 @@ class ClassicalCode(AbstractCode):
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             # find a low-weight candidate code word
-            candidate = qldpc.decoder.decode(
+            candidate = decoder.decode(
                 effective_check_matrix,
                 effective_syndrome,
                 **decoder_args,
@@ -955,7 +954,7 @@ class CSSCode(QuditCode):
 
         if vector is not None:
             # find the distance of the given vector from a logical X-type operator
-            correction = qldpc.decoder.decode(
+            correction = decoder.decode(
                 code_z.matrix,
                 code_z.matrix @ self.field(vector),
                 **decoder_args,
@@ -978,7 +977,7 @@ class CSSCode(QuditCode):
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
-            candidate_logical_op = qldpc.decoder.decode(
+            candidate_logical_op = decoder.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
 
@@ -1139,7 +1138,7 @@ class CSSCode(QuditCode):
 
         logical_op_found = False
         while not logical_op_found:
-            candidate_logical_op = qldpc.decoder.decode(
+            candidate_logical_op = decoder.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
             actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order

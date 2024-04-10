@@ -30,7 +30,7 @@ import numpy.typing as npt
 import sympy
 import sympy.combinatorics as comb
 
-from qldpc import abstract, codes
+from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import (
     PAULIS_XZ,
@@ -42,28 +42,31 @@ from qldpc.objects import (
     QuditOperator,
 )
 
+from .classical import HammingCode, RepetitionCode, RingCode, TannerCode
+from .common import ClassicalCode, CSSCode, QuditCode
 
-class FiveQubitCode(codes.QuditCode):
+
+class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
     def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
-        code = codes.QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
-        codes.QuditCode.__init__(self, code, conjugate=conjugate)
+        code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
+        QuditCode.__init__(self, code, conjugate=conjugate)
 
 
-class SteaneCode(codes.CSSCode):
+class SteaneCode(CSSCode):
     """Smallest quantum error-correcting CSS code."""
 
     def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
-        code = codes.HammingCode(3)
-        codes.CSSCode.__init__(self, code, code, conjugate=conjugate)
+        code = HammingCode(3)
+        CSSCode.__init__(self, code, code, conjugate=conjugate)
 
 
 ################################################################################
 # bicycle and quasi-cyclic codes
 
 
-class GBCode(codes.CSSCode):
+class GBCode(CSSCode):
     """Generalized bicycle (GB) code.
 
     A GBCode code is built out of two matrices A and B, which are combined as
@@ -93,9 +96,7 @@ class GBCode(codes.CSSCode):
 
         matrix_x = np.block([matrix_a, matrix_b])
         matrix_z = np.block([matrix_b.T, -matrix_a.T])
-        codes.CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True
-        )
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
 
 
 # map from a "sector" in {0, 1, X, Z} to a coordinate map (i, j) --> (a, b) as a 4D array
@@ -478,7 +479,7 @@ class QCCode(GBCode):
 # hypergraph and lifted product codes
 
 
-class HGPCode(codes.CSSCode):
+class HGPCode(CSSCode):
     """Hypergraph product (HGP) code.
 
     A hypergraph product code AB is constructed from two classical codes, A and B.
@@ -535,8 +536,8 @@ class HGPCode(codes.CSSCode):
 
     def __init__(
         self,
-        code_a: codes.ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        code_b: codes.ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
         conjugate: bool = False,
@@ -557,8 +558,8 @@ class HGPCode(codes.CSSCode):
         """
         if code_b is None:
             code_b = code_a
-        code_a = codes.ClassicalCode(code_a, field)
-        code_b = codes.ClassicalCode(code_b, field)
+        code_a = ClassicalCode(code_a, field)
+        code_b = ClassicalCode(code_b, field)
         field = code_a.field.order
 
         # use a matrix-based hypergraph product to identify X-sector and Z-sector parity checks
@@ -573,7 +574,7 @@ class HGPCode(codes.CSSCode):
         # identify which qudits to conjugate (Hadamard-transform)
         qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
-        codes.CSSCode.__init__(
+        CSSCode.__init__(
             self,
             matrix_x.astype(int),
             matrix_z.astype(int),
@@ -672,7 +673,7 @@ class HGPCode(codes.CSSCode):
         return node_map
 
 
-class LPCode(codes.CSSCode):
+class LPCode(CSSCode):
     """Lifted product (LP) code.
 
     A lifted product code is essentially the same as a hypergraph product code, except that the
@@ -721,7 +722,7 @@ class LPCode(codes.CSSCode):
         # identify which qudits to conjugate (Hadamard-transform)
         qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
 
-        codes.CSSCode.__init__(
+        CSSCode.__init__(
             self,
             abstract.Protograph(matrix_x.astype(object)).lift(),
             abstract.Protograph(matrix_z.astype(object)).lift(),
@@ -732,85 +733,14 @@ class LPCode(codes.CSSCode):
 
 
 ################################################################################
-# classical and quantum Tanner codes
-
-
-class TannerCode(codes.ClassicalCode):
-    """Classical Tanner code, as described in DOI:10.1109/TIT.1981.1056404.
-
-    A Tanner code T(G,C) is constructed from:
-    [1] A bipartite "half-regular" graph G.  That is, a graph...
-        ... with two sets of nodes, V and W.
-        ... in which all nodes in V have degree n.
-    [2] A classical code C on n bits.
-
-    For convenience, we make G directed, with edges directed from V to W.  The node sets V and W can
-    then be identified, respectively, by the sources and sinks of G.
-
-    The Tanner code T(G,C) is defined on |W| bits.  A |W|-bit string x is a code word of T(G,C) iff,
-    for every node v in V, the bits of x incident to v are a code word of C.
-
-    This construction requires an ordering the edges E(v) adjacent to each vertex v.  This class
-    sorts E(v) by the value of the "sort" attribute attached to each edge.  If there is no "sort"
-    attribute, its value is treated as corresponding neighbor of v.
-
-    Tanner codes can similarly be defined on regular (undirected) graphs G' = (V',E') by placing
-    checks on V' and bits on E'.
-
-    Notes:
-    - If the subcode C has m checks, its parity matrix has shape (m,n).
-    - The code T(G,C) has |W| bits and |V|m checks.
-    """
-
-    subgraph: nx.DiGraph
-    subcode: codes.ClassicalCode
-
-    def __init__(self, subgraph: nx.Graph, subcode: codes.ClassicalCode) -> None:
-        """Construct a classical Tanner code."""
-        if not isinstance(subgraph, nx.DiGraph):
-            subgraph = TannerCode.as_directed_subgraph(subgraph)
-
-        self.subgraph = subgraph
-        self.subcode = subcode
-        sources = [node for node in subgraph if subgraph.in_degree(node) == 0]
-        sinks = [node for node in subgraph if subgraph.out_degree(node) == 0]
-        sink_indices = {sink: idx for idx, sink in enumerate(sorted(sinks))}
-
-        num_bits = len(sinks)
-        num_checks = len(sources) * subcode.num_checks
-        matrix = np.zeros((num_checks, num_bits), dtype=int)
-        for idx, source in enumerate(sorted(sources)):
-            checks = range(subcode.num_checks * idx, subcode.num_checks * (idx + 1))
-            bits = [sink_indices[sink] for sink in self._get_sorted_neighbors(source)]
-            matrix[np.ix_(checks, bits)] = subcode.matrix
-        codes.ClassicalCode.__init__(self, matrix, subcode.field.order)
-
-    def _get_sorted_neighbors(self, node: object) -> Sequence[object]:
-        """Sorted neighbors of the given node."""
-        return sorted(
-            self.subgraph.neighbors(node),
-            key=lambda neighbor: self.subgraph[node][neighbor].get("sort", neighbor),
-        )
-
-    @classmethod
-    def as_directed_subgraph(self, subgraph: nx.Graph) -> nx.DiGraph:
-        """Convert an undirected graph for a Tanner code into a directed graph for the same code."""
-        directed_subgraph = nx.DiGraph()
-        for node_a, node_b, edge_data in subgraph.edges(data=True):
-            edge = frozenset([node_a, node_b])
-            directed_subgraph.add_edge(node_a, edge)
-            directed_subgraph.add_edge(node_b, edge)
-            if (sort_data := edge_data.pop("sort", None)) is not None:
-                directed_subgraph[node_a][edge]["sort"] = sort_data[node_a]
-                directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
-        return directed_subgraph
+# quantum Tanner code
 
 
 # TODO: investigate construction in
 # https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
 # see also Section 7 of https://arxiv.org/abs/2206.07571
 # TODO: example notebook featuring this code
-class QTCode(codes.CSSCode):
+class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex.
 
     Altogether, a quantum Tanner code is defined by:
@@ -850,17 +780,17 @@ class QTCode(codes.CSSCode):
         self,
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember],
-        code_a: codes.ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        code_b: codes.ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
         bipartite: bool = False,
         conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
-        code_a = codes.ClassicalCode(code_a, field)
+        code_a = ClassicalCode(code_a, field)
         if code_b is not None:
-            code_b = codes.ClassicalCode(code_b, field)
+            code_b = ClassicalCode(code_b, field)
         elif len(subset_a) == len(subset_b):
             code_b = ~code_a
         else:
@@ -876,9 +806,7 @@ class QTCode(codes.CSSCode):
         self.code_b = code_b
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
-        codes.CSSCode.__init__(
-            self, code_x, code_z, field, conjugate=conjugate, skip_validation=True
-        )
+        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -893,12 +821,12 @@ class QTCode(codes.CSSCode):
 
     @classmethod
     def get_subcodes(
-        cls, cayplex: CayleyComplex, code_a: codes.ClassicalCode, code_b: codes.ClassicalCode
+        cls, cayplex: CayleyComplex, code_a: ClassicalCode, code_b: ClassicalCode
     ) -> tuple[TannerCode, TannerCode]:
         """Get the classical Tanner subcodes of a quantum Tanner code."""
         subgraph_x, subgraph_z = QTCode.get_subgraphs(cayplex)
-        subcode_x = ~codes.ClassicalCode.tensor_product(code_a, code_b)
-        subcode_z = ~codes.ClassicalCode.tensor_product(~code_a, ~code_b)
+        subcode_x = ~ClassicalCode.tensor_product(code_a, code_b)
+        subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         return TannerCode(subgraph_x, subcode_x), TannerCode(subgraph_z, subcode_z)
 
     @classmethod
@@ -963,8 +891,8 @@ class QTCode(codes.CSSCode):
     def random(
         cls,
         group: abstract.Group,
-        code_a: codes.ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        code_b: codes.ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
         bipartite: bool = False,
@@ -976,8 +904,8 @@ class QTCode(codes.CSSCode):
 
         If only one code C is provided, use its dual ~C for the second code.
         """
-        code_a = codes.ClassicalCode(code_a, field)
-        code_b = codes.ClassicalCode(code_b if code_b is not None else ~code_a, field)
+        code_a = ClassicalCode(code_a, field)
+        code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
         subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
         subset_b = group.random_symmetric_subset(code_b.num_bits) if not one_subset else subset_a
         return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
@@ -1042,8 +970,8 @@ class QTCode(codes.CSSCode):
         # construct subsets and generating codes
         subset_a = set(abstract.GroupMember(gen) for gen in arrays[0])
         subset_b = set(abstract.GroupMember(gen) for gen in arrays[1])
-        code_a = codes.ClassicalCode(arrays[2], field)
-        code_b = codes.ClassicalCode(arrays[3], field)
+        code_a = ClassicalCode(arrays[2], field)
+        code_b = ClassicalCode(arrays[3], field)
         return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
 
 
@@ -1051,7 +979,7 @@ class QTCode(codes.CSSCode):
 # common quantum codes
 
 
-class SurfaceCode(codes.CSSCode):
+class SurfaceCode(CSSCode):
     """The one and only!
 
     Actually, there are two variants: "ordinary" and "rotated" surface codes.
@@ -1095,14 +1023,14 @@ class SurfaceCode(codes.CSSCode):
 
         else:
             # "original" surface code
-            code_a = codes.RepetitionCode(rows, field)
-            code_b = codes.RepetitionCode(cols, field)
+            code_a = RepetitionCode(rows, field)
+            code_b = RepetitionCode(cols, field)
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
             qudits_to_conjugate = code_ab.conjugated_qubits
 
-        codes.CSSCode.__init__(
+        CSSCode.__init__(
             self,
             matrix_x,
             matrix_z,
@@ -1174,7 +1102,7 @@ class SurfaceCode(codes.CSSCode):
         return np.array(checks_x), np.array(checks_z)
 
 
-class ToricCode(codes.CSSCode):
+class ToricCode(CSSCode):
     """Surface code with periodic bounary conditions, encoding two logical qudits.
 
     Reference: https://errorcorrectionzoo.org/c/surface
@@ -1213,14 +1141,14 @@ class ToricCode(codes.CSSCode):
 
         else:
             # "original" toric code
-            code_a = codes.RingCode(rows, field)
-            code_b = codes.RingCode(cols, field)
+            code_a = RingCode(rows, field)
+            code_b = RingCode(cols, field)
             code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
             qudits_to_conjugate = code_ab.conjugated_qubits
 
-        codes.CSSCode.__init__(
+        CSSCode.__init__(
             self,
             matrix_x,
             matrix_z,
@@ -1262,7 +1190,7 @@ class ToricCode(codes.CSSCode):
         return np.array(checks_x), np.array(checks_z)
 
 
-class GeneralizedSurfaceCode(codes.CSSCode):
+class GeneralizedSurfaceCode(CSSCode):
     """Surface or toric code defined on a multi-dimensional hypercubic lattice.
 
     Reference: https://errorcorrectionzoo.org/c/higher_dimensional_surface
@@ -1287,7 +1215,7 @@ class GeneralizedSurfaceCode(codes.CSSCode):
         self._exact_distance_x = size ** (dim - 1)
         self._exact_distance_z = size
 
-        base_code = codes.RingCode(size, field) if periodic else codes.RepetitionCode(size, field)
+        base_code = RingCode(size, field) if periodic else RepetitionCode(size, field)
 
         # build a chain complex one link at a time
         chain = ChainComplex(base_code.matrix)
@@ -1301,6 +1229,4 @@ class GeneralizedSurfaceCode(codes.CSSCode):
         matrix_x, matrix_z = chain.op(1), chain.op(2).T
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
-        codes.CSSCode.__init__(
-            self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True
-        )
+        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
