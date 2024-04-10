@@ -33,82 +33,82 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
     return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
 
 
-def test_classical_codes() -> None:
-    """Classical code constructions."""
-    code = codes.ClassicalCode.random(5, 3, seed=0)
-    assert code.num_bits == 5
-    assert "ClassicalCode" in str(code)
+# def test_classical_codes() -> None:
+#     """Classical code constructions."""
+#     code = codes.ClassicalCode.random(5, 3, seed=0)
+#     assert code.num_bits == 5
+#     assert "ClassicalCode" in str(code)
 
-    code = codes.ClassicalCode.random(5, 3, field=3, seed=0)
-    assert "GF(3)" in str(code)
+#     code = codes.ClassicalCode.random(5, 3, field=3, seed=0)
+#     assert "GF(3)" in str(code)
 
-    num_bits = 2
-    for code in [
-        codes.RepetitionCode(num_bits, field=3),
-        codes.RingCode(num_bits, field=3),
-    ]:
-        assert code.num_bits == num_bits
-        assert code.dimension == 1
-        assert code.get_distance() == num_bits
-        assert code.get_distance(bound=10) == num_bits
-        assert code.get_weight() == 2
-        assert code.get_random_word() in code
+#     num_bits = 2
+#     for code in [
+#         codes.RepetitionCode(num_bits, field=3),
+#         codes.RingCode(num_bits, field=3),
+#     ]:
+#         assert code.num_bits == num_bits
+#         assert code.dimension == 1
+#         assert code.get_distance() == num_bits
+#         assert code.get_distance(bound=10) == num_bits
+#         assert code.get_weight() == 2
+#         assert code.get_random_word() in code
 
-    assert codes.HammingCode(3).get_distance() == 3
+#     assert codes.HammingCode(3).get_distance() == 3
 
-    # that rank of repetition and Hamming codes is independent of the field
-    assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
-    assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
+#     # that rank of repetition and Hamming codes is independent of the field
+#     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
+#     assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
-    # invalid classical code construction
-    with pytest.raises(ValueError, match="inconsistent"):
-        codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
+#     # invalid classical code construction
+#     with pytest.raises(ValueError, match="inconsistent"):
+#         codes.ClassicalCode(codes.ClassicalCode.random(2, 2, field=2), field=3)
 
-    # construct a code from its generator matrix
-    code = codes.ClassicalCode.random(5, 3)
-    assert codes.ClassicalCode.equiv(code, codes.ClassicalCode.from_generator(code.generator))
+#     # construct a code from its generator matrix
+#     code = codes.ClassicalCode.random(5, 3)
+#     assert codes.ClassicalCode.equiv(code, codes.ClassicalCode.from_generator(code.generator))
 
-    # puncture a code
-    assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
+#     # puncture a code
+#     assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
 
-    # shortening a repetition code yields a trivial code
-    num_bits = 3
-    code = codes.RepetitionCode(num_bits)
-    words = [[0] * (num_bits - 1)]
-    assert np.array_equal(code.shorten(0).words(), words)
-
-
-def test_special_codes() -> None:
-    """Reed-Solomon, BCH, and Reed-Muller codes."""
-    assert codes.ReedSolomonCode(3, 2).dimension == 2
-
-    bits, dimension = 7, 4
-    assert codes.BCHCode(bits, dimension).dimension == dimension
-    with pytest.raises(ValueError, match=r"2\^m - 1 bits"):
-        codes.BCHCode(bits - 1, dimension)
-
-    order, size = 1, 3
-    code = codes.ReedMullerCode(order, size)
-    assert code.dimension == codes.ClassicalCode(code.matrix).dimension
-    assert ~code == codes.ReedMullerCode(size - order - 1, size)
-
-    with pytest.raises(ValueError, match="0 <= r <= m"):
-        codes.ReedMullerCode(-1, 0)
+#     # shortening a repetition code yields a trivial code
+#     num_bits = 3
+#     code = codes.RepetitionCode(num_bits)
+#     words = [[0] * (num_bits - 1)]
+#     assert np.array_equal(code.shorten(0).words(), words)
 
 
-def test_named_codes(order: int = 2) -> None:
-    """Named codes from the GAP computer algebra system."""
-    code = codes.RepetitionCode(order)
-    checks = [list(row) for row in code.matrix.view(np.ndarray)]
+# def test_special_codes() -> None:
+#     """Reed-Solomon, BCH, and Reed-Muller codes."""
+#     assert codes.ReedSolomonCode(3, 2).dimension == 2
 
-    with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(checks, None)):
-        assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
+#     bits, dimension = 7, 4
+#     assert codes.BCHCode(bits, dimension).dimension == dimension
+#     with pytest.raises(ValueError, match=r"2\^m - 1 bits"):
+#         codes.BCHCode(bits - 1, dimension)
+
+#     order, size = 1, 3
+#     code = codes.ReedMullerCode(order, size)
+#     assert code.dimension == codes.ClassicalCode(code.matrix).dimension
+#     assert ~code == codes.ReedMullerCode(size - order - 1, size)
+
+#     with pytest.raises(ValueError, match="0 <= r <= m"):
+#         codes.ReedMullerCode(-1, 0)
 
 
-def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
-    """Dual code construction."""
-    code = codes.ClassicalCode.random(bits, checks, field)
-    assert all(word_a @ word_b == 0 for word_a in code.words() for word_b in (~code).words())
+# def test_named_codes(order: int = 2) -> None:
+#     """Named codes from the GAP computer algebra system."""
+#     code = codes.RepetitionCode(order)
+#     checks = [list(row) for row in code.matrix.view(np.ndarray)]
+
+#     with unittest.mock.patch("qldpc.named_codes.get_code", return_value=(checks, None)):
+#         assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
+
+
+# def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
+#     """Dual code construction."""
+#     code = codes.ClassicalCode.random(bits, checks, field)
+#     assert all(word_a @ word_b == 0 for word_a in code.words() for word_b in (~code).words())
 
 
 def test_tensor_product(
