@@ -15,18 +15,14 @@
    limitations under the License.
 """
 
-import io
 import itertools
 import unittest.mock
 
-import networkx as nx
 import numpy as np
 import pytest
-import sympy
 
-from qldpc import abstract, codes
-from qldpc.objects import ChainComplex, Pauli, QuditOperator
-
+from qldpc import codes
+from qldpc.objects import Pauli, QuditOperator
 
 ####################################################################################################
 # classical code tests
