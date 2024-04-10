@@ -19,7 +19,7 @@ import ast
 import re
 
 import qldpc.cache
-from qldpc.named_groups import gap_is_installed, get_gap_result
+from qldpc.external.groups import gap_is_installed, get_gap_result
 
 
 @qldpc.cache.use_disk_cache("qldpc_codes")

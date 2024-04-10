@@ -197,7 +197,7 @@ def test_small_group() -> None:
     # invalid group index
     with (
         pytest.raises(ValueError, match="Index for SmallGroup"),
-        unittest.mock.patch("qldpc.named_groups.get_small_group_number", return_value=index),
+        unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=index),
     ):
         abstract.SmallGroup(order, 0)
 
@@ -205,7 +205,7 @@ def test_small_group() -> None:
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
     with (
         unittest.mock.patch("qldpc.abstract.SmallGroup.number", return_value=index),
-        unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators),
+        unittest.mock.patch("qldpc.external.groups.get_generators", return_value=generators),
     ):
         assert abstract.SmallGroup(order, index).generators == desired_group.generators
         assert list(abstract.SmallGroup.generator(order)) == [desired_group]

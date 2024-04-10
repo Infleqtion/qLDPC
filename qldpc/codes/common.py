@@ -30,7 +30,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 
-from qldpc import decoder, named_codes
+from qldpc import decoder, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
 
@@ -466,7 +466,7 @@ class ClassicalCode(AbstractCode):
     def from_name(cls, name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
-        matrix, field = named_codes.get_code(standardized_name)
+        matrix, field = external.codes.get_code(standardized_name)
         code = ClassicalCode(matrix, field)
         setattr(code, "_name", name)
         return code
