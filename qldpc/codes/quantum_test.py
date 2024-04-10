@@ -44,7 +44,7 @@ def test_GB_code_error() -> None:
         codes.GBCode(matrix_a, matrix_b, field=3)
 
 
-def test_cyclic_codes(field: int = 3) -> None:
+def test_cyclic_codes() -> None:
     """Quasi-cyclic codes from arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y, z
 
@@ -54,7 +54,7 @@ def test_cyclic_codes(field: int = 3) -> None:
     dims = (12, 4)
     poly_a = 1 + y + x * y + x**9
     poly_b = 1 + x**2 + x**7 + x**9 * y**2
-    code = codes.QCCode(dims, poly_a, poly_b, field=2)
+    code = codes.QCCode(dims, poly_a, poly_b)
     assert code.num_qudits == 96
     assert code.dimension == 10
     assert code.get_weight() == 8
@@ -63,7 +63,7 @@ def test_cyclic_codes(field: int = 3) -> None:
     dims = {x: 12, y: 6}
     poly_a = x**3 + y + y**2
     poly_b = y**3 + x + x**2
-    code = codes.QCCode(dims, poly_a, poly_b, field=2)
+    code = codes.QCCode(dims, poly_a, poly_b)
     assert code.num_qudits == 144
     assert code.dimension == 12
     assert code.get_weight() == 6
@@ -297,7 +297,7 @@ def test_toric_tanner_code(size: int = 4) -> None:
     shift_x, shift_y = group.generators
     subset_a = [shift_x, ~shift_x]
     subset_b = [shift_y, ~shift_y]
-    subcode_a = codes.RepetitionCode(2, field=2)
+    subcode_a = codes.RepetitionCode(2)
     code = codes.QTCode(subset_a, subset_b, subcode_a, bipartite=False)
     assert code.get_code_params() == (size**2, 2, size)
     assert code.get_weight() == 4
@@ -327,61 +327,60 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
 
 
-def test_toric_codes(field: int = 2) -> None:
+def test_toric_codes() -> None:
     """Ordinary and rotated toric codes."""
 
     # "ordinary"/original toric code
-    rows, cols = 5, 2
-    code = codes.ToricCode(rows, cols, rotated=False, field=field)
+    distance = 4
+    code = codes.ToricCode(distance, rotated=False)
     assert code.dimension == 2
-    assert code.num_qudits == 2 * rows * cols
+    assert code.num_qudits == 2 * distance**2
 
     # check minimal logical operator weights
     code.reduce_logical_ops(with_ILP=True)
     assert (
-        {rows, cols}
+        {distance}
         == {sum(op) for op in code.get_logical_ops(Pauli.X).view(np.ndarray)}
         == {sum(op) for op in code.get_logical_ops(Pauli.Z).view(np.ndarray)}
     )
 
     # rotated toric code
-    distance = 3
-    code = codes.ToricCode(distance, rotated=True, field=field)
+    code = codes.ToricCode(distance, rotated=True)
     assert code.dimension == 2
     assert code.num_qudits == distance**2
     assert codes.CSSCode.get_distance(code) == distance
 
     # rotated toric XZZX code
     rows, cols = 6, 4
-    code = codes.ToricCode(rows, cols, rotated=True, field=field, conjugate=True)
+    code = codes.ToricCode(rows, cols, rotated=True, conjugate=True)
     for row in code.matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
 
 
-def test_generalized_surface_codes(size: int = 3, field: int = 2) -> None:
+def test_generalized_surface_codes(size: int = 3) -> None:
     """Multi-dimensional surface and toric codes."""
 
     # recover ordinary surface code in 2D
     assert np.array_equal(
-        codes.GeneralizedSurfaceCode(size, dim=2, periodic=False, field=field).matrix,
-        codes.SurfaceCode(size, rotated=False, field=field).matrix,
+        codes.GeneralizedSurfaceCode(size, dim=2, periodic=False).matrix,
+        codes.SurfaceCode(size, rotated=False).matrix,
     )
 
     # recover ordinary toric code in 2D
     assert np.array_equal(
-        codes.GeneralizedSurfaceCode(size, dim=2, periodic=True, field=field).matrix,
-        codes.ToricCode(size, rotated=False, field=field).matrix,
+        codes.GeneralizedSurfaceCode(size, dim=2, periodic=True).matrix,
+        codes.ToricCode(size, rotated=False).matrix,
     )
 
     for dim in [3, 4]:
         # surface code
-        code = codes.GeneralizedSurfaceCode(size, dim, periodic=False, field=field)
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=False)
         assert code.dimension == 1
         assert code.num_qudits == size**dim + (dim - 1) * size ** (dim - 2) * (size - 1) ** 2
 
         # toric code
-        code = codes.GeneralizedSurfaceCode(size, dim, periodic=True, field=field)
+        code = codes.GeneralizedSurfaceCode(size, dim, periodic=True)
         assert code.dimension == dim
         assert code.num_qudits == dim * size**dim
 

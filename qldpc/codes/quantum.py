@@ -1127,6 +1127,9 @@ class ToricCode(CSSCode):
         qudits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
+            if rows % 2 or cols % 2:
+                raise ValueError("Rotated toric code only valid for even row and column numbers")
+
             # rotated toric code
             matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)
 
