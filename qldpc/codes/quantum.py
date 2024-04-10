@@ -1128,7 +1128,9 @@ class ToricCode(CSSCode):
 
         if rotated:
             if rows % 2 or cols % 2:
-                raise ValueError("Rotated toric code only valid for even row and column numbers")
+                raise ValueError(
+                    f"Rotated toric code must have even side lengths, not {rows} and {cols}"
+                )
 
             # rotated toric code
             matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)

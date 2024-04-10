@@ -331,7 +331,7 @@ def test_toric_codes() -> None:
     """Ordinary and rotated toric codes."""
 
     # "ordinary"/original toric code
-    distance = 4
+    distance = 3
     code = codes.ToricCode(distance, rotated=False)
     assert code.dimension == 2
     assert code.num_qudits == 2 * distance**2
@@ -345,10 +345,15 @@ def test_toric_codes() -> None:
     )
 
     # rotated toric code
+    distance = 4
     code = codes.ToricCode(distance, rotated=True)
     assert code.dimension == 2
     assert code.num_qudits == distance**2
     assert codes.CSSCode.get_distance(code) == distance
+
+    # rotated toric code must have even side lengths
+    with pytest.raises(ValueError, match="even side lengths"):
+        codes.ToricCode(3, rotated=True)
 
     # rotated toric XZZX code
     rows, cols = 6, 4
