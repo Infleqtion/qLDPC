@@ -1,8 +1,30 @@
-from . import classical, common, quantum
+from .classical import (
+    BCHCode,
+    HammingCode,
+    ReedMullerCode,
+    ReedSolomonCode,
+    RepetitionCode,
+    RingCode,
+)
+from .common import ClassicalCode, CSSCode, QuditCode
+from .quantum import FiveQubitCode, GBCode, HGPCode, LPCode, QCCode, QTCode, SteaneCode, TannerCode
 
 __all__ = [
-    "abstract",
-    "codes",
-    "decoder",
-    "objects",
+    "BCHCode",
+    "ClassicalCode",
+    "CSSCode",
+    "FiveQubitCode",
+    "GBCode",
+    "HammingCode",
+    "HGPCode",
+    "LPCode",
+    "QuditCode",
+    "QCCode",
+    "QTCode",
+    "ReedMullerCode",
+    "ReedSolomonCode",
+    "RepetitionCode",
+    "RingCode",
+    "SteaneCode",
+    "TannerCode",
 ]
