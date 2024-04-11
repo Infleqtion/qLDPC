@@ -25,8 +25,7 @@ def test_custom_decoder() -> None:
     """Custom decoder."""
     matrix = np.eye(2, dtype=int)
     syndrome = np.zeros(2, dtype=int)
-    with pytest.warns(UserWarning, match="cannot be guaranteed"):
-        result = decoder.decode(matrix, syndrome, exact=True, decoder=lambda matrix, syndrome: None)
+    result = decoder.decode(matrix, syndrome, decoder=lambda matrix, syndrome: None)
     assert result is None
 
 
@@ -35,25 +34,28 @@ def test_decoding() -> None:
     matrix = np.eye(3, 2, dtype=int)
     syndrome = np.array([1, 1, 0])
     error = np.array([1, 1], dtype=int)
-    assert np.allclose(decoder.decode(matrix, syndrome, exact=False), error)
-    assert np.allclose(decoder.decode(matrix, syndrome, exact=True), error)
-    assert np.allclose(decoder.decode_with_MWPM(matrix, syndrome), error)
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=False))
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_ILP=True))
+    assert np.allclose(error, decoder.decode(matrix, syndrome, with_MWPM=True))
 
-    # decode over F_3
+    # decode over trinary field
     modulus = 3
-    assert np.allclose(
-        decoder.decode(-matrix, syndrome, exact=True, modulus=modulus),
-        -error % modulus,
-    )
-
-    # raise error for invalid modulus
-    with pytest.raises(ValueError, match="must have modulus >= 2"):
-        decoder.decode(matrix, syndrome, exact=True, modulus=1)
+    answer = -error % modulus
+    result = decoder.decode(-matrix, syndrome, with_ILP=True, modulus=modulus, lower_bound_row=-1)
+    assert np.allclose(answer, result)
 
 
-def test_decoding_error() -> None:
+def test_decoding_errors() -> None:
     """Fail to solve an invalid optimization problem."""
     matrix = np.ones((2, 2), dtype=int)
     syndrome = np.array([0, 1], dtype=int)
+
+    with pytest.raises(ValueError, match="must have modulus >= 2"):
+        decoder.decode_with_ILP(matrix, syndrome, with_ILP=True, modulus=1)
+
+    with pytest.raises(ValueError, match="row index must be an integer"):
+        decoder.decode_with_ILP(matrix, syndrome, with_ILP=True, lower_bound_row="x")
+
     with pytest.raises(ValueError, match="could not be found"):
-        decoder.decode(matrix, syndrome, exact=True)
+        with pytest.warns(UserWarning, match="infeasible or unbounded"):
+            decoder.decode(matrix, syndrome, with_ILP=True)
