@@ -57,6 +57,7 @@ fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f, %.3f"
 
 comm_cutoffs = sorted([cutoff for cutoff in comm_cutoffs if cutoff <= MAX_COMMUNICATION_DISTANCE])
 data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_cutoffs))]
+data_all: list[tuple[int | float, ...]] = []
 
 # iterate over all entries in the cache
 cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
@@ -84,6 +85,7 @@ for key in cache.iterkeys():
     for cutoff, data in zip(comm_cutoffs, data_groups):
         if comm_dist <= cutoff:
             data.append(code)
+            data_all.append(code)
             break
 
 ##################################################
@@ -100,5 +102,4 @@ for last_comm, comm_dist, data in zip([0] + comm_cutoffs, comm_cutoffs, data_gro
 
 # save all data
 path = os.path.join(save_dir, "codes_all.csv")
-data_all = [code for data_group in data_groups for code in data_group]
 np.savetxt(path, data_all, header=header, fmt=fmt)
