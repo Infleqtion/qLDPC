@@ -24,6 +24,7 @@ from collections.abc import Sequence
 
 import qldpc.cache
 
+CACHE_NAME = "qldpc_groups"
 GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
@@ -178,7 +179,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
     return generators
 
 
-@qldpc.cache.use_disk_cache("qldpc_groups")
+@qldpc.cache.use_disk_cache(CACHE_NAME)
 def get_generators(group: str) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
 
@@ -202,7 +203,7 @@ def get_generators(group: str) -> GENERATORS_LIST:
     raise ValueError("\n".join(message))
 
 
-@qldpc.cache.use_disk_cache("qldpc_groups")
+@qldpc.cache.use_disk_cache(CACHE_NAME)
 def get_small_group_number(order: int) -> int:
     """Get the number of 'SmallGroup's of a given order."""
     if gap_is_installed():
@@ -217,3 +218,28 @@ def get_small_group_number(order: int) -> int:
 
     matches = re.findall(rf"<td>{order},([0-9]+)</td>", page_html)
     return max(int(match) for match in matches)
+
+
+def get_small_group_description(order: int, index: int) -> str:
+    """Get the description of a SmallGroup from GAP."""
+    # if we have the description cached, retrieve it
+    key = (order, index)
+    cache = qldpc.cache.get_disk_cache(CACHE_NAME)
+    if description := cache.get(key, None):
+        return description
+
+    # try to retrieve the description from GAP
+    name = f"SmallGroup({order},{index})"
+    if gap_is_installed():
+        command = f"Print(StructureDescription({name}));"
+        result = get_gap_result(command)
+        description = result.stdout.strip()
+
+        if not description:
+            raise ValueError(f"Group not recognized by GAP: {name}")
+
+        cache[key] = description
+        return description
+
+    # return the name of the group
+    return name

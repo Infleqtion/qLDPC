@@ -825,6 +825,11 @@ class SmallGroup(Group):
         super()._init_from_group(Group.from_name(name))
         self.index = index
 
+    @functools.cached_property
+    def description(self) -> str:
+        """Return a description of this group."""
+        return external.groups.get_small_group_description(self.order, self.index)
+
     @classmethod
     def number(cls, order: int) -> int:
         """The number of groups of a given order."""
