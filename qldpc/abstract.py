@@ -825,6 +825,11 @@ class SmallGroup(Group):
         super()._init_from_group(Group.from_name(name))
         self.index = index
 
+    @functools.cached_property
+    def structure(self) -> str:
+        """A description of the structure of this group."""
+        return self.get_structure(self.order, self.index)
+
     @classmethod
     def number(cls, order: int) -> int:
         """The number of groups of a given order."""
@@ -835,6 +840,11 @@ class SmallGroup(Group):
         """Iterator over all groups of a given order."""
         for ii in range(SmallGroup.number(order)):
             yield SmallGroup(order, ii + 1)
+
+    @classmethod
+    def get_structure(cls, order: int, index: int) -> str:
+        """Retrieve a description of the structure of a group."""
+        return external.groups.get_small_group_structure(order, index)
 
 
 ################################################################################
