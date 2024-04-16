@@ -220,26 +220,26 @@ def get_small_group_number(order: int) -> int:
     return max(int(match) for match in matches)
 
 
-def get_small_group_description(order: int, index: int) -> str:
-    """Get the description of a SmallGroup from GAP."""
-    # if we have the description cached, retrieve it
+def get_small_group_structure(order: int, index: int) -> str:
+    """Get a description of the structure of a SmallGroup from GAP."""
+    # if we have the structure cached, retrieve it
     key = (order, index)
     cache = qldpc.cache.get_disk_cache(CACHE_NAME)
-    if description := cache.get(key, None):
-        return description
+    if structure := cache.get(key, None):
+        return structure
 
-    # try to retrieve the description from GAP
+    # try to retrieve the structure from GAP
     name = f"SmallGroup({order},{index})"
     if gap_is_installed():
         command = f"Print(StructureDescription({name}));"
         result = get_gap_result(command)
-        description = result.stdout.strip()
+        structure = result.stdout.strip()
 
-        if not description:
+        if not structure:
             raise ValueError(f"Group not recognized by GAP: {name}")
 
-        cache[key] = description
-        return description
+        cache[key] = structure
+        return structure
 
     # return the name of the group
     return name

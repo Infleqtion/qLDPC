@@ -223,17 +223,17 @@ def test_get_small_group_number() -> None:
         assert external.groups.get_small_group_number(order) == number
 
 
-def test_get_small_group_description() -> None:
-    """Retrieve a description of a group."""
+def test_get_small_group_structure() -> None:
+    """Retrieve a description of the structure of a group."""
     order, index = 12, 3
-    description = "C3 : C4"
+    structure = "C3 : C4"
 
-    # retrieve a description from cache
-    cache = {(order, index): description}
+    # retrieve a structure from cache
+    cache = {(order, index): structure}
     with unittest.mock.patch("qldpc.cache.get_disk_cache", return_value=cache):
-        assert external.groups.get_small_group_description(order, index) == description
+        assert external.groups.get_small_group_structure(order, index) == structure
 
-    # fail to retrieve description from GAP
+    # fail to retrieve structure from GAP
     process = get_mock_process("")
     with (
         unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
@@ -241,21 +241,21 @@ def test_get_small_group_description() -> None:
         unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=process),
         pytest.raises(ValueError, match="Group not recognized"),
     ):
-        external.groups.get_small_group_description(order, index)
+        external.groups.get_small_group_structure(order, index)
 
-    # retrieve description from GAP
-    process = get_mock_process(description)
+    # retrieve structure from GAP
+    process = get_mock_process(structure)
     with (
         unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=process),
     ):
-        assert external.groups.get_small_group_description(order, index) == description
+        assert external.groups.get_small_group_structure(order, index) == structure
 
     # GAP is not installed
     with (
         unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=False),
     ):
-        description = f"SmallGroup({order},{index})"
-        assert external.groups.get_small_group_description(order, index) == description
+        structure = f"SmallGroup({order},{index})"
+        assert external.groups.get_small_group_structure(order, index) == structure

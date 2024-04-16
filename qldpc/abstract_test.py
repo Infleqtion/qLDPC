@@ -211,9 +211,9 @@ def test_small_group() -> None:
         assert group.generators == desired_group.generators
         assert list(abstract.SmallGroup.generator(order)) == [desired_group]
 
-        # retrieve group description
-        description = "test"
+        # retrieve group structure
+        structure = "test"
         with unittest.mock.patch(
-            "qldpc.external.groups.get_small_group_description", return_value=description
+            "qldpc.external.groups.get_small_group_structure", return_value=structure
         ):
-            assert group.description == description
+            assert group.structure == structure

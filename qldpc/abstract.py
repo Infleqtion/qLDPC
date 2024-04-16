@@ -826,9 +826,9 @@ class SmallGroup(Group):
         self.index = index
 
     @functools.cached_property
-    def description(self) -> str:
-        """Return a description of this group."""
-        return external.groups.get_small_group_description(self.order, self.index)
+    def structure(self) -> str:
+        """A description of the structure of this group."""
+        return external.groups.get_small_group_structure(self.order, self.index)
 
     @classmethod
     def number(cls, order: int) -> int:
