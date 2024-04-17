@@ -198,6 +198,19 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) 
         assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals
 
 
+def test_qudit_ops() -> None:
+    """Logical operator construction for Galois qudit codes."""
+    code = codes.FiveQubitCode()
+    print()
+    print(code.dimension)
+
+    logical_ops = code.get_logical_ops()
+
+
+####################################################################################################
+# CSS code tests
+
+
 def test_CSS_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
     code_x = codes.ClassicalCode.random(3, 2)
@@ -218,8 +231,8 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z)
 
 
-def test_logical_ops() -> None:
-    """Logical operator construction."""
+def test_CSS_ops() -> None:
+    """Logical operator construction for CSS codes."""
     code: codes.QuditCode
 
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))

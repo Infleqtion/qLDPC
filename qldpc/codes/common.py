@@ -574,7 +574,7 @@ class QuditCode(AbstractCode):
 
     @property
     def dimension(self) -> int:
-        """The number of logical bits encoded by this code."""
+        """The number of logical qudits encoded by this code."""
         return self.num_qudits - self.rank
 
     def get_weight(self) -> int:
@@ -675,8 +675,11 @@ class QuditCode(AbstractCode):
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
-        code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
-        physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
+        code.  The first axis is used to keep track of conjugate pairs of logical operators for each
+        logical qubit.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support
+        (i.e., the physical qudits addressed nontrivially) by a logical operator on logical qudit 4,
+        and the conjugate logical operator is `logical_ops[0, 4, :]`.  In general,
+        `logical_ops[0, aa, :] @ logical_ops[1, bb, :] = int(aa == bb)`.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified and generalized for qudits.
@@ -714,13 +717,16 @@ class QuditCode(AbstractCode):
             other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
             return matrix_RRE, pivots, other
 
-        # identify check matrices for X/Z-type errors, and the current qudit locations
-        checks_x: npt.NDArray[np.int_] = self.matrix_z
-        checks_z: npt.NDArray[np.int_] = self.matrix_x
+        # keep track of current qudit locations
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
-        checks_x, pivot_x, other_x = row_reduce(checks_x)
+        checks_x, pivot_x, other_x = row_reduce(self.matrix)
+        print()
+        print(checks_x)
+        print(pivot_x)
+        print(other_x)
+        return
         checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
         checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivot_x]])
