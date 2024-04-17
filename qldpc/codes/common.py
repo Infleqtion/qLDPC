@@ -708,7 +708,6 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
-        self._has_balanced_distance = promise_balanced_distance or self.code_x == self.code_z
 
         if field is None and self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
@@ -718,6 +717,7 @@ class CSSCode(QuditCode):
             self._validate_subcodes()
 
         self._conjugated = conjugate or ()
+        self._has_balanced_distance = promise_balanced_distance or self.code_x == self.code_z
 
     def _validate_subcodes(self) -> None:
         """Is this a valid CSS code?"""
