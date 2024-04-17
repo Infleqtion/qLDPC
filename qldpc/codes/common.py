@@ -25,7 +25,6 @@ from collections.abc import Callable, Sequence
 from typing import Literal
 
 import galois
-import ldpc.mod2
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
@@ -119,6 +118,16 @@ class AbstractCode(abc.ABC):
     def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
         return self._matrix
+
+    @functools.cached_property
+    def rank(self) -> int:
+        """Rank of this code's parity check matrix.
+
+        Equivalently, the number of linearly independent parity checks in this code.
+        """
+        matrix_RREF = self.matrix.row_reduce()
+        nonzero_rows = np.any(matrix_RREF, axis=1)
+        return np.count_nonzero(nonzero_rows)
 
     @functools.cached_property
     def graph(self) -> nx.DiGraph:
@@ -279,16 +288,6 @@ class ClassicalCode(AbstractCode):
     def num_bits(self) -> int:
         """Number of data bits in this code."""
         return self._matrix.shape[1]
-
-    @functools.cached_property
-    def rank(self) -> int:
-        """Rank of this code's parity check matrix.
-
-        Equivalently, the number of linearly independent parity checks in this code.
-        """
-        if self.field.order == 2:
-            return ldpc.mod2.rank(self._matrix)
-        return np.linalg.matrix_rank(self._matrix)
 
     @property
     def dimension(self) -> int:
@@ -572,6 +571,11 @@ class QuditCode(AbstractCode):
     def _assert_qubit_code(self) -> None:
         if self.field.order != 2:
             raise ValueError("Attempted to call a qubit-only method with a non-qubit code")
+
+    @property
+    def dimension(self) -> int:
+        """The number of logical bits encoded by this code."""
+        return self.num_qudits - self.rank
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
@@ -1113,16 +1117,16 @@ class CSSCode(QuditCode):
             """Perform Gaussian elimination on the matrix.
 
             Returns:
-                matrix_RRE: the reduced row echelon form of the matrix.
+                matrix_RREF: the reduced row echelon form of the matrix.
                 pivot: the "pivot" columns of the reduced matrix.
                 other: the remaining columns of the reduced matrix.
 
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
-            occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
+            occur at a unique columns for each row; these columns are the "pivots" of matrix_RREF.
             """
             # row-reduce the matrix and identify its pivots
-            matrix_RRE = self.field(matrix).row_reduce()
-            pivots = (matrix_RRE != 0).argmax(axis=1)
+            matrix_RREF = self.field(matrix).row_reduce()
+            pivots = (matrix_RREF != 0).argmax(axis=1)
 
             # remove trailing zero pivots, which correspond to trivial (all-zero) rows
             if pivots.size > 1 and pivots[-1] == 0:
@@ -1130,7 +1134,7 @@ class CSSCode(QuditCode):
 
             # identify remaining columns and return
             other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
-            return matrix_RRE, pivots, other
+            return matrix_RREF, pivots, other
 
         # identify check matrices for X/Z-type errors, and the current qudit locations
         checks_x: npt.NDArray[np.int_] = self.matrix_z

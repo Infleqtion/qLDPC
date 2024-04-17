@@ -160,6 +160,11 @@ def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
         assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
 
 
+def test_qudit_code() -> None:
+    """Miscellaneous qudit code tests and coverage."""
+    assert codes.FiveQubitCode().dimension == 1
+
+
 @pytest.mark.parametrize("field", [2, 3])
 def test_conversions_quantum(field: int, bits: int = 5, checks: int = 3) -> None:
     """Conversions between matrix and graph representations of a code."""
