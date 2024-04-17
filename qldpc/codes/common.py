@@ -690,7 +690,7 @@ class CSSCode(QuditCode):
     _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
-    _distance_balanced: bool
+    _has_balanced_distance: bool
 
     def __init__(
         self,
@@ -708,7 +708,7 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
-        self._distance_balanced = promise_balanced_distance or self.code_x == self.code_z
+        self._has_balanced_distance = promise_balanced_distance or self.code_x == self.code_z
 
         if field is None and self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
@@ -875,9 +875,9 @@ class CSSCode(QuditCode):
         distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
         # save the exact distance and return
-        if pauli == Pauli.X or self._distance_balanced:
+        if pauli == Pauli.X or self._has_balanced_distance:
             self._exact_distance_x = distance
-        if pauli == Pauli.Z or self._distance_balanced:
+        if pauli == Pauli.Z or self._has_balanced_distance:
             self._exact_distance_z = distance
         return distance
 
