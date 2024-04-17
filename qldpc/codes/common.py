@@ -573,7 +573,7 @@ class QuditCode(AbstractCode):
 
     @property
     def dimension(self) -> int:
-        """The number of logical bits encoded by this code."""
+        """The number of logical qudits encoded by this code."""
         return self.num_qudits - self.rank
 
     def get_weight(self) -> int:
