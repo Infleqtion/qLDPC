@@ -529,8 +529,6 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _exact_distance_x: int | float | None = None
-    _exact_distance_z: int | float | None = None
 
     def __init__(
         self,
@@ -687,9 +685,9 @@ class CSSCode(QuditCode):
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
+    _codes_equal: bool
 
     _conjugated: slice | Sequence[int]
-    _codes_equal: bool
     _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
@@ -709,6 +707,7 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
+        self._codes_equal = self.code_x == self.code_z
 
         if field is None and self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
@@ -718,7 +717,6 @@ class CSSCode(QuditCode):
             self._validate_subcodes()
 
         self._conjugated = conjugate or ()
-        self._codes_equal = self.code_x == self.code_z
 
     def _validate_subcodes(self) -> None:
         """Is this a valid CSS code?"""
@@ -876,9 +874,9 @@ class CSSCode(QuditCode):
         distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
         # save the exact distance and return
-        if pauli == Pauli.X:
+        if pauli == Pauli.X or self._codes_equal:
             self._exact_distance_x = distance
-        if pauli == Pauli.Z:
+        if pauli == Pauli.Z or self._codes_equal:
             self._exact_distance_z = distance
         return distance
 
