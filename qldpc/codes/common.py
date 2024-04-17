@@ -685,12 +685,12 @@ class CSSCode(QuditCode):
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
-    _codes_equal: bool
 
     _conjugated: slice | Sequence[int]
     _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
+    _distance_balanced: bool
 
     def __init__(
         self,
@@ -699,6 +699,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] | None = (),
+        promise_balanced_distance: bool = False,
         skip_validation: bool = False,
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
@@ -707,13 +708,13 @@ class CSSCode(QuditCode):
         """
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
-        self._codes_equal = self.code_x == self.code_z
+        self._distance_balanced = promise_balanced_distance or self.code_x == self.code_z
 
         if field is None and self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field = self.code_x.field
 
-        if not skip_validation:
+        if not skip_validation and self.code_x != self.code_z:
             self._validate_subcodes()
 
         self._conjugated = conjugate or ()
@@ -874,9 +875,9 @@ class CSSCode(QuditCode):
         distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
         # save the exact distance and return
-        if pauli == Pauli.X or self._codes_equal:
+        if pauli == Pauli.X or self._distance_balanced:
             self._exact_distance_x = distance
-        if pauli == Pauli.Z or self._codes_equal:
+        if pauli == Pauli.Z or self._distance_balanced:
             self._exact_distance_z = distance
         return distance
 
