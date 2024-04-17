@@ -529,6 +529,7 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
+    _logical_ops: galois.FieldArray | None = None
 
     def __init__(
         self,
@@ -664,6 +665,93 @@ class QuditCode(AbstractCode):
         matrix = np.reshape(matrix, (num_checks, 2, -1))
         matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
         return matrix.reshape(num_checks, -1)
+
+    def get_logical_ops(self) -> galois.FieldArray:
+        """Complete basis of nontrivial logical operators for this code.
+
+        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
+        (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
+        code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
+        physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
+
+        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
+        thesis (arXiv:9705052), slightly modified and generalized for qudits.
+        """
+        # memoize manually because other methods may modify the logical operators computed here
+        if self._logical_ops is not None:
+            return self._logical_ops
+
+        num_qudits = self.num_qudits
+        dimension = self.dimension
+        identity = self.field.Identity(dimension)
+
+        def row_reduce(
+            matrix: npt.NDArray[np.int_],
+        ) -> tuple[npt.NDArray[np.int_], Sequence[int], Sequence[int]]:
+            """Perform Gaussian elimination on the matrix.
+
+            Returns:
+                matrix_RRE: the reduced row echelon form of the matrix.
+                pivot: the "pivot" columns of the reduced matrix.
+                other: the remaining columns of the reduced matrix.
+
+            In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
+            occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
+            """
+            # row-reduce the matrix and identify its pivots
+            matrix_RRE = self.field(matrix).row_reduce()
+            pivots = (matrix_RRE != 0).argmax(axis=1)
+
+            # remove trailing zero pivots, which correspond to trivial (all-zero) rows
+            if pivots.size > 1 and pivots[-1] == 0:
+                pivots = np.concatenate([[pivots[0]], pivots[1:][pivots[1:] != 0]])
+
+            # identify remaining columns and return
+            other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
+            return matrix_RRE, pivots, other
+
+        # identify check matrices for X/Z-type errors, and the current qudit locations
+        checks_x: npt.NDArray[np.int_] = self.matrix_z
+        checks_z: npt.NDArray[np.int_] = self.matrix_x
+        qudit_locs = np.arange(num_qudits, dtype=int)
+
+        # row reduce the check matrix for X-type errors and move its pivots to the back
+        checks_x, pivot_x, other_x = row_reduce(checks_x)
+        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
+        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
+        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivot_x]])
+
+        # row reduce the check matrix for Z-type errors and move its pivots to the back
+        checks_z, pivot_z, other_z = row_reduce(checks_z)
+        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivot_z]])
+        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivot_z]])
+
+        # run some sanity checks
+        assert pivot_z[-1] < num_qudits - len(pivot_x)
+        assert dimension + len(pivot_x) + len(pivot_z) == num_qudits
+
+        # get the support of the check matrices on non-pivot qudits
+        non_pivot_x = checks_x[: len(pivot_x), :dimension]
+        non_pivot_z = checks_z[: len(pivot_z), :dimension]
+
+        # construct logical X operators
+        logicals_x = self.field.Zeros((dimension, num_qudits))
+        logicals_x[:, dimension : dimension + len(pivot_x)] = -non_pivot_x.T
+        logicals_x[:dimension, :dimension] = identity
+
+        # construct logical Z operators
+        logicals_z = self.field.Zeros((dimension, num_qudits))
+        logicals_z[:, -len(pivot_z) :] = -non_pivot_z.T
+        logicals_z[:dimension, :dimension] = identity
+
+        # move qudits back to their original locations
+        permutation = np.argsort(qudit_locs)
+        logicals_x = logicals_x[:, permutation]
+        logicals_z = logicals_z[:, permutation]
+
+        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
+        return self._logical_ops
 
 
 class CSSCode(QuditCode):
