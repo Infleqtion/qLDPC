@@ -86,6 +86,7 @@ class GBCode(CSSCode):
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
+        promise_balanced_distance: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
         code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -96,7 +97,15 @@ class GBCode(CSSCode):
 
         matrix_x = np.block([matrix_a, matrix_b])
         matrix_z = np.block([matrix_b.T, -matrix_a.T])
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+        CSSCode.__init__(
+            self,
+            matrix_x,
+            matrix_z,
+            field,
+            conjugate=conjugate,
+            promise_balanced_distance=promise_balanced_distance,
+            skip_validation=True,
+        )
 
 
 # map from a "sector" in {0, 1, X, Z} to a coordinate map (i, j) --> (a, b) as a 4D array
@@ -179,7 +188,14 @@ class QCCode(GBCode):
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
         matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
-        GBCode.__init__(self, matrix_a, matrix_b, field, conjugate=qudits_to_conjugate)
+        GBCode.__init__(
+            self,
+            matrix_a,
+            matrix_b,
+            field,
+            conjugate=qudits_to_conjugate,
+            promise_balanced_distance=True,
+        )
 
     def eval(
         self,

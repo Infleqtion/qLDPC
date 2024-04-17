@@ -529,8 +529,6 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _exact_distance_x: int | float | None = None
-    _exact_distance_z: int | float | None = None
 
     def __init__(
         self,
@@ -689,10 +687,10 @@ class CSSCode(QuditCode):
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
 
     _conjugated: slice | Sequence[int]
-    _codes_equal: bool
     _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
+    _has_balanced_distance: bool
 
     def __init__(
         self,
@@ -701,6 +699,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] | None = (),
+        promise_balanced_distance: bool = False,
         skip_validation: bool = False,
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
@@ -714,11 +713,11 @@ class CSSCode(QuditCode):
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field = self.code_x.field
 
-        if not skip_validation:
+        if not skip_validation and self.code_x != self.code_z:
             self._validate_subcodes()
 
         self._conjugated = conjugate or ()
-        self._codes_equal = self.code_x == self.code_z
+        self._has_balanced_distance = promise_balanced_distance or self.code_x == self.code_z
 
     def _validate_subcodes(self) -> None:
         """Is this a valid CSS code?"""
@@ -876,9 +875,9 @@ class CSSCode(QuditCode):
         distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
         # save the exact distance and return
-        if pauli == Pauli.X:
+        if pauli == Pauli.X or self._has_balanced_distance:
             self._exact_distance_x = distance
-        if pauli == Pauli.Z:
+        if pauli == Pauli.Z or self._has_balanced_distance:
             self._exact_distance_z = distance
         return distance
 
