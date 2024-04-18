@@ -26,7 +26,6 @@ from sympy.abc import x, y
 import qldpc
 import qldpc.cache
 
-
 MIN_ORDER = 3  # minimum cyclic group order
 MIN_DIMENSION = 8  # ignore codes with fewer than this many logical qubits
 NUM_TRIALS = 1000  # for code distance calculations
@@ -42,7 +41,7 @@ def get_quasi_cyclic_code_params(
     num_trials: int,
     *,
     silent: bool = False,
-) -> tuple[int, int, int | None, float] | None:
+) -> tuple[int, int, int] | None:
     """Compute the code parameters of a quasi-cyclic code.
 
     If the code dimension (number of encoded logical qubits) is below some cutoff, return None.
