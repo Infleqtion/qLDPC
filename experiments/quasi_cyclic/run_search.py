@@ -21,15 +21,15 @@ import os
 import sys
 
 import diskcache
-import numpy as np
 from sympy.abc import x, y
 
 import qldpc
 import qldpc.cache
 
-NUM_TRIALS = 1000  # for code distance calculations
-MAX_COMMUNICATION_DISTANCE = 12
+
 MIN_ORDER = 3  # minimum cyclic group order
+MIN_DIMENSION = 8  # ignore codes with fewer than this many logical qubits
+NUM_TRIALS = 1000  # for code distance calculations
 
 CACHE_DIR = os.path.dirname(__file__)
 CACHE_NAME = ".code_cache"
@@ -38,6 +38,7 @@ CACHE_NAME = ".code_cache"
 def get_quasi_cyclic_code_params(
     dims: tuple[int, int],
     exponents: tuple[int, int, int, int],
+    min_dimension: int,
     num_trials: int,
     *,
     silent: bool = False,
@@ -52,21 +53,8 @@ def get_quasi_cyclic_code_params(
     poly_b = 1 + y + x**bx * y**by
     code = qldpc.codes.QCCode(dims, poly_a, poly_b)
 
-    if code.dimension == 0:
+    if code.dimension < min_dimension:
         return None
-
-    # identify maximum Euclidean distance between check/data qubits required for each toric layout
-    max_distances = []
-    for plaquette_map, torus_shape in code.toric_layouts:
-        shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape, open_boundaries=True)
-        distances = set(np.sqrt(xx**2 + yy**2) for xx, yy in shifts_x | shifts_z)
-        max_distances.append(max(distances))
-
-    # minimize distance requirement over possible toric layouts
-    comm_distance = min(max_distances)
-
-    if comm_distance > MAX_COMMUNICATION_DISTANCE:
-        return code.num_qubits, code.dimension, None, comm_distance
 
     if not silent:
         print("starting", dims, exponents)
@@ -74,12 +62,13 @@ def get_quasi_cyclic_code_params(
     distance = code.get_distance_bound(num_trials=num_trials)
     assert isinstance(distance, int)
 
-    return code.num_qubits, code.dimension, distance, comm_distance
+    return code.num_qubits, code.dimension, distance
 
 
 def run_and_save(
     dims: tuple[int, int],
     exponents: tuple[int, int, int, int],
+    min_dimension: int,
     num_trials: int,
     cache: diskcache.Cache,
     *,
@@ -89,13 +78,18 @@ def run_and_save(
     if not silent and not any(exponents[1:]):
         print(dims, exponents)
 
-    params = get_quasi_cyclic_code_params(dims, exponents, num_trials, silent=silent)
+    key = (dims, exponents, num_trials)
+    if key in cache:
+        return None
+
+    params = get_quasi_cyclic_code_params(dims, exponents, min_dimension, num_trials, silent=silent)
     if params is not None:
-        nn, kk, dd, comm_dist = params
-        cache[dims, exponents, num_trials] = (nn, kk, dd, comm_dist)
-        if not silent and dd is not None:
+        cache[key] = params
+
+        if not silent:
+            nn, kk, dd = params
             merit = kk * dd**2 / nn
-            print(dims, exponents, (nn, kk, dd), f"{comm_dist:.2f}", f"{merit:.2f}")
+            print(dims, exponents, (nn, kk, dd), f"{merit:.2f}")
 
 
 def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
@@ -124,4 +118,4 @@ if __name__ == "__main__":
                 range(dim_x), range(dim_y), range(dim_x), range(dim_y)
             ):
                 if not redundant(dims, exponents):
-                    executor.submit(run_and_save, dims, exponents, NUM_TRIALS, cache)
+                    executor.submit(run_and_save, dims, exponents, MIN_DIMENSION, NUM_TRIALS, cache)
