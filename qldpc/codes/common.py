@@ -692,19 +692,19 @@ class QuditCode(AbstractCode):
         dimension = self.dimension
         identity = self.field.Identity(dimension)
 
-        def row_reduce(
-            matrix: npt.NDArray[np.int_],
-        ) -> tuple[npt.NDArray[np.int_], Sequence[int], Sequence[int]]:
+        def row_reduce(matrix: npt.NDArray[np.int_]) -> tuple[npt.NDArray[np.int_], Sequence[int]]:
             """Perform Gaussian elimination on the matrix.
 
             Returns:
                 matrix_RRE: the reduced row echelon form of the matrix.
                 pivot: the "pivot" columns of the reduced matrix.
-                other: the remaining columns of the reduced matrix.
 
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
             occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
             """
+            if not matrix.size:
+                return matrix, np.array([], dtype=int)
+
             # row-reduce the matrix and identify its pivots
             matrix_RRE = self.field(matrix).row_reduce()
             pivots = (matrix_RRE != 0).argmax(axis=1)
@@ -713,53 +713,69 @@ class QuditCode(AbstractCode):
             if pivots.size > 1 and pivots[-1] == 0:
                 pivots = np.concatenate([[pivots[0]], pivots[1:][pivots[1:] != 0]])
 
-            # identify remaining columns and return
-            other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
-            return matrix_RRE, pivots, other
+            return matrix_RRE, pivots
 
         # keep track of current qudit locations
         qudit_locs = np.arange(num_qudits, dtype=int)
 
-        # row reduce the check matrix for X-type errors and move its pivots to the back
-        checks_x, pivot_x, other_x = row_reduce(self.matrix)
-        print()
-        print(checks_x)
-        print(pivot_x)
-        print(other_x)
-        return
-        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
-        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
-        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivot_x]])
+        # row reduce and identify pivots in the X sector
+        matrix, pivots_x = row_reduce(self.matrix)
+        pivots_x = pivots_x[pivots_x < self.num_qudits]
+        other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
 
-        # row reduce the check matrix for Z-type errors and move its pivots to the back
-        checks_z, pivot_z, other_z = row_reduce(checks_z)
-        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivot_z]])
-        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivot_z]])
+        # move the X pivots to the back
+        matrix = matrix.reshape(self.num_checks * 2, self.num_qudits)
+        matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
+        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
+
+        # row reduce and identify pivots in the Z sector
+        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)
+        sub_matrix = matrix[len(pivots_x) :, self.num_qudits :]
+        sub_matrix, pivots_z = row_reduce(sub_matrix)
+        matrix[len(pivots_x) :, self.num_qudits :] = sub_matrix
+        other_z = [qq for qq in range(self.num_qudits) if qq not in pivots_z]
+
+        # move the Z pivots to the back
+        matrix = matrix.reshape(self.num_checks * 2, self.num_qudits)
+        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
+
+        # identify X-pivot and Z-pivot parity checks
+        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)
+        checks_x = matrix[: len(pivots_x), :].reshape(len(pivots_x), 2, self.num_qudits)
+        checks_z = matrix[len(pivots_x) :, :].reshape(len(pivots_z), 2, self.num_qudits)
 
         # run some sanity checks
-        assert pivot_z[-1] < num_qudits - len(pivot_x)
-        assert dimension + len(pivot_x) + len(pivot_z) == num_qudits
+        assert pivots_z.size == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
+        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
+        assert not np.any(checks_z[:, 0, :])
 
-        # get the support of the check matrices on non-pivot qudits
-        non_pivot_x = checks_x[: len(pivot_x), :dimension]
-        non_pivot_z = checks_z[: len(pivot_z), :dimension]
+        # identify "sections" of columns / qudits
+        section_k = slice(dimension)
+        section_x = slice(dimension, dimension + len(pivots_x))
+        section_z = slice(dimension + len(pivots_x), self.num_qudits)
 
-        # construct logical X operators
-        logicals_x = self.field.Zeros((dimension, num_qudits))
-        logicals_x[:, dimension : dimension + len(pivot_x)] = -non_pivot_x.T
-        logicals_x[:dimension, :dimension] = identity
+        # construct X-pivot logical operators
+        logicals_x = self.field.Zeros((dimension, 2, num_qudits))
+        logicals_x[:, 0, section_k] = identity
+        logicals_x[:, 0, section_z] = -checks_z[:, 1, :dimension].T
+        logicals_x[:, 1, section_x] = -(
+            checks_x[:, 1, section_z] @ checks_z[:, 1, section_k] + checks_x[:, 1, section_k]
+        ).T
 
-        # construct logical Z operators
-        logicals_z = self.field.Zeros((dimension, num_qudits))
-        logicals_z[:, -len(pivot_z) :] = -non_pivot_z.T
-        logicals_z[:dimension, :dimension] = identity
+        # construct Z-pivot logical operators
+        logicals_z = self.field.Zeros((dimension, 2, num_qudits))
+        logicals_z[:, 1, section_k] = identity
+        logicals_z[:, 1, section_x] = -checks_x[:, 0, :dimension].T
 
         # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)
-        logicals_x = logicals_x[:, permutation]
-        logicals_z = logicals_z[:, permutation]
+        logicals_x = logicals_x[:, :, permutation]
+        logicals_z = logicals_z[:, :, permutation]
 
+        # reshape and return
+        logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
+        logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._logical_ops
 
@@ -1148,34 +1164,39 @@ class CSSCode(QuditCode):
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
-        checks_x, pivot_x, other_x = row_reduce(checks_x)
-        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivot_x]])
-        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivot_x]])
-        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivot_x]])
+        checks_x, pivots_x, other_x = row_reduce(checks_x)
+        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
+        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
+        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # row reduce the check matrix for Z-type errors and move its pivots to the back
-        checks_z, pivot_z, other_z = row_reduce(checks_z)
-        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivot_z]])
-        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivot_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivot_z]])
+        checks_z, pivots_z, other_z = row_reduce(checks_z)
+        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
+        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
         # run some sanity checks
-        assert pivot_z[-1] < num_qudits - len(pivot_x)
-        assert dimension + len(pivot_x) + len(pivot_z) == num_qudits
+        assert pivots_z[-1] < num_qudits - len(pivots_x)
+        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
+
+        # identify "sections" of columns / qudits
+        section_k = slice(dimension)
+        section_x = slice(dimension, dimension + len(pivots_x))
+        section_z = slice(dimension + len(pivots_x), self.num_qudits)
 
         # get the support of the check matrices on non-pivot qudits
-        non_pivot_x = checks_x[: len(pivot_x), :dimension]
-        non_pivot_z = checks_z[: len(pivot_z), :dimension]
+        non_pivots_x = checks_x[: len(pivots_x), :dimension]
+        non_pivots_z = checks_z[: len(pivots_z), :dimension]
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
-        logicals_x[:, dimension : dimension + len(pivot_x)] = -non_pivot_x.T
-        logicals_x[:dimension, :dimension] = identity
+        logicals_x[:, section_k] = identity
+        logicals_x[:, section_x] = -non_pivots_x.T
 
         # construct logical Z operators
         logicals_z = self.field.Zeros((dimension, num_qudits))
-        logicals_z[:, -len(pivot_z) :] = -non_pivot_z.T
-        logicals_z[:dimension, :dimension] = identity
+        logicals_z[:, section_k] = identity
+        logicals_z[:, section_z] = -non_pivots_z.T
 
         # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)

@@ -201,10 +201,13 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) 
 def test_qudit_ops() -> None:
     """Logical operator construction for Galois qudit codes."""
     code = codes.FiveQubitCode()
-    print()
-    print(code.dimension)
+    # code = codes.SteaneCode()
 
-    logical_ops = code.get_logical_ops()
+    logical_ops = codes.QuditCode.get_logical_ops(code)
+
+    print()
+    for op in logical_ops:
+        print(op)
 
 
 ####################################################################################################
