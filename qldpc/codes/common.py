@@ -696,31 +696,22 @@ class QuditCode(AbstractCode):
             """Perform Gaussian elimination on the matrix.
 
             Returns:
-                matrix_RRE: the reduced row echelon form of the matrix.
+                matrix_RREF: the reduced row echelon form of the matrix.
                 pivot: the "pivot" columns of the reduced matrix.
 
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
-            occur at a unique columns for each row; these columns are the "pivots" of matrix_RRE.
+            occur at a unique columns for each row; these columns are the "pivots" of matrix_RREF.
             """
-            if not matrix.size:
-                return matrix, np.array([], dtype=int)
-
-            # row-reduce the matrix and identify its pivots
-            matrix_RRE = self.field(matrix).row_reduce()
-            pivots = (matrix_RRE != 0).argmax(axis=1)
-
-            # remove trailing zero pivots, which correspond to trivial (all-zero) rows
-            if pivots.size > 1 and pivots[-1] == 0:
-                pivots = np.concatenate([[pivots[0]], pivots[1:][pivots[1:] != 0]])
-
-            return matrix_RRE, pivots
+            matrix_RREF = self.field(matrix).row_reduce()
+            pivots = [np.argmax(row != 0) for row in matrix_RREF if np.any(row)]
+            return matrix_RREF, pivots
 
         # keep track of current qudit locations
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce and identify pivots in the X sector
         matrix, pivots_x = row_reduce(self.matrix)
-        pivots_x = pivots_x[pivots_x < self.num_qudits]
+        pivots_x = [pivot for pivot in pivots_x if pivot < self.num_qudits]
         other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
 
         # move the X pivots to the back
@@ -741,12 +732,12 @@ class QuditCode(AbstractCode):
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
         # identify X-pivot and Z-pivot parity checks
-        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)
+        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)[: len(pivots_x + pivots_z), :]
         checks_x = matrix[: len(pivots_x), :].reshape(len(pivots_x), 2, self.num_qudits)
         checks_z = matrix[len(pivots_x) :, :].reshape(len(pivots_z), 2, self.num_qudits)
 
         # run some sanity checks
-        assert pivots_z.size == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
+        assert len(pivots_z) == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
         assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
         assert not np.any(checks_z[:, 0, :])
 
@@ -1146,15 +1137,8 @@ class CSSCode(QuditCode):
             In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
             occur at a unique columns for each row; these columns are the "pivots" of matrix_RREF.
             """
-            # row-reduce the matrix and identify its pivots
             matrix_RREF = self.field(matrix).row_reduce()
-            pivots = (matrix_RREF != 0).argmax(axis=1)
-
-            # remove trailing zero pivots, which correspond to trivial (all-zero) rows
-            if pivots.size > 1 and pivots[-1] == 0:
-                pivots = np.concatenate([[pivots[0]], pivots[1:][pivots[1:] != 0]])
-
-            # identify remaining columns and return
+            pivots = [np.argmax(row != 0) for row in matrix_RREF if np.any(row)]
             other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
             return matrix_RREF, pivots, other
 

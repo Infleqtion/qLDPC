@@ -200,14 +200,17 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) 
 
 def test_qudit_ops() -> None:
     """Logical operator construction for Galois qudit codes."""
+    code: codes.QuditCode
+
     code = codes.FiveQubitCode()
-    # code = codes.SteaneCode()
+    logical_ops = code.get_logical_ops()
+    assert logical_ops.shape == (2, code.dimension, 2 * code.num_qudits)
+    assert np.array_equal(logical_ops[0, 0], [0, 0, 0, 0, 1, 1, 0, 0, 1, 0])
+    assert np.array_equal(logical_ops[1, 0], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+    assert code.get_logical_ops() is code._logical_ops
 
-    logical_ops = codes.QuditCode.get_logical_ops(code)
-
-    print()
-    for op in logical_ops:
-        print(op)
+    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I")
+    assert np.array_equal(logical_ops, code.get_logical_ops())
 
 
 ####################################################################################################
