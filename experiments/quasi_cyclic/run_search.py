@@ -27,7 +27,7 @@ import qldpc
 import qldpc.cache
 
 MIN_ORDER = 3  # minimum cyclic group order
-MIN_DIMENSION = 8  # ignore codes with fewer than this many logical qubits
+MIN_RATE = 0.1  # ignore codes with lower encoding rates
 NUM_TRIALS = 1000  # for code distance calculations
 
 CACHE_DIR = os.path.dirname(__file__)
@@ -37,7 +37,7 @@ CACHE_NAME = ".code_cache"
 def get_quasi_cyclic_code_params(
     dims: tuple[int, int],
     exponents: tuple[int, int, int, int],
-    min_dimension: int,
+    min_rate: float,
     num_trials: int,
     *,
     silent: bool = False,
@@ -52,7 +52,7 @@ def get_quasi_cyclic_code_params(
     poly_b = 1 + y + x**bx * y**by
     code = qldpc.codes.QCCode(dims, poly_a, poly_b)
 
-    if code.dimension < min_dimension:
+    if code.dimension / code.num_qubits < min_rate:
         return None
 
     if not silent:
@@ -67,7 +67,7 @@ def get_quasi_cyclic_code_params(
 def run_and_save(
     dims: tuple[int, int],
     exponents: tuple[int, int, int, int],
-    min_dimension: int,
+    min_rate: float,
     num_trials: int,
     cache: diskcache.Cache,
     *,
@@ -81,7 +81,7 @@ def run_and_save(
     if key in cache:
         return None
 
-    params = get_quasi_cyclic_code_params(dims, exponents, min_dimension, num_trials, silent=silent)
+    params = get_quasi_cyclic_code_params(dims, exponents, min_rate, num_trials, silent=silent)
     if params is not None:
         cache[key] = params
 
@@ -117,4 +117,4 @@ if __name__ == "__main__":
                 range(dim_x), range(dim_y), range(dim_x), range(dim_y)
             ):
                 if not redundant(dims, exponents):
-                    executor.submit(run_and_save, dims, exponents, MIN_DIMENSION, NUM_TRIALS, cache)
+                    executor.submit(run_and_save, dims, exponents, MIN_RATE, NUM_TRIALS, cache)
