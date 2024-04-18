@@ -217,7 +217,7 @@ def test_qudit_ops() -> None:
 # CSS code tests
 
 
-def test_CSS_code() -> None:
+def test_css_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
     code_x = codes.ClassicalCode.random(3, 2)
 
@@ -237,9 +237,9 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z)
 
 
-def test_CSS_ops() -> None:
+def test_css_ops() -> None:
     """Logical operator construction for CSS codes."""
-    code: codes.QuditCode
+    code: codes.CSSCode
 
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
@@ -253,10 +253,12 @@ def test_CSS_ops() -> None:
     assert not np.any(code.matrix_x @ logicals_z.T)
     assert code.get_logical_ops() is code._logical_ops
 
-    # reducing logical operator weight only supported for prime number fields
-    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
-    with pytest.raises(ValueError, match="prime number fields"):
-        code.reduce_logical_op(Pauli.X, 0)
+    logicals_full = codes.QuditCode.get_logical_ops(code)
+
+    print()
+    print(logicals_x)
+    print()
+    print(logicals_full[0])
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
@@ -265,6 +267,11 @@ def test_CSS_ops() -> None:
     assert code.get_code_params() == (dist**2, 2, dist)
     assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.X))
     assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.Z))
+
+    # reducing logical operator weight only supported for prime number fields
+    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
+    with pytest.raises(ValueError, match="prime number fields"):
+        code.reduce_logical_op(Pauli.X, 0)
 
 
 def test_distance_quantum() -> None:

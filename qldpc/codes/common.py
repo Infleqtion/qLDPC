@@ -692,25 +692,11 @@ class QuditCode(AbstractCode):
         dimension = self.dimension
         identity = self.field.Identity(dimension)
 
-        def row_reduce(matrix: npt.NDArray[np.int_]) -> tuple[npt.NDArray[np.int_], Sequence[int]]:
-            """Perform Gaussian elimination on the matrix.
-
-            Returns:
-                matrix_RREF: the reduced row echelon form of the matrix.
-                pivot: the "pivot" columns of the reduced matrix.
-
-            In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
-            occur at a unique columns for each row; these columns are the "pivots" of matrix_RREF.
-            """
-            matrix_RREF = self.field(matrix).row_reduce()
-            pivots = [np.argmax(row != 0) for row in matrix_RREF if np.any(row)]
-            return matrix_RREF, pivots
-
         # keep track of current qudit locations
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce and identify pivots in the X sector
-        matrix, pivots_x = row_reduce(self.matrix)
+        matrix, pivots_x = _row_reduce(self.matrix)
         pivots_x = [pivot for pivot in pivots_x if pivot < self.num_qudits]
         other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
 
@@ -722,7 +708,7 @@ class QuditCode(AbstractCode):
         # row reduce and identify pivots in the Z sector
         matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)
         sub_matrix = matrix[len(pivots_x) :, self.num_qudits :]
-        sub_matrix, pivots_z = row_reduce(sub_matrix)
+        sub_matrix, pivots_z = _row_reduce(self.field(sub_matrix))
         matrix[len(pivots_x) :, self.num_qudits :] = sub_matrix
         other_z = [qq for qq in range(self.num_qudits) if qq not in pivots_z]
 
@@ -1124,37 +1110,21 @@ class CSSCode(QuditCode):
         dimension = self.dimension
         identity = self.field.Identity(dimension)
 
-        def row_reduce(
-            matrix: npt.NDArray[np.int_],
-        ) -> tuple[npt.NDArray[np.int_], Sequence[int], Sequence[int]]:
-            """Perform Gaussian elimination on the matrix.
-
-            Returns:
-                matrix_RREF: the reduced row echelon form of the matrix.
-                pivot: the "pivot" columns of the reduced matrix.
-                other: the remaining columns of the reduced matrix.
-
-            In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
-            occur at a unique columns for each row; these columns are the "pivots" of matrix_RREF.
-            """
-            matrix_RREF = self.field(matrix).row_reduce()
-            pivots = [np.argmax(row != 0) for row in matrix_RREF if np.any(row)]
-            other = [qq for qq in range(matrix.shape[1]) if qq not in pivots]
-            return matrix_RREF, pivots, other
-
         # identify check matrices for X/Z-type errors, and the current qudit locations
         checks_x: npt.NDArray[np.int_] = self.matrix_z
         checks_z: npt.NDArray[np.int_] = self.matrix_x
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
-        checks_x, pivots_x, other_x = row_reduce(checks_x)
+        checks_x, pivots_x = _row_reduce(self.field(checks_x))
+        other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
         checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
         checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # row reduce the check matrix for Z-type errors and move its pivots to the back
-        checks_z, pivots_z, other_z = row_reduce(checks_z)
+        checks_z, pivots_z = _row_reduce(self.field(checks_z))
+        other_z = [qq for qq in range(self.num_qudits) if qq not in pivots_z]
         checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
@@ -1279,3 +1249,20 @@ def _fix_decoder_args_for_nonbinary_fields(
         decoder_args["modulus"] = field.order
         if bound_index is not None:
             decoder_args["lower_bound_row"] = bound_index
+
+
+def _row_reduce(
+    matrix: galois.FieldArray,
+) -> tuple[npt.NDArray[np.int_], list[int]]:
+    """Perform Gaussian elimination on a matrix.
+
+    Returns:
+        matrix_RREF: the reduced row echelon form of the matrix.
+        pivot: the "pivot" columns of the reduced matrix.
+
+    In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
+    occur at a unique columns for each row; these columns are the "pivots" of matrix_RREF.
+    """
+    matrix_RREF = matrix.row_reduce()
+    pivots = [int(np.argmax(row != 0)) for row in matrix_RREF if np.any(row)]
+    return matrix_RREF, pivots
