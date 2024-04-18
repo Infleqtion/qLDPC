@@ -43,9 +43,9 @@ def get_quasi_cyclic_code_params(
     *,
     silent: bool = False,
 ) -> tuple[int, int, int | None, float] | None:
-    """Compute communication distance and code distance for a quasi-cyclic code.
+    """Compute the code parameters of a quasi-cyclic code.
 
-    If the code is trivial or the communication distance is beyond the cutoff, return None.
+    If the code dimension (number of encoded logical qubits) is below some cutoff, return None.
     """
     # construct the code itself
     ax, ay, bx, by = exponents
