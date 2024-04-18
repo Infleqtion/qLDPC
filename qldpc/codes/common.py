@@ -528,7 +528,7 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _logical_ops: galois.FieldArray | None = None
+    _full_logical_ops: galois.FieldArray | None = None
 
     def __init__(
         self,
@@ -685,8 +685,8 @@ class QuditCode(AbstractCode):
         thesis (arXiv:9705052), slightly modified and generalized for qudits.
         """
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
-            return self._logical_ops
+        if self._full_logical_ops is not None:
+            return self._full_logical_ops
 
         num_qudits = self.num_qudits
         dimension = self.dimension
@@ -722,6 +722,9 @@ class QuditCode(AbstractCode):
         checks_x = matrix[: len(pivots_x), :].reshape(len(pivots_x), 2, self.num_qudits)
         checks_z = matrix[len(pivots_x) :, :].reshape(len(pivots_z), 2, self.num_qudits)
 
+        print()
+        print(checks_x.reshape(len(pivots_x), -1))
+
         # run some sanity checks
         assert len(pivots_z) == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
         assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
@@ -753,8 +756,8 @@ class QuditCode(AbstractCode):
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
         logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
-        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
-        return self._logical_ops
+        self._full_logical_ops = self.field(np.stack([logicals_x, logicals_z]))
+        return self._full_logical_ops
 
 
 class CSSCode(QuditCode):
@@ -1129,6 +1132,9 @@ class CSSCode(QuditCode):
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
+        print()
+        print(checks_x)
+
         # run some sanity checks
         assert pivots_z[-1] < num_qudits - len(pivots_x)
         assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
@@ -1138,19 +1144,15 @@ class CSSCode(QuditCode):
         section_x = slice(dimension, dimension + len(pivots_x))
         section_z = slice(dimension + len(pivots_x), self.num_qudits)
 
-        # get the support of the check matrices on non-pivot qudits
-        non_pivots_x = checks_x[: len(pivots_x), :dimension]
-        non_pivots_z = checks_z[: len(pivots_z), :dimension]
-
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
         logicals_x[:, section_k] = identity
-        logicals_x[:, section_x] = -non_pivots_x.T
+        logicals_x[:, section_x] = -checks_x[: len(pivots_x), :dimension].T
 
         # construct logical Z operators
         logicals_z = self.field.Zeros((dimension, num_qudits))
         logicals_z[:, section_k] = identity
-        logicals_z[:, section_z] = -non_pivots_z.T
+        logicals_z[:, section_z] = -checks_z[: len(pivots_z), :dimension].T
 
         # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)

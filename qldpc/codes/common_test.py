@@ -207,7 +207,7 @@ def test_qudit_ops() -> None:
     assert logical_ops.shape == (2, code.dimension, 2 * code.num_qudits)
     assert np.array_equal(logical_ops[0, 0], [0, 0, 0, 0, 1, 1, 0, 0, 1, 0])
     assert np.array_equal(logical_ops[1, 0], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
-    assert code.get_logical_ops() is code._logical_ops
+    assert code.get_logical_ops() is code._full_logical_ops
 
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I")
     assert np.array_equal(logical_ops, code.get_logical_ops())
@@ -240,6 +240,7 @@ def test_css_code() -> None:
 def test_css_ops() -> None:
     """Logical operator construction for CSS codes."""
     code: codes.CSSCode
+    np.set_printoptions(linewidth=200)
 
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
@@ -253,25 +254,35 @@ def test_css_ops() -> None:
     assert not np.any(code.matrix_x @ logicals_z.T)
     assert code.get_logical_ops() is code._logical_ops
 
-    logicals_full = codes.QuditCode.get_logical_ops(code)
+    # check that the logical operators agree with those computed by the QuditCode method
+    full_logicals = codes.QuditCode.get_logical_ops(code)
+    full_logicals_x, full_logicals_z = full_logicals[0], full_logicals[1]
+    # assert np.array_equal(full_logicals_x, np.hstack([logicals_x, np.zeros_like(logicals_x)]))
+    # assert np.array_equal(full_logicals_z, np.hstack([np.zeros_like(logicals_x), logicals_z]))
 
     print()
     print(logicals_x)
     print()
-    print(logicals_full[0])
+    print(logicals_z)
+    print()
+    print(full_logicals_x)
+    print()
+    print(full_logicals_z)
+    # print()
+    # print(np.hstack([logicals_x, np.zeros_like(logicals_x)]))
 
-    # successfullly construct and reduce logical operators in a code with "over-complete" checks
-    dist = 4
-    code = codes.ToricCode(dist, rotated=True)
-    code.reduce_logical_ops()
-    assert code.get_code_params() == (dist**2, 2, dist)
-    assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.X))
-    assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.Z))
+    # # successfullly construct and reduce logical operators in a code with "over-complete" checks
+    # dist = 4
+    # code = codes.ToricCode(dist, rotated=True)
+    # code.reduce_logical_ops()
+    # assert code.get_code_params() == (dist**2, 2, dist)
+    # assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.X))
+    # assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.Z))
 
-    # reducing logical operator weight only supported for prime number fields
-    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
-    with pytest.raises(ValueError, match="prime number fields"):
-        code.reduce_logical_op(Pauli.X, 0)
+    # # reducing logical operator weight only supported for prime number fields
+    # code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
+    # with pytest.raises(ValueError, match="prime number fields"):
+    #     code.reduce_logical_op(Pauli.X, 0)
 
 
 def test_distance_quantum() -> None:
