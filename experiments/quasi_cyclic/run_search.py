@@ -41,7 +41,7 @@ def get_quasi_cyclic_code_params(
     num_trials: int,
     *,
     silent: bool = False,
-) -> tuple[int, int, int] | None:
+) -> tuple[int, int, int | None] | None:
     """Compute the code parameters of a quasi-cyclic code.
 
     If the code dimension (number of encoded logical qubits) is below some cutoff, return None.
@@ -52,8 +52,8 @@ def get_quasi_cyclic_code_params(
     poly_b = 1 + y + x**bx * y**by
     code = qldpc.codes.QCCode(dims, poly_a, poly_b)
 
-    if code.dimension / code.num_qubits < min_rate:
-        return None
+    if code.dimension < code.num_qubits * min_rate:
+        return code.num_qubits, code.dimension, None
 
     if not silent:
         print(" starting", dims, exponents)
@@ -78,17 +78,22 @@ def run_and_save(
         print(dims, exponents)
 
     key = (dims, exponents, num_trials)
+
+    # check whether we already have data for this code
     if key in cache:
-        return None
+        nn, kk, dd = cache[key]
+        # if we know the distance or the encoding rate is too low, there's nothing more to do
+        if dd is not None or kk < nn * min_rate:
+            return None
 
+    # compute and save code parameters
     params = get_quasi_cyclic_code_params(dims, exponents, min_rate, num_trials, silent=silent)
-    if params is not None:
-        cache[key] = params
+    cache[key] = params
 
-        if not silent:
-            nn, kk, dd = params
-            merit = kk * dd**2 / nn
-            print("", dims, exponents, (nn, kk, dd), f"{merit:.2f}")
+    nn, kk, dd = params
+    if not silent and dd is not None:
+        merit = kk * dd**2 / nn
+        print("", dims, exponents, (nn, kk, dd), f"{merit:.2f}")
 
 
 def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
