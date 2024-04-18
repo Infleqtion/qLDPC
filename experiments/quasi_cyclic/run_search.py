@@ -27,7 +27,7 @@ import qldpc
 import qldpc.cache
 
 MIN_ORDER = 3  # minimum cyclic group order
-MIN_RATE = 0.1  # ignore codes with lower encoding rates
+MIN_RATE = 1 / 25  # ignore codes with lower encoding rates
 NUM_TRIALS = 1000  # for code distance calculations
 
 CACHE_DIR = os.path.dirname(__file__)
@@ -56,7 +56,7 @@ def get_quasi_cyclic_code_params(
         return None
 
     if not silent:
-        print("starting", dims, exponents)
+        print(" starting", dims, exponents)
 
     distance = code.get_distance_bound(num_trials=num_trials)
     assert isinstance(distance, int)
@@ -88,7 +88,7 @@ def run_and_save(
         if not silent:
             nn, kk, dd = params
             merit = kk * dd**2 / nn
-            print(dims, exponents, (nn, kk, dd), f"{merit:.2f}")
+            print("", dims, exponents, (nn, kk, dd), f"{merit:.2f}")
 
 
 def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
