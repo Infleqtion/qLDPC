@@ -92,7 +92,7 @@ def run_and_save(
 
 
 def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
-    """Are the given code parameters redundant?"""
+    """Is the given quasi-cyclic code redundant?"""
     dim_x, dim_y = dims
     ax, ay, bx, by = exponents
     return (
