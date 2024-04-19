@@ -674,12 +674,21 @@ class QuditCode(AbstractCode):
         """Complete basis of nontrivial logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
-        code.  The first axis is used to keep track of conjugate pairs of logical operators for each
-        logical qubit.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support
-        (i.e., the physical qudits addressed nontrivially) by a logical operator on logical qudit 4,
-        and the conjugate logical operator is `logical_ops[1, 4, :]`.  In general,
-        `logical_ops[0, aa, :] @ logical_ops[1, bb, :] = int(aa == bb)`.
+        `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
+        qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
+        operators for each logical qubit (indexed by the second axis).  The last axis is "doubled"
+        to indicate whether a physical qudit is addressed by a physical X-type or Z-type operator.
+
+        Specifically, `logical_ops[0, :, :]` are "logical X-type" operators, which address at least
+        one physical qudit by a physical X-type operator, and may additionally address physical
+        qudits by physical Z-type operators.  `logical_ops[1, :, :]` are logical Z-type operators
+        that only address physical qudits by physical Z-type operators (which is a consequence of
+        the way these operators are constructed here).
+
+        For example, if `logical_ops[0, r, j] == 1` for `j < n` (`j >= n`), then the X-type logical
+        operator for qudit `r` addresses physical qudit `j` with an X-type (Z-type) operator.
+        The fact that logical operators come in conjugate pairs means that
+        `logical_ops[0, r, :] @ logical_ops[1, s, :] = int(r == s)`.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
