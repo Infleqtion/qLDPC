@@ -780,8 +780,8 @@ class CSSCode(QuditCode):
     and H_z witnesses X-type errors.
 
     The full parity check matrix of a CSSCode is
-    ⌈  0 , H_z ⌉.
-    ⌊ H_x,  0  ⌋
+    ⌈  0 , H_z ⌉
+    ⌊ H_x,  0  ⌋.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
