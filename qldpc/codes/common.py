@@ -678,11 +678,11 @@ class QuditCode(AbstractCode):
         code.  The first axis is used to keep track of conjugate pairs of logical operators for each
         logical qubit.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support
         (i.e., the physical qudits addressed nontrivially) by a logical operator on logical qudit 4,
-        and the conjugate logical operator is `logical_ops[0, 4, :]`.  In general,
+        and the conjugate logical operator is `logical_ops[1, 4, :]`.  In general,
         `logical_ops[0, aa, :] @ logical_ops[1, bb, :] = int(aa == bb)`.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified and generalized for qudits.
+        thesis (arXiv:9705052), slightly modified for qudits.
         """
         # memoize manually because other methods may modify the logical operators computed here
         if self._full_logical_ops is not None:
@@ -750,16 +750,6 @@ class QuditCode(AbstractCode):
         logicals_x = logicals_x[:, :, permutation]
         logicals_z = logicals_z[:, :, permutation]
 
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-        logicals_x = np.roll(logicals_x, 1, axis=1)
-        logicals_z = np.roll(logicals_z, 1, axis=1)
-        print()
-        print(not np.any(self.matrix @ logicals_x.reshape(-1, 2 * self.num_qudits).T))
-        print(not np.any(self.matrix @ logicals_z.reshape(-1, 2 * self.num_qudits).T))
-        logicals_x = np.roll(logicals_x, 1, axis=1)
-        logicals_z = np.roll(logicals_z, 1, axis=1)
-        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
         logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
@@ -781,8 +771,8 @@ class CSSCode(QuditCode):
     and H_z witnesses X-type errors.
 
     The full parity check matrix of a CSSCode is
-    ⌈  0 , H_z ⌉.
-    ⌊ H_x,  0  ⌋
+    ⌈ H_x,  0  ⌉
+    ⌊  0 , H_z ⌋.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -848,8 +838,8 @@ class CSSCode(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [np.zeros_like(self.matrix_z), self.matrix_z],
                 [self.matrix_x, np.zeros_like(self.matrix_x)],
+                [np.zeros_like(self.matrix_z), self.matrix_z],
             ]
         )
         return self.field(self.conjugate(matrix, self.conjugated))
@@ -1100,12 +1090,8 @@ class CSSCode(QuditCode):
         If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
         operators of the specified type.
 
-        In the case of qudits with dimension > 2, the "Pauli X" and "Pauli Z" operators constructed
-        by this method are the unit shift and phase operators that generate all logical X-type and
-        Z-type qudit operators.
-
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified and generalized for qudits.
+        thesis (arXiv:9705052), slightly modified for qudits.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
@@ -1121,9 +1107,9 @@ class CSSCode(QuditCode):
         dimension = self.dimension
         identity = self.field.Identity(dimension)
 
-        # identify check matrices for X/Z-type errors, and the current qudit locations
-        checks_x: npt.NDArray[np.int_] = self.matrix_z
-        checks_z: npt.NDArray[np.int_] = self.matrix_x
+        # identify check matrices for X/Z-type parity checks, and the current qudit locations
+        checks_x: npt.NDArray[np.int_] = self.matrix_x
+        checks_z: npt.NDArray[np.int_] = self.matrix_z
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
@@ -1140,6 +1126,11 @@ class CSSCode(QuditCode):
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
+        # print()
+        # print(checks_x)
+        # print()
+        # print(checks_z)
+
         # run some sanity checks
         assert pivots_z[-1] < num_qudits - len(pivots_x)
         assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
@@ -1152,12 +1143,12 @@ class CSSCode(QuditCode):
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
         logicals_x[:, section_k] = identity
-        logicals_x[:, section_x] = -checks_x[: len(pivots_x), :dimension].T
+        logicals_x[:, section_z] = -checks_z[: len(pivots_z), :dimension].T
 
         # construct logical Z operators
         logicals_z = self.field.Zeros((dimension, num_qudits))
         logicals_z[:, section_k] = identity
-        logicals_z[:, section_z] = -checks_z[: len(pivots_z), :dimension].T
+        logicals_z[:, section_x] = -checks_x[: len(pivots_x), :dimension].T
 
         # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)
