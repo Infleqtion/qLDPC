@@ -103,45 +103,26 @@ def test_cyclic_codes() -> None:
         codes.QCCode({}, poly_a, poly_b)
 
 
-# @pytest.mark.parametrize("field", [2, 3])
-@pytest.mark.parametrize("field", [2])
+@pytest.mark.parametrize("field", [2, 3])
 def test_hypergraph_products(
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
-    conjugate: bool = False,  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    conjugate: bool = True,
 ) -> None:
     """Equivalency of matrix-based, graph-based, and chain-based hypergraph products."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
-    code_a = codes.RepetitionCode(2)  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    code_b = codes.RepetitionCode(2)  # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
     code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph, conjugate=conjugate)
     chain = ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
 
-    from qldpc import objects
-
-    print()
-    for uu, vv, data in code.graph.edges(data=True):
-        if data == {objects.Pauli: objects.Pauli.X}:
-            print(uu, vv, data)
-    for uu, vv, data in code.graph.edges(data=True):
-        if data == {objects.Pauli: objects.Pauli.Z}:
-            print(uu, vv, data)
-    print()
-    for uu, vv, data in graph.edges(data=True):
-        if data == {objects.Pauli: objects.Pauli.X}:
-            print(uu, vv, data)
-    for uu, vv, data in graph.edges(data=True):
-        if data == {objects.Pauli: objects.Pauli.Z}:
-            print(uu, vv, data)
-    # assert nx.utils.graphs_equal(code.graph, graph)
-    # assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
-    # assert np.array_equal(code.matrix_x, matrix_x)
-    # assert np.array_equal(code.matrix_z, matrix_z)
+    assert nx.utils.graphs_equal(code.graph, graph)
+    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+    assert np.array_equal(code.matrix_x, matrix_x)
+    assert np.array_equal(code.matrix_z, matrix_z)
 
 
 def test_trivial_lift(
@@ -215,8 +196,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = np.block(
         [
-            [mat_1, zero_2, zero_3, mat_2.T],
             [zero_1, mat_1.T, -mat_2, zero_4],
+            [mat_1, zero_2, zero_3, mat_2.T],
         ]
     )
 
