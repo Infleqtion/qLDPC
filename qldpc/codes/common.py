@@ -1126,11 +1126,6 @@ class CSSCode(QuditCode):
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
-        # print()
-        # print(checks_x)
-        # print()
-        # print(checks_z)
-
         # run some sanity checks
         assert pivots_z[-1] < num_qudits - len(pivots_x)
         assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
