@@ -531,8 +531,8 @@ class HGPCode(CSSCode):
     Edges in G_AB are inherited across rows/columns from G_A and G_B.  For example, if rows r_1 and
     r_2 share an edge in G_A, then the same is true in every column of G_AB.
 
-    By default, the check qudits in sectors (0, 1) of G_AB measure Z-type operators.  Likewise with
-    sector (1, 0) and X-type operators.  If a HGP is constructed with `conjugate==True`, then the
+    By default, the check qudits in sectors (1, 0) of G_AB measure X-type operators.  Likewise with
+    sector (0, 1) and Z-type operators.  If a HGP is constructed with `conjugate==True`, then the
     types of operators addressing the nodes in sector (1, 1) are switched.
 
     This class contains two equivalent constructions of an HGPCode:
@@ -629,29 +629,34 @@ class HGPCode(CSSCode):
         # fix edge orientation, and tag each edge with a QuditOperator
         graph = nx.DiGraph()
         for node_fst, node_snd, data in graph_product.edges(data=True):
-            # determine which node is a check node vs. a qudit node
-            if node_fst[0].is_data == node_fst[1].is_data:
-                # the first node is in the (0, 0) or (1, 1) sector --> a data node
-                node_qudit, node_check = node_fst, node_snd
+            # identify the sectors of two nodes
+            sector_fst = cls.get_sector(*node_fst)
+            sector_snd = cls.get_sector(*node_snd)
+
+            # identify data-qudit vs. check nodes, and their sectors
+            if sector_fst in [(0, 0), (1, 1)]:
+                node_qudit, sector_qudit = node_fst, sector_fst
+                node_check, sector_check = node_snd, sector_snd
             else:
-                # the first node is in the (0, 1) or (1, 0) sector --> a check node
-                node_check, node_qudit = node_fst, node_snd
-            graph.add_edge(node_check, node_qudit)
+                node_check, sector_check = node_fst, sector_fst
+                node_qudit, sector_qudit = node_snd, sector_snd
 
-            # by default, this edge is Z-type iff the check qudit is in the (0, 1) sector
-            op = QuditOperator((0, data.get("val", 1)))
-            if node_check[0].is_data:
-                # make this a X-type operator
-                op = ~op
+            # start with an X-type operator
+            op = QuditOperator((data.get("val", 1), 0))
 
-            # for a conjugated code, flip X <--> Z operators in the (1, 1) sector
-            if conjugate and not node_qudit[0].is_data:
+            # switch to Z-type operator for check qudits in the (0, 1) sector
+            if sector_check == (0, 1):
                 op = ~op
 
             # account for the minus sign in the (0, 0) sector of the Z-type subcode
-            if node_qudit[0].is_data and node_check[0].is_data:
+            if op.value[Pauli.Z] and sector_qudit == (0, 0):
                 op = -op
 
+            # for a conjugated code, flip X <--> Z operators in the (1, 1) sector
+            if conjugate and sector_qudit == (1, 1):
+                op = ~op
+
+            graph.add_edge(node_check, node_qudit)
             graph[node_check][node_qudit][QuditOperator] = op
 
         # relabel nodes, from (node_a, node_b) --> node_combined
@@ -669,6 +674,11 @@ class HGPCode(CSSCode):
         return graph
 
     @classmethod
+    def get_sector(cls, node_a: Node, node_b: Node) -> tuple[int, int]:
+        """Get the sector of a node in a graph product."""
+        return int(not node_a.is_data), int(not node_b.is_data)
+
+    @classmethod
     def get_product_node_map(
         cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
     ) -> dict[tuple[Node, Node], Node]:
@@ -677,12 +687,10 @@ class HGPCode(CSSCode):
         index_check = 0
         node_map = {}
         for node_a, node_b in itertools.product(sorted(nodes_a), sorted(nodes_b)):
-            if node_a.is_data == node_b.is_data:
-                # this is a data qudit in sector (0, 0) or (1, 1)
+            if cls.get_sector(node_a, node_b) in [(0, 0), (1, 1)]:
                 node = Node(index=index_qudit, is_data=True)
                 index_qudit += 1
             else:
-                # this is a check qudit in sector (0, 1) or (1, 0)
                 node = Node(index=index_check, is_data=False)
                 index_check += 1
             node_map[node_a, node_b] = node
