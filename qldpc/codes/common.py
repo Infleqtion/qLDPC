@@ -683,8 +683,8 @@ class CSSCode(QuditCode):
     and H_z witnesses X-type errors.
 
     The full parity check matrix of a CSSCode is
-    ⌈ H_z,  0  ⌉
-    ⌊  0 , H_x ⌋.
+    ⌈  0 , H_z ⌉.
+    ⌊ H_x,  0  ⌋
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -750,8 +750,8 @@ class CSSCode(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [self.matrix_z, np.zeros_like(self.matrix_z)],
-                [np.zeros_like(self.matrix_x), self.matrix_x],
+                [np.zeros_like(self.matrix_z), self.matrix_z],
+                [self.matrix_x, np.zeros_like(self.matrix_x)],
             ]
         )
         return self.field(self.conjugate(matrix, self.conjugated))
