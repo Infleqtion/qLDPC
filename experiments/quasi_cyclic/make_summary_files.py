@@ -18,15 +18,12 @@
 import os
 
 import numpy as np
-from run_search import CACHE_DIR, CACHE_NAME, MAX_COMMUNICATION_DISTANCE, NUM_TRIALS
+from run_search import CACHE_DIR, CACHE_NAME, NUM_TRIALS
 
 import qldpc.cache
 
-# Euclidean communication distance "cutoffs" by which to organize results
-comm_cutoffs = [5, 8, 10]
-
 # directory in which to save results
-save_dir = os.path.join(os.path.dirname(__file__), "codes")
+save_dir = os.path.join(os.path.dirname(__file__))
 
 # data file headers
 headers = [
@@ -55,9 +52,7 @@ fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f, %.3f"
 
 ##################################################
 
-comm_cutoffs = sorted([cutoff for cutoff in comm_cutoffs if cutoff <= MAX_COMMUNICATION_DISTANCE])
-data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_cutoffs))]
-data_all: list[tuple[int | float, ...]] = []
+data: list[tuple[int | float, ...]] = []
 
 # iterate over all entries in the cache
 cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
@@ -70,8 +65,7 @@ for key in cache.iterkeys():
     # retrieve code parameters
     nn, kk, dd, comm_dist = cache[key]
 
-    if comm_dist > comm_cutoffs[-1] or dd is None:
-        # we don't care about this code
+    if dd is None:
         continue
 
     # figure of merit relative to the surface code
@@ -81,25 +75,13 @@ for key in cache.iterkeys():
         continue
 
     # add a summary of this code to the appropriate group of data
-    code = (*dims, *exponents, nn, kk, dd, comm_dist, merit)
-    for cutoff, data in zip(comm_cutoffs, data_groups):
-        if comm_dist <= cutoff:
-            data.append(code)
-            data_all.append(code)
-            break
+    summary = (*dims, *exponents, nn, kk, dd, comm_dist, merit)
+    data.append(summary)
 
 ##################################################
 
+# save data
 os.makedirs(save_dir, exist_ok=True)
+path = os.path.join(save_dir, "codes.csv")
 header = "\n".join(headers)
-
-# save data groups to files
-for last_comm, comm_dist, data in zip([0] + comm_cutoffs, comm_cutoffs, data_groups):
-    file = f"codes_D{last_comm}-{comm_dist}.csv"
-    path = os.path.join(save_dir, file)
-    np.savetxt(path, data, header=header, fmt=fmt)
-    last_comm = comm_dist
-
-# save all data
-path = os.path.join(save_dir, "codes_all.csv")
-np.savetxt(path, data_all, header=header, fmt=fmt)
+np.savetxt(path, data, header=header, fmt=fmt)
