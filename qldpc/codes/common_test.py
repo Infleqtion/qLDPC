@@ -217,7 +217,7 @@ def test_qudit_ops() -> None:
 # CSS code tests
 
 
-def test_css_code() -> None:
+def test_CSS_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
     code_x = codes.ClassicalCode.random(3, 2)
 
@@ -237,14 +237,16 @@ def test_css_code() -> None:
         codes.CSSCode(code_x, code_z)
 
 
-def test_css_ops() -> None:
+def test_CSS_ops() -> None:
     """Logical operator construction for CSS codes."""
     code: codes.CSSCode
     np.set_printoptions(linewidth=200)
 
-    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
-    code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
-    code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
+    # code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
+    # code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
+    # code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
+
+    code = codes.SurfaceCode(3, 5, rotated=True)
 
     # test that logical operators are dual to each other and have trivial syndromes
     logicals = code.get_logical_ops()
@@ -261,13 +263,13 @@ def test_css_ops() -> None:
     # assert np.array_equal(full_logicals_z, np.hstack([np.zeros_like(logicals_x), logicals_z]))
 
     print()
-    print(logicals_x)
+    print(logicals_x[0].reshape(3, 5))
     print()
-    print(logicals_z)
+    print(logicals_z[0].reshape(3, 5))
     print()
-    print(full_logicals_x)
+    print(full_logicals_x[0].reshape(6, 5))
     print()
-    print(full_logicals_z)
+    print(full_logicals_z[0].reshape(6, 5))
     # print()
     # print(np.hstack([logicals_x, np.zeros_like(logicals_x)]))
 

@@ -722,9 +722,6 @@ class QuditCode(AbstractCode):
         checks_x = matrix[: len(pivots_x), :].reshape(len(pivots_x), 2, self.num_qudits)
         checks_z = matrix[len(pivots_x) :, :].reshape(len(pivots_z), 2, self.num_qudits)
 
-        print()
-        print(checks_x.reshape(len(pivots_x), -1))
-
         # run some sanity checks
         assert len(pivots_z) == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
         assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
@@ -753,9 +750,20 @@ class QuditCode(AbstractCode):
         logicals_x = logicals_x[:, :, permutation]
         logicals_z = logicals_z[:, :, permutation]
 
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+        logicals_x = np.roll(logicals_x, 1, axis=1)
+        logicals_z = np.roll(logicals_z, 1, axis=1)
+        print()
+        print(not np.any(self.matrix @ logicals_x.reshape(-1, 2 * self.num_qudits).T))
+        print(not np.any(self.matrix @ logicals_z.reshape(-1, 2 * self.num_qudits).T))
+        logicals_x = np.roll(logicals_x, 1, axis=1)
+        logicals_z = np.roll(logicals_z, 1, axis=1)
+        # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
         logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
+
         self._full_logical_ops = self.field(np.stack([logicals_x, logicals_z]))
         return self._full_logical_ops
 
@@ -1131,9 +1139,6 @@ class CSSCode(QuditCode):
         checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
-
-        print()
-        print(checks_x)
 
         # run some sanity checks
         assert pivots_z[-1] < num_qudits - len(pivots_x)
