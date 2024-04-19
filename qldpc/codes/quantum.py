@@ -760,9 +760,9 @@ class LPCode(CSSCode):
 # quantum Tanner code
 
 
-# TODO: investigate construction in
-# https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
-# see also Section 7 of https://arxiv.org/abs/2206.07571
+# TODO: investigate construction from lifted product codes
+# - see Section 7 of https://arxiv.org/abs/2206.07571
+# - also https://inria.hal.science/hal-04206478/document
 # TODO: example notebook featuring this code
 class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex.
