@@ -626,31 +626,39 @@ class HGPCode(CSSCode):
         # start with a cartesian products of the input graphs
         graph_product = nx.cartesian_product(graph_a, graph_b)
 
+        # get the sector of a node in the graph product
+        def get_sector(node_a: Node, node_b: Node) -> tuple[int, int]:
+            return int(not node_b.is_data), int(not node_a.is_data)
+
         # fix edge orientation, and tag each edge with a QuditOperator
         graph = nx.DiGraph()
         for node_fst, node_snd, data in graph_product.edges(data=True):
-            # determine which node is a check node vs. a qudit node
-            if node_fst[0].is_data == node_fst[1].is_data:
-                # the first node is in the (0, 0) or (1, 1) sector --> a data node
-                node_qudit, node_check = node_fst, node_snd
+            # identify the sectors of two nodes
+            sector_fst = get_sector(*node_fst)
+            sector_snd = get_sector(*node_snd)
+
+            # identify data-qudit vs. check nodes, and their sectors
+            if sector_fst in [(0, 0), (1, 1)]:
+                node_qudit, sector_qudit = node_fst, sector_fst
+                node_check, sector_check = node_snd, sector_snd
             else:
-                # the first node is in the (0, 1) or (1, 0) sector --> a check node
-                node_check, node_qudit = node_fst, node_snd
-            graph.add_edge(node_check, node_qudit)
+                node_check, sector_check = node_fst, sector_fst
+                node_qudit, sector_qudit = node_snd, sector_snd
 
             # this edge is X-type iff the check qudit is in the (0, 1) sector
             op = QuditOperator((data.get("val", 1), 0))
-            if node_check[0].is_data:
+            if sector_check == (1, 0):
                 op = ~op
 
             # for a conjugated code, flip X <--> Z operators in the (1, 1) sector
-            if conjugate and not node_qudit[0].is_data:
+            if conjugate and sector_qudit == (1, 1):
                 op = ~op
 
             # account for the minus sign in the (1, 1) sector of the Z-type subcode
-            if not node_qudit[0].is_data and not node_check[0].is_data:
+            if sector_qudit == (1, 1):
                 op = -op
 
+            graph.add_edge(node_check, node_qudit)
             graph[node_check][node_qudit][QuditOperator] = op
 
         # relabel nodes, from (node_a, node_b) --> node_combined
