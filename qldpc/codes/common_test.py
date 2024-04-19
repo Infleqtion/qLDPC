@@ -253,7 +253,7 @@ def test_CSS_ops() -> None:
     assert not np.any(code.matrix_x @ logicals_z.T)
     assert code.get_logical_ops() is code._logical_ops
 
-    # check that the logical operators agree with those computed by the QuditCode method
+    # verify consistency with QuditCode.get_logical_ops
     full_logicals = codes.QuditCode.get_logical_ops(code)
     full_logicals_x, full_logicals_z = full_logicals[0], full_logicals[1]
     assert np.array_equal(full_logicals_x, np.hstack([logicals_x, np.zeros_like(logicals_x)]))
