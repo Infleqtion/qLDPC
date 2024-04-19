@@ -41,7 +41,7 @@ def get_quasi_cyclic_code_params(
     num_trials: int,
     *,
     silent: bool = False,
-) -> tuple[int, int, int | None] | None:
+) -> tuple[int, int, int | None]:
     """Compute the code parameters of a quasi-cyclic code.
 
     If the code dimension (number of encoded logical qubits) is below some cutoff, return None.
