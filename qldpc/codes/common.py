@@ -1253,9 +1253,7 @@ def _fix_decoder_args_for_nonbinary_fields(
             decoder_args["lower_bound_row"] = bound_index
 
 
-def _row_reduce(
-    matrix: galois.FieldArray,
-) -> tuple[npt.NDArray[np.int_], list[int]]:
+def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[int]]:
     """Perform Gaussian elimination on a matrix.
 
     Returns:
