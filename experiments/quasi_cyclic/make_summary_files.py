@@ -60,10 +60,13 @@ for key in cache.iterkeys():
     if num_trials != NUM_TRIALS:
         continue
 
-    # retrieve code parameters and compute figure of merit
+    # retrieve code parameters
     nn, kk, dd = cache[key]
-    merit = kk * dd**2 / nn
+    if dd is None:
+        continue
 
+    # only report codes that outperform the surface code
+    merit = kk * dd**2 / nn
     if merit > 1:
         code_data = (*dims, *exponents, nn, kk, dd, merit)
         data.append(code_data)
