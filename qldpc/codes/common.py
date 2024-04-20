@@ -800,7 +800,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] | None = (),
-        promise_balanced_codes: bool = False,
+        promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
         skip_validation: bool = False,
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
