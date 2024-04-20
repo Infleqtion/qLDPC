@@ -74,7 +74,7 @@ def run_and_save(
     silent: bool = False,
 ) -> None:
     """Compute and save quasi-cyclic code parameters."""
-    if not silent and not any(exponents[1:]):
+    if not silent and not any(exponents[2:]):
         print(dims, exponents)
 
     key = (dims, exponents, num_trials)
@@ -96,7 +96,7 @@ def run_and_save(
         print("", dims, exponents, (nn, kk, dd), f"{merit:.2f}")
 
 
-def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
+def redundant_or_trivial(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
     """Is the given quasi-cyclic code redundant?"""
     dim_x, dim_y = dims
     ax, ay, bx, by = exponents
@@ -104,6 +104,8 @@ def redundant(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bo
         (dim_x, ax, ay) < (dim_y, by, bx)  # enforce torus width >= height
         or (ax, bx) > ((1 - ax) % dim_x, -bx % dim_x)  # reflection about x axis
         or (by, ay) > ((1 - by) % dim_y, -ay % dim_y)  # reflection about y axis
+        or (ax, ay) in [(0, 0), (1, 0)]  # "trivial" polynomial
+        or (bx, by) in [(0, 0), (0, 1)]  # "trivial" polynomial
     )
 
 
@@ -121,5 +123,5 @@ if __name__ == "__main__":
             for exponents in itertools.product(
                 range(dim_x), range(dim_y), range(dim_x), range(dim_y)
             ):
-                if not redundant(dims, exponents):
+                if not redundant_or_trivial(dims, exponents):
                     executor.submit(run_and_save, dims, exponents, MIN_RATE, NUM_TRIALS, cache)

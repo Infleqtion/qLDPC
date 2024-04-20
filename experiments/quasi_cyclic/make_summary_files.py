@@ -60,6 +60,9 @@ for key in cache.iterkeys():
     if num_trials != NUM_TRIALS:
         continue
 
+    if not any(exponents[1:]):
+        print(dims, exponents)
+
     # retrieve code parameters
     nn, kk, dd = cache[key]
     if dd is None:
