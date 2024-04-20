@@ -74,7 +74,7 @@ def run_and_save(
     silent: bool = False,
 ) -> None:
     """Compute and save quasi-cyclic code parameters."""
-    if not silent and not any(exponents[2:]):
+    if not silent and exponents[2:] == (1, 0):
         print(dims, exponents)
 
     key = (dims, exponents, num_trials)
