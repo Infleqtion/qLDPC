@@ -891,9 +891,9 @@ class CSSCode(QuditCode):
     @property
     def dimension(self) -> int:
         """Number of logical qudits encoded by this code."""
-        if self._balanced_codes:
-            return self.num_qudits - 2 * self.code_x.rank
-        return self.num_qudits - self.code_x.rank - self.code_z.rank
+        rank_x = self.code_x.rank
+        rank_z = rank_x if self._balanced_codes else self.code_z.rank
+        return self.num_qudits - rank_x - rank_z
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
