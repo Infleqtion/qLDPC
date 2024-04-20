@@ -23,7 +23,6 @@ import itertools
 import os
 from collections.abc import Callable, Collection, Sequence
 
-import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
@@ -31,7 +30,6 @@ import sympy
 import sympy.combinatorics as comb
 
 from qldpc import abstract
-from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import (
     PAULIS_XZ,
     CayleyComplex,
@@ -89,9 +87,8 @@ class GBCode(CSSCode):
         promise_balanced_distance: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        matrix_a = code_field(matrix_a)
-        matrix_b = code_field(matrix_b)
+        matrix_a = ClassicalCode(matrix_a, field).matrix
+        matrix_b = ClassicalCode(matrix_b, field).matrix
         if not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this GBCode are incompatible")
 
@@ -186,8 +183,8 @@ class QCCode(GBCode):
         )
 
         # build defining matrices of a generalized bicycle code
-        matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
-        matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
+        matrix_a = self.eval(self.poly_a).lift()
+        matrix_b = self.eval(self.poly_b).lift()
         GBCode.__init__(
             self,
             matrix_a,
