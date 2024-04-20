@@ -85,11 +85,12 @@ class GBCode(CSSCode):
         *,
         conjugate: slice | Sequence[int] = (),
         promise_balanced_codes: bool = False,
+        skip_validation: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
         matrix_a = ClassicalCode(matrix_a, field).matrix
         matrix_b = ClassicalCode(matrix_b, field).matrix
-        if not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
+        if not skip_validation and not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this GBCode are incompatible")
 
         matrix_x = np.block([matrix_a, matrix_b])
@@ -192,6 +193,7 @@ class QCCode(GBCode):
             field,
             conjugate=qudits_to_conjugate,
             promise_balanced_codes=True,
+            skip_validation=True,
         )
 
     def eval(
