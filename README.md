@@ -36,7 +36,7 @@ Notable features include:
 - `abstract.py`: module for basic abstract algebra (groups, algebras, and representations thereof).
   - Various pre-defined groups (mostly borrowed from [SymPy](https://docs.sympy.org/latest/modules/combinatorics/named_groups.html)).
   - Communication with the [GAP](https://www.gap-system.org/) computer algebra system and [GroupNames.org](https://people.maths.bris.ac.uk/~matyd/GroupNames/) for constructing [even more groups](https://docs.gap-system.org/doc/ref/chap50.html).
-- `objects.py`: module for constructing and helper objects such as Cayley complexes and chain complexes, which are instrumental for the construction of various quantum codes.
+- `objects.py`: module for constructing helper objects such as Cayley complexes and chain complexes, which are instrumental for the construction of various quantum codes.
 
 ## 🤔 Questions and issues
 
