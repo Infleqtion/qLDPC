@@ -51,6 +51,7 @@ fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f"
 ##################################################
 
 data: list[tuple[int | float, ...]] = []
+last_print_val = -1
 
 # iterate over all entries in the cache
 cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
@@ -60,7 +61,8 @@ for key in cache.iterkeys():
     if num_trials != NUM_TRIALS:
         continue
 
-    if not any(exponents[1:]):
+    if (print_val := exponents[0]) != last_print_val:
+        last_print_val = print_val
         print(dims, exponents)
 
     # retrieve code parameters

@@ -27,7 +27,7 @@ import qldpc
 import qldpc.cache
 
 MIN_ORDER = 3  # minimum cyclic group order
-MIN_RATE = 1 / 25  # ignore codes with lower encoding rates
+MIN_RATE = 1 / 36  # ignore codes with lower encoding rates
 NUM_TRIALS = 1000  # for code distance calculations
 
 CACHE_DIR = os.path.dirname(__file__)
