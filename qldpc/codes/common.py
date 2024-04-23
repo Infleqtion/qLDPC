@@ -285,8 +285,6 @@ class ClassicalCode(AbstractCode):
 
         See https://arxiv.org/abs/2206.09973
         """
-        assert code_a.field is code_b.field
-
         code = ClassicalCode.tensor_product(code_a, code_b)
         estimate = np.inf
         for vector in itertools.product(
