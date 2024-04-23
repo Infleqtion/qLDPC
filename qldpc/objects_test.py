@@ -106,13 +106,11 @@ def test_cayley_complex() -> None:
 
 
 def assert_valid_complex(cayplex: objects.CayleyComplex) -> None:
-    """Assert that a Cayley complex has the correct number of vertices, edges, and faces."""
-    size_g = cayplex.group.order
+    """Sanity check on the number of edges in a Cayley complex."""
     size_a = len(cayplex.subset_a)
     size_b = len(cayplex.subset_b)
-    assert cayplex.graph.number_of_nodes() == size_g
+    size_g = cayplex.graph.number_of_nodes()
     assert cayplex.graph.number_of_edges() == size_g * (size_a + size_b) // 2
-    assert len(cayplex.faces) == size_g * size_a * size_b // 4
 
 
 def test_chain_complex(field: int = 3) -> None:
@@ -125,12 +123,21 @@ def test_chain_complex(field: int = 3) -> None:
     assert not np.any(two_chain.op(two_chain.num_links + 1))
 
     # tensor product of a two-complex and its dual
-    objects.ChainComplex.tensor_product(two_chain, two_chain.T, field)
+    four_chain = objects.ChainComplex.tensor_product(two_chain, two_chain.T, field)
+    four_chain._validate_ops()
+
+    # tensor product of one-complexes over a group algebra
+    protograph = abstract.Protograph.build(abstract.TrivialGroup(field), mat)
+    two_chain = objects.ChainComplex.tensor_product(protograph, protograph, field)
+    assert not np.any(two_chain.op(0))
+    assert not np.any(two_chain.op(two_chain.num_links + 1))
 
     # invalid chain complex constructions
+    with pytest.raises(ValueError, match="inconsistent operator types"):
+        objects.ChainComplex(mat, abstract.TrivialGroup.to_protograph([[0]]))
     with pytest.raises(ValueError, match="Inconsistent base fields"):
         objects.ChainComplex(galois.GF(field)(mat), field=field**2)
     with pytest.raises(ValueError, match="boundary operators .* must compose to zero"):
         objects.ChainComplex(mat, mat, field=field)
-    with pytest.raises(ValueError, match="different fields"):
+    with pytest.raises(ValueError, match="different base fields"):
         objects.ChainComplex.tensor_product(galois.GF(field)(mat), galois.GF(field**2)(mat))

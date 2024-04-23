@@ -29,12 +29,13 @@ def test_permutation_group() -> None:
     gens = [abstract.GroupMember(seq) for seq in ([0, 1, 2], [1, 2, 0], [2, 0, 1])]
     assert gens[0] < gens[1] < gens[2]
 
-    group = abstract.Group.from_generators(*gens)
+    group = abstract.Group(*gens)
     assert all(perm in group for perm in gens)
     assert len(group.generators) == 2
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
     assert group.to_sympy() == group._group
+    assert hash(group) == hash(group.to_sympy())
 
     assert abstract.Group.from_generating_mats([[1]]) == abstract.CyclicGroup(1)
 
@@ -53,6 +54,7 @@ def test_trivial_group() -> None:
     assert group.random() == group.identity
     assert np.array_equal(group.lift(group.identity), np.array(1, ndmin=2))
     assert group == abstract.Group.from_generating_mats()
+    assert str(group) == "TrivialGroup"
 
 
 def test_lift() -> None:
@@ -106,6 +108,7 @@ def test_algebra() -> None:
     group = abstract.TrivialGroup(field=3)
     zero = abstract.Element(group)
     one = abstract.Element(group).one()
+    assert bool(one) and not bool(zero)
     assert zero.group == group
     assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
     assert group.identity * one == one * group.identity == one**2 == one
@@ -139,7 +142,7 @@ def test_transpose() -> None:
         assert element.T.T == element
 
     x0, x1, x2, x3 = group.generate()
-    matrix = [[x0, 0, x1], [x2, 0, x3]]
+    matrix = [[x0, 0, x1], [x2, 0, abstract.Element(group, x3)]]
     protograph = abstract.Protograph.build(group, matrix)
     assert np.array_equal(protograph.T.T, protograph)
 
@@ -194,7 +197,7 @@ def test_small_group() -> None:
     # invalid group index
     with (
         pytest.raises(ValueError, match="Index for SmallGroup"),
-        unittest.mock.patch("qldpc.named_groups.get_small_group_number", return_value=index),
+        unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=index),
     ):
         abstract.SmallGroup(order, 0)
 
@@ -202,7 +205,15 @@ def test_small_group() -> None:
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
     with (
         unittest.mock.patch("qldpc.abstract.SmallGroup.number", return_value=index),
-        unittest.mock.patch("qldpc.named_groups.get_generators", return_value=generators),
+        unittest.mock.patch("qldpc.external.groups.get_generators", return_value=generators),
     ):
-        assert abstract.SmallGroup(order, index).generators == desired_group.generators
+        group = abstract.SmallGroup(order, index)
+        assert group.generators == desired_group.generators
         assert list(abstract.SmallGroup.generator(order)) == [desired_group]
+
+        # retrieve group structure
+        structure = "test"
+        with unittest.mock.patch(
+            "qldpc.external.groups.get_small_group_structure", return_value=structure
+        ):
+            assert group.structure == structure
