@@ -280,20 +280,35 @@ class ClassicalCode(AbstractCode):
         return ~ClassicalCode(np.kron(gen_a, gen_b))
 
     @classmethod
-    def get_robustness_estimate(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> float:
+    def get_robustness(
+        cls,
+        code_a: ClassicalCode,
+        code_b: ClassicalCode,
+        *,
+        bound: int | bool | None = None,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
+        **decoder_args: object,
+    ) -> float:
         """Estimate the robustness of the tensor product C_a ⊗ C_b of two codes C_a and C_b.
 
         See https://arxiv.org/abs/2206.09973
         """
         code = ClassicalCode.tensor_product(code_a, code_b)
+
+        def get_distance_a(vector: npt.NDArray[np.int_]) -> int | float:
+            return code_a.get_distance(bound=bound, vector=vector, **decoder_args)
+
+        def get_distance_b(vector: npt.NDArray[np.int_]) -> int | float:
+            return code_b.get_distance(bound=bound, vector=vector, **decoder_args)
+
         estimate = np.inf
         for vector in itertools.product(
             code.field.elements, repeat=code_a.num_bits * code_b.num_bits
         ):
             matrix = code.field(vector).reshape((code_a.num_bits, code_b.num_bits))
-            dist_A = np.sum(np.apply_along_axis(code_a.get_distance, axis=1, arr=matrix))
-            dist_B = np.sum(np.apply_along_axis(code_b.get_distance, axis=0, arr=matrix))
-            dist_AB = code.get_distance(vector=vector)
+            dist_A = np.sum(np.apply_along_axis(get_distance_a, axis=1, arr=matrix))
+            dist_B = np.sum(np.apply_along_axis(get_distance_b, axis=0, arr=matrix))
+            dist_AB = code.get_distance(bound=bound, vector=vector, **decoder_args)
             ratio = (dist_A + dist_B) / (2 * dist_AB)
             estimate = min(estimate, ratio)
 
