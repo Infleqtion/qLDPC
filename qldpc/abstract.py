@@ -380,12 +380,12 @@ class Group:
 
         singles = set()  # group members equal to their own inverse
         doubles = set()  # pairs of group members and their inverses
-        while True:  # sounds dangerous, but bear with me
+        while True:  # sounds dangerous, but bear with me...
             member = self.random()
             if exclude_identity and member == self.identity:
                 continue  # pragma: no cover
 
-            # always add group members we find
+            # always add group members and their inverses
             if member == ~member:
                 singles.add(member)
             else:
@@ -396,11 +396,11 @@ class Group:
             num_extra = len(singles) + len(doubles) - size
 
             if not num_extra:
-                # if we have the right number of group members, we are done
+                # if we have the correct number of group members, we are done
                 return singles | doubles
 
             elif num_extra > 0 and len(singles):
-                # we have overshot, so throw away elements to get down to the right size
+                # we have overshot, so throw away members to get down to the right size
                 for _ in range(num_extra // 2):
                     member = sorted(doubles)[sympy.core.random.randint(0, len(doubles) - 1)]
                     doubles.remove(member)
@@ -825,6 +825,11 @@ class SmallGroup(Group):
         super()._init_from_group(Group.from_name(name))
         self.index = index
 
+    @functools.cached_property
+    def structure(self) -> str:
+        """A description of the structure of this group."""
+        return self.get_structure(self.order, self.index)
+
     @classmethod
     def number(cls, order: int) -> int:
         """The number of groups of a given order."""
@@ -835,6 +840,11 @@ class SmallGroup(Group):
         """Iterator over all groups of a given order."""
         for ii in range(SmallGroup.number(order)):
             yield SmallGroup(order, ii + 1)
+
+    @classmethod
+    def get_structure(cls, order: int, index: int) -> str:
+        """Retrieve a description of the structure of a group."""
+        return external.groups.get_small_group_structure(order, index)
 
 
 ################################################################################

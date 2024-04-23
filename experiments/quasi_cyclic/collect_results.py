@@ -18,15 +18,12 @@
 import os
 
 import numpy as np
-from run_search import CACHE_DIR, CACHE_NAME, MAX_COMMUNICATION_DISTANCE, NUM_TRIALS
+from run_search import CACHE_DIR, CACHE_NAME, NUM_TRIALS
 
 import qldpc.cache
 
-# Euclidean communication distance "cutoffs" by which to organize results
-comm_cutoffs = [5, 8, 10]
-
 # directory in which to save results
-save_dir = os.path.join(os.path.dirname(__file__), "codes")
+save_dir = os.path.join(os.path.dirname(__file__))
 
 # data file headers
 headers = [
@@ -41,23 +38,20 @@ headers = [
     "    d = code distance (minimal weight of a nontrivial logical operator)",
     "code distance is estimated by the method of arXiv:2308.07915,"
     + f" minimizing over {NUM_TRIALS} trials",
-    "also included:",
-    "    D = (Euclidean) communication distance required for a 'folded toric layout' of the code",
-    "    r = k d^2 / n",
+    "the last column reports r = k d^2 / n",
     "topological 2D codes such as the toric code strictly satisfy r <= 1",
     "we only keep track of codes with r > 1",
     "",
-    "Rx, Ry, ax, ay, bx, by, n, k, d, D, r",
+    "Rx, Ry, ax, ay, bx, by, n, k, d, r",
 ]
 
 # data format
-fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f, %.3f"
+fmt = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f"
 
 ##################################################
 
-comm_cutoffs = sorted([cutoff for cutoff in comm_cutoffs if cutoff <= MAX_COMMUNICATION_DISTANCE])
-data_groups: list[list[tuple[int | float, ...]]] = [[] for _ in range(len(comm_cutoffs))]
-data_all: list[tuple[int | float, ...]] = []
+data: list[tuple[int | float, ...]] = []
+last_print_val = -1
 
 # iterate over all entries in the cache
 cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
@@ -67,39 +61,25 @@ for key in cache.iterkeys():
     if num_trials != NUM_TRIALS:
         continue
 
+    if (print_val := exponents[0]) != last_print_val:
+        last_print_val = print_val
+        print(dims, exponents)
+
     # retrieve code parameters
-    nn, kk, dd, comm_dist = cache[key]
-
-    if comm_dist > comm_cutoffs[-1] or dd is None:
-        # we don't care about this code
+    nn, kk, dd = cache[key]
+    if dd is None:
         continue
 
-    # figure of merit relative to the surface code
+    # only report codes that outperform the surface code
     merit = kk * dd**2 / nn
-    if merit <= 1:
-        # this code doesn't even beat the surface code, so we don't care about it
-        continue
-
-    # add a summary of this code to the appropriate group of data
-    code = (*dims, *exponents, nn, kk, dd, comm_dist, merit)
-    for cutoff, data in zip(comm_cutoffs, data_groups):
-        if comm_dist <= cutoff:
-            data.append(code)
-            data_all.append(code)
-            break
+    if merit > 1:
+        code_data = (*dims, *exponents, nn, kk, dd, merit)
+        data.append(code_data)
 
 ##################################################
 
+# save codes to a data file
 os.makedirs(save_dir, exist_ok=True)
+path = os.path.join(save_dir, "codes.csv")
 header = "\n".join(headers)
-
-# save data groups to files
-for last_comm, comm_dist, data in zip([0] + comm_cutoffs, comm_cutoffs, data_groups):
-    file = f"codes_D{last_comm}-{comm_dist}.csv"
-    path = os.path.join(save_dir, file)
-    np.savetxt(path, data, header=header, fmt=fmt)
-    last_comm = comm_dist
-
-# save all data
-path = os.path.join(save_dir, "codes_all.csv")
-np.savetxt(path, data_all, header=header, fmt=fmt)
+np.savetxt(path, data, header=header, fmt=fmt)
