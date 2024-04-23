@@ -676,8 +676,8 @@ class QuditCode(AbstractCode):
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
         qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
-        operators for each logical qubit (indexed by the second axis).  The last axis is "doubled"
-        to indicate whether a physical qudit is addressed by a physical X-type or Z-type operator.
+        operators.  The last axis is "doubled" to indicate whether a physical qudit is addressed by
+        a physical X-type or Z-type operator.
 
         Specifically, `logical_ops[0, :, :]` are "logical X-type" operators, which address at least
         one physical qudit by a physical X-type operator, and may additionally address physical
@@ -791,7 +791,7 @@ class CSSCode(QuditCode):
     _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
-    _has_balanced_distance: bool
+    _balanced_codes: bool
 
     def __init__(
         self,
@@ -800,7 +800,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] | None = (),
-        promise_balanced_distance: bool = False,
+        promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
         skip_validation: bool = False,
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
@@ -818,7 +818,7 @@ class CSSCode(QuditCode):
             self._validate_subcodes()
 
         self._conjugated = conjugate or ()
-        self._has_balanced_distance = promise_balanced_distance or self.code_x == self.code_z
+        self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
 
     def _validate_subcodes(self) -> None:
         """Is this a valid CSS code?"""
@@ -891,7 +891,9 @@ class CSSCode(QuditCode):
     @property
     def dimension(self) -> int:
         """Number of logical qudits encoded by this code."""
-        return self.code_x.dimension + self.code_z.dimension - self.num_qudits
+        rank_x = self.code_x.rank
+        rank_z = rank_x if self._balanced_codes else self.code_z.rank
+        return self.num_qudits - rank_x - rank_z
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
@@ -976,9 +978,9 @@ class CSSCode(QuditCode):
         distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
         # save the exact distance and return
-        if pauli == Pauli.X or self._has_balanced_distance:
+        if pauli == Pauli.X or self._balanced_codes:
             self._exact_distance_x = distance
-        if pauli == Pauli.Z or self._has_balanced_distance:
+        if pauli == Pauli.Z or self._balanced_codes:
             self._exact_distance_z = distance
         return distance
 

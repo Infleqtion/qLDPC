@@ -23,7 +23,6 @@ import itertools
 import os
 from collections.abc import Callable, Collection, Sequence
 
-import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
@@ -31,7 +30,6 @@ import sympy
 import sympy.combinatorics as comb
 
 from qldpc import abstract
-from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import (
     PAULIS_XZ,
     CayleyComplex,
@@ -86,13 +84,13 @@ class GBCode(CSSCode):
         field: int | None = None,
         *,
         conjugate: slice | Sequence[int] = (),
-        promise_balanced_distance: bool = False,
+        promise_balanced_codes: bool = False,
+        skip_validation: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
-        code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        matrix_a = code_field(matrix_a)
-        matrix_b = code_field(matrix_b)
-        if not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
+        matrix_a = ClassicalCode(matrix_a, field).matrix
+        matrix_b = ClassicalCode(matrix_b, field).matrix
+        if not skip_validation and not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this GBCode are incompatible")
 
         matrix_x = np.block([matrix_a, matrix_b])
@@ -103,7 +101,7 @@ class GBCode(CSSCode):
             matrix_z,
             field,
             conjugate=conjugate,
-            promise_balanced_distance=promise_balanced_distance,
+            promise_balanced_codes=promise_balanced_codes,
             skip_validation=True,
         )
 
@@ -186,15 +184,16 @@ class QCCode(GBCode):
         )
 
         # build defining matrices of a generalized bicycle code
-        matrix_a = self.eval(self.poly_a).lift().view(np.ndarray)
-        matrix_b = self.eval(self.poly_b).lift().view(np.ndarray)
+        matrix_a = self.eval(self.poly_a).lift()
+        matrix_b = self.eval(self.poly_b).lift()
         GBCode.__init__(
             self,
             matrix_a,
             matrix_b,
             field,
             conjugate=qudits_to_conjugate,
-            promise_balanced_distance=True,
+            promise_balanced_codes=True,
+            skip_validation=True,
         )
 
     def eval(
@@ -760,9 +759,9 @@ class LPCode(CSSCode):
 # quantum Tanner code
 
 
-# TODO: investigate construction in
-# https://github.com/errorcorrectionzoo/eczoo_data/files/9210173/rotated.pdf
-# see also Section 7 of https://arxiv.org/abs/2206.07571
+# TODO: investigate construction from lifted product codes
+# - see Section 7 of https://arxiv.org/abs/2206.07571
+# - also https://inria.hal.science/hal-04206478/document
 # TODO: example notebook featuring this code
 class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex.
