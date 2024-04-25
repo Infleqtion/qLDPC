@@ -95,7 +95,7 @@ def test_cyclic_codes() -> None:
     assert not code.toric_layouts
 
     # codes with more than 2 symbols are unsupported
-    with pytest.raises(ValueError, match="not supported"):
+    with pytest.raises(ValueError, match="cannot have more than 2 symbols"):
         codes.BBCode({}, poly_a, x + y + z)
 
     # fail to match cyclic group orders to free variables
