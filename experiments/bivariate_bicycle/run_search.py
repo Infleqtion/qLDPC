@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Script to perform a brute-force search for quasi-cyclic codes
+"""Script to perform a brute-force search for bivariate bicycle codes
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -42,7 +42,7 @@ def get_quasi_cyclic_code_params(
     *,
     silent: bool = False,
 ) -> tuple[int, int, int | None]:
-    """Compute the code parameters of a quasi-cyclic code.
+    """Compute the code parameters of a bivariate bicycle code.
 
     If the code dimension (number of encoded logical qubits) is below some cutoff, return None.
     """
@@ -50,7 +50,7 @@ def get_quasi_cyclic_code_params(
     ax, ay, bx, by = exponents
     poly_a = 1 + x + x**ax * y**ay
     poly_b = 1 + y + x**bx * y**by
-    code = qldpc.codes.QCCode(dims, poly_a, poly_b)
+    code = qldpc.codes.BBCode(dims, poly_a, poly_b)
 
     if code.dimension < code.num_qubits * min_rate:
         return code.num_qubits, code.dimension, None
@@ -73,7 +73,7 @@ def run_and_save(
     *,
     silent: bool = False,
 ) -> None:
-    """Compute and save quasi-cyclic code parameters."""
+    """Compute and save bivariate bicycle code parameters."""
     if not silent and exponents[2:] == (1, 0):
         print(dims, exponents)
 
@@ -97,7 +97,7 @@ def run_and_save(
 
 
 def redundant_or_trivial(dims: tuple[int, int], exponents: tuple[int, int, int, int]) -> bool:
-    """Is the given quasi-cyclic code redundant?"""
+    """Is the given bivariate bicycle code redundant?"""
     dim_x, dim_y = dims
     ax, ay, bx, by = exponents
     return (
