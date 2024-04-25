@@ -61,7 +61,7 @@ class SteaneCode(CSSCode):
 
 
 ################################################################################
-# bicycle and quasi-cyclic codes
+# bicycle codes
 
 
 class GBCode(CSSCode):
@@ -111,10 +111,10 @@ QuasiCyclicPlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
 
 
 # TODO: example notebook featuring this code
-class QCCode(GBCode):
-    """Quasi-cyclic (QC) codes from arXiv:2308.07915.
+class BBCode(GBCode):
+    """Bivariate bicycle codes from arXiv:2308.07915.
 
-    A quasi-cyclic code is a CSS code with subcode parity check matrices
+    A bivariate bicycle code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T],
     where A = A_{ij} x^i y^j and B = B_{ij} x^i y^j are bivariate polynomials.  Here:
@@ -122,14 +122,14 @@ class QCCode(GBCode):
     - x generates a group of order R_x, and
     - y generates a group of order R_y.
 
-    A quasi-cyclic code is defined by...
+    A bivariate bicycle code is defined by...
     [1] two cyclic group orders, and
     [2] two sympy polynomials in two variables.
     By default, group orders are associated in lexicographic order with free variables of the
     polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
     """
 
-    _min_symbols: int = 2
+    _num_symbols = 2
 
     def __init__(
         self,
@@ -140,15 +140,15 @@ class QCCode(GBCode):
         *,
         conjugate: bool = False,
     ) -> None:
-        """Construct a quasi-cyclic code."""
+        """Construct a bivariate bicycle code."""
         self.poly_a = sympy.Poly(poly_a)
         self.poly_b = sympy.Poly(poly_b)
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) > 2:
+        if len(symbols) > self._num_symbols:
             raise ValueError(
-                f"Quasi-cyclic codes with more than {self._min_symbols} symbols are not supported"
+                f"Bivariate bicycle codes cannot have more than {self._num_symbols} symbols"
             )
         if len(orders) < len(symbols) or (
             isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
@@ -165,7 +165,7 @@ class QCCode(GBCode):
                 symbol_to_order[symbol] = order
 
         # enforce a minimum number of symbols by adding placeholders if necessary
-        while len(symbol_to_order) < self._min_symbols:
+        while len(symbol_to_order) < self._num_symbols:
             unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
             symbol_to_order[unique_symbol] = 1
 
@@ -451,7 +451,7 @@ class QCCode(GBCode):
 
         # build arrays that map plaquette coordinates to qubit coordinates for each qubit sector
         qubit_coords = {
-            sector: QCCode.get_qubit_coordinate_maps(sector, torus_shape, open_boundaries)
+            sector: BBCode.get_qubit_coordinate_maps(sector, torus_shape, open_boundaries)
             for sector in [0, 1] + PAULIS_XZ
         }
 

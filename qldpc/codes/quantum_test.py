@@ -45,7 +45,7 @@ def test_GB_code_error() -> None:
 
 
 def test_cyclic_codes() -> None:
-    """Quasi-cyclic codes from arXiv:2308.07915 and arXiv:2311.16980."""
+    """Bivariate bicycle codes from arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y, z
 
     dims: tuple[int, int] | dict[sympy.Symbol, int]
@@ -54,7 +54,7 @@ def test_cyclic_codes() -> None:
     dims = (12, 4)
     poly_a = 1 + y + x * y + x**9
     poly_b = 1 + x**2 + x**7 + x**9 * y**2
-    code = codes.QCCode(dims, poly_a, poly_b)
+    code = codes.BBCode(dims, poly_a, poly_b)
     assert code.num_qudits == 96
     assert code.dimension == 10
     assert code.get_weight() == 8
@@ -63,7 +63,7 @@ def test_cyclic_codes() -> None:
     dims = {x: 12, y: 6}
     poly_a = x**3 + y + y**2
     poly_b = y**3 + x + x**2
-    code = codes.QCCode(dims, poly_a, poly_b)
+    code = codes.BBCode(dims, poly_a, poly_b)
     assert code.num_qudits == 144
     assert code.dimension == 12
     assert code.get_weight() == 6
@@ -84,23 +84,23 @@ def test_cyclic_codes() -> None:
     dims = (36, 2)
     poly_a = 1 + x**9 + x**28 + x**31
     poly_b = 1 + x + x**21 + x**34
-    code = codes.QCCode(dims, poly_a, poly_b)
+    code = codes.BBCode(dims, poly_a, poly_b)
     assert code.orders == (dims[0], 1)
 
     # check a case with no toric mappings
     dims = (6, 6)
     poly_a = 1 + y + y**2
     poly_b = y**3 + x**2 + x**4
-    code = codes.QCCode(dims, poly_a, poly_b)
+    code = codes.BBCode(dims, poly_a, poly_b)
     assert not code.toric_layouts
 
     # codes with more than 2 symbols are unsupported
     with pytest.raises(ValueError, match="not supported"):
-        codes.QCCode({}, poly_a, x + y + z)
+        codes.BBCode({}, poly_a, x + y + z)
 
     # fail to match cyclic group orders to free variables
     with pytest.raises(ValueError, match="Could not match"):
-        codes.QCCode({}, poly_a, poly_b)
+        codes.BBCode({}, poly_a, poly_b)
 
 
 @pytest.mark.parametrize("field", [2, 3])

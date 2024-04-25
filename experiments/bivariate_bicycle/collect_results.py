@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Script to save quasi-cyclic code search results to data files
+"""Script to save bivariate bicycle code search results to data files
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -28,7 +28,7 @@ save_dir = os.path.join(os.path.dirname(__file__))
 # data file headers
 headers = [
     "AUTHOR: Michael A. Perlin, 2024",
-    "quasi-cyclic codes of arXiv:2308.07915, with generating polynomials",
+    "bivariate bicycle codes of arXiv:2308.07915, with generating polynomials",
     "    A = 1 + x + x**ax * y**ay",
     "    B = 1 + y + x**bx * y**by",
     "here x and y are generators of cyclic groups with orders Rx and Ry",

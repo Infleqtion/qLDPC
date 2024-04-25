@@ -9,12 +9,12 @@ from .classical import (
 )
 from .common import ClassicalCode, CSSCode, QuditCode
 from .quantum import (
+    BBCode,
     FiveQubitCode,
     GBCode,
     GeneralizedSurfaceCode,
     HGPCode,
     LPCode,
-    QCCode,
     QTCode,
     SteaneCode,
     SurfaceCode,
@@ -22,6 +22,7 @@ from .quantum import (
 )
 
 __all__ = [
+    "BBCode",
     "BCHCode",
     "HammingCode",
     "ReedMullerCode",
@@ -37,7 +38,6 @@ __all__ = [
     "GeneralizedSurfaceCode",
     "HGPCode",
     "LPCode",
-    "QCCode",
     "QTCode",
     "SteaneCode",
     "SurfaceCode",
