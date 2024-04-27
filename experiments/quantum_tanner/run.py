@@ -124,14 +124,10 @@ def plot_ratios(
 # plt.show()
 
 
-# for _, base_code in search.get_base_codes():
-#     selection = data["base_code"] == base_code
-#     if not any(selection):
-#         continue
-#     fig, ax = plot_rates(data[selection], alpha=1)
-#     ax.set_title(base_code)
-#     fig.tight_layout()
-#     plt.show()
+fig, ax = plot_logs(data, alpha=1)
+fig.tight_layout()
+plt.savefig("codes.png", dpi=600)
+exit()
 
 data = data[data["distance"] >= 5]
 data = data[data["dimension"] >= 4]
