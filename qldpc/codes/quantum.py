@@ -106,8 +106,8 @@ class GBCode(CSSCode):
         )
 
 
-# map from a "sector" in {0, 1, X, Z} to a coordinate map (i, j) --> (a, b) as a 4D array
-QuasiCyclicPlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
+# map from a "sector" in {0,1,X,Z} to a 2D coordinate map (i,j) --> (a,b) represented by a 4D array
+BBCodePlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
 
 
 # TODO: example notebook featuring this code
@@ -253,7 +253,7 @@ class BBCode(GBCode):
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     @functools.cached_property
-    def toric_layouts(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
+    def toric_layouts(self) -> Sequence[tuple[BBCodePlaquetteMap, tuple[int, int]]]:
         """Get a list of all toric layouts of this code.
 
         All qubits of this code can be organized into plaquettes of four qubits that look like:
@@ -372,7 +372,7 @@ class BBCode(GBCode):
         )
 
     def get_toric_checks(
-        self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
+        self, plaquette_map: BBCodePlaquetteMap, torus_shape: tuple[int, int]
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Build X-type and Z-type parity check matrices for a toric layout."""
 
@@ -433,7 +433,7 @@ class BBCode(GBCode):
 
     def get_check_shifts(
         self,
-        plaquette_map: QuasiCyclicPlaquetteMap,
+        plaquette_map: BBCodePlaquetteMap,
         torus_shape: tuple[int, int],
         open_boundaries: bool = False,
     ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
