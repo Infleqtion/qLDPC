@@ -72,13 +72,13 @@ def plot_rates(
     kk_nn = data["dimension"].values / data["num_qubits"].values
     ax.scatter(dd, kk_nn, marker=".", color="k", alpha=alpha)
 
-    ax.set_xlim(left=0)
+    ax.set_xscale("log")
     ax.set_ylim(bottom=0)
 
     if refline:
         xlim = ax.get_xlim()
         ylim = ax.get_ylim()
-        dd_vals = np.linspace(*xlim, 200)
+        dd_vals = np.logspace(*map(np.log10, xlim), 200)
         with np.errstate(divide="ignore"):
             kk_nn_vals = 1 / dd_vals**2
         ax.plot(dd_vals, kk_nn_vals, "r", label="$kd^2=n$")
@@ -103,6 +103,8 @@ def plot_ratios(
     dd = data["distance"].values
     rr = data["ratio"].values
     ax.scatter(dd, rr, marker=".", color="k", alpha=alpha)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
 
     if refline:
         xlim = ax.get_xlim()
@@ -124,9 +126,9 @@ def plot_ratios(
 # plt.show()
 
 
-fig, ax = plot_logs(data, alpha=1)
+fig, ax = plot_rates(data, alpha=1)
 fig.tight_layout()
-plt.savefig("codes.png", dpi=600)
+plt.show()
 exit()
 
 data = data[data["distance"] >= 5]
