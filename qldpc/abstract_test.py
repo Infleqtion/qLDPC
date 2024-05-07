@@ -179,15 +179,15 @@ def test_SL(field: int = 3) -> None:
 
 def test_PSL(field: int = 3) -> None:
     """Projective special linear group."""
-    linear_rep=True
-    SL22 = abstract.SL(2, 2, linear_rep=linear_rep)
-    PSL22 = abstract.PSL(2, 2, linear_rep=linear_rep)
-    SL2q = abstract.SL(2, field=field, linear_rep=linear_rep)
-    PSL2q = abstract.PSL(2, field=field, linear_rep=linear_rep)
-    assert abstract.Group(SL22.generators).to_sympy().equals(abstract.Group(PSL22.generators).to_sympy())
-    assert PSL22.dimension == 2
-    assert len(list(abstract.PSL.iter_mats(2, 2))) == PSL22.order
-    assert PSL2q.order == SL2q.order // galois.gcd(2,field-1)
+    for linear_rep in [False, True]:
+        SL22 = abstract.SL(2, 2, linear_rep=linear_rep)
+        PSL22 = abstract.PSL(2, 2, linear_rep=linear_rep)
+        SL2q = abstract.SL(2, field=field, linear_rep=linear_rep)
+        PSL2q = abstract.PSL(2, field=field, linear_rep=linear_rep)
+        assert abstract.Group(SL22.generators).to_sympy().equals(abstract.Group(PSL22.generators).to_sympy())
+        assert PSL22.dimension == 2
+        assert len(list(abstract.PSL.iter_mats(2, 2))) == PSL22.order
+        assert PSL2q.order == SL2q.order // galois.gcd(2,field-1)
 
     #with pytest.raises(ValueError, match="not yet supported"):
     #    abstract.PSL(3, 3)

@@ -958,7 +958,7 @@ class ProjectiveSpecialLinearGroup(Group):
             target_space = [ next(iter(orbit)) for orbit in target_orbits if self.field.Zeros(self.dimension).tobytes() not in orbit ]
             
             generators = []
-            for member in self.get_generator_mats():
+            for member in self.get_SL_generator_mats():
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
                     vec = self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
@@ -987,7 +987,8 @@ class ProjectiveSpecialLinearGroup(Group):
             super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
         else:
-            group = self.from_generating_mats(*self.get_generator_mats())
+            generator_mats = self.get_generator_mats()
+            group = self.from_generating_mats(*generator_mats)
             super()._init_from_group(group)
 
 
@@ -997,8 +998,8 @@ class ProjectiveSpecialLinearGroup(Group):
         return self._dimension
 
   
-    def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
-        """Same generator matrices in the SpecialLinearGroup class."""
+    def get_SL_generator_mats(self) -> tuple[galois.FieldArray, ...]:
+        """Copied from the SpecialLinearGroup class."""
         gen_w = -self.field(np.diag(np.ones(self.dimension - 1, dtype=int), k=-1))
         gen_w[0, -1] = 1
         gen_x = self.field.Identity(self._dimension)
@@ -1009,6 +1010,14 @@ class ProjectiveSpecialLinearGroup(Group):
             gen_x[1, 1] = self.field.primitive_element**-1
             gen_w[0, 0] = -1 * self.field(1)
         return gen_x, gen_w
+
+    def get_generator_mats(self) -> tuple[galois.FieldArray, ...]:
+        """Generators of the n**2 dimensional adjoint representation of PSL(n)"""  
+        gen_SL = list(self.get_SL_generator_mats())
+        gen_PSL = tuple([ np.kron( np.linalg.inv(g), g ) for g in gen_SL ])
+        return gen_PSL
+
+
 
 
     @classmethod
