@@ -948,8 +948,9 @@ class ProjectiveSpecialLinearGroup(Group):
             # elements of the vector space that the generating matrices act on.
 
             #root generates the cyclic subgroup of roots of unity of order 'dimension' of the multiplicative group of self.field.
-            root = self.field.primitive_element ** ((self.field.order-1)//galois.gcd(self.dimension,self.field.order-1))
-            roots = [ root ** k for k in range(self.dimension) ]
+            num_roots = galois.gcd(self.dimension, self.field.order - 1 )
+            root = self.field.primitive_element ** ( ( self.field.order - 1 ) // num_roots )
+            roots = [ root ** k for k in range(num_roots) ]
             
             # PSL acts on the quotient of the target space of SL by roots of unity of order 'dimension'.
             target_elements = itertools.product(range(self.field.order), repeat=self.dimension)
