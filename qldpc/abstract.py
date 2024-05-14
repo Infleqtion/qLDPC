@@ -874,7 +874,7 @@ class SpecialLinearGroup(Group):
 
             # identify how the generators permute elements of the target space
             generators = []
-            for member in self.get_generating_mats():
+            for member in self.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(target_space_size, dtype=int)
                 for index, vec_bytes in enumerate(target_space):
                     next_vec = member @ self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
@@ -902,7 +902,8 @@ class SpecialLinearGroup(Group):
 
         else:
             # represent group members by how they permute elements of the group
-            group = self.from_generating_mats(*self.get_generating_mats())
+            generating_mats = self.get_generating_mats(self.dimension, self.field.order)
+            group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
 
     @property
@@ -911,7 +912,7 @@ class SpecialLinearGroup(Group):
         return self._dimension
 
     @classmethod
-    def _get_generating_mats(
+    def get_generating_mats(
         cls, dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, ...]:
         """Generator matrices for the Special Linear group, based on arXiv:2201.09155."""
@@ -928,21 +929,13 @@ class SpecialLinearGroup(Group):
         return gen_x, gen_w
 
     @classmethod
-    def _iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of SL(dimension, field)."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         for vec in itertools.product(base_field.elements, repeat=dimension**2):
             mat = base_field(np.reshape(vec, (dimension, dimension)))
             if np.linalg.det(mat) == 1:
                 yield mat
-
-    def get_generating_mats(self) -> tuple[galois.FieldArray, ...]:
-        """Generator matrices for this group."""
-        return self._get_generating_mats(self.dimension, self.field.order)
-
-    def iter_mats(self) -> Iterator[galois.FieldArray]:
-        """Iterate over all elements of this group."""
-        yield from self._iter_mats(self.dimension, self.field.order)
 
 
 class ProjectiveSpecialLinearGroup(Group):
@@ -976,7 +969,7 @@ class ProjectiveSpecialLinearGroup(Group):
             ]
 
             generators = []
-            for member in SpecialLinearGroup._get_generating_mats(self.dimension, self.field.order):
+            for member in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
                     vec = self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
@@ -1005,8 +998,8 @@ class ProjectiveSpecialLinearGroup(Group):
             super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
         else:
-            generator_mats = self.get_generating_mats()
-            group = self.from_generating_mats(*generator_mats)
+            generating_mats = self.get_generating_mats(self.dimension, self.field.order)
+            group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
 
     @property
@@ -1014,16 +1007,17 @@ class ProjectiveSpecialLinearGroup(Group):
         """Dimension of the elements of this group."""
         return self._dimension
 
-    def _get_generating_mats(
+    @classmethod
+    def get_generating_mats(
         cls, dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, ...]:
         """Generator matrices of the adjoint representation of PSL."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        generators_SL = SpecialLinearGroup._get_generating_mats(dimension, field)
+        generators_SL = SpecialLinearGroup.get_generating_mats(dimension, field)
         return tuple(base_field(np.kron(np.linalg.inv(gen), gen)) for gen in generators_SL)
 
     @classmethod
-    def _iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of PSL(dimension, field)."""
         field = field or DEFAULT_FIELD_ORDER
         base_field = galois.GF(field)
@@ -1032,19 +1026,11 @@ class ProjectiveSpecialLinearGroup(Group):
         orbits = set(
             [
                 frozenset([(r * mat).tobytes() for r in roots])
-                for mat in SpecialLinearGroup._iter_mats(dimension, field)
+                for mat in SpecialLinearGroup.iter_mats(dimension, field)
             ]
         )
         for orbit in orbits:
             yield base_field(np.frombuffer(next(iter(orbit)), dtype=np.uint8))
-
-    def get_generating_mats(self) -> tuple[galois.FieldArray, ...]:
-        """Generator matrices for this group."""
-        return self._get_generating_mats(self.dimension, self.field.order)
-
-    def iter_mats(self) -> Iterator[galois.FieldArray]:
-        """Iterate over all elements of this group."""
-        yield from self._iter_mats(self.dimension, self.field.order)
 
 
 SL = SpecialLinearGroup
