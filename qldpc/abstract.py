@@ -979,6 +979,7 @@ class ProjectiveSpecialLinearGroup(Group):
                     perm[index] = next_index
                 generators.append(GroupMember(perm))
 
+            # construct a lift identical to that for the linear representation of SL
             def lift(member: GroupMember) -> npt.NDArray[np.int_]:
                 """Lift a group member to a square matrix.
 
