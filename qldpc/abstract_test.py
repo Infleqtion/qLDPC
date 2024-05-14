@@ -170,7 +170,7 @@ def test_SL(field: int = 3) -> None:
         assert np.array_equal(group.lift(gens[0]), mats[0])
         assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
 
-    assert abstract.SL(2,field).order == field*(field**2-1)
+    assert abstract.SL(2, field).order == field * (field**2 - 1)
     assert len(list(abstract.SL.iter_mats(2, 2))) == abstract.SL(2, 2).order
 
     # cover representation with different generators
@@ -184,13 +184,14 @@ def test_PSL(field: int = 3) -> None:
         PSL22 = abstract.PSL(2, 2, linear_rep=linear_rep)
         SL2q = abstract.SL(2, field=field, linear_rep=linear_rep)
         PSL2q = abstract.PSL(2, field=field, linear_rep=linear_rep)
-        assert abstract.Group(SL22.generators).to_sympy().equals(abstract.Group(PSL22.generators).to_sympy())
+        assert (
+            abstract.Group(SL22.generators)
+            .to_sympy()
+            .equals(abstract.Group(PSL22.generators).to_sympy())
+        )
         assert PSL22.dimension == 2
         assert len(list(abstract.PSL.iter_mats(2, 2))) == PSL22.order
-        assert PSL2q.order == SL2q.order // galois.gcd(2,field-1)
-
-    #with pytest.raises(ValueError, match="not yet supported"):
-    #    abstract.PSL(3, 3)
+        assert PSL2q.order == SL2q.order // galois.gcd(2, field - 1)
 
 
 def test_small_group() -> None:
