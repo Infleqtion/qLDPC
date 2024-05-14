@@ -998,6 +998,7 @@ class ProjectiveSpecialLinearGroup(Group):
             super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
         else:
+            # represent group members by how they permute elements of the group
             generating_mats = self.get_generating_mats(self.dimension, self.field.order)
             group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
