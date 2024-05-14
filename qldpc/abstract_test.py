@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import math
 import unittest.mock
 
 import galois
@@ -166,12 +167,12 @@ def test_SL(field: int = 3) -> None:
     for linear_rep in [False, True]:
         group = abstract.SL(2, field=field, linear_rep=linear_rep)
         gens = group.generators
-        mats = group.get_generator_mats()
+        mats = group.get_generating_mats()
         assert np.array_equal(group.lift(gens[0]), mats[0])
         assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
 
     assert abstract.SL(2, field).order == field * (field**2 - 1)
-    assert len(list(abstract.SL.iter_mats(2, 2))) == abstract.SL(2, 2).order
+    assert len(list(abstract.SL._iter_mats(2, 2))) == abstract.SL(2, 2).order
 
     # cover representation with different generators
     assert len(abstract.SL(2, 5).generators) == 2
@@ -185,13 +186,13 @@ def test_PSL(field: int = 3) -> None:
         SL2q = abstract.SL(2, field=field, linear_rep=linear_rep)
         PSL2q = abstract.PSL(2, field=field, linear_rep=linear_rep)
         assert (
-            abstract.Group(SL22.generators)
+            abstract.Group(*SL22.generators)
             .to_sympy()
-            .equals(abstract.Group(PSL22.generators).to_sympy())
+            .equals(abstract.Group(*PSL22.generators).to_sympy())
         )
         assert PSL22.dimension == 2
-        assert len(list(abstract.PSL.iter_mats(2, 2))) == PSL22.order
-        assert PSL2q.order == SL2q.order // galois.gcd(2, field - 1)
+        assert len(list(abstract.PSL._iter_mats(2, 2))) == PSL22.order
+        assert PSL2q.order == SL2q.order // math.gcd(2, field - 1)
 
 
 def test_small_group() -> None:
