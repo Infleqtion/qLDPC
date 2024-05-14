@@ -1017,7 +1017,7 @@ class ProjectiveSpecialLinearGroup(Group):
     def _get_generating_mats(
         cls, dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, ...]:
-        """Generators of the adjoint representation of PSL."""
+        """Generator matrices of the adjoint representation of PSL."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         generators_SL = SpecialLinearGroup._get_generating_mats(dimension, field)
         return tuple(base_field(np.kron(np.linalg.inv(gen), gen)) for gen in generators_SL)
