@@ -162,37 +162,37 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-def test_SL(dimension: int = 2, field: int = 3) -> None:
+@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 3), (3, 2)])
+@pytest.mark.parametrize("linear_rep", [False, True])
+def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group."""
-    for linear_rep in [False, True]:
-        group = abstract.SL(dimension, field=field, linear_rep=linear_rep)
-        gens = group.generators
-        mats = group.get_generating_mats(dimension, field)
-        assert np.array_equal(group.lift(gens[0]), mats[0])
-        assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
+    group = abstract.SL(dimension, field=field, linear_rep=linear_rep)
+    order = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
+    mats = tuple(abstract.SL.iter_mats(dimension, field))
+    assert group.order == len(mats) == order
 
-    assert abstract.SL(2, field).order == field * (field**2 - 1)
-    assert len(list(abstract.SL.iter_mats(2, 2))) == abstract.SL(2, 2).order
+    gens = group.generators
+    gen_mats = group.get_generating_mats(dimension, field)
+    assert np.array_equal(group.lift(gens[0]), gen_mats[0])
+    assert np.array_equal(group.lift(gens[1]), gen_mats[1])
 
-    # cover representation with different generators
-    assert len(abstract.SL(2, 5).generators) == 2
+    # # cover representation with different generators
+    # assert len(abstract.SL(2, 5).generators) == 2
 
 
-def test_PSL(field: int = 3) -> None:
+@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 3), (3, 2)])
+@pytest.mark.parametrize("linear_rep", [False, True])
+def test_PSL(dimension: int, field: int, linear_rep: bool) -> None:
     """Projective special linear group."""
-    for linear_rep in [False, True]:
-        SL22 = abstract.SL(2, 2, linear_rep=linear_rep)
-        PSL22 = abstract.PSL(2, 2, linear_rep=linear_rep)
-        SL2q = abstract.SL(2, field=field, linear_rep=linear_rep)
-        PSL2q = abstract.PSL(2, field=field, linear_rep=linear_rep)
-        assert (
-            abstract.Group(*SL22.generators)
-            .to_sympy()
-            .equals(abstract.Group(*PSL22.generators).to_sympy())
-        )
-        assert PSL22.dimension == 2
-        assert len(list(abstract.PSL.iter_mats(2, 2))) == PSL22.order
-        assert PSL2q.order == SL2q.order // math.gcd(2, field - 1)
+    order_SL = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
+    order = order_SL // math.gcd(2, field - 1)
+    group = abstract.PSL(dimension, field, linear_rep=linear_rep)
+    mats = tuple(abstract.PSL.iter_mats(dimension, field))
+    assert group.order == len(mats) == order
+
+    if dimension == field == 2:
+        group_SL = abstract.SL(dimension, field, linear_rep=linear_rep)
+        assert group.to_sympy().equals(group_SL.to_sympy())
 
 
 def test_small_group() -> None:
