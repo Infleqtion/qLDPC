@@ -866,7 +866,7 @@ class SpecialLinearGroup(Group):
             # Construct a linear representation of this group, in which group elements permute
             # elements of the vector space that the generating matrices act on.
 
-            # identify the target space that group members (as matrices) act on
+            # identify the target space that group members (as matrices) act on: all nonzero vectors
             target_space = [
                 self.field(vec).tobytes()
                 for vec in itertools.product(range(self.field.order), repeat=self.dimension)
@@ -958,8 +958,8 @@ class ProjectiveSpecialLinearGroup(Group):
             primitive_root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
             roots = [primitive_root**kk for kk in range(num_roots)]
 
-            # Identify the target space that group members (as matrices) act on.
-            # The target space is same as for SL, but modded out by roots of unity.
+            # Identify the target space that group members (as matrices) act on:
+            # the space of all nonzero vectors, modded out by roots of unity.
             target_orbits = [
                 frozenset([(root * self.field(vec)).tobytes() for root in roots])
                 for vec in itertools.product(range(self.field.order), repeat=self.dimension)
@@ -967,6 +967,7 @@ class ProjectiveSpecialLinearGroup(Group):
             del target_orbits[0]  # remove the orbit of the zero vector
             target_space = [next(iter(orbit)) for orbit in set(target_orbits)]
 
+            # identify how the generators permute elements of the target space
             generators = []
             for mat in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
