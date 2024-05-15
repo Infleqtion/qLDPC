@@ -959,7 +959,7 @@ class ProjectiveSpecialLinearGroup(Group):
             roots = [primitive_root**kk for kk in range(num_roots)]
 
             # Identify the target space that group members (as matrices) act on:
-            # the space of all nonzero vectors, modded out by roots of unity.
+            # all nonzero vectors, modded out by roots of unity.
             target_orbits = [
                 frozenset([(root * self.field(vec)).tobytes() for root in roots])
                 for vec in itertools.product(range(self.field.order), repeat=self.dimension)
