@@ -969,12 +969,12 @@ class ProjectiveSpecialLinearGroup(Group):
 
             # identify how the generators permute elements of the target space
             generators = []
-            for mat in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
+            for member in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
                     vec = self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
-                    next_orbit = [root * mat @ vec for root in roots]
-                    next_vec = [vec for vec in next_orbit if vec.tobytes() in target_space][0]
+                    next_orbit = [root * member @ vec for root in roots]
+                    next_vec = next((vec for vec in next_orbit if vec.tobytes() in target_space))
                     next_index = target_space.index(next_vec.tobytes())
                     perm[index] = next_index
                 generators.append(GroupMember(perm))
