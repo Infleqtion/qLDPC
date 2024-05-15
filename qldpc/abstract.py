@@ -953,29 +953,26 @@ class ProjectiveSpecialLinearGroup(Group):
             # Construct a linear representation of this group, in which group elements permute
             # elements of the vector space that the generating matrices act on.
 
-            # root generates the cyclic subgroup of roots of unity of order 'dimension' of the multiplicative group of self.field.
+            # identify multiplicative roots of unity
             num_roots = math.gcd(self.dimension, self.field.order - 1)
-            root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
-            roots = [root**k for k in range(num_roots)]
+            base_root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
+            roots = [base_root**kk for kk in range(num_roots)]
 
             # Identify the target space that group members (as matrices) act on.
-            # PSL acts on the quotient of the target space of SL by roots of unity of order 'dimension'.
-            target_elements = itertools.product(range(self.field.order), repeat=self.dimension)
-            target_orbits = set(
-                [frozenset([(r * self.field(t)).tobytes() for r in roots]) for t in target_elements]
-            )
-            target_space = [
-                next(iter(orbit))
-                for orbit in target_orbits
-                if self.field.Zeros(self.dimension).tobytes() not in orbit
+            # The target space is same as for SL, but modded out by roots of unity.
+            target_orbits = [
+                frozenset([(root * self.field(vec)).tobytes() for root in roots])
+                for vec in itertools.product(range(self.field.order), repeat=self.dimension)
             ]
+            del target_orbits[0]  # remove the orbit of the zero vector
+            target_space = [next(iter(orbit)) for orbit in set(target_orbits)]
 
             generators = []
             for mat in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
                     vec = self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
-                    next_orbit = [r * mat @ vec for r in roots]
+                    next_orbit = [root * mat @ vec for root in roots]
                     next_vec = [v for v in next_orbit if v.tobytes() in target_space][0]
                     next_index = target_space.index(next_vec.tobytes())
                     perm[index] = next_index
