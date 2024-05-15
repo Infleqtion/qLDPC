@@ -162,7 +162,7 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 3), (3, 2)])
+@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 4), (3, 2)])
 @pytest.mark.parametrize("linear_rep", [False, True])
 def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group."""
@@ -175,9 +175,6 @@ def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     gen_mats = group.get_generating_mats(dimension, field)
     assert np.array_equal(group.lift(gens[0]), gen_mats[0])
     assert np.array_equal(group.lift(gens[1]), gen_mats[1])
-
-    # # cover representation with different generators
-    # assert len(abstract.SL(2, 5).generators) == 2
 
 
 @pytest.mark.parametrize("dimension,field", [(2, 2), (2, 3), (3, 2)])
