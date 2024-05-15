@@ -187,6 +187,12 @@ def test_PSL(dimension: int, field: int, linear_rep: bool) -> None:
     mats = tuple(abstract.PSL.iter_mats(dimension, field))
     assert group.order == len(mats) == order
 
+    if field == 2:
+        gens = group.generators
+        gen_mats = group.get_generating_mats(dimension, field)
+        assert np.array_equal(group.lift(gens[0]), gen_mats[0])
+        assert np.array_equal(group.lift(gens[1]), gen_mats[1])
+
 
 def test_small_group() -> None:
     """Groups indexed by the GAP computer algebra system."""

@@ -901,7 +901,7 @@ class SpecialLinearGroup(Group):
             super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
         else:
-            # represent group members by how they permute elements of the group
+            # represent group members by how they permute elements of the group itself
             generating_mats = self.get_generating_mats(self.dimension, self.field.order)
             group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
@@ -915,7 +915,7 @@ class SpecialLinearGroup(Group):
     def get_generating_mats(
         cls, dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
-        """Generator matrices for the Special Linear group, based on arXiv:2201.09155."""
+        """Generating matrices for the Special Linear group, based on arXiv:2201.09155."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         gen_w = -base_field(np.diag(np.ones(dimension - 1, dtype=int), k=-1))
         gen_w[0, -1] = 1
@@ -999,7 +999,7 @@ class ProjectiveSpecialLinearGroup(Group):
             super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
         else:
-            # represent group members by how they permute elements of the group
+            # represent group members by how they permute elements of the group itself
             generating_mats = self.get_generating_mats(self.dimension, self.field.order)
             group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
@@ -1013,9 +1013,11 @@ class ProjectiveSpecialLinearGroup(Group):
     def get_generating_mats(
         cls, dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
-        """Generator matrices of the adjoint representation of PSL."""
+        """Generating matrices of PSL, constructed out of the generating matrices of SL."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         gen_x, gen_w = SpecialLinearGroup.get_generating_mats(dimension, field)
+        if base_field.order == 2:
+            return gen_x, gen_w
         return (
             base_field(np.kron(np.linalg.inv(gen_x), gen_x)),
             base_field(np.kron(np.linalg.inv(gen_w), gen_w)),
