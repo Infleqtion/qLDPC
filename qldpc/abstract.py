@@ -867,15 +867,16 @@ class SpecialLinearGroup(Group):
             # elements of the vector space that the generating matrices act on.
 
             # identify the target space that group members (as matrices) act on
-            target_elements = itertools.product(range(self.field.order), repeat=self.dimension)
-            next(target_elements)  # skip the all-0 element
-            target_space = [self.field(vec).tobytes() for vec in target_elements]
-            target_space_size = self.field.order**self.dimension - 1
+            target_space = [
+                self.field(vec).tobytes()
+                for vec in itertools.product(range(self.field.order), repeat=self.dimension)
+            ]
+            del target_space[0]  # remove the all-0 element
 
             # identify how the generators permute elements of the target space
             generators = []
             for member in self.get_generating_mats(self.dimension, self.field.order):
-                perm = np.empty(target_space_size, dtype=int)
+                perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
                     next_vec = member @ self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
                     next_index = target_space.index(next_vec.tobytes())
@@ -957,6 +958,7 @@ class ProjectiveSpecialLinearGroup(Group):
             root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
             roots = [root**k for k in range(num_roots)]
 
+            # Identify the target space that group members (as matrices) act on.
             # PSL acts on the quotient of the target space of SL by roots of unity of order 'dimension'.
             target_elements = itertools.product(range(self.field.order), repeat=self.dimension)
             target_orbits = set(
@@ -969,11 +971,11 @@ class ProjectiveSpecialLinearGroup(Group):
             ]
 
             generators = []
-            for member in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
+            for mat in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
                     vec = self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
-                    next_orbit = [r * nv for r in roots if (nv := member @ vec) is not None]
+                    next_orbit = [r * mat @ vec for r in roots]
                     next_vec = [v for v in next_orbit if v.tobytes() in target_space][0]
                     next_index = target_space.index(next_vec.tobytes())
                     perm[index] = next_index
