@@ -871,7 +871,7 @@ class SpecialLinearGroup(Group):
                 self.field(vec).tobytes()
                 for vec in itertools.product(range(self.field.order), repeat=self.dimension)
             ]
-            del target_space[0]  # remove the all-0 element
+            del target_space[0]  # remove the zero vector
 
             # identify how the generators permute elements of the target space
             generators = []
@@ -955,8 +955,8 @@ class ProjectiveSpecialLinearGroup(Group):
 
             # identify multiplicative roots of unity
             num_roots = math.gcd(self.dimension, self.field.order - 1)
-            base_root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
-            roots = [base_root**kk for kk in range(num_roots)]
+            primitive_root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
+            roots = [primitive_root**kk for kk in range(num_roots)]
 
             # Identify the target space that group members (as matrices) act on.
             # The target space is same as for SL, but modded out by roots of unity.
@@ -973,7 +973,7 @@ class ProjectiveSpecialLinearGroup(Group):
                 for index, vec_bytes in enumerate(target_space):
                     vec = self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
                     next_orbit = [root * mat @ vec for root in roots]
-                    next_vec = [v for v in next_orbit if v.tobytes() in target_space][0]
+                    next_vec = [vec for vec in next_orbit if vec.tobytes() in target_space][0]
                     next_index = target_space.index(next_vec.tobytes())
                     perm[index] = next_index
                 generators.append(GroupMember(perm))
