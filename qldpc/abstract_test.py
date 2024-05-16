@@ -182,7 +182,7 @@ def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
 def test_PSL(dimension: int, field: int, linear_rep: bool) -> None:
     """Projective special linear group."""
     order_SL = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
-    order = order_SL // math.gcd(2, field - 1)
+    order = order_SL // math.gcd(dimension, field - 1)
     group = abstract.PSL(dimension, field, linear_rep=linear_rep)
     mats = tuple(abstract.PSL.iter_mats(dimension, field))
     assert group.order == len(mats) == order
