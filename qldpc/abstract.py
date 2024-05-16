@@ -940,7 +940,15 @@ class SpecialLinearGroup(Group):
 
 
 class ProjectiveSpecialLinearGroup(Group):
-    """Projective special linear group (PSL = SL/center)."""
+    """Projective special linear group (PSL = SL/center).
+
+    Here "center" is the subgroup of SL that commutes with all elements of SL.  Specifically, every
+    element in the center of SL is a scalar multiple of the identity matrix I.  In the case of
+    SL(d,q) (d×d matrices over F_q with determinant 1), the determinant of scalar*I is scalar**d,
+    which is only contained in SL(d,q) if scalar**d == 1.
+
+    Altogether, we construct PSL(d,q) by SL(d,q) mod [d-th roots of unity over F_q].
+    """
 
     _dimension: int
 
