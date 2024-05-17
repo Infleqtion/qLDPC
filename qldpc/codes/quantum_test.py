@@ -36,7 +36,7 @@ def test_small_codes() -> None:
     assert code.get_stabilizers()[0] == "X X X X I"
 
 
-def test_GB_code_error() -> None:
+def test_two_block_code_error() -> None:
     """Raise error when trying to construct incompatible two-block codes."""
     matrix_a = [[1, 0], [0, 2]]
     matrix_b = [[0, 1], [1, 0]]
@@ -44,7 +44,7 @@ def test_GB_code_error() -> None:
         codes.TBCode(matrix_a, matrix_b, field=3)
 
 
-def test_cyclic_codes() -> None:
+def test_bivariate_bicycle_codes() -> None:
     """Bivariate bicycle codes from arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y, z
 
