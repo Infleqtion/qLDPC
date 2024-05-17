@@ -1036,15 +1036,14 @@ class ProjectiveSpecialLinearGroup(Group):
         """Iterate over all elements of PSL(dimension, field)."""
         field = field or DEFAULT_FIELD_ORDER
         base_field = galois.GF(field)
-        root = base_field.primitive_element ** ((field - 1) // math.gcd(dimension, field - 1))
-        roots = [root**k for k in range(dimension)]
-        orbits = set(
-            [
-                frozenset([(r * mat).tobytes() for r in roots])
-                for mat in SpecialLinearGroup.iter_mats(dimension, field)
-            ]
-        )
-        for orbit in orbits:
+        num_roots = math.gcd(dimension, base_field.order - 1)
+        primitive_root = base_field.primitive_element ** ((base_field.order - 1) // num_roots)
+        roots = [primitive_root**k for k in range(dimension)]
+        orbits = [
+            frozenset([(root * mat).tobytes() for root in roots])
+            for mat in SpecialLinearGroup.iter_mats(dimension, field)
+        ]
+        for orbit in set(orbits):
             yield base_field(np.frombuffer(next(iter(orbit)), dtype=np.uint8))
 
 
