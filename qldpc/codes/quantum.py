@@ -706,7 +706,8 @@ class LPCode(CSSCode):
 
     Notes:
     - A lifted product code with protographs of size 1×1 is a two-block code (more specifically, a
-        two-block group-algebra code).
+        two-block group-algebra code).  If the base group of the protographs is a cyclic group, the
+        resulting lifted product code is a generalized bicycle code.
     - A lifted product code with protographs whose entries get lifted to 1×1 matrices is a
         hypergraph product code of the lifted protographs.
     - One way to get an LPCode: take a classical code with parity check matrix H and multiply it by
