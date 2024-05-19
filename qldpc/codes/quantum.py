@@ -64,17 +64,16 @@ class SteaneCode(CSSCode):
 # bicycle codes
 
 
-class GBCode(CSSCode):
-    """Generalized bicycle (GB) code.
+class TBCode(CSSCode):
+    """Two-block (TB) code.
 
-    A GBCode code is built out of two matrices A and B, which are combined as
+    A TBCode code is built out of two matrices A and B, which are combined as
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T],
     to form the parity check matrices of a CSSCode.  If A and B commute, the parity check matrices
     matrix_x and matrix_z satisfy the requirements of a CSSCode.
 
-    References:
-    - https://arxiv.org/abs/2012.04068
+    Two-block codes constructed out of circulant matrices are known as generalized bicycle codes.
     """
 
     def __init__(
@@ -87,11 +86,11 @@ class GBCode(CSSCode):
         promise_balanced_codes: bool = False,
         skip_validation: bool = False,
     ) -> None:
-        """Construct a generalized bicycle code."""
+        """Construct a two-block quantum code."""
         matrix_a = ClassicalCode(matrix_a, field).matrix
         matrix_b = ClassicalCode(matrix_b, field).matrix
         if not skip_validation and not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
-            raise ValueError("The matrices provided for this GBCode are incompatible")
+            raise ValueError("The matrices provided for this TBCode are incompatible")
 
         matrix_x = np.block([matrix_a, matrix_b])
         matrix_z = np.block([matrix_b.T, -matrix_a.T])
@@ -111,7 +110,7 @@ BBCodePlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
 
 
 # TODO: example notebook featuring this code
-class BBCode(GBCode):
+class BBCode(TBCode):
     """Bivariate bicycle codes from arXiv:2308.07915.
 
     A bivariate bicycle code is a CSS code with subcode parity check matrices
@@ -186,7 +185,7 @@ class BBCode(GBCode):
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift()
         matrix_b = self.eval(self.poly_b).lift()
-        GBCode.__init__(
+        TBCode.__init__(
             self,
             matrix_a,
             matrix_b,
@@ -706,9 +705,11 @@ class LPCode(CSSCode):
     this is called "lifting" the protograph.
 
     Notes:
-    - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
+    - A lifted product code with protographs of size 1×1 is a two-block code (more specifically, a
+        two-block group-algebra code).  If the base group of the protographs is a cyclic group, the
+        resulting lifted product code is a generalized bicycle code.
     - A lifted product code with protographs whose entries get lifted to 1×1 matrices is a
-        hypergraph product code of the lifted protographs.
+        hypergraph product code built from the lifted protographs.
     - One way to get an LPCode: take a classical code with parity check matrix H and multiply it by
         a diagonal matrix D = diag(a_1, a_2, ... a_n), where all {a_j} are elements of a group
         algebra.  The protograph P = H @ D can then be used for one of the protographs of an LPCode.
@@ -717,6 +718,7 @@ class LPCode(CSSCode):
     - https://errorcorrectionzoo.org/c/lifted_product
     - https://arxiv.org/abs/2202.01702
     - https://arxiv.org/abs/2012.04068
+    - https://arxiv.org/abs/2306.16400
     """
 
     def __init__(
