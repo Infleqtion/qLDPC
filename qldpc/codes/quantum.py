@@ -61,20 +61,19 @@ class SteaneCode(CSSCode):
 
 
 ################################################################################
-# bicycle and quasi-cyclic codes
+# bicycle codes
 
 
-class GBCode(CSSCode):
-    """Generalized bicycle (GB) code.
+class TBCode(CSSCode):
+    """Two-block (TB) code.
 
-    A GBCode code is built out of two matrices A and B, which are combined as
+    A TBCode code is built out of two matrices A and B, which are combined as
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T],
     to form the parity check matrices of a CSSCode.  If A and B commute, the parity check matrices
     matrix_x and matrix_z satisfy the requirements of a CSSCode.
 
-    References:
-    - https://arxiv.org/abs/2012.04068
+    Two-block codes constructed out of circulant matrices are known as generalized bicycle codes.
     """
 
     def __init__(
@@ -87,11 +86,11 @@ class GBCode(CSSCode):
         promise_balanced_codes: bool = False,
         skip_validation: bool = False,
     ) -> None:
-        """Construct a generalized bicycle code."""
+        """Construct a two-block quantum code."""
         matrix_a = ClassicalCode(matrix_a, field).matrix
         matrix_b = ClassicalCode(matrix_b, field).matrix
         if not skip_validation and not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
-            raise ValueError("The matrices provided for this GBCode are incompatible")
+            raise ValueError("The matrices provided for this TBCode are incompatible")
 
         matrix_x = np.block([matrix_a, matrix_b])
         matrix_z = np.block([matrix_b.T, -matrix_a.T])
@@ -106,15 +105,15 @@ class GBCode(CSSCode):
         )
 
 
-# map from a "sector" in {0, 1, X, Z} to a coordinate map (i, j) --> (a, b) as a 4D array
-QuasiCyclicPlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
+# map from a "sector" in {0,1,X,Z} to a 2D coordinate map (i,j) --> (a,b) represented by a 4D array
+BBCodePlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
 
 
 # TODO: example notebook featuring this code
-class QCCode(GBCode):
-    """Quasi-cyclic (QC) codes from arXiv:2308.07915.
+class BBCode(TBCode):
+    """Bivariate bicycle codes from arXiv:2308.07915.
 
-    A quasi-cyclic code is a CSS code with subcode parity check matrices
+    A bivariate bicycle code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T],
     where A = A_{ij} x^i y^j and B = B_{ij} x^i y^j are bivariate polynomials.  Here:
@@ -122,14 +121,14 @@ class QCCode(GBCode):
     - x generates a group of order R_x, and
     - y generates a group of order R_y.
 
-    A quasi-cyclic code is defined by...
+    A bivariate bicycle code is defined by...
     [1] two cyclic group orders, and
     [2] two sympy polynomials in two variables.
     By default, group orders are associated in lexicographic order with free variables of the
     polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
     """
 
-    _min_symbols: int = 2
+    _num_symbols = 2
 
     def __init__(
         self,
@@ -140,15 +139,15 @@ class QCCode(GBCode):
         *,
         conjugate: bool = False,
     ) -> None:
-        """Construct a quasi-cyclic code."""
+        """Construct a bivariate bicycle code."""
         self.poly_a = sympy.Poly(poly_a)
         self.poly_b = sympy.Poly(poly_b)
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) > 2:
+        if len(symbols) > self._num_symbols:
             raise ValueError(
-                f"Quasi-cyclic codes with more than {self._min_symbols} symbols are not supported"
+                f"Bivariate bicycle codes cannot have more than {self._num_symbols} symbols"
             )
         if len(orders) < len(symbols) or (
             isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
@@ -165,7 +164,7 @@ class QCCode(GBCode):
                 symbol_to_order[symbol] = order
 
         # enforce a minimum number of symbols by adding placeholders if necessary
-        while len(symbol_to_order) < self._min_symbols:
+        while len(symbol_to_order) < self._num_symbols:
             unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
             symbol_to_order[unique_symbol] = 1
 
@@ -186,7 +185,7 @@ class QCCode(GBCode):
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift()
         matrix_b = self.eval(self.poly_b).lift()
-        GBCode.__init__(
+        TBCode.__init__(
             self,
             matrix_a,
             matrix_b,
@@ -253,7 +252,7 @@ class QCCode(GBCode):
         return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
 
     @functools.cached_property
-    def toric_layouts(self) -> Sequence[tuple[QuasiCyclicPlaquetteMap, tuple[int, int]]]:
+    def toric_layouts(self) -> Sequence[tuple[BBCodePlaquetteMap, tuple[int, int]]]:
         """Get a list of all toric layouts of this code.
 
         All qubits of this code can be organized into plaquettes of four qubits that look like:
@@ -372,7 +371,7 @@ class QCCode(GBCode):
         )
 
     def get_toric_checks(
-        self, plaquette_map: QuasiCyclicPlaquetteMap, torus_shape: tuple[int, int]
+        self, plaquette_map: BBCodePlaquetteMap, torus_shape: tuple[int, int]
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Build X-type and Z-type parity check matrices for a toric layout."""
 
@@ -433,7 +432,7 @@ class QCCode(GBCode):
 
     def get_check_shifts(
         self,
-        plaquette_map: QuasiCyclicPlaquetteMap,
+        plaquette_map: BBCodePlaquetteMap,
         torus_shape: tuple[int, int],
         open_boundaries: bool = False,
     ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
@@ -451,7 +450,7 @@ class QCCode(GBCode):
 
         # build arrays that map plaquette coordinates to qubit coordinates for each qubit sector
         qubit_coords = {
-            sector: QCCode.get_qubit_coordinate_maps(sector, torus_shape, open_boundaries)
+            sector: BBCode.get_qubit_coordinate_maps(sector, torus_shape, open_boundaries)
             for sector in [0, 1] + PAULIS_XZ
         }
 
@@ -706,9 +705,11 @@ class LPCode(CSSCode):
     this is called "lifting" the protograph.
 
     Notes:
-    - A lifted product code with protographs of size 1×1 is a generalized bicycle code.
+    - A lifted product code with protographs of size 1×1 is a two-block code (more specifically, a
+        two-block group-algebra code).  If the base group of the protographs is a cyclic group, the
+        resulting lifted product code is a generalized bicycle code.
     - A lifted product code with protographs whose entries get lifted to 1×1 matrices is a
-        hypergraph product code of the lifted protographs.
+        hypergraph product code built from the lifted protographs.
     - One way to get an LPCode: take a classical code with parity check matrix H and multiply it by
         a diagonal matrix D = diag(a_1, a_2, ... a_n), where all {a_j} are elements of a group
         algebra.  The protograph P = H @ D can then be used for one of the protographs of an LPCode.
@@ -717,6 +718,7 @@ class LPCode(CSSCode):
     - https://errorcorrectionzoo.org/c/lifted_product
     - https://arxiv.org/abs/2202.01702
     - https://arxiv.org/abs/2012.04068
+    - https://arxiv.org/abs/2306.16400
     """
 
     def __init__(
