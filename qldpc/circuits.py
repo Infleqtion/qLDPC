@@ -18,8 +18,8 @@ import cirq
 
 from qldpc import codes
 
-rep_code = codes.ClassicalCode.ring(3)
-code = codes.HGPCode(rep_code)
+# rep_code = codes.ClassicalCode.ring(3)
+# code = codes.HGPCode(rep_code)
 
 
 # circuit = cirq.Circuit()
