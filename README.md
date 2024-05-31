@@ -42,7 +42,7 @@ Notable features include:
 
 If this project gains interest and traction, I'll add a documentation webpage and material to help users get started quickly.  I am also planning to write a paper that presents and explains this project.  In the meantime, you can explore the documentation and explanations in the source code, as well as the `examples` directory.  Test files (such as `qldpc/codes/quantum_test.py`) contain some examples of using the classes and methods described above.
 
-If you have any questions, feedback, or requests, please [open an issue on GitHub](https://github.com/Infleqtion/qLDPC/issues/new) or email me at [michael.perlin@infleqtion.com](mailto:michael.perlin@infleqtion.com)!
+If you have any questions, feedback, or requests, please [open an issue on GitHub](https://github.com/Infleqtion/qLDPC/issues/new) or email me at [mika.perlin@gmail.com](mailto:mika.perlin@gmail.com)!
 
 ## ⚓ Attribution
 
