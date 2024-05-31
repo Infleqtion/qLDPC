@@ -405,13 +405,10 @@ class ClassicalCode(AbstractCode):
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             # find a low-weight candidate code word
-            candidate = decoder.decode(
-                effective_check_matrix,
-                effective_syndrome,
-                **decoder_args,
-            )
+            candidate = decoder.decode(effective_check_matrix, effective_syndrome, **decoder_args)
 
             # check whether we found a valid candidate
+            # NOTE: we can mod out by the field order because non-prime fields aren't allowed here
             actual_syndrome = effective_check_matrix @ candidate % self.field.order
             valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
 
@@ -1084,6 +1081,7 @@ class CSSCode(QuditCode):
             )
 
             # check whether decoding was successful
+            # NOTE: we can mod out by the field order because non-prime fields aren't allowed here
             actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
