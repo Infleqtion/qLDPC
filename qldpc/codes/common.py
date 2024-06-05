@@ -683,9 +683,9 @@ class QuditCode(AbstractCode):
         the way these operators are constructed here).
 
         For example, if `logical_ops[0, r, j] == 1` for `j < n` (`j >= n`), then the X-type logical
-        operator for qudit `r` addresses physical qudit `j` with an X-type (Z-type) operator.
-        The fact that logical operators come in conjugate pairs means that
-        `logical_ops[0, r, :] @ logical_ops[1, s, :] = int(r == s)`.
+        operator for logical qudit `r` addresses physical qudit `j` with an X-type (Z-type)
+        operator.  The fact that logical operators come in conjugate pairs means that
+        `logical_ops[0, r, :] @ logical_ops[1, s, :] == 1` iff `r == s` and `0` otherwise.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
@@ -1089,24 +1089,33 @@ class CSSCode(QuditCode):
         return int(np.count_nonzero(candidate_logical_op))
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Complete basis of nontrivial X-type and Z-type logical operators for this code.
+        """Complete basis of nontrivial logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        (2, k, n), where k and n are respectively the numbers of logical and physical qudits in this
-        code.  The bitstring `logical_ops[0, 4, :]`, for example, indicates the support (i.e., the
-        physical qudits addressed nontrivially) by the logical Pauli-X operator on logical qudit 4.
+        `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
+        qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
+        operators.  The last axis is "doubled" to indicate whether a physical qudit is addressed by
+        a physical X-type or Z-type operator.
 
-        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
-        operators of the specified type.
+        Specifically, `logical_ops[0, :, :]` are logical X-type operators that address physical
+        qudits by physical X-type operators, while `logical_ops[1, :, :]` are logical Z-type
+        operators that address physical qudits by physical Z-type operators.
 
-        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified for qudits.
+        For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
+        logical operator for logical qudit `r` addresses physical qudit `j` with an X-type (Z-type)
+        operator.  The fact that logical operators come in conjugate pairs means that
+        `logical_ops[0, r, :] @ logical_ops[1, s, :] == 1` iff `r == s` and `0` otherwise.
+
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array with
+        dimensions `(k, n)`, in which `logical_ops[r, :]` indicates the support of the purely-X-type
+        or purely-Z-type logical operator on qudit `r`.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.get_logical_ops()[pauli]
+            shape = (self.dimension, 2, self.num_qudits)
+            return self.get_logical_ops()[pauli].reshape(shape)[:, pauli, :]
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
@@ -1159,7 +1168,12 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
-        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]))
+        logical_ops = [
+            [logicals_x, np.zeros_like(logicals_x)],
+            [np.zeros_like(logicals_z), logicals_z],
+        ]
+        shape = (2, self.dimension, 2 * self.num_qudits)
+        self._logical_ops = self.field(np.block(logical_ops).reshape(shape))
         return self._logical_ops
 
     def get_random_logical_op(
