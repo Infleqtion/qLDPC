@@ -683,9 +683,8 @@ class QuditCode(AbstractCode):
         qudits by physical Z-type operators.
 
         For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
-        logical operator for logical qudit `r` addresses physical qudit `j` with an X-type (Z-type)
-        operator.  The fact that logical operators come in conjugate pairs means that
-        `logical_ops[0, r, :] @ logical_ops[1, s, :] == 1` iff `r == s` and `0` otherwise.
+        logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
+        (Z-type) operator.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
@@ -1102,9 +1101,9 @@ class CSSCode(QuditCode):
         operators that address physical qudits by physical Z-type operators.
 
         For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
-        logical operator for logical qudit `r` addresses physical qudit `j` with an X-type (Z-type)
-        operator.  The fact that logical operators come in conjugate pairs means that
-        `logical_ops[0, r, :] @ logical_ops[1, s, :] == 1` iff `r == s` and `0` otherwise.
+        logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
+        (Z-type) operator.  The fact that logical operators come in conjugate pairs means that
+        `logical_ops(Pauli.X)[r, :] @ logical_ops(Pauli.Z)[s, :] == int(r == s)`.
 
         If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array with
         dimensions `(k, n)`, in which `logical_ops[r, :]` indicates the support of the purely-X-type
@@ -1236,7 +1235,9 @@ class CSSCode(QuditCode):
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
-        self._logical_ops[pauli, logical_index] = candidate_logical_op
+        self._logical_ops.shape = (2, self.dimension, 2, self.num_qudits)
+        self._logical_ops[pauli, logical_index, pauli, :] = candidate_logical_op
+        self._logical_ops.shape = (2, self.dimension, 2 * self.num_qudits)
 
     def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: object) -> None:
         """Reduce the weight of all logical operators."""
