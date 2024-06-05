@@ -676,14 +676,14 @@ class QuditCode(AbstractCode):
         operators.  The last axis is "doubled" to indicate whether a physical qudit is addressed by
         a physical X-type or Z-type operator.
 
-        Specifically, `logical_ops[0, :, :]` are "logical X-type" operators, which address at least
+        Specifically, `logical_ops[0, :, :]` are "logical X-type" operators that address at least
         one physical qudit by a physical X-type operator, and may additionally address physical
         qudits by physical Z-type operators.  `logical_ops[1, :, :]` are logical Z-type operators
-        that only address physical qudits by physical Z-type operators (which is a consequence of
-        the way these operators are constructed here).
+        that -- due to the way that logical operators are constructed here -- only address physical
+        qudits by physical Z-type operators.
 
-        For example, if `logical_ops[0, r, j] == 1` for `j < n` (`j >= n`), then the X-type logical
-        operator for logical qudit `r` addresses physical qudit `j` with an X-type (Z-type)
+        For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
+        logical operator for logical qudit `r` addresses physical qudit `j` with an X-type (Z-type)
         operator.  The fact that logical operators come in conjugate pairs means that
         `logical_ops[0, r, :] @ logical_ops[1, s, :] == 1` iff `r == s` and `0` otherwise.
 
@@ -1109,6 +1109,9 @@ class CSSCode(QuditCode):
         If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array with
         dimensions `(k, n)`, in which `logical_ops[r, :]` indicates the support of the purely-X-type
         or purely-Z-type logical operator on qudit `r`.
+
+        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
+        thesis (arXiv:9705052), slightly modified for qudits.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
