@@ -31,8 +31,7 @@ extensions = [
     "IPython.sphinxext.ipython_console_highlighting",
 ]
 
-# Our notebooks can involve network I/O (or even costing $), so we don't want them to be
-# run every time we build the docs.  Instead, just use the pre-executed outputs.
+# use the pre-executed outputs in notebooks
 nbsphinx_execute = "never"
 
 autosummary_generate = True
