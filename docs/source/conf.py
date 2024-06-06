@@ -46,6 +46,3 @@ exclude_patterns = ["modules.rst"]
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
 
 html_theme = "sphinx_rtd_theme"
-html_static_path = ["_static"]
-html_theme_options = {"logo_only": True}
-html_favicon = "_static/logos/Infleqtion_logo.png"
