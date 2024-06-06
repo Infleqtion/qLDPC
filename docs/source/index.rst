@@ -12,8 +12,3 @@ See the `readme page <https://github.com/Infleqtion/qLDPC>`_ for a high-level ov
    :caption: Contents:
 
    qldpc
-
-Indices and tables
-==================
-
-* :ref:`genindex`
