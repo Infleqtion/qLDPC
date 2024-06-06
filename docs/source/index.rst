@@ -7,7 +7,7 @@ Welcome to qLDPC's documentation!
 =================================
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
    qldpc
@@ -16,4 +16,3 @@ Indices and tables
 ==================
 
 * :ref:`genindex`
-* :ref:`search`
