@@ -424,6 +424,11 @@ class ClassicalCode(AbstractCode):
         - k is the number of encoded ("logical") bits
         - d is the code distance
 
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
+        upper bound using a randomized algorithm inspired by arXiv:2308.07915, minimizing over
+        `bound` random trials.  For a detailed explanation, see
+        `ClassicalCode.get_one_distance_bound`.
+
         Keyword arguments are passed to the calculation of code distance.
         """
         distance = self.get_distance(bound=bound, vector=None, **decoder_args)
@@ -900,6 +905,10 @@ class CSSCode(QuditCode):
         - n is the number of data qudits
         - k is the number of encoded ("logical") qudits
         - d is the code distance
+
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
+        upper bound using a randomized algorithm described in arXiv:2308.07915, minimizing over
+        `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
 
         Keyword arguments are passed to the calculation of code distance.
         """
