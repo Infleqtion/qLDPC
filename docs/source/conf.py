@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.abspath("../../qldpc"))
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = "qLDPC"
-copyright = "2023 The qLDPC Authors and Infleqtion Inc."
+copyright = "2023 The qLDPC Authors and Infleqtion Inc."  # pylint:disable=redefined-builtin
 author = "Michael A. Perlin"
 
 # -- General configuration ---------------------------------------------------
