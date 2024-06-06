@@ -20,4 +20,5 @@ __pycache__
 
 # sphinx documentation
 docs/build
+docs/source/modules.rst
 docs/source/qldpc*.rst
