@@ -25,8 +25,9 @@ extensions = [
     "nbsphinx",
     "sphinx.ext.autodoc",
     "sphinx.ext.autosummary",
-    "sphinx.ext.mathjax",  # math rendering in html
-    "sphinx.ext.napoleon",  # allows google- and numpy- style docstrings
+    "sphinx.ext.mathjax",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.viewcode",
     "IPython.sphinxext.ipython_console_highlighting",
 ]
 
@@ -34,8 +35,6 @@ extensions = [
 # run every time we build the docs.  Instead, just use the pre-executed outputs.
 nbsphinx_execute = "never"
 
-# In addition, we set the mathjax path to v3, which allows \ket{} (and other commands) to render
-mathjax_path = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
 autosummary_generate = True
 
 templates_path = ["_templates"]
