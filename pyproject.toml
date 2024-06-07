@@ -37,6 +37,8 @@ networkx = ">=2.6.2"
 numpy = ">=1.22.0"
 platformdirs = ">=4.0.0"
 pymatching = ">=2.1.0"
+sinter = ">=1.13"
+stim = ">=1.13"
 sympy = ">=1.12"
 
 checks-superstaq = { version = ">=0.5.0", optional = true }
