@@ -28,14 +28,14 @@ def get_syndrome_extraction_circuit(
     if not code.field.order == 2:
         raise ValueError("Syndrome extraction circuits only supported for qubit CSS codes.")
 
-    circuit = stim.Circuit()
-
+    # identify data and ancilla qubits by index
     data_qubits = list(range(code.num_qubits))
     ancillas_x = [len(data_qubits) + qq for qq in range(code.num_checks_x)]
     ancillas_z = [len(data_qubits) + len(ancillas_x) + qq for qq in range(code.num_checks_z)]
     ancillas_xz = ancillas_x + ancillas_z
 
     # initialize data qubits
+    circuit = stim.Circuit()
     circuit.append(f"R{stabilizer_pauli}", data_qubits)
     circuit.append(f"{~stabilizer_pauli}_ERROR", data_qubits, error_rate)
 
