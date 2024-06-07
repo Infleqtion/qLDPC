@@ -63,7 +63,7 @@ def get_syndrome_extraction_circuit(
     circuit += single_round_circuit
 
     # initial ancilla detectors
-    ancilla_recs = [-code.num_checks + qq for qq in ancillas_xz]
+    ancilla_recs = {ancilla: -code.num_checks + qq for qq, ancilla in enumerate(ancillas_xz)}
     for ancilla in ancillas_x if stabilizer_pauli is objects.Pauli.X else ancillas_z:
         circuit.append("DETECTOR", stim.target_rec(ancilla_recs[ancilla]))
 
