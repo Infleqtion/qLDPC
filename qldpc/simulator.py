@@ -25,8 +25,8 @@ from qldpc import codes, objects
 
 def get_syndrome_extraction_circuit(
     code: codes.CSSCode,
-    stabilizer_pauli: objects.PauliXZ,
     error_rate: float,
+    stabilizer_pauli: objects.PauliXZ = objects.Pauli.X,
     rounds: int = 1,
     gate_order: Sequence[tuple[int, int]] | None = None,
 ) -> stim.Circuit:
