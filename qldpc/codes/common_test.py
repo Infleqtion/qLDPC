@@ -246,8 +246,7 @@ def test_CSS_ops() -> None:
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
 
     # test that logical operators are dual to each other and have trivial syndromes
-    logicals = code.get_logical_ops()
-    logicals_x, logicals_z = logicals[0], logicals[1]
+    logicals_x, logicals_z = code.get_logical_ops(Pauli.X), code.get_logical_ops(Pauli.Z)
     assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
     assert not np.any(code.matrix_z @ logicals_x.T)
     assert not np.any(code.matrix_x @ logicals_z.T)

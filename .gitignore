@@ -1,4 +1,22 @@
+notes.txt
 .trash.*
-.coverage
+
+# code search experiments
+.code_cache
+experiments/bivariate_bicycle/codes.csv
+experiments/quantum_tanner/codes
+
+# python cache
 __pycache__
+
+# ipython notebooks
+.ipynb_checkpoints
+
+# pytest/coverage
+.coverage
+
+# macOS
 .DS_Store
+
+# sphinx documentation
+docs/build
