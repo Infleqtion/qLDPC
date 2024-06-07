@@ -22,9 +22,6 @@ import numpy.typing as npt
 import pymatching
 
 
-# TODO: avoid initializing BP_OSD and MWPM decoders every time they are needed
-
-
 def decode_with_BP_OSD(
     matrix: npt.NDArray[np.int_],
     syndrome: npt.NDArray[np.int_],
