@@ -81,10 +81,13 @@ def get_syndrome_extraction_circuit(
 
     # check stabilizer parity
     data_qubit_recs = [-code.num_qubits + qq for qq in data_qubits]
-    ancilla_recs = [-code.num_qubits - code.num_checks + qq for qq in ancillas_xz]
+    ancilla_recs = {
+        ancilla: -code.num_qubits - code.num_checks + qq for qq, ancilla in enumerate(ancillas_xz)
+    }
+    ancillas = ancillas_x if stabilizer_pauli is objects.Pauli.X else ancillas_z
     matrix = code.matrix_x if stabilizer_pauli is objects.Pauli.X else code.matrix_z
-    for ancilla_rec, row in zip(ancilla_recs, matrix):
-        recs = [ancilla_rec] + [data_qubit_recs[qq] for qq in np.nonzero(row)[0]]
+    for ancilla, row in zip(ancillas, matrix):
+        recs = [ancilla_recs[ancilla]] + [data_qubit_recs[qq] for qq in np.nonzero(row)[0]]
         circuit.append("DETECTOR", [stim.target_rec(rec) for rec in recs])
 
     # check logical observable parity
