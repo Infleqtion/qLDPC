@@ -36,8 +36,8 @@ def get_syndrome_extraction_circuit(
     ancillas_xz = ancillas_x + ancillas_z
 
     # initialize data qubits
-    circuit.append(f"R{~stabilizer_pauli}", data_qubits)
-    circuit.append(f"{stabilizer_pauli}_ERROR", data_qubits, error_rate)
+    circuit.append(f"R{stabilizer_pauli}", data_qubits)
+    circuit.append(f"{~stabilizer_pauli}_ERROR", data_qubits, error_rate)
 
     # initialize ancillas, deferring SPAM errors until later
     circuit.append("RX", ancillas_xz)
