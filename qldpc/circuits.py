@@ -70,9 +70,8 @@ def get_syndrome_extraction_circuit(
     # additional rounds of syndrome extraction
     if rounds > 1:
         repeat_circuit = single_round_circuit.copy()
-        for ancilla in ancillas_x if stabilizer_pauli is objects.Pauli.X else ancillas_z:
+        for ancilla in ancillas_xz:
             recs = [ancilla_recs[ancilla], ancilla_recs[ancilla] - code.num_checks]
-
             repeat_circuit.append("DETECTOR", [stim.target_rec(rec) for rec in recs])
         circuit += (rounds - 1) * repeat_circuit
 
