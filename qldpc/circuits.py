@@ -36,8 +36,8 @@ def get_syndrome_extraction_circuit(
     ancillas_xz = ancillas_x + ancillas_z
 
     # initialize data qubits
-    circuit.append(f"R{stabilizer_pauli}", data_qubits)
-    circuit.append(f"{~stabilizer_pauli}_ERROR", data_qubits, error_rate)
+    circuit.append(f"R{~stabilizer_pauli}", data_qubits)
+    circuit.append(f"{stabilizer_pauli}_ERROR", data_qubits, error_rate)
 
     # initialize ancillas, deferring SPAM errors until later
     circuit.append("RX", ancillas_xz)
@@ -93,3 +93,10 @@ def get_syndrome_extraction_circuit(
         circuit.append("OBSERVABLE_INCLUDE", recs, logical_op_idx)
 
     return circuit
+
+
+code = codes.SurfaceCode(3, 3, rotated=True)
+circuit = get_syndrome_extraction_circuit(code, objects.Pauli.Z, error_rate=1e-3, rounds=3)
+print(circuit)
+exit()
+
