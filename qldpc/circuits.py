@@ -63,16 +63,17 @@ def get_syndrome_extraction_circuit(
     circuit += single_round_circuit
 
     # initial ancilla detectors
-    for index in range(code.num_checks):
-        circuit.append("DETECTOR", stim.target_rec(-index - 1))
+    ancilla_recs = [-code.num_checks + qq for qq in ancillas_xz]
+    for ancilla in ancillas_x if stabilizer_pauli is objects.Pauli.X else ancillas_z:
+        circuit.append("DETECTOR", stim.target_rec(ancilla_recs[ancilla]))
 
     # additional rounds of syndrome extraction
     if rounds > 1:
         repeat_circuit = single_round_circuit.copy()
-        for index in range(code.num_checks):
-            repeat_circuit.append(
-                "DETECTOR", [stim.target_rec(-1 - index), stim.target_rec(-1 - code.num_checks)]
-            )
+        for ancilla in ancillas_x if stabilizer_pauli is objects.Pauli.X else ancillas_z:
+            recs = [ancilla_recs[ancilla], ancilla_recs[ancilla] - code.num_checks]
+
+            circuit.append("DETECTOR", [stim.target_rec(rec) for rec in recs])
         circuit += (rounds - 1) * repeat_circuit
 
     # measure out data qubits
