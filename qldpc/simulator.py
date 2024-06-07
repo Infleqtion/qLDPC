@@ -1,4 +1,4 @@
-"""Tools for constructing syndrome extraction circuits.
+"""Tools for simulating codes to identify logical error rates
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
