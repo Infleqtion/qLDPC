@@ -3,7 +3,6 @@ import sys
 from collections.abc import Iterable
 
 import checks_superstaq
-
 import pytest_
 
 
