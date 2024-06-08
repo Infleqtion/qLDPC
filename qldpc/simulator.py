@@ -1,4 +1,4 @@
-"""Tools for simulating codes to identify logical error rates
+"""Tools for simulating error-correcting codes to identify logical error rates
 
    Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
