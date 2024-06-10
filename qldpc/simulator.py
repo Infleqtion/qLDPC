@@ -89,7 +89,7 @@ def get_syndrome_extraction_circuit(
 
     single_round_circuit.append("Z_ERROR", ancillas_xz, error_rate)
     for ancilla, data_qubit in gate_order:
-        gate = "CX" if ancilla < (len(ancillas_x) + len(data_qubits)) else "CZ"
+        gate = "CX" if ancilla < (len(data_qubits) + len(ancillas_x)) else "CZ"
         single_round_circuit.append(gate, [ancilla, data_qubit])
         single_round_circuit.append("DEPOLARIZE2", [ancilla, data_qubit], error_rate)
 
