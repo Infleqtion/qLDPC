@@ -665,14 +665,14 @@ class QuditCode(AbstractCode):
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
         qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
-        operators.  The last axis is "doubled" to indicate whether a physical qudit is addressed by
-        a physical X-type or Z-type operator.
+        operators.  The last axis is "doubled" to indicate the support of physical X-type vs. Z-type
+        operators.
 
-        Specifically, `logical_ops[0, :, :]` are "logical X-type" operators that address at least
-        one physical qudit by a physical X-type operator, and may additionally address physical
-        qudits by physical Z-type operators.  `logical_ops[1, :, :]` are logical Z-type operators
-        that -- due to the way that logical operators are constructed here -- only address physical
-        qudits by physical Z-type operators.
+        Specifically, each row of `logical_ops[0, :, :]` is logical X-type operator that -- due to
+        the way that logical operators are constructed here -- only addresses physical qudits by
+        physical X-type operators.  Each row of `logical_ops[1, :, :]` is a logical Z-type operator
+        that addresses at least one physical qudit by a physical Z-type operator, and may
+        additionally address physical qudits by physical X-type operators.
 
         For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
         logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
