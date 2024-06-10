@@ -619,8 +619,8 @@ class QuditCode(AbstractCode):
         for check in range(self.num_checks):
             ops = []
             for qudit in range(self.num_qudits):
-                val_x = matrix[check, 1, qudit]
-                val_z = matrix[check, 0, qudit]
+                val_x = matrix[check, ~Pauli.X, qudit]
+                val_z = matrix[check, ~Pauli.Z, qudit]
                 vals_xz = (val_x, val_z)
                 if self.field.order == 2:
                     ops.append(str(Pauli(vals_xz)))
