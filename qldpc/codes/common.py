@@ -504,7 +504,7 @@ class QuditCode(AbstractCode):
     """Quantum stabilizer code for Galois qudits, with dimension q = p^m for prime p and integer m.
 
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
-    written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
+    written as a block matrix in the form H = [H_z|H_x].  Each block has num_qudits columns.
 
     The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
     X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
