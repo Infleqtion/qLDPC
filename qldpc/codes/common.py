@@ -570,8 +570,8 @@ class QuditCode(AbstractCode):
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
-        matrix_x = self.matrix[:, : self.num_qudits].view(np.ndarray)
-        matrix_z = self.matrix[:, self.num_qudits :].view(np.ndarray)
+        matrix_z = self.matrix[:, : self.num_qudits].view(np.ndarray)
+        matrix_x = self.matrix[:, self.num_qudits :].view(np.ndarray)
         matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
         return max(np.count_nonzero(row) for row in matrix)
 
@@ -580,14 +580,14 @@ class QuditCode(AbstractCode):
         """Convert a parity check matrix into a Tanner graph."""
         graph = nx.DiGraph()
         matrix = np.reshape(matrix, (len(matrix), 2, -1))
-        for row, col_xz, col in zip(*np.nonzero(matrix)):
+        for row, col_zx, col in zip(*np.nonzero(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qudit = Node(index=int(col), is_data=True)
             graph.add_edge(node_check, node_qudit)
 
             qudit_op = graph[node_check][node_qudit].get(QuditOperator, QuditOperator())
             vals_xz = list(qudit_op.value)
-            vals_xz[col_xz] += int(matrix[row, col_xz, col])
+            vals_xz[1 - col_zx] += int(matrix[row, col_zx, col])
             graph[node_check][node_qudit][QuditOperator] = QuditOperator(tuple(vals_xz))
 
         # remember order of the field, and use Pauli operators if appropriate
@@ -608,7 +608,7 @@ class QuditCode(AbstractCode):
         matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
         for node_check, node_qudit, data in graph.edges(data=True):
             op = data.get(QuditOperator) or data.get(Pauli)
-            matrix[node_check.index, :, node_qudit.index] = op.value
+            matrix[node_check.index, :, node_qudit.index] = op.value[::-1]
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
@@ -619,8 +619,8 @@ class QuditCode(AbstractCode):
         for check in range(self.num_checks):
             ops = []
             for qudit in range(self.num_qudits):
-                val_x = matrix[check, Pauli.X, qudit]
-                val_z = matrix[check, Pauli.Z, qudit]
+                val_x = matrix[check, 1, qudit]
+                val_z = matrix[check, 0, qudit]
                 vals_xz = (val_x, val_z)
                 if self.field.order == 2:
                     ops.append(str(Pauli(vals_xz)))
@@ -643,7 +643,7 @@ class QuditCode(AbstractCode):
             if len(check_op) != num_qudits:
                 raise ValueError(f"Stabilizers 0 and {check} have different lengths")
             for qudit, op in enumerate(check_op):
-                matrix[check, :, qudit] = operator.from_string(op).value
+                matrix[check, :, qudit] = operator.from_string(op).value[::-1]
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
