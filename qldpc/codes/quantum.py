@@ -678,7 +678,7 @@ class HGPCode(CSSCode):
 
     @classmethod
     def get_product_node_map(
-        cls, nodes_a: Sequence[Node], nodes_b: Sequence[Node]
+        cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
     ) -> dict[tuple[Node, Node], Node]:
         """Map (dictionary) that re-labels nodes in the hypergraph product of two codes."""
         num_qudits_a = sum(node.is_data for node in nodes_a)
