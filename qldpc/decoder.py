@@ -33,9 +33,7 @@ def decode_with_BP_OSD(
     - Documentation: https://roffe.eu/software/ldpc/ldpc/osd_decoder.html
     - Reference: https://arxiv.org/abs/2005.07016
     """
-    bposd_decoder = ldpc.bposd_decoder(
-        matrix, osd_order=decoder_args.pop("osd_order", 0), **decoder_args
-    )
+    bposd_decoder = get_BP_OSD_decoder(matrix, **decoder_args)
     return bposd_decoder.decode(syndrome)
 
 

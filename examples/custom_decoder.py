@@ -2,31 +2,19 @@ import stim
 import numpy as np
 import pathlib
 from ldpc.bposd_decoder import BpOsdDecoder
+from functools import partial
 import sinter
 import beliefmatching
 import pymatching
+import qldpc
 
-def mwpm(matrix):
-    decoder = pymatching.Matching(matrix.check_matrix)
+def ilp(matrix):
+    decoder = partial(qldpc.decoder.decode_with_ILP, matrix=matrix.check_matrix.toarray())
     def decode(syndrome):
-        return decoder.decode(syndrome)
-    return decode
-
-def get_decoding_map(matrix):
-    decoder = BpOsdDecoder(
-            matrix.check_matrix,
-            error_channel=list(matrix.priors),
-            max_iter=5,
-            bp_method="ms",
-            ms_scaling_factor=0.625,
-            schedule="parallel",
-            omp_thread_count=1,
-            serial_schedule_order=None,
-            osd_method="osd0",
-            osd_order=0,
-        )
-    def decode(syndrome):
-        return decoder.decode(syndrome)
+        try:
+            return decoder(syndrome=syndrome)
+        except:
+            return np.zeros(matrix.check_matrix.shape[1], dtype=syndrome.dtype)
     return decode
 
 
@@ -108,6 +96,6 @@ class CustomDecoder(sinter.Decoder):
         return (self.check_matrices.observables_matrix @ corr) % 2
 
     def initialize_decoder(self):
-        self.check_matrices = beliefmatching.detector_error_model_to_check_matrices(self.dem, True)
+        self.check_matrices = beliefmatching.detector_error_model_to_check_matrices(self.dem, allow_undecomposed_hyperedges=True)
         self.decode = self.decoder_function(self.check_matrices)
             
