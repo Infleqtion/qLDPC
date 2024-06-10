@@ -195,7 +195,7 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) 
     transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
     for node_check, node_qubit, data in code.graph.edges(data=True):
         vals = data[QuditOperator].value
-        assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals
+        assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals[::-1]
 
 
 def test_qudit_ops() -> None:
@@ -205,8 +205,8 @@ def test_qudit_ops() -> None:
     code = codes.FiveQubitCode()
     logical_ops = code.get_logical_ops()
     assert logical_ops.shape == (2, code.dimension, 2 * code.num_qudits)
-    assert np.array_equal(logical_ops[0, 0], [0, 0, 0, 0, 1, 1, 0, 0, 1, 0])
-    assert np.array_equal(logical_ops[1, 0], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
+    assert np.array_equal(logical_ops[0], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0]])
+    assert np.array_equal(logical_ops[1], [[0, 1, 1, 0, 0, 0, 0, 0, 0, 1]])
     assert code.get_logical_ops() is code._full_logical_ops
 
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I")
@@ -257,6 +257,8 @@ def test_CSS_ops() -> None:
     full_logicals_x, full_logicals_z = full_logicals[0], full_logicals[1]
     assert np.array_equal(full_logicals_x, np.hstack([logicals_x, np.zeros_like(logicals_x)]))
     assert np.array_equal(full_logicals_z, np.hstack([np.zeros_like(logicals_x), logicals_z]))
+    assert not np.any(code.matrix @ full_logicals_x.T)
+    assert not np.any(code.matrix @ full_logicals_z.T)
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
