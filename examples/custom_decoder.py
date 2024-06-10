@@ -4,50 +4,28 @@ import pathlib
 from ldpc.bposd_decoder import BpOsdDecoder
 import sinter
 import beliefmatching
+import pymatching
 
-class BPOSD():
-
-    def __init__(self,
-                 matrix,
-                 error_channel,
-                 max_iter=5,
-                 bp_method="ms",
-                 ms_scaling_factor=0.625,
-                 schedule="parallel",
-                 omp_thread_count=1,
-                 serial_schedule_order=None,
-                 osd_method="osd0",
-                 osd_order=0):
-        
-        self.bposd = BpOsdDecoder(
-            matrix,
-            error_channel=error_channel,
-            max_iter=max_iter,
-            bp_method=bp_method,
-            ms_scaling_factor=ms_scaling_factor,
-            schedule=schedule,
-            omp_thread_count=omp_thread_count,
-            serial_schedule_order=serial_schedule_order,
-            osd_method=osd_method,
-            osd_order=osd_order,
-        )
-    def decode(self, syndrome):
-        return self.bposd.decode(syndrome)
+def mwpm(matrix):
+    decoder = pymatching.Matching(matrix.check_matrix)
+    def decode(syndrome):
+        return decoder.decode(syndrome)
+    return decode
 
 def get_decoding_map(matrix):
     decoder = BpOsdDecoder(
-            matrix,
-            error_channel=error_channel,
-            max_iter=max_iter,
-            bp_method=bp_method,
-            ms_scaling_factor=ms_scaling_factor,
-            schedule=schedule,
-            omp_thread_count=omp_thread_count,
-            serial_schedule_order=serial_schedule_order,
-            osd_method=osd_method,
-            osd_order=osd_order,
+            matrix.check_matrix,
+            error_channel=list(matrix.priors),
+            max_iter=5,
+            bp_method="ms",
+            ms_scaling_factor=0.625,
+            schedule="parallel",
+            omp_thread_count=1,
+            serial_schedule_order=None,
+            osd_method="osd0",
+            osd_order=0,
         )
-    def decode(self, syndrome):
+    def decode(syndrome):
         return decoder.decode(syndrome)
     return decode
 
@@ -62,8 +40,8 @@ class CustomDecoder(sinter.Decoder):
     decoder: A decoder object
     """
 
-    def __init__(self, decoder):
-        self.decoder_class = decoder
+    def __init__(self, decoder_function):
+        self.decoder_function = decoder_function
 
     def decode_via_files(
         self,
@@ -116,7 +94,7 @@ class CustomDecoder(sinter.Decoder):
             (num_shots, num_obs), dtype=bool)
 
         for i in range(num_shots):
-            predictions[i, :] = self.decode(shots[i, :])
+            predictions[i, :] = self.full_decode(shots[i, :])
 
         stim.write_shot_data_file(
             data=predictions,
@@ -125,12 +103,11 @@ class CustomDecoder(sinter.Decoder):
             num_observables=num_obs,
         )
 
-    def decode(self, syndrome: np.ndarray) -> np.ndarray:
-        corr = self.decoder.decode(syndrome=syndrome)
+    def full_decode(self, syndrome: np.ndarray) -> np.ndarray:
+        corr = self.decode(syndrome=syndrome)
         return (self.check_matrices.observables_matrix @ corr) % 2
 
-    def initialize_decoder(self, needs_matrices: bool = True):
-        if needs_matrices:
-            self.check_matrices = beliefmatching.detector_error_model_to_check_matrices(self.dem, True)
-            self.decoder = self.decoder_class(self.check_matrices.check_matrix, list(self.check_matrices.priors))
+    def initialize_decoder(self):
+        self.check_matrices = beliefmatching.detector_error_model_to_check_matrices(self.dem, True)
+        self.decode = self.decoder_function(self.check_matrices)
             
