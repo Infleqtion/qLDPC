@@ -64,7 +64,6 @@ def get_random_array(
 # template error-correcting code class
 
 
-# TODO(?): support sparse parity check matrices
 class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
@@ -153,8 +152,6 @@ class AbstractCode(abc.ABC):
 # classical codes
 
 
-# TODO:
-# - add code concatenation
 class ClassicalCode(AbstractCode):
     """Classical linear error-correcting code over a finite field F_q.
 
@@ -503,14 +500,6 @@ class ClassicalCode(AbstractCode):
 # quantum codes
 
 
-# TODO:
-# - add code concatenation
-# - investigate weight reduction: https://arxiv.org/abs/2402.05228
-# - add is_CSS method to figure out whether this is a CSS Code
-#   - see https://quantumcomputing.stackexchange.com/questions/15432/
-#   - also compute and store sub-codes, if CSS
-#   - also add QuditCode.to_CSS() -> CSSCode
-# - implement standard methods like get_distance, etc.
 class QuditCode(AbstractCode):
     """Quantum stabilizer code for Galois qudits, with dimension q = p^m for prime p and integer m.
 
@@ -658,8 +647,6 @@ class QuditCode(AbstractCode):
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
-    # TODO: generalize to any local Clifford deformation
-    #       see https://arxiv.org/abs/quant-ph/0408190
     @classmethod
     def conjugate(
         cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]], qudits: slice | Sequence[int]

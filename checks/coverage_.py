@@ -3,11 +3,10 @@ import sys
 from collections.abc import Iterable
 
 import checks_superstaq
+import pytest_
 
 
-def run_modular(
-    exclude: str | Iterable[str] = ("checks/*.py", "experiments/*.py", "*/__init__.py", "*_test.py")
-) -> int:
+def run_modular(exclude: str | Iterable[str] = ("*_test.py",) + pytest_.EXCLUDE) -> int:
     """Check that each file is covered by its own data file."""
 
     # start by identifying files that should be covered
