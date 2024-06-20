@@ -15,6 +15,7 @@
    limitations under the License.
 """
 
+import math
 import unittest.mock
 
 import galois
@@ -161,32 +162,36 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-def test_SL(field: int = 3) -> None:
+@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 4), (3, 2)])
+@pytest.mark.parametrize("linear_rep", [False, True])
+def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group."""
-    for linear_rep in [False, True]:
-        group = abstract.SL(2, field=field, linear_rep=linear_rep)
-        gens = group.generators
-        mats = group.get_generator_mats()
-        assert np.array_equal(group.lift(gens[0]), mats[0])
-        assert np.array_equal(group.lift(gens[1]), mats[1].view(np.ndarray))
+    group = abstract.SL(dimension, field=field, linear_rep=linear_rep)
+    order = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
+    mats = tuple(abstract.SL.iter_mats(dimension, field))
+    assert group.order == len(mats) == order
 
-    assert len(list(abstract.SL.iter_mats(2, 2))) == abstract.SL(2, 2).order
-
-    # cover representation with different generators
-    assert len(abstract.SL(2, 5).generators) == 2
+    gens = group.generators
+    gen_mats = group.get_generating_mats(dimension, field)
+    assert np.array_equal(group.lift(gens[0]), gen_mats[0])
+    assert np.array_equal(group.lift(gens[1]), gen_mats[1])
 
 
-def test_PSL(field: int = 3) -> None:
+@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 3), (3, 2)])
+@pytest.mark.parametrize("linear_rep", [False, True])
+def test_PSL(dimension: int, field: int, linear_rep: bool) -> None:
     """Projective special linear group."""
-    group = abstract.PSL(2, 2)
-    assert group.generators == abstract.SL(2, 2).generators
-    assert group.dimension == 2
+    group = abstract.PSL(dimension, field, linear_rep=linear_rep)
+    order_SL = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
+    order = order_SL // math.gcd(dimension, field - 1)
+    mats = tuple(abstract.PSL.iter_mats(dimension, field))
+    assert group.order == len(mats) == order
 
-    assert len(list(abstract.PSL.iter_mats(2, 2))) == abstract.PSL(2, 2).order
-    assert abstract.PSL(2, 3).order == 24
-
-    with pytest.raises(ValueError, match="not yet supported"):
-        abstract.PSL(3, 3)
+    if field == 2:
+        gens = group.generators
+        gen_mats = group.get_generating_mats(dimension, field)
+        assert np.array_equal(group.lift(gens[0]), gen_mats[0])
+        assert np.array_equal(group.lift(gens[1]), gen_mats[1])
 
 
 def test_small_group() -> None:
