@@ -681,17 +681,31 @@ class HGPCode(CSSCode):
         cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
     ) -> dict[tuple[Node, Node], Node]:
         """Map (dictionary) that re-labels nodes in the hypergraph product of two codes."""
-        index_qudit = 0
-        index_check = 0
+        num_qudits_a = sum(node.is_data for node in nodes_a)
+        num_qudits_b = sum(node.is_data for node in nodes_b)
+        num_checks_a = len(nodes_a) - num_qudits_a
+        num_checks_b = len(nodes_b) - num_qudits_b
+        sector_shapes = [
+            [(num_qudits_a, num_qudits_b), (num_qudits_a, num_checks_b)],
+            [(num_checks_a, num_qudits_b), (num_checks_a, num_checks_b)],
+        ]
+
         node_map = {}
         for node_a, node_b in itertools.product(sorted(nodes_a), sorted(nodes_b)):
-            if cls.get_sector(node_a, node_b) in [(0, 0), (1, 1)]:
-                node = Node(index=index_qudit, is_data=True)
-                index_qudit += 1
-            else:
-                node = Node(index=index_check, is_data=False)
-                index_check += 1
-            node_map[node_a, node_b] = node
+            # identify sector and whether this is a data vs. check qudit
+            sector = cls.get_sector(node_a, node_b)
+            is_data = sector in [(0, 0), (1, 1)]
+
+            # identify node index
+            sector_shape = sector_shapes[sector[0]][sector[1]]
+            index = int(np.ravel_multi_index((node_a.index, node_b.index), sector_shape))
+            if sector == (1, 1):
+                index += num_qudits_a * num_qudits_b
+            if sector == (0, 1):
+                index += num_checks_a * num_qudits_b
+
+            node_map[node_a, node_b] = Node(index=index, is_data=is_data)
+
         return node_map
 
 
@@ -761,9 +775,6 @@ class LPCode(CSSCode):
 # quantum Tanner code
 
 
-# TODO: investigate construction from lifted product codes
-# - see Section 7 of https://arxiv.org/abs/2206.07571
-# - also https://inria.hal.science/hal-04206478/document
 # TODO: example notebook featuring this code
 class QTCode(CSSCode):
     """Quantum Tanner code: a CSS code for qudits defined on the faces of a Cayley complex.
