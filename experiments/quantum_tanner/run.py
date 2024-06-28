@@ -54,7 +54,7 @@ def plot_logs(
         ax.set_ylim(*ylim)
 
     ax.legend(loc="best")
-    ax.set_xlabel(r"$\log_n(d)$")
+    ax.set_xlabel(r"$\log_n(d_{\mathrm{upper}})$")
     ax.set_ylabel(r"$\log_n(k)$")
     fig.tight_layout()
     return fig, ax
@@ -86,7 +86,7 @@ def plot_rates(
         ax.set_ylim(*ylim)
 
     ax.legend(loc="best")
-    ax.set_xlabel(r"$d$")
+    ax.set_xlabel(r"$d_{\mathrm{upper}}$")
     ax.set_ylabel(r"$k/n$")
     fig.tight_layout()
     return fig, ax
@@ -112,7 +112,7 @@ def plot_ratios(
         ax.set_xlim(*xlim)
 
     ax.legend(loc="best")
-    ax.set_xlabel(r"$d$")
+    ax.set_xlabel(r"$d_{\mathrm{upper}}$")
     ax.set_ylabel(r"$kd^2/n$")
     fig.tight_layout()
     return fig, ax
