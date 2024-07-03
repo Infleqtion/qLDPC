@@ -24,6 +24,7 @@ import numpy as np
 import pymatching
 import sinter
 import stim
+from ldpc.sinter_decoders import SinterBpOsdDecoder
 
 from qldpc import codes, objects
 
