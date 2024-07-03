@@ -15,17 +15,16 @@
    limitations under the License.
 """
 
+import pathlib
 from collections.abc import Sequence
 
-import pathlib
-import sinter
 import beliefmatching
-import pymatching
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pymatching
+import sinter
 import stim
 
-from ldpc.bposd_decoder import BpOsdDecoder
 from qldpc import codes, objects
 
 
@@ -143,7 +142,6 @@ def get_syndrome_extraction_circuit(
 
 
 class CustomDecoder(sinter.Decoder):
-
     """
     Initializes a CustomDecoder object.
 
@@ -198,12 +196,9 @@ class CustomDecoder(sinter.Decoder):
         self.dem = stim.DetectorErrorModel.from_file(dem_path)
         self.initialize_decoder()
 
-        shots = stim.read_shot_data_file(
-            path=dets_b8_in_path, format="b8", num_detectors=num_dets
-        )
+        shots = stim.read_shot_data_file(path=dets_b8_in_path, format="b8", num_detectors=num_dets)
 
-        predictions = np.zeros(
-            (num_shots, num_obs), dtype=bool)
+        predictions = np.zeros((num_shots, num_obs), dtype=bool)
 
         for i in range(num_shots):
             predictions[i, :] = self.full_decode(shots[i, :])
@@ -216,19 +211,23 @@ class CustomDecoder(sinter.Decoder):
         )
 
     def full_decode(self, syndrome: np.ndarray) -> np.ndarray:
-        corr = self.decode(syndrome=syndrome)
-        return (self.check_matrices.observables_matrix @ corr) % 2
+        corr = self.decoder.decode(syndrome)
+        return (self.dem_matrices.observables_matrix @ corr) % 2
 
     def initialize_decoder(self):
-        self.check_matrices = beliefmatching.detector_error_model_to_check_matrices(self.dem, allow_undecomposed_hyperedges=True)
-        self.decode = self.decoder_function(self.check_matrices)
+        self.dem_matrices = beliefmatching.detector_error_model_to_check_matrices(
+            self.dem, allow_undecomposed_hyperedges=True
+        )
+        self.decoder = self.decoder_function(self.dem_matrices)
 
 
-def run_simulation(code, distance, sector, noise_range, shots, decoder_func, code_name: str, overwrite=True):
+def run_simulation(
+    code, distance, sector, noise_range, shots, decoder_func, code_name: str, overwrite=True
+):
 
     file_name = f"{('_'.join(code_name.split())).lower()}_{sector}"
-    filename = f'bposd_{file_name}.csv'
-    
+    filename = f"bposd_{file_name}.csv"
+
     if overwrite:
         if pathlib.Path(filename).is_file():
             pathlib.Path(filename).unlink()
@@ -239,7 +238,7 @@ def run_simulation(code, distance, sector, noise_range, shots, decoder_func, cod
             yield sinter.Task(
                 circuit=stim_circuit,
                 detector_error_model=stim_circuit.detector_error_model(decompose_errors=False),
-                json_metadata={'noise': noise, 'd': distance, 'repetitions': distance},
+                json_metadata={"noise": noise, "d": distance, "repetitions": distance},
             )
 
     samples = sinter.collect(
@@ -248,21 +247,27 @@ def run_simulation(code, distance, sector, noise_range, shots, decoder_func, cod
         max_errors=100,
         tasks=generate_example_tasks(),
         # decoders=["pymatching"],
-        decoders=['bposd'],
-        custom_decoders={'bposd': CustomDecoder(decoder_func)
-        },
-
+        decoders=["bposd"],
+        custom_decoders={"bposd": CustomDecoder(decoder_func)},
+        # custom_decoders={'bposd': SinterBpOsdDecoder(
+        #     max_iter=5,
+        #     bp_method="ms",
+        #     ms_scaling_factor=0.625,
+        #     schedule="parallel",
+        #     osd_method="osd0")
+        # },
         print_progress=True,
         save_resume_filepath=filename,
     )
-    return(samples)
+    return samples
 
 
 def print_results(samples):
- # Print samples as CSV data.
+    # Print samples as CSV data.
     print(sinter.CSV_HEADER)
     for sample in samples:
         print(sample.to_csv_line())
+
 
 def plot_results(samples, code_name, sector, noise_range):
     # Render a matplotlib plot of the data.
@@ -271,39 +276,21 @@ def plot_results(samples, code_name, sector, noise_range):
         ax=axis,
         stats=samples,
         group_func=lambda stat: f"{code_name} d={stat.json_metadata['d']}",
-        filter_func=lambda stat: stat.decoder == 'bposd',
+        filter_func=lambda stat: stat.decoder == "bposd",
         # filter_func=lambda stat: stat.decoder == "pymatching",
-        x_func=lambda stat: stat.json_metadata['noise'],
+        x_func=lambda stat: stat.json_metadata["noise"],
     )
 
-    axis.set_ylabel('Logical Error Rate')
-    axis.set_title(f'{code_name} threshold with BPOSD for {sector} stabilizers')
+    axis.set_ylabel("Logical Error Rate")
+    axis.set_title(f"{code_name} threshold with BPOSD for {sector} stabilizers")
 
     axis.plot(noise_range, noise_range, "--", color="k")
     axis.loglog()
     axis.grid()
-    axis.set_xlabel('Physical Error Rate')
+    axis.set_xlabel("Physical Error Rate")
     axis.legend()
 
     # Save to file and also open in a window.
     file_name = f"{('_'.join(code_name.split())).lower()}_{sector}"
-    fig.savefig(f'{file_name}_plot.png')
+    fig.savefig(f"{file_name}_plot.png")
     plt.show()
-
-
-def BPOSD(matrix):
-    decoder = BpOsdDecoder(
-            matrix.check_matrix,
-            error_channel=list(matrix.priors),
-            max_iter=5,
-            bp_method="ms",
-            ms_scaling_factor=0.625,
-            schedule="parallel",
-            omp_thread_count=1,
-            serial_schedule_order=None,
-            osd_method="osd0",
-            osd_order=0,
-        )
-    def decode(syndrome):
-        return decoder.decode(syndrome)
-    return decode
