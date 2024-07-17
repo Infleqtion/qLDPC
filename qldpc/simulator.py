@@ -224,7 +224,7 @@ class CustomDecoder(sinter.Decoder):
 
 def run_simulation(
     code, distance, sector, noise_range, shots, decoder_func, code_name: str, overwrite=True
-):
+) -> list['sinter.TaskStats']:
 
     file_name = f"{('_'.join(code_name.split())).lower()}_{sector}"
     filename = f"bposd_{file_name}.csv"
@@ -247,30 +247,22 @@ def run_simulation(
         max_shots=shots,
         max_errors=100,
         tasks=generate_example_tasks(),
-        # decoders=["pymatching"],
         decoders=["bposd"],
         custom_decoders={"bposd": CustomDecoder(decoder_func)},
-        # custom_decoders={'bposd': SinterBpOsdDecoder(
-        #     max_iter=5,
-        #     bp_method="ms",
-        #     ms_scaling_factor=0.625,
-        #     schedule="parallel",
-        #     osd_method="osd0")
-        # },
         print_progress=True,
         save_resume_filepath=filename,
     )
     return samples
 
 
-def print_results(samples):
+def print_results(samples: list['sinter.TaskStats']) -> None:
     # Print samples as CSV data.
     print(sinter.CSV_HEADER)
     for sample in samples:
         print(sample.to_csv_line())
 
 
-def plot_results(samples, code_name, sector, noise_range):
+def plot_results(samples: list['sinter.TaskStats'], code_name, sector, noise_range):
     # Render a matplotlib plot of the data.
     fig, axis = plt.subplots(1, 1, sharey=True, figsize=(8, 6))
     sinter.plot_error_rate(
@@ -278,7 +270,6 @@ def plot_results(samples, code_name, sector, noise_range):
         stats=samples,
         group_func=lambda stat: f"{code_name} d={stat.json_metadata['d']}",
         filter_func=lambda stat: stat.decoder == "bposd",
-        # filter_func=lambda stat: stat.decoder == "pymatching",
         x_func=lambda stat: stat.json_metadata["noise"],
     )
 
