@@ -341,7 +341,7 @@ class BBCode(TBCode):
 
             # figure out how to shift qubits in each sector:
             # (0 <--> L) or (1 <--> R) for data qubits, and X or Z for check qubits
-            shifts = {
+            shifts: dict[int | PauliXZ, tuple[int, int]] = {
                 0: (0, 0),  # "L" data qubits
                 1: self.get_exponents(a_2 ** (-1) * b_1),  # "R" data qubits
                 Pauli.X: self.get_exponents(a_2 ** (-1)),  # "X" check qubits
