@@ -113,10 +113,9 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
 
 def gap_is_installed() -> bool:
     """Is GAP 4 installed?"""
-    commands = ["gap", "-q", "-c", r'Print("GAP ", GAPInfo.Version, "\n"); QUIT;']
+    commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n"); QUIT;']
     result = subprocess.run(commands, capture_output=True, text=True)
-    lines = result.stdout.splitlines()
-    return len(lines) == 2 and lines[1].startswith("GAP 4")
+    return bool(re.match(r"\n4\.[0-9]+\.[0-9]+$", result.stdout))
 
 
 def sanitize_gap_commands(commands: Sequence[str]) -> tuple[str, ...]:
