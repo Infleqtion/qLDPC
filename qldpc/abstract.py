@@ -43,8 +43,8 @@ import copy
 import functools
 import itertools
 import math
+import typing
 from collections.abc import Callable, Iterator, Sequence
-from typing import TypeVar
 
 import galois
 import numpy as np
@@ -59,9 +59,6 @@ DEFAULT_FIELD_ORDER = 2
 
 ################################################################################
 # groups and group members
-
-
-UnknownType = TypeVar("UnknownType")
 
 
 class GroupMember(comb.Permutation):
@@ -84,9 +81,7 @@ class GroupMember(comb.Permutation):
             return GroupMember.from_sympy(super().__mul__(other))
         return NotImplemented
 
-    def __add__(self, other: UnknownType) -> UnknownType:
-        if hasattr(other, "__radd__"):
-            return other.__radd__(self)
+    def __add__(self, other: object) -> typing.Any:
         return NotImplemented  # pragma: no cover
 
     def __lt__(self, other: GroupMember) -> bool:
