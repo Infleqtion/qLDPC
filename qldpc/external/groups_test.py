@@ -15,6 +15,8 @@
    limitations under the License.
 """
 
+from __future__ import annotations
+
 import subprocess
 import unittest.mock
 import urllib

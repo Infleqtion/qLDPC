@@ -15,6 +15,8 @@
    limitations under the License.
 """
 
+from __future__ import annotations
+
 import functools
 import os
 from collections.abc import Callable, Hashable

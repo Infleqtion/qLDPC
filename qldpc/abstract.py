@@ -431,7 +431,7 @@ class Element:
     _group: Group
     _vec: collections.defaultdict[GroupMember, galois.FieldArray]
 
-    def __init__(self, group: Group, *members: GroupMember):
+    def __init__(self, group: Group, *members: GroupMember) -> None:
         self._group = group
         self._vec = collections.defaultdict(lambda: self.field(0))
         for member in members:
