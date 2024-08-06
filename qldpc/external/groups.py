@@ -15,7 +15,6 @@
    limitations under the License.
 """
 
-import os
 import re
 import subprocess
 import urllib.error
@@ -114,7 +113,7 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
 
 def gap_is_installed() -> bool:
     """Is GAP 4 installed?"""
-    commands = ["script", "-c", "gap --version", os.devnull]
+    commands = ["gap", "-q", "-c", r'Print("GAP ", GAPInfo.Version, "\n"); QUIT;']
     result = subprocess.run(commands, capture_output=True, text=True)
     lines = result.stdout.splitlines()
     return len(lines) == 2 and lines[1].startswith("GAP 4")
