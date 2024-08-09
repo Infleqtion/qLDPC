@@ -18,7 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -54,21 +54,37 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
 
 
 @restrict_to_qubits
-def prep(code: codes.QuditCode, pauli: PauliXZ = Pauli.Z) -> stim.Circuit:
-    """Circuit to prepare a logical +1 eigenstate of all logical operators of one type."""
+def prep(
+    code: codes.QuditCode, pauli: PauliXZ = Pauli.Z, *, qubits: Sequence[int] | None
+) -> stim.Circuit:
+    """Circuit to prepare a logical +1 eigenstate of all logical operators of one type.
+
+    Optionally prepend a specified number of qubits to every Pauli string.
+    """
     stabilizers = [op_to_string(row, flip_xz=True) for row in code.matrix]
     operators = [op_to_string(op) for op in code.get_logical_ops(pauli)]
     tableau = stim.Tableau.from_stabilizers(stabilizers + operators, allow_redundant=True)
-    return tableau.to_circuit()
+    cirucit = tableau.to_circuit()
+    if not qubits:
+        return cirucit
+
+    assert len(qubits) >= cirucit.num_qubits
+    remapped_circuit = stim.Circuit()
+    for instruction in tableau.to_circuit():
+        targets = [stim.GateTarget(qubits[target.value]) for target in instruction.targets_copy()]
+        remapped_circuit.append(instruction.name, targets, instruction.gate_args_copy())
+    return remapped_circuit
 
 
 @restrict_to_qubits
 def steane_syndrome_extraction(
-    code: codes.QuditCode, error_prob: float = 0, num_cycles: int = 1
+    code: codes.CSSCode, error_prob: float = 0, num_cycles: int = 1
 ) -> stim.Circuit:
     """Noisy circuit to perform one or more Steane-type syndrome extraction cycles."""
+    circuit = stim.Circuit()
+    circuit += prep(code, qubits=[qq + code.num_qubits for qq in range(code.num_qubits)])
+#     print(circuit)
 
 
 # code = codes.FiveQubitCode()
-# circuit = prep(code, Pauli.Z)
-# print(circuit)
+# circuit = steane_syndrome_extraction(code)
