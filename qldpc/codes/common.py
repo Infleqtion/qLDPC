@@ -1120,12 +1120,7 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-<<<<<<< Updated upstream
             return self.get_logical_ops()[pauli]
-=======
-            shape = (self.dimension, 2, self.num_qudits)
-            return self.get_logical_ops()
->>>>>>> Stashed changes
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
