@@ -247,20 +247,19 @@ def test_CSS_ops() -> None:
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
 
-    # test that logical operators are dual to each other and have trivial syndromes
-    logicals_x, logicals_z = code.get_logical_ops(Pauli.X), code.get_logical_ops(Pauli.Z)
-    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
-    assert not np.any(code.matrix_z @ logicals_x.T)
-    assert not np.any(code.matrix_x @ logicals_z.T)
+    # test that logical operators have trivial syndromes
+    logicals_x = code.get_logical_ops(Pauli.X)
+    logicals_z = code.get_logical_ops(Pauli.Z)
+    assert not np.any(logicals_x[:, code.num_qudits :])
+    assert not np.any(logicals_z[:, : code.num_qudits])
+    assert not np.any(code.matrix @ logicals_x.T)
+    assert not np.any(code.matrix @ logicals_z.T)
     assert code.get_logical_ops() is code._logical_ops
 
-    # verify consistency with QuditCode.get_logical_ops
-    full_logicals = codes.QuditCode.get_logical_ops(code)
-    full_logicals_x, full_logicals_z = full_logicals[0], full_logicals[1]
-    assert np.array_equal(full_logicals_x, np.hstack([logicals_x, np.zeros_like(logicals_x)]))
-    assert np.array_equal(full_logicals_z, np.hstack([np.zeros_like(logicals_x), logicals_z]))
-    assert not np.any(code.matrix @ full_logicals_x.T)
-    assert not np.any(code.matrix @ full_logicals_z.T)
+    # test that logical operators are dual to each other
+    logicals_x = logicals_x[:, : code.num_qudits]
+    logicals_z = logicals_z[:, code.num_qudits :]
+    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
     dist = 4

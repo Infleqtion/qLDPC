@@ -1118,8 +1118,7 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            shape = (self.dimension, 2, self.num_qudits)
-            return self.get_logical_ops()
+            return self.get_logical_ops()[pauli]
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
@@ -1218,8 +1217,13 @@ class CSSCode(QuditCode):
         assert 0 <= logical_index < self.dimension
 
         # effective check matrix = syndromes and other logical operators
-        code = self.code_z if pauli == Pauli.X else self.code_x
-        all_dual_ops = self.get_logical_ops(~pauli)  # type:ignore[arg-type]
+        if pauli == Pauli.X:
+            code = self.code_z
+            nonzero_dual_section = slice(self.num_qudits, 2 * self.num_qudits)
+        else:
+            code = self.code_x
+            nonzero_dual_section = slice(self.num_qudits)
+        all_dual_ops = self.get_logical_ops()[~pauli, :, nonzero_dual_section]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
         dual_op_index = code.num_checks + logical_index
 
