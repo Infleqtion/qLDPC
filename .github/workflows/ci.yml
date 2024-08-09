@@ -14,7 +14,7 @@ on:
 
 jobs:
   format:
-    name: Format check
+    name: Formatting check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -37,7 +37,7 @@ jobs:
           checks/format_.py
 
   lint:
-    name: Lint check
+    name: Linting check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -83,7 +83,7 @@ jobs:
           checks/mypy_.py
 
   coverage:
-    name: Pytest and Coverage check
+    name: Pytest and coverage check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
