@@ -58,6 +58,7 @@ filterwarnings = [
 
 [tool.ruff]
 line-length = 100
+lint.extend-select = ["I"]
 
 [tool.black]
 color = true
