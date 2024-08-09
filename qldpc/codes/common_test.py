@@ -164,7 +164,9 @@ def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
 
 def test_qudit_code() -> None:
     """Miscellaneous qudit code tests and coverage."""
-    assert codes.FiveQubitCode().dimension == 1
+    code = codes.FiveQubitCode()
+    assert code.dimension == 1
+    assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
 
 @pytest.mark.parametrize("field", [2, 3])
