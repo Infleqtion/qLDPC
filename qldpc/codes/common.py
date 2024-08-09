@@ -678,6 +678,9 @@ class QuditCode(AbstractCode):
         logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
         (Z-type) operator.
 
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of that type.
+
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
         """
@@ -1107,9 +1110,8 @@ class CSSCode(QuditCode):
         (Z-type) operator.  The fact that logical operators come in conjugate pairs means that
         `logical_ops(Pauli.X)[r, :] @ logical_ops(Pauli.Z)[s, :] == int(r == s)`.
 
-        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array with
-        dimensions `(k, n)`, in which `logical_ops[r, :]` indicates the support of the purely-X-type
-        or purely-Z-type logical operator on qudit `r`.
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of that type.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
