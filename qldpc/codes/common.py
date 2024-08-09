@@ -519,7 +519,7 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _full_logical_ops: galois.FieldArray | None = None
+    _logical_ops: galois.FieldArray | None = None
 
     def __init__(
         self,
@@ -659,7 +659,7 @@ class QuditCode(AbstractCode):
         matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
         return matrix.reshape(num_checks, -1)
 
-    def get_logical_ops(self) -> galois.FieldArray:
+    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -682,8 +682,15 @@ class QuditCode(AbstractCode):
         thesis (arXiv:9705052), slightly modified for qudits.
         """
         # memoize manually because other methods may modify the logical operators computed here
-        if self._full_logical_ops is not None:
-            return self._full_logical_ops
+        assert pauli is None or pauli in PAULIS_XZ
+
+        # if requested, retrieve logical operators of one type only
+        if pauli is not None:
+            return self.get_logical_ops()[pauli]
+
+        # memoize manually because other methods may modify the logical operators computed here
+        if self._logical_ops is not None:
+            return self._logical_ops
 
         num_qudits = self.num_qudits
         dimension = self.dimension
@@ -750,8 +757,9 @@ class QuditCode(AbstractCode):
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
         logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
-        self._full_logical_ops = self.field(np.stack([logicals_x, logicals_z]))
-        return self._full_logical_ops
+        shape = (2, self.dimension, 2 * self.num_qudits)
+        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]).reshape(shape))
+        return self._logical_ops
 
 
 class CSSCode(QuditCode):
@@ -775,7 +783,6 @@ class CSSCode(QuditCode):
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
 
     _conjugated: slice | Sequence[int]
-    _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
     _balanced_codes: bool
@@ -1112,7 +1119,7 @@ class CSSCode(QuditCode):
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
             shape = (self.dimension, 2, self.num_qudits)
-            return self.get_logical_ops()[pauli].reshape(shape)[:, pauli, :]
+            return self.get_logical_ops()
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
