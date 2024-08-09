@@ -57,7 +57,7 @@ jobs:
           python3 -m pip install '.[dev]'
       - name: Lint
         run: |
-          checks/lint_.py --all
+          checks/lint_.py
 
   mypy:
     name: Type check
