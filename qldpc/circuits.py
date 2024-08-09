@@ -46,11 +46,9 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
     num_qubits = len(op) // 2
     paulis = []
     for qubit in range(num_qubits):
-        pauli = Pauli.I
-        if op[qubit]:
-            pauli *= Pauli.X
-        if op[qubit + num_qubits]:
-            pauli *= Pauli.Z
+        val_x = int(op[qubit])
+        val_z = int(op[qubit + num_qubits])
+        pauli = Pauli((val_x, val_z))
         paulis.append(str(pauli if not flip_xz else ~pauli))
     return stim.PauliString("".join(paulis))
 
