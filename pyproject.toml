@@ -41,12 +41,20 @@ sinter = ">=1.13"
 stim = ">=1.13"
 sympy = ">=1.12"
 
-checks-superstaq = { version = ">=0.5.19", optional = true }
+checks-superstaq = { version = ">=0.5.22", optional = true }
 
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
 
 # Check script configuration:
+
+[tool.pytest.ini_options]
+addopts = "--disable-socket"
+filterwarnings = [
+  "ignore::UserWarning:qtrl.*",
+  "ignore::PendingDeprecationWarning:qtrl.utils.config",
+  "ignore::PendingDeprecationWarning:ruamel.yaml.main",
+]
 
 [tool.black]
 color = true
@@ -80,6 +88,7 @@ modern-annotations-union = "always"
 modern-annotations-optional = "always"
 
 [tool.mypy]
+pretty = true
 ignore_missing_imports = true
 show_error_codes = true
 disallow_any_generics = true
@@ -89,7 +98,7 @@ warn_unused_ignores = true
 install_types = true
 non_interactive = true
 no_implicit_optional = true
-plugins = ["numpy.typing.mypy_plugin"]
+plugins = ["numpy.typing.mypy_plugin", "pydantic.mypy"]
 
 [tool.coverage.report]
 fail_under = 100
@@ -103,7 +112,12 @@ include = ["./*"]
 [tool.pylint.main]
 max-line-length = 100
 disable = "all"
-load-plugins = ["pylint.extensions.docparams", "pylint.extensions.docstyle"]
+load-plugins = [
+  "pylint.extensions.docparams",
+  "pylint.extensions.docstyle",
+  "checks_superstaq.pylint_init_return",
+  "checks_superstaq.pylint_import_annotations",
+]
 output-format = "colorized"
 score = false
 reports = false
@@ -121,7 +135,9 @@ enable = [
   "duplicate-argument-name",
   "expression-not-assigned",
   "function-redefined",
+  "import-future-annotations",
   "inconsistent-mro",
+  "init-return-check",
   "init-is-generator",
   "line-too-long",
   "lost-exception",
@@ -133,7 +149,7 @@ enable = [
   "no-value-for-parameter",
   "nonexistent-operator",
   "not-in-loop",
-  "parameter_documentation",
+  # "parameter_documentation",  # REPO-SPECIFIC CONFIG
   "pointless-statement",
   "redefined-builtin",
   "relative-beyond-top-level",
@@ -150,6 +166,7 @@ enable = [
   "unnecessary-pass",
   "unreachable",
   "unrecognized-inline-option",
+  "unused-argument",
   "unused-import",
   "unnecessary-semicolon",
   "unused-variable",
@@ -159,6 +176,13 @@ enable = [
   "wrong-import-position",
   "yield-outside-function",
 ]
+
+# Enable the optional checks by parameter_documentation
+[tool.pylint.parameter_documentation]
+accept-no-param-doc=false # Do not accept totally missing parameter documentation.
+accept-no-raise-doc=false # Do not accept totally missing raises documentation.
+accept-no-return-doc=false # Do not accept totally missing return documentation.
+accept-no-yield-doc=false # Do not accept missing yields annotations.
 
 # Ignore long lines containing urls or pylint directives.
 [tool.pylint.format]

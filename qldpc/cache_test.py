@@ -15,6 +15,8 @@
    limitations under the License.
 """
 
+from __future__ import annotations
+
 import unittest.mock
 
 import qldpc.cache
@@ -24,7 +26,7 @@ def test_use_disk_cache() -> None:
     """Cache function outputs."""
 
     @qldpc.cache.use_disk_cache("test")
-    def get_five(arg: str) -> int:
+    def get_five(_: str) -> int:
         return 5
 
     # use cache to save/retrieve results

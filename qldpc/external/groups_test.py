@@ -15,6 +15,8 @@
    limitations under the License.
 """
 
+from __future__ import annotations
+
 import subprocess
 import unittest.mock
 import urllib
@@ -115,7 +117,7 @@ def test_gap_is_installed() -> None:
     """Is GAP 4 installed?"""
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
         assert not external.groups.gap_is_installed()
-    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\nGAP 4")):
+    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n4.12.1")):
         assert external.groups.gap_is_installed()
 
 
