@@ -1,18 +1,18 @@
 """Quantum error-correcting codes
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 from __future__ import annotations
@@ -380,7 +380,6 @@ class BBCode(TBCode):
 
         # loop over each of X-type and Z-type parity checks
         for pauli in PAULIS_XZ:
-
             # identify old and new parity check tensors
             matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
             old_checks = matrix.reshape(*self.orders, 2, *self.orders)
@@ -465,7 +464,6 @@ class BBCode(TBCode):
 
             # loop over all plaquettes we need to consider
             for p_a, p_b in plaquettes:
-
                 # identify the location of a check qubit, and the support of its stabilizer
                 c_a = qubit_coords[pauli][0][p_a]
                 c_b = qubit_coords[pauli][1][p_b]
