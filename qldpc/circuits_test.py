@@ -37,3 +37,8 @@ def test_pauli_strings() -> None:
         circuits.op_to_string(row, flip_xz=True) == stim.PauliString(stabilizer.replace(" ", ""))
         for row, stabilizer in zip(code.matrix, code.get_stabilizers())
     )
+
+
+code = codes.FiveQubitCode()
+circuit = circuits.steane_syndrome_extraction(code, num_cycles=3)
+print(circuit)
