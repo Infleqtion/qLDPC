@@ -80,7 +80,7 @@ def prep(
 
 @restrict_to_qubits
 def steane_syndrome_extraction(
-    code: codes.CSSCode, error_prob: float = 0, num_cycles: int = 1
+    code: codes.CSSCode, error_prob: float = 0, num_cycles: int = 1, observables: PauliXZ = Pauli.Z
 ) -> stim.Circuit:
     """Circuit to perform one or more Steane-type syndrome measurement cycles.
 
@@ -161,6 +161,16 @@ def steane_syndrome_extraction(
             targets = [stim.target_rec(index), stim.target_rec(index - len(ancillas_x))]
             repeat_cycle.append("DETECTOR", targets)
         circuit.append(stim.CircuitRepeatBlock(num_cycles - 1, repeat_cycle))
+
+    # identify logical observables
+    for op_idx, logical_op in enumerate(code.get_logical_ops(observables)):
+        string = op_to_string(logical_op)
+        support = [
+            f"{_INT_TO_PAULI[string[qubit]]}{copy_qubits[qubit]}" for qubit in np.where(string)[0]
+        ]
+        observable = "*".join(support)
+        circuit += stim.Circuit(f"MPP {observable}")
+        circuit.append("OBSERVABLE_INCLUDE", [stim.target_rec(-1)], op_idx)
 
     if not error_prob:
         return circuit.without_noise()
