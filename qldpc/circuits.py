@@ -125,11 +125,13 @@ def steane_syndrome_extraction(
     # bit-flip (X-type) error correction cycle
     cycle_x = prep(code, Pauli.Z, qubits=copy_qubits)
     cycle_x.append("CX", data_copy_pairs)
+    cycle_x.append("DEPOLARIZE2", data_copy_pairs, error_prob)
     cycle_x += extract_syndromes(checks_x, ancillas_x)
 
     # phase-flip (Z-type) error correction cycle
     cycle_z = prep(code, Pauli.X, qubits=copy_qubits)
     cycle_z.append("CZ", data_copy_pairs)
+    cycle_z.append("DEPOLARIZE2", data_copy_pairs, error_prob)
     cycle_z += extract_syndromes(checks_z, ancillas_z)
 
     # one full error correction cycle
