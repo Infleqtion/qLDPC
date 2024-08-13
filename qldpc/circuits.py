@@ -165,9 +165,7 @@ def steane_syndrome_extraction(
     # identify logical observables
     for op_idx, logical_op in enumerate(code.get_logical_ops(observables)):
         string = op_to_string(logical_op)
-        support = [
-            f"{_INT_TO_PAULI[string[qubit]]}{copy_qubits[qubit]}" for qubit in np.where(string)[0]
-        ]
+        support = [f"{_INT_TO_PAULI[string[qubit]]}{qubit}" for qubit in np.where(string)[0]]
         observable = "*".join(support)
         circuit += stim.Circuit(f"MPP {observable}")
         circuit.append("OBSERVABLE_INCLUDE", [stim.target_rec(-1)], op_idx)
