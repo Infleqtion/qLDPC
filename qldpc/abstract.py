@@ -580,15 +580,16 @@ class Protograph(npt.NDArray[np.object_]):
         for value in protograph.ravel():
             if not isinstance(value, Element):
                 raise ValueError(
-                    "Requirement failed: all entries of a protograph must be Element-valued"
+                    "Requirement failed: all entries of a protograph must be Element-valued\n"
+                    "Try building a protograph with Protograph.build(...)"
                 )
             else:
                 if not (group is None or group == value.group):
-                    raise ValueError("Inconsistent base groups provided for protograph")
+                    raise ValueError("Inconsistent base groups provided for a protograph")
                 group = value.group
 
         if group is None:
-            raise ValueError("Cannot determine underlying group for a protograh")
+            raise ValueError("Cannot determine the underlying group for a protograh")
         protograph._group = group
 
         return protograph
@@ -601,7 +602,7 @@ class Protograph(npt.NDArray[np.object_]):
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field of this protograph."""
-        return self.group.field
+        return self._group.field
 
     def lift(self) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
@@ -645,6 +646,13 @@ class Protograph(npt.NDArray[np.object_]):
 
         vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape), group)
+
+    def __matmul__(self, other: object) -> Protograph:
+        if isinstance(other, Protograph) and not self._group == other._group:
+            raise ValueError("Cannot multiply protographs with different base groups")
+        protograph = super().__matmul__(other)
+        protograph._group = self._group
+        return protograph
 
 
 ################################################################################
