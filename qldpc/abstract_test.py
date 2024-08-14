@@ -126,6 +126,7 @@ def test_protograph() -> None:
     assert protograph.group == abstract.TrivialGroup()
     assert protograph.field == abstract.TrivialGroup().field
     assert np.array_equal(protograph.lift(), matrix)
+    assert np.array_equal((protograph @ protograph).lift(), matrix @ matrix % 2)
 
     # fail to construct a valid protograph
     with pytest.raises(ValueError, match="must be Element-valued"):
@@ -133,8 +134,11 @@ def test_protograph() -> None:
     with pytest.raises(ValueError, match="Inconsistent base groups"):
         groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
         abstract.Protograph([[abstract.Element(group) for group in groups]])
-    with pytest.raises(ValueError, match="Cannot determine underlying group"):
+    with pytest.raises(ValueError, match="Cannot determine the underlying group"):
         abstract.Protograph([])
+    with pytest.raises(ValueError, match="different base groups"):
+        new_protograph = abstract.Protograph.build(abstract.CyclicGroup(1), [[1]])
+        protograph @ new_protograph
 
 
 def test_transpose() -> None:
