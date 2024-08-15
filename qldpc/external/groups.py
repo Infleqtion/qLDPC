@@ -17,6 +17,7 @@ limitations under the License.
 
 from __future__ import annotations
 
+import functools
 import re
 import subprocess
 import urllib.error
@@ -113,11 +114,15 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     return generators
 
 
+@functools.cache
 def gap_is_installed() -> bool:
     """Is GAP 4 installed?"""
     commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n"); QUIT;']
-    result = subprocess.run(commands, capture_output=True, text=True)
-    return bool(re.match(r"\n4\.[0-9]+\.[0-9]+$", result.stdout))
+    try:
+        result = subprocess.run(commands, capture_output=True, text=True)
+        return bool(re.match(r"\n4\.[0-9]+\.[0-9]+$", result.stdout))
+    except Exception:
+        return False
 
 
 def sanitize_gap_commands(commands: Sequence[str]) -> tuple[str, ...]:
