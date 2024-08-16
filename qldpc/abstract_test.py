@@ -230,4 +230,4 @@ def test_small_group() -> None:
             assert group.structure == structure
 
     # cover a special case
-    assert abstract.SmallGroup(1, 1) == abstract.TrivialGroup()
+    assert abstract.Group.from_name("SmallGroup(1,1)") == abstract.TrivialGroup()
