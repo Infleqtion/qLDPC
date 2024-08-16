@@ -228,3 +228,5 @@ def test_small_group() -> None:
             "qldpc.external.groups.get_small_group_structure", return_value=structure
         ):
             assert group.structure == structure
+
+    assert abstract.SmallGroup(1, 1) == abstract.TrivialGroup()
