@@ -831,6 +831,10 @@ class SmallGroup(Group):
         super()._init_from_group(Group.from_name(name))
         self.index = index
 
+    def random(self, *, seed: int | None = None) -> GroupMember:
+        """A random element this group."""
+        return super().random(seed=seed) if self.index > 1 else self.identity
+
     @functools.cached_property
     def structure(self) -> str:
         """A description of the structure of this group."""
