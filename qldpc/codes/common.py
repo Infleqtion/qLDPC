@@ -556,12 +556,12 @@ class QuditCode(AbstractCode):
     @property
     def num_qubits(self) -> int:
         """Number of data qubits in this code."""
-        self._assert_qubit_code()
+        if not self.field.order == 2:
+            raise ValueError(
+                "You asked for the number of qubits in this code, but this code is built out of "
+                rf"{self.field.order}-dimensional qudits.\nTry calling {type(self)}.num_qudits."
+            )
         return self.num_qudits
-
-    def _assert_qubit_code(self) -> None:
-        if self.field.order != 2:
-            raise ValueError("Attempted to call a qubit-only method with a non-qubit code")
 
     @property
     def dimension(self) -> int:

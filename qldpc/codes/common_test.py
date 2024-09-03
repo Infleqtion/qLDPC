@@ -158,7 +158,7 @@ def test_code_string() -> None:
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
     assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
-    with pytest.raises(ValueError, match="qubit-only method"):
+    with pytest.raises(ValueError, match="3-dimensional qudits"):
         assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
 
 
