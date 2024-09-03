@@ -303,8 +303,8 @@ class CayleyComplex:
     @classmethod
     def build_cayley_graph(
         cls,
-        subset_a: set[abstract.GroupMember],
-        subset_b: set[abstract.GroupMember],
+        subset_a: Collection[abstract.GroupMember],
+        subset_b: Collection[abstract.GroupMember] = (),
     ) -> None:
         """Build a left-right Cayley graph generated from the identity element of a group."""
         # identify the identity element
@@ -323,14 +323,14 @@ class CayleyComplex:
             old_nodes = set(graph.nodes())
             new_nodes = set()
 
-            # add all A-type and B-type edges adjacent to this node
+            # add all edges adjacent to this node
             for aa in subset_a:
                 aa_gg = aa * gg
-                graph.add_edge(gg, aa_gg, type="A")
+                graph.add_edge(gg, aa_gg, type="L")  # "L" for left-acting
                 new_nodes.add(aa_gg)
             for bb in subset_b:
                 gg_bb = gg * bb
-                graph.add_edge(gg, gg_bb, type="B")
+                graph.add_edge(gg, gg_bb, type="R")  # "R" for right-acting
                 new_nodes.add(gg_bb)
 
             nodes_to_add |= new_nodes - old_nodes
