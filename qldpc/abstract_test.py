@@ -215,7 +215,7 @@ def test_small_group() -> None:
     # everything works as expected
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
     with (
-        unittest.mock.patch("qldpc.abstract.SmallGroup.number", return_value=index),
+        unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=index),
         unittest.mock.patch("qldpc.external.groups.get_generators", return_value=generators),
     ):
         group = abstract.SmallGroup(order, index)
@@ -230,6 +230,7 @@ def test_small_group() -> None:
             assert group.structure == structure
 
     # cover a special case
-    group = abstract.SmallGroup(1, 1)
+    with unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=1):
+        group = abstract.SmallGroup(1, 1)
     assert group == abstract.TrivialGroup()
     assert group.random() == group.identity
