@@ -1,18 +1,18 @@
 """Instrumental objects used to construct error-correcting codes
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 from __future__ import annotations
@@ -303,8 +303,8 @@ class CayleyComplex:
     @classmethod
     def build_cayley_graph(
         cls,
-        subset_a: set[abstract.GroupMember],
-        subset_b: set[abstract.GroupMember],
+        subset_a: Collection[abstract.GroupMember],
+        subset_b: Collection[abstract.GroupMember] = (),
     ) -> None:
         """Build a left-right Cayley graph generated from the identity element of a group."""
         # identify the identity element
@@ -323,14 +323,14 @@ class CayleyComplex:
             old_nodes = set(graph.nodes())
             new_nodes = set()
 
-            # add all A-type and B-type edges adjacent to this node
+            # add all edges adjacent to this node
             for aa in subset_a:
                 aa_gg = aa * gg
-                graph.add_edge(gg, aa_gg, type="A")
+                graph.add_edge(gg, aa_gg, type="L")  # "L" for left-acting
                 new_nodes.add(aa_gg)
             for bb in subset_b:
                 gg_bb = gg * bb
-                graph.add_edge(gg, gg_bb, type="B")
+                graph.add_edge(gg, gg_bb, type="R")  # "R" for right-acting
                 new_nodes.add(gg_bb)
 
             nodes_to_add |= new_nodes - old_nodes

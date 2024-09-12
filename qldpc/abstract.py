@@ -43,8 +43,8 @@ import copy
 import functools
 import itertools
 import math
+import typing
 from collections.abc import Callable, Iterator, Sequence
-from typing import TypeVar
 
 import galois
 import numpy as np
@@ -59,9 +59,6 @@ DEFAULT_FIELD_ORDER = 2
 
 ################################################################################
 # groups and group members
-
-
-UnknownType = TypeVar("UnknownType")
 
 
 class GroupMember(comb.Permutation):
@@ -84,9 +81,7 @@ class GroupMember(comb.Permutation):
             return GroupMember.from_sympy(super().__mul__(other))
         return NotImplemented
 
-    def __add__(self, other: UnknownType) -> UnknownType:
-        if hasattr(other, "__radd__"):
-            return other.__radd__(self)
+    def __add__(self, other: object) -> typing.Any:
         return NotImplemented  # pragma: no cover
 
     def __lt__(self, other: GroupMember) -> bool:
@@ -414,7 +409,9 @@ class Group:
     @classmethod
     def from_name(cls, name: str) -> Group:
         """Named group in the GAP computer algebra system."""
-        standardized_name = name.strip().replace(" ", "")  # remove whitespace
+        standardized_name = name.strip().replace(" ", "")
+        if standardized_name == "SmallGroup(1,1)":
+            return TrivialGroup()
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
         group = Group(*generators, name=standardized_name)
         return group
@@ -436,7 +433,7 @@ class Element:
     _group: Group
     _vec: collections.defaultdict[GroupMember, galois.FieldArray]
 
-    def __init__(self, group: Group, *members: GroupMember):
+    def __init__(self, group: Group, *members: GroupMember) -> None:
         self._group = group
         self._vec = collections.defaultdict(lambda: self.field(0))
         for member in members:
@@ -585,15 +582,16 @@ class Protograph(npt.NDArray[np.object_]):
         for value in protograph.ravel():
             if not isinstance(value, Element):
                 raise ValueError(
-                    "Requirement failed: all entries of a protograph must be Element-valued"
+                    "Requirement failed: all entries of a protograph must be Element-valued\n"
+                    "Try building a protograph with Protograph.build(...)"
                 )
             else:
                 if not (group is None or group == value.group):
-                    raise ValueError("Inconsistent base groups provided for protograph")
+                    raise ValueError("Inconsistent base groups provided for a protograph")
                 group = value.group
 
         if group is None:
-            raise ValueError("Cannot determine underlying group for a protograh")
+            raise ValueError("Cannot determine the underlying group for a protograh")
         protograph._group = group
 
         return protograph
@@ -606,7 +604,7 @@ class Protograph(npt.NDArray[np.object_]):
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field of this protograph."""
-        return self.group.field
+        return self._group.field
 
     def lift(self) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
@@ -650,6 +648,13 @@ class Protograph(npt.NDArray[np.object_]):
 
         vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape), group)
+
+    def __matmul__(self, other: object) -> Protograph:
+        if isinstance(other, Protograph) and not self._group == other._group:
+            raise ValueError("Cannot multiply protographs with different base groups")
+        protograph = super().__matmul__(other)
+        protograph._group = self._group
+        return protograph
 
 
 ################################################################################
@@ -825,6 +830,10 @@ class SmallGroup(Group):
         name = f"SmallGroup({order},{index})"
         super()._init_from_group(Group.from_name(name))
         self.index = index
+
+    def random(self, *, seed: int | None = None) -> GroupMember:
+        """A random element this group."""
+        return super().random(seed=seed) if self.index > 1 else self.identity
 
     @functools.cached_property
     def structure(self) -> str:

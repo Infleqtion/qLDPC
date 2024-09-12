@@ -14,7 +14,7 @@ on:
 
 jobs:
   format:
-    name: Format check
+    name: Formatting check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -37,7 +37,7 @@ jobs:
           checks/format_.py
 
   lint:
-    name: Lint check
+    name: Linting check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -55,32 +55,9 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Pylint
+      - name: Lint
         run: |
-          checks/pylint_.py --all
-
-  flake8:
-    name: Flake8 check
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
-      - name: Flake8
-        run: |
-          checks/flake8_.py
+          checks/lint_.py
 
   mypy:
     name: Type check
@@ -106,7 +83,7 @@ jobs:
           checks/mypy_.py
 
   coverage:
-    name: Pytest and Coverage check
+    name: Pytest and coverage check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
