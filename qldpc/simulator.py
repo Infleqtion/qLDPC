@@ -1,18 +1,18 @@
 """Tools for simulating error-correcting codes to identify logical error rates
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 import pathlib
@@ -21,10 +21,8 @@ from collections.abc import Sequence
 import beliefmatching
 import matplotlib.pyplot as plt
 import numpy as np
-import pymatching
 import sinter
 import stim
-from ldpc.sinter_decoders import SinterBpOsdDecoder
 
 from qldpc import codes, objects
 
@@ -224,8 +222,7 @@ class CustomDecoder(sinter.Decoder):
 
 def run_simulation(
     code, distance, sector, noise_range, shots, decoder_func, code_name: str, overwrite=True
-) -> list['sinter.TaskStats']:
-
+) -> list["sinter.TaskStats"]:
     file_name = f"{('_'.join(code_name.split())).lower()}_{sector}"
     filename = f"bposd_{file_name}.csv"
 
@@ -255,14 +252,14 @@ def run_simulation(
     return samples
 
 
-def print_results(samples: list['sinter.TaskStats']) -> None:
+def print_results(samples: list["sinter.TaskStats"]) -> None:
     # Print samples as CSV data.
     print(sinter.CSV_HEADER)
     for sample in samples:
         print(sample.to_csv_line())
 
 
-def plot_results(samples: list['sinter.TaskStats'], code_name, sector, noise_range):
+def plot_results(samples: list["sinter.TaskStats"], code_name, sector, noise_range):
     # Render a matplotlib plot of the data.
     fig, axis = plt.subplots(1, 1, sharey=True, figsize=(8, 6))
     sinter.plot_error_rate(
