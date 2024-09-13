@@ -1,20 +1,23 @@
 #!/usr/bin/env python3
 """Script to perform a randomized search for quantum Tanner codes
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
+
+from __future__ import annotations
+
 import concurrent.futures
 import hashlib
 import os
@@ -136,12 +139,10 @@ if __name__ == "__main__":
 
     # run multiple jobs in parallel
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
-
         # iterate over all combinations of group, base code, and sample index
         for group_order, group_index in get_small_groups():
             for base_code, base_code_id in get_base_codes():
                 for sample in range(NUM_SAMPLES):
-
                     # submit this job to the job queue
                     executor.submit(
                         run_and_save,

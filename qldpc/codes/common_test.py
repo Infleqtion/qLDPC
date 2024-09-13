@@ -1,19 +1,21 @@
 """Unit tests for common.py
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
+
+from __future__ import annotations
 
 import itertools
 import unittest.mock
@@ -156,13 +158,15 @@ def test_code_string() -> None:
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
     assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
-    with pytest.raises(ValueError, match="qubit-only method"):
+    with pytest.raises(ValueError, match="3-dimensional qudits"):
         assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
 
 
 def test_qudit_code() -> None:
     """Miscellaneous qudit code tests and coverage."""
-    assert codes.FiveQubitCode().dimension == 1
+    code = codes.FiveQubitCode()
+    assert code.dimension == 1
+    assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -207,7 +211,7 @@ def test_qudit_ops() -> None:
     assert logical_ops.shape == (2, code.dimension, 2 * code.num_qudits)
     assert np.array_equal(logical_ops[0], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0]])
     assert np.array_equal(logical_ops[1], [[0, 1, 1, 0, 0, 0, 0, 0, 0, 1]])
-    assert code.get_logical_ops() is code._full_logical_ops
+    assert code.get_logical_ops() is code._logical_ops
 
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I")
     assert np.array_equal(logical_ops, code.get_logical_ops())
@@ -245,20 +249,19 @@ def test_CSS_ops() -> None:
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
 
-    # test that logical operators are dual to each other and have trivial syndromes
-    logicals_x, logicals_z = code.get_logical_ops(Pauli.X), code.get_logical_ops(Pauli.Z)
-    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
-    assert not np.any(code.matrix_z @ logicals_x.T)
-    assert not np.any(code.matrix_x @ logicals_z.T)
+    # test that logical operators have trivial syndromes
+    logicals_x = code.get_logical_ops(Pauli.X)
+    logicals_z = code.get_logical_ops(Pauli.Z)
+    assert not np.any(logicals_x[:, code.num_qudits :])
+    assert not np.any(logicals_z[:, : code.num_qudits])
+    assert not np.any(code.matrix @ logicals_x.T)
+    assert not np.any(code.matrix @ logicals_z.T)
     assert code.get_logical_ops() is code._logical_ops
 
-    # verify consistency with QuditCode.get_logical_ops
-    full_logicals = codes.QuditCode.get_logical_ops(code)
-    full_logicals_x, full_logicals_z = full_logicals[0], full_logicals[1]
-    assert np.array_equal(full_logicals_x, np.hstack([logicals_x, np.zeros_like(logicals_x)]))
-    assert np.array_equal(full_logicals_z, np.hstack([np.zeros_like(logicals_x), logicals_z]))
-    assert not np.any(code.matrix @ full_logicals_x.T)
-    assert not np.any(code.matrix @ full_logicals_z.T)
+    # test that logical operators are dual to each other
+    logicals_x = logicals_x[:, : code.num_qudits]
+    logicals_z = logicals_z[:, code.num_qudits :]
+    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
