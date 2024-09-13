@@ -1,18 +1,18 @@
 """General error-correcting code classes and methods
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 from __future__ import annotations
@@ -554,7 +554,7 @@ class QuditCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _full_logical_ops: galois.FieldArray | None = None
+    _logical_ops: galois.FieldArray | None = None
 
     def __init__(
         self,
@@ -591,12 +591,12 @@ class QuditCode(AbstractCode):
     @property
     def num_qubits(self) -> int:
         """Number of data qubits in this code."""
-        self._assert_qubit_code()
+        if not self.field.order == 2:
+            raise ValueError(
+                "You asked for the number of qubits in this code, but this code is built out of "
+                rf"{self.field.order}-dimensional qudits.\nTry calling {type(self)}.num_qudits."
+            )
         return self.num_qudits
-
-    def _assert_qubit_code(self) -> None:
-        if self.field.order != 2:
-            raise ValueError("Attempted to call a qubit-only method with a non-qubit code")
 
     @property
     def dimension(self) -> int:
@@ -694,7 +694,7 @@ class QuditCode(AbstractCode):
         matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
         return matrix.reshape(num_checks, -1)
 
-    def get_logical_ops(self) -> galois.FieldArray:
+    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial logical operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -713,12 +713,22 @@ class QuditCode(AbstractCode):
         logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
         (Z-type) operator.
 
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of that type.
+
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
         """
         # memoize manually because other methods may modify the logical operators computed here
-        if self._full_logical_ops is not None:
-            return self._full_logical_ops
+        assert pauli is None or pauli in PAULIS_XZ
+
+        # if requested, retrieve logical operators of one type only
+        if pauli is not None:
+            return self.get_logical_ops()[pauli]
+
+        # memoize manually because other methods may modify the logical operators computed here
+        if self._logical_ops is not None:
+            return self._logical_ops
 
         num_qudits = self.num_qudits
         dimension = self.dimension
@@ -785,8 +795,9 @@ class QuditCode(AbstractCode):
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
         logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
-        self._full_logical_ops = self.field(np.stack([logicals_x, logicals_z]))
-        return self._full_logical_ops
+        shape = (2, self.dimension, 2 * self.num_qudits)
+        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]).reshape(shape))
+        return self._logical_ops
 
 
 class CSSCode(QuditCode):
@@ -810,7 +821,6 @@ class CSSCode(QuditCode):
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
 
     _conjugated: slice | Sequence[int]
-    _logical_ops: galois.FieldArray | None = None
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
     _balanced_codes: bool
@@ -1135,9 +1145,8 @@ class CSSCode(QuditCode):
         (Z-type) operator.  The fact that logical operators come in conjugate pairs means that
         `logical_ops(Pauli.X)[r, :] @ logical_ops(Pauli.Z)[s, :] == int(r == s)`.
 
-        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array with
-        dimensions `(k, n)`, in which `logical_ops[r, :]` indicates the support of the purely-X-type
-        or purely-Z-type logical operator on qudit `r`.
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of that type.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
@@ -1146,8 +1155,7 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            shape = (self.dimension, 2, self.num_qudits)
-            return self.get_logical_ops()[pauli].reshape(shape)[:, pauli, :]
+            return self.get_logical_ops()[pauli]
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
@@ -1246,8 +1254,13 @@ class CSSCode(QuditCode):
         assert 0 <= logical_index < self.dimension
 
         # effective check matrix = syndromes and other logical operators
-        code = self.code_z if pauli == Pauli.X else self.code_x
-        all_dual_ops = self.get_logical_ops(~pauli)  # type:ignore[arg-type]
+        if pauli == Pauli.X:
+            code = self.code_z
+            nonzero_dual_section = slice(self.num_qudits, 2 * self.num_qudits)
+        else:
+            code = self.code_x
+            nonzero_dual_section = slice(self.num_qudits)
+        all_dual_ops = self.get_logical_ops()[~pauli, :, nonzero_dual_section]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
         dual_op_index = code.num_checks + logical_index
 

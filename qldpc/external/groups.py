@@ -1,21 +1,22 @@
 """Module for loading groups from the GAP computer algebra system
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
-import os
+from __future__ import annotations
+
 import re
 import subprocess
 import urllib.error
@@ -114,10 +115,12 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
 
 def gap_is_installed() -> bool:
     """Is GAP 4 installed?"""
-    commands = ["script", "-c", "gap --version", os.devnull]
-    result = subprocess.run(commands, capture_output=True, text=True)
-    lines = result.stdout.splitlines()
-    return len(lines) == 2 and lines[1].startswith("GAP 4")
+    commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n"); QUIT;']
+    try:
+        result = subprocess.run(commands, capture_output=True, text=True)
+        return bool(re.match(r"\n4\.[0-9]+\.[0-9]+$", result.stdout))
+    except Exception:
+        return False
 
 
 def sanitize_gap_commands(commands: Sequence[str]) -> tuple[str, ...]:

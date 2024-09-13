@@ -1,19 +1,21 @@
 """Unit tests for abstract.py
 
-   Copyright 2023 The qLDPC Authors and Infleqtion Inc.
+Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
 
-       http://www.apache.org/licenses/LICENSE-2.0
+    http://www.apache.org/licenses/LICENSE-2.0
 
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
+
+from __future__ import annotations
 
 import math
 import unittest.mock
@@ -124,6 +126,7 @@ def test_protograph() -> None:
     assert protograph.group == abstract.TrivialGroup()
     assert protograph.field == abstract.TrivialGroup().field
     assert np.array_equal(protograph.lift(), matrix)
+    assert np.array_equal((protograph @ protograph).lift(), matrix @ matrix % 2)
 
     # fail to construct a valid protograph
     with pytest.raises(ValueError, match="must be Element-valued"):
@@ -131,8 +134,11 @@ def test_protograph() -> None:
     with pytest.raises(ValueError, match="Inconsistent base groups"):
         groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
         abstract.Protograph([[abstract.Element(group) for group in groups]])
-    with pytest.raises(ValueError, match="Cannot determine underlying group"):
+    with pytest.raises(ValueError, match="Cannot determine the underlying group"):
         abstract.Protograph([])
+    with pytest.raises(ValueError, match="different base groups"):
+        new_protograph = abstract.Protograph.build(abstract.CyclicGroup(1), [[1]])
+        protograph @ new_protograph
 
 
 def test_transpose() -> None:
@@ -209,7 +215,7 @@ def test_small_group() -> None:
     # everything works as expected
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
     with (
-        unittest.mock.patch("qldpc.abstract.SmallGroup.number", return_value=index),
+        unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=index),
         unittest.mock.patch("qldpc.external.groups.get_generators", return_value=generators),
     ):
         group = abstract.SmallGroup(order, index)
@@ -222,3 +228,9 @@ def test_small_group() -> None:
             "qldpc.external.groups.get_small_group_structure", return_value=structure
         ):
             assert group.structure == structure
+
+    # cover a special case
+    with unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=1):
+        group = abstract.SmallGroup(1, 1)
+    assert group == abstract.TrivialGroup()
+    assert group.random() == group.identity
