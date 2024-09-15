@@ -70,39 +70,22 @@ def test_bivariate_bicycle_codes() -> None:
     assert code.dimension == 12
     assert code.get_weight() == 6
 
-    # check that every check qubit addresses its neighboring data qubits
-    distance_one_shifts = {(0, 1), (1, 0), (0, -1), (-1, 0)}
-    distance_two_shifts = {(0, 2), (2, 0), (0, -2), (-2, 0)} | distance_one_shifts
-    for plaquette_map, torus_shape in code.toric_layouts:
-        shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape)
-        assert distance_one_shifts.issubset(shifts_x)
-        assert distance_one_shifts.issubset(shifts_z)
-
-        shifts_x, shifts_z = code.get_check_shifts(plaquette_map, torus_shape, open_boundaries=True)
-        assert distance_two_shifts.issubset(shifts_z)
-        assert distance_two_shifts.issubset(shifts_z)
-
-    # check a case with only one symbol
-    dims = (36, 2)
-    poly_a = 1 + x**9 + x**28 + x**31
-    poly_b = 1 + x + x**21 + x**34
-    code = codes.BBCode(dims, poly_a, poly_b)
-    assert code.orders == (dims[0], 1)
-
-    # check a case with no toric mappings
-    dims = (6, 6)
-    poly_a = 1 + y + y**2
-    poly_b = y**3 + x**2 + x**4
-    code = codes.BBCode(dims, poly_a, poly_b)
-    assert not code.toric_layouts
-
     # codes with more than 2 symbols are unsupported
-    with pytest.raises(ValueError, match="cannot have more than 2 symbols"):
+    with pytest.raises(ValueError, match="should have exactly two"):
         codes.BBCode({}, poly_a, x + y + z)
 
-    # fail to match cyclic group orders to free variables
-    with pytest.raises(ValueError, match="Could not match"):
-        codes.BBCode({}, poly_a, poly_b)
+
+def test_generalized_bicycle_codes() -> None:
+    """Multivariave versions of the bicycle codes in arXiv:2308.07915 and arXiv:2311.16980."""
+    from sympy.abc import x, y
+
+    # not enough orders provided
+    with pytest.raises(ValueError, match="Provided .* symbols, but only .* orders"):
+        codes.GBCode([], x, y)
+
+    # add placeholder symbols if necessary
+    code = codes.GBCode([1, 2, 3], x, x * y)
+    assert len(code.symbols) == 3
 
 
 @pytest.mark.parametrize("field", [2, 3])
