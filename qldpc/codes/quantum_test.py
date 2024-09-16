@@ -73,8 +73,10 @@ def test_bivariate_bicycle_codes() -> None:
     # test toric-code-like layouts of the above BBCode
     for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
         # assert that the polynomials look like 1 + x + ... and 1 + y + ...
-        assert (1, 0) in [code.get_coefficient_and_exponents(term)[1] for term in poly_a.args]
-        assert (0, 1) in [code.get_coefficient_and_exponents(term)[1] for term in poly_b.args]
+        exponents_a = [code.get_coefficient_and_exponents(term)[1] for term in poly_a.args]
+        exponents_b = [code.get_coefficient_and_exponents(term)[1] for term in poly_b.args]
+        assert {} in exponents_a and {x: 1} in exponents_a
+        assert {} in exponents_b and {y: 1} in exponents_b
 
         # assert that the code has equivalent parameters
         equiv_code = codes.BBCode(orders, poly_a, poly_b)

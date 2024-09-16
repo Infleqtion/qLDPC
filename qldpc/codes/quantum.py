@@ -18,7 +18,6 @@ limitations under the License.
 from __future__ import annotations
 
 import ast
-import functools
 import itertools
 import os
 from collections.abc import Collection, Sequence
@@ -199,41 +198,40 @@ class QCCode(TBCode):
         # evaluate a polynomial
         element = abstract.Element(self.group)
         for term in expression.as_expr().args:
-            element += functools.reduce(
-                abstract.Element.__mul__,
-                [self.eval(factor) for factor in term.as_ordered_factors()],
-            )
+            element += self.eval(term)
         return element
 
     def to_group_member(
         self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
     ) -> abstract.GroupMember:
         """Convert a sympy expression into an associated member of this code's base group."""
-        _, exponents = self.get_coefficient_and_exponents(expression)
         output = self.group.identity
-        for base, exponent in zip(self.symbols, exponents):
-            if exponent:
-                output *= self.symbol_gens[base] ** exponent
+        _, exponents = self.get_coefficient_and_exponents(expression)
+        for base, exponent in exponents.items():
+            output *= self.symbol_gens[base] ** exponent
         return output
 
+    @classmethod
     def get_coefficient_and_exponents(
         self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> tuple[int, tuple[int, ...]]:
+    ) -> tuple[int, dict[sympy.Symbol, int]]:
         """Extract the coefficients and exponents in a monomial expression.
 
-        For example, this method takes 5 x**3 y**2 to (5, (3, 2))."""
+        For example, this method takes 5 x**3 y**2 to (5, {x: 3, y: 2})."""
         coeff, monomial = expression.as_coeff_Mul()
         exponents = {}
-        if isinstance(monomial, sympy.Symbol):
+        if isinstance(monomial, sympy.Integer):
+            coeff *= int(monomial)
+        elif isinstance(monomial, sympy.Symbol):
             exponents[monomial] = 1
         elif isinstance(monomial, sympy.Pow):
-            base, exp = monomial.as_base_exp()
-            exponents[base] = exp
+            base, exponent = monomial.as_base_exp()
+            exponents[base] = exponent
         elif isinstance(monomial, sympy.Mul):
             for factor in monomial.args:
-                base, exp = factor.as_base_exp()
-                exponents[base] = exp
-        return coeff, tuple(exponents.get(symbol, 0) for symbol in self.symbols)
+                base, exponent = factor.as_base_exp()
+                exponents[base] = exponent
+        return coeff, exponents
 
 
 # TODO: example notebook featuring this code
@@ -367,8 +365,10 @@ class BBCode(QCCode):
                 y = g^gy h^hy.
             We find these exponents with a brute force search...
             """
-            _, (pp, qq) = self.get_coefficient_and_exponents(gen_g)
-            _, (uu, vv) = self.get_coefficient_and_exponents(gen_h)
+            _, exponents_g = self.get_coefficient_and_exponents(gen_g)
+            _, exponents_h = self.get_coefficient_and_exponents(gen_h)
+            pp, qq = [exponents_g.get(symbol, 0) for symbol in self.symbols]
+            uu, vv = [exponents_h.get(symbol, 0) for symbol in self.symbols]
             for aa, bb in np.ndindex(orders):
                 ii = (aa * pp + bb * uu) % self.orders[0]
                 jj = (aa * qq + bb * vv) % self.orders[1]
@@ -392,8 +392,8 @@ class BBCode(QCCode):
                 for term in new_poly.args:
                     coeff, exponents = self.get_coefficient_and_exponents(term)
                     term = sympy.core.numbers.One()
-                    for symbol, order, exponent in zip(self.symbols, orders, exponents):
-                        term *= symbol ** (exponent % order)
+                    for symbol, order in zip(self.symbols, orders):
+                        term *= coeff * symbol ** (exponents.get(symbol, 0) % order)
                     new_poly_simplified += term
 
                 new_polys.append(new_poly_simplified)
