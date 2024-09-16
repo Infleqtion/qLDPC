@@ -7,13 +7,18 @@ from .classical import (
     RingCode,
     TannerCode,
 )
-from .common import ClassicalCode, CSSCode, QuditCode
+from .common import (
+    ClassicalCode,
+    CSSCode,
+    QuditCode,
+)
 from .quantum import (
     BBCode,
     FiveQubitCode,
     GeneralizedSurfaceCode,
     HGPCode,
     LPCode,
+    QCCode,
     QTCode,
     SteaneCode,
     SurfaceCode,
@@ -37,6 +42,7 @@ __all__ = [
     "GeneralizedSurfaceCode",
     "HGPCode",
     "LPCode",
+    "QCCode",
     "QTCode",
     "SteaneCode",
     "SurfaceCode",

@@ -18,27 +18,17 @@ limitations under the License.
 from __future__ import annotations
 
 import ast
-import functools
 import itertools
 import os
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Collection, Sequence
 
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import sympy
-import sympy.combinatorics as comb
 
 from qldpc import abstract
-from qldpc.objects import (
-    PAULIS_XZ,
-    CayleyComplex,
-    ChainComplex,
-    Node,
-    Pauli,
-    PauliXZ,
-    QuditOperator,
-)
+from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
 from .classical import HammingCode, RepetitionCode, RingCode, TannerCode
 from .common import ClassicalCode, CSSCode, QuditCode
@@ -61,7 +51,7 @@ class SteaneCode(CSSCode):
 
 
 ################################################################################
-# bicycle codes
+# two-block and bicycle codes
 
 
 class TBCode(CSSCode):
@@ -73,7 +63,10 @@ class TBCode(CSSCode):
     to form the parity check matrices of a CSSCode.  If A and B commute, the parity check matrices
     matrix_x and matrix_z satisfy the requirements of a CSSCode.
 
-    Two-block codes constructed out of circulant matrices are known as generalized bicycle codes.
+    Two-block codes constructed out of circulant matrices are known as quasi-cyclic codes.
+
+    References:
+    - https://errorcorrectionzoo.org/c/two_block_quantum
     """
 
     def __init__(
@@ -105,30 +98,33 @@ class TBCode(CSSCode):
         )
 
 
-# map from a "sector" in {0,1,X,Z} to a 2D coordinate map (i,j) --> (a,b) represented by a 4D array
-BBCodePlaquetteMap = Callable[[int | PauliXZ], npt.NDArray[np.int_]]
+class QCCode(TBCode):
+    """Quasi-cyclic code.
 
-
-# TODO: example notebook featuring this code
-class BBCode(TBCode):
-    """Bivariate bicycle codes from arXiv:2308.07915.
-
-    A bivariate bicycle code is a CSS code with subcode parity check matrices
+    A quasi-cyclic code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
-    - matrix_z = [B.T, -A.T],
-    where A = A_{ij} x^i y^j and B = B_{ij} x^i y^j are bivariate polynomials.  Here:
-    - A_{ij} and B_{ij} are scalar coefficients (over some finite field),
-    - x generates a group of order R_x, and
-    - y generates a group of order R_y.
+    - matrix_z = [B.T, -A.T].
+    Here A and B are polynomials of the form A = sum_{i,j,k,...} A_{ijk...} x^i y^j z^k ...,
+    where
+    - A_{ijk...} is a scalar coefficient (over some finite field),
+    - x, y, z, ... are generators of cyclic groups of orders R_x, R_y, R_z, ...
+    - the monomial x^i y^j z^k ... represents a tensor product of cyclic shift matrices.
 
-    A bivariate bicycle code is defined by...
-    [1] two cyclic group orders, and
-    [2] two sympy polynomials in two variables.
+    A quasi-cyclic code code is defined by...
+    [1] a sequence of cyclic group orders, and
+    [2] two multivariate polynomials.
     By default, group orders are associated in lexicographic order with free variables of the
     polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
-    """
 
-    _num_symbols = 2
+    References:
+    - https://errorcorrectionzoo.org/c/quantum_quasi_cyclic
+
+    Univariate quasi-cyclic codes are generalized bicycle codes:
+    - https://errorcorrectionzoo.org/c/generalized_bicycle
+    - https://arxiv.org/pdf/2203.17216
+
+    Bivariate quasi-cyclic codes are bivariate bicycle codes; see BBCode class.
+    """
 
     def __init__(
         self,
@@ -139,34 +135,28 @@ class BBCode(TBCode):
         *,
         conjugate: bool = False,
     ) -> None:
-        """Construct a bivariate bicycle code."""
+        """Construct a generalized bicycle code."""
         self.poly_a = sympy.Poly(poly_a)
         self.poly_b = sympy.Poly(poly_b)
 
         # identify the symbols used to denote cyclic group generators
         symbols = poly_a.free_symbols | poly_b.free_symbols
-        if len(symbols) > self._num_symbols:
-            raise ValueError(
-                f"Bivariate bicycle codes cannot have more than {self._num_symbols} symbols"
-            )
-        if len(orders) < len(symbols) or (
-            isinstance(orders, dict) and any(symbol not in orders for symbol in symbols)
-        ):
-            raise ValueError(f"Could not match symbols {symbols} to group orders {orders}")
+        if len(orders) < len(symbols):
+            raise ValueError(f"Provided {len(symbols)} symbols, but only {len(orders)} orders.")
 
         # identify cyclic group orders with symbols in the polynomials
         if isinstance(orders, dict):
-            symbol_to_order = orders
+            symbol_to_order = orders.copy()
         else:
             symbol_to_order = {}
             for symbol, order in zip(sorted(symbols, key=str), orders):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 symbol_to_order[symbol] = order
 
-        # enforce a minimum number of symbols by adding placeholders if necessary
-        while len(symbol_to_order) < self._num_symbols:
+        # add more placeholder symbols if necessay
+        while len(symbol_to_order) < len(orders):
             unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
-            symbol_to_order[unique_symbol] = 1
+            symbol_to_order[unique_symbol] = orders[len(symbol_to_order)]
 
         self.symbols = tuple(symbol_to_order.keys())
         self.orders = tuple(symbol_to_order.values())
@@ -176,10 +166,9 @@ class BBCode(TBCode):
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
-        # if requested, hadamard-transform qudits in the "R" sector
-        num_qudits = self.group.order * 2
+        # if requested, hadamard-transform half of the qudits
         qudits_to_conjugate: slice | Sequence[int] = (
-            slice(num_qudits // 2, num_qudits + 1) if conjugate else ()
+            slice(self.group.order, 2 * self.group.order + 1) if conjugate else ()
         )
 
         # build defining matrices of a generalized bicycle code
@@ -197,294 +186,238 @@ class BBCode(TBCode):
 
     def eval(
         self,
-        expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
+        expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
     ) -> abstract.Element:
         """Convert a sympy expression into an element of this code's group algebra."""
-        # evaluate simple cases
-        if isinstance(expr, sympy.Integer):
-            return int(expr) * abstract.Element(self.group, self.to_group_member(expr))
-        if isinstance(expr, (sympy.Symbol, sympy.Pow)):
-            return abstract.Element(self.group, self.to_group_member(expr))
+        # evaluate a monomial
+        if isinstance(expression, (sympy.Integer, sympy.Symbol, sympy.Pow, sympy.Mul)):
+            coeff, monomial = expression.as_coeff_Mul()
+            member = self.to_group_member(monomial)
+            return int(coeff) * abstract.Element(self.group, member)
 
-        # evaluate a product or polynomial
+        # evaluate a polynomial
         element = abstract.Element(self.group)
-        for term in expr.as_expr().args:
-            element += functools.reduce(
-                abstract.Element.__mul__,
-                [self.eval(factor) for factor in term.as_ordered_factors()],
-            )
+        for term in expression.as_expr().args:
+            element += self.eval(term)
         return element
 
     def to_group_member(
-        self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
     ) -> abstract.GroupMember:
         """Convert a sympy expression into an associated member of this code's base group."""
-        if isinstance(expr, sympy.Integer):
-            return self.group.identity
-        if isinstance(expr, sympy.Symbol):
-            return self.symbol_gens[expr]
-        if isinstance(expr, sympy.Pow):
-            base, exp = expr.as_base_exp()
-            return self.symbol_gens[base] ** exp
-        if isinstance(expr, sympy.Mul):
-            output = self.group.identity
-            for factor in expr.args:
-                if not isinstance(factor, sympy.Integer):
-                    base, exp = factor.as_base_exp()
-                    output *= self.symbol_gens[base] ** exp
-            return output
-        return NotImplemented  # pragma: no cover
+        output = self.group.identity
+        _, exponents = self.get_coefficient_and_exponents(expression)
+        for base, exponent in exponents.items():
+            output *= self.symbol_gens[base] ** exponent
+        return output
 
-    def get_exponents(
-        self, expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> tuple[int, int]:
-        """Extract the exponents from a term, for example converting x**2 * y**4 into (2, 4)."""
+    @classmethod
+    def get_coefficient_and_exponents(
+        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+    ) -> tuple[int, dict[sympy.Symbol, int]]:
+        """Extract the coefficients and exponents in a monomial expression.
+
+        For example, this method takes 5 x**3 y**2 to (5, {x: 3, y: 2})."""
+        coeff, monomial = expression.as_coeff_Mul()
         exponents = {}
-        if isinstance(expr, sympy.Symbol):
-            exponents[expr] = 1
-        elif isinstance(expr, sympy.Pow):
-            base, exp = expr.as_base_exp()
-            exponents[base] = exp
-        elif isinstance(expr, sympy.Mul):
-            for factor in expr.args:
-                base, exp = factor.as_base_exp()
-                exponents[base] = exp
-        return exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0)
+        if isinstance(monomial, sympy.Integer):
+            coeff *= int(monomial)
+        elif isinstance(monomial, sympy.Symbol):
+            exponents[monomial] = 1
+        elif isinstance(monomial, sympy.Pow):
+            base, exponent = monomial.as_base_exp()
+            exponents[base] = exponent
+        elif isinstance(monomial, sympy.Mul):
+            for factor in monomial.args:
+                base, exponent = factor.as_base_exp()
+                exponents[base] = exponent
+        return coeff, exponents
 
-    @functools.cached_property
-    def toric_layouts(self) -> Sequence[tuple[BBCodePlaquetteMap, tuple[int, int]]]:
-        """Get a list of all toric layouts of this code.
 
-        All qubits of this code can be organized into plaquettes of four qubits that look like:
-            L X
-            Z R
-        where L and R are data qubits, and X and Z are check qubits.  More specifically:
-        - L and R data qubits are addressed by the left and right halves of matrix_x (or matrix_z).
-        - X check qubits measure X-type parity checks, and are associated with rows of matrix_x.
-        - Z check qubits measure Z-type parity checks, and are associated with rows of matrix_z.
-        We identify sectors L, R, X, and Z respectively by the "index" 0, 1, Pauli.X, and Pauli.Z.
+# TODO: example notebook featuring this code
+class BBCode(QCCode):
+    """Bivariate bicycle code.
 
-        A toric layout is one in which plaquettes are arranged on a 2D grid with periodic boundary
-        conditions (that is, a torus), and every check addresses all of its neighboring data qubits
-        (and possibly other data qubits as well).  Not every code is guaranteed to have a toric
-        layout.
+    A bivariate bicycle code is a CSS code with subcode parity check matrices
+    - matrix_x = [A, B], and
+    - matrix_z = [B.T, -A.T].
+    Here A and B are polynomials of the form A = sum_{i,j} A_{ij} x^i y^j, where
+    - A_{ij} is a scalar coefficient (over some finite field),
+    - x and y are, respectively, generators of cyclic groups of orders R_x, R_y, and
+    - the monomial x^i y^j represents a tensor product of cyclic shift matrices.
 
-        A toric layout is defined by:
-        - a plaquette_map, which maps each qubit to a plaquette on the torus, and
-        - a torus_shape, or the number of plaquettes along each axis of the torus.
+    A bivariate bicycle code is defined by...
+    [1] two cyclic group orders, and
+    [2] two bivariate polynomials.
+    By default, group orders are associated in lexicographic order with free variables of the
+    polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
 
-        The plaquette map is a function that maps a qubit sector (0, 1, Pauli.X, or Pauli.Z) to a 3D
-        tensor.  The tensor is populated by integers in such a way that
-            plaquette_map(sector)[i, j] = [a, b]
-        where (i, j) is the "bare" index of a qubit in the given sector, and (a, b) correspond to
-        the location of a plaquette on a torus -- the plaquette that the qubit is assigned to.
+    All qubits of a BBCode can be organized into plaquettes of four qubits that look like:
+        L X
+        Z R
+    where L and R are data qubits, and X and Z are check qubits.  More specifically:
+    - L and R data qubits are addressed by the left and right halves of matrix_x (or matrix_z).
+    - X check qubits measure X-type parity checks, and are associated with rows of matrix_x.
+    - Z check qubits measure Z-type parity checks, and are associated with rows of matrix_z.
+    These plaquettes are arranged into a rectangle R_x plaquettes wide and R_y plaquettes tall.
 
-        Bare indices are defined as follows.  We can reshape (say) matrix_z into a tensor checks_z
-        with shape (Rx, Ry, 2, Rx, Ry), which has the effect of:
-        - expanding every integer row index into two integers that identify a Z-sector check qubit,
-        - splitting the left and right halves of the matrix into a new 0/1 index that identifies an
-            L/R sector of the data qubits,
-        - expanding every integer "column" index within each data qubit sector into two integers
-            that identify a single data qubit.
-        For example, checks_z[i, j, 0, k, l] is nonzero iff the Z-sector check qubit (i, j)
-        addresses the L-sector data qubit (k, l).
+    The connections between ancilla and data qubits can be determined by inspection of the
+    polynomials A and B.  For example, if A_{ij} != 0, then every X-type parity check addresses an
+    L-type qubit that is (i, j) plaquettes (right, up) -- assuming periodic boundary conditions --
+    and every Z-type parity check addresses an R-type qubit that is (i, j) plaquettes (left, down).
+    The polynomial B indicates where X-type (Z-type) checks address R-type (L-type) qubits.
+
+    References:
+    - https://errorcorrectionzoo.org/c/qcga
+    - https://arxiv.org/abs/2308.07915
+    - https://arxiv.org/pdf/2408.10001
+    """
+
+    def __init__(
+        self,
+        orders: Sequence[int] | dict[sympy.Symbol, int],
+        poly_a: sympy.Basic,
+        poly_b: sympy.Basic,
+        field: int | None = None,
+        *,
+        conjugate: bool = False,
+    ) -> None:
+        """Construct a bivariate bicycle code."""
+        self.poly_a = sympy.Poly(poly_a)
+        self.poly_b = sympy.Poly(poly_b)
+        symbols = poly_a.free_symbols | poly_b.free_symbols
+        if len(orders) != 2 or len(symbols) != 2:
+            raise ValueError(
+                "BBCodes should have exactly two cyclic group orders and two symbols, not "
+                f"{len(orders)} orders and {len(symbols)} symbols."
+            )
+        QCCode.__init__(self, orders, poly_a, poly_b, field, conjugate=conjugate)
+
+    def get_equivalent_toric_layout_code_data(
+        self,
+    ) -> Sequence[tuple[tuple[int, int], sympy.Poly, sympy.Poly]]:
+        """Get the generating data for equivalent BBCodes with "manifest" toric layouts.
+
+        For simplicity, we consider BBCodes for qubits (with base field F_2) in the text below.
+
+        A BBCode has a "manifest" toric layout if it is generated by polynomials that look like
+            poly_a = 1 + x + ..., and
+            poly_b = 1 + y + ...,
+        These codes are "equivalent" in the sense that they are equal up to a permutation of data
+        and check qubits.
+
+        To find equivalent BBCodes with manifest toric layouts, we take
+            poly_a = sum_j A_j --> poly_a / A_k = 1 + sum_{j != k} A_j/A_k, and
+            poly_b = sum_j B_j --> poly_b / B_l = 1 + sum_{j != l} B_j/B_l.
+        Each pair of terms (A_j/A_k, B_j/B_l) is then a candidate for generators (g, h).
+
+        This modification of polynomials and change-of-basis from the original generators (x, y)
+        to (g, h) produces an equivalent BBCode so long as g and h satisfy the conditions in Lemma
+        of arXiv:2308.07915, which boils down to the requirement that
+            order(g) * order(h) = order(<g, h>) = order(<x, y>),
+        where (for example) <x, y> is the Abelian group generated by x and y.
         """
         if not nx.is_weakly_connected(self.graph):
-            # a connected tanner graph is a baseline requirement for a toric mapping to exist
+            # a connected tanner graph is required for a toric layout to exist
             return []
+
+        # identify unique symbols to use as placeholders for the new generators
+        symbol_g = sympy.Symbol("".join(map(str, self.symbols)))
+        symbol_h = sympy.Symbol("".join(map(str, self.symbols * 2)))
 
         # identify individual terms in the polynomials
         terms_a = self.poly_a.as_expr().args
         terms_b = self.poly_b.as_expr().args
 
-        # find combinations of terms that enable a toric layout
+        # identify monomials that can be combined to obtain a toric layout
         toric_params = []
         for (a_1, a_2), (b_1, b_2) in itertools.product(
             itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
         ):
-            gen_a = self.to_group_member(a_1 * a_2 ** (-1))
-            gen_b = self.to_group_member(b_1 * b_2 ** (-1))
+            member_g = self.to_group_member(a_2 / a_1)
+            member_h = self.to_group_member(b_2 / b_1)
             if (
-                gen_a.order() * gen_b.order() == self.group.order
-                and comb.PermutationGroup(gen_a, gen_b).order() == self.group.order
+                member_g.order() * member_h.order() == self.group.order
+                and abstract.Group(member_g, member_h).order == self.group.order
             ):
                 toric_params.append((a_1, a_2, b_1, b_2))
-                toric_params.append((a_2, a_1, b_1, b_2))
                 toric_params.append((a_1, a_2, b_2, b_1))
+                toric_params.append((a_2, a_1, b_1, b_2))
                 toric_params.append((a_2, a_1, b_2, b_1))
 
-        # identify torus shapes and qubit-to-plaquette mappings
-        toric_layouts = []
+        toric_layout_generating_data = set()
         for a_1, a_2, b_1, b_2 in toric_params:
-            shift_a = a_1 * a_2 ** (-1)
-            shift_b = b_1 * b_2 ** (-1)
+            # new generators and their corresponding cyclic group orders
+            gen_g = a_2 / a_1
+            gen_h = b_2 / b_1
+            orders = (self.to_group_member(gen_g).order(), self.to_group_member(gen_h).order())
+
+            # new "shifted" polynomials
+            shifted_poly_a = self.poly_a / a_1
+            shifted_poly_b = self.poly_b / b_1
+
+            # without loss of generality, enforce that the toric layout "width" >= "height"
+            if orders[0] < orders[1]:
+                orders = orders[::-1]
+                gen_g, gen_h = gen_h, gen_g
+                shifted_poly_a, shifted_poly_b = shifted_poly_b, shifted_poly_a
+
             """
+            Let x and y be the generators of the polynomials in the original BBCode.
             We want to "change basis" from generators (x, y) to generators (g, h), where
-                g = x^p y^q  <-- shift_a,
-                h = x^u y^v  <-- shift_b.
-            To do so, we build a grid_map that takes (i, j) --> (a, b), where
-                x^i y^j = g^a h^b.
-            Equivalently, we want
+                g = x^p y^q,
+                h = x^u y^v.
+            To do so, need to find integer exponents (i, j, a, b) for which
+                x^i y^j = g^a h^b,
+            or equivalently
                 i = a p + b u  mod order(x),
                 j = a q + b v  mod order(y).
+            More specifically, we need to find exponents (gx, hx) and (gy, hy) for which
+                x = g^gx h^hx,
+                y = g^gy h^hy.
+            We find these exponents with a brute force search...
             """
-            gen_g = self.to_group_member(shift_a)
-            gen_h = self.to_group_member(shift_b)
-            pp, qq = self.get_exponents(shift_a)
-            uu, vv = self.get_exponents(shift_b)
-            torus_shape: tuple[int, int] = (int(gen_g.order()), int(gen_h.order()))
-            grid_map = np.empty((*self.orders, 2), dtype=int)
-            for aa, bb in np.ndindex(torus_shape):
+            _, exponents_g = self.get_coefficient_and_exponents(gen_g)
+            _, exponents_h = self.get_coefficient_and_exponents(gen_h)
+            pp, qq = [exponents_g.get(symbol, 0) for symbol in self.symbols]
+            uu, vv = [exponents_h.get(symbol, 0) for symbol in self.symbols]
+            for aa, bb in np.ndindex(orders):
                 ii = (aa * pp + bb * uu) % self.orders[0]
                 jj = (aa * qq + bb * vv) % self.orders[1]
-                grid_map[ii, jj] = aa, bb
+                if (ii, jj) == (1, 0):
+                    gx, hx = aa, bb
+                elif (ii, jj) == (0, 1):
+                    gy, hy = aa, bb
+            gen_x = symbol_g**gx * symbol_h**hx
+            gen_y = symbol_g**gy * symbol_h**hy
 
-            # figure out how to shift qubits in each sector:
-            # (0 <--> L) or (1 <--> R) for data qubits, and X or Z for check qubits
-            shifts: dict[int | PauliXZ, tuple[int, int]] = {
-                0: (0, 0),  # "L" data qubits
-                1: self.get_exponents(a_2 ** (-1) * b_1),  # "R" data qubits
-                Pauli.X: self.get_exponents(a_2 ** (-1)),  # "X" check qubits
-                Pauli.Z: self.get_exponents(b_1),  # "Z" check qubits
-            }
+            # build polynomials for an equivalent BBCode with a manifest toric layout
+            new_polys = []
+            for poly in [shifted_poly_a, shifted_poly_b]:
+                poly = poly.expand().subs({self.symbols[0]: gen_x, self.symbols[1]: gen_y})
 
-            plaquette_map = functools.partial(
-                self._full_plaquette_map,
-                grid_map=grid_map,
-                shifts=shifts,
-            )
-            toric_layouts.append((plaquette_map, torus_shape))
+                # replace the "new" symbols (g, h) by the "original" symbols (x, y)
+                poly = poly.subs({symbol_g: self.symbols[0], symbol_h: self.symbols[1]})
 
-        return toric_layouts
+                # simplify exponents
+                poly_simplified = sympy.core.numbers.Zero()
+                for term in poly.args:
+                    coeff, exponents = self.get_coefficient_and_exponents(term)
+                    term = sympy.core.numbers.One()
+                    for symbol, order in zip(self.symbols, orders):
+                        # find an equivalent exponent in the interval (-order/2, order/2]
+                        new_exponent = exponents.get(symbol, 0) % order
+                        if new_exponent > order / 2:
+                            new_exponent -= order
+                        term *= coeff * symbol**new_exponent
+                    poly_simplified += term
 
-    def _full_plaquette_map(
-        self,
-        qubit_sector: int | PauliXZ,
-        grid_map: npt.NDArray[np.int_],
-        shifts: dict[int | PauliXZ, tuple[int, int]],
-    ) -> npt.NDArray[np.int_]:
-        """Map from "original" plaquette coordinates to "shifted" plaquette coordinates."""
-        return np.roll(
-            np.roll(grid_map, shifts[qubit_sector][0], axis=0),
-            shifts[qubit_sector][1],
-            axis=1,
-        )
+                new_polys.append(poly_simplified)
+            new_poly_a, new_poly_b = new_polys
 
-    def get_toric_checks(
-        self, plaquette_map: BBCodePlaquetteMap, torus_shape: tuple[int, int]
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Build X-type and Z-type parity check matrices for a toric layout."""
+            toric_layout_generating_data.add((orders, new_poly_a, new_poly_b))
 
-        # identify plaquette map in each qubit sector
-        index_map = {sector: plaquette_map(sector) for sector in [0, 1] + PAULIS_XZ}
-
-        # loop over each of X-type and Z-type parity checks
-        for pauli in PAULIS_XZ:
-            # identify old and new parity check tensors
-            matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
-            old_checks = matrix.reshape(*self.orders, 2, *self.orders)
-            new_checks = np.empty((*torus_shape, 2, *torus_shape), dtype=int)
-
-            # old check matrix with the data qubits permuted
-            new_vals = np.zeros((*self.orders, 2, *torus_shape), dtype=int)
-
-            # permute the data qubits in each data qubit sector (0 or 1)
-            for sector in range(2):
-                map_01 = index_map[sector].reshape(-1, 2)
-                old_vals = old_checks[:, :, sector, :, :].reshape(*self.orders, -1)
-                new_vals[:, :, sector, map_01[:, 0], map_01[:, 1]] = old_vals
-
-            # permute the check qubits in this check qubit sector (X or Z)
-            map_xz = index_map[pauli].reshape(-1, 2)
-            new_checks[map_xz[:, 0], map_xz[:, 1], :] = new_vals.reshape(-1, 2, *torus_shape)
-
-            # save the new check tensor to a parity check matrix
-            if pauli == Pauli.X:
-                matrix_x = new_checks.reshape(self.matrix_x.shape)
-            else:
-                assert pauli == Pauli.Z
-                matrix_z = new_checks.reshape(self.matrix_z.shape)
-
-        return self.field(matrix_x), self.field(matrix_z)
-
-    @classmethod
-    def get_qubit_coordinate_maps(
-        cls,
-        sector: int | PauliXZ,
-        torus_shape: tuple[int, int],
-        open_boundaries: bool = False,
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Build arrays that map plaquette coordinates to qubit coordinates.
-
-        If open_boundaries=True, "fold" the torus for a qubit layout with open boundaries.
-        """
-        x_map = 2 * np.arange(torus_shape[0]) + int(sector in [Pauli.X, 1])
-        y_map = 2 * np.arange(torus_shape[1]) + int(sector in [Pauli.Z, 1])
-        if open_boundaries:
-            half_x = x_map < torus_shape[0]
-            half_y = y_map < torus_shape[1]
-            x_map[half_x] *= 2
-            y_map[half_y] *= 2
-            x_map[~half_x] = (2 * torus_shape[0] - 1 - x_map[~half_x]) * 2 + 1
-            y_map[~half_y] = (2 * torus_shape[1] - 1 - y_map[~half_y]) * 2 + 1
-        return x_map, y_map
-
-    def get_check_shifts(
-        self,
-        plaquette_map: BBCodePlaquetteMap,
-        torus_shape: tuple[int, int],
-        open_boundaries: bool = False,
-    ) -> tuple[set[tuple[int, int]], set[tuple[int, int]]]:
-        """Get the relative positions of data qubits addressed by X-type and Z-type check qubits.
-
-        If open_boundaries=True, "fold" the torus for a qubit layout with open boundaries.
-        """
-        # identify the parity check matrices
-        matrix_x, matrix_z = self.get_toric_checks(plaquette_map, torus_shape)
-
-        # Identify the plaquettes on which we need to examine check qubits.  If we have periodic
-        # boundaries, all plaquettes "look the same", so we only need to consider one of them.
-        # Otherwise, we generally need to consider all plaquettes.
-        plaquettes = [(0, 0)] if not open_boundaries else [*np.ndindex(*torus_shape)]
-
-        # build arrays that map plaquette coordinates to qubit coordinates for each qubit sector
-        qubit_coords = {
-            sector: BBCode.get_qubit_coordinate_maps(sector, torus_shape, open_boundaries)
-            for sector in [0, 1] + PAULIS_XZ
-        }
-
-        # sets of relative coordinates, organized by stabilizer type
-        shifts: dict[PauliXZ, set[tuple[int, int]]] = {}
-        for pauli in PAULIS_XZ:
-            shifts[pauli] = set()
-
-            # organize checks by plaquette on the torus
-            shape = (*torus_shape, 2, *torus_shape)
-            checks = (matrix_x if pauli == Pauli.X else matrix_z).reshape(shape)
-
-            # loop over all plaquettes we need to consider
-            for p_a, p_b in plaquettes:
-                # identify the location of a check qubit, and the support of its stabilizer
-                c_a = qubit_coords[pauli][0][p_a]
-                c_b = qubit_coords[pauli][1][p_b]
-
-                # identify the relative position of all data qubits addressed by this check
-                for sector, q_a, q_b in zip(*np.where(checks[p_a, p_b])):
-                    # relative position of this data qubit from the check qubit
-                    d_a = qubit_coords[sector][0][q_a]
-                    d_b = qubit_coords[sector][1][q_b]
-                    shift_a = d_a - c_a
-                    shift_b = d_b - c_b
-
-                    # account for periodic boundary conditions, if applicable
-                    if not open_boundaries:
-                        shift_a = (shift_a + torus_shape[0]) % (2 * torus_shape[0]) - torus_shape[0]
-                        shift_b = (shift_b + torus_shape[1]) % (2 * torus_shape[1]) - torus_shape[1]
-
-                    # record relative position
-                    shifts[pauli].add((shift_a, shift_b))
-
-        return shifts[Pauli.X], shifts[Pauli.Z]
+        return tuple(toric_layout_generating_data)
 
 
 ################################################################################
