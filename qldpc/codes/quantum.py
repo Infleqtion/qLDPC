@@ -361,7 +361,7 @@ class BBCode(QCCode):
                 new_poly = new_poly.subs({symbol_g: self.symbols[0], symbol_h: self.symbols[1]})
 
                 # simplify exponents
-                new_poly_simplified = sympy.Poly(0, *self.symbols)
+                new_poly_simplified = sympy.core.numbers.Zero()
                 for term in new_poly.args:
                     coeff, exponents = self.get_coefficient_and_exponents(term)
                     term = sympy.core.numbers.One()
