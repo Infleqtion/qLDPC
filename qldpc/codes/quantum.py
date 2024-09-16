@@ -345,7 +345,7 @@ class BBCode(QCCode):
                 toric_params.append((a_2, a_1, b_1, b_2))
                 toric_params.append((a_2, a_1, b_2, b_1))
 
-        toric_layout_generating_data = []
+        toric_layout_generating_data = set()
         for a_1, a_2, b_1, b_2 in toric_params:
             # new generators and their corresponding cyclic group orders
             gen_g = a_2 / a_1
@@ -415,7 +415,7 @@ class BBCode(QCCode):
                 new_polys.append(poly_simplified)
             new_poly_a, new_poly_b = new_polys
 
-            toric_layout_generating_data.append((orders, new_poly_a, new_poly_b))
+            toric_layout_generating_data.add((orders, new_poly_a, new_poly_b))
 
         return tuple(toric_layout_generating_data)
 
