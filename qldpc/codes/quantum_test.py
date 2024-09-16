@@ -75,16 +75,16 @@ def test_bivariate_bicycle_codes() -> None:
         codes.BBCode({}, poly_a, x + y + z)
 
 
-def test_generalized_bicycle_codes() -> None:
+def test_quasi_cyclic_codes() -> None:
     """Multivariave versions of the bicycle codes in arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y
 
     # not enough orders provided
     with pytest.raises(ValueError, match="Provided .* symbols, but only .* orders"):
-        codes.GBCode([], x, y)
+        codes.QCCode([], x, y)
 
     # add placeholder symbols if necessary
-    code = codes.GBCode([1, 2, 3], x, x * y)
+    code = codes.QCCode([1, 2, 3], x, x * y)
     assert len(code.symbols) == 3
 
 

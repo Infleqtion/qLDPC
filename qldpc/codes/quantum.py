@@ -70,7 +70,10 @@ class TBCode(CSSCode):
     to form the parity check matrices of a CSSCode.  If A and B commute, the parity check matrices
     matrix_x and matrix_z satisfy the requirements of a CSSCode.
 
-    Two-block codes constructed out of circulant matrices are known as generalized bicycle codes.
+    Two-block codes constructed out of circulant matrices are known as quasi-cyclic codes.
+
+    References:
+    - https://errorcorrectionzoo.org/c/two_block_quantum
     """
 
     def __init__(
@@ -102,23 +105,32 @@ class TBCode(CSSCode):
         )
 
 
-class GBCode(TBCode):
-    """Generalized bicycle code.
+class QCCode(TBCode):
+    """Quasi-cyclic code.
 
-    A generalized bicycle code is a CSS code with subcode parity check matrices
+    A quasi-cyclic code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
     - matrix_z = [B.T, -A.T].
     Here A and B are polynomials of the form A = sum_{i,j,k,...} A_{ijk...} x^i y^j z^k ...,
     where
     - A_{ijk...} is a scalar coefficient (over some finite field),
     - x, y, z, ... are generators of cyclic groups of orders R_x, R_y, R_z, ...
-    - the monomial x^i y^j z^k ... represents by a tensor product of cyclic shift matrices.
+    - the monomial x^i y^j z^k ... represents a tensor product of cyclic shift matrices.
 
-    A generalized bicycle code is defined by...
+    A quasi-cyclic code code is defined by...
     [1] a sequence of cyclic group orders, and
-    [2] two sympy polynomials.
+    [2] two multivariate polynomials.
     By default, group orders are associated in lexicographic order with free variables of the
     polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
+
+    References:
+    - https://errorcorrectionzoo.org/c/quantum_quasi_cyclic
+
+    Univariate quasi-cyclic codes are generalized bicycle codes:
+    - https://errorcorrectionzoo.org/c/generalized_bicycle
+    - https://arxiv.org/pdf/2203.17216
+
+    Bivariate quasi-cyclic codes are bivariate bicycle codes; see BBCode class.
     """
 
     def __init__(
@@ -204,8 +216,8 @@ class GBCode(TBCode):
 
 
 # TODO: example notebook featuring this code
-class BBCode(GBCode):
-    """Bivariate bicycle codes from arXiv:2308.07915.
+class BBCode(QCCode):
+    """Bivariate bicycle code.
 
     A bivariate bicycle code is a CSS code with subcode parity check matrices
     - matrix_x = [A, B], and
@@ -215,9 +227,9 @@ class BBCode(GBCode):
     - x and y are, respectively, generators of cyclic groups of orders R_x, R_y, and
     - the monomial x^i y^j represents a tensor product of cyclic shift matrices.
 
-    A generalized bicycle code is defined by...
+    A bivariate bicycle code is defined by...
     [1] two cyclic group orders, and
-    [2] two sympy polynomials.
+    [2] two bivariate polynomials.
     By default, group orders are associated in lexicographic order with free variables of the
     polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
 
@@ -230,11 +242,16 @@ class BBCode(GBCode):
     - Z check qubits measure Z-type parity checks, and are associated with rows of matrix_z.
     These plaquettes are arranged into a rectangle R_x plaquettes wide and R_y plaquettes tall.
 
-    The the connections between ancilla and data qubits can be read off of the polynomials A and B.
-    For example, if A_{ij} != 0, then every X-type parity check addresses an L-type qubit that is
-    (i, j) plaquettes (right, up), assuming periodic boundary conditions, and every Z-type parity
-    check addresses an R-type qubit that is (i, j) plaquettes (left, down).  The polynomial B
-    similarly indicates where X-type (Z-type) checks address R-type (L-type) qubits.
+    The connections between ancilla and data qubits can be determined by inspection of the
+    polynomials A and B.  For example, if A_{ij} != 0, then every X-type parity check addresses an
+    L-type qubit that is (i, j) plaquettes (right, up) -- assuming periodic boundary conditions --
+    and every Z-type parity check addresses an R-type qubit that is (i, j) plaquettes (left, down).
+    The polynomial B indicates where X-type (Z-type) checks address R-type (L-type) qubits.
+
+    References:
+    - https://errorcorrectionzoo.org/c/qcga
+    - https://arxiv.org/abs/2308.07915
+    - https://arxiv.org/pdf/2408.10001
     """
 
     def __init__(
@@ -255,7 +272,7 @@ class BBCode(GBCode):
                 "BBCodes should have exactly two cyclic group orders and two symbols, not "
                 f"{len(orders)} orders and {len(symbols)} symbols."
             )
-        GBCode.__init__(self, orders, poly_a, poly_b, field, conjugate=conjugate)
+        QCCode.__init__(self, orders, poly_a, poly_b, field, conjugate=conjugate)
 
 
 ################################################################################
