@@ -70,9 +70,21 @@ def test_bivariate_bicycle_codes() -> None:
     assert code.dimension == 12
     assert code.get_weight() == 6
 
+    # test toric-code-like layouts of the above BBCode
+    for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
+        # assert that the polynomials look like 1 + x + ... and 1 + y + ...
+        assert (1, 0) in [code.get_coefficient_and_exponents(term)[1] for term in poly_a.args]
+        assert (0, 1) in [code.get_coefficient_and_exponents(term)[1] for term in poly_b.args]
+
+        # assert that the code has equivalent parameters
+        equiv_code = codes.BBCode(orders, poly_a, poly_b)
+        assert equiv_code.num_qudits == 144
+        assert equiv_code.dimension == 12
+        assert equiv_code.get_weight() == 6
+
     # codes with more than 2 symbols are unsupported
     with pytest.raises(ValueError, match="should have exactly two"):
-        codes.BBCode({}, poly_a, x + y + z)
+        codes.BBCode({}, x, y + z)
 
 
 def test_quasi_cyclic_codes() -> None:
