@@ -352,6 +352,16 @@ class BBCode(QCCode):
             gen_h = b_2 / b_1
             orders = (self.to_group_member(gen_g).order(), self.to_group_member(gen_h).order())
 
+            # new "shifted" polynomials
+            shifted_poly_a = self.poly_a / a_1
+            shifted_poly_b = self.poly_b / b_1
+
+            # without loss of generality, enforce that the toric layout "width" >= "height"
+            if orders[0] < orders[1]:
+                orders = orders[::-1]
+                gen_g, gen_h = gen_h, gen_g
+                shifted_poly_a, shifted_poly_b = shifted_poly_b, shifted_poly_a
+
             """
             Let x and y be the generators of the polynomials in the original BBCode.
             We want to "change basis" from generators (x, y) to generators (g, h), where
@@ -383,25 +393,26 @@ class BBCode(QCCode):
 
             # build polynomials for an equivalent BBCode with a manifest toric layout
             new_polys = []
-            for new_poly in [(self.poly_a / a_1), (self.poly_b / b_1)]:
-                new_poly = new_poly.expand().subs({self.symbols[0]: gen_x, self.symbols[1]: gen_y})
+            for poly in [shifted_poly_a, shifted_poly_b]:
+                poly = poly.expand().subs({self.symbols[0]: gen_x, self.symbols[1]: gen_y})
 
                 # replace the "new" symbols (g, h) by the "original" symbols (x, y)
-                new_poly = new_poly.subs({symbol_g: self.symbols[0], symbol_h: self.symbols[1]})
+                poly = poly.subs({symbol_g: self.symbols[0], symbol_h: self.symbols[1]})
 
                 # simplify exponents
-                new_poly_simplified = sympy.core.numbers.Zero()
-                for term in new_poly.args:
+                poly_simplified = sympy.core.numbers.Zero()
+                for term in poly.args:
                     coeff, exponents = self.get_coefficient_and_exponents(term)
                     term = sympy.core.numbers.One()
                     for symbol, order in zip(self.symbols, orders):
+                        # find an equivalent exponent in the interval (-order/2, order/2]
                         new_exponent = exponents.get(symbol, 0) % order
                         if new_exponent > order / 2:
                             new_exponent -= order
                         term *= coeff * symbol**new_exponent
-                    new_poly_simplified += term
+                    poly_simplified += term
 
-                new_polys.append(new_poly_simplified)
+                new_polys.append(poly_simplified)
             new_poly_a, new_poly_b = new_polys
 
             toric_layout_generating_data.append((orders, new_poly_a, new_poly_b))
