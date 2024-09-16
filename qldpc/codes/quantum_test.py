@@ -70,7 +70,7 @@ def test_bivariate_bicycle_codes() -> None:
     assert code.dimension == 12
     assert code.get_weight() == 6
 
-    # test toric-code-like layouts of the above BBCode
+    # test toric layouts of the above BBCode
     for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
         # assert that the polynomials look like 1 + x + ... and 1 + y + ...
         exponents_a = [code.get_coefficient_and_exponents(term)[1] for term in poly_a.args]
@@ -84,7 +84,7 @@ def test_bivariate_bicycle_codes() -> None:
         assert equiv_code.dimension == 12
         assert equiv_code.get_weight() == 6
 
-    # check a case with no toric-code-like layouts
+    # check a code with no toric layouts
     dims = (6, 6)
     poly_a = 1 + y + y**2
     poly_b = y**3 + x**2 + x**4
