@@ -82,6 +82,13 @@ def test_bivariate_bicycle_codes() -> None:
         assert equiv_code.dimension == 12
         assert equiv_code.get_weight() == 6
 
+    # check a case with no toric-code-like layouts
+    dims = (6, 6)
+    poly_a = 1 + y + y**2
+    poly_b = y**3 + x**2 + x**4
+    code = codes.BBCode(dims, poly_a, poly_b)
+    assert not code.get_equivalent_toric_layout_code_data()
+
     # codes with more than 2 symbols are unsupported
     with pytest.raises(ValueError, match="should have exactly two"):
         codes.BBCode({}, x, y + z)
