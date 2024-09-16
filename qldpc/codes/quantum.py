@@ -187,26 +187,53 @@ class QCCode(TBCode):
 
     def eval(
         self,
-        expr: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
+        expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
     ) -> abstract.Element:
         """Convert a sympy expression into an element of this code's group algebra."""
-        # evaluate simple cases
-        if isinstance(expr, sympy.Integer):
-            return int(expr) * abstract.Element(self.group, self.group.identity)
-        if isinstance(expr, sympy.Symbol):
-            return abstract.Element(self.group, self.symbol_gens[expr])
-        if isinstance(expr, (sympy.Symbol, sympy.Pow)):
-            base, exp = expr.as_base_exp()
-            return abstract.Element(self.group, self.symbol_gens[base] ** exp)
+        # evaluate a monomial
+        if isinstance(expression, (sympy.Integer, sympy.Symbol, sympy.Pow, sympy.Mul)):
+            coeff, monomial = expression.as_coeff_Mul()
+            member = self.to_group_member(monomial)
+            return int(coeff) * abstract.Element(self.group, member)
 
-        # evaluate a product or polynomial
+        # evaluate a polynomial
         element = abstract.Element(self.group)
-        for term in expr.as_expr().args:
+        for term in expression.as_expr().args:
             element += functools.reduce(
                 abstract.Element.__mul__,
                 [self.eval(factor) for factor in term.as_ordered_factors()],
             )
         return element
+
+    def to_group_member(
+        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+    ) -> abstract.GroupMember:
+        """Convert a sympy expression into an associated member of this code's base group."""
+        _, exponents = self.get_coefficient_and_exponents(expression)
+        output = self.group.identity
+        for base, exponent in zip(self.symbols, exponents):
+            if exponent:
+                output *= self.symbol_gens[base] ** exponent
+        return output
+
+    def get_coefficient_and_exponents(
+        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+    ) -> tuple[int, tuple[int, ...]]:
+        """Extract the coefficients and exponents in a monomial expression.
+
+        For example, this method takes 5 x**3 y**2 to (5, (3, 2))."""
+        coeff, monomial = expression.as_coeff_Mul()
+        exponents = {}
+        if isinstance(monomial, sympy.Symbol):
+            exponents[monomial] = 1
+        elif isinstance(monomial, sympy.Pow):
+            base, exp = monomial.as_base_exp()
+            exponents[base] = exp
+        elif isinstance(monomial, sympy.Mul):
+            for factor in monomial.args:
+                base, exp = factor.as_base_exp()
+                exponents[base] = exp
+        return coeff, tuple(exponents.get(symbol, 0) for symbol in self.symbols)
 
 
 # TODO: example notebook featuring this code
@@ -375,36 +402,6 @@ class BBCode(QCCode):
             toric_layout_generating_data.append((orders, new_poly_a, new_poly_b))
 
         return tuple(toric_layout_generating_data)
-
-    def to_group_member(
-        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> abstract.GroupMember:
-        """Convert a sympy expression into an associated member of this code's base group."""
-        _, exponents = self.get_coefficient_and_exponents(expression)
-        output = self.group.identity
-        for base, exponent in zip(self.symbols, exponents):
-            if exponent:
-                output *= self.symbol_gens[base] ** exponent
-        return output
-
-    def get_coefficient_and_exponents(
-        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
-    ) -> tuple[int, tuple[int, ...]]:
-        """Extract the coefficients and exponents in a monomial expression.
-
-        For example, this method takes 5 x**3 y**2 to (5, (3, 2))."""
-        coeff, monomial = expression.as_coeff_Mul()
-        exponents = {}
-        if isinstance(monomial, sympy.Symbol):
-            exponents[monomial] = 1
-        elif isinstance(monomial, sympy.Pow):
-            base, exp = monomial.as_base_exp()
-            exponents[base] = exp
-        elif isinstance(monomial, sympy.Mul):
-            for factor in monomial.args:
-                base, exp = factor.as_base_exp()
-                exponents[base] = exp
-        return coeff, tuple(exponents.get(symbol, 0) for symbol in self.symbols)
 
 
 ################################################################################
