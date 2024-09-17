@@ -162,7 +162,7 @@ class QCCode(TBCode):
         self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
-        self.group = abstract.AbelianGroup(*self.orders, product_lift=True)
+        self.group = abstract.AbelianGroup(*self.orders, field=field, product_lift=True)
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
@@ -204,9 +204,11 @@ class QCCode(TBCode):
     def to_group_member(
         self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
     ) -> abstract.GroupMember:
-        """Convert a sympy expression into an associated member of this code's base group."""
+        """Convert a monomial into an associated member of this code's base group."""
+        coeff, exponents = self.get_coefficient_and_exponents(expression)
+        assert coeff == 1
+
         output = self.group.identity
-        _, exponents = self.get_coefficient_and_exponents(expression)
         for base, exponent in exponents.items():
             output *= self.symbol_gens[base] ** exponent
         return output
@@ -348,14 +350,14 @@ class BBCode(QCCode):
         symbol_g = sympy.Symbol("".join(map(str, self.symbols)))
         symbol_h = sympy.Symbol("".join(map(str, self.symbols * 2)))
 
-        # identify individual terms in the polynomials
-        terms_a = self.poly_a.as_expr().args
-        terms_b = self.poly_b.as_expr().args
+        # identify individual monomials (terms without their coefficients) in the polynomials
+        monomials_a = [term.as_coeff_Mul()[1] for term in self.poly_a.as_expr().args]
+        monomials_b = [term.as_coeff_Mul()[1] for term in self.poly_b.as_expr().args]
 
-        # identify monomials that can be combined to obtain a toric layout
+        # identify collections of monomials that can be combined to obtain a toric layout
         toric_params = []
         for (a_1, a_2), (b_1, b_2) in itertools.product(
-            itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
+            itertools.combinations(monomials_a, 2), itertools.combinations(monomials_b, 2)
         ):
             member_g = self.to_group_member(a_2 / a_1)
             member_h = self.to_group_member(b_2 / b_1)
