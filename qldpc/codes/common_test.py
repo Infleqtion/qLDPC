@@ -265,7 +265,7 @@ def test_CSS_ops() -> None:
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
-    code = codes.ToricCode(dist, rotated=True)
+    code = codes.ToricCode(dist, rotated=True, field=2)
     code.reduce_logical_ops()
     assert code.get_code_params() == (dist**2, 2, dist)
     assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.X))
