@@ -32,7 +32,7 @@ from qldpc.objects import Pauli, QuditOperator
 
 def test_constructions_classical() -> None:
     """Classical code constructions."""
-    code = codes.ClassicalCode.random(5, 3, seed=0)
+    code = codes.ClassicalCode.random(5, 3, field=2, seed=0)
     assert code.num_bits == 5
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
