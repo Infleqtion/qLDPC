@@ -191,6 +191,7 @@ def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) 
     """Apply Pauli deformations to a qudit code."""
     qudits = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
     code = get_random_qudit_code(num_qudits, num_checks, field).conjugated(qudits)
+    assert np.array_equal(code.matrix, code.conjugated().matrix)
 
     matrix = np.reshape(code.matrix, (num_checks, 2, num_qudits))
     for node_check, node_qubit, data in code.graph.edges(data=True):

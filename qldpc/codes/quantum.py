@@ -518,6 +518,9 @@ class HGPCode(CSSCode):
             [code_b.num_bits, code_b.num_checks],
         )
 
+        # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
+        self._default_conjugate = slice(self.sector_size[0, 0], None)
+
         CSSCode.__init__(
             self, matrix_x.astype(int), matrix_z.astype(int), field, skip_validation=True
         )
@@ -627,11 +630,6 @@ class HGPCode(CSSCode):
 
         return node_map
 
-    def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
-        """Hadamard-transform to the qudits in sector (1, 1)."""
-        qudits = qudits if qudits is not None else slice(self.sector_size[0, 0], None)
-        return QuditCode.conjugated(self, qudits)
-
 
 class LPCode(CSSCode):
     """Lifted product (LP) code.
@@ -680,6 +678,9 @@ class LPCode(CSSCode):
             protograph_b.shape[::-1],
         )
 
+        # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
+        self._default_conjugate = slice(self.sector_size[0, 0], None)
+
         CSSCode.__init__(
             self,
             abstract.Protograph(matrix_x.astype(object)).lift(),
@@ -687,11 +688,6 @@ class LPCode(CSSCode):
             field,
             skip_validation=True,
         )
-
-    def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
-        """Hadamard-transform to the qudits in sector (1, 1)."""
-        qudits = qudits if qudits is not None else slice(self.sector_size[0, 0], None)
-        return QuditCode.conjugated(self, qudits)
 
 
 ################################################################################
@@ -959,7 +955,7 @@ class SurfaceCode(CSSCode):
         if rotated:
             # rotated surface code
             matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
-            self._qudits_to_conjugate: list[int] | slice = [
+            self._default_conjugate: list[int] | slice = [
                 idx
                 for idx, (row, col) in enumerate(np.ndindex(self.rows, self.cols))
                 if (row + col) % 2
@@ -972,7 +968,7 @@ class SurfaceCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            self._qudits_to_conjugate = slice(code_ab.sector_size[0, 0], None)
+            self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
         CSSCode.__init__(self, matrix_x, matrix_z, field=field, skip_validation=True)
 
@@ -1038,11 +1034,6 @@ class SurfaceCode(CSSCode):
 
         return np.array(checks_x), np.array(checks_z)
 
-    def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
-        """Hadamard-transform qudits in a checkerboard pattern."""
-        qudits = qudits if qudits is not None else self._qudits_to_conjugate
-        return QuditCode.conjugated(self, qudits)
-
 
 class ToricCode(CSSCode):
     """Surface code with periodic bounary conditions, encoding two logical qudits.
@@ -1073,7 +1064,7 @@ class ToricCode(CSSCode):
 
             # rotated toric code
             matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)
-            self._qudits_to_conjugate: list[int] | slice = [
+            self._default_conjugate: list[int] | slice = [
                 idx
                 for idx, (row, col) in enumerate(np.ndindex(self.rows, self.cols))
                 if (row + col) % 2
@@ -1086,7 +1077,7 @@ class ToricCode(CSSCode):
             code_ab = HGPCode(code_a, code_b, field)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            self._qudits_to_conjugate = slice(code_ab.sector_size[0, 0], None)
+            self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
         CSSCode.__init__(self, matrix_x, matrix_z, field=field, skip_validation=True)
 
@@ -1121,11 +1112,6 @@ class ToricCode(CSSCode):
                     checks_z.append(check)
 
         return np.array(checks_x), np.array(checks_z)
-
-    def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
-        """Hadamard-transform qudits in a checkerboard pattern."""
-        qudits = qudits if qudits is not None else self._qudits_to_conjugate
-        return QuditCode.conjugated(self, qudits)
 
 
 class GeneralizedSurfaceCode(CSSCode):

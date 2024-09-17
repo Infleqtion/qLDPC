@@ -643,10 +643,10 @@ class QuditCode(AbstractCode):
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
-    def conjugated(self, qudits: slice | Sequence[int]) -> QuditCode:
-        """Apply local Fourier (Hadamard) transforms to the given qudits.
-
-        This is equivalent to swapping X-type and Z-type operators."""
+    def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
+        """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
+        if qudits is None:
+            qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
         num_checks = len(self.matrix)
         matrix = np.reshape(self.matrix.copy(), (num_checks, 2, -1))
         matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
