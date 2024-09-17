@@ -80,9 +80,9 @@ def test_bivariate_bicycle_codes() -> None:
 
         # assert that the code has equivalent parameters
         equiv_code = codes.BBCode(orders, poly_a, poly_b)
-        assert equiv_code.num_qudits == 144
-        assert equiv_code.dimension == 12
-        assert equiv_code.get_weight() == 6
+        assert equiv_code.num_qudits == code.num_qudits
+        assert equiv_code.dimension == code.dimension
+        assert equiv_code.get_weight() == code.get_weight()
 
     # check a code with no toric layouts
     dims = (6, 6)
