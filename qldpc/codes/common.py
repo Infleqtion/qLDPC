@@ -525,13 +525,9 @@ class QuditCode(AbstractCode):
         self,
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
-        *,
-        conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
-        if conjugate:
-            self._matrix = self.field(QuditCode.conjugate(self._matrix, conjugate))
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
@@ -647,17 +643,14 @@ class QuditCode(AbstractCode):
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
-    @classmethod
-    def conjugate(
-        cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]], qudits: slice | Sequence[int]
-    ) -> npt.NDArray[np.int_]:
-        """Apply local Fourier transforms to the given qudits.
+    def conjugated(self, qudits: slice | Sequence[int]) -> QuditCode:
+        """Apply local Fourier (Hadamard) transforms to the given qudits.
 
         This is equivalent to swapping X-type and Z-type operators."""
-        num_checks = len(matrix)
-        matrix = np.reshape(matrix, (num_checks, 2, -1))
+        num_checks = len(self.matrix)
+        matrix = np.reshape(self.matrix.copy(), (num_checks, 2, -1))
         matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
-        return matrix.reshape(num_checks, -1)
+        return QuditCode(matrix.reshape(num_checks, -1))
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial logical operators for this code.
@@ -785,7 +778,6 @@ class CSSCode(QuditCode):
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
     code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
 
-    _conjugated: slice | Sequence[int]
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
     _balanced_codes: bool
@@ -796,14 +788,10 @@ class CSSCode(QuditCode):
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
-        conjugate: slice | Sequence[int] | None = (),
         promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
         skip_validation: bool = False,
     ) -> None:
-        """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
-
-        Allow specifying local Fourier transformations on the qudits specified by `conjugate`.
-        """
+        """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks."""
         self.code_x = ClassicalCode(code_x, field)
         self.code_z = ClassicalCode(code_z, field)
 
@@ -814,7 +802,6 @@ class CSSCode(QuditCode):
         if not skip_validation and self.code_x != self.code_z:
             self._validate_subcodes()
 
-        self._conjugated = conjugate or ()
         self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
 
     def _validate_subcodes(self) -> None:
@@ -834,9 +821,6 @@ class CSSCode(QuditCode):
             text += f"{self.name} on {self.num_qudits} qudits over {self.field_name}"
         text += f"\nX-type parity checks:\n{self.matrix_x}"
         text += f"\nZ-type parity checks:\n{self.matrix_z}"
-        if self.conjugated:
-            qudits = "qubits" if self.field.order == 2 else "qudits"
-            text += f"\n{qudits} conjugated at:\n{self.conjugated}"
         return text
 
     @functools.cached_property
@@ -848,7 +832,7 @@ class CSSCode(QuditCode):
                 [self.matrix_z, np.zeros_like(self.matrix_z)],
             ]
         )
-        return self.field(self.conjugate(matrix, self.conjugated))
+        return self.field(matrix)
 
     @property
     def matrix_x(self) -> galois.FieldArray:
@@ -859,11 +843,6 @@ class CSSCode(QuditCode):
     def matrix_z(self) -> galois.FieldArray:
         """Z-type parity checks."""
         return self.code_z.matrix
-
-    @property
-    def conjugated(self) -> slice | Sequence[int]:
-        """Which qudits are conjugated?  Conjugated qudits swap their X and Z operators."""
-        return self._conjugated
 
     @property
     def num_checks_x(self) -> int:
