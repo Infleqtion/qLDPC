@@ -233,6 +233,29 @@ class QCCode(TBCode):
                 exponents[base] = exponent
         return coeff, exponents
 
+    def get_canonical_form(
+        self, poly: sympy.Poly, orders: tuple[int, ...] | None = None
+    ) -> tuple[sympy.Poly, sympy.Poly]:
+        """Canonicalize the given polynomial, shifting exponents to (-order/2, order/2]."""
+        orders = orders or self.orders
+        assert len(orders) == len(self.symbols)
+
+        # canonialize and add one term ata time
+        new_poly = sympy.core.numbers.Zero()
+        for term in poly.args:
+            coeff, exponents = self.get_coefficient_and_exponents(term)
+
+            new_term = sympy.core.numbers.One()
+            for symbol, order in zip(self.symbols, orders):
+                new_exponent = exponents.get(symbol, 0) % order
+                if new_exponent > order / 2:
+                    new_exponent -= order
+                new_term *= coeff * symbol**new_exponent
+
+            new_poly += new_term
+
+        return new_poly
+
 
 # TODO: example notebook featuring this code
 class BBCode(QCCode):
@@ -345,7 +368,7 @@ class BBCode(QCCode):
                 toric_params.append((a_2, a_1, b_1, b_2))
                 toric_params.append((a_2, a_1, b_2, b_1))
 
-        toric_layout_generating_data = set()
+        toric_layout_generating_data = []
         for a_1, a_2, b_1, b_2 in toric_params:
             # new generators and their corresponding cyclic group orders
             gen_g = a_2 / a_1
@@ -394,30 +417,20 @@ class BBCode(QCCode):
             # build polynomials for an equivalent BBCode with a manifest toric layout
             new_polys = []
             for poly in [shifted_poly_a, shifted_poly_b]:
-                poly = poly.expand().subs({self.symbols[0]: gen_x, self.symbols[1]: gen_y})
-
-                # replace the "new" symbols (g, h) by the "original" symbols (x, y)
+                # expand (x, y) in terms of (g, h), then "rename" (g, h) to (x, y)
+                poly = poly.expand()
+                poly = poly.subs({self.symbols[0]: gen_x, self.symbols[1]: gen_y})
                 poly = poly.subs({symbol_g: self.symbols[0], symbol_h: self.symbols[1]})
 
-                # simplify exponents
-                poly_simplified = sympy.core.numbers.Zero()
-                for term in poly.args:
-                    coeff, exponents = self.get_coefficient_and_exponents(term)
-                    term = sympy.core.numbers.One()
-                    for symbol, order in zip(self.symbols, orders):
-                        # find an equivalent exponent in the interval (-order/2, order/2]
-                        new_exponent = exponents.get(symbol, 0) % order
-                        if new_exponent > order / 2:
-                            new_exponent -= order
-                        term *= coeff * symbol**new_exponent
-                    poly_simplified += term
+                # add canonical form of this polynomial, with exponents in (-order/2, order/2]
+                new_polys.append(self.get_canonical_form(poly, orders))
 
-                new_polys.append(poly_simplified)
             new_poly_a, new_poly_b = new_polys
+            generating_data = (orders, new_poly_a, new_poly_b)
+            if generating_data not in toric_layout_generating_data:
+                toric_layout_generating_data.append(generating_data)
 
-            toric_layout_generating_data.add((orders, new_poly_a, new_poly_b))
-
-        return tuple(toric_layout_generating_data)
+        return toric_layout_generating_data
 
 
 ################################################################################
