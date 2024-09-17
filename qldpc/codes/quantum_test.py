@@ -81,7 +81,7 @@ def test_bivariate_bicycle_codes() -> None:
         assert {} in exponents_b and {y: 1} in exponents_b
 
         # assert that the code has equivalent parameters
-        equiv_code = codes.BBCode(orders, poly_a, poly_b)
+        equiv_code = codes.BBCode(orders, poly_a, poly_b, field=3)
         assert equiv_code.num_qudits == code.num_qudits
         assert equiv_code.dimension == code.dimension
 
