@@ -213,7 +213,7 @@ def test_qudit_ops() -> None:
     assert np.array_equal(logical_ops[1], [[0, 1, 1, 0, 0, 0, 0, 0, 0, 1]])
     assert code.get_logical_ops() is code._logical_ops
 
-    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I")
+    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
 

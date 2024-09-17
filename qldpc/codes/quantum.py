@@ -38,7 +38,13 @@ class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
     def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
-        code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
+        code = QuditCode.from_stabilizers(
+            "X Z Z X I",
+            "I X Z Z X",
+            "X I X Z Z",
+            "Z X I X Z",
+            field=2,
+        )
         QuditCode.__init__(self, code, conjugate=conjugate)
 
 
@@ -46,7 +52,7 @@ class SteaneCode(CSSCode):
     """Smallest quantum error-correcting CSS code."""
 
     def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
-        code = HammingCode(3)
+        code = HammingCode(3, field=2)
         CSSCode.__init__(self, code, code, conjugate=conjugate)
 
 

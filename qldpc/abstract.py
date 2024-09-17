@@ -54,7 +54,7 @@ import sympy.core
 
 from qldpc import external
 
-DEFAULT_FIELD_ORDER = 2
+DEFAULT_FIELD_ORDER = 3
 
 
 ################################################################################
