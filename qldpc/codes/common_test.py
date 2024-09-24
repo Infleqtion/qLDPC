@@ -32,7 +32,7 @@ from qldpc.objects import Pauli, QuditOperator
 
 def test_constructions_classical() -> None:
     """Classical code constructions."""
-    code = codes.ClassicalCode.random(5, 3, seed=0)
+    code = codes.ClassicalCode.random(5, 3, field=2, seed=0)
     assert code.num_bits == 5
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
@@ -134,10 +134,7 @@ def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
     """Construct a random (but probably trivial or invalid) QuditCode."""
-    return codes.QuditCode(
-        codes.ClassicalCode.random(2 * qudits, checks, field).matrix,
-        conjugate=(0,),  # conjugate the first qubit
-    )
+    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
 
 
 def test_code_string() -> None:
@@ -151,8 +148,8 @@ def test_code_string() -> None:
     code = codes.HGPCode(codes.RepetitionCode(2, field=2))
     assert "qubits" in str(code)
 
-    code = codes.HGPCode(codes.RepetitionCode(2, field=3), conjugate=True)
-    assert "GF(3)" in str(code) and "conjugated" in str(code)
+    code = codes.HGPCode(codes.RepetitionCode(2, field=3))
+    assert "GF(3)" in str(code)
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -192,14 +189,14 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 
 def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Apply Pauli deformations to a qudit code."""
-    code = get_random_qudit_code(num_qudits, num_checks, field)
-    conjugate = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
-    transformed_matrix = codes.QuditCode.conjugate(code.matrix, conjugate)
+    qudits = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
+    code = get_random_qudit_code(num_qudits, num_checks, field).conjugated(qudits)
+    assert np.array_equal(code.matrix, code.conjugated().matrix)
 
-    transformed_matrix = transformed_matrix.reshape(num_checks, 2, num_qudits)
+    matrix = np.reshape(code.matrix, (num_checks, 2, num_qudits))
     for node_check, node_qubit, data in code.graph.edges(data=True):
         vals = data[QuditOperator].value
-        assert tuple(transformed_matrix[node_check.index, :, node_qubit.index]) == vals[::-1]
+        assert tuple(matrix[node_check.index, :, node_qubit.index]) == vals[::-1]
 
 
 def test_qudit_ops() -> None:
@@ -213,7 +210,7 @@ def test_qudit_ops() -> None:
     assert np.array_equal(logical_ops[1], [[0, 1, 1, 0, 0, 0, 0, 0, 0, 1]])
     assert code.get_logical_ops() is code._logical_ops
 
-    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I")
+    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
 
@@ -265,7 +262,7 @@ def test_CSS_ops() -> None:
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
-    code = codes.ToricCode(dist, rotated=True)
+    code = codes.ToricCode(dist, rotated=True, field=2)
     code.reduce_logical_ops()
     assert code.get_code_params() == (dist**2, 2, dist)
     assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.X))

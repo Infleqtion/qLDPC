@@ -8,7 +8,9 @@ This package requires Python>=3.10, and can be installed from PyPI with
 ```
 pip install qldpc
 ```
-To install a local version from source:
+If you use macOS, you may need to install `cvxpy` manually by following the instructions [here](https://www.cvxpy.org/install/) before installing qLDPC.
+
+To install a local version of qLDPC from source:
 ```
 git clone git@github.com:Infleqtion/qLDPC.git
 pip install -e qLDPC

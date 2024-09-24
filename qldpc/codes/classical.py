@@ -97,10 +97,15 @@ class BCHCode(ClassicalCode):
     - https://www.cs.cmu.edu/~venkatg/teaching/codingtheory/notes/notes6.pdf
     """
 
-    def __init__(self, bits: int, dimension: int) -> None:
-        if "0" in format(bits, "b"):
-            raise ValueError("BCH codes only defined for 2^m - 1 bits with integer m.")
-        ClassicalCode.__init__(self, galois.BCH(bits, dimension).H)
+    def __init__(self, length: int, dimension: int, field: int | None = None) -> None:
+        field = field or DEFAULT_FIELD_ORDER
+        length_in_base = np.base_repr(length, base=field)
+        if not length_in_base == str(field - 1) * len(length_in_base):
+            raise ValueError(
+                f"BCH codes over F_{field} are only defined for block lengths {field}^m - 1 with"
+                " integer m."
+            )
+        ClassicalCode.__init__(self, galois.BCH(length, dimension, field=galois.GF(field)).H)
 
 
 class ReedMullerCode(ClassicalCode):

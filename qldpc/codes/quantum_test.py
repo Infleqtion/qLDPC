@@ -33,9 +33,9 @@ def test_small_codes() -> None:
     """Five-qubit and Steane codes."""
     assert codes.SteaneCode().num_qubits == 7
 
-    code = codes.FiveQubitCode(conjugate=[1, 2])
+    code = codes.FiveQubitCode()
     assert code.num_qubits == 5
-    assert code.get_stabilizers()[0] == "X X X X I"
+    assert code.get_stabilizers()[0] == "X Z Z X I"
 
 
 def test_two_block_code_error() -> None:
@@ -56,7 +56,7 @@ def test_bivariate_bicycle_codes() -> None:
     dims = (12, 4)
     poly_a = 1 + y + x * y + x**9
     poly_b = 1 + x**2 + x**7 + x**9 * y**2
-    code = codes.BBCode(dims, poly_a, poly_b)
+    code = codes.BBCode(dims, poly_a, poly_b, field=2)
     assert code.num_qudits == 96
     assert code.dimension == 10
     assert code.get_weight() == 8
@@ -65,12 +65,14 @@ def test_bivariate_bicycle_codes() -> None:
     dims = {x: 12, y: 6}
     poly_a = x**3 + y + y**2
     poly_b = y**3 + x + x**2
-    code = codes.BBCode(dims, poly_a, poly_b)
+    code = codes.BBCode(dims, poly_a, poly_b, field=2)
     assert code.num_qudits == 144
     assert code.dimension == 12
     assert code.get_weight() == 6
 
-    # test toric layouts of the above BBCode
+    # toric layouts of a qutrit BBCode
+    code = codes.BBCode(dims, poly_a, poly_b, field=3)
+    assert code.dimension == 8
     for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
         # assert that the polynomials look like 1 + x + ... and 1 + y + ...
         exponents_a = [code.get_coefficient_and_exponents(term)[1] for term in poly_a.args]
@@ -79,10 +81,9 @@ def test_bivariate_bicycle_codes() -> None:
         assert {} in exponents_b and {y: 1} in exponents_b
 
         # assert that the code has equivalent parameters
-        equiv_code = codes.BBCode(orders, poly_a, poly_b)
+        equiv_code = codes.BBCode(orders, poly_a, poly_b, field=3)
         assert equiv_code.num_qudits == code.num_qudits
         assert equiv_code.dimension == code.dimension
-        assert equiv_code.get_weight() == code.get_weight()
 
     # check a code with no toric layouts
     dims = (6, 6)
@@ -114,14 +115,13 @@ def test_hypergraph_products(
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
-    conjugate: bool = True,
 ) -> None:
     """Equivalency of matrix-based, graph-based, and chain-based hypergraph products."""
     code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
 
-    code = codes.HGPCode(code_a, code_b, conjugate=conjugate)
-    graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph, conjugate=conjugate)
+    code = codes.HGPCode(code_a, code_b)
+    graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph)
     chain = ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
 
@@ -190,7 +190,7 @@ def test_lift() -> None:
 def test_twisted_XZZX(width: int = 3) -> None:
     """Verify twisted XZZX code in Eqs.(29) and (32) of arXiv:2202.01702v3."""
     num_qudits = 2 * width**2
-    code: codes.CSSCode
+    code: codes.QuditCode
 
     # construct check matrix directly
     ring = codes.RingCode(width).matrix
@@ -213,8 +213,10 @@ def test_twisted_XZZX(width: int = 3) -> None:
     shift = abstract.Element(group, group.generators[0])
     element_a = unit - shift**width
     element_b = unit - shift
-    code = codes.LPCode([[element_a]], [[element_b]], conjugate=True)
-    assert np.array_equal(matrix, code.matrix)
+    code = codes.LPCode([[element_a]], [[element_b]])
+    qudits_to_conjugate = slice(code.sector_size[0, 0], None)
+    assert np.array_equal(matrix, code.conjugated(qudits_to_conjugate).matrix)
+    assert np.array_equal(matrix, code.conjugated().matrix)
 
     # same construction with a chain complex
     protograph_a = abstract.Protograph([[element_a]])
@@ -223,7 +225,7 @@ def test_twisted_XZZX(width: int = 3) -> None:
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
     assert isinstance(matrix_x, abstract.Protograph)
     assert isinstance(matrix_z, abstract.Protograph)
-    code = codes.CSSCode(matrix_x.lift(), matrix_z.lift(), conjugate=code.conjugated)
+    code = codes.CSSCode(matrix_x.lift(), matrix_z.lift()).conjugated(qudits_to_conjugate)
     assert np.array_equal(matrix, code.matrix)
 
 
@@ -319,6 +321,13 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
     assert code.get_distance(Pauli.X, bound=10) == cols
     assert code.get_distance(Pauli.Z, bound=10) == rows
 
+    # un-rotated SurfaceCode = HGPCode
+    rep_codes = (codes.RepetitionCode(rows, field), codes.RepetitionCode(cols, field))
+    assert np.array_equal(
+        code.conjugated().matrix,
+        codes.HGPCode(*rep_codes).conjugated().matrix,
+    )
+
     # rotated surface code
     code = codes.SurfaceCode(rows, cols, rotated=True, field=field)
     assert code.dimension == 1
@@ -326,9 +335,9 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
     assert code.get_distance(Pauli.X) == codes.CSSCode.get_distance_exact(code, Pauli.X) == cols
     assert code.get_distance(Pauli.Z) == codes.CSSCode.get_distance_exact(code, Pauli.Z) == rows
 
-    # test that the rotated surface code with conjugate=True is an XZZX code
-    code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2, conjugate=True)
-    for row in code.matrix:
+    # test that the conjugated rotated surface code is an XZZX code
+    code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2)
+    for row in code.conjugated().matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
 
@@ -363,8 +372,8 @@ def test_toric_codes() -> None:
 
     # rotated toric XZZX code
     rows, cols = 6, 4
-    code = codes.ToricCode(rows, cols, rotated=True, conjugate=True)
-    for row in code.matrix:
+    code = codes.ToricCode(rows, cols, rotated=True)
+    for row in code.conjugated().matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
 

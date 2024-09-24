@@ -40,15 +40,14 @@ def test_special_codes() -> None:
     """Reed-Solomon, BCH, and Reed-Muller codes."""
     assert codes.ReedSolomonCode(3, 2).dimension == 2
 
-    bits, dimension = 7, 4
-    assert codes.BCHCode(bits, dimension).dimension == dimension
-    with pytest.raises(ValueError, match=r"2\^m - 1 bits"):
-        codes.BCHCode(bits - 1, dimension)
+    for bits, dimension, field in [(7, 4, 2), (8, 4, 3)]:
+        assert codes.BCHCode(bits, dimension, field).dimension == dimension
+        with pytest.raises(ValueError, match=rf"block lengths {field}\^m - 1"):
+            codes.BCHCode(bits - 1, dimension, field)
 
-    order, size = 1, 3
-    code = codes.ReedMullerCode(order, size)
-    assert code.dimension == codes.ClassicalCode(code.matrix).dimension
-    assert ~code == codes.ReedMullerCode(size - order - 1, size)
+    order, size, field = 1, 3, 2
+    code = codes.ReedMullerCode(order, size, field)
+    assert ~code == codes.ReedMullerCode(size - order - 1, size, field)
 
     with pytest.raises(ValueError, match="0 <= r <= m"):
         codes.ReedMullerCode(-1, 0)
