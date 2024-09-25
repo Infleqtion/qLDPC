@@ -66,11 +66,11 @@ def prep(
     stabilizers = [op_to_string(row, flip_xz=True) for row in code.matrix]
     operators = [op_to_string(op) for op in code.get_logical_ops(pauli)]
     tableau = stim.Tableau.from_stabilizers(stabilizers + operators, allow_redundant=True)
-    cirucit = tableau.to_circuit()
+    circuit = tableau.to_circuit()
     if not qubits:
-        return cirucit
+        return circuit
 
-    assert len(qubits) >= cirucit.num_qubits
+    assert len(qubits) >= circuit.num_qubits
     remapped_circuit = stim.Circuit()
     for instruction in tableau.to_circuit():
         targets = [stim.GateTarget(qubits[target.value]) for target in instruction.targets_copy()]
