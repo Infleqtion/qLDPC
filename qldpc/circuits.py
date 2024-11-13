@@ -191,6 +191,4 @@ def steane_syndrome_extraction(
         circuit += stim.Circuit(f"MPP {observable}")
         circuit.append("OBSERVABLE_INCLUDE", [stim.target_rec(-1)], op_idx)
 
-    if not error_prob:
-        return circuit.without_noise()
-    return circuit
+    return circuit if error_prob else circuit.without_noise()
