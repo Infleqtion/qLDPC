@@ -38,7 +38,7 @@ platformdirs = ">=4.0.0"
 pymatching = ">=2.1.0"
 sympy = ">=1.12"
 
-checks-superstaq = { version = ">=0.5.23", optional = true }
+checks-superstaq = { version = ">=0.5.31", optional = true }
 
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
@@ -183,7 +183,8 @@ enable = [
 accept-no-param-doc=false # Do not accept totally missing parameter documentation.
 accept-no-raise-doc=false # Do not accept totally missing raises documentation.
 accept-no-return-doc=false # Do not accept totally missing return documentation.
-accept-no-yield-doc=false # Do not accept missing yields annotations.
+accept-no-yields-doc=false # Do not accept missing yields annotations.
+default-docstring-type = "google"
 
 # Ignore long lines containing urls or pylint directives.
 [tool.pylint.format]
