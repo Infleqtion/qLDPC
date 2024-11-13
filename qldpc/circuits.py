@@ -57,15 +57,36 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
 
 @restrict_to_qubits
 def prep(
-    code: codes.QuditCode, pauli: PauliXZ = Pauli.Z, *, qubits: Sequence[int] | None
+    code: codes.QuditCode,
+    string: Pauli | stim.PauliString = Pauli.Z,
+    *,
+    qubits: Sequence[int] | None,
 ) -> stim.Circuit:
-    """Circuit to prepare a logical +1 eigenstate of all logical operators of one type.
+    """Circuit to prepare a logical +1 eigenstate of the given logical Pauli string.
 
     Optionally prepend a specified number of qubits to every Pauli string.
     """
-    stabilizers = [op_to_string(row, flip_xz=True) for row in code.matrix]
-    operators = [op_to_string(op) for op in code.get_logical_ops(pauli)]
-    tableau = stim.Tableau.from_stabilizers(stabilizers + operators, allow_redundant=True)
+    if isinstance(string, Pauli):
+        string = stim.PauliString(str(string) * code.dimension)
+    elif len(string) < code.dimension:
+        string += stim.PauliString(len(string) - code.dimension)
+    assert len(string) == code.dimension
+
+    # identify logical operators that stabilize our target state
+    logical_ops = code.get_logical_ops()
+    logical_stabs = []
+    for qubit, pauli in enumerate(string):
+        if pauli == 1:
+            logical_op = logical_ops[0, qubit]
+        elif pauli == 3 or pauli == 0:
+            logical_op = logical_ops[1, qubit]
+        else:
+            assert pauli == 2
+            logical_op = logical_ops[0, qubit] + logical_ops[1, qubit]
+        logical_stabs.append(op_to_string(logical_op))
+
+    code_stabs = [op_to_string(row, flip_xz=True) for row in code.matrix]
+    tableau = stim.Tableau.from_stabilizers(logical_stabs + code_stabs, allow_redundant=True)
     circuit = tableau.to_circuit()
     if not qubits:
         return circuit
