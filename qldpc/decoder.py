@@ -123,7 +123,7 @@ def decode_with_ILP(
     result = problem.solve(**decoder_args)
 
     # raise error if the optimization failed
-    if not isinstance(result, float) or not np.isfinite(result):
+    if not isinstance(result, float) or not np.isfinite(result) or variables.value is None:
         message = "Optimal solution to integer linear program could not be found!"
         raise ValueError(message + f"\nSolver output: {result}")
 

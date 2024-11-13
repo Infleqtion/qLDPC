@@ -5,4 +5,4 @@ import checks_superstaq
 
 if __name__ == "__main__":
     skip_args = ["--ruff", "--skip", "requirements", "build_docs", "--"]
-    exit(checks_superstaq.all_.run(*skip_args, *sys.argv[1:], sphinx_paths=["../qldpc"]))
+    exit(checks_superstaq.all_.run(*skip_args, *sys.argv[1:]))
