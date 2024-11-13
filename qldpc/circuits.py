@@ -54,12 +54,7 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
 
 
 @restrict_to_qubits
-def prep(
-    code: codes.QuditCode,
-    string: Pauli | stim.PauliString = Pauli.Z,
-    *,
-    qubits: Sequence[int] | None,
-) -> stim.Circuit:
+def prep(code: codes.QuditCode, string: Pauli | stim.PauliString = Pauli.Z) -> stim.Circuit:
     """Circuit to prepare a logical +1 eigenstate of the given logical Pauli string.
 
     Optionally prepend a specified number of qubits to every Pauli string.
