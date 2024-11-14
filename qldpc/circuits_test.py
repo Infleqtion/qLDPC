@@ -37,3 +37,23 @@ def test_pauli_strings() -> None:
         circuits.op_to_string(row, flip_xz=True) == stim.PauliString(stabilizer.replace(" ", ""))
         for row, stabilizer in zip(code.matrix, code.get_stabilizers())
     )
+
+
+def test_state_prep() -> None:
+    """Prepare eigenstates of logical Pauli strings."""
+    for code in [codes.FiveQubitCode(), codes.HGPCode(codes.HammingCode(3))]:
+        logical_string = stim.PauliString.random(code.dimension)
+        circuit = circuits.get_ecoding_circuit(code, logical_string)
+
+        # test stabilizers of the code
+        simulator = stim.TableauSimulator()
+        simulator.do(circuit)
+        for row in code.matrix:
+            string = circuits.op_to_string(row, flip_xz=True)
+            assert simulator.peek_observable_expectation(string) == 1
+
+        # test the logical string
+        simulator.do(circuit.inverse())
+        simulator.do(logical_string)
+        simulator.do(circuit)
+        assert simulator.peek_observable_expectation(string) == 1
