@@ -41,7 +41,10 @@ def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.
 
 
 def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliString:
-    """Convert an integer array that represents a Pauli string into a stim.PauliString."""
+    """Convert an integer array that represents a Pauli string into a stim.PauliString.
+
+    The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz=True.
+    """
     assert len(op) % 2 == 0
     num_qubits = len(op) // 2
     paulis = []
