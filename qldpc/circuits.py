@@ -18,7 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 
 import numpy as np
 import numpy.typing as npt
@@ -28,7 +28,7 @@ from qldpc import codes
 from qldpc.objects import Pauli
 
 
-def restrict_to_qubits(func: Callable[[...], stim.Circuit]) -> Callable[[...], stim.Circuit]:
+def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.Circuit]:
     """Restrict a circuit constructor to qubit-based codes."""
 
     @functools.wraps(func)
@@ -62,9 +62,6 @@ def get_ecoding_tableau(
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
     string = string if isinstance(string, stim.PauliString) else stim.PauliString(code.dimension)
-    if len(string) < code.dimension:
-        string += stim.PauliString(len(string) - code.dimension)
-    assert len(string) == code.dimension
 
     # identify logical operators that stabilize our target state
     logical_ops = code.get_logical_ops()
@@ -85,7 +82,7 @@ def get_ecoding_tableau(
 
 @restrict_to_qubits
 def get_ecoding_circuit(
-    code: codes.QuditCode, string: stim.PauliString = stim.PauliString()
+    code: codes.QuditCode, string: stim.PauliString | None = None
 ) -> stim.Tableau:
     """Circuit to encode a logical all-|0> state of the given code.
 

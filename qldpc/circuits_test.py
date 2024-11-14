@@ -20,14 +20,14 @@ from __future__ import annotations
 import pytest
 import stim
 
-from qldpc import circuits, codes, objects
+from qldpc import circuits, codes
 
 
 def test_restriction() -> None:
     """Raise an error for non-qubit codes."""
     code = codes.SurfaceCode(2, field=3)
     with pytest.raises(ValueError, match="only supported for qubit codes"):
-        circuits.prep(code, objects.Pauli.Z)
+        circuits.get_ecoding_circuit(code)
 
 
 def test_pauli_strings() -> None:
