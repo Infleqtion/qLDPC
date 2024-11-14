@@ -9,6 +9,7 @@ See the `readme page <https://github.com/Infleqtion/qLDPC>`_ for a high-level ov
 
 .. toctree::
    :maxdepth: 1
-   :caption: Contents:
+   :hidden:
+   :caption: API Reference
 
-   qldpc
+   autoapi/index
