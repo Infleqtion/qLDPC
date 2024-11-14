@@ -71,12 +71,12 @@ def get_ecoding_tableau(
     logical_ops = code.get_logical_ops()
     logical_stabs = []
     for qubit, pauli in enumerate(string):
-        if pauli == 1:
+        if pauli == 1:  # X
             logical_op = logical_ops[0, qubit]
-        elif pauli == 3 or pauli == 0:
+        elif pauli == 3 or pauli == 0:  # Z or I
             logical_op = logical_ops[1, qubit]
         else:
-            assert pauli == 2
+            assert pauli == 2  # Y
             logical_op = logical_ops[0, qubit] + logical_ops[1, qubit]
         logical_stabs.append(op_to_string(logical_op))
 
