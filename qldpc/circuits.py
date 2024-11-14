@@ -62,6 +62,7 @@ def get_ecoding_tableau(
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
     string = string if isinstance(string, stim.PauliString) else stim.PauliString(code.dimension)
+    assert len(string) == code.dimension
 
     # identify logical operators that stabilize our target state
     logical_ops = code.get_logical_ops()
