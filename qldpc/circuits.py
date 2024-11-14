@@ -84,7 +84,7 @@ def get_ecoding_tableau(
 
 @restrict_to_qubits
 def get_ecoding_circuit(
-    code: codes.QuditCode, string: Pauli | stim.PauliString = Pauli.Z
+    code: codes.QuditCode, string: stim.PauliString = stim.PauliString()
 ) -> stim.Tableau:
     """Circuit to encode a logical all-|0> state of the given code.
 
