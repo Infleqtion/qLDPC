@@ -23,9 +23,9 @@ author = "Michael A. Perlin"
 
 # see https://www.sphinx-doc.org/en/master/usage/extensions/index.html
 extensions = [
+    "autoapi.extension",
     "nbsphinx",
     "sphinx.ext.autodoc",
-    "sphinx.ext.autosummary",
     "sphinx.ext.doctest",
     "sphinx.ext.mathjax",
     "sphinx.ext.napoleon",
@@ -38,7 +38,7 @@ extensions = [
 nbsphinx_execute = "never"
 
 # generate stub.rst files automatically
-autosummary_generate = True
+autosummary_generate = False
 
 # fix fox mathjax v3
 # https://www.sphinx-doc.org/en/master/usage/extensions/math.html#module-sphinx.ext.mathjax
@@ -47,6 +47,22 @@ mathjax_path = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"
 templates_path = ["_templates"]
 exclude_patterns = ["modules.rst"]
 
+autoapi_dirs = [
+    "../../qldpc",
+]
+autoapi_type = "python"
+
+autoapi_options = [
+    "members",
+    "undoc-members",
+    "show-inheritance",
+    "show-module-summary",
+    "imported-members",
+]
+
+autoapi_ignore = ["*_test.py", "*/checks/*.py", "*conftest.py"]
+
+autoapi_member_order = "groupwise"
 
 # -- Options for HTML output -------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
