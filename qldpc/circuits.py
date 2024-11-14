@@ -60,7 +60,7 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
 def get_ecoding_tableau(
     code: codes.QuditCode, string: stim.PauliString | None = None
 ) -> stim.Circuit:
-    """Tableau to encode a logical all-|0> state of the given code.
+    """Tableau to prepare a logical all-|0> state of the given code, from an all-|0> state of its qubits.
 
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
@@ -88,7 +88,7 @@ def get_ecoding_tableau(
 def get_ecoding_circuit(
     code: codes.QuditCode, string: stim.PauliString | None = None
 ) -> stim.Tableau:
-    """Circuit to encode a logical all-|0> state of the given code.
+    """Circuit to prepare a logical all-|0> state of the given code, from an all-|0> state of its qubits.
 
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
