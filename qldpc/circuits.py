@@ -55,15 +55,16 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
 
 @restrict_to_qubits
 def get_ecoding_tableau(
-    code: codes.QuditCode, string: stim.PauliString = stim.PauliString()
+    code: codes.QuditCode, string: stim.PauliString | None = None
 ) -> stim.Circuit:
     """Tableau to encode a logical all-|0> state of the given code.
 
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
-    assert len(string) <= code.dimension
+    string = string if isinstance(string, stim.PauliString) else stim.PauliString(code.dimension)
     if len(string) < code.dimension:
         string += stim.PauliString(len(string) - code.dimension)
+    assert len(string) == code.dimension
 
     # identify logical operators that stabilize our target state
     logical_ops = code.get_logical_ops()
@@ -91,3 +92,53 @@ def get_ecoding_circuit(
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
     return get_ecoding_tableau(code, string).to_circuit()
+
+
+@restrict_to_qubits
+def get_swap_transversal_circuit(
+    code: codes.QuditCode, circuit: stim.Circuit | stim.Tableau
+) -> stim.Circuit | None:
+    """Get a SWAP-transversal implementation of a logical circuit (or tablaeau), if it exists."""
+    # extend the circuit to act on code.num_qubits qubits, acting with the identity on ancillas
+    circuit = circuit if isinstance(circuit, stim.Circuit) else circuit.to_circuit()
+    for qubit in range(circuit.num_qubits, code.num_qubits):
+        circuit.append("I", qubit)
+
+    circuit.append("SWAP", [2, 3])
+    print(circuit)
+    print()
+
+    # construct the physical tableau for the desired operation
+    logical_tableau = circuit.to_tableau()
+    encoding_tableau = get_ecoding_tableau(code)
+    tableau = encoding_tableau.inverse().then(logical_tableau).then(encoding_tableau)
+    print()
+    print(tableau)
+
+    # identify the qubit permutation matrix
+    x2x, x2z, z2x, z2z, x_signs, z_signs = tableau.to_numpy()
+    perm_mat = (x2x | x2z | z2x | z2z).T
+    ones = np.ones(code.num_qubits)
+    if not (perm_mat.sum(0) == ones).all() or not (perm_mat.sum(1) == ones).all():
+        # a SWAP-transversal implementation of this circuit does not exist
+        return None
+
+    print()
+    print(perm_mat.astype(int))
+
+    # apply identify swaps
+    output_circuit = stim.Circuit()
+    current_loc_to_qubit = np.arange(circuit.num_qubits)
+    desired_qubit_to_loc = np.argmax(perm_mat, axis=0)
+    desired_loc_to_qubit = np.argmax(perm_mat, axis=1)
+    for old_loc in range(circuit.num_qubits):
+        while (qubit := current_loc_to_qubit[old_loc]) != desired_loc_to_qubit[old_loc]:
+            new_loc = desired_qubit_to_loc[qubit]
+            output_circuit.append("SWAP", [old_loc, new_loc])
+            current_loc_to_qubit[[old_loc, new_loc]] = current_loc_to_qubit[[new_loc, old_loc]]
+
+    print()
+    print(output_circuit)
+    print()
+    print(output_circuit.to_tableau())
+    return

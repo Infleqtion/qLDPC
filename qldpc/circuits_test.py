@@ -61,3 +61,21 @@ def test_state_prep() -> None:
         simulator.do(logical_string)
         simulator.do(circuit)
         assert simulator.peek_observable_expectation(string) == 1
+
+
+def test_swap_transversal_circuit() -> None:
+    """Test SWAP-transversal implementations of logical operations."""
+    circuit = stim.Circuit()
+    # circuit.append("CX", [1, 0])
+    circuit.append("SWAP", [0, 1])
+    circuit.append("H", [0, 1])
+
+    code = codes.CSSCode([[1, 1, 1, 1]], [[1, 1, 1, 1]])
+    print(code.get_code_params())
+    print()
+    print(circuit)
+    print()
+    circuits.get_swap_transversal_circuit(code, circuit)
+
+
+test_swap_transversal_circuit()
