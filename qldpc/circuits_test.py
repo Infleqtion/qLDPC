@@ -41,7 +41,11 @@ def test_pauli_strings() -> None:
 
 def test_state_prep() -> None:
     """Prepare eigenstates of logical Pauli strings."""
-    for code in [codes.FiveQubitCode(), codes.HGPCode(codes.HammingCode(3))]:
+    for code in [
+        codes.FiveQubitCode(),
+        codes.HGPCode(codes.HammingCode(3)),
+        codes.HGPCode(codes.ClassicalCode.random(5, 3)),
+    ]:
         logical_string = stim.PauliString.random(code.dimension)
         circuit = circuits.get_ecoding_circuit(code, logical_string)
 
