@@ -144,7 +144,7 @@ def test_automorphism() -> None:
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         pytest.raises(ValueError, match="Is GAP installed?"),
     ):
-        codes.HammingCode(2, field=3).get_automorphism_group().order
+        code.get_automorphism_group()
 
     # otherwise, check that automorphisms do indeed preserve the code space
     with (
