@@ -18,6 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import itertools
+import subprocess
 import unittest.mock
 
 import numpy as np
@@ -126,6 +127,29 @@ def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     code = codes.ClassicalCode.random(bits, checks)
     graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
+
+
+def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
+    """Fake process with the given stdout."""
+    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
+
+
+def test_automorphism() -> None:
+    """Compute automorphism group of the smallest nontrivial trinary Hamming code."""
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
+        pytest.raises(ValueError, match="Is GAP installed?"),
+    ):
+        codes.HammingCode(2, field=3).get_automorphism_group().order
+
+    result_stdout = "\n()\n(2,4,3)\n(2,3,4)\n"
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch(
+            "qldpc.external.gap.get_result", return_value=get_mock_process(result_stdout)
+        ),
+    ):
+        assert codes.HammingCode(2, field=3).get_automorphism_group().order == 3
 
 
 ####################################################################################################

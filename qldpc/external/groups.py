@@ -112,7 +112,7 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     return generators
 
 
-def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
+def get_generators_with_gap(group: str, load_guava: bool = False) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GAP directly."""
 
     if not qldpc.external.gap.is_installed():
@@ -120,6 +120,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
 
     # run GAP commands
     commands = [
+        *['LoadPackage("guava");' if load_guava else ""],
         f"G := {group};",
         "iso := IsomorphismPermGroup(G);",
         "permG := Image(iso, G);",
@@ -140,7 +141,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
         # extract list of cycles, where each cycle is a tuple of integers
         cycles_str = line[1:-1].split(")(")
         try:
-            cycles = [tuple(map(int, cycle.split(","))) for cycle in cycles_str]
+            cycles = [tuple(map(int, cycle.split(","))) for cycle in cycles_str if cycle]
         except ValueError:
             raise ValueError(f"Cannot extract cycles from string: {line}")
 
