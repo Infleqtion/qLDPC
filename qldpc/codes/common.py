@@ -29,7 +29,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 
-from qldpc import decoder, external
+from qldpc import abstract, decoder, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
 
@@ -468,6 +468,27 @@ class ClassicalCode(AbstractCode):
         code = ClassicalCode(matrix, field)
         setattr(code, "_name", name)
         return code
+
+    def get_automorphism_group(self) -> abstract.Group:
+        """Get the automorphism group of this code.
+
+        The auomorphism group of a classical linear code is the group of permutations of bits that
+        preserve the code space.
+        """
+        lines = ["[" + ",".join(map(str, line)) + "]" for line in self.matrix]
+        matrix = "[" + ",".join(lines) + "]"
+        commands = [
+            'LoadPackage("guava");',
+            f"H := {matrix};",
+            f"C := CheckMatCode(H, GF({self.field.order}));",
+            "Print(AutomorphismGroup(C));",
+        ]
+        gap_group = external.gap.get_result(*commands).stdout
+        generators = [
+            abstract.GroupMember(perm)
+            for perm in external.groups.get_generators_with_gap(gap_group)
+        ]
+        return abstract.Group(*generators, field=self.field.order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
