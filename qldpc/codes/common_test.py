@@ -136,20 +136,26 @@ def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
 
 def test_automorphism() -> None:
     """Compute automorphism group of the smallest nontrivial trinary Hamming code."""
+    code = codes.HammingCode(2, field=3)
+    automorphisms = "\n()\n(2,4,3)\n(2,3,4)\n"
+
+    # raise an error when GAP is not installed
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         pytest.raises(ValueError, match="Is GAP installed?"),
     ):
         codes.HammingCode(2, field=3).get_automorphism_group().order
 
-    result_stdout = "\n()\n(2,4,3)\n(2,3,4)\n"
+    # otherwise, check that automorphisms do indeed preserve the code space
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external.gap.get_result", return_value=get_mock_process(result_stdout)
+            "qldpc.external.gap.get_result", return_value=get_mock_process(automorphisms)
         ),
     ):
-        assert codes.HammingCode(2, field=3).get_automorphism_group().order == 3
+        group = code.get_automorphism_group()
+        for member in group.generate():
+            assert not np.any(code.matrix @ group.lift(member) @ code.generator.T)
 
 
 ####################################################################################################
