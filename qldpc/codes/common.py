@@ -477,17 +477,16 @@ class ClassicalCode(AbstractCode):
         """
         lines = ["[" + ",".join(map(str, line)) + "]" for line in self.matrix]
         matrix = "[" + ",".join(lines) + "]"
+        group_cmd = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
         commands = [
             'LoadPackage("guava");',
             f"H := {matrix};",
             f"C := CheckMatCode(H, GF({self.field.order}));",
-            "Print(AutomorphismGroup(C));",
+            f"Print({group_cmd}(C));",
         ]
         gap_group = external.gap.get_result(*commands).stdout
-        generators = [
-            abstract.GroupMember(perm)
-            for perm in external.groups.get_generators_with_gap(gap_group)
-        ]
+        perms = external.groups.get_generators_with_gap(gap_group) or [[(self.num_bits - 1,)]]
+        generators = [abstract.GroupMember(perm) for perm in perms]
         return abstract.Group(*generators, field=self.field.order)
 
     def puncture(self, *bits: int) -> ClassicalCode:

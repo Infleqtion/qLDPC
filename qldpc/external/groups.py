@@ -140,7 +140,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
         # extract list of cycles, where each cycle is a tuple of integers
         cycles_str = line[1:-1].split(")(")
         try:
-            cycles = [tuple(map(int, cycle.split(","))) for cycle in cycles_str]
+            cycles = [tuple(map(int, cycle.split(","))) for cycle in cycles_str if cycle]
         except ValueError:
             raise ValueError(f"Cannot extract cycles from string: {line}")
 

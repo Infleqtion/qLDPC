@@ -128,6 +128,12 @@ def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
 
 
+def test_automorphism() -> None:
+    """Automorphism groups of the smallest binary and trinary Hamming codes."""
+    assert codes.HammingCode(2, field=2).get_automorphism_group().order == 6
+    assert codes.HammingCode(2, field=3).get_automorphism_group().order == 3
+
+
 ####################################################################################################
 # quantum code tests
 
