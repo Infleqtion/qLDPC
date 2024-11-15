@@ -488,12 +488,13 @@ class ClassicalCode(AbstractCode):
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
 
-        To delete bits from the code, we remove the corresponding columns from its generator matrix.
+        To delete bits from the code, we remove the corresponding columns from its generator matrix
+        (whose rows are code words that form a basis for the code space).
         """
         assert all(0 <= bit < self.num_bits for bit in bits)
         bits_to_keep = [bit for bit in range(self.num_bits) if bit not in bits]
-        generator = [word[bits_to_keep] for word in self.generator]
-        return ClassicalCode.from_generator(generator, self.field.order)
+        new_generator = self.generator[:, bits_to_keep]
+        return ClassicalCode.from_generator(new_generator, self.field.order)
 
     def shorten(self, *bits: int) -> ClassicalCode:
         """Shorten a code to the words that are zero on the specified bits, and delete those bits.
