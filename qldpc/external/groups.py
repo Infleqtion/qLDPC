@@ -1,4 +1,4 @@
-"""Module for loading groups from the GAP computer algebra system
+"""Module for loading groups from GroupNames or the GAP computer algebra system
 
 Copyright 2023 The qLDPC Authors and Infleqtion Inc.
 
@@ -18,12 +18,11 @@ limitations under the License.
 from __future__ import annotations
 
 import re
-import subprocess
 import urllib.error
 import urllib.request
-from collections.abc import Sequence
 
 import qldpc.cache
+import qldpc.external.gap
 
 CACHE_NAME = "qldpc_groups"
 GENERATORS_LIST = list[list[tuple[int, ...]]]
@@ -113,40 +112,10 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     return generators
 
 
-def gap_is_installed() -> bool:
-    """Is GAP 4 installed?"""
-    commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n"); QUIT;']
-    try:
-        result = subprocess.run(commands, capture_output=True, text=True)
-        return bool(re.match(r"\n4\.[0-9]+\.[0-9]+$", result.stdout))
-    except Exception:
-        return False
-
-
-def sanitize_gap_commands(commands: Sequence[str]) -> tuple[str, ...]:
-    """Sanitize GAP commands: don't format Print statements, and quit at the end."""
-    stream = "__stream__"
-    prefix = [
-        f"{stream} := OutputTextUser();",
-        f"SetPrintFormattingStatus({stream}, false);",
-    ]
-    suffix = ["QUIT;"]
-    commands = [cmd.replace("Print(", f"PrintTo({stream}, ") for cmd in commands]
-    return tuple(prefix + commands + suffix)
-
-
-def get_gap_result(*commands: str) -> subprocess.CompletedProcess[str]:
-    """Get the output from the given GAP commands."""
-    commands = sanitize_gap_commands(commands)
-    shell_commands = ["gap", "-q", "--quitonbreak", "-c", " ".join(commands)]
-    result = subprocess.run(shell_commands, capture_output=True, text=True)
-    return result
-
-
 def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GAP directly."""
 
-    if not gap_is_installed():
+    if not qldpc.external.gap.is_installed():
         return None
 
     # run GAP commands
@@ -157,7 +126,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
         "gens := GeneratorsOfGroup(permG);",
         r'for gen in gens do Print(gen, "\n"); od;',
     ]
-    result = get_gap_result(*commands)
+    result = qldpc.external.gap.get_result(*commands)
 
     if not result.stdout.strip():
         raise ValueError(f"Group not recognized by GAP: {group}")
@@ -209,9 +178,9 @@ def get_generators(group: str) -> GENERATORS_LIST:
 @qldpc.cache.use_disk_cache(CACHE_NAME)
 def get_small_group_number(order: int) -> int:
     """Get the number of 'SmallGroup's of a given order."""
-    if gap_is_installed():
+    if qldpc.external.gap.is_installed():
         command = f"Print(NumberSmallGroups({order}));"
-        return int(get_gap_result(command).stdout)
+        return int(qldpc.external.gap.get_result(command).stdout)
 
     # get the HTML for the page with all groups
     page_html = maybe_get_webpage(order)
@@ -233,9 +202,9 @@ def get_small_group_structure(order: int, index: int) -> str:
 
     # try to retrieve the structure from GAP
     name = f"SmallGroup({order},{index})"
-    if gap_is_installed():
+    if qldpc.external.gap.is_installed():
         command = f"Print(StructureDescription({name}));"
-        result = get_gap_result(command)
+        result = qldpc.external.gap.get_result(command)
         structure = result.stdout.strip()
 
         if not structure:
