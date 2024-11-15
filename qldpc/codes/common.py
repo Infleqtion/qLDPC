@@ -482,7 +482,7 @@ class ClassicalCode(AbstractCode):
         perms = external.groups.get_generators_with_gap(f"{group_cmd}({code})", load_guava=True)
         if perms is None:
             raise ValueError("Cannot retrieve group from GAP.  Is GAP installed?")
-        generators = [abstract.GroupMember(perm) for perm in perms or [[(self.num_bits - 1,)]]]
+        generators = [abstract.GroupMember(perm) for perm in perms]
         return abstract.Group(*generators, field=self.field.order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
