@@ -21,7 +21,7 @@ import ast
 import re
 
 import qldpc.cache
-from qldpc.external.groups import gap_is_installed, get_gap_result
+import qldpc.external.gap
 
 CACHE_NAME = "qldpc_codes"
 
@@ -31,7 +31,7 @@ def get_code(code: str) -> tuple[list[list[int]], int | None]:
     """Retrieve a group from GAP."""
 
     # run GAP commands
-    if not gap_is_installed():
+    if not qldpc.external.gap.is_installed():
         raise ValueError("GAP 4 is not installed")
     commands = [
         'LoadPackage("guava");',
@@ -40,7 +40,7 @@ def get_code(code: str) -> tuple[list[list[int]], int | None]:
         r'Print(LeftActingDomain(code), "\n");',
         r'for vec in mat do Print(List(vec, x -> Int(x)), "\n"); od;',
     ]
-    result = get_gap_result(*commands)
+    result = qldpc.external.gap.get_result(*commands)
 
     if "guava package is not available" in result.stdout:
         raise ValueError("GAP package GUAVA not available")
