@@ -112,7 +112,7 @@ def get_generators_from_groupnames(group: str) -> GENERATORS_LIST | None:
     return generators
 
 
-def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
+def get_generators_with_gap(group: str, load_guava: bool = False) -> GENERATORS_LIST | None:
     """Retrieve GAP group generators from GAP directly."""
 
     if not qldpc.external.gap.is_installed():
@@ -120,6 +120,7 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
 
     # run GAP commands
     commands = [
+        *['LoadPackage("guava");' if load_guava else ""],
         f"G := {group};",
         "iso := IsomorphismPermGroup(G);",
         "permG := Image(iso, G);",

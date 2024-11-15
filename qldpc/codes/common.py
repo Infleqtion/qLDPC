@@ -475,18 +475,14 @@ class ClassicalCode(AbstractCode):
         The auomorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
         """
-        lines = ["[" + ",".join(map(str, line)) + "]" for line in self.matrix]
-        matrix = "[" + ",".join(lines) + "]"
+        checks = ["[" + ",".join(map(str, line)) + "]" for line in self.matrix]
+        matrix = "[" + ",".join(checks) + "]"
+        code = f"CheckMatCode({matrix}, GF({self.field.order}))"
         group_cmd = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
-        commands = [
-            'LoadPackage("guava");',
-            f"H := {matrix};",
-            f"C := CheckMatCode(H, GF({self.field.order}));",
-            f"Print({group_cmd}(C));",
-        ]
-        gap_group = external.gap.get_result(*commands).stdout
-        perms = external.groups.get_generators_with_gap(gap_group) or [[(self.num_bits - 1,)]]
-        generators = [abstract.GroupMember(perm) for perm in perms]
+        perms = external.groups.get_generators_with_gap(f"{group_cmd}({code})", load_guava=True)
+        if perms is None:
+            raise ValueError("Cannot retrieve group from GAP.  Is GAP installed?")
+        generators = [abstract.GroupMember(perm) for perm in perms or [[(self.num_bits - 1,)]]]
         return abstract.Group(*generators, field=self.field.order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
