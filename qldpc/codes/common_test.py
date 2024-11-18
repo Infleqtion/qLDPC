@@ -34,7 +34,7 @@ from qldpc.objects import Pauli, QuditOperator
 def test_constructions_classical() -> None:
     """Classical code constructions."""
     code = codes.ClassicalCode.random(5, 3, field=2, seed=0)
-    assert code.num_bits == 5
+    assert len(code) == code.num_bits == 5
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
 
@@ -279,15 +279,15 @@ def test_CSS_ops() -> None:
     # test that logical operators have trivial syndromes
     logicals_x = code.get_logical_ops(Pauli.X)
     logicals_z = code.get_logical_ops(Pauli.Z)
-    assert not np.any(logicals_x[:, code.num_qudits :])
-    assert not np.any(logicals_z[:, : code.num_qudits])
+    assert not np.any(logicals_x[:, len(code) :])
+    assert not np.any(logicals_z[:, : len(code)])
     assert not np.any(code.matrix @ logicals_x.T)
     assert not np.any(code.matrix @ logicals_z.T)
     assert code.get_logical_ops() is code._logical_ops
 
     # test that logical operators are dual to each other
-    logicals_x = logicals_x[:, : code.num_qudits]
-    logicals_z = logicals_z[:, code.num_qudits :]
+    logicals_x = logicals_x[:, : len(code)]
+    logicals_z = logicals_z[:, len(code) :]
     assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
@@ -311,8 +311,8 @@ def test_distance_quantum() -> None:
     assert code.get_distance(bound=False) == 2
 
     # assert that the identity is a logical operator
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * code.num_qudits)
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * code.num_qudits, bound=True)
+    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code))
+    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code), bound=True)
 
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])

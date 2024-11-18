@@ -133,6 +133,10 @@ class AbstractCode(abc.ABC):
         """Tanner graph of this code."""
         return self.matrix_to_graph(self.matrix)
 
+    @abc.abstractmethod
+    def __len__(self) -> int:
+        """The block length of this code."""
+
     @classmethod
     @abc.abstractmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -281,10 +285,14 @@ class ClassicalCode(AbstractCode):
         """Number of check bits in this code."""
         return self._matrix.shape[0]
 
+    def __len__(self) -> int:
+        """The block length of this code."""
+        return self._matrix.shape[1]
+
     @property
     def num_bits(self) -> int:
         """Number of data bits in this code."""
-        return self._matrix.shape[1]
+        return len(self)
 
     @property
     def dimension(self) -> int:
@@ -561,10 +569,14 @@ class QuditCode(AbstractCode):
         """Number of parity checks (stabilizers) in this code."""
         return self.matrix.shape[0]
 
+    def __len__(self) -> int:
+        """The block length of this code."""
+        return self.matrix.shape[1] // 2
+
     @property
     def num_qudits(self) -> int:
         """Number of data qudits in this code."""
-        return self.matrix.shape[1] // 2
+        return len(self)
 
     @property
     def num_qubits(self) -> int:
