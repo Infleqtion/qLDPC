@@ -27,7 +27,7 @@ def test_restriction() -> None:
     """Raise an error for non-qubit codes."""
     code = codes.SurfaceCode(2, field=3)
     with pytest.raises(ValueError, match="only supported for qubit codes"):
-        circuits.get_ecoding_circuit(code)
+        circuits.get_encoding_circuit(code)
 
 
 def test_pauli_strings() -> None:
@@ -47,7 +47,7 @@ def test_state_prep() -> None:
         codes.HGPCode(codes.ClassicalCode.random(5, 3)),
     ]:
         logical_string = stim.PauliString.random(code.dimension)
-        circuit = circuits.get_ecoding_circuit(code, logical_string)
+        circuit = circuits.get_encoding_circuit(code, logical_string)
 
         # test stabilizers of the code
         simulator = stim.TableauSimulator()
