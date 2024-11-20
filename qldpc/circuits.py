@@ -248,13 +248,12 @@ def get_transversal_automorphism_data(
 
 def _standardize_local_gates(local_gates: Collection[str]) -> set[str]:
     """Standardize a local Clifford gate set."""
-    local_gates = set(local_gates)
     allowed_gates = {"S", "H", "SQRT_X"}
-    if not local_gates.issubset(allowed_gates):
+    if not allowed_gates.issuperset(local_gates):
         raise ValueError(
             f"Local Clifford gates (provided: {local_gates}) must be subset of {allowed_gates}"
         )
-    return local_gates
+    return set(local_gates)
 
 
 def _get_swap_circuit(code: codes.QuditCode, automorphism: abstract.GroupMember) -> stim.Circuit:

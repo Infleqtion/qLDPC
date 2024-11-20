@@ -66,7 +66,7 @@ def test_state_prep() -> None:
 def test_transversal_ops() -> None:
     """Construct transversal logical operations for codes."""
     code = codes.FiveQubitCode()
-    for local_gates in [{"H"}, {"S"}, {"SQRT_X"}, {"H", "S"}]:
+    for local_gates in [{"S"}, {"H"}, {"SQRT_X"}, {"H", "S"}]:
         logical_tableaus, physical_circuits = circuits.get_transversal_ops(code, local_gates)
         assert len(logical_tableaus) == len(physical_circuits) == len(local_gates)
 
