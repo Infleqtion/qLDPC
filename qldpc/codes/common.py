@@ -682,7 +682,7 @@ class QuditCode(AbstractCode):
         return QuditCode(matrix.reshape(num_checks, -1))
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Complete basis of nontrivial logical operators for this code.
+        """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
@@ -1101,7 +1101,7 @@ class CSSCode(QuditCode):
         return int(np.count_nonzero(candidate_logical_op))
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Complete basis of nontrivial logical operators for this code.
+        """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
