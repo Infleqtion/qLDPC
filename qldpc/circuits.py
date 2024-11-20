@@ -238,8 +238,8 @@ def _get_transversal_automorphism_data(
     # prepend the Pauli correction to the circuit
     correction_circuit = stim.Circuit()
     for pauli in ["X", "Y", "Z"]:
-        for index in correction.pauli_indices(pauli):
-            correction_circuit.append(pauli, index)
+        if indices := correction.pauli_indices(pauli):
+            correction_circuit.append(pauli, indices)
     physical_circuit = correction_circuit + physical_circuit
 
     # Identify the logical tableau implemented by the physical circuit, which is simply
