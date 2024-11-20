@@ -157,7 +157,7 @@ def get_transversal_automorphism_group(
     """
     local_gates = _standardize_local_gates(local_gates)
 
-    # compute the automorphism group of the "augmented" code for a SWAP-transversal gate set
+    # compute the automorphism group of the "augmented" code for a transversal gate set
     matrix_z = code.matrix.reshape(code.num_checks, 2, len(code))[:, 0, :]
     matrix_x = code.matrix.reshape(code.num_checks, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
