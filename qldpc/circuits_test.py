@@ -72,6 +72,3 @@ def test_transversal_ops() -> None:
 
     with pytest.raises(ValueError, match="Local Clifford gates"):
         circuits.get_transversal_automorphism_group(code, ["SQRT_Y"])
-
-
-    
