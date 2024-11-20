@@ -25,12 +25,6 @@ import pytest
 
 from qldpc import external
 
-# strip cache wrappers
-assert hasattr(external.groups.get_generators, "__wrapped__")
-assert hasattr(external.groups.get_small_group_number, "__wrapped__")
-external.groups.get_generators = external.groups.get_generators.__wrapped__
-external.groups.get_small_group_number = external.groups.get_small_group_number.__wrapped__
-
 # define global testing variables
 ORDER, INDEX = 2, 1
 GENERATORS = [[(0, 1)]]

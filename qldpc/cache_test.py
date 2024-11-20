@@ -22,16 +22,29 @@ import unittest.mock
 import qldpc.cache
 
 
+def test_pytest() -> None:
+    """We are running with pytest."""
+    assert qldpc.cache.running_with_pytest()
+
+    def test_func() -> None: ...
+
+    assert test_func is qldpc.cache.use_disk_cache("test")(test_func)
+
+
 def test_use_disk_cache() -> None:
     """Cache function outputs."""
 
-    @qldpc.cache.use_disk_cache("test")
-    def get_five(_: str) -> int:
-        return 5
-
-    # use cache to save/retrieve results
     cache: dict[tuple[str], int] = {}
-    with unittest.mock.patch("diskcache.Cache", return_value=cache):
+    with (
+        unittest.mock.patch("qldpc.cache.running_with_pytest", return_value=False),
+        unittest.mock.patch("diskcache.Cache", return_value=cache),
+    ):
+
+        @qldpc.cache.use_disk_cache("test")
+        def get_five(_: str) -> int:
+            return 5
+
+        # use cache to save/retrieve results
         get_five("test")  # save results to cache
         assert cache == {("test",): 5}  # check cache
         assert cache[("test",)] == get_five("test")  # retrieve results
