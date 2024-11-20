@@ -24,10 +24,6 @@ import pytest
 
 from qldpc import external
 
-# strip cache wrapper
-assert hasattr(external.codes.get_code, "__wrapped__")
-external.codes.get_code = external.codes.get_code.__wrapped__
-
 
 def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
     """Fake process with the given stdout."""

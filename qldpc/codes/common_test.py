@@ -142,7 +142,7 @@ def test_automorphism() -> None:
     # raise an error when GAP is not installed
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
-        pytest.raises(ValueError, match="Is GAP installed?"),
+        pytest.raises(ValueError, match="Cannot build GAP group"),
     ):
         code.get_automorphism_group()
 
