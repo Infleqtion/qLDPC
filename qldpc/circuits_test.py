@@ -61,3 +61,14 @@ def test_state_prep() -> None:
         simulator.do(logical_string)
         simulator.do(circuit)
         assert simulator.peek_observable_expectation(string) == 1
+
+
+def test_transversal_ops() -> None:
+    """Construct transversal logical operations for codes."""
+    code = codes.FiveQubitCode()
+    for local_gates in [{"H"}, {"S"}, {"SQRT_X"}, {"H", "S"}]:
+        logical_tableaus, physical_circuits = circuits.get_transversal_ops(code, local_gates)
+        assert len(logical_tableaus) == len(physical_circuits) == len(local_gates)
+
+    with pytest.raises(ValueError, match="Local Clifford gates must be subset of"):
+        circuits.get_transversal_automorphism_group(code, ["SQRT_Y"])
