@@ -216,18 +216,22 @@ def _get_transversal_automorphism_data(
     physical_circuit += _get_pauli_permutation_circuit(code, local_gates, automorphism)
     physical_circuit += _get_swap_circuit(code, automorphism)
 
+    # make sure that the physical circuit acts on all qubits of the code
+    if physical_circuit.num_qubits < len(code):
+        physical_circuit.append("I", len(code) - 1)
+
     # identify Pauli correction
     correction = stim.PauliString(len(code))
-    encoder = get_encoding_circuit(code)
+    encoder = get_encoding_tableau(code)
     decoder = encoder.inverse()
-    bare_circuit = encoder + physical_circuit + decoder
+    decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
     for aa in range(code.dimension, len(code)):
-        bare_stabilizer_str = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
-        bare_stabilizer = stim.PauliString(bare_stabilizer_str)
-        decoded_string = bare_stabilizer.after(bare_circuit)
+        decoded_stabilizer_str = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
+        decoded_stabilizer = stim.PauliString(decoded_stabilizer_str)
+        decoded_string = decoded_stabilizer.after(decoded_tableau, targets=range(len(code)))
         if decoded_string.sign == -1:
-            bare_destabilizer = stim.PauliString(bare_stabilizer_str.replace("Z", "X"))
-            correction *= bare_destabilizer.after(encoder)
+            decoded_destabilizer = stim.PauliString(decoded_stabilizer_str.replace("Z", "X"))
+            correction *= decoded_destabilizer.after(encoder, targets=range(len(code)))
 
     # prepend correction to the circuit
     correction_circuit = stim.Circuit()
@@ -236,13 +240,9 @@ def _get_transversal_automorphism_data(
             correction_circuit.append(pauli, index)
     physical_circuit = correction_circuit + physical_circuit
 
-    # make sure that the physical circuit acts on all qubits of the code
-    if physical_circuit.num_qubits < len(code):
-        physical_circuit.append("I", len(code) - 1)
-
     # identify the logical tableau implemented by the automorphism
-    bare_tableau = (encoder + physical_circuit + decoder).to_tableau()
-    x2x, x2z, z2x, z2z, x_signs, z_signs = bare_tableau.to_numpy()
+    decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
+    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
     logical_tableau = stim.Tableau.from_numpy(
         x2x=x2x[: code.dimension, : code.dimension],
         x2z=x2z[: code.dimension, : code.dimension],
