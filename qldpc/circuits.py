@@ -224,14 +224,12 @@ def _get_transversal_automorphism_data(
     encoder = get_encoding_tableau(code)
     decoder = encoder.inverse()
     decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
-    decoded_correction = stim.PauliString(len(code))
+    decoded_correction = "_" * code.dimension
     for aa in range(code.dimension, len(code)):
-        decoded_stabilizer_str = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
-        decoded_stabilizer = stim.PauliString(decoded_stabilizer_str)
+        decoded_stabilizer = stim.PauliString("_" * aa + "Z" + "_" * (len(code) - aa - 1))
         decoded_string = decoded_stabilizer.after(decoded_tableau, targets=range(len(code)))
-        if decoded_string.sign == -1:
-            decoded_correction *= stim.PauliString(decoded_stabilizer_str.replace("Z", "X"))
-    correction = decoded_correction.after(encoder, targets=range(len(code)))
+        decoded_correction += "_" if decoded_string.sign == -1 else "X"
+    correction = stim.PauliString(decoded_correction).after(encoder, targets=range(len(code)))
 
     # prepend correction to the circuit
     correction_circuit = stim.Circuit()
