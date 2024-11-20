@@ -233,7 +233,7 @@ def _get_transversal_automorphism_data(
         decoded_stabilizer = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
         decoded_string = decoded_tableau(stim.PauliString(decoded_stabilizer))
         decoded_correction += "_" if decoded_string.sign == -1 else "X"
-    correction = stim.PauliString(decoded_correction).after(encoder, targets=range(len(code)))
+    correction = encoder(stim.PauliString(decoded_correction))
 
     # prepend the Pauli correction to the circuit
     correction_circuit = stim.Circuit()
