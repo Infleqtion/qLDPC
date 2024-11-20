@@ -109,7 +109,8 @@ def get_transversal_ops(
     Here local_gates must be a subset of {"H", "S", "SQRT_X"}, and if allow_swaps is True, then SWAP
     gates are considered "free" (transversal).
 
-    Uses the methods of https://arxiv.org/abs/2409.18175.
+    Transversal logical Clifford gates are identified via the code automorphism methods in
+    https://arxiv.org/abs/2409.18175.
     """
     group_aut = get_transversal_automorphism_group(code, local_gates, allow_swaps=allow_swaps)
 
