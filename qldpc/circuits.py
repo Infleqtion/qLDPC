@@ -243,7 +243,7 @@ def _get_transversal_automorphism_data(
     physical_circuit = correction_circuit + physical_circuit
 
     # Identify the logical tableau implemented by the physical circuit, which is simply
-    # the "upper left" block of the decoded tableau.
+    # the "upper left" block of the decoded tableau that acts on all logical qubits.
     decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
     x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
     logical_tableau = stim.Tableau.from_numpy(
