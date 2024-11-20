@@ -110,13 +110,13 @@ def get_transversal_ops(
 
     Uses the methods of https://arxiv.org/abs/2409.18175.
     """
-    group_aut = get_clifford_automorphism_group(code, local_gates, allow_swaps)
+    group_aut = get_transversal_automorphism_group(code, local_gates, allow_swaps)
 
     identity = stim.Tableau(code.dimension)
     logical_tableaus = []
     physical_circuits = []
     for generator in group_aut.generators:
-        logical_tableau, physical_circuit = get_clifford_automorphism_data(
+        logical_tableau, physical_circuit = get_transversal_automorphism_data(
             code, local_gates, generator
         )
         if not remove_redundancies or (
@@ -129,13 +129,13 @@ def get_transversal_ops(
 
 
 @restrict_to_qubits
-def get_clifford_automorphism_group(
+def get_transversal_automorphism_group(
     code: codes.QuditCode, local_gates: Collection[str], allow_swaps: bool = True
 ) -> abstract.Group:
-    """Get the Clifford automorphism group of a QuditCode, using the methods of arXiv.2409.18175.
+    """Get the transversal automorphism group of a QuditCode, using the methods of arXiv.2409.18175.
 
-    The Clifford automorphism group of a QuditCode is the group of logical Clifford operations that
-    can be implemented transversally with a given local gate set.
+    The transversal automorphism group of a QuditCode is the group of logical Clifford operations
+    that can be implemented transversally with a given local gate set.
 
     Here local_gates must be a subset of {"H", "S", "SQRT_X"}, and if allow_swaps is True, then SWAP
     gates are considered "free" (transversal).
@@ -189,12 +189,12 @@ def get_clifford_automorphism_group(
 
 
 @restrict_to_qubits
-def get_clifford_automorphism_data(
+def get_transversal_automorphism_data(
     code: codes.QuditCode,
     local_gates: Collection[str],
     automorphism: abstract.GroupMember,
 ) -> tuple[stim.Tableau, stim.Circuit]:
-    """Logical tableau and physical circuit for a Clifford automorphism of a code.
+    """Logical tableau and physical circuit for a transversal automorphism of a code.
 
     Here local_gates must be the same as that used to construct the automorphism group.
     """
@@ -258,7 +258,7 @@ def _standardize_local_gates(local_gates: Collection[str]) -> set[str]:
 
 
 def _get_swap_circuit(code: codes.QuditCode, automorphism: abstract.GroupMember) -> stim.Circuit:
-    """Construct the circuit of SWAPs applied by a Clifford automorphism."""
+    """Construct the circuit of SWAPs applied by a transversal automorphism."""
     circuit = stim.Circuit()
     new_locs = [automorphism(qubit) % len(code) for qubit in range(len(code))]
     for cycle in abstract.GroupMember(new_locs).cyclic_form:
@@ -274,7 +274,7 @@ def _get_pauli_permutation_circuit(
     local_gates: Collection[str],
     automorphism: abstract.GroupMember,
 ) -> stim.Circuit:
-    """Construct the circuit of local Pauli permutations applied by a Clifford automorphism."""
+    """Construct the circuit of local Pauli permutations applied by a transversal automorphism."""
     local_gates = _standardize_local_gates(local_gates)
     circuit = stim.Circuit()
 
