@@ -40,11 +40,11 @@ def test_use_disk_cache() -> None:
         unittest.mock.patch("diskcache.Cache", return_value=cache),
     ):
 
-        @qldpc.cache.use_disk_cache("test")
+        @qldpc.cache.use_disk_cache("test_name")
         def get_five(_: str) -> int:
             return 5
 
         # use cache to save/retrieve results
-        get_five("test")  # save results to cache
-        assert cache == {("test",): 5}  # check cache
-        assert cache[("test",)] == get_five("test")  # retrieve results
+        get_five("test_arg")  # save results to cache
+        assert cache == {("test_arg",): 5}  # check cache
+        assert cache[("test_arg",)] == get_five("test_arg")  # retrieve results
