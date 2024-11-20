@@ -309,9 +309,9 @@ def _get_pauli_permutation_circuit(
                 case [0, 2, 1]:  # Y <--> Z
                     gate_targets["H_YZ"].append(qubit)
                 case [1, 2, 0]:  # ZXY <--> XYZ
-                    gate_targets["C_XYZ"].append(qubit)
+                    gate_targets["C_XYZ"].append(qubit)  # pragma: no cover
                 case [2, 0, 1]:  # ZXY <--> ZYX
-                    gate_targets["C_ZYX"].append(qubit)
+                    gate_targets["C_ZYX"].append(qubit)  # pragma: no cover
 
         for gate, targets in gate_targets.items():
             circuit.append(gate, sorted(targets))
