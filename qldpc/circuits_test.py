@@ -70,5 +70,5 @@ def test_transversal_ops() -> None:
         logical_tableaus, physical_circuits = circuits.get_transversal_ops(code, local_gates)
         assert len(logical_tableaus) == len(physical_circuits) == len(local_gates)
 
-    with pytest.raises(ValueError, match="Local Clifford gates must be subset of"):
+    with pytest.raises(ValueError, match="Local Clifford gates"):
         circuits.get_transversal_automorphism_group(code, ["SQRT_Y"])

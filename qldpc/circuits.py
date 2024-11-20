@@ -252,7 +252,7 @@ def _standardize_local_gates(local_gates: Collection[str]) -> set[str]:
     allowed_gates = {"S", "H", "SQRT_X"}
     if not local_gates.issubset(allowed_gates):
         raise ValueError(
-            f"Local Clifford gates must be subset of {allowed_gates}\nProvided: {local_gates}"
+            f"Local Clifford gates (provided: {local_gates}) must be subset of {allowed_gates}"
         )
     return local_gates
 
