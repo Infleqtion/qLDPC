@@ -487,11 +487,7 @@ class ClassicalCode(AbstractCode):
         matrix = "[" + ",".join(checks) + "]"
         code = f"CheckMatCode({matrix}, GF({self.field.order}))"
         group_cmd = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
-        perms = external.groups.get_generators_with_gap(f"{group_cmd}({code})", load_guava=True)
-        if perms is None:
-            raise ValueError("Cannot retrieve group from GAP.  Is GAP installed?")
-        generators = [abstract.GroupMember(perm) for perm in perms]
-        return abstract.Group(*generators, field=self.field.order)
+        return abstract.Group.from_name(f"{group_cmd}({code})", field=self.field.order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
