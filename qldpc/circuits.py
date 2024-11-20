@@ -99,7 +99,7 @@ def get_encoding_circuit(
 @restrict_to_qubits
 def get_transversal_ops(
     code: codes.QuditCode,
-    local_gates: Collection[str],
+    local_gates: Collection[str] = ("H", "S"),
     *,
     allow_swaps: bool = True,
     remove_redundancies: bool = True,
@@ -117,7 +117,7 @@ def get_transversal_ops(
     logical_tableaus = []
     physical_circuits = []
     for generator in group_aut.generators:
-        logical_tableau, physical_circuit = get_transversal_automorphism_data(
+        logical_tableau, physical_circuit = _get_transversal_automorphism_data(
             code, local_gates, generator
         )
         if not remove_redundancies or not (
@@ -143,7 +143,7 @@ def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
 
 @restrict_to_qubits
 def get_transversal_automorphism_group(
-    code: codes.QuditCode, local_gates: Collection[str], *, allow_swaps: bool = True
+    code: codes.QuditCode, local_gates: Collection[str] = ("H", "S"), *, allow_swaps: bool = True
 ) -> abstract.Group:
     """Get the transversal automorphism group of a QuditCode, using the methods of arXiv.2409.18175.
 
@@ -202,7 +202,7 @@ def get_transversal_automorphism_group(
 
 
 @restrict_to_qubits
-def get_transversal_automorphism_data(
+def _get_transversal_automorphism_data(
     code: codes.QuditCode,
     local_gates: Collection[str],
     automorphism: abstract.GroupMember,
@@ -259,16 +259,6 @@ def get_transversal_automorphism_data(
     return logical_tableau, physical_circuit
 
 
-def _standardize_local_gates(local_gates: Collection[str]) -> set[str]:
-    """Standardize a local Clifford gate set."""
-    allowed_gates = {"S", "H", "SQRT_X"}
-    if not allowed_gates.issuperset(local_gates):
-        raise ValueError(
-            f"Local Clifford gates (provided: {local_gates}) must be subset of {allowed_gates}"
-        )
-    return set(local_gates)
-
-
 def _get_swap_circuit(code: codes.QuditCode, automorphism: abstract.GroupMember) -> stim.Circuit:
     """Construct the circuit of SWAPs applied by a transversal automorphism."""
     circuit = stim.Circuit()
@@ -318,3 +308,13 @@ def _get_pauli_permutation_circuit(
             circuit.append(gate, sorted(targets))
 
     return circuit
+
+
+def _standardize_local_gates(local_gates: Collection[str]) -> set[str]:
+    """Standardize a local Clifford gate set."""
+    allowed_gates = {"S", "H", "SQRT_X"}
+    if not allowed_gates.issuperset(local_gates):
+        raise ValueError(
+            f"Local Clifford gates (provided: {local_gates}) must be subset of {allowed_gates}"
+        )
+    return set(local_gates)
