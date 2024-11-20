@@ -228,10 +228,10 @@ def _get_transversal_automorphism_data(
 
     # Identify Pauli corrections to the circuit: a product of destabilizers whose correspoding
     # stabilizers change sign under the physical_circuit.
-    decoded_correction = "_" * code.dimension
+    decoded_correction = "_" * code.dimension  # identity on the logical qubits
     for aa in range(code.dimension, len(code)):
-        decoded_stabilizer = stim.PauliString("_" * aa + "Z" + "_" * (len(code) - aa - 1))
-        decoded_string = decoded_stabilizer.after(decoded_tableau, targets=range(len(code)))
+        decoded_stabilizer = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
+        decoded_string = decoded_tableau(stim.PauliString(decoded_stabilizer))
         decoded_correction += "_" if decoded_string.sign == -1 else "X"
     correction = stim.PauliString(decoded_correction).after(encoder, targets=range(len(code)))
 
