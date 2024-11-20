@@ -216,14 +216,18 @@ def _get_transversal_automorphism_data(
     physical_circuit += _get_pauli_permutation_circuit(code, local_gates, automorphism)
     physical_circuit += _get_swap_circuit(code, automorphism)
 
-    # make sure that the physical circuit acts on all qubits of the code
+    # make sure that the physical circuit acts on all physial qubits
     if physical_circuit.num_qubits < len(code):
         physical_circuit.append("I", len(code) - 1)
 
-    # identify Pauli correction
+    # Determine the effect of physical_circuit on "decoded" qubits, for which
+    # logicals, stabilizers, and destabilizers are single-qubit Paulis.
     encoder = get_encoding_tableau(code)
     decoder = encoder.inverse()
     decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
+
+    # Identify Pauli corrections to the circuit: a product of destabilizers whose correspoding
+    # stabilizers change sign under the physical_circuit.
     decoded_correction = "_" * code.dimension
     for aa in range(code.dimension, len(code)):
         decoded_stabilizer = stim.PauliString("_" * aa + "Z" + "_" * (len(code) - aa - 1))
@@ -231,14 +235,15 @@ def _get_transversal_automorphism_data(
         decoded_correction += "_" if decoded_string.sign == -1 else "X"
     correction = stim.PauliString(decoded_correction).after(encoder, targets=range(len(code)))
 
-    # prepend correction to the circuit
+    # prepend the Pauli correction to the circuit
     correction_circuit = stim.Circuit()
     for pauli in ["X", "Y", "Z"]:
         for index in correction.pauli_indices(pauli):
             correction_circuit.append(pauli, index)
     physical_circuit = correction_circuit + physical_circuit
 
-    # identify the logical tableau implemented by the automorphism
+    # Identify the logical tableau implemented by the physical circuit, which is simply
+    # the "upper left" block of the decoded tableau.
     decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
     x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
     logical_tableau = stim.Tableau.from_numpy(
