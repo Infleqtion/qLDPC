@@ -100,6 +100,7 @@ def get_encoding_circuit(
 def get_transversal_ops(
     code: codes.QuditCode,
     local_gates: Collection[str],
+    *,
     allow_swaps: bool = True,
     remove_redundancies: bool = True,
 ) -> tuple[list[stim.Tableau], list[stim.Circuit]]:
@@ -110,17 +111,16 @@ def get_transversal_ops(
 
     Uses the methods of https://arxiv.org/abs/2409.18175.
     """
-    group_aut = get_transversal_automorphism_group(code, local_gates, allow_swaps)
+    group_aut = get_transversal_automorphism_group(code, local_gates, allow_swaps=allow_swaps)
 
-    identity = stim.Tableau(code.dimension)
     logical_tableaus = []
     physical_circuits = []
     for generator in group_aut.generators:
         logical_tableau, physical_circuit = get_transversal_automorphism_data(
             code, local_gates, generator
         )
-        if not remove_redundancies or (
-            logical_tableau != identity and logical_tableau not in logical_tableaus
+        if not remove_redundancies or not (
+            _is_pauli_tableau(logical_tableau) or logical_tableau in logical_tableaus
         ):
             logical_tableaus.append(logical_tableau)
             physical_circuits.append(physical_circuit)
@@ -128,9 +128,21 @@ def get_transversal_ops(
     return logical_tableaus, physical_circuits
 
 
+def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
+    """Does this Tableau represent a Pauli operator?"""
+    identity_mat = np.identity(len(tableau), dtype=bool)
+    x2x, x2z, z2x, z2z, *_ = tableau.to_numpy()
+    return (
+        np.array_equal(identity_mat, x2x)
+        and np.array_equal(identity_mat, z2z)
+        and not np.any(x2z)
+        and not np.any(z2x)
+    )
+
+
 @restrict_to_qubits
 def get_transversal_automorphism_group(
-    code: codes.QuditCode, local_gates: Collection[str], allow_swaps: bool = True
+    code: codes.QuditCode, local_gates: Collection[str], *, allow_swaps: bool = True
 ) -> abstract.Group:
     """Get the transversal automorphism group of a QuditCode, using the methods of arXiv.2409.18175.
 
