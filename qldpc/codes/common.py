@@ -483,7 +483,8 @@ class ClassicalCode(AbstractCode):
         The auomorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
         """
-        checks = ["[" + ",".join(map(str, line)) + "]" for line in self.matrix]
+        matrix = np.array([row for row in self.matrix.row_reduce() if np.any(row)])
+        checks = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
         matrix = "[" + ",".join(checks) + "]"
         code = f"CheckMatCode({matrix}, GF({self.field.order}))"
         group_cmd = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
