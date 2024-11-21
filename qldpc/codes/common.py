@@ -391,6 +391,7 @@ class ClassicalCode(AbstractCode):
 
         if vector is not None:
             # find the distance of the given vector from a code word
+            _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
             correction = decoder.decode(
                 self.matrix,
                 self.matrix @ self.field(vector),
@@ -1061,6 +1062,7 @@ class CSSCode(QuditCode):
 
         if vector is not None:
             # find the distance of the given vector from a logical X-type operator
+            _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
             correction = decoder.decode(
                 code_z.matrix,
                 code_z.matrix @ self.field(vector),
