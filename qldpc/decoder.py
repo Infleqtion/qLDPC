@@ -119,8 +119,8 @@ def _build_cvxpy_constraints(
 
     If `lower_bound_row is not None`, treat the constraint at this row index as a lower bound.
     """
-    matrix = matrix % modulus
-    syndrome = syndrome % modulus
+    matrix = np.array(matrix) % modulus
+    syndrome = np.array(syndrome) % modulus
     if lower_bound_row is not None:
         lower_bound_row %= syndrome.size
 
