@@ -484,10 +484,11 @@ class ClassicalCode(AbstractCode):
         preserve the code space.
         """
         matrix = np.array([row for row in self.matrix.row_reduce() if np.any(row)])
-        matrix_str = str(matrix).replace("\n", "").replace(" ", ",")
-        code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"
+        checks = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
+        matrix = "[" + ",".join(checks) + "]"
+        code = f"CheckMatCode({matrix}, GF({self.field.order}))"
         group_cmd = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
-        return abstract.Group.from_name(f"{group_cmd}({code_str})", field=self.field.order)
+        return abstract.Group.from_name(f"{group_cmd}({code})", field=self.field.order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
