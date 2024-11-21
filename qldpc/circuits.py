@@ -130,7 +130,10 @@ def get_transversal_ops(
 
 
 def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
-    """Does this Tableau represent a Pauli operator?"""
+    """Does this Tableau represent a Pauli operator?
+
+    If so, it maps Pauli strings to themselves up to sign.
+    """
     identity_mat = np.identity(len(tableau), dtype=bool)
     x2x, x2z, z2x, z2z, *_ = tableau.to_numpy()
     return (
