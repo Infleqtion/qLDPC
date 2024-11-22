@@ -17,14 +17,15 @@ limitations under the License.
 
 from __future__ import annotations
 
+import collections
 import functools
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 
 import numpy as np
 import numpy.typing as npt
 import stim
 
-from qldpc import codes
+from qldpc import abstract, codes
 from qldpc.objects import Pauli
 
 
@@ -47,20 +48,20 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
     """
     assert len(op) % 2 == 0
     num_qubits = len(op) // 2
-    paulis = []
+    paulis = ""
     for qubit in range(num_qubits):
         val_x = int(op[qubit])
         val_z = int(op[qubit + num_qubits])
         pauli = Pauli((val_x, val_z))
-        paulis.append(str(pauli if not flip_xz else ~pauli))
-    return stim.PauliString("".join(paulis))
+        paulis += str(pauli if not flip_xz else ~pauli)
+    return stim.PauliString(paulis)
 
 
 @restrict_to_qubits
 def get_encoding_tableau(
     code: codes.QuditCode, string: stim.PauliString | None = None
 ) -> stim.Circuit:
-    """Tableau to prepare a logical all-|0> state of the given code, from an all-|0> state of its qubits.
+    """Tableau to prepare a logical all-|0> state of a code from an all-|0> state of its qubits.
 
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
@@ -88,8 +89,237 @@ def get_encoding_tableau(
 def get_encoding_circuit(
     code: codes.QuditCode, string: stim.PauliString | None = None
 ) -> stim.Tableau:
-    """Circuit to prepare a logical all-|0> state of the given code, from an all-|0> state of its qubits.
+    """Circuit to prepare a logical all-|0> state of a code from an all-|0> state of its qubits.
 
     If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
     """
     return get_encoding_tableau(code, string).to_circuit()
+
+
+@restrict_to_qubits
+def get_transversal_ops(
+    code: codes.QuditCode,
+    local_gates: Collection[str] = ("S", "H", "SWAP"),
+    *,
+    remove_redundancies: bool = True,
+) -> tuple[list[stim.Tableau], list[stim.Circuit]]:
+    """Logical tableaus and physical circuits for transversal logical Clifford gates of a code.
+
+    Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
+
+    Transversal logical Clifford gates are identified via the code automorphism methods in
+    https://arxiv.org/abs/2409.18175.
+    """
+    group_aut = get_transversal_automorphism_group(code, local_gates)
+
+    logical_tableaus = []
+    physical_circuits = []
+    for generator in group_aut.generators:
+        logical_tableau, physical_circuit = _get_transversal_automorphism_data(
+            code, generator, local_gates
+        )
+        if not remove_redundancies or not (
+            _is_pauli_tableau(logical_tableau) or logical_tableau in logical_tableaus
+        ):
+            logical_tableaus.append(logical_tableau)
+            physical_circuits.append(physical_circuit)
+
+    return logical_tableaus, physical_circuits
+
+
+def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
+    """Does this Tableau represent a Pauli operator?
+
+    If so, it maps Pauli strings to themselves up to sign.
+    """
+    identity_mat = np.identity(len(tableau), dtype=bool)
+    x2x, x2z, z2x, z2z, *_ = tableau.to_numpy()
+    return (
+        np.array_equal(identity_mat, x2x)
+        and np.array_equal(identity_mat, z2z)
+        and not np.any(x2z)
+        and not np.any(z2x)
+    )
+
+
+@restrict_to_qubits
+def get_transversal_automorphism_group(
+    code: codes.QuditCode, local_gates: Collection[str] = ("S", "H", "SWAP")
+) -> abstract.Group:
+    """Get the transversal automorphism group of a QuditCode, using the methods of arXiv.2409.18175.
+
+    The transversal automorphism group of a QuditCode is the group of logical Clifford operations
+    that can be implemented transversally with a given local gate set.
+
+    Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
+
+    Uses the methods of https://arxiv.org/abs/2409.18175.
+    """
+    local_gates = _standardize_local_gates(local_gates)
+    allow_swaps = "SWAP" in local_gates
+    local_gates.discard("SWAP")
+
+    # compute the automorphism group of the "augmented" code for a transversal gate set
+    matrix_z = code.matrix.reshape(code.num_checks, 2, len(code))[:, 0, :]
+    matrix_x = code.matrix.reshape(code.num_checks, 2, len(code))[:, 1, :]
+    if not local_gates or local_gates == {"H"}:
+        # swapping sectors = swapping Z <--> X
+        augmented_matrix = np.hstack([matrix_z, matrix_x])
+    elif local_gates == {"S"}:
+        # swapping sectors = swapping X <--> Y
+        augmented_matrix = np.hstack([matrix_z, matrix_z + matrix_x])
+    elif local_gates == {"SQRT_X"}:
+        # swapping sectors = swapping Y <--> Z
+        augmented_matrix = np.hstack([matrix_z + matrix_x, matrix_x])
+    else:
+        # we have a complete local Clifford gate set that can arbitrarily permute Pauli ops
+        augmented_matrix = np.hstack([matrix_z, matrix_x, matrix_z + matrix_x])
+
+    code_checks = codes.ClassicalCode(augmented_matrix)
+    group_checks = code_checks.get_automorphism_group()
+
+    # identify the group of augmented code transformations generated by the gate set
+    num_sectors = augmented_matrix.shape[1] // len(code)
+    column_perms = []
+    if allow_swaps:
+        # allow swapping qudits, which swaps corresponding columns in all "sectors" concurrently
+        column_perms += [
+            [(ss * len(code) + qq, ss * len(code) + qq + 1) for ss in range(num_sectors)]
+            for qq in range(len(code) - 1)
+        ]
+    if local_gates:
+        # local gates can permute "sectors" arbitrarily and independently on any qudit
+        column_perms += [
+            [(ss * len(code) + qq, (ss + 1) * len(code) + qq)]
+            for ss in range(num_sectors - 1)
+            for qq in range(len(code))
+        ]
+    group_gates = abstract.Group(*map(abstract.GroupMember, column_perms))
+
+    # intersect the groups above to find the group generated by a SWAP-transversal gate set
+    group_aut_sympy = group_checks.to_sympy().subgroup_search(group_gates.to_sympy().contains)
+    return abstract.Group.from_sympy(group_aut_sympy, field=code.field.order)
+
+
+@restrict_to_qubits
+def _get_transversal_automorphism_data(
+    code: codes.QuditCode,
+    automorphism: abstract.GroupMember,
+    local_gates: Collection[str],
+) -> tuple[stim.Tableau, stim.Circuit]:
+    """Logical tableau and physical circuit for a transversal automorphism of a code.
+
+    Here local_gates must be the same as that used to construct the automorphism group.
+    """
+    # construct a circuit with the desired action modulo destabilizers
+    physical_circuit = stim.Circuit()
+    physical_circuit += _get_pauli_permutation_circuit(code, automorphism, local_gates)
+    physical_circuit += _get_swap_circuit(code, automorphism)
+
+    # make sure that the physical circuit acts on all physial qubits
+    if physical_circuit.num_qubits < len(code):
+        physical_circuit.append("I", len(code) - 1)
+
+    # Determine the effect of physical_circuit on "decoded" qubits, for which
+    # logicals, stabilizers, and destabilizers are single-qubit Paulis.
+    encoder = get_encoding_tableau(code)
+    decoder = encoder.inverse()
+    decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
+
+    # Identify Pauli corrections to the circuit: a product of destabilizers whose correspoding
+    # stabilizers change sign under the physical_circuit.
+    decoded_correction = "_" * code.dimension  # identity on the logical qubits
+    for aa in range(code.dimension, len(code)):
+        decoded_stabilizer = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
+        decoded_string = decoded_tableau(stim.PauliString(decoded_stabilizer))
+        decoded_correction += "_" if decoded_string.sign == -1 else "X"
+    correction = encoder(stim.PauliString(decoded_correction))
+
+    # prepend the Pauli correction to the circuit
+    correction_circuit = stim.Circuit()
+    for pauli in ["X", "Y", "Z"]:
+        if indices := correction.pauli_indices(pauli):
+            correction_circuit.append(pauli, indices)
+    physical_circuit = correction_circuit + physical_circuit
+
+    # Identify the logical tableau implemented by the physical circuit, which is simply
+    # the "upper left" block of the decoded tableau that acts on all logical qubits.
+    decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
+    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
+    logical_tableau = stim.Tableau.from_numpy(
+        x2x=x2x[: code.dimension, : code.dimension],
+        x2z=x2z[: code.dimension, : code.dimension],
+        z2x=z2x[: code.dimension, : code.dimension],
+        z2z=z2z[: code.dimension, : code.dimension],
+        x_signs=x_signs[: code.dimension],
+        z_signs=z_signs[: code.dimension],
+    )
+
+    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
+    assert not np.any(z2x[:, code.dimension :])  # stabilizers and Z-type logicals
+    assert not np.any(x2x[: code.dimension, code.dimension :])  # X-type logicals
+
+    return logical_tableau, physical_circuit
+
+
+def _standardize_local_gates(local_gates: Collection[str]) -> set[str]:
+    """Standardize a local Clifford gate set."""
+    allowed_gates = {"S", "H", "SQRT_X", "SWAP"}
+    if not allowed_gates.issuperset(local_gates):
+        raise ValueError(
+            f"Local Clifford gates (provided: {local_gates}) must be subset of {allowed_gates}"
+        )
+    return set(local_gates)
+
+
+def _get_swap_circuit(code: codes.QuditCode, automorphism: abstract.GroupMember) -> stim.Circuit:
+    """Construct the circuit of SWAPs applied by a transversal automorphism."""
+    circuit = stim.Circuit()
+    new_locs = [automorphism(qubit) % len(code) for qubit in range(len(code))]
+    for cycle in abstract.GroupMember(new_locs).cyclic_form:
+        loc_0 = cycle[0]
+        for loc_1 in cycle[1:]:
+            circuit.append("SWAP", [loc_0, loc_1])
+    return circuit
+
+
+@restrict_to_qubits
+def _get_pauli_permutation_circuit(
+    code: codes.QuditCode,
+    automorphism: abstract.GroupMember,
+    local_gates: Collection[str],
+) -> stim.Circuit:
+    """Construct the circuit of local Pauli permutations applied by a transversal automorphism."""
+    local_gates = _standardize_local_gates(local_gates)
+    local_gates.discard("SWAP")
+
+    circuit = stim.Circuit()
+
+    if len(local_gates) == 1:
+        # there is only one local gate, and all it can do is permute two parity check sectors
+        gate = next(iter(local_gates))
+        for qubit in range(len(code)):
+            if automorphism(qubit) >= len(code):
+                circuit.append(gate, qubit)
+
+    elif len(local_gates) > 1:
+        # we have a complete local Clifford gate set that can permute Pauli sectors arbitrarily
+        gate_targets = collections.defaultdict(list)
+        for qubit in range(len(code)):
+            pauli_perm = [automorphism(qubit + ss * len(code)) // len(code) for ss in range(3)]
+            match pauli_perm:
+                case [1, 0, 2]:  # Z <--> X
+                    gate_targets["H"].append(qubit)
+                case [2, 1, 0]:  # X <--> Y
+                    gate_targets["S"].append(qubit)
+                case [0, 2, 1]:  # Y <--> Z
+                    gate_targets["H_YZ"].append(qubit)
+                case [1, 2, 0]:  # ZXY <--> XYZ
+                    gate_targets["C_XYZ"].append(qubit)  # pragma: no cover
+                case [2, 0, 1]:  # ZXY <--> ZYX
+                    gate_targets["C_ZYX"].append(qubit)  # pragma: no cover
+
+        for gate, targets in gate_targets.items():
+            circuit.append(gate, sorted(targets))
+
+    return circuit

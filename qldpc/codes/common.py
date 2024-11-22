@@ -484,11 +484,12 @@ class ClassicalCode(AbstractCode):
         The auomorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
         """
-        checks = ["[" + ",".join(map(str, line)) + "]" for line in self.matrix]
-        matrix = "[" + ",".join(checks) + "]"
-        code = f"CheckMatCode({matrix}, GF({self.field.order}))"
-        group_cmd = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
-        return abstract.Group.from_name(f"{group_cmd}({code})", field=self.field.order)
+        matrix = np.array([row for row in self.matrix.row_reduce() if np.any(row)])
+        checks_str = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
+        matrix_str = "[" + ",".join(checks_str) + "]"
+        code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"
+        group_str = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
+        return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
@@ -679,7 +680,7 @@ class QuditCode(AbstractCode):
         return QuditCode(matrix.reshape(num_checks, -1))
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Complete basis of nontrivial logical operators for this code.
+        """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
@@ -1099,7 +1100,7 @@ class CSSCode(QuditCode):
         return int(np.count_nonzero(candidate_logical_op))
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Complete basis of nontrivial logical operators for this code.
+        """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
         `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
