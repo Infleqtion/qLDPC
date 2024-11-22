@@ -58,6 +58,8 @@ filterwarnings = [
   "ignore::UserWarning:qtrl.*",
   "ignore::PendingDeprecationWarning:qtrl.utils.config",
   "ignore::PendingDeprecationWarning:ruamel.yaml.main",
+  # TEMPORARY; see https://github.com/quantumgizmos/ldpc_v2/issues/7 # REPO-SPECIFIC CONFIG
+  "ignore::DeprecationWarning:ldpc.*", # REPO-SPECIFIC CONFIG
 ]
 
 [tool.ruff]
