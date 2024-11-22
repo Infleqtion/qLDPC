@@ -117,7 +117,7 @@ def get_transversal_ops(
     logical_tableaus = []
     physical_circuits = []
     for generator in group_aut.generators:
-        logical_tableau, physical_circuit = _get_transversal_automorphism_data(
+        logical_tableau, physical_circuit = get_transversal_automorphism_data(
             code, local_gates, generator
         )
         if not remove_redundancies or not (
@@ -205,7 +205,7 @@ def get_transversal_automorphism_group(
 
 
 @restrict_to_qubits
-def _get_transversal_automorphism_data(
+def get_transversal_automorphism_data(
     code: codes.QuditCode,
     local_gates: Collection[str],
     automorphism: abstract.GroupMember,
