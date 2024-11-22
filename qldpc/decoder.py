@@ -37,7 +37,7 @@ def decode_with_BP_OSD(
     """
     bposd_decoder = ldpc.BpOsdDecoder(
         matrix,
-        error_rate=float(decoder_args.pop("error_rate", 0)),
+        error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
     )
     return bposd_decoder.decode(syndrome)

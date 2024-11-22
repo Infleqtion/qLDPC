@@ -44,6 +44,12 @@ checks-superstaq = { version = ">=0.5.31", optional = true }
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
 
+# TEMPORARILY ignore the ldpc library until stubs are fixed
+# https://github.com/quantumgizmos/ldpc_v2/issues/7
+[[tool.mypy.overrides]]
+module = "ldpc"
+follow_imports = "skip"
+
 # Check script configuration:
 
 [tool.pytest.ini_options]
