@@ -110,8 +110,7 @@ def test_transversal_ops() -> None:
     }
     for local_gates, group_aut_gens in gate_gens.items():
         with unittest.mock.patch(
-            "qldpc.codes.ClassicalCode.get_automorphism_group",
-            return_value=abstract.Group(*map(abstract.GroupMember, group_aut_gens)),
+            "qldpc.external.groups.get_generators", return_value=group_aut_gens
         ) if not gap_is_installed else contextlib.nullcontext():
             logical_tableaus, physical_circuits = circuits.get_transversal_ops(code, local_gates)
 
@@ -170,8 +169,7 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
         [[3, 11], [4, 12], [6, 7], [13, 14]],
     ]
     with unittest.mock.patch(
-        "qldpc.codes.ClassicalCode.get_automorphism_group",
-        return_value=abstract.Group(*map(abstract.GroupMember, group_aut_gens)),
+        "qldpc.external.groups.get_generators", return_value=group_aut_gens
     ) if not gap_is_installed else contextlib.nullcontext():
         physical_circuit = circuits.maybe_get_transversal_circuit(code, logical_circuit)
 
