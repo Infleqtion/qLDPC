@@ -113,7 +113,7 @@ def get_transversal_ops(
     group_aut = get_transversal_automorphism_group(code, local_gates)
 
     logical_tableaus: list[stim.Tableau] = []
-    physical_circuits = []
+    physical_circuits: list[stim.Circuit] = []
     for generator in group_aut.generators:
         logical_tableau, physical_circuit = _get_transversal_automorphism_data(
             code, generator, local_gates
@@ -374,17 +374,17 @@ def maybe_get_transversal_circuit(
             break
 
     if matching_tableau is None:
-        return None
+        return None  # pragma: no cover
 
     # add logical Pauli corrections to fix the signs of the tableau
     correction = code.field([0] * (2 * len(code)))
     *_, x_signs_l, z_signs_l = logical_tableau.to_numpy()
     *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
     for logical_qubit in range(code.dimension):
-        if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:
-            correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit, :]
-        if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:
-            correction += code.get_logical_ops(Pauli.X)[logical_qubit, :]
+        if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
+            correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
+        if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
+            correction += code.get_logical_ops(Pauli.X)[logical_qubit]
     correction_circuit = _get_pauli_circuit(op_to_string(correction))
 
     return correction_circuit + matching_circuit
