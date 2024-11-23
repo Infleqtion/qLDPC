@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import unittest.mock
 
+import numpy as np
 import pytest
 import stim
 
@@ -115,3 +116,57 @@ def test_transversal_ops() -> None:
 
     with pytest.raises(ValueError, match="Local Clifford gates"):
         circuits.get_transversal_automorphism_group(code, ["SQRT_Y"])
+
+
+def test_finding_circuit(pytestconfig: pytest.Config) -> None:
+    """Find a physical circuit for a desired logical Clifford operation."""
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
+    # code with randomly permuted qubits
+    base_code = codes.FiveQubitCode()
+    matrix = base_code.matrix.reshape(-1, len(base_code))
+    permutation = np.eye(len(base_code), dtype=int)[np.random.permutation(len(base_code))]
+    permuted_matrix = (matrix @ base_code.field(permutation)).reshape(-1, 2 * len(base_code))
+    code = codes.QuditCode(permuted_matrix)
+
+    # logical circuit: random single-qubit Clifford recognized by Stim
+    logical_op = np.random.choice(
+        [
+            "X",
+            "Y",
+            "Z",
+            "C_XYZ",
+            "C_ZYX",
+            "H",
+            "H_XY",
+            "H_XZ",
+            "H_YZ",
+            "S",
+            "SQRT_X",
+            "SQRT_X_DAG",
+            "SQRT_Y",
+            "SQRT_Y_DAG",
+            "SQRT_Z",
+            "SQRT_Z_DAG",
+            "S_DAG",
+        ]
+    )
+    logical_circuit = stim.Circuit(f"{logical_op} 0")
+
+    # construct physical circuit
+    physical_circuit = circuits.maybe_get_transversal_circuit(code, logical_circuit)
+
+    # check that the physical circuit has the correct logical tableau
+    encoder = circuits.get_encoding_tableau(code)
+    decoder = encoder.inverse()
+    decoded_physical_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
+    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_physical_tableau.to_numpy()
+    reconstructed_logical_tableau = stim.Tableau.from_numpy(
+        x2x=x2x[: code.dimension, : code.dimension],
+        x2z=x2z[: code.dimension, : code.dimension],
+        z2x=z2x[: code.dimension, : code.dimension],
+        z2z=z2z[: code.dimension, : code.dimension],
+        x_signs=x_signs[: code.dimension],
+        z_signs=z_signs[: code.dimension],
+    )
+    assert logical_circuit.to_tableau() == reconstructed_logical_tableau

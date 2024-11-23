@@ -112,14 +112,18 @@ def get_transversal_ops(
     """
     group_aut = get_transversal_automorphism_group(code, local_gates)
 
-    logical_tableaus = []
-    physical_circuits = []
+    logical_tableaus: list[stim.Tableau] = []
+    physical_circuits: list[stim.Circuit] = []
     for generator in group_aut.generators:
         logical_tableau, physical_circuit = _get_transversal_automorphism_data(
             code, generator, local_gates
         )
         if not remove_redundancies or not (
-            _is_pauli_tableau(logical_tableau) or logical_tableau in logical_tableaus
+            _is_pauli_tableau(logical_tableau)
+            or any(
+                _tableaus_are_equivalent_mod_paulis(logical_tableau, tableau)
+                for tableau in logical_tableaus
+            )
         ):
             logical_tableaus.append(logical_tableau)
             physical_circuits.append(physical_circuit)
@@ -139,6 +143,18 @@ def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
         and np.array_equal(identity_mat, z2z)
         and not np.any(x2z)
         and not np.any(z2x)
+    )
+
+
+def _tableaus_are_equivalent_mod_paulis(tableau_1: stim.Tableau, tableau_2: stim.Tableau) -> bool:
+    """Are the two stabilizer tableaus equivalent, up to Paulis?"""
+    x2x_1, x2z_1, z2x_1, z2z_1, *_ = tableau_1.to_numpy()
+    x2x_2, x2z_2, z2x_2, z2z_2, *_ = tableau_2.to_numpy()
+    return (
+        np.array_equal(x2x_1, x2x_2)
+        and np.array_equal(x2z_1, x2z_2)
+        and np.array_equal(z2x_1, z2x_2)
+        and np.array_equal(z2z_1, z2z_2)
     )
 
 
@@ -226,21 +242,15 @@ def _get_transversal_automorphism_data(
     decoder = encoder.inverse()
     decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
 
-    # Identify Pauli corrections to the circuit: a product of destabilizers whose correspoding
+    # Prepend Pauli corrections to the circuit: a product of destabilizers whose correspoding
     # stabilizers change sign under the physical_circuit.
     decoded_correction = "_" * code.dimension  # identity on the logical qubits
     for aa in range(code.dimension, len(code)):
-        decoded_stabilizer = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
-        decoded_string = decoded_tableau(stim.PauliString(decoded_stabilizer))
-        decoded_correction += "_" if decoded_string.sign == -1 else "X"
+        decoded_stabilizer_before = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
+        decoded_stabilizer_after = decoded_tableau(stim.PauliString(decoded_stabilizer_before))
+        decoded_correction += "_" if decoded_stabilizer_after.sign == -1 else "X"
     correction = encoder(stim.PauliString(decoded_correction))
-
-    # prepend the Pauli correction to the circuit
-    correction_circuit = stim.Circuit()
-    for pauli in ["X", "Y", "Z"]:
-        if indices := correction.pauli_indices(pauli):
-            correction_circuit.append(pauli, indices)
-    physical_circuit = correction_circuit + physical_circuit
+    physical_circuit = _get_pauli_circuit(correction) + physical_circuit
 
     # Identify the logical tableau implemented by the physical circuit, which is simply
     # the "upper left" block of the decoded tableau that acts on all logical qubits.
@@ -315,11 +325,66 @@ def _get_pauli_permutation_circuit(
                 case [0, 2, 1]:  # Y <--> Z
                     gate_targets["H_YZ"].append(qubit)
                 case [1, 2, 0]:  # ZXY <--> XYZ
-                    gate_targets["C_XYZ"].append(qubit)  # pragma: no cover
-                case [2, 0, 1]:  # ZXY <--> ZYX
                     gate_targets["C_ZYX"].append(qubit)  # pragma: no cover
+                case [2, 0, 1]:  # ZXY <--> ZYX
+                    gate_targets["C_XYZ"].append(qubit)  # pragma: no cover
 
         for gate, targets in gate_targets.items():
             circuit.append(gate, sorted(targets))
 
     return circuit
+
+
+def _get_pauli_circuit(string: stim.PauliString) -> stim.Circuit:
+    """Stim circuit to apply a Pauli string."""
+    circuit = stim.Circuit()
+    for pauli in ["X", "Y", "Z"]:
+        if indices := string.pauli_indices(pauli):
+            circuit.append(pauli, indices)
+    return circuit
+
+
+@restrict_to_qubits
+def maybe_get_transversal_circuit(
+    code: codes.QuditCode,
+    logical_circuit_or_tableau: stim.Circuit | stim.Tableau,
+    local_gates: Collection[str] = ("S", "H", "SWAP"),
+) -> stim.Circuit | None:
+    """Find a transversal physical circuit to implement a logical Clifford operation, if it exists.
+
+    Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
+
+    Warning: this method performs a brute-force search over the Clifford automorphisms of a code,
+    and thereby generally has exponential runtime.
+    """
+    logical_tableau = (
+        logical_circuit_or_tableau
+        if isinstance(logical_circuit_or_tableau, stim.Tableau)
+        else logical_circuit_or_tableau.to_tableau()
+    )
+
+    matching_tableau: stim.Tableau | None = None
+    matching_circuit: stim.Circuit | None = None
+    group_aut = get_transversal_automorphism_group(code, local_gates)
+    for automorphism in group_aut.generate():
+        tableau, circuit = _get_transversal_automorphism_data(code, automorphism, local_gates)
+        if _tableaus_are_equivalent_mod_paulis(logical_tableau, tableau):
+            matching_tableau = tableau
+            matching_circuit = circuit
+            break
+
+    if matching_tableau is None:
+        return None  # pragma: no cover
+
+    # add logical Pauli corrections to fix the signs of the tableau
+    correction = code.field([0] * (2 * len(code)))
+    *_, x_signs_l, z_signs_l = logical_tableau.to_numpy()
+    *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
+    for logical_qubit in range(code.dimension):
+        if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
+            correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
+        if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
+            correction += code.get_logical_ops(Pauli.X)[logical_qubit]
+    correction_circuit = _get_pauli_circuit(op_to_string(correction))
+
+    return correction_circuit + matching_circuit
