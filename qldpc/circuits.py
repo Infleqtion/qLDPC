@@ -265,6 +265,10 @@ def _get_transversal_automorphism_data(
         z_signs=z_signs[: code.dimension],
     )
 
+    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
+    assert not np.any(z2x[:, code.dimension :])  # stabilizers and Z-type logicals
+    assert not np.any(x2x[: code.dimension, code.dimension :])  # X-type logicals
+
     return logical_tableau, physical_circuit
 
 
