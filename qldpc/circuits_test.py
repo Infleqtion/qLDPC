@@ -113,8 +113,7 @@ def test_transversal_ops() -> None:
             "qldpc.external.groups.get_generators", return_value=group_aut_gens
         ) if not gap_is_installed else contextlib.nullcontext():
             logical_tableaus, physical_circuits = circuits.get_transversal_ops(code, local_gates)
-
-        assert len(logical_tableaus) == len(physical_circuits) == len(local_gates) - 1
+            assert len(logical_tableaus) == len(physical_circuits) == len(local_gates) - 1
 
     with pytest.raises(ValueError, match="Local Clifford gates"):
         circuits.get_transversal_automorphism_group(code, ["SQRT_Y"])
