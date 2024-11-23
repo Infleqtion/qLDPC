@@ -24,7 +24,7 @@ import numpy as np
 import pytest
 import stim
 
-from qldpc import abstract, circuits, codes, external
+from qldpc import circuits, codes, external
 
 
 def test_restriction() -> None:
