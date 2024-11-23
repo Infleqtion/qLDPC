@@ -112,7 +112,7 @@ def get_transversal_ops(
     """
     group_aut = get_transversal_automorphism_group(code, local_gates)
 
-    logical_tableaus = []
+    logical_tableaus: list[stim.Tableau] = []
     physical_circuits = []
     for generator in group_aut.generators:
         logical_tableau, physical_circuit = _get_transversal_automorphism_data(
@@ -364,7 +364,7 @@ def maybe_get_transversal_circuit(
     )
 
     matching_tableau: stim.Tableau | None = None
-    matching_circuit: stim.Tableau | None = None
+    matching_circuit: stim.Circuit | None = None
     group_aut = get_transversal_automorphism_group(code, local_gates)
     for automorphism in group_aut.generate():
         tableau, circuit = _get_transversal_automorphism_data(code, automorphism, local_gates)
