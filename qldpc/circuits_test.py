@@ -17,12 +17,14 @@ limitations under the License.
 
 from __future__ import annotations
 
+import contextlib
 import unittest.mock
 
+import numpy as np
 import pytest
 import stim
 
-from qldpc import abstract, circuits, codes
+from qldpc import circuits, codes, external
 
 
 def test_restriction() -> None:
@@ -67,6 +69,7 @@ def test_state_prep() -> None:
 
 def test_transversal_ops() -> None:
     """Construct SWAP-transversal logical Cliffords of a code."""
+    gap_is_installed = external.gap.is_installed()
     code = codes.FiveQubitCode()
 
     gate_gens = {
@@ -106,12 +109,84 @@ def test_transversal_ops() -> None:
         ],
     }
     for local_gates, group_aut_gens in gate_gens.items():
-        with unittest.mock.patch(
-            "qldpc.codes.ClassicalCode.get_automorphism_group",
-            return_value=abstract.Group(*map(abstract.GroupMember, group_aut_gens)),
+        with (
+            unittest.mock.patch("qldpc.external.groups.get_generators", return_value=group_aut_gens)
+            if not gap_is_installed
+            else contextlib.nullcontext()
         ):
             logical_tableaus, physical_circuits = circuits.get_transversal_ops(code, local_gates)
             assert len(logical_tableaus) == len(physical_circuits) == len(local_gates) - 1
 
     with pytest.raises(ValueError, match="Local Clifford gates"):
         circuits.get_transversal_automorphism_group(code, ["SQRT_Y"])
+
+
+def test_finding_circuit(pytestconfig: pytest.Config) -> None:
+    """Find a physical circuit for a desired logical Clifford operation."""
+    gap_is_installed = external.gap.is_installed()
+    np.random.seed(pytestconfig.getoption("randomly_seed") if gap_is_installed else 0)
+
+    # code with randomly permuted qubits
+    base_code = codes.FiveQubitCode()
+    matrix = base_code.matrix.reshape(-1, len(base_code))
+    permutation = np.eye(len(base_code), dtype=int)[np.random.permutation(len(base_code))]
+    permuted_matrix = (matrix @ base_code.field(permutation)).reshape(-1, 2 * len(base_code))
+    code = codes.QuditCode(permuted_matrix)
+
+    # logical circuit: random single-qubit Clifford recognized by Stim
+    logical_op = np.random.choice(
+        [
+            "X",
+            "Y",
+            "Z",
+            "C_XYZ",
+            "C_ZYX",
+            "H",
+            "H_XY",
+            "H_XZ",
+            "H_YZ",
+            "S",
+            "SQRT_X",
+            "SQRT_X_DAG",
+            "SQRT_Y",
+            "SQRT_Y_DAG",
+            "SQRT_Z",
+            "SQRT_Z_DAG",
+            "S_DAG",
+        ]
+    )
+    logical_circuit = stim.Circuit(f"{logical_op} 0")
+
+    # construct physical circuit
+    group_aut_gens = [
+        [[0, 1], [7, 11], [8, 10], [12, 13]],
+        [[2, 3], [5, 6], [7, 10], [8, 11]],
+        [[1, 2], [6, 13], [7, 14], [8, 9]],
+        [[1, 9], [4, 12], [5, 10], [6, 7]],
+        [[3, 13], [4, 7], [6, 12], [11, 14]],
+        [[2, 8], [4, 12], [5, 10], [13, 14]],
+        [[2, 5], [3, 7], [4, 12], [6, 11], [8, 10], [13, 14]],
+        [[3, 7], [4, 13], [6, 11], [12, 14]],
+        [[3, 11], [4, 12], [6, 7], [13, 14]],
+    ]
+    with (
+        unittest.mock.patch("qldpc.external.groups.get_generators", return_value=group_aut_gens)
+        if not gap_is_installed
+        else contextlib.nullcontext()
+    ):
+        physical_circuit = circuits.maybe_get_transversal_circuit(code, logical_circuit)
+
+    # check that the physical circuit has the correct logical tableau
+    encoder = circuits.get_encoding_tableau(code)
+    decoder = encoder.inverse()
+    decoded_physical_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
+    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_physical_tableau.to_numpy()
+    reconstructed_logical_tableau = stim.Tableau.from_numpy(
+        x2x=x2x[: code.dimension, : code.dimension],
+        x2z=x2z[: code.dimension, : code.dimension],
+        z2x=z2x[: code.dimension, : code.dimension],
+        z2z=z2z[: code.dimension, : code.dimension],
+        x_signs=x_signs[: code.dimension],
+        z_signs=z_signs[: code.dimension],
+    )
+    assert logical_circuit.to_tableau() == reconstructed_logical_tableau
