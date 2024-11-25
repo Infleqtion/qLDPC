@@ -109,9 +109,11 @@ def test_transversal_ops() -> None:
         ],
     }
     for local_gates, group_aut_gens in gate_gens.items():
-        with unittest.mock.patch(
-            "qldpc.external.groups.get_generators", return_value=group_aut_gens
-        ) if not gap_is_installed else contextlib.nullcontext():
+        with (
+            unittest.mock.patch("qldpc.external.groups.get_generators", return_value=group_aut_gens)
+            if not gap_is_installed
+            else contextlib.nullcontext()
+        ):
             logical_tableaus, physical_circuits = circuits.get_transversal_ops(code, local_gates)
             assert len(logical_tableaus) == len(physical_circuits) == len(local_gates) - 1
 
@@ -167,9 +169,11 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
         [[3, 7], [4, 13], [6, 11], [12, 14]],
         [[3, 11], [4, 12], [6, 7], [13, 14]],
     ]
-    with unittest.mock.patch(
-        "qldpc.external.groups.get_generators", return_value=group_aut_gens
-    ) if not gap_is_installed else contextlib.nullcontext():
+    with (
+        unittest.mock.patch("qldpc.external.groups.get_generators", return_value=group_aut_gens)
+        if not gap_is_installed
+        else contextlib.nullcontext()
+    ):
         physical_circuit = circuits.maybe_get_transversal_circuit(code, logical_circuit)
 
     # check that the physical circuit has the correct logical tableau
