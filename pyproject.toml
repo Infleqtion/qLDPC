@@ -44,8 +44,7 @@ checks-superstaq = { version = ">=0.5.31", optional = true }
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
 
-# TEMPORARILY ignore the ldpc library until stubs are fixed
-# https://github.com/quantumgizmos/ldpc_v2/issues/7
+# TEMPORARILY until the fix in https://github.com/quantumgizmos/ldpc/pull/46 is deployed
 [[tool.mypy.overrides]]
 module = "ldpc"
 follow_imports = "skip"
@@ -58,7 +57,7 @@ filterwarnings = [
   "ignore::UserWarning:qtrl.*",
   "ignore::PendingDeprecationWarning:qtrl.utils.config",
   "ignore::PendingDeprecationWarning:ruamel.yaml.main",
-  # TEMPORARY; see https://github.com/quantumgizmos/ldpc_v2/issues/7 # REPO-SPECIFIC CONFIG
+  # TEMPORARY until the fix in https://github.com/quantumgizmos/ldpc/pull/45 is deployed # REPO-SPECIFIC CONFIG
   "ignore::DeprecationWarning:ldpc.*", # REPO-SPECIFIC CONFIG
 ]
 
