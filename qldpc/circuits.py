@@ -57,6 +57,30 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
     return stim.PauliString(paulis)
 
 
+def get_physical_string(
+    code: codes.QuditCode, logical_string: stim.PauliString | str
+) -> stim.PauliString:
+    """Convert a logical Pauli string into a physical Pauli string."""
+    logical_string = stim.PauliString(logical_string)
+
+    # identify physical Pauli strings for logical Pauli ops
+    ops_x = [op_to_string(op) for op in code.get_logical_ops(Pauli.X)]
+    ops_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
+
+    physical_string = stim.PauliString(len(code)) * logical_string.sign
+    for qubit in logical_string.pauli_indices():
+        pauli = logical_string[qubit]
+        if pauli == 1:  # X
+            physical_string *= ops_x[qubit]
+        elif pauli == 3:  # Z
+            physical_string *= ops_z[qubit]
+        else:  # Y
+            assert pauli == 2
+            physical_string *= 1j * ops_x[qubit] * ops_z[qubit]
+
+    return physical_string
+
+
 @restrict_to_qubits
 def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str) -> stim.Circuit:
     """Tableau to prepare a logical state of a code from an all-|0> state of its data qubits.
@@ -67,32 +91,11 @@ def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str
     # prepare a +1 eigenstate of the all-Z Pauli string by default
     strings = strings or (stim.PauliString("Z" * code.dimension),)
 
-    # convert each providde PauliString into a stabilizer of our target state
-    logical_stabs = []
-    ops_x, ops_z = code.get_logical_ops()
-    for string in strings:
-        string = stim.PauliString(string)
-        logical_stab = stim.PauliString(len(code)) * string.sign
-        for qubit in string.pauli_indices():
-            pauli = string[qubit]
-            if pauli == 1:  # X
-                logical_op = ops_x[qubit]
-            elif pauli == 3:  # Z
-                logical_op = ops_z[qubit]
-            elif pauli == 2:  # Y
-                logical_op = ops_x[qubit] + ops_z[qubit]
-                op_x_z = ops_x[qubit, len(code) :]  # Z support of X op
-                op_z_x = ops_z[qubit, : len(code)]  # X support of Z op
-                logical_op *= (-1) ** int(op_x_z @ op_z_x)
-            logical_stab *= op_to_string(logical_op)
-        logical_stabs.append(logical_stab)
-
-    # collect stabilizers of the code
+    # collect the physical stabilizers that stabilize our target state
+    logical_stabs = [get_physical_string(code, string) for string in strings]
     code_stabs = [op_to_string(row, flip_xz=True) for row in code.matrix]
-
-    target_state_stabilizers = logical_stabs + code_stabs
     return stim.Tableau.from_stabilizers(
-        target_state_stabilizers, allow_redundant=True, allow_underconstrained=True
+        logical_stabs + code_stabs, allow_redundant=True, allow_underconstrained=True
     )
 
 

@@ -45,13 +45,21 @@ def test_pauli_strings() -> None:
 
 def test_state_prep() -> None:
     """Prepare eigenstates of logical Pauli strings."""
+
+    def _get_random_logical_stabilizer(code_dimension) -> stim.PauliString:
+        """Get a random logical stabilizer"""
+        minus_one = -stim.PauliString(code_dimension)
+        while (string := stim.PauliString.random(code_dimension)) == minus_one:
+            pass  # pragma: no cover
+        return string
+
     for code in [
         codes.FiveQubitCode(),
         codes.HGPCode(codes.HammingCode(3)),
         codes.HGPCode(codes.ClassicalCode.random(5, 3)),
     ]:
-        logical_string = stim.PauliString.random(code.dimension)
-        circuit = circuits.get_encoding_circuit(code, logical_string)
+        logical_stabilizer = _get_random_logical_stabilizer(code.dimension)
+        circuit = circuits.get_encoding_circuit(code, logical_stabilizer)
 
         # test stabilizers of the code
         simulator = stim.TableauSimulator()
@@ -60,10 +68,11 @@ def test_state_prep() -> None:
             string = circuits.op_to_string(row, flip_xz=True)
             assert simulator.peek_observable_expectation(string) == 1
 
-        # test the logical string
-        simulator.do(circuit.inverse())
-        simulator.do(logical_string)
-        simulator.do(circuit)
+        # test the logical stabilizer
+        encoder = circuits.get_encoding_circuit(code)
+        simulator.do(encoder.inverse())
+        simulator.do(logical_stabilizer)
+        simulator.do(encoder)
         assert simulator.peek_observable_expectation(string) == 1
 
 
