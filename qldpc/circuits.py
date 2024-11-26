@@ -67,6 +67,7 @@ def get_physical_string(
     ops_x = [op_to_string(op) for op in code.get_logical_ops(Pauli.X)]
     ops_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
 
+    # build the physical Pauli string by multiplying in one logical at a time
     physical_string = stim.PauliString(len(code)) * logical_string.sign
     for qubit in logical_string.pauli_indices():
         pauli = logical_string[qubit]
