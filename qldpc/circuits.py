@@ -63,6 +63,7 @@ def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str
 
     If provided Pauli strings, prepare a logical +1 eigenstate of those logical Pauli strings.
     """
+    # prepare a +1 eigenstate of the all-Z Pauli string by default
     strings = strings or [stim.PauliString("Z" * code.dimension)]
 
     # convert each providde PauliString into a stabilizer of our target state
