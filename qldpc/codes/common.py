@@ -491,6 +491,22 @@ class ClassicalCode(AbstractCode):
         group_str = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
         return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
 
+    @classmethod
+    def join(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
+        """Join two classical codes.
+
+        The joined code is obtained by having the input codes acting on disjoint sets of bits.
+        Joining two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
+        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        """
+        if code_a.field is not code_b.field:
+            raise ValueError("Cannot join codes over different fields")
+        block_matrix = [
+            [code_a.matrix, np.zeros((code_a.num_checks, len(code_b)), dtype=int)],
+            [np.zeros((code_b.num_checks, len(code_a)), dtype=int), code_b.matrix],
+        ]
+        return ClassicalCode(np.block(block_matrix), field=code_a.field.order)
+
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
 
@@ -784,6 +800,22 @@ class QuditCode(AbstractCode):
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]).reshape(shape))
         return self._logical_ops
 
+    @classmethod
+    def join(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
+        """Join two qudit codes.
+
+        The joined code is obtained by having the input codes acting on disjoint sets of qudits.
+        Joining two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
+        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        """
+        if code_a.field is not code_b.field:
+            raise ValueError("Cannot join codes over different fields")
+        block_matrix = [
+            [code_a.matrix, np.zeros((code_a.num_checks, len(code_b)), dtype=int)],
+            [np.zeros((code_b.num_checks, len(code_a)), dtype=int), code_b.matrix],
+        ]
+        return QuditCode(np.block(block_matrix), field=code_a.field.order)
+
 
 class CSSCode(QuditCode):
     """CSS qudit code, with separate X-type and Z-type parity checks.
@@ -901,7 +933,7 @@ class CSSCode(QuditCode):
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
     ) -> tuple[int, int, int | float]:
-        """Compute the parameters of this code: [[n,k,d]].
+        """Compute the parameters of this code: [n,k,d].
 
         Here:
         - n is the number of data qudits
@@ -1263,6 +1295,26 @@ class CSSCode(QuditCode):
         else:
             for logical_index in range(self.dimension):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
+
+    @classmethod
+    def join(cls, code_a: CSSCode, code_b: CSSCode) -> CSSCode:
+        """Join two qudit CSS codes.
+
+        The joined code is obtained by having the input codes acting on disjoint sets of qudits.
+        Joining two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
+        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        """
+        if code_a.field is not code_b.field:
+            raise ValueError("Cannot join codes over different fields")
+        code_x = ClassicalCode.join(code_a.code_x, code_b.code_x)
+        code_z = ClassicalCode.join(code_a.code_z, code_b.code_z)
+        return CSSCode(
+            code_x,
+            code_z,
+            field=code_a.field.order,
+            promise_balanced_codes=code_a._balanced_codes and code_b._balanced_codes,
+            skip_validation=True,
+        )
 
 
 def _fix_decoder_args_for_nonbinary_fields(
