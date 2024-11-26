@@ -495,7 +495,7 @@ class ClassicalCode(AbstractCode):
     def join(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
         """Join two classical codes.
 
-        The joined code is obtained by having the input codes acting on disjoint sets of bits.
+        The joined code is obtained by having the input codes act on disjoint sets of bits.
         Joining two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
         code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
@@ -804,17 +804,20 @@ class QuditCode(AbstractCode):
     def join(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
         """Join two qudit codes.
 
-        The joined code is obtained by having the input codes acting on disjoint sets of qudits.
+        The joined code is obtained by having the input codes act on disjoint sets of qudits.
         Joining two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
         code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
         if code_a.field is not code_b.field:
             raise ValueError("Cannot join codes over different fields")
-        block_matrix = [
-            [code_a.matrix, np.zeros((code_a.num_checks, len(code_b)), dtype=int)],
-            [np.zeros((code_b.num_checks, len(code_a)), dtype=int), code_b.matrix],
-        ]
-        return QuditCode(np.block(block_matrix), field=code_a.field.order)
+        matrix_a_z = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 0, :]
+        matrix_a_x = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 1, :]
+        matrix_b_z = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 0, :]
+        matrix_b_x = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 1, :]
+        matrix_z = ClassicalCode.join(ClassicalCode(matrix_a_z), ClassicalCode(matrix_b_z)).matrix
+        matrix_x = ClassicalCode.join(ClassicalCode(matrix_a_x), ClassicalCode(matrix_b_x)).matrix
+        matrix = np.hstack([matrix_z, matrix_x])
+        return QuditCode(matrix, field=code_a.field.order)
 
 
 class CSSCode(QuditCode):
@@ -1297,15 +1300,17 @@ class CSSCode(QuditCode):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
 
     @classmethod
-    def join(cls, code_a: CSSCode, code_b: CSSCode) -> CSSCode:
+    def join(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
         """Join two qudit CSS codes.
 
-        The joined code is obtained by having the input codes acting on disjoint sets of qudits.
+        The joined code is obtained by having the input codes act on disjoint sets of qudits.
         Joining two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
         code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
         if code_a.field is not code_b.field:
             raise ValueError("Cannot join codes over different fields")
+        if not isinstance(code_a, CSSCode) or not isinstance(code_b, CSSCode):
+            return QuditCode.join(code_a, code_b)
         code_x = ClassicalCode.join(code_a.code_x, code_b.code_x)
         code_z = ClassicalCode.join(code_a.code_z, code_b.code_z)
         return CSSCode(
