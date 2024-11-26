@@ -1301,16 +1301,18 @@ class CSSCode(QuditCode):
 
     @classmethod
     def stack(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
-        """Stack two qudit CSS codes.
+        """Stack two qudit codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of qudits.
         Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
         code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+
+        If both input codes are CSS, the output code will likewise be a CSSCode.
         """
         if code_a.field is not code_b.field:
             raise ValueError("Cannot join codes over different fields")
         if not isinstance(code_a, CSSCode) or not isinstance(code_b, CSSCode):
-            return QuditCode.join(code_a, code_b)
+            return QuditCode.stack(code_a, code_b)
         code_x = ClassicalCode.stack(code_a.code_x, code_b.code_x)
         code_z = ClassicalCode.stack(code_a.code_z, code_b.code_z)
         return CSSCode(
