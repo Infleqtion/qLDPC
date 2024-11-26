@@ -63,15 +63,11 @@ def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str
 
     If provided Pauli strings, prepare a logical +1 eigenstate of those logical Pauli strings.
     """
-    strings = [
-        stim.PauliString(code.dimension) if not string else stim.PauliString(string)
-        for string in strings
-    ]
-
     # identify logical operators that stabilize our target state
     logical_stabs = []
     logical_ops = code.get_logical_ops()
     for string in strings:
+        string = stim.PauliString(string)
         for qubit in string.pauli_indices():
             pauli = string[qubit]
             if pauli == 1:  # X
