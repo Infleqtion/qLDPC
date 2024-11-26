@@ -59,27 +59,31 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
 
 @restrict_to_qubits
 def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str) -> stim.Circuit:
-    """Tableau to prepare a logical all-|0> state of a code from an all-|0> state of its qubits.
+    """Tableau to prepare a logical state of a code from an all-|0> state of its data qubits.
 
     If provided Pauli strings, prepare a logical +1 eigenstate of those logical Pauli strings.
+    Otherwise, prepare a logical all-|0> state.
     """
     # prepare a +1 eigenstate of the all-Z Pauli string by default
     strings = strings or (stim.PauliString("Z" * code.dimension),)
 
     # convert each providde PauliString into a stabilizer of our target state
     logical_stabs = []
-    logical_ops = code.get_logical_ops()
+    ops_x, ops_z = code.get_logical_ops()
     for string in strings:
         string = stim.PauliString(string)
-        logical_stab = stim.PauliString(len(code))
+        logical_stab = stim.PauliString(len(code)) * string.sign
         for qubit in string.pauli_indices():
             pauli = string[qubit]
             if pauli == 1:  # X
-                logical_op = logical_ops[0, qubit]
+                logical_op = ops_x[qubit]
             elif pauli == 3:  # Z
-                logical_op = logical_ops[1, qubit]
+                logical_op = ops_z[qubit]
             elif pauli == 2:  # Y
-                logical_op = logical_ops[0, qubit] + logical_ops[1, qubit]
+                logical_op = ops_x[qubit] + ops_z[qubit]
+                op_x_z = ops_x[qubit, len(code) :]  # Z support of X op
+                op_z_x = ops_z[qubit, : len(code)]  # X support of Z op
+                logical_op *= (-1) ** int(op_x_z @ op_z_x)
             logical_stab *= op_to_string(logical_op)
         logical_stabs.append(logical_stab)
 
@@ -94,9 +98,10 @@ def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str
 
 @restrict_to_qubits
 def get_encoding_circuit(code: codes.QuditCode, *strings: stim.PauliString | str) -> stim.Tableau:
-    """Circuit to prepare a logical all-|0> state of a code from an all-|0> state of its qubits.
+    """Circuit to prepare a logical state of a code from an all-|0> state of its data qubits.
 
     If provided Pauli strings, prepare a logical +1 eigenstate of those logical Pauli strings.
+    Otherwise, prepare a logical all-|0> state.
     """
     return get_encoding_tableau(code, *strings).to_circuit()
 
