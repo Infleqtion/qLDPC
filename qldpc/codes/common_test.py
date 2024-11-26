@@ -66,17 +66,17 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     words = [[0] * (num_bits - 1)]
     assert np.array_equal(code.shorten(0).words(), words)
 
-    # join two codes
+    # stack two codes
     code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
     code_b = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
-    code = codes.ClassicalCode.join(code_a, code_b)
+    code = codes.ClassicalCode.stack(code_a, code_b)
     assert len(code) == len(code_a) + len(code_b)
     assert code.dimension == code_a.dimension + code_b.dimension
 
-    # joining codes over different fields is not supported
+    # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
         code_b = codes.RepetitionCode(2, field=2)
-        code = codes.ClassicalCode.join(code_a, code_b)
+        code = codes.ClassicalCode.stack(code_a, code_b)
 
 
 def test_named_codes(order: int = 2) -> None:
@@ -209,14 +209,14 @@ def test_qudit_code() -> None:
     assert base_code.dimension == 1
     assert base_code.get_logical_ops(Pauli.X).shape == base_code.get_logical_ops(Pauli.Z).shape
 
-    code = codes.QuditCode.join(base_code, base_code)
+    code = codes.QuditCode.stack(base_code, base_code)
     assert len(code) == len(base_code) * 2
     assert code.dimension == base_code.dimension * 2
 
-    # joining codes over different fields is not supported
+    # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
         qudit_code = codes.SurfaceCode(2, field=3)
-        code = codes.QuditCode.join(base_code, qudit_code)
+        code = codes.QuditCode.stack(base_code, qudit_code)
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -345,18 +345,18 @@ def test_distance_quantum() -> None:
     assert code.get_distance(bound=False) is np.nan
 
 
-def test_joining_css_codes() -> None:
-    """Join two CSS codes."""
+def test_stacking_css_codes() -> None:
+    """Stack two CSS codes."""
     steane_code = codes.SteaneCode()
-    code = codes.CSSCode.join(steane_code, steane_code)
+    code = codes.CSSCode.stack(steane_code, steane_code)
     assert len(code) == len(steane_code) * 2
     assert code.dimension == steane_code.dimension * 2
 
-    # joining codes over different fields is not supported
+    # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
         qudit_code = codes.SurfaceCode(2, field=3)
-        code = codes.CSSCode.join(steane_code, qudit_code)
+        code = codes.CSSCode.stack(steane_code, qudit_code)
 
-    # joining a CSSCode with a QuditCode yields a QuditCode
-    code = codes.CSSCode.join(steane_code, codes.FiveQubitCode())
+    # stacking a CSSCode with a QuditCode yields a QuditCode
+    code = codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
     assert not isinstance(code, codes.CSSCode)
