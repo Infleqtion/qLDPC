@@ -1,3 +1,3 @@
-from . import codes, groups
+from . import codes, gap, groups
 
-__all__ = ["codes", "groups"]
+__all__ = ["codes", "gap", "groups"]
