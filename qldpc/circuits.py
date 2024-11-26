@@ -63,7 +63,7 @@ def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str
 
     If provided Pauli strings, prepare a logical +1 eigenstate of those logical Pauli strings.
     """
-    # convert each providde PauliString into a stabilizer of our target state
+    # identify logical operators that stabilize our target state
     logical_stabs = []
     logical_ops = code.get_logical_ops()
     for string in strings:
@@ -78,9 +78,7 @@ def get_encoding_tableau(code: codes.QuditCode, *strings: stim.PauliString | str
                 logical_op = logical_ops[0, qubit] + logical_ops[1, qubit]
             logical_stabs.append(op_to_string(logical_op))
 
-    # collect stabilizers of the code
     code_stabs = [op_to_string(row, flip_xz=True) for row in code.matrix]
-
     return stim.Tableau.from_stabilizers(logical_stabs + code_stabs, allow_redundant=True)
 
 
