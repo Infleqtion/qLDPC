@@ -31,14 +31,16 @@ from qldpc.objects import Pauli, QuditOperator
 # classical code tests
 
 
-def test_constructions_classical() -> None:
+def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     """Classical code constructions."""
-    code = codes.ClassicalCode.random(5, 3, field=2, seed=0)
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
+    code = codes.ClassicalCode.random(5, 3, field=2, seed=np.random.randint(2**32))
     assert len(code) == code.num_bits == 5
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
 
-    code = codes.ClassicalCode.random(5, 3, field=3, seed=0)
+    code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
     assert "GF(3)" in str(code)
 
     num_bits = 2
@@ -63,6 +65,18 @@ def test_constructions_classical() -> None:
     code = codes.RepetitionCode(num_bits)
     words = [[0] * (num_bits - 1)]
     assert np.array_equal(code.shorten(0).words(), words)
+
+    # stack two codes
+    code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
+    code_b = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
+    code = codes.ClassicalCode.stack(code_a, code_b)
+    assert len(code) == len(code_a) + len(code_b)
+    assert code.dimension == code_a.dimension + code_b.dimension
+
+    # stacking codes over different fields is not supported
+    with pytest.raises(ValueError, match="different fields"):
+        code_b = codes.RepetitionCode(2, field=2)
+        code = codes.ClassicalCode.stack(code_a, code_b)
 
 
 def test_named_codes(order: int = 2) -> None:
@@ -162,11 +176,6 @@ def test_automorphism() -> None:
 # quantum code tests
 
 
-def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
-    """Construct a random (but probably trivial or invalid) QuditCode."""
-    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
-
-
 def test_code_string() -> None:
     """Human-readable representation of a code."""
     code = codes.QuditCode([[0]], field=2)
@@ -182,6 +191,11 @@ def test_code_string() -> None:
     assert "GF(3)" in str(code)
 
 
+def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
+    """Construct a random (but probably trivial or invalid) QuditCode."""
+    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
+
+
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
     assert get_random_qudit_code(num_qubits, num_checks, field=2).num_qubits == num_qubits
@@ -191,9 +205,18 @@ def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
 
 def test_qudit_code() -> None:
     """Miscellaneous qudit code tests and coverage."""
-    code = codes.FiveQubitCode()
-    assert code.dimension == 1
-    assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
+    base_code = codes.FiveQubitCode()
+    assert base_code.dimension == 1
+    assert base_code.get_logical_ops(Pauli.X).shape == base_code.get_logical_ops(Pauli.Z).shape
+
+    code = codes.QuditCode.stack(base_code, base_code)
+    assert len(code) == len(base_code) * 2
+    assert code.dimension == base_code.dimension * 2
+
+    # stacking codes over different fields is not supported
+    with pytest.raises(ValueError, match="different fields"):
+        qudit_code = codes.SurfaceCode(2, field=3)
+        code = codes.QuditCode.stack(base_code, qudit_code)
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -248,7 +271,7 @@ def test_qudit_ops() -> None:
 # CSS code tests
 
 
-def test_CSS_code() -> None:
+def test_css_code() -> None:
     """Miscellaneous CSS code tests and coverage."""
     code_x = codes.ClassicalCode.random(3, 2)
 
@@ -268,7 +291,7 @@ def test_CSS_code() -> None:
         codes.CSSCode(code_x, code_z)
 
 
-def test_CSS_ops() -> None:
+def test_css_ops() -> None:
     """Logical operator construction for CSS codes."""
     code: codes.CSSCode
 
@@ -320,3 +343,20 @@ def test_distance_quantum() -> None:
     assert code.dimension == 0
     assert code.get_distance(bound=True) is np.nan
     assert code.get_distance(bound=False) is np.nan
+
+
+def test_stacking_css_codes() -> None:
+    """Stack two CSS codes."""
+    steane_code = codes.SteaneCode()
+    code = codes.CSSCode.stack(steane_code, steane_code)
+    assert len(code) == len(steane_code) * 2
+    assert code.dimension == steane_code.dimension * 2
+
+    # stacking codes over different fields is not supported
+    with pytest.raises(ValueError, match="different fields"):
+        qudit_code = codes.SurfaceCode(2, field=3)
+        code = codes.CSSCode.stack(steane_code, qudit_code)
+
+    # stacking a CSSCode with a QuditCode yields a QuditCode
+    code = codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
+    assert not isinstance(code, codes.CSSCode)

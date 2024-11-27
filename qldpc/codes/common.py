@@ -491,6 +491,22 @@ class ClassicalCode(AbstractCode):
         group_str = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
         return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
 
+    @classmethod
+    def stack(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
+        """Stack two classical codes.
+
+        The stacked code is obtained by having the input codes act on disjoint sets of bits.
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
+        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        """
+        if code_a.field is not code_b.field:
+            raise ValueError("Cannot join codes over different fields")
+        block_matrix = [
+            [code_a.matrix, np.zeros((code_a.num_checks, len(code_b)), dtype=int)],
+            [np.zeros((code_b.num_checks, len(code_a)), dtype=int), code_b.matrix],
+        ]
+        return ClassicalCode(np.block(block_matrix), field=code_a.field.order)
+
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
 
@@ -784,6 +800,25 @@ class QuditCode(AbstractCode):
         self._logical_ops = self.field(np.stack([logicals_x, logicals_z]).reshape(shape))
         return self._logical_ops
 
+    @classmethod
+    def stack(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
+        """Stack two qudit codes.
+
+        The stacked code is obtained by having the input codes act on disjoint sets of qudits.
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
+        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        """
+        if code_a.field is not code_b.field:
+            raise ValueError("Cannot join codes over different fields")
+        matrix_a_z = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 0, :]
+        matrix_a_x = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 1, :]
+        matrix_b_z = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 0, :]
+        matrix_b_x = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 1, :]
+        code_z = ClassicalCode.stack(ClassicalCode(matrix_a_z), ClassicalCode(matrix_b_z))
+        code_x = ClassicalCode.stack(ClassicalCode(matrix_a_x), ClassicalCode(matrix_b_x))
+        matrix = np.hstack([code_z.matrix, code_x.matrix])
+        return QuditCode(matrix, field=code_a.field.order)
+
 
 class CSSCode(QuditCode):
     """CSS qudit code, with separate X-type and Z-type parity checks.
@@ -901,7 +936,7 @@ class CSSCode(QuditCode):
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: object
     ) -> tuple[int, int, int | float]:
-        """Compute the parameters of this code: [[n,k,d]].
+        """Compute the parameters of this code: [n,k,d].
 
         Here:
         - n is the number of data qudits
@@ -1263,6 +1298,30 @@ class CSSCode(QuditCode):
         else:
             for logical_index in range(self.dimension):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
+
+    @classmethod
+    def stack(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
+        """Stack two qudit codes.
+
+        The stacked code is obtained by having the input codes act on disjoint sets of qudits.
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
+        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+
+        If both input codes are CSS, the output code will likewise be a CSSCode.
+        """
+        if code_a.field is not code_b.field:
+            raise ValueError("Cannot join codes over different fields")
+        if not isinstance(code_a, CSSCode) or not isinstance(code_b, CSSCode):
+            return QuditCode.stack(code_a, code_b)
+        code_x = ClassicalCode.stack(code_a.code_x, code_b.code_x)
+        code_z = ClassicalCode.stack(code_a.code_z, code_b.code_z)
+        return CSSCode(
+            code_x,
+            code_z,
+            field=code_a.field.order,
+            promise_balanced_codes=code_a._balanced_codes and code_b._balanced_codes,
+            skip_validation=True,
+        )
 
 
 def _fix_decoder_args_for_nonbinary_fields(
