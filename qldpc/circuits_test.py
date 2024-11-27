@@ -25,6 +25,7 @@ import pytest
 import stim
 
 from qldpc import circuits, codes, external
+from qldpc.objects import Pauli
 
 
 def test_restriction() -> None:
@@ -44,36 +45,25 @@ def test_pauli_strings() -> None:
 
 
 def test_state_prep() -> None:
-    """Prepare eigenstates of logical Pauli strings."""
-
-    def _get_random_logical_stabilizer(code_dimension) -> stim.PauliString:
-        """Get a random logical stabilizer"""
-        minus_one = -stim.PauliString(code_dimension)
-        while (string := stim.PauliString.random(code_dimension)) == minus_one:
-            pass  # pragma: no cover
-        return string
-
+    """Prepare all-0 logical states of qubit codes."""
     for code in [
         codes.FiveQubitCode(),
         codes.HGPCode(codes.HammingCode(3)),
         codes.HGPCode(codes.ClassicalCode.random(5, 3)),
     ]:
-        logical_stabilizer = _get_random_logical_stabilizer(code.dimension)
-        circuit = circuits.get_encoding_circuit(code, logical_stabilizer)
-
-        # test stabilizers of the code
+        encoder = circuits.get_encoding_circuit(code)
         simulator = stim.TableauSimulator()
-        simulator.do(circuit)
+        simulator.do(encoder)
+
+        # the state of the simulator is a +1 eigenstate of code stabilizers
         for row in code.matrix:
             string = circuits.op_to_string(row, flip_xz=True)
             assert simulator.peek_observable_expectation(string) == 1
 
-        # test the logical stabilizer
-        encoder = circuits.get_encoding_circuit(code)
-        simulator.do(encoder.inverse())
-        simulator.do(logical_stabilizer)
-        simulator.do(encoder)
-        assert simulator.peek_observable_expectation(string) == 1
+        # the state of the simulator is a +1 eigenstate of all logical Z operators
+        for op in code.get_logical_ops(Pauli.Z):
+            string = circuits.op_to_string(op)
+            assert simulator.peek_observable_expectation(string) == 1
 
 
 def test_transversal_ops() -> None:
