@@ -58,42 +58,19 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
 
 
 @restrict_to_qubits
-def get_encoding_tableau(
-    code: codes.QuditCode, string: stim.PauliString | str | None = None
-) -> stim.Circuit:
-    """Tableau to prepare a logical all-|0> state of a code from an all-|0> state of its qubits.
-
-    If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
-    """
-    string = stim.PauliString(code.dimension) if not string else stim.PauliString(string)
-    assert len(string) == code.dimension
-
-    # identify logical operators that stabilize our target state
-    logical_ops = code.get_logical_ops()
-    logical_stabs = []
-    for qubit, pauli in enumerate(string):
-        if pauli == 1:  # X
-            logical_op = logical_ops[0, qubit]
-        elif pauli == 3 or pauli == 0:  # Z or I
-            logical_op = logical_ops[1, qubit]
-        else:
-            assert pauli == 2  # Y
-            logical_op = logical_ops[0, qubit] + logical_ops[1, qubit]
-        logical_stabs.append(op_to_string(logical_op))
-
+def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
+    """Tableau to prepare an all-|0> logical state of a code from an all-|0> state of its qubits."""
+    logical_ops_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
     code_stabs = [op_to_string(row, flip_xz=True) for row in code.matrix]
-    return stim.Tableau.from_stabilizers(logical_stabs + code_stabs, allow_redundant=True)
+    return stim.Tableau.from_stabilizers(
+        logical_ops_z + code_stabs, allow_redundant=True, allow_underconstrained=False
+    )
 
 
 @restrict_to_qubits
-def get_encoding_circuit(
-    code: codes.QuditCode, string: stim.PauliString | str | None = None
-) -> stim.Tableau:
-    """Circuit to prepare a logical all-|0> state of a code from an all-|0> state of its qubits.
-
-    If provided a Pauli string, prepare a logical +1 eigenstate of that logical Pauli string.
-    """
-    return get_encoding_tableau(code, string).to_circuit()
+def get_encoding_circuit(code: codes.QuditCode) -> stim.Tableau:
+    """Circuit to prepare an all-|0> logical state of a code from an all-|0> state of its qubits."""
+    return get_encoding_tableau(code).to_circuit()
 
 
 @restrict_to_qubits
