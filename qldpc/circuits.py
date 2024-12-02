@@ -47,6 +47,12 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
     The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz=True.
     """
     assert len(op) % 2 == 0
+    support_xz = np.array(op, dtype=int).reshape(2, -1)
+    if flip_xz:
+        support_xz = support_xz[::-1, :]
+    paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
+    return stim.PauliString(map(str, paulis))
+
     num_qubits = len(op) // 2
     paulis = ""
     for qubit in range(num_qubits):
