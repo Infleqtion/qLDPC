@@ -560,6 +560,8 @@ class QuditCode(AbstractCode):
     _matrix: galois.FieldArray
     _logical_ops: galois.FieldArray | None = None
 
+    _exact_distance: int | float | None = None
+
     def __init__(
         self,
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
@@ -694,6 +696,70 @@ class QuditCode(AbstractCode):
         matrix = np.reshape(self.matrix.copy(), (num_checks, 2, -1))
         matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
         return QuditCode(matrix.reshape(num_checks, -1))
+
+    def get_code_params(self, *, bound: int | bool | None = None) -> tuple[int, int, int | float]:
+        """Compute the parameters of this code: [n,k,d].
+
+        Here:
+        - n is the number of data qudits
+        - k is the number of encoded ("logical") qudits
+        - d is the code distance
+
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
+        upper bound using a randomized algorithm, minimizing over `bound` random trials.  For a
+        detailed explanation, see `QuditCode.get_one_distance_bound`.
+        """
+        return self.num_qudits, self.dimension, self.get_distance(bound=bound)
+
+    def get_distance(self, *, bound: int | bool | None = None) -> int | float:
+        """Compute (or upper bound) the minimal weight of a nontrivial logical operator.
+
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
+        upper bound using a randomized algorithm, minimizing over `bound` random trials.  For a
+        detailed explanation, see `QuditCode.get_one_distance_bound`.
+        """
+        if not bound:
+            return self.get_distance_exact()
+        return self.get_distance_bound(num_trials=int(bound))
+
+    def _get_distance_if_known(self) -> int | float | None:
+        """Retrieve exact distance, if known.  Otherwise return None."""
+        if self.dimension == 0:
+            # the distances of dimension-0 codes are undefined
+            self._exact_distance = np.nan
+        return self._exact_distance
+
+    def get_distance_exact(self) -> int | float:
+        """Compute the minimal weight of a nontrivial code word by brute force."""
+        # if we know the exact code distance, return it
+        if (known_distance := self._get_distance_if_known()) is not None:
+            return known_distance
+
+        raise NotImplementedError("Exact distance not implemented for a general QuditCode")
+
+    def get_distance_bound(self, num_trials: int = 1) -> int | float:
+        """Compute an upper bound on code distance by minimizing many individual upper bounds.
+
+        If provided a vector, compute the minimum Hamming distance between this vector and a
+        (possibly trivial) X-type or Z-type logical operator, as applicable.
+
+        Additional arguments, if applicable, are passed to a decoder in
+        `CSSCode.get_one_distance_bound`.
+        """
+        distance_bounds = (self.get_one_distance_bound() for _ in range(num_trials))
+        return min(distance_bounds, default=self.num_qudits)
+
+    def get_one_distance_bound(
+        self,
+        pauli: PauliXZ | None = None,
+        *,
+        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
+        **decoder_args: object,
+    ) -> int | float:
+        """Compute a single upper bound on code distance."""
+        raise NotImplementedError(
+            "Monte Carlo distance bound not implemented for a general QuditCode"
+        )
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
