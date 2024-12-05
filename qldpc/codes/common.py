@@ -763,7 +763,7 @@ class QuditCode(AbstractCode):
     ) -> int | float:
         """Compute a single upper bound on code distance."""
         raise NotImplementedError(
-            "Monte Carlo distance bound not implemented for a general QuditCode"
+            "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
         )
 
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
