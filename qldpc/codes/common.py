@@ -714,7 +714,7 @@ class QuditCode(AbstractCode):
 
         If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
         upper bound using `bound` trials of a a randomized algorithm.  For a detailed explanation,
-        see the `get_one_distance_bound` method of `QuditCode` or `CSSCode`, as applicable.
+        see the `get_one_distance_bound` method.
 
         Keyword arguments are passed to the calculation of code distance.
         """
