@@ -750,14 +750,7 @@ class QuditCode(AbstractCode):
         return minimum_weight
 
     def get_distance_bound(self, num_trials: int = 1) -> int | float:
-        """Compute an upper bound on code distance by minimizing many individual upper bounds.
-
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) X-type or Z-type logical operator, as applicable.
-
-        Additional arguments, if applicable, are passed to a decoder in
-        `CSSCode.get_one_distance_bound`.
-        """
+        """Compute an upper bound on code distance by minimizing many individual upper bounds."""
         distance_bounds = (self.get_one_distance_bound() for _ in range(num_trials))
         return min(distance_bounds, default=self.num_qudits)
 
