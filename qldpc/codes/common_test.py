@@ -225,7 +225,7 @@ def test_qudit_code() -> None:
     with pytest.raises(NotImplementedError, match="not implemented"):
         code.get_distance(bound=True)
 
-    # stacking
+    # stacking two codes
     two_codes = codes.QuditCode.stack(code, code)
     assert len(two_codes) == len(code) * 2
     assert two_codes.dimension == code.dimension * 2
@@ -234,6 +234,11 @@ def test_qudit_code() -> None:
     with pytest.raises(ValueError, match="different fields"):
         second_code = codes.SurfaceCode(2, field=3)
         codes.QuditCode.stack(code, second_code)
+
+
+def test_undefined_distance() -> None:
+    """The distance of dimension-0 codes is undefined."""
+    assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
 
 
 @pytest.mark.parametrize("field", [2, 3])
