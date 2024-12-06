@@ -400,9 +400,6 @@ class ClassicalCode(AbstractCode):
 
         Additional arguments, if applicable, are passed to a decoder.
         """
-        if (known_distance := self._get_distance_if_known(vector)) is not None:
-            return known_distance
-
         if vector is not None:
             # find the distance of the given vector from a code word
             _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
@@ -775,9 +772,6 @@ class QuditCode(AbstractCode):
 
     def get_one_distance_bound(self, **decoder_args: Any) -> int | float:
         """Use a randomized algorithm to compute a single upper bound on code distance."""
-        if (known_distance := self._get_distance_if_known()) is not None:
-            return known_distance
-
         raise NotImplementedError(
             "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
         )
@@ -1140,9 +1134,6 @@ class CSSCode(QuditCode):
         presumably one of low Hamming weight, since decoders try to find low-weight solutions.
         Return the Hamming weight |w_x|.
         """
-        if (known_distance := self._get_distance_if_known(pauli)) is not None:
-            return known_distance
-
         pauli = pauli or random.choice(PAULIS_XZ)
         assert pauli in PAULIS_XZ
 

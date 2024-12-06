@@ -209,18 +209,31 @@ def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
 
 def test_qudit_code() -> None:
     """Miscellaneous qudit code tests and coverage."""
-    base_code = codes.FiveQubitCode()
-    assert base_code.dimension == 1
-    assert base_code.get_logical_ops(Pauli.X).shape == base_code.get_logical_ops(Pauli.Z).shape
+    code = codes.FiveQubitCode()
+    assert code.dimension == 1
+    assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
-    code = codes.QuditCode.stack(base_code, base_code)
-    assert len(code) == len(base_code) * 2
-    assert code.dimension == base_code.dimension * 2
+    # cover calls to the known code exact distance
+    assert code.get_distance() == 3
+    assert code.get_distance(bound=True) == 3
+
+    # "forget" the code distance and recompute
+    code._exact_distance = None
+    assert code.get_distance_exact() == 3
+
+    code._exact_distance = None
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        code.get_distance(bound=True)
+
+    # stacking
+    two_codes = codes.QuditCode.stack(code, code)
+    assert len(two_codes) == len(code) * 2
+    assert two_codes.dimension == code.dimension * 2
 
     # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
-        qudit_code = codes.SurfaceCode(2, field=3)
-        code = codes.QuditCode.stack(base_code, qudit_code)
+        second_code = codes.SurfaceCode(2, field=3)
+        codes.QuditCode.stack(code, second_code)
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -331,7 +344,7 @@ def test_css_ops() -> None:
         code.reduce_logical_op(Pauli.X, 0)
 
 
-def test_distance_quantum() -> None:
+def test_distance_css() -> None:
     """Distance calculations for CSS codes."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance(bound=True) == 2
