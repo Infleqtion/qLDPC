@@ -1323,6 +1323,118 @@ class CSSCode(QuditCode):
             skip_validation=True,
         )
 
+    @classmethod
+    def concatenate(cls, 
+                    code_inner: CSSCode,
+                    code_outer: CSSCode,
+                    connectivity: list | None = None,
+                    inherit_logicals = False ) -> CSSCode:
+        """Concatenate two CSS codes"""
+        
+        ### define useful parameters we will need for building matrices of new code
+        n_in, k_in = code_inner.get_code_params()[0:2]
+        n_out, k_out = code_outer.get_code_params()[0:2]
+
+        if n_in % k_out != 0:
+            raise TypeError(f"n_in is not divisible by k_out: have unused outer logicals. Can't handle this yet")
+
+        # number of X and Z stabilizers
+        sx_out, sz_out = [code_outer.matrix_x.shape[0], code_outer.matrix_z.shape[0]] 
+        sx_in, sz_in = [code_inner.matrix_x.shape[0], code_inner.matrix_z.shape[0]]
+
+        ### 
+        if connectivity is None:
+            code_connectivity = list(zip(range(n_in), range(n_in)))
+        else:
+            code_connectivity = connectivity 
+        
+        #### construct blocks associated with X and Z stab of the outer code
+        outer_stab_X = galois.GF(2)(np.zeros((int(n_in/k_out*sx_out), int(n_out*n_in/k_out)),dtype=int))
+        outer_stab_Z = galois.GF(2)(np.zeros((int(n_in/k_out*sz_out), int(n_in*n_out/k_out)),dtype=int))
+
+        for i in range(int(n_in/k_out)):
+            outer_stab_X[i*sx_out:(i+1)*sx_out, i*n_out:(i+1)*n_out] = code_outer.matrix_x
+            outer_stab_Z[i*sz_out:(i+1)*sz_out, i*n_out:(i+1)*n_out] = code_outer.matrix_z
+
+
+        #### now define the inner stabilizers in terms of outer logicals
+        x_outer_logical = code_outer.get_logical_ops()[0][:,:n_out] ## get_logical_op gives matrix where each row is logical ops (x_support| z_support), z_support = 0s for X logical  
+        z_outer_logical = code_outer.get_logical_ops()[1][:,n_out:]
+
+        inner_stab_X = galois.GF(2)(np.zeros((sx_in, int(n_out*n_in/k_out)),dtype=int))
+        inner_stab_Z = galois.GF(2)(np.zeros((sz_in, int(n_out*n_in/k_out)),dtype=int))
+
+        for s_id, s in enumerate(code_inner.matrix_x):
+            for q in range(len(s)):
+                if s[q] == 1:
+                    b, k = [int(code_connectivity[q][1]/k_out), code_connectivity[q][1] % k_out]   #inner_q_outerlogical_q_dic[q] # block and logical label for inner qubit q
+                    inner_stab_X[s_id, n_out*b:n_out*(b+1)] += x_outer_logical[k] 
+        
+        for s_id, s in enumerate(code_inner.matrix_z):
+            for q in range(len(s)):
+                if s[q] == 1:
+                    b, k = [int(code_connectivity[q][1]/k_out), code_connectivity[q][1] % k_out] # block and logical label for inner qubit q
+                    inner_stab_Z[s_id, n_out*b:n_out*(b+1)] += z_outer_logical[k]
+
+        new_CSS_code = CSSCode(code_x = np.vstack([outer_stab_X,inner_stab_X]),
+                                code_z = np.vstack([outer_stab_Z,inner_stab_Z]),
+                                field=code_inner.field.order)
+        if inherit_logicals:
+            new_CSS_code._logical_ops = CSSCode.canonical_concat_logicals(code_inner, code_outer, connectivity)
+
+        return new_CSS_code
+      
+
+    @classmethod
+    def canonical_concat_logicals(cls,
+        code_inner: CSSCode,
+        code_outer: CSSCode,
+        connectivity: list | None = None) -> np.array :
+         
+         
+        n_in, k_in = code_inner.get_code_params()[0:2]
+        n_out, k_out = code_outer.get_code_params()[0:2]
+
+        if n_in % k_out != 0:
+            raise TypeError(f"n_in is not divisible by k_out: have unused outer logicals. Can't handle this yet")
+
+        # number of X and Z stabilizers
+        sx_out, sz_out = [code_outer.matrix_x.shape[0], code_outer.matrix_z.shape[0]] 
+        sx_in, sz_in = [code_inner.matrix_x.shape[0], code_inner.matrix_z.shape[0]]
+
+        ### 
+        if connectivity is None:
+            code_connectivity = list(zip(range(n_in), range(n_in)))
+        else:
+            code_connectivity = connectivity
+
+        #### now define the inner stabilizers in terms of outer logicals
+        x_outer_logical = code_outer.get_logical_ops()[0][:,:n_out] ## get_logical_op gives matrix where each row is logical ops (x_support| z_support), z_support = 0s for X logical  
+        z_outer_logical = code_outer.get_logical_ops()[1][:,n_out:] 
+
+        X_logical = galois.GF(2)(np.zeros((k_in, int(n_out*n_in/k_out)),dtype=int)) 
+        Z_logical = galois.GF(2)(np.zeros((k_in, int(n_out*n_in/k_out)),dtype=int))
+
+        for l_id, l in enumerate(code_inner.get_logical_ops()[0][:,:n_in]): #enumerate X logicals, :n_in gives X support
+                for q in range(len(l)):
+                    if not l[q]:
+                            b, k = [int(code_connectivity[q][1]/k_out), code_connectivity[q][1] % k_out]
+                            X_logical[l_id, n_out*b:n_out*(b+1)] = x_outer_logical[k]
+
+        for l_id, l in enumerate(code_inner.get_logical_ops()[1][:,n_in:]): #enumerate X logicals, :n_in gives X support
+                for q in range(len(l)):
+                    if not l[q]:
+                            b, k = [int(code_connectivity[q][1]/k_out), code_connectivity[q][1] % k_out]
+                            Z_logical[l_id, n_out*b:n_out*(b+1)] = z_outer_logical[k]
+
+        logical_full_rep = np.vstack([np.hstack([np.zeros(X_logical.shape, dtype=int), X_logical]),
+                              np.hstack([np.zeros(Z_logical.shape, dtype=int), Z_logical])])
+    
+        return logical_full_rep
+
+
+
+
 
 def _fix_decoder_args_for_nonbinary_fields(
     decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
