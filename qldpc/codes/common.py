@@ -120,6 +120,11 @@ class AbstractCode(abc.ABC):
         """Parity check matrix of this code."""
         return self._matrix
 
+    @property
+    def num_checks(self) -> int:
+        """Number of parity checks in this code."""
+        return self.matrix.shape[0]
+
     @functools.cached_property
     def rank(self) -> int:
         """Rank of this code's parity check matrix.
@@ -177,6 +182,14 @@ class ClassicalCode(AbstractCode):
     _matrix: galois.FieldArray
     _exact_distance: int | float | None = None
 
+    def __eq__(self, other: object) -> bool:
+        """Equality test between two code instances."""
+        return (
+            isinstance(other, ClassicalCode)
+            and self._field is other._field
+            and np.array_equal(self._matrix, other._matrix)
+        )
+
     def __str__(self) -> str:
         """Human-readable representation of this code."""
         text = ""
@@ -188,16 +201,22 @@ class ClassicalCode(AbstractCode):
         return text
 
     def __contains__(
-        self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]] | ClassicalCode
+        self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]]
     ) -> bool:
-        """Does this code contain the given word(s)?
-
-        If passed a ClassicalCode for "words", interpret it to mean "all words in the given code",
-        which are spanned by the code's generator matrix.
-        """
-        if isinstance(words, ClassicalCode):
-            words = words.generator
+        """Does this code contain the given word(s)?"""
         return not np.any(self.matrix @ self.field(words).T)
+
+    @classmethod
+    def equiv(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> bool:
+        """Are two classical codes equivalent?  That is, do they have the same code words?"""
+        return code_a.field is code_b.field and np.array_equal(
+            code_a.canonicalized().matrix, code_b.canonicalized().matrix
+        )
+
+    def canonicalized(self) -> ClassicalCode:
+        """The same code with its parity matrix in reduced row echelon form."""
+        rows = [row for row in self.matrix.row_reduce() if np.any(row)]
+        return ClassicalCode(rows, self.field.order)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -231,23 +250,6 @@ class ClassicalCode(AbstractCode):
     def generator(self) -> galois.FieldArray:
         """Generator of this code: a matrix whose rows for a basis for code words."""
         return self.matrix.null_space()
-
-    def __eq__(self, other: object) -> bool:
-        """Equality test between two classical code instances."""
-        return (
-            isinstance(other, ClassicalCode)
-            and self.field is other.field
-            and np.array_equal(self.matrix, other.matrix)
-        )
-
-    @classmethod
-    def equiv(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> bool:
-        """Test equivalence between two classical codes.
-
-        Two classical codes are equivalent if they have the same code words.  Equivalently, codes
-        C_a and C_b are equivalent if they contain each other, C_a ⊆ C_b and C_b ⊆ C_a.
-        """
-        return code_a.field is code_b.field and code_a in code_b and code_b in code_a
 
     def words(self) -> galois.FieldArray:
         """Code words of this code."""
@@ -295,11 +297,6 @@ class ClassicalCode(AbstractCode):
         gen_a: npt.NDArray[np.int_] = code_a.generator
         gen_b: npt.NDArray[np.int_] = code_b.generator
         return ~ClassicalCode(np.kron(gen_a, gen_b))
-
-    @property
-    def num_checks(self) -> int:
-        """Number of check bits in this code."""
-        return self._matrix.shape[0]
 
     def __len__(self) -> int:
         """The block length of this code."""
@@ -493,7 +490,7 @@ class ClassicalCode(AbstractCode):
         The auomorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
         """
-        matrix = np.array([row for row in self.matrix.row_reduce() if np.any(row)])
+        matrix = np.array([row for row in self.canonicalized().matrix])
         checks_str = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
         matrix_str = "[" + ",".join(checks_str) + "]"
         code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"
@@ -575,9 +572,23 @@ class QuditCode(AbstractCode):
         self,
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
+        *,
+        skip_validation: bool = False,
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
+        if not skip_validation:
+            shape_xz = (self.num_checks, 2, -1)
+            matrix_xz = self.matrix.reshape(shape_xz)[:, ::-1, :].reshape(self.matrix.shape)
+            assert not np.any(self.matrix @ matrix_xz.T)
+
+    def __eq__(self, other: object) -> bool:
+        """Equality test between two code instances."""
+        return (
+            isinstance(other, QuditCode)
+            and self._field is other._field
+            and np.array_equal(self._matrix, other._matrix)
+        )
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
@@ -588,11 +599,6 @@ class QuditCode(AbstractCode):
             text += f"{self.name} on {self.num_qudits} qudits over {self.field_name}"
         text += f", with parity check matrix\n{self.matrix}"
         return text
-
-    @property
-    def num_checks(self) -> int:
-        """Number of parity checks (stabilizers) in this code."""
-        return self.matrix.shape[0]
 
     def __len__(self) -> int:
         """The block length of this code."""
@@ -619,6 +625,18 @@ class QuditCode(AbstractCode):
         matrix_z = self.matrix[:, : len(self)].view(np.ndarray)
         matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
         return max(np.count_nonzero(row) for row in matrix)
+
+    @classmethod
+    def equiv(cls, code_a: QuditCode, code_b: QuditCode) -> bool:
+        """Are two quantum codes equivalent?  That is, do they have the same code space?"""
+        return code_a.field is code_b.field and np.array_equal(
+            code_a.canonicalized().matrix, code_b.canonicalized().matrix
+        )
+
+    def canonicalized(self) -> QuditCode:
+        """The same code with its parity matrix in reduced row echelon form."""
+        rows = [row for row in self.matrix.row_reduce() if np.any(row)]
+        return QuditCode(rows, self.field.order)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -675,7 +693,9 @@ class QuditCode(AbstractCode):
         return stabilizers
 
     @classmethod
-    def from_stabilizers(cls, *stabilizers: str, field: int | None = None) -> QuditCode:
+    def from_stabilizers(
+        cls, *stabilizers: str, field: int | None = None, skip_validation: bool = False
+    ) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
         check_ops = [stabilizer.split() for stabilizer in stabilizers]
@@ -690,16 +710,20 @@ class QuditCode(AbstractCode):
             for qudit, op in enumerate(check_op):
                 matrix[check, :, qudit] = operator.from_string(op).value[::-1]
 
-        return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
+        return QuditCode(
+            matrix.reshape(num_checks, 2 * num_qudits), field, skip_validation=skip_validation
+        )
 
-    def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
+    def conjugated(
+        self, qudits: slice | Sequence[int] | None = None, *, skip_validation: bool = False
+    ) -> QuditCode:
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
         num_checks = len(self.matrix)
         matrix = np.reshape(self.matrix.copy(), (num_checks, 2, -1))
-        matrix[:, :, qudits] = np.roll(matrix[:, :, qudits], 1, axis=1)
-        return QuditCode(matrix.reshape(num_checks, -1))
+        matrix[:, :, qudits] = matrix[:, ::-1, qudits]
+        return QuditCode(matrix.reshape(num_checks, -1), skip_validation=skip_validation)
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
@@ -953,6 +977,15 @@ class CSSCode(QuditCode):
         ):
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
+    def __eq__(self, other: object) -> bool:
+        """Equality test between two code instances."""
+        return (
+            isinstance(other, type(self))
+            and self._field is other._field
+            and np.array_equal(self.code_x._matrix, other.code_x._matrix)
+            and np.array_equal(self.code_z._matrix, other.code_z._matrix)
+        )
+
     def __str__(self) -> str:
         """Human-readable representation of this code."""
         text = ""
@@ -985,6 +1018,10 @@ class CSSCode(QuditCode):
         """Z-type parity checks."""
         return self.code_z.matrix
 
+    def canonicalized(self) -> CSSCode:
+        """The same code with its parity matrix in reduced row echelon form."""
+        return CSSCode(self.code_x.canonicalized(), self.code_z.canonicalized())
+
     @property
     def num_checks_x(self) -> int:
         """Number of X-type parity checks in this code."""
@@ -1000,8 +1037,7 @@ class CSSCode(QuditCode):
         """Number of parity checks in this code."""
         return self.num_checks_x + self.num_checks_z
 
-    @property
-    def num_qudits(self) -> int:
+    def __len__(self) -> int:
         """Number of data qudits in this code."""
         return self.matrix_x.shape[1]
 
