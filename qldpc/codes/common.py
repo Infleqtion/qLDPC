@@ -126,8 +126,8 @@ class AbstractCode(abc.ABC):
 
         Equivalently, the number of linearly independent parity checks in this code.
         """
-        matrix_RREF = self.matrix.row_reduce()
-        nonzero_rows = np.any(matrix_RREF, axis=1)
+        matrix_rref = self.matrix.row_reduce()
+        nonzero_rows = np.any(matrix_rref, axis=1)
         return np.count_nonzero(nonzero_rows)
 
     @property
@@ -1379,12 +1379,12 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[i
     """Perform Gaussian elimination on a matrix.
 
     Returns:
-        matrix_RREF: the reduced row echelon form of the matrix.
+        matrix_rref: the reduced row echelon form of the matrix.
         pivot: the "pivot" columns of the reduced matrix.
 
     In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
-    occur at a unique columns for each row; these columns are the "pivots" of matrix_RREF.
+    occur at a unique columns for each row; these columns are the "pivots" of matrix_rref.
     """
-    matrix_RREF = matrix.row_reduce()
-    pivots = [int(np.argmax(row != 0)) for row in matrix_RREF if np.any(row)]
-    return matrix_RREF, pivots
+    matrix_rref = matrix.row_reduce()
+    pivots = [int(np.argmax(row != 0)) for row in matrix_rref if np.any(row)]
+    return matrix_rref, pivots
