@@ -604,18 +604,6 @@ class QuditCode(AbstractCode):
         """The block length of this code."""
         return self.matrix.shape[1] // 2
 
-    @classmethod
-    def equiv(cls, code_a: QuditCode, code_b: QuditCode) -> bool:
-        """Are two quantum codes equivalent?"""
-        return code_a.field is code_b.field and np.array_equal(
-            code_a.canonicalized().matrix, code_b.canonicalized().matrix
-        )
-
-    def canonicalized(self) -> QuditCode:
-        """The same code with its parity matrix in reduced row echelon form."""
-        rows = [row for row in self.matrix.row_reduce() if np.any(row)]
-        return QuditCode(rows, self.field.order)
-
     @property
     def num_qudits(self) -> int:
         """Number of data qudits in this code."""
@@ -637,6 +625,18 @@ class QuditCode(AbstractCode):
         matrix_z = self.matrix[:, : len(self)].view(np.ndarray)
         matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
         return max(np.count_nonzero(row) for row in matrix)
+
+    @classmethod
+    def equiv(cls, code_a: QuditCode, code_b: QuditCode) -> bool:
+        """Are two quantum codes equivalent?  That is, do they have the same code space?"""
+        return code_a.field is code_b.field and np.array_equal(
+            code_a.canonicalized().matrix, code_b.canonicalized().matrix
+        )
+
+    def canonicalized(self) -> QuditCode:
+        """The same code with its parity matrix in reduced row echelon form."""
+        rows = [row for row in self.matrix.row_reduce() if np.any(row)]
+        return QuditCode(rows, self.field.order)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
