@@ -22,7 +22,7 @@ import functools
 import itertools
 import random
 from collections.abc import Callable, Sequence
-from typing import Iterator, Literal
+from typing import Any, Iterator, Literal
 
 import galois
 import networkx as nx
@@ -312,15 +312,16 @@ class ClassicalCode(AbstractCode):
         *,
         bound: int | bool | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial code word.
 
         If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
-        upper bound using a randomized algorithm, minimizing over `bound` random trials.  For a
+        upper bound using a randomized algorithm and minimize over `bound` random trials.  For a
         detailed explanation, see the `get_one_distance_bound` method.
 
-        If provided a vector, compute the Hamming distance between the vector and this code.
+        If provided a vector, compute the minimum Hamming distance between this vector and a code
+        word.
 
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
@@ -362,7 +363,7 @@ class ClassicalCode(AbstractCode):
         num_trials: int = 1,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
@@ -376,7 +377,7 @@ class ClassicalCode(AbstractCode):
         return min(distance_bounds, default=self.num_bits)
 
     def get_one_distance_bound(
-        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: object
+        self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: Any
     ) -> int | float:
         """Compute a single upper bound on code distance.
 
@@ -427,7 +428,7 @@ class ClassicalCode(AbstractCode):
         return int(np.count_nonzero(candidate))
 
     def get_code_params(
-        self, *, bound: int | bool | None = None, **decoder_args: object
+        self, *, bound: int | bool | None = None, **decoder_args: Any
     ) -> tuple[int, int, int | float]:
         """Compute the parameters of this code: [n,k,d].
 
@@ -703,7 +704,7 @@ class QuditCode(AbstractCode):
         return QuditCode(matrix.reshape(num_checks, -1))
 
     def get_code_params(
-        self, *, bound: int | bool | None = None, **decoder_args: object
+        self, *, bound: int | bool | None = None, **decoder_args: Any
     ) -> tuple[int, int, int | float]:
         """Compute the parameters of this code: [n,k,d].
 
@@ -726,12 +727,12 @@ class QuditCode(AbstractCode):
         *,
         bound: int | bool | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial logical operator.
 
         If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
-        upper bound using a randomized algorithm, minimizing over `bound` random trials.  For a
+        upper bound using a randomized algorithm and minimize over `bound` random trials.  For a
         detailed explanation, see the `get_one_distance_bound` method.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
@@ -790,7 +791,7 @@ class QuditCode(AbstractCode):
         num_trials: int = 1,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
@@ -809,7 +810,7 @@ class QuditCode(AbstractCode):
         self,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute a single upper bound on code distance."""
         raise NotImplementedError(
@@ -1050,12 +1051,12 @@ class CSSCode(QuditCode):
         *,
         bound: int | bool | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial logical operator.
 
         If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
-        upper bound using a randomized algorithm described in arXiv:2308.07915, minimizing over
+        upper bound using the randomized algorithm described in arXiv:2308.07915, and minimize over
         `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
@@ -1139,7 +1140,7 @@ class CSSCode(QuditCode):
         pauli: PauliXZ | None = None,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
@@ -1160,7 +1161,7 @@ class CSSCode(QuditCode):
         pauli: PauliXZ | None = None,
         *,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: object,
+        **decoder_args: Any,
     ) -> int | float:
         """Compute a single upper bound on code distance.
 
@@ -1357,7 +1358,7 @@ class CSSCode(QuditCode):
 
         return op_a
 
-    def reduce_logical_op(self, pauli: PauliXZ, logical_index: int, **decoder_args: object) -> None:
+    def reduce_logical_op(self, pauli: PauliXZ, logical_index: int, **decoder_args: Any) -> None:
         """Reduce the weight of a logical operator.
 
         A minimal-weight logical operator is found by enforcing that it has a trivial syndrome, and
@@ -1396,7 +1397,7 @@ class CSSCode(QuditCode):
         self._logical_ops[pauli, logical_index, pauli, :] = candidate_logical_op
         self._logical_ops.shape = (2, self.dimension, 2 * self.num_qudits)
 
-    def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: object) -> None:
+    def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: Any) -> None:
         """Reduce the weight of all logical operators."""
         assert pauli is None or pauli in PAULIS_XZ
         if pauli is None:
