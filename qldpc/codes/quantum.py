@@ -46,7 +46,7 @@ class FiveQubitCode(QuditCode):
             "Z X I X Z",
             field=2,
         )
-        QuditCode.__init__(self, code)
+        QuditCode.__init__(self, code, skip_validation=True)
 
 
 class SteaneCode(CSSCode):

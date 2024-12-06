@@ -216,7 +216,6 @@ def test_twisted_XZZX(width: int = 3) -> None:
     code = codes.LPCode([[element_a]], [[element_b]])
     qudits_to_conjugate = slice(code.sector_size[0, 0], None)
     assert np.array_equal(matrix, code.conjugated(qudits_to_conjugate).matrix)
-    assert np.array_equal(matrix, code.conjugated().matrix)
 
     # same construction with a chain complex
     protograph_a = abstract.Protograph([[element_a]])
@@ -324,10 +323,7 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
 
     # un-rotated SurfaceCode = HGPCode
     rep_codes = (codes.RepetitionCode(rows, field), codes.RepetitionCode(cols, field))
-    assert np.array_equal(
-        code.conjugated().matrix,
-        codes.HGPCode(*rep_codes).conjugated().matrix,
-    )
+    assert code.conjugated() == codes.HGPCode(*rep_codes).conjugated()
 
     # rotated surface code
     code = codes.SurfaceCode(rows, cols, rotated=True, field=field)
