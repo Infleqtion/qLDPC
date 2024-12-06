@@ -578,8 +578,8 @@ class QuditCode(AbstractCode):
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
         if not skip_validation:
-            split_shape = (self.num_checks, 2, -1)
-            matrix_xz = self.matrix.reshape(split_shape)[:, ::-1, :].reshape(self.matrix.shape)
+            shape_xz = (self.num_checks, 2, -1)
+            matrix_xz = self.matrix.reshape(shape_xz)[:, ::-1, :].reshape(self.matrix.shape)
             assert not np.any(self.matrix @ matrix_xz.T)
 
     def __eq__(self, other: object) -> bool:

@@ -217,10 +217,15 @@ def test_qudit_code() -> None:
     """Miscellaneous qudit code tests and coverage."""
     code = codes.FiveQubitCode()
     assert code.dimension == 1
+    assert code.get_weight() == 4
     assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
+    # equivlence to code with redundant stabilizers
+    redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
+    assert codes.QuditCode.equiv(code, redundant_code)
+
     # cover calls to the known code exact distance
-    assert code.get_distance() == 3
+    assert code.get_code_params() == (5, 1, 3)
     assert code.get_distance(bound=True) == 3
 
     # "forget" the code distance and recompute
