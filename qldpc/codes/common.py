@@ -344,11 +344,9 @@ class ClassicalCode(AbstractCode):
 
         if vector is not None:
             vector = self.field(vector)
+            return min(np.count_nonzero(word - vector) for word in self.iter_words(skip_zero=True))
 
-        self._exact_distance = min(
-            np.count_nonzero(word if vector is None else word - vector)
-            for word in self.iter_words(skip_zero=vector is None)
-        )
+        self._exact_distance = min(np.count_nonzero(word) for word in self.iter_words())
         return self._exact_distance
 
     def _get_distance_if_known(
