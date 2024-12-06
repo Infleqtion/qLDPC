@@ -130,10 +130,14 @@ def test_distance_classical(bits: int = 3) -> None:
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
     random_vector = np.random.randint(2, size=trivial_code.num_bits)
     assert trivial_code.dimension == 0
-    assert trivial_code.get_distance_bound() is np.nan
     assert trivial_code.get_distance_exact() is np.nan
-    assert trivial_code.get_distance_bound(vector=random_vector) == np.count_nonzero(random_vector)
-    assert trivial_code.get_distance_exact(vector=random_vector) == np.count_nonzero(random_vector)
+    assert trivial_code.get_distance_bound() is np.nan
+    assert (
+        np.count_nonzero(random_vector)
+        == trivial_code.get_distance_exact(vector=random_vector)
+        == trivial_code.get_distance_bound(vector=random_vector)
+        == trivial_code.get_one_distance_bound(vector=random_vector)
+    )
 
 
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
