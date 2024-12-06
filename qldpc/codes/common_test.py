@@ -308,6 +308,7 @@ def test_css_code() -> None:
     assert code.num_checks_x == code_x.num_checks
     assert code.num_checks_z == code_z.num_checks
     assert code.num_checks == code.num_checks_x + code.num_checks_z
+    assert code == codes.CSSCode(code.code_x, code.code_z)
 
     code_z = codes.ClassicalCode.random(4, 2)
     with pytest.raises(ValueError, match="incompatible"):
@@ -352,6 +353,11 @@ def test_css_ops() -> None:
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
     with pytest.raises(ValueError, match="prime number fields"):
         code.reduce_logical_op(Pauli.X, 0)
+
+    # the 2x2 toric code has redundant stabilizers
+    code = codes.ToricCode(2)
+    assert code.num_checks == 4
+    assert codes.CSSCode.equiv(code, codes.CSSCode([[1, 1, 1, 1]], [[1, 1, 1, 1]]))
 
 
 def test_distance_css() -> None:
