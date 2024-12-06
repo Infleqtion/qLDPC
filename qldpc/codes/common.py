@@ -817,7 +817,7 @@ class QuditCode(AbstractCode):
             "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
         )
 
-    def get_logical_ops(self) -> galois.FieldArray:
+    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
@@ -836,9 +836,18 @@ class QuditCode(AbstractCode):
         logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
         (Z-type) operator.
 
+        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        operators of that type.
+
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
         """
+        assert pauli is None or pauli in PAULIS_XZ
+
+        # if requested, retrieve logical operators of one type only
+        if pauli is not None:
+            return self.get_logical_ops()[pauli]
+
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
             return self._logical_ops
