@@ -25,7 +25,7 @@ import numpy as np
 import pytest
 
 from qldpc import codes
-from qldpc.objects import Pauli, QuditOperator
+from qldpc.objects import Pauli
 
 ####################################################################################################
 # classical code tests
@@ -118,8 +118,12 @@ def test_tensor_product(
 def test_distance_classical(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.RepetitionCode(bits, field=2)
+
+    # "forget" the exact code distance
+    rep_code._exact_distance = None
+
     assert rep_code.get_distance(bound=True) == bits
-    assert rep_code.get_distance(bound=False) == bits
+    assert rep_code.get_distance() == bits
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
         dist_bound = rep_code.get_distance_bound(vector=vector)
@@ -130,17 +134,20 @@ def test_distance_classical(bits: int = 3) -> None:
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
     random_vector = np.random.randint(2, size=trivial_code.num_bits)
     assert trivial_code.dimension == 0
-    assert trivial_code.get_distance_bound() is np.nan
     assert trivial_code.get_distance_exact() is np.nan
-    assert trivial_code.get_distance_bound(vector=random_vector) == np.count_nonzero(random_vector)
-    assert trivial_code.get_distance_exact(vector=random_vector) == np.count_nonzero(random_vector)
+    assert trivial_code.get_distance_bound() is np.nan
+    assert (
+        np.count_nonzero(random_vector)
+        == trivial_code.get_distance_exact(vector=random_vector)
+        == trivial_code.get_distance_bound(vector=random_vector)
+        == trivial_code.get_one_distance_bound(vector=random_vector)
+    )
 
 
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     """Conversions between matrix and graph representations of a classical code."""
     code = codes.ClassicalCode.random(bits, checks)
-    graph = codes.ClassicalCode.matrix_to_graph(code.matrix)
-    assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(graph))
+    assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(code.graph))
 
 
 def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
@@ -178,10 +185,10 @@ def test_automorphism() -> None:
 
 def test_code_string() -> None:
     """Human-readable representation of a code."""
-    code = codes.QuditCode([[0]], field=2)
+    code = codes.QuditCode([[0, 1]], field=2)
     assert "qubits" in str(code)
 
-    code = codes.QuditCode([[0]], field=3)
+    code = codes.QuditCode([[0, 1]], field=3)
     assert "GF(3)" in str(code)
 
     code = codes.HGPCode(codes.RepetitionCode(2, field=2))
@@ -193,7 +200,10 @@ def test_code_string() -> None:
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
     """Construct a random (but probably trivial or invalid) QuditCode."""
-    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
+    return codes.QuditCode(
+        codes.ClassicalCode.random(2 * qudits, checks, field).matrix,
+        skip_validation=True,
+    )
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -205,18 +215,41 @@ def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
 
 def test_qudit_code() -> None:
     """Miscellaneous qudit code tests and coverage."""
-    base_code = codes.FiveQubitCode()
-    assert base_code.dimension == 1
-    assert base_code.get_logical_ops(Pauli.X).shape == base_code.get_logical_ops(Pauli.Z).shape
+    code = codes.FiveQubitCode()
+    assert code.dimension == 1
+    assert code.get_weight() == 4
+    assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
-    code = codes.QuditCode.stack(base_code, base_code)
-    assert len(code) == len(base_code) * 2
-    assert code.dimension == base_code.dimension * 2
+    # equivlence to code with redundant stabilizers
+    redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
+    assert codes.QuditCode.equiv(code, redundant_code)
+
+    # cover calls to the known code exact distance
+    assert code.get_code_params() == (5, 1, 3)
+    assert code.get_distance(bound=True) == 3
+
+    # "forget" the code distance and recompute
+    code._exact_distance = None
+    assert code.get_distance_exact() == 3
+
+    code._exact_distance = None
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        code.get_distance(bound=True)
+
+    # stacking two codes
+    two_codes = codes.QuditCode.stack(code, code)
+    assert len(two_codes) == len(code) * 2
+    assert two_codes.dimension == code.dimension * 2
 
     # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
-        qudit_code = codes.SurfaceCode(2, field=3)
-        code = codes.QuditCode.stack(base_code, qudit_code)
+        second_code = codes.SurfaceCode(2, field=3)
+        codes.QuditCode.stack(code, second_code)
+
+
+def test_undefined_distance() -> None:
+    """The distance of dimension-0 codes is undefined."""
+    assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -232,24 +265,18 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
     code_a = get_random_qudit_code(bits, checks, field)
     stabilizers = code_a.get_stabilizers()
-    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field)
-    assert np.array_equal(code_a.matrix, code_b.matrix)
+    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field, skip_validation=True)
+    assert code_a == code_b
     assert stabilizers == code_b.get_stabilizers()
 
     with pytest.raises(ValueError, match="different lengths"):
         codes.QuditCode.from_stabilizers("I", "I I", field=field)
 
 
-def test_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
-    """Apply Pauli deformations to a qudit code."""
-    qudits = tuple(qubit for qubit in range(num_qudits) if np.random.randint(2))
-    code = get_random_qudit_code(num_qudits, num_checks, field).conjugated(qudits)
-    assert np.array_equal(code.matrix, code.conjugated().matrix)
-
-    matrix = np.reshape(code.matrix, (num_checks, 2, num_qudits))
-    for node_check, node_qubit, data in code.graph.edges(data=True):
-        vals = data[QuditOperator].value
-        assert tuple(matrix[node_check.index, :, node_qubit.index]) == vals[::-1]
+def test_trivial_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
+    """Trivial local Clifford deformations do not modify a code."""
+    code = get_random_qudit_code(num_qudits, num_checks, field)
+    assert code == code.conjugated(skip_validation=True)
 
 
 def test_qudit_ops() -> None:
@@ -281,6 +308,7 @@ def test_css_code() -> None:
     assert code.num_checks_x == code_x.num_checks
     assert code.num_checks_z == code_z.num_checks
     assert code.num_checks == code.num_checks_x + code.num_checks_z
+    assert code == codes.CSSCode(code.code_x, code.code_z)
 
     code_z = codes.ClassicalCode.random(4, 2)
     with pytest.raises(ValueError, match="incompatible"):
@@ -326,16 +354,17 @@ def test_css_ops() -> None:
     with pytest.raises(ValueError, match="prime number fields"):
         code.reduce_logical_op(Pauli.X, 0)
 
+    # the 2x2 toric code has redundant stabilizers
+    code = codes.ToricCode(2)
+    assert code.num_checks == 4
+    assert codes.CSSCode.equiv(code, codes.CSSCode([[1, 1, 1, 1]], [[1, 1, 1, 1]]))
 
-def test_distance_quantum() -> None:
+
+def test_distance_css() -> None:
     """Distance calculations for CSS codes."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance(bound=True) == 2
     assert code.get_distance(bound=False) == 2
-
-    # assert that the identity is a logical operator
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code))
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code), bound=True)
 
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
