@@ -38,6 +38,7 @@ class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
     def __init__(self) -> None:
+        self._exact_distance = 3
         code = QuditCode.from_stabilizers(
             "X Z Z X I",
             "I X Z Z X",
@@ -52,6 +53,7 @@ class SteaneCode(CSSCode):
     """Smallest quantum error-correcting CSS code."""
 
     def __init__(self) -> None:
+        self._exact_distance_x = self._exact_distance_z = 3
         code = HammingCode(3, field=2)
         CSSCode.__init__(self, code, code)
 

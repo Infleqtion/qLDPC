@@ -118,8 +118,12 @@ def test_tensor_product(
 def test_distance_classical(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.RepetitionCode(bits, field=2)
+
+    # "forget" the exact code distance
+    rep_code._exact_distance = None
+
     assert rep_code.get_distance(bound=True) == bits
-    assert rep_code.get_distance(bound=False) == bits
+    assert rep_code.get_distance() == bits
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
         dist_bound = rep_code.get_distance_bound(vector=vector)
@@ -130,10 +134,14 @@ def test_distance_classical(bits: int = 3) -> None:
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
     random_vector = np.random.randint(2, size=trivial_code.num_bits)
     assert trivial_code.dimension == 0
-    assert trivial_code.get_distance_bound() is np.nan
     assert trivial_code.get_distance_exact() is np.nan
-    assert trivial_code.get_distance_bound(vector=random_vector) == np.count_nonzero(random_vector)
-    assert trivial_code.get_distance_exact(vector=random_vector) == np.count_nonzero(random_vector)
+    assert trivial_code.get_distance_bound() is np.nan
+    assert (
+        np.count_nonzero(random_vector)
+        == trivial_code.get_distance_exact(vector=random_vector)
+        == trivial_code.get_distance_bound(vector=random_vector)
+        == trivial_code.get_one_distance_bound(vector=random_vector)
+    )
 
 
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
@@ -205,18 +213,36 @@ def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
 
 def test_qudit_code() -> None:
     """Miscellaneous qudit code tests and coverage."""
-    base_code = codes.FiveQubitCode()
-    assert base_code.dimension == 1
-    assert base_code.get_logical_ops(Pauli.X).shape == base_code.get_logical_ops(Pauli.Z).shape
+    code = codes.FiveQubitCode()
+    assert code.dimension == 1
+    assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
-    code = codes.QuditCode.stack(base_code, base_code)
-    assert len(code) == len(base_code) * 2
-    assert code.dimension == base_code.dimension * 2
+    # cover calls to the known code exact distance
+    assert code.get_distance() == 3
+    assert code.get_distance(bound=True) == 3
+
+    # "forget" the code distance and recompute
+    code._exact_distance = None
+    assert code.get_distance_exact() == 3
+
+    code._exact_distance = None
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        code.get_distance(bound=True)
+
+    # stacking two codes
+    two_codes = codes.QuditCode.stack(code, code)
+    assert len(two_codes) == len(code) * 2
+    assert two_codes.dimension == code.dimension * 2
 
     # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
-        qudit_code = codes.SurfaceCode(2, field=3)
-        code = codes.QuditCode.stack(base_code, qudit_code)
+        second_code = codes.SurfaceCode(2, field=3)
+        codes.QuditCode.stack(code, second_code)
+
+
+def test_undefined_distance() -> None:
+    """The distance of dimension-0 codes is undefined."""
+    assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -327,15 +353,11 @@ def test_css_ops() -> None:
         code.reduce_logical_op(Pauli.X, 0)
 
 
-def test_distance_quantum() -> None:
+def test_distance_css() -> None:
     """Distance calculations for CSS codes."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance(bound=True) == 2
     assert code.get_distance(bound=False) == 2
-
-    # assert that the identity is a logical operator
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code))
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code), bound=True)
 
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])

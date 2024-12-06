@@ -39,6 +39,7 @@ class RepetitionCode(ClassicalCode):
         for row in range(bits - 1):
             self._matrix[row, row] = 1
             self._matrix[row, row + 1] = -self.field(1)
+        self._exact_distance = bits
 
 
 class RingCode(ClassicalCode):
@@ -50,6 +51,7 @@ class RingCode(ClassicalCode):
         for row in range(bits):
             self._matrix[row, row] = 1
             self._matrix[row, (row + 1) % bits] = -self.field(1)
+        self._exact_distance = bits
 
 
 class HammingCode(ClassicalCode):
@@ -73,6 +75,7 @@ class HammingCode(ClassicalCode):
                 for rest in itertools.product(range(self.field.order), repeat=rank - top_row - 1)
             ]
             self._matrix = self.field(strings).T
+        self._exact_distance = 3
 
 
 class ReedSolomonCode(ClassicalCode):

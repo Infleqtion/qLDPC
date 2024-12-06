@@ -316,6 +316,7 @@ def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
 
     # "ordinary"/original surface code
     code = codes.SurfaceCode(rows, cols, rotated=False, field=field)
+    code._exact_distance_x = code._exact_distance_z = None  # "forget" the code distances
     assert code.dimension == 1
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
     assert code.get_distance(Pauli.X, bound=10) == cols
