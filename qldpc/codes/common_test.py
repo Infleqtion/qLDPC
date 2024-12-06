@@ -120,7 +120,7 @@ def test_distance_classical(bits: int = 3) -> None:
     rep_code = codes.RepetitionCode(bits, field=2)
 
     # "forget" the exact code distance
-    rep_code._distance = None
+    rep_code._exact_distance = None
 
     assert rep_code.get_distance(bound=True) == bits
     assert rep_code.get_distance() == bits
