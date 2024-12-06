@@ -255,10 +255,11 @@ class ClassicalCode(AbstractCode):
         return self.field(list(vectors)) @ self.generator
 
     def iter_words(self, skip_zero: bool = False) -> Iterator[galois.FieldArray]:
-        """Code words of this code."""
+        """Iterate over the code words of this code."""
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
         if skip_zero:
-            next(vectors)  # skip the all-0 vector
+            # skip the all-0 vector
+            next(vectors)
         for vector in vectors:
             yield self.field(vector) @ self.generator
 
