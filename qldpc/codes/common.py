@@ -759,7 +759,7 @@ class QuditCode(AbstractCode):
         """Compute the minimal weight of a nontrivial code word by brute force.
 
         If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) X-type or Z-type logical operator, as applicable.
+        logical operator.
         """
         if vector is not None:
             vector = self.field(vector)
