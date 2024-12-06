@@ -344,9 +344,11 @@ class ClassicalCode(AbstractCode):
 
         if vector is not None:
             vector = self.field(vector)
-            return min(np.count_nonzero(word - vector) for word in self.iter_words(skip_zero=True))
+            return min(np.count_nonzero(word - vector) for word in self.iter_words())
 
-        self._exact_distance = min(np.count_nonzero(word) for word in self.iter_words())
+        self._exact_distance = min(
+            np.count_nonzero(word) for word in self.iter_words(skip_zero=True)
+        )
         return self._exact_distance
 
     def _get_distance_if_known(
@@ -403,9 +405,7 @@ class ClassicalCode(AbstractCode):
             # find the distance of the given vector from a code word
             _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
             correction = decoder.decode(
-                self.matrix,
-                self.matrix @ self.field(vector),
-                **decoder_args,
+                self.matrix, self.matrix @ self.field(vector), **decoder_args
             )
             return int(np.count_nonzero(correction))
 

@@ -118,8 +118,12 @@ def test_tensor_product(
 def test_distance_classical(bits: int = 3) -> None:
     """Distance of a vector from a classical code."""
     rep_code = codes.RepetitionCode(bits, field=2)
+
+    # "forget" the exact code distance
+    rep_code._distance = None
+
     assert rep_code.get_distance(bound=True) == bits
-    assert rep_code.get_distance(bound=False) == bits
+    assert rep_code.get_distance() == bits
     for vector in itertools.product(rep_code.field.elements, repeat=bits):
         weight = np.count_nonzero(vector)
         dist_bound = rep_code.get_distance_bound(vector=vector)
