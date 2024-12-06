@@ -333,10 +333,6 @@ def test_distance_quantum() -> None:
     assert code.get_distance(bound=True) == 2
     assert code.get_distance(bound=False) == 2
 
-    # assert that the identity is a logical operator
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code))
-    assert 0 == code.get_distance(Pauli.X, vector=[0] * len(code), bound=True)
-
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
     code = codes.HGPCode(trivial_code)

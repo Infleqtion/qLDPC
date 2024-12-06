@@ -69,6 +69,8 @@ class AbstractCode(abc.ABC):
 
     _field: type[galois.FieldArray]
 
+    _exact_distance: int | float | None = None
+
     def __init__(
         self,
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
@@ -128,10 +130,22 @@ class AbstractCode(abc.ABC):
         nonzero_rows = np.any(matrix_RREF, axis=1)
         return np.count_nonzero(nonzero_rows)
 
+    @property
+    def dimension(self) -> int:
+        """The number of logical (qu)dits encoded by this code."""
+        return len(self) - self.rank
+
     @functools.cached_property
     def graph(self) -> nx.DiGraph:
         """Tanner graph of this code."""
         return self.matrix_to_graph(self.matrix)
+
+    def _get_distance_if_known(self) -> int | float | None:
+        """Retrieve exact distance, if known.  Otherwise return None."""
+        if self.dimension == 0:
+            # the distance of dimension-0 codes is undefined
+            self._exact_distance = np.nan
+        return self._exact_distance
 
     @abc.abstractmethod
     def __len__(self) -> int:
@@ -302,11 +316,6 @@ class ClassicalCode(AbstractCode):
         """Number of data bits in this code."""
         return len(self)
 
-    @property
-    def dimension(self) -> int:
-        """The number of logical bits encoded by this code."""
-        return self.num_bits - self.rank
-
     def get_distance(
         self,
         *,
@@ -316,12 +325,12 @@ class ClassicalCode(AbstractCode):
     ) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial code word.
 
-        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
-        upper bound using a randomized algorithm and minimize over `bound` random trials.  For a
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute
+        upper bounds using a randomized algorithm and minimize over `bound` random trials.  For a
         detailed explanation, see the `get_one_distance_bound` method.
 
-        If provided a vector, compute the minimum Hamming distance between this vector and a code
-        word.
+        If provided a vector, compute (or bound) the minimum Hamming distance between this vector
+        and a code word.
 
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
@@ -329,17 +338,10 @@ class ClassicalCode(AbstractCode):
             return self.get_distance_exact(vector=vector)
         return self.get_distance_bound(num_trials=int(bound), vector=vector, **decoder_args)
 
-    def _get_distance_if_known(self) -> int | float | None:
-        """Retrieve exact distance, if known.  Otherwise return None."""
-        if self.dimension == 0:
-            # the distance of dimension-0 codes is undefined
-            self._exact_distance = np.nan
-        return self._exact_distance
-
     def get_distance_exact(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
     ) -> int | float:
-        """Compute the minimal weight of a nontrivial code word by brute force.
+        """Compute the minimum weight of a nontrivial code word by brute force.
 
         If passed a vector, compute the minimal Hamming distance between the vector and a code word.
         """
@@ -608,17 +610,12 @@ class QuditCode(AbstractCode):
                 "You asked for the number of qubits in this code, but this code is built out of "
                 rf"{self.field.order}-dimensional qudits.\nTry calling {type(self)}.num_qudits."
             )
-        return self.num_qudits
-
-    @property
-    def dimension(self) -> int:
-        """The number of logical qudits encoded by this code."""
-        return self.num_qudits - self.rank
+        return len(self)
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
-        matrix_x = self.matrix[:, self.num_qudits :].view(np.ndarray)
-        matrix_z = self.matrix[:, : self.num_qudits].view(np.ndarray)
+        matrix_x = self.matrix[:, len(self) :].view(np.ndarray)
+        matrix_z = self.matrix[:, : len(self)].view(np.ndarray)
         matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
         return max(np.count_nonzero(row) for row in matrix)
 
@@ -722,96 +719,43 @@ class QuditCode(AbstractCode):
         distance = self.get_distance(bound=bound, vector=None, **decoder_args)
         return self.num_qudits, self.dimension, distance
 
-    def get_distance(
-        self,
-        *,
-        bound: int | bool | None = None,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: Any,
-    ) -> int | float:
+    def get_distance(self, *, bound: int | bool | None = None, **decoder_args: Any) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial logical operator.
 
-        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
-        upper bound using a randomized algorithm and minimize over `bound` random trials.  For a
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute
+        upper bounds using a randomized algorithm and minimize over `bound` random trials.  For a
         detailed explanation, see the `get_one_distance_bound` method.
-
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) logical operator.
-
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
         if not bound:
-            return self.get_distance_exact(vector=vector)
-        return self.get_distance_bound(num_trials=int(bound), vector=vector, **decoder_args)
+            return self.get_distance_exact()
+        return self.get_distance_bound(num_trials=int(bound), **decoder_args)
 
-    def _get_distance_if_known(self) -> int | float | None:
-        """Retrieve exact distance, if known.  Otherwise return None."""
-        if self.dimension == 0:
-            # the distance of dimension-0 codes is undefined
-            self._exact_distance = np.nan
-        return self._exact_distance
-
-    def get_distance_exact(
-        self,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-    ) -> int | float:
-        """Compute the minimal weight of a nontrivial code word by brute force.
-
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        logical operator.
-        """
-        if vector is not None:
-            vector = self.field(vector)
-            min_distance = self.num_qudits
-            for word in ClassicalCode(self.matrix).iter_words():
-                difference = word - vector
-                support_x = difference[: self.num_qubits].view(np.ndarray)
-                support_z = difference[self.num_qubits :].view(np.ndarray)
-                support = support_x + support_z  # nonzero on the support of difference
-                min_distance = min(min_distance, np.count_nonzero(support))
-            return min_distance
-
+    def get_distance_exact(self) -> int | float:
+        """Compute the minimum weight of a nontrivial logical operator by brute force."""
         # if we know the exact code distance, return it
         if (known_distance := self._get_distance_if_known()) is not None:
             return known_distance
 
-        minimum_weight = self.num_qudits
+        minimum_weight = len(self)
         for word in ClassicalCode(self.matrix).iter_words(skip_zero=True):
-            support_x = word[: self.num_qudits].view(np.ndarray)
-            support_z = word[self.num_qudits :].view(np.ndarray)
+            support_x = word[: len(self)].view(np.ndarray)
+            support_z = word[len(self) :].view(np.ndarray)
             support = support_x + support_z  # nonzero wherever a word addresses a qudit
             minimum_weight = min(minimum_weight, np.count_nonzero(support))
 
         self._exact_distance = minimum_weight
         return minimum_weight
 
-    def get_distance_bound(
-        self,
-        num_trials: int = 1,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: Any,
-    ) -> int | float:
+    def get_distance_bound(self, num_trials: int = 1, **decoder_args: Any) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) X-type or Z-type logical operator, as applicable.
-
-        Additional arguments, if applicable, are passed to a decoder in the `get_one_distance_bound`
-        method.
+        Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
-        distance_bounds = (
-            self.get_one_distance_bound(vector=vector, **decoder_args) for _ in range(num_trials)
-        )
-        return min(distance_bounds, default=self.num_qudits)
+        distance_bounds = (self.get_one_distance_bound(**decoder_args) for _ in range(num_trials))
+        return min(distance_bounds, default=len(self))
 
-    def get_one_distance_bound(
-        self,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-        **decoder_args: Any,
-    ) -> int | float:
+    def get_one_distance_bound(self, **decoder_args: Any) -> int | float:
         """Compute a single upper bound on code distance."""
         raise NotImplementedError(
             "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
@@ -1047,83 +991,46 @@ class CSSCode(QuditCode):
         """Number of data qudits in this code."""
         return self.matrix_x.shape[1]
 
-    @property
-    def dimension(self) -> int:
-        """Number of logical qudits encoded by this code."""
+    @functools.cached_property
+    def rank(self) -> int:
+        """Rank of this code's parity check matrix.
+
+        Equivalently, the number of linearly independent parity checks in this code.
+        """
         rank_x = self.code_x.rank
         rank_z = rank_x if self._balanced_codes else self.code_z.rank
-        return self.num_qudits - rank_x - rank_z
+        return rank_x + rank_z
 
     def get_distance(
         self,
         pauli: PauliXZ | None = None,
         *,
         bound: int | bool | None = None,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: Any,
     ) -> int | float:
         """Compute (or upper bound) the minimal weight of a nontrivial logical operator.
 
-        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
-        upper bound using the randomized algorithm described in arXiv:2308.07915, and minimize over
-        `bound` random trials.  For a detailed explanation, see `CSSCode.get_one_distance_bound`.
+        If `pauli is not None`, compute the distance of the subcode with `pauli`-type parity checks.
 
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) X-type or Z-type logical operator, as applicable.
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute
+        upper bounds using a randomized algorithm and minimize over `bound` random trials.  For a
+        detailed explanation, see the `get_one_distance_bound` method.
 
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
         if not bound:
-            return self.get_distance_exact(pauli, vector=vector)
-        return self.get_distance_bound(
-            num_trials=int(bound), pauli=pauli, vector=vector, **decoder_args
-        )
+            return self.get_distance_exact(pauli)
+        return self.get_distance_bound(num_trials=int(bound), pauli=pauli, **decoder_args)
 
-    def _get_distance_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
-        """Retrieve exact distance, if known.  Otherwise return None."""
-        if self.dimension == 0:
-            # the distances of dimension-0 codes are undefined
-            self._exact_distance_x = self._exact_distance_z = np.nan
-        if pauli == Pauli.X:
-            return self._exact_distance_x
-        elif pauli == Pauli.Z:
-            return self._exact_distance_z
-        return (
-            min(self._exact_distance_x, self._exact_distance_z)
-            if self._exact_distance_x is not None and self._exact_distance_z is not None
-            else None
-        )
+    def get_distance_exact(self, pauli: PauliXZ | None = None) -> int | float:
+        """Compute the minimum weight of a nontrivial logical operator by brute force.
 
-    def get_distance_exact(
-        self,
-        pauli: PauliXZ | None = None,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
-    ) -> int | float:
-        """Compute the minimal weight of a nontrivial code word by brute force.
-
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) X-type or Z-type logical operator, as applicable.
+        If `pauli is not None`, compute the distance of the subcode with `pauli`-type parity checks.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
         if pauli is None:
-            return min(
-                self.get_distance_exact(Pauli.X, vector=vector),
-                self.get_distance_exact(Pauli.Z, vector=vector),
-            )
-
-        if vector is not None:
-            vector = self.field(vector)
-            code_z = self.code_z if pauli == Pauli.X else self.code_x
-            min_distance = self.num_qudits
-            for word in ClassicalCode(self.matrix).iter_words():
-                difference = word - vector
-                support_x = difference[: self.num_qubits].view(np.ndarray)
-                support_z = difference[self.num_qubits :].view(np.ndarray)
-                support = support_x + support_z  # nonzero on the support of difference
-                min_distance = min(min_distance, np.count_nonzero(support))
-            return min_distance
+            return min(self.get_distance_exact(Pauli.X), self.get_distance_exact(Pauli.Z))
 
         # if we know the exact code distance, return it
         if (known_distance := self._get_distance_if_known(pauli)) is not None:
@@ -1143,39 +1050,42 @@ class CSSCode(QuditCode):
             self._exact_distance_z = distance
         return distance
 
+    def _get_distance_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
+        """Retrieve exact distance, if known.  Otherwise return None."""
+        if self.dimension == 0:
+            # the distances of dimension-0 codes are undefined
+            self._exact_distance_x = self._exact_distance_z = np.nan
+        if pauli == Pauli.X:
+            return self._exact_distance_x
+        elif pauli == Pauli.Z:
+            return self._exact_distance_z
+        return (
+            min(self._exact_distance_x, self._exact_distance_z)
+            if self._exact_distance_x is not None and self._exact_distance_z is not None
+            else None
+        )
+
     def get_distance_bound(
         self,
         num_trials: int = 1,
         pauli: PauliXZ | None = None,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: Any,
     ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) X-type or Z-type logical operator, as applicable.
-
-        Additional arguments, if applicable, are passed to a decoder in
-        `CSSCode.get_one_distance_bound`.
+        Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
         distance_bounds = (
-            self.get_one_distance_bound(pauli, vector=vector, **decoder_args)
-            for _ in range(num_trials)
+            self.get_one_distance_bound(pauli, **decoder_args) for _ in range(num_trials)
         )
         return min(distance_bounds, default=self.num_qudits)
 
     def get_one_distance_bound(
         self,
         pauli: PauliXZ | None = None,
-        *,
-        vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: Any,
     ) -> int | float:
         """Compute a single upper bound on code distance.
-
-        If provided a vector, compute the minimum Hamming distance between this vector and a
-        (possibly trivial) X-type or Z-type logical operator, as applicable.
 
         Additional arguments, if applicable, are passed to a decoder.
 
@@ -1209,23 +1119,13 @@ class CSSCode(QuditCode):
         pauli = pauli or random.choice(PAULIS_XZ)
         assert pauli in PAULIS_XZ
 
+        # if we know the exact code distance, return it
+        if (known_distance := self._get_distance_if_known(pauli)) is not None:
+            return known_distance
+
         # define code_z and pauli_z as if we are computing X-distance
         code_z = self.code_z if pauli == Pauli.X else self.code_x
         pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
-
-        if vector is not None:
-            # find the distance of the given vector from a logical X-type operator
-            _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
-            correction = decoder.decode(
-                code_z.matrix,
-                code_z.matrix @ self.field(vector),
-                **decoder_args,
-            )
-            return int(np.count_nonzero(correction))
-
-        # if we know the exact code distance, return it
-        if (known_distance := self._get_distance_if_known()) is not None:
-            return known_distance
 
         # construct the effective syndrome
         effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
