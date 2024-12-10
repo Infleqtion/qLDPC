@@ -97,6 +97,44 @@ def test_bivariate_bicycle_codes() -> None:
         codes.BBCode({}, x, y + z)
 
 
+def test_bbcode_toric_distance() -> None:
+    """In a toric layout of a code, check qubits address their nearest neighbors."""
+    from sympy.abc import x, y
+
+    code = codes.BBCode({x: 6, y: 6}, x**3 + y + y**2, y**3 + x + x**2)
+    for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
+        code = codes.BBCode(orders, poly_a, poly_b)
+        break
+
+    array_shape = tuple(2 * order for order in code.orders)  # dimensions of qubit array
+    for node in code.graph.nodes:
+        if code.graph.out_degree(node) == 0:
+            # this is a data qubit
+            continue
+
+        # identify the position of this check qubit
+        node_label = code.get_node_label(node)
+        node_pos = code.get_qubit_pos(node_label)
+
+        # get all L1 distances to the data qubits addressed by this check qubit
+        neighbor_dists = []
+        for neighbor in code.graph.neighbors(node):
+            neighbor_label = code.get_node_label(neighbor)
+            neighbor_pos = code.get_qubit_pos(neighbor_label)
+            dist = get_dist_l1(node_pos, neighbor_pos, array_shape)
+            neighbor_dists.append(dist)
+
+        # assert that this check qubit has 6 neighbors, and that 4 of them are nearby
+        assert len(neighbor_dists) == 6
+        assert neighbor_dists.count(1) == 4
+
+
+def get_dist_l1(pos_a: tuple[int, ...], pos_b: tuple[int, ...], shape: tuple[int, ...]) -> int:
+    """Get the L1 distance between two points on a lattice with periodic boundary conditions."""
+    diffs = [abs(aa - bb) for aa, bb in zip(pos_a, pos_b)]
+    return sum(min(diff, length - diff) for diff, length in zip(diffs, shape))
+
+
 def test_quasi_cyclic_codes() -> None:
     """Multivariave versions of the bicycle codes in arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y
