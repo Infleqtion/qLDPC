@@ -138,13 +138,16 @@ def test_bbcode_toric_distance() -> None:
 
 
 def get_dist_l1(
-    pos_a: tuple[int, ...], pos_b: tuple[int, ...], shape: tuple[int, ...] | None = None
+    pos_a: tuple[int, ...], pos_b: tuple[int, ...], torus_shape: tuple[int, ...] | None = None
 ) -> int:
-    """Get the L1 distance between two points, possibly with periodic boundary conditions."""
+    """Get the L1 distance between two points on a lattice.
+
+    If provided a torus_shape, the lattice has periodic boundary conditions.
+    """
     diffs = [abs(aa - bb) for aa, bb in zip(pos_a, pos_b)]
-    if shape is None:
+    if torus_shape is None:
         return sum(diffs)
-    return sum(min(diff, length - diff) for diff, length in zip(diffs, shape))
+    return sum(min(diff, length - diff) for diff, length in zip(diffs, torus_shape))
 
 
 def test_quasi_cyclic_codes() -> None:
