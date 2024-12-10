@@ -113,11 +113,9 @@ def test_bbcode_toric_distance() -> None:
             # this is a data qubit
             continue
 
-        # identify the position of this check qubit
-        node_pos = code.get_qubit_pos(node)
-
         # get all L1 distances to the data qubits addressed by this check qubit
         neighbor_dists = []
+        node_pos = code.get_qubit_pos(node)
         for neighbor in code.graph.neighbors(node):
             neighbor_pos = code.get_qubit_pos(neighbor)
             dist = get_dist_l1(node_pos, neighbor_pos, array_shape)
@@ -127,10 +125,25 @@ def test_bbcode_toric_distance() -> None:
         assert len(neighbor_dists) == 6
         assert neighbor_dists.count(1) == 4
 
+        # get all L1 distances in the "folded" layout of this code
+        neighbor_dists = []
+        node_pos = code.get_qubit_pos(node, folded_layout=True)
+        for neighbor in code.graph.neighbors(node):
+            neighbor_pos = code.get_qubit_pos(neighbor, folded_layout=True)
+            dist = get_dist_l1(node_pos, neighbor_pos)
+            neighbor_dists.append(dist)
 
-def get_dist_l1(pos_a: tuple[int, ...], pos_b: tuple[int, ...], shape: tuple[int, ...]) -> int:
-    """Get the L1 distance between two points on a lattice with periodic boundary conditions."""
+        # assert assert that 4 of the 6 neighbors are still pretty close by
+        assert neighbor_dists.count(1) + neighbor_dists.count(2) >= 4
+
+
+def get_dist_l1(
+    pos_a: tuple[int, ...], pos_b: tuple[int, ...], shape: tuple[int, ...] | None = None
+) -> int:
+    """Get the L1 distance between two points, possibly with periodic boundary conditions."""
     diffs = [abs(aa - bb) for aa, bb in zip(pos_a, pos_b)]
+    if shape is None:
+        return sum(diffs)
     return sum(min(diff, length - diff) for diff, length in zip(diffs, shape))
 
 
