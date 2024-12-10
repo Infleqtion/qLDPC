@@ -101,6 +101,7 @@ def test_bbcode_toric_distance() -> None:
     """In a toric layout of a code, check qubits address their nearest neighbors."""
     from sympy.abc import x, y
 
+    # [[72, 12, 6]] code in Table 3 and Figure 2 of arXiv:2308.07915
     code = codes.BBCode({x: 6, y: 6}, x**3 + y + y**2, y**3 + x + x**2)
     for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
         code = codes.BBCode(orders, poly_a, poly_b)
