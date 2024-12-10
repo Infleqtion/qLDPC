@@ -336,14 +336,16 @@ class BBCode(QCCode):
 
     def get_qubit_pos(
         self,
-        qubit_label: tuple[str, int, int],
+        qubit: Node | tuple[str, int, int],
         folded_layout: bool = False,
     ) -> tuple[int, int]:
         """Get the canonical position of a qubit with the given label.
 
         If a folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
         """
-        sector, aa, bb = qubit_label
+        if isinstance(qubit, Node):
+            qubit = self.get_node_label(qubit)
+        sector, aa, bb = qubit
         assert sector in ["L", "R", "X", "Z"]
 
         xx = 2 * aa + int(sector in ["R", "X"])

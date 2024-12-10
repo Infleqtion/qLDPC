@@ -114,14 +114,12 @@ def test_bbcode_toric_distance() -> None:
             continue
 
         # identify the position of this check qubit
-        node_label = code.get_node_label(node)
-        node_pos = code.get_qubit_pos(node_label)
+        node_pos = code.get_qubit_pos(node)
 
         # get all L1 distances to the data qubits addressed by this check qubit
         neighbor_dists = []
         for neighbor in code.graph.neighbors(node):
-            neighbor_label = code.get_node_label(neighbor)
-            neighbor_pos = code.get_qubit_pos(neighbor_label)
+            neighbor_pos = code.get_qubit_pos(neighbor)
             dist = get_dist_l1(node_pos, neighbor_pos, array_shape)
             neighbor_dists.append(dist)
 
