@@ -97,6 +97,59 @@ def test_bivariate_bicycle_codes() -> None:
         codes.BBCode({}, x, y + z)
 
 
+def test_bbcode_toric_distance() -> None:
+    """In a toric layout of a code, check qubits address their nearest neighbors."""
+    from sympy.abc import x, y
+
+    # [[72, 12, 6]] code in Table 3 and Figure 2 of arXiv:2308.07915
+    code = codes.BBCode({x: 6, y: 6}, x**3 + y + y**2, y**3 + x + x**2)
+    for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
+        code = codes.BBCode(orders, poly_a, poly_b)
+        break
+
+    array_shape = tuple(2 * order for order in code.orders)  # dimensions of qubit array
+    for node in code.graph.nodes:
+        if code.graph.out_degree(node) == 0:
+            # this is a data qubit
+            continue
+
+        # get all L1 distances to the data qubits addressed by this check qubit
+        neighbor_dists = []
+        node_pos = code.get_qubit_pos(node)
+        for neighbor in code.graph.neighbors(node):
+            neighbor_pos = code.get_qubit_pos(neighbor)
+            dist = get_dist_l1(node_pos, neighbor_pos, array_shape)
+            neighbor_dists.append(dist)
+
+        # assert that this check qubit has 6 neighbors, and that 4 of them are nearby
+        assert len(neighbor_dists) == 6
+        assert neighbor_dists.count(1) == 4
+
+        # get all L1 distances in the "folded" layout of this code
+        neighbor_dists = []
+        node_pos = code.get_qubit_pos(node, folded_layout=True)
+        for neighbor in code.graph.neighbors(node):
+            neighbor_pos = code.get_qubit_pos(neighbor, folded_layout=True)
+            dist = get_dist_l1(node_pos, neighbor_pos)
+            neighbor_dists.append(dist)
+
+        # assert assert that 4 of the 6 neighbors are still pretty close by
+        assert neighbor_dists.count(1) + neighbor_dists.count(2) >= 4
+
+
+def get_dist_l1(
+    pos_a: tuple[int, ...], pos_b: tuple[int, ...], torus_shape: tuple[int, ...] | None = None
+) -> int:
+    """Get the L1 distance between two points on a lattice.
+
+    If provided a torus_shape, the lattice has periodic boundary conditions.
+    """
+    diffs = [abs(aa - bb) for aa, bb in zip(pos_a, pos_b)]
+    if torus_shape is None:
+        return sum(diffs)
+    return sum(min(diff, length - diff) for diff, length in zip(diffs, torus_shape))
+
+
 def test_quasi_cyclic_codes() -> None:
     """Multivariave versions of the bicycle codes in arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y
