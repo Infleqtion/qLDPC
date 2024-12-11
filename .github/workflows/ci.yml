@@ -14,7 +14,7 @@ on:
 
 jobs:
   format:
-    name: Formatting check
+    name: Linting check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
@@ -35,28 +35,6 @@ jobs:
       - name: Format
         run: |
           checks/format_.py
-
-  lint:
-    name: Linting check
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
-      - name: Lint
-        run: |
           checks/lint_.py
 
   mypy:
