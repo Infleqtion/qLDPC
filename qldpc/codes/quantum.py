@@ -119,8 +119,10 @@ class QCCode(TBCode):
     A quasi-cyclic code code is defined by...
     [1] a sequence of cyclic group orders, and
     [2] two multivariate polynomials.
-    By default, group orders are associated in lexicographic order with free variables of the
-    polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
+    The polynomials should be sympy expressions such as 1 + x + x * y**2 with sympy.abc variables x
+    and y.  Group orders are, by default, associated with the free variables of the polynomials in
+    lexicographic order.  Group orders can also be assigned to variables explicitly with a
+    dictionary, as in {x: 12, y: 6}.
 
     References:
     - https://errorcorrectionzoo.org/c/quantum_quasi_cyclic
