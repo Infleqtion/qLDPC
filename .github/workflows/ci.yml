@@ -35,6 +35,8 @@ jobs:
       - name: Format
         run: |
           checks/format_.py
+      - name: Lint
+        run: |
           checks/lint_.py
 
   mypy:
