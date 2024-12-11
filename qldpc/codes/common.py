@@ -384,7 +384,7 @@ class ClassicalCode(AbstractCode):
 
     def get_one_distance_bound(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: Any
-    ) -> int | float:
+    ) -> int:
         """Use a randomized algorithm to compute a single upper bound on code distance.
 
         The code distance is the minimum Hamming distance between two code words, or equivalently
@@ -793,7 +793,7 @@ class QuditCode(AbstractCode):
             default=len(self),
         )
 
-    def get_one_distance_bound(self, **decoder_args: Any) -> int | float:
+    def get_one_distance_bound(self, **decoder_args: Any) -> int:
         """Use a randomized algorithm to compute a single upper bound on code distance."""
         raise NotImplementedError(
             "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
@@ -1135,7 +1135,7 @@ class CSSCode(QuditCode):
         self,
         pauli: PauliXZ | None = None,
         **decoder_args: Any,
-    ) -> int | float:
+    ) -> int:
         """Use a randomized algorithm to compute a single upper bound on code distance.
 
         If `pauli is not None`, consider only `pauli`-type logical operators.
