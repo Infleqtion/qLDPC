@@ -382,10 +382,10 @@ class ClassicalCode(AbstractCode):
 
         min_bound = len(self)
         for _ in range(num_trials):
-            new_bound = self.get_one_distance_bound(vector=vector, **decoder_args)
-            min_bound = int(min(min_bound, new_bound))
             if cutoff and min_bound <= cutoff:
                 break
+            new_bound = self.get_one_distance_bound(vector=vector, **decoder_args)
+            min_bound = int(min(min_bound, new_bound))
         return min_bound
 
     def get_one_distance_bound(
@@ -800,10 +800,10 @@ class QuditCode(AbstractCode):
 
         min_bound = len(self)
         for _ in range(num_trials):
-            new_bound = self.get_one_distance_bound(**decoder_args)
-            min_bound = int(min(min_bound, new_bound))
             if cutoff and min_bound <= cutoff:
                 break
+            new_bound = self.get_one_distance_bound(**decoder_args)
+            min_bound = int(min(min_bound, new_bound))
         return min_bound
 
     def get_one_distance_bound(self, **decoder_args: Any) -> int:
@@ -1145,10 +1145,10 @@ class CSSCode(QuditCode):
 
         min_bound = len(self)
         for _ in range(num_trials):
-            new_bound = self.get_one_distance_bound(pauli, **decoder_args)
-            min_bound = int(min(min_bound, new_bound))
             if cutoff and min_bound <= cutoff:
                 break
+            new_bound = self.get_one_distance_bound(pauli, **decoder_args)
+            min_bound = int(min(min_bound, new_bound))
         return min_bound
 
     def get_one_distance_bound(
