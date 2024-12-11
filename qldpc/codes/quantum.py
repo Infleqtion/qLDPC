@@ -261,14 +261,16 @@ class BBCode(QCCode):
     - matrix_z = [B.T, -A.T].
     Here A and B are polynomials of the form A = sum_{i,j} A_{ij} x^i y^j, where
     - A_{ij} is a scalar coefficient (over some finite field),
-    - x and y are, respectively, generators of cyclic groups of orders R_x, R_y, and
+    - x and y are, respectively, generators of cyclic groups of orders R_x and R_y, and
     - the monomial x^i y^j represents a tensor product of cyclic shift matrices.
 
     A bivariate bicycle code is defined by...
     [1] two cyclic group orders, and
     [2] two bivariate polynomials.
-    By default, group orders are associated in lexicographic order with free variables of the
-    polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
+    The polynomials should be sympy expressions such as 1 + x + x * y**2 with sympy.abc variables x
+    and y.  Group orders are, by default, associated with the free variables of the polynomials in
+    lexicographic order.  Group orders can also be assigned to variables explicitly with a
+    dictionary, as in {x: 12, y: 6}.
 
     The polynomials A and B induce a "canonical" layout of the data and check qubits of a BBCode.
     In the canonical layout, qubits are organized into plaquettes of four qubits that look like
