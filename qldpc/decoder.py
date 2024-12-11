@@ -35,7 +35,7 @@ def decode_with_BP_LSD(
     - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2406.18655
     """
-    decoder = ldpc.BpLsdDecoder(
+    decoder = ldpc.bplsd_decoder.BpLsdDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
@@ -54,7 +54,7 @@ def decode_with_BP_OSD(
     - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2005.07016
     """
-    decoder = ldpc.BpOsdDecoder(
+    decoder = ldpc.bposd_decoder.BpOsdDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
@@ -76,7 +76,7 @@ def decode_with_BF(
       - https://arxiv.org/abs/2103.08049
       - https://arxiv.org/abs/2209.01180
     """
-    decoder = ldpc.BeliefFindDecoder(
+    decoder = ldpc.belief_find_decoder.BeliefFindDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
