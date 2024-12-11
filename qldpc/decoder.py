@@ -35,12 +35,12 @@ def decode_with_BP_LSD(
     - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2406.18655
     """
-    bposd_decoder = ldpc.BpOsdDecoder(
+    decoder = ldpc.BpLsdDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
     )
-    return bposd_decoder.decode(syndrome)
+    return decoder.decode(syndrome)
 
 
 def decode_with_BP_OSD(
@@ -54,12 +54,34 @@ def decode_with_BP_OSD(
     - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2005.07016
     """
-    bposd_decoder = ldpc.BpOsdDecoder(
+    decoder = ldpc.BpOsdDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
     )
-    return bposd_decoder.decode(syndrome)
+    return decoder.decode(syndrome)
+
+
+def decode_with_BF(
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    **decoder_args: object,
+) -> npt.NDArray[np.int_]:
+    """Decode with belief finding (BF).
+
+    For details about the BF decoder and its arguments, see:
+    - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
+    - References:
+      - https://arxiv.org/abs/1709.06218
+      - https://arxiv.org/abs/2103.08049
+      - https://arxiv.org/abs/2209.01180
+    """
+    decoder = ldpc.BeliefFindDecoder(
+        matrix,
+        error_rate=decoder_args.pop("error_rate", 0.0),
+        **decoder_args,
+    )
+    return decoder.decode(syndrome)
 
 
 def decode_with_MWPM(
@@ -179,7 +201,7 @@ def decode(
 
     - If passed an explicit decoder, use it.
     - If passed `with_ILP=True`, solve exactly with an integer linear program.
-    - If passed `with_MWPM=True` or `with_BP_OSD=True`, use the corresponding decoder.
+    - If passed `with_MWPM=True`, `with_BF=True`, or `with_BP_OSD=True`, use that decoder.
     - Otherwise, use a BP-LSD decoder.
 
     In all cases, pass the `decoder_args` to the decoder that is used.
@@ -191,6 +213,9 @@ def decode(
         return decode_with_ILP(matrix, syndrome, **decoder_args)
 
     if decoder_args.pop("with_MWPM", False):
+        return decode_with_MWPM(matrix, syndrome, **decoder_args)
+
+    if decoder_args.pop("with_BF", False):
         return decode_with_MWPM(matrix, syndrome, **decoder_args)
 
     if decoder_args.pop("with_BP_OSD", False):
