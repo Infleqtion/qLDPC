@@ -4,4 +4,4 @@ import sys
 import checks_superstaq as checks
 
 if __name__ == "__main__":
-    exit(checks.build_docs.run(*sys.argv[1:], sphinx_paths=["../qldpc"]))
+    exit(checks.build_docs.run(*sys.argv[1:]))

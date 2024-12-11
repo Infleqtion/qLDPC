@@ -25,12 +25,6 @@ import pytest
 
 from qldpc import external
 
-# strip cache wrappers
-assert hasattr(external.groups.get_generators, "__wrapped__")
-assert hasattr(external.groups.get_small_group_number, "__wrapped__")
-external.groups.get_generators = external.groups.get_generators.__wrapped__
-external.groups.get_small_group_number = external.groups.get_small_group_number.__wrapped__
-
 # define global testing variables
 ORDER, INDEX = 2, 1
 GENERATORS = [[(0, 1)]]
@@ -113,35 +107,18 @@ def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
     return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
 
 
-def test_gap_is_installed() -> None:
-    """Is GAP 4 installed?"""
-    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("\n4.12.1")):
-        assert external.groups.gap_is_installed()
-    with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
-        assert not external.groups.gap_is_installed()
-    with unittest.mock.patch("subprocess.run", side_effect=Exception):
-        assert not external.groups.gap_is_installed()
-
-
-def test_get_gap_result() -> None:
-    """Run GAP commands and retrieve the GAP output."""
-    output = "test"
-    with unittest.mock.patch("subprocess.run", return_value=get_mock_process(output)):
-        assert external.groups.get_gap_result().stdout == output
-
-
 def test_get_generators_with_gap() -> None:
     """Retrive generators from GAP 4."""
 
     # GAP is not installed
-    with unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=False):
+    with unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False):
         assert external.groups.get_generators_with_gap(GROUP) is None
 
     # cannot extract cycle from string
     mock_process = get_mock_process("\n(1, 2a)\n")
     with (
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
         pytest.raises(ValueError, match="Cannot extract cycle"),
     ):
         assert external.groups.get_generators_with_gap(GROUP) is None
@@ -149,8 +126,8 @@ def test_get_generators_with_gap() -> None:
     # group not recognized by GAP
     mock_process = get_mock_process("")
     with (
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
         pytest.raises(ValueError, match="not recognized by GAP"),
     ):
         assert external.groups.get_generators_with_gap(GROUP) is None
@@ -158,8 +135,8 @@ def test_get_generators_with_gap() -> None:
     # everything works as expected
     mock_process = get_mock_process("\n(1, 2)\n")
     with (
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
     ):
         assert external.groups.get_generators_with_gap(GROUP) == GENERATORS
 
@@ -206,7 +183,7 @@ def test_get_small_group_number() -> None:
     # fail to determine group number
     with (
         unittest.mock.patch("qldpc.external.groups.maybe_get_webpage", return_value=None),
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         pytest.raises(ValueError, match="Cannot determine"),
     ):
         external.groups.get_small_group_number(order)
@@ -214,14 +191,14 @@ def test_get_small_group_number() -> None:
     # retrieve from GAP
     mock_process = get_mock_process(str(number))
     with (
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
     ):
         assert external.groups.get_small_group_number(order) == number
 
     # retrieve from GroupNames.org
     with (
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         unittest.mock.patch("qldpc.external.groups.maybe_get_webpage", return_value=text),
     ):
         assert external.groups.get_small_group_number(order) == number
@@ -241,8 +218,8 @@ def test_get_small_group_structure() -> None:
     process = get_mock_process("")
     with (
         unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=process),
         pytest.raises(ValueError, match="Group not recognized"),
     ):
         external.groups.get_small_group_structure(order, index)
@@ -251,15 +228,15 @@ def test_get_small_group_structure() -> None:
     process = get_mock_process(structure)
     with (
         unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.groups.get_gap_result", return_value=process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=process),
     ):
         assert external.groups.get_small_group_structure(order, index) == structure
 
     # GAP is not installed
     with (
         unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
-        unittest.mock.patch("qldpc.external.groups.gap_is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
     ):
         structure = f"SmallGroup({order},{index})"
         assert external.groups.get_small_group_structure(order, index) == structure

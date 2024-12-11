@@ -13,11 +13,11 @@ on:
   workflow_call:
 
 jobs:
-  format:
-    name: Formatting check
+  install:
+    name: Installation check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 1
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -28,19 +28,17 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Format
-        run: |
-          checks/format_.py
 
-  lint:
+  format:
     name: Linting check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 1
+    needs: install
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -51,11 +49,14 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Lint
+      - name: Run ruff format
+        run: |
+          checks/format_.py
+      - name: Run ruff check
         run: |
           checks/lint_.py
 
@@ -63,7 +64,8 @@ jobs:
     name: Type check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 1
+    needs: install
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -74,11 +76,11 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Type check
+      - name: Run mypy
         run: |
           checks/mypy_.py
 
@@ -87,6 +89,7 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 3
+    needs: install
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -97,10 +100,10 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Coverage check
+      - name: Run coverage
         run: |
           checks/coverage_.py

@@ -37,17 +37,25 @@ from .common import ClassicalCode, CSSCode, QuditCode
 class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
-    def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
-        code = QuditCode.from_stabilizers("X Z Z X I", "I X Z Z X", "X I X Z Z", "Z X I X Z")
-        QuditCode.__init__(self, code, conjugate=conjugate)
+    def __init__(self) -> None:
+        self._exact_distance = 3
+        code = QuditCode.from_stabilizers(
+            "X Z Z X I",
+            "I X Z Z X",
+            "X I X Z Z",
+            "Z X I X Z",
+            field=2,
+        )
+        QuditCode.__init__(self, code, skip_validation=True)
 
 
 class SteaneCode(CSSCode):
     """Smallest quantum error-correcting CSS code."""
 
-    def __init__(self, *, conjugate: slice | Sequence[int] | None = ()) -> None:
-        code = HammingCode(3)
-        CSSCode.__init__(self, code, code, conjugate=conjugate)
+    def __init__(self) -> None:
+        self._exact_distance_x = self._exact_distance_z = 3
+        code = HammingCode(3, field=2)
+        CSSCode.__init__(self, code, code)
 
 
 ################################################################################
@@ -75,7 +83,6 @@ class TBCode(CSSCode):
         matrix_b: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
-        conjugate: slice | Sequence[int] = (),
         promise_balanced_codes: bool = False,
         skip_validation: bool = False,
     ) -> None:
@@ -92,7 +99,6 @@ class TBCode(CSSCode):
             matrix_x,
             matrix_z,
             field,
-            conjugate=conjugate,
             promise_balanced_codes=promise_balanced_codes,
             skip_validation=True,
         )
@@ -113,8 +119,10 @@ class QCCode(TBCode):
     A quasi-cyclic code code is defined by...
     [1] a sequence of cyclic group orders, and
     [2] two multivariate polynomials.
-    By default, group orders are associated in lexicographic order with free variables of the
-    polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
+    The polynomials should be sympy expressions such as 1 + x + x * y**2 with sympy.abc variables x
+    and y.  Group orders are, by default, associated with the free variables of the polynomials in
+    lexicographic order.  Group orders can also be assigned to variables explicitly with a
+    dictionary, as in {x: 12, y: 6}.
 
     References:
     - https://errorcorrectionzoo.org/c/quantum_quasi_cyclic
@@ -132,8 +140,6 @@ class QCCode(TBCode):
         poly_a: sympy.Basic,
         poly_b: sympy.Basic,
         field: int | None = None,
-        *,
-        conjugate: bool = False,
     ) -> None:
         """Construct a generalized bicycle code."""
         self.poly_a = sympy.Poly(poly_a)
@@ -162,26 +168,15 @@ class QCCode(TBCode):
         self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
-        self.group = abstract.AbelianGroup(*self.orders, product_lift=True)
+        self.group = abstract.AbelianGroup(*self.orders, field=field, product_lift=True)
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
-
-        # if requested, hadamard-transform half of the qudits
-        qudits_to_conjugate: slice | Sequence[int] = (
-            slice(self.group.order, 2 * self.group.order + 1) if conjugate else ()
-        )
 
         # build defining matrices of a generalized bicycle code
         matrix_a = self.eval(self.poly_a).lift()
         matrix_b = self.eval(self.poly_b).lift()
         TBCode.__init__(
-            self,
-            matrix_a,
-            matrix_b,
-            field,
-            conjugate=qudits_to_conjugate,
-            promise_balanced_codes=True,
-            skip_validation=True,
+            self, matrix_a, matrix_b, field, promise_balanced_codes=True, skip_validation=True
         )
 
     def eval(
@@ -204,9 +199,11 @@ class QCCode(TBCode):
     def to_group_member(
         self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
     ) -> abstract.GroupMember:
-        """Convert a sympy expression into an associated member of this code's base group."""
+        """Convert a monomial into an associated member of this code's base group."""
+        coeff, exponents = self.get_coefficient_and_exponents(expression)
+        assert coeff == 1
+
         output = self.group.identity
-        _, exponents = self.get_coefficient_and_exponents(expression)
         for base, exponent in exponents.items():
             output *= self.symbol_gens[base] ** exponent
         return output
@@ -266,34 +263,52 @@ class BBCode(QCCode):
     - matrix_z = [B.T, -A.T].
     Here A and B are polynomials of the form A = sum_{i,j} A_{ij} x^i y^j, where
     - A_{ij} is a scalar coefficient (over some finite field),
-    - x and y are, respectively, generators of cyclic groups of orders R_x, R_y, and
+    - x and y are, respectively, generators of cyclic groups of orders R_x and R_y, and
     - the monomial x^i y^j represents a tensor product of cyclic shift matrices.
 
     A bivariate bicycle code is defined by...
     [1] two cyclic group orders, and
     [2] two bivariate polynomials.
-    By default, group orders are associated in lexicographic order with free variables of the
-    polynomials.  Group orders can also be assigned to variables explicitly with a dictionary.
+    The polynomials should be sympy expressions such as 1 + x + x * y**2 with sympy.abc variables x
+    and y.  Group orders are, by default, associated with the free variables of the polynomials in
+    lexicographic order.  Group orders can also be assigned to variables explicitly with a
+    dictionary, as in {x: 12, y: 6}.
 
-    All qubits of a BBCode can be organized into plaquettes of four qubits that look like:
-        L X
-        Z R
+    The polynomials A and B induce a "canonical" layout of the data and check qubits of a BBCode.
+    In the canonical layout, qubits are organized into plaquettes of four qubits that look like
+        Z L
+        R X
     where L and R are data qubits, and X and Z are check qubits.  More specifically:
     - L and R data qubits are addressed by the left and right halves of matrix_x (or matrix_z).
-    - X check qubits measure X-type parity checks, and are associated with rows of matrix_x.
-    - Z check qubits measure Z-type parity checks, and are associated with rows of matrix_z.
-    These plaquettes are arranged into a rectangle R_x plaquettes wide and R_y plaquettes tall.
+    - X are check qubits measure X-type parity checks, and are associated with rows of matrix_x.
+    - Z are check qubits measure Z-type parity checks, and are associated with rows of matrix_z.
+    These four-qubit plaquettes are arranged into a rectangular grid that is R_x plaquettes tall and
+    R_y plaquettes wide, where R_x and R_y are the orders of the cyclic groups generated by x and y.
+    Each qubit can then be labeled by coordinates (aa, bb) of a plaquette, corresponding to a row
+    and column in the grid, and a "sector" (L, R, X, or Z) within a plaquette.
 
-    The connections between ancilla and data qubits can be determined by inspection of the
-    polynomials A and B.  For example, if A_{ij} != 0, then every X-type parity check addresses an
-    L-type qubit that is (i, j) plaquettes (right, up) -- assuming periodic boundary conditions --
-    and every Z-type parity check addresses an R-type qubit that is (i, j) plaquettes (left, down).
-    The polynomial B indicates where X-type (Z-type) checks address R-type (L-type) qubits.
+    If we associate (L, R) ~ (0, 1), then the qubit addressed by column qq of matrix_x (or matrix_z)
+    has the label (sector, aa, bb) = numpy.unravel_index(qq, [2, R_x, R_y]).  That is, the integer
+    index of a data qubit its label are essentially related to each other by array reshaping.  The
+    label of a check qubit is similarly obtained by associating (X, Z) ~ (0, 1).  In this case, the
+    numerical index of a check qubit is the index of its corresponding row in the full parity check
+    matrix of a BBCode.
+
+    The connections between data and check qubits can be read directly from the polynomials A and B:
+    - If A_{ij} != 0, then...
+      - every X qubit addresses an L qubit that is (i, j) plaquettes (down, right), and
+      - every Z qubit addresses an R qubit that is (i, j) plaquettes (up, left).
+    - If B_{ij} != 0, then...
+      - every X qubit addresses an R qubit that is (i, j) plaquettes (down, right), and
+      - every Z qubit addresses an L qubit that is (i, j) plaquettes (up, left).
+    Here the grid of plaquettes is assumed to have periodic boundary conditions, so going one
+    plaquette "up" from the top row of the grid gets you to the bottom row of the grid.
 
     References:
     - https://errorcorrectionzoo.org/c/qcga
     - https://arxiv.org/abs/2308.07915
     - https://arxiv.org/pdf/2408.10001
+    - https://arxiv.org/pdf/2404.18809
     """
 
     def __init__(
@@ -302,8 +317,6 @@ class BBCode(QCCode):
         poly_a: sympy.Basic,
         poly_b: sympy.Basic,
         field: int | None = None,
-        *,
-        conjugate: bool = False,
     ) -> None:
         """Construct a bivariate bicycle code."""
         self.poly_a = sympy.Poly(poly_a)
@@ -314,7 +327,37 @@ class BBCode(QCCode):
                 "BBCodes should have exactly two cyclic group orders and two symbols, not "
                 f"{len(orders)} orders and {len(symbols)} symbols."
             )
-        QCCode.__init__(self, orders, poly_a, poly_b, field, conjugate=conjugate)
+        QCCode.__init__(self, orders, poly_a, poly_b, field)
+
+    def get_node_label(self, node: Node) -> tuple[str, int, int]:
+        """Convert a node of this code's Tanner graph into a qubit label."""
+        ss, aa, bb = np.unravel_index(node.index, (2,) + self.orders)
+        if node.is_data:
+            sector = "L" if ss == 0 else "R"
+        else:
+            sector = "X" if ss == 0 else "Z"
+        return sector, int(aa), int(bb)
+
+    def get_qubit_pos(
+        self,
+        qubit: Node | tuple[str, int, int],
+        folded_layout: bool = False,
+    ) -> tuple[int, int]:
+        """Get the canonical position of a qubit with the given label.
+
+        If a folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
+        """
+        if isinstance(qubit, Node):
+            qubit = self.get_node_label(qubit)
+        sector, aa, bb = qubit
+        assert sector in ["L", "R", "X", "Z"]
+
+        xx = 2 * aa + int(sector in ["R", "X"])
+        yy = 2 * bb + int(sector in ["L", "X"])
+        if folded_layout:
+            xx = 2 * xx if xx < self.orders[0] else (2 * self.orders[0] - 1 - xx) * 2 + 1
+            yy = 2 * yy if yy < self.orders[1] else (2 * self.orders[1] - 1 - yy) * 2 + 1
+        return xx, yy
 
     def get_equivalent_toric_layout_code_data(
         self,
@@ -326,10 +369,10 @@ class BBCode(QCCode):
         A BBCode has a "manifest" toric layout if it is generated by polynomials that look like
             poly_a = 1 + x + ..., and
             poly_b = 1 + y + ...,
-        These codes are "equivalent" in the sense that they are equal up to a permutation of data
-        and check qubits.
+        These codes are "equivalent" in the sense that they can be obtained from one another by a
+        permutation of data and check qubits.
 
-        To find equivalent BBCodes with manifest toric layouts, we take
+        To an find equivalent BBCode with a manifest toric layouts, we take
             poly_a = sum_j A_j --> poly_a / A_k = 1 + sum_{j != k} A_j/A_k, and
             poly_b = sum_j B_j --> poly_b / B_l = 1 + sum_{j != l} B_j/B_l.
         Each pair of terms (A_j/A_k, B_j/B_l) is then a candidate for generators (g, h).
@@ -348,14 +391,14 @@ class BBCode(QCCode):
         symbol_g = sympy.Symbol("".join(map(str, self.symbols)))
         symbol_h = sympy.Symbol("".join(map(str, self.symbols * 2)))
 
-        # identify individual terms in the polynomials
-        terms_a = self.poly_a.as_expr().args
-        terms_b = self.poly_b.as_expr().args
+        # identify individual monomials (terms without their coefficients) in the polynomials
+        monomials_a = [term.as_coeff_Mul()[1] for term in self.poly_a.as_expr().args]
+        monomials_b = [term.as_coeff_Mul()[1] for term in self.poly_b.as_expr().args]
 
-        # identify monomials that can be combined to obtain a toric layout
+        # identify collections of monomials that can be combined to obtain a toric layout
         toric_params = []
         for (a_1, a_2), (b_1, b_2) in itertools.product(
-            itertools.combinations(terms_a, 2), itertools.combinations(terms_b, 2)
+            itertools.combinations(monomials_a, 2), itertools.combinations(monomials_b, 2)
         ):
             member_g = self.to_group_member(a_2 / a_1)
             member_h = self.to_group_member(b_2 / b_1)
@@ -473,9 +516,9 @@ class HGPCode(CSSCode):
     Edges in G_AB are inherited across rows/columns from G_A and G_B.  For example, if rows r_1 and
     r_2 share an edge in G_A, then the same is true in every column of G_AB.
 
-    By default, the check qudits in sectors (1, 0) of G_AB measure X-type operators.  Likewise with
-    sector (0, 1) and Z-type operators.  If a HGP is constructed with `conjugate==True`, then the
-    types of operators addressing the nodes in sector (1, 1) are switched.
+    By default, the check qudits in sectors...
+    - (1, 0) of G_AB measure X-type operators, and
+    - (0, 1) of G_AB measure Z-type operators.
 
     This class contains two equivalent constructions of an HGPCode:
     - A construction based on Tanner graphs (as discussed above).
@@ -497,8 +540,6 @@ class HGPCode(CSSCode):
         code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
-        *,
-        conjugate: bool = False,
     ) -> None:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
@@ -529,16 +570,11 @@ class HGPCode(CSSCode):
             [code_b.num_bits, code_b.num_checks],
         )
 
-        # identify which qudits to conjugate (Hadamard-transform)
-        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
+        # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
+        self._default_conjugate = slice(self.sector_size[0, 0], None)
 
         CSSCode.__init__(
-            self,
-            matrix_x.astype(int),
-            matrix_z.astype(int),
-            field,
-            conjugate=qudits_to_conjugate,
-            skip_validation=True,
+            self, matrix_x.astype(int), matrix_z.astype(int), field, skip_validation=True
         )
 
     @classmethod
@@ -560,9 +596,7 @@ class HGPCode(CSSCode):
         return matrix_x, matrix_z
 
     @classmethod
-    def get_graph_product(
-        cls, graph_a: nx.DiGraph, graph_b: nx.DiGraph, *, conjugate: bool = False
-    ) -> nx.DiGraph:
+    def get_graph_product(cls, graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> nx.DiGraph:
         """Hypergraph product of two Tanner graphs."""
 
         # start with a cartesian products of the input graphs
@@ -593,10 +627,6 @@ class HGPCode(CSSCode):
             # account for the minus sign in the (0, 0) sector of the Z-type subcode
             if op.value[Pauli.Z] and sector_qudit == (0, 0):
                 op = -op
-
-            # for a conjugated code, flip X <--> Z operators in the (1, 1) sector
-            if conjugate and sector_qudit == (1, 1):
-                op = ~op
 
             graph.add_edge(node_check, node_qudit)
             graph[node_check][node_qudit][QuditOperator] = op
@@ -683,8 +713,6 @@ class LPCode(CSSCode):
         self,
         protograph_a: npt.NDArray[np.object_] | Sequence[Sequence[object]],
         protograph_b: npt.NDArray[np.object_] | Sequence[Sequence[object]] | None = None,
-        *,
-        conjugate: bool = False,
     ) -> None:
         """Lifted product of two protographs, as in arXiv:2012.04068."""
         if protograph_b is None:
@@ -702,15 +730,14 @@ class LPCode(CSSCode):
             protograph_b.shape[::-1],
         )
 
-        # identify which qudits to conjugate (Hadamard-transform)
-        qudits_to_conjugate = slice(self.sector_size[0, 0], None) if conjugate else None
+        # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
+        self._default_conjugate = slice(self.sector_size[0, 0], None)
 
         CSSCode.__init__(
             self,
             abstract.Protograph(matrix_x.astype(object)).lift(),
             abstract.Protograph(matrix_z.astype(object)).lift(),
             field,
-            conjugate=qudits_to_conjugate,
             skip_validation=True,
         )
 
@@ -765,7 +792,6 @@ class QTCode(CSSCode):
         field: int | None = None,
         *,
         bipartite: bool = False,
-        conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         """Construct a quantum Tanner code."""
         code_a = ClassicalCode(code_a, field)
@@ -786,7 +812,7 @@ class QTCode(CSSCode):
         self.code_b = code_b
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
-        CSSCode.__init__(self, code_x, code_z, field, conjugate=conjugate, skip_validation=True)
+        CSSCode.__init__(self, code_x, code_z, field, skip_validation=True)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -796,7 +822,6 @@ class QTCode(CSSCode):
             and other.complex.subset_a == other.complex.subset_a
             and other.complex.subset_b == other.complex.subset_b
             and other.complex.bipartite == other.complex.bipartite
-            and other.conjugated == other.conjugated
         )
 
     @classmethod
@@ -876,7 +901,6 @@ class QTCode(CSSCode):
         field: int | None = None,
         *,
         bipartite: bool = False,
-        conjugate: slice | Sequence[int] | None = (),
         one_subset: bool = False,
         seed: int | None = None,
     ) -> QTCode:
@@ -888,7 +912,7 @@ class QTCode(CSSCode):
         code_b = ClassicalCode(code_b if code_b is not None else ~code_a, field)
         subset_a = group.random_symmetric_subset(code_a.num_bits, seed=seed)
         subset_b = group.random_symmetric_subset(code_b.num_bits) if not one_subset else subset_a
-        return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
+        return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite)
 
     def save(self, path: str, *headers: str) -> None:
         """Save the generating data of this code to a file."""
@@ -921,7 +945,6 @@ class QTCode(CSSCode):
             # write other data
             file.write(f"# base field: {self.field.order}\n")
             file.write(f"# bipartite: {self.complex.bipartite}\n")
-            file.write(f"# conjugate: {self.conjugated}\n")
 
     @classmethod
     def load(cls, path: str) -> QTCode:
@@ -933,9 +956,8 @@ class QTCode(CSSCode):
             lines = file.read().splitlines()
 
         # load miscellaneous data
-        field = ast.literal_eval(lines[-3].split(":")[-1])
-        bipartite = ast.literal_eval(lines[-2].split(":")[-1])
-        conjugate = ast.literal_eval(lines[-1].split(":")[-1])
+        field = ast.literal_eval(lines[-2].split(":")[-1])
+        bipartite = ast.literal_eval(lines[-1].split(":")[-1])
 
         # load integer arrays separated by comments
         arrays = []
@@ -952,7 +974,7 @@ class QTCode(CSSCode):
         subset_b = set(abstract.GroupMember(gen) for gen in arrays[1])
         code_a = ClassicalCode(arrays[2], field)
         code_b = ClassicalCode(arrays[3], field)
-        return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite, conjugate=conjugate)
+        return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite)
 
 
 ################################################################################
@@ -964,9 +986,6 @@ class SurfaceCode(CSSCode):
 
     Actually, there are two variants: "ordinary" and "rotated" surface codes.
     The rotated code is more qubit-efficient.
-
-    If constructed with conjugate=True, every other qubit is Hadamard-transformed in a checkerboard
-    pattern.  The rotated surface code with conjugate=True is the XZZX code in arXiv:2009.07851.
     """
 
     def __init__(
@@ -975,49 +994,35 @@ class SurfaceCode(CSSCode):
         cols: int | None = None,
         rotated: bool = True,
         field: int | None = None,
-        *,
-        conjugate: bool = False,
     ) -> None:
         if cols is None:
             cols = rows
+        self.rows = rows
+        self.cols = cols
 
         # save known distances
         self._exact_distance_x = cols
         self._exact_distance_z = rows
 
-        # which qubits should be Hadamard-transformed?
-        qudits_to_conjugate: slice | Sequence[int] | None
-
         if rotated:
             # rotated surface code
             matrix_x, matrix_z = SurfaceCode.get_rotated_checks(rows, cols)
-
-            if conjugate:
-                # Hadamard-transform qubits in a checkerboard pattern
-                qudits_to_conjugate = [
-                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
-                ]
-
-            else:
-                qudits_to_conjugate = None
+            self._default_conjugate: list[int] | slice = [
+                idx
+                for idx, (row, col) in enumerate(np.ndindex(self.rows, self.cols))
+                if (row + col) % 2
+            ]
 
         else:
             # "original" surface code
             code_a = RepetitionCode(rows, field)
             code_b = RepetitionCode(cols, field)
-            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            code_ab = HGPCode(code_a, code_b, field)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qudits_to_conjugate = code_ab.conjugated
+            self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(
-            self,
-            matrix_x,
-            matrix_z,
-            field=field,
-            conjugate=qudits_to_conjugate,
-            skip_validation=True,
-        )
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field, skip_validation=True)
 
     @classmethod
     def get_rotated_checks(
@@ -1094,17 +1099,14 @@ class ToricCode(CSSCode):
         cols: int | None = None,
         rotated: bool = True,
         field: int | None = None,
-        *,
-        conjugate: bool = False,
     ) -> None:
         if cols is None:
             cols = rows
+        self.rows = rows
+        self.cols = cols
 
         # save known distances
         self._exact_distance_x = self._exact_distance_z = min(rows, cols)
-
-        # which qubits should be Hadamard-transformed?
-        qudits_to_conjugate: slice | Sequence[int] | None
 
         if rotated:
             if rows % 2 or cols % 2:
@@ -1114,33 +1116,22 @@ class ToricCode(CSSCode):
 
             # rotated toric code
             matrix_x, matrix_z = ToricCode.get_rotated_checks(rows, cols)
-
-            if conjugate:
-                # Hadamard-transform qubits in a checkerboard pattern
-                qudits_to_conjugate = [
-                    idx for idx, (row, col) in enumerate(np.ndindex(rows, cols)) if (row + col) % 2
-                ]
-
-            else:
-                qudits_to_conjugate = None
+            self._default_conjugate: list[int] | slice = [
+                idx
+                for idx, (row, col) in enumerate(np.ndindex(self.rows, self.cols))
+                if (row + col) % 2
+            ]
 
         else:
             # "original" toric code
             code_a = RingCode(rows, field)
             code_b = RingCode(cols, field)
-            code_ab = HGPCode(code_a, code_b, field, conjugate=conjugate)
+            code_ab = HGPCode(code_a, code_b, field)
             matrix_x = code_ab.matrix_x
             matrix_z = code_ab.matrix_z
-            qudits_to_conjugate = code_ab.conjugated
+            self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(
-            self,
-            matrix_x,
-            matrix_z,
-            field=field,
-            conjugate=qudits_to_conjugate,
-            skip_validation=True,
-        )
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field, skip_validation=True)
 
     @classmethod
     def get_rotated_checks(
@@ -1187,8 +1178,6 @@ class GeneralizedSurfaceCode(CSSCode):
         dim: int,
         periodic: bool = False,
         field: int | None = None,
-        *,
-        conjugate: slice | Sequence[int] | None = (),
     ) -> None:
         if dim < 2:
             raise ValueError(
@@ -1214,4 +1203,4 @@ class GeneralizedSurfaceCode(CSSCode):
         matrix_x, matrix_z = chain.op(1), chain.op(2).T
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
-        CSSCode.__init__(self, matrix_x, matrix_z, field, conjugate=conjugate, skip_validation=True)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, skip_validation=True)
