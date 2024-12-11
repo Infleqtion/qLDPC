@@ -32,11 +32,13 @@ def decode_with_BP_OSD(
     """Decode with belief propagation with ordered statistics (BP+OSD).
 
     For details about the BD-OSD decoder and its arguments, see:
-    - Documentation: https://roffe.eu/software/ldpc/ldpc/osd_decoder.html
+    - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2005.07016
     """
-    bposd_decoder = ldpc.bposd_decoder(
-        matrix, osd_order=decoder_args.pop("osd_order", 0), **decoder_args
+    bposd_decoder = ldpc.BpOsdDecoder(
+        matrix,
+        error_rate=decoder_args.pop("error_rate", 0.0),
+        **decoder_args,
     )
     return bposd_decoder.decode(syndrome)
 
@@ -95,7 +97,7 @@ def decode_with_ILP(
     result = problem.solve(**decoder_args)
 
     # raise error if the optimization failed
-    if not isinstance(result, float) or not np.isfinite(result):
+    if not isinstance(result, float) or not np.isfinite(result) or variables.value is None:
         message = "Optimal solution to integer linear program could not be found!"
         raise ValueError(message + f"\nSolver output: {result}")
 
@@ -119,8 +121,8 @@ def _build_cvxpy_constraints(
 
     If `lower_bound_row is not None`, treat the constraint at this row index as a lower bound.
     """
-    matrix = matrix % modulus
-    syndrome = syndrome % modulus
+    matrix = np.array(matrix) % modulus
+    syndrome = np.array(syndrome) % modulus
     if lower_bound_row is not None:
         lower_bound_row %= syndrome.size
 

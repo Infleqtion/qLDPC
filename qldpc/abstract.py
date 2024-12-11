@@ -407,14 +407,13 @@ class Group:
                 return singles | doubles
 
     @classmethod
-    def from_name(cls, name: str) -> Group:
+    def from_name(cls, name: str, field: int | None = None) -> Group:
         """Named group in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")
         if standardized_name == "SmallGroup(1,1)":
             return TrivialGroup()
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
-        group = Group(*generators, name=standardized_name)
-        return group
+        return Group(*generators, name=standardized_name, field=field)
 
 
 ################################################################################
@@ -701,8 +700,8 @@ class CyclicGroup(Group):
     basis vector <i| as <i| L(g^p) = < i + p mod R |.
     """
 
-    def __init__(self, order: int) -> None:
-        field = DEFAULT_FIELD_ORDER
+    def __init__(self, order: int, field: int | None = None) -> None:
+        field = field or DEFAULT_FIELD_ORDER
         identity_mat = np.eye(order, dtype=int)
 
         # build lift manually, which is faster than the default_lift
@@ -720,8 +719,8 @@ class AbelianGroup(Group):
     product_lift=True, the group members get lifted to a Kronecker product ⨂_i L(g_i)^{a_i}.
     """
 
-    def __init__(self, *orders: int, product_lift: bool = False) -> None:
-        field = DEFAULT_FIELD_ORDER
+    def __init__(self, *orders: int, field: int | None = None, product_lift: bool = False) -> None:
+        field = field or DEFAULT_FIELD_ORDER
         identity_mats = [np.eye(order, dtype=int) for order in orders]
         vals = [sum(orders[:idx]) for idx in range(len(orders))]
 

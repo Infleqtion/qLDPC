@@ -19,11 +19,17 @@ from __future__ import annotations
 
 import functools
 import os
+import sys
 from collections.abc import Callable, Hashable
 from typing import Any
 
 import diskcache
 import platformdirs
+
+
+def running_with_pytest() -> bool:
+    """Are we currently running  with pytest?"""
+    return "pytest" in sys.modules
 
 
 def get_disk_cache(cache_name: str, *, cache_dir: str | None = None) -> diskcache.Cache:
@@ -39,6 +45,9 @@ def use_disk_cache(
     """Decorator to cache results to disk."""
 
     def decorator(function: Callable[..., Any]) -> Callable[..., Any]:
+        if running_with_pytest():
+            return function
+
         @functools.wraps(function)
         def function_with_cache(*args: Hashable, **kwargs: Hashable) -> Any:
             # retrieve results from cache, if available

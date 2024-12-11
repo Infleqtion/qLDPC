@@ -39,6 +39,7 @@ class RepetitionCode(ClassicalCode):
         for row in range(bits - 1):
             self._matrix[row, row] = 1
             self._matrix[row, row + 1] = -self.field(1)
+        self._exact_distance = bits
 
 
 class RingCode(ClassicalCode):
@@ -50,6 +51,7 @@ class RingCode(ClassicalCode):
         for row in range(bits):
             self._matrix[row, row] = 1
             self._matrix[row, (row + 1) % bits] = -self.field(1)
+        self._exact_distance = bits
 
 
 class HammingCode(ClassicalCode):
@@ -73,6 +75,7 @@ class HammingCode(ClassicalCode):
                 for rest in itertools.product(range(self.field.order), repeat=rank - top_row - 1)
             ]
             self._matrix = self.field(strings).T
+        self._exact_distance = 3
 
 
 class ReedSolomonCode(ClassicalCode):
@@ -97,10 +100,15 @@ class BCHCode(ClassicalCode):
     - https://www.cs.cmu.edu/~venkatg/teaching/codingtheory/notes/notes6.pdf
     """
 
-    def __init__(self, bits: int, dimension: int) -> None:
-        if "0" in format(bits, "b"):
-            raise ValueError("BCH codes only defined for 2^m - 1 bits with integer m.")
-        ClassicalCode.__init__(self, galois.BCH(bits, dimension).H)
+    def __init__(self, length: int, dimension: int, field: int | None = None) -> None:
+        field = field or DEFAULT_FIELD_ORDER
+        length_in_base = np.base_repr(length, base=field)
+        if not length_in_base == str(field - 1) * len(length_in_base):
+            raise ValueError(
+                f"BCH codes over F_{field} are only defined for block lengths {field}^m - 1 with"
+                " integer m."
+            )
+        ClassicalCode.__init__(self, galois.BCH(length, dimension, field=galois.GF(field)).H)
 
 
 class ReedMullerCode(ClassicalCode):

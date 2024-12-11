@@ -24,10 +24,6 @@ import pytest
 
 from qldpc import external
 
-# strip cache wrapper
-assert hasattr(external.codes.get_code, "__wrapped__")
-external.codes.get_code = external.codes.get_code.__wrapped__
-
 
 def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
     """Fake process with the given stdout."""
@@ -39,7 +35,7 @@ def test_get_code() -> None:
 
     # GAP is not installed
     with (
-        unittest.mock.patch("qldpc.external.codes.gap_is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         pytest.raises(ValueError, match="GAP 4 is not installed"),
     ):
         external.codes.get_code("")
@@ -47,8 +43,8 @@ def test_get_code() -> None:
     # GUAVA is not installed
     mock_process = get_mock_process("guava package is not available")
     with (
-        unittest.mock.patch("qldpc.external.codes.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
         pytest.raises(ValueError, match="GAP package GUAVA not available"),
     ):
         external.codes.get_code("")
@@ -56,8 +52,8 @@ def test_get_code() -> None:
     # code not recognized by GUAVA
     mock_process = get_mock_process("\n")
     with (
-        unittest.mock.patch("qldpc.external.codes.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
         pytest.raises(ValueError, match="Code not recognized"),
     ):
         external.codes.get_code("")
@@ -65,15 +61,15 @@ def test_get_code() -> None:
     check = [1, 1]
     mock_process = get_mock_process(f"\n{check}\nGF(3^3)")
     with (
-        unittest.mock.patch("qldpc.external.codes.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
     ):
         assert external.codes.get_code("") == ([check], 27)
 
     mock_process = get_mock_process(r"\nGF(3^3)")
     with (
-        unittest.mock.patch("qldpc.external.codes.gap_is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_gap_result", return_value=mock_process),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_result", return_value=mock_process),
         pytest.raises(ValueError, match="has no parity checks"),
     ):
         assert external.codes.get_code("")
