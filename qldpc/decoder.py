@@ -54,7 +54,7 @@ def decode_with_BP_OSD(
     - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2005.07016
     """
-    decoder = ldpc.bposd_decoder.BpOsdDecoder(
+    decoder = ldpc.BpOsdDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
@@ -216,7 +216,7 @@ def decode(
         return decode_with_MWPM(matrix, syndrome, **decoder_args)
 
     if decoder_args.pop("with_BF", False):
-        return decode_with_MWPM(matrix, syndrome, **decoder_args)
+        return decode_with_BF(matrix, syndrome, **decoder_args)
 
     if decoder_args.pop("with_BP_OSD", False):
         return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
