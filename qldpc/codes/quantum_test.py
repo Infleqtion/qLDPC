@@ -107,9 +107,12 @@ def test_bbcode_toric_distance() -> None:
         code = codes.BBCode(orders, poly_a, poly_b)
         break
 
-    array_shape = tuple(2 * order for order in code.orders)  # dimensions of qubit array
+    # identify the dimensions of the qubit array
+    array_shape = tuple(2 * order for order in code.orders)
+
+    # iterate over check qubit nodes of the Tanner graph
     for node in code.graph.nodes:
-        if code.graph.out_degree(node) == 0:
+        if node.is_data:
             # this is a data qubit
             continue
 
