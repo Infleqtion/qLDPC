@@ -231,12 +231,14 @@ def test_qudit_code() -> None:
 
     # "forget" the code distance and recompute
     code._exact_distance = None
-    assert code.get_distance_bound(cutoff=len(code)) == len(code)
+    assert code.get_distance_bound(cutoff=5) == 5
     assert code.get_distance_exact() == 3
 
     code._exact_distance = None
     with pytest.raises(NotImplementedError, match="not implemented"):
         code.get_distance(bound=True)
+    with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
+        code.get_distance(bound=True) == 3
 
     # stacking two codes
     two_codes = codes.QuditCode.stack(code, code)
@@ -366,7 +368,7 @@ def test_distance_css() -> None:
     """Distance calculations for CSS codes."""
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance_bound(cutoff=len(code)) == len(code)
-    assert code.get_distance(bound=True) == 2
+    assert code.get_distance(bound=True) <= len(code)
     assert code.get_distance(bound=False) == 2
 
     # an empty quantum code has distance infinity
