@@ -365,6 +365,7 @@ class ClassicalCode(AbstractCode):
         self,
         num_trials: int = 1,
         *,
+        cutoff: int | None = None,
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         **decoder_args: Any,
     ) -> int | float:
@@ -377,10 +378,13 @@ class ClassicalCode(AbstractCode):
         if (known_distance := self._get_distance_if_known(vector)) is not None:
             return known_distance
 
-        return min(
-            (self.get_one_distance_bound(vector=vector, **decoder_args) for _ in range(num_trials)),
-            default=self.num_bits,
-        )
+        min_bound = len(self)
+        for _ in range(num_trials):
+            new_bound = self.get_one_distance_bound(vector=vector, **decoder_args)
+            min_bound = int(min(min_bound, new_bound))
+            if cutoff and min_bound <= cutoff:
+                break
+        return min_bound
 
     def get_one_distance_bound(
         self, *, vector: Sequence[int] | npt.NDArray[np.int_] | None = None, **decoder_args: Any
@@ -780,7 +784,9 @@ class QuditCode(AbstractCode):
 
         return self._exact_distance
 
-    def get_distance_bound(self, num_trials: int = 1, **decoder_args: Any) -> int | float:
+    def get_distance_bound(
+        self, num_trials: int = 1, *, cutoff: int | None = None, **decoder_args: Any
+    ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
@@ -788,10 +794,13 @@ class QuditCode(AbstractCode):
         if (known_distance := self._get_distance_if_known()) is not None:
             return known_distance
 
-        return min(
-            (self.get_one_distance_bound(**decoder_args) for _ in range(num_trials)),
-            default=len(self),
-        )
+        min_bound = len(self)
+        for _ in range(num_trials):
+            new_bound = self.get_one_distance_bound(**decoder_args)
+            min_bound = int(min(min_bound, new_bound))
+            if cutoff and min_bound <= cutoff:
+                break
+        return min_bound
 
     def get_one_distance_bound(self, **decoder_args: Any) -> int:
         """Use a randomized algorithm to compute a single upper bound on code distance."""
@@ -1115,6 +1124,8 @@ class CSSCode(QuditCode):
         self,
         num_trials: int = 1,
         pauli: PauliXZ | None = None,
+        *,
+        cutoff: int | None = None,
         **decoder_args: Any,
     ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
@@ -1126,10 +1137,13 @@ class CSSCode(QuditCode):
         if (known_distance := self._get_distance_if_known(pauli)) is not None:
             return known_distance
 
-        return min(
-            (self.get_one_distance_bound(pauli, **decoder_args) for _ in range(num_trials)),
-            default=self.num_qudits,
-        )
+        min_bound = len(self)
+        for _ in range(num_trials):
+            new_bound = self.get_one_distance_bound(pauli, **decoder_args)
+            min_bound = int(min(min_bound, new_bound))
+            if cutoff and min_bound <= cutoff:
+                break
+        return min_bound
 
     def get_one_distance_bound(
         self,
