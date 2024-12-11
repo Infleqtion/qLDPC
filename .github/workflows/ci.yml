@@ -28,7 +28,7 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
@@ -49,7 +49,7 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
@@ -76,7 +76,7 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
@@ -100,7 +100,7 @@ jobs:
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
-      - name: Install dependencies
+      - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
