@@ -32,10 +32,10 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Ruff format
+      - name: Run ruff format
         run: |
           checks/format_.py
-      - name: Ruff lint
+      - name: Run ruff check
         run: |
           checks/lint_.py
 
@@ -58,7 +58,7 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Type check
+      - name: Run mypy
         run: |
           checks/mypy_.py
 
@@ -81,6 +81,6 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Coverage check
+      - name: Run coverage
         run: |
           checks/coverage_.py
