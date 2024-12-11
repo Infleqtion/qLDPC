@@ -371,8 +371,8 @@ class ClassicalCode(AbstractCode):
     ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
+        If passed a cutoff, don't bother trying to find distances less than the cutoff.
         If passed a vector, compute the minimum Hamming distance between the vector and a code word.
-
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
         if (known_distance := self._get_distance_if_known(vector)) is not None:
@@ -789,6 +789,7 @@ class QuditCode(AbstractCode):
     ) -> int | float:
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
+        If passed a cutoff, don't bother trying to find distances less than the cutoff.
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
         if (known_distance := self._get_distance_if_known()) is not None:
@@ -1131,7 +1132,7 @@ class CSSCode(QuditCode):
         """Compute an upper bound on code distance by minimizing many individual upper bounds.
 
         If `pauli is not None`, consider only `pauli`-type logical operators.
-
+        If passed a cutoff, don't bother trying to find distances less than the cutoff.
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
         if (known_distance := self._get_distance_if_known(pauli)) is not None:
