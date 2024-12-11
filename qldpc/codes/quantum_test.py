@@ -97,7 +97,7 @@ def test_bivariate_bicycle_codes() -> None:
         codes.BBCode({}, x, y + z)
 
 
-def test_bbcode_toric_distance() -> None:
+def test_bivariate_bicycle_neighbors() -> None:
     """In a toric layout of a code, check qubits address their nearest neighbors."""
     from sympy.abc import x, y
 
