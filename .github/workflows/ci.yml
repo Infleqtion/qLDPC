@@ -32,10 +32,10 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Format
+      - name: Ruff format
         run: |
           checks/format_.py
-      - name: Lint
+      - name: Ruff lint
         run: |
           checks/lint_.py
 
