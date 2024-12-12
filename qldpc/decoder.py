@@ -24,25 +24,6 @@ import numpy.typing as npt
 import pymatching
 
 
-def decode_with_BP_LSD(
-    matrix: npt.NDArray[np.int_],
-    syndrome: npt.NDArray[np.int_],
-    **decoder_args: object,
-) -> npt.NDArray[np.int_]:
-    """Decode with belief propagation with localized statistics (BP+LSD).
-
-    For details about the BD-LSD decoder and its arguments, see:
-    - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
-    - Reference: https://arxiv.org/abs/2406.18655
-    """
-    decoder = ldpc.bplsd_decoder.BpLsdDecoder(
-        matrix,
-        error_rate=decoder_args.pop("error_rate", 0.0),
-        **decoder_args,
-    )
-    return decoder.decode(syndrome)
-
-
 def decode_with_BP_OSD(
     matrix: npt.NDArray[np.int_],
     syndrome: npt.NDArray[np.int_],
@@ -57,6 +38,25 @@ def decode_with_BP_OSD(
     decoder = ldpc.BpOsdDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
+        **decoder_args,
+    )
+    return decoder.decode(syndrome)
+
+
+def decode_with_BP_LSD(
+    matrix: npt.NDArray[np.int_],
+    syndrome: npt.NDArray[np.int_],
+    **decoder_args: object,
+) -> npt.NDArray[np.int_]:
+    """Decode with belief propagation with localized statistics (BP+LSD).
+
+    For details about the BD-LSD decoder and its arguments, see:
+    - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
+    - Reference: https://arxiv.org/abs/2406.18655
+    """
+    decoder = ldpc.bplsd_decoder.BpLsdDecoder(
+        matrix,
+        error_rate=decoder_args.pop("error_rate", 0.1),
         **decoder_args,
     )
     return decoder.decode(syndrome)
@@ -218,8 +218,8 @@ def decode(
     if decoder_args.pop("with_BF", False):
         return decode_with_BF(matrix, syndrome, **decoder_args)
 
-    if decoder_args.pop("with_BP_OSD", False):
-        return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
+    if decoder_args.pop("with_BP_LSD", False):
+        return decode_with_BP_LSD(matrix, syndrome, **decoder_args)
 
-    decoder_args.pop("with_BP_LSD", None)
-    return decode_with_BP_LSD(matrix, syndrome, **decoder_args)
+    decoder_args.pop("with_BP_OSD", None)
+    return decode_with_BP_OSD(matrix, syndrome, **decoder_args)
