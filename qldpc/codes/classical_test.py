@@ -31,7 +31,7 @@ def test_basic(field: int) -> None:
         assert code.num_bits == num_bits
         assert code.dimension == 1
 
-    # that rank of repetition and Hamming codes is independent of the field
+    # the rank of repetition and Hamming codes is independent of the field
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
     assert codes.HammingCode(3, 2).rank == codes.HammingCode(3, 3).rank
 
