@@ -56,7 +56,7 @@ def decode_with_BP_LSD(
     """
     decoder = ldpc.bplsd_decoder.BpLsdDecoder(
         matrix,
-        error_rate=decoder_args.pop("error_rate", 0.1),
+        error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
     )
     return decoder.decode(syndrome)
