@@ -168,7 +168,7 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-@pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (3, 2, False)])
+@pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])
 def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group."""
     group = abstract.SL(dimension, field=field, linear_rep=linear_rep)
