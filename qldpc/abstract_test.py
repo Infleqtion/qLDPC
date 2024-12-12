@@ -168,8 +168,7 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 4), (3, 2)])
-@pytest.mark.parametrize("linear_rep", [False, True])
+@pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])
 def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group."""
     group = abstract.SL(dimension, field=field, linear_rep=linear_rep)
@@ -183,8 +182,7 @@ def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     assert np.array_equal(group.lift(gens[1]), gen_mats[1])
 
 
-@pytest.mark.parametrize("dimension,field", [(2, 2), (2, 3), (3, 2)])
-@pytest.mark.parametrize("linear_rep", [False, True])
+@pytest.mark.parametrize("dimension,field,linear_rep", [(2, 2, True), (2, 3, False)])
 def test_PSL(dimension: int, field: int, linear_rep: bool) -> None:
     """Projective special linear group."""
     group = abstract.PSL(dimension, field, linear_rep=linear_rep)

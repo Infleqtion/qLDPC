@@ -403,8 +403,9 @@ class BBCode(QCCode):
             member_g = self.to_group_member(a_2 / a_1)
             member_h = self.to_group_member(b_2 / b_1)
             if (
-                member_g.order() * member_h.order() == self.group.order
-                and abstract.Group(member_g, member_h).order == self.group.order
+                self.group.order
+                == member_g.order() * member_h.order()
+                == abstract.Group(member_g, member_h).order
             ):
                 toric_params.append((a_1, a_2, b_1, b_2))
                 toric_params.append((a_1, a_2, b_2, b_1))
@@ -422,7 +423,7 @@ class BBCode(QCCode):
             shifted_poly_a = self.poly_a / a_1
             shifted_poly_b = self.poly_b / b_1
 
-            # without loss of generality, enforce that the toric layout "width" >= "height"
+            # without loss of generality, enforce that the toric layout "height" >= "width"
             if orders[0] < orders[1]:
                 orders = orders[::-1]
                 gen_g, gen_h = gen_h, gen_g
