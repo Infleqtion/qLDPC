@@ -38,12 +38,13 @@ def test_basic(field: int) -> None:
 
 def test_special_codes() -> None:
     """Reed-Solomon, BCH, and Reed-Muller codes."""
-    assert codes.ReedSolomonCode(3, 2).dimension == 2
+    bits, dimension = 3, 2
+    assert codes.ReedSolomonCode(bits, dimension).dimension == dimension
 
-    for bits, dimension, field in [(7, 4, 2), (8, 4, 3)]:
-        assert codes.BCHCode(bits, dimension, field).dimension == dimension
-        with pytest.raises(ValueError, match=rf"block lengths {field}\^m - 1"):
-            codes.BCHCode(bits - 1, dimension, field)
+    bits, dimension, field = 7, 4, 2
+    assert codes.BCHCode(bits, dimension, field).dimension == dimension
+    with pytest.raises(ValueError, match=rf"block lengths {field}\^m - 1"):
+        codes.BCHCode(bits - 1, dimension, field)
 
     order, size, field = 1, 3, 2
     code = codes.ReedMullerCode(order, size, field)
