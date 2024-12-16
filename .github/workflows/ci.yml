@@ -27,8 +27,8 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          python3 -m uv pip install --upgrade pip
-          python3 -m uv pip install '.[dev]'
+          uv pip install --upgrade pip
+          uv pip install '.[dev]'
 
   format:
     name: Linting check
@@ -45,8 +45,8 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          python3 -m uv pip install --upgrade pip
-          python3 -m uv pip install '.[dev]'
+          uv pip install --upgrade pip
+          uv pip install '.[dev]'
       - name: Run ruff format
         run: |
           checks/format_.py
@@ -69,8 +69,8 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          python3 -m uv pip install --upgrade pip
-          python3 -m uv pip install '.[dev]'
+          uv pip install --upgrade pip
+          uv pip install '.[dev]'
       - name: Run mypy
         run: |
           checks/mypy_.py
@@ -90,8 +90,8 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          python3 -m uv pip install --upgrade pip
-          python3 -m uv pip install '.[dev]'
+          uv pip install --upgrade pip
+          uv pip install '.[dev]'
       - name: Run coverage
         run: |
           checks/coverage_.py
