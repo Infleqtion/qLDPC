@@ -27,7 +27,8 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
-          uv pip install '.[dev]' --system
+          uv venv
+          uv pip install '.[dev]'
 
   format:
     name: Linting check
