@@ -49,6 +49,7 @@ dev = ["checks-superstaq"]
 [[tool.uv.dependency-metadata]]
 name = "sinter"
 version = "1.14.0"
+requires-dist = ["numpy>=2.0.0"]
 
 # Check script configuration:
 
