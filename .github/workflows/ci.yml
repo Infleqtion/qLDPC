@@ -25,9 +25,6 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "**/pyproject.toml"
-      - name: Install Python
-        run:
-          run: uv python install 3.11 --system
       - name: Install package and dependencies
         run: |
           uv pip install '.[dev]' --system
