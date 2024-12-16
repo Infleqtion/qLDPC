@@ -27,11 +27,6 @@ import diskcache
 import platformdirs
 
 
-def running_with_pytest() -> bool:
-    """Are we currently running  with pytest?"""
-    return "pytest" in sys.modules
-
-
 def get_disk_cache(cache_name: str, *, cache_dir: str | None = None) -> diskcache.Cache:
     """Retrieve a dictionary-like cache object."""
     cache_dir = cache_dir or platformdirs.user_cache_dir()
@@ -64,3 +59,8 @@ def use_disk_cache(
         return function_with_cache
 
     return decorator
+
+
+def running_with_pytest() -> bool:
+    """Are we currently running  with pytest?"""
+    return "pytest" in sys.modules

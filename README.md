@@ -4,7 +4,7 @@ This package contains tools for constructing and analyzing [quantum low density 
 
 ## 📦 Installation
 
-This package requires Python>=3.10, and can be installed from PyPI with
+This package requires Python>=3.10, and can be installed from the Python Package Index (PyPI) with
 ```
 pip install qldpc
 ```
