@@ -25,10 +25,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "**/pyproject.toml"
-        run: |
-          uv venv
       - name: Install package and dependencies
         run: |
+          uv venv
           uv pip install '.[dev]'
 
   format:
@@ -46,6 +45,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
+          uv venv
           uv pip install '.[dev]'
       - name: Run ruff format
         run: |
@@ -69,6 +69,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
+          uv venv
           uv pip install '.[dev]'
       - name: Run mypy
         run: |
@@ -89,6 +90,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
+          uv venv
           uv pip install '.[dev]'
       - name: Run coverage
         run: |
