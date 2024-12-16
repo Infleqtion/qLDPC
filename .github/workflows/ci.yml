@@ -25,9 +25,10 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: "**/pyproject.toml"
-      - name: Install package and dependencies
         run: |
           uv venv
+      - name: Install package and dependencies
+        run: |
           uv pip install '.[dev]'
 
   format:
