@@ -21,17 +21,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: '3.11'
+          enable-cache: true
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
       - name: Install package and dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+          python3 -m uv pip install --upgrade pip
+          python3 -m uv pip install '.[dev]'
 
   format:
     name: Linting check
@@ -42,17 +43,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: '3.11'
+          enable-cache: true
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
       - name: Install package and dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+          python3 -m uv pip install --upgrade pip
+          python3 -m uv pip install '.[dev]'
       - name: Run ruff format
         run: |
           checks/format_.py
@@ -69,17 +71,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: '3.11'
+          enable-cache: true
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
       - name: Install package and dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+          python3 -m uv pip install --upgrade pip
+          python3 -m uv pip install '.[dev]'
       - name: Run mypy
         run: |
           checks/mypy_.py
@@ -93,17 +96,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v4
         with:
           python-version: '3.11'
+          enable-cache: true
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
           key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
       - name: Install package and dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+          python3 -m uv pip install --upgrade pip
+          python3 -m uv pip install '.[dev]'
       - name: Run coverage
         run: |
           checks/coverage_.py
