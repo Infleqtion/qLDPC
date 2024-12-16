@@ -76,7 +76,7 @@ def decode_with_BF(
       - https://arxiv.org/abs/2103.08049
       - https://arxiv.org/abs/2209.01180
     """
-    decoder = ldpc.belief_find_decoder.BeliefFindDecoder(
+    decoder = ldpc.BeliefFindDecoder(
         matrix,
         error_rate=decoder_args.pop("error_rate", 0.0),
         **decoder_args,
