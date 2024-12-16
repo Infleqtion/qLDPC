@@ -49,11 +49,11 @@ jobs:
           uv pip install '.[dev]'
       - name: Run ruff format
         run: |
-          .venv/bin/activate
+          source .venv/bin/activate
           checks/format_.py
       - name: Run ruff check
         run: |
-          .venv/bin/activate
+          source .venv/bin/activate
           checks/lint_.py
 
   mypy:
@@ -75,7 +75,7 @@ jobs:
           uv pip install '.[dev]'
       - name: Run mypy
         run: |
-          .venv/bin/activate
+          source .venv/bin/activate
           checks/mypy_.py
 
   coverage:
@@ -97,5 +97,5 @@ jobs:
           uv pip install '.[dev]'
       - name: Run coverage
         run: |
-          .venv/bin/activate
+          source .venv/bin/activate
           checks/coverage_.py
