@@ -37,12 +37,18 @@ numpy = ">=1.24.0"
 platformdirs = ">=4.0.0"
 pymatching = ">=2.1.0"
 stim = ">=1.14.0"
+sinter = ">=1.14.0"  # TEMPORARY until sinter allows numpy >=2.0.0
 sympy = ">=1.12"
 
 checks-superstaq = { version = ">=0.5.31", optional = true }
 
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
+
+# TEMPORARY until sinter allows numpy >=2.0.0
+[[tool.uv.dependency-metadata]]
+name = "sinter"
+version = "1.14.0"
 
 # Check script configuration:
 
