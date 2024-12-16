@@ -29,7 +29,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
-          uv pip install '.[dev]' --system
+          uv pip install '.[dev]'
 
   format:
     name: Linting check
@@ -46,7 +46,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
-          uv pip install '.[dev]' --system
+          uv pip install '.[dev]'
       - name: Run ruff format
         run: |
           checks/format_.py
@@ -69,7 +69,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
-          uv pip install '.[dev]' --system
+          uv pip install '.[dev]'
       - name: Run mypy
         run: |
           checks/mypy_.py
@@ -89,7 +89,7 @@ jobs:
           cache-dependency-glob: "**/pyproject.toml"
       - name: Install package and dependencies
         run: |
-          uv pip install '.[dev]' --system
+          uv pip install '.[dev]'
       - name: Run coverage
         run: |
           checks/coverage_.py
