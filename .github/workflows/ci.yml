@@ -27,7 +27,6 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          uv pip install --upgrade pip
           uv pip install '.[dev]'
 
   format:
@@ -45,7 +44,6 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          uv pip install --upgrade pip
           uv pip install '.[dev]'
       - name: Run ruff format
         run: |
@@ -69,7 +67,6 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          uv pip install --upgrade pip
           uv pip install '.[dev]'
       - name: Run mypy
         run: |
@@ -90,7 +87,6 @@ jobs:
           enable-cache: true
       - name: Install package and dependencies
         run: |
-          uv pip install --upgrade pip
           uv pip install '.[dev]'
       - name: Run coverage
         run: |
