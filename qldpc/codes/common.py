@@ -1415,13 +1415,14 @@ class CSSCode(QuditCode):
         code_inner: CSSCode,
         code_outer: CSSCode,
         connectivity: list | None = None,
-        inherit_logicals=False,
+        inherit_logicals=False
     ) -> CSSCode:
         """Concatenate two CSS codes"""
 
         ### define useful parameters we will need for building matrices of new code
-        n_in, k_in = code_inner.get_code_params()[0:2]
-        n_out, k_out = code_outer.get_code_params()[0:2]
+        
+        n_in, k_in = [code_inner.num_qubits, code_inner.get_logical_ops().shape[1]]
+        n_out, k_out = [code_outer.num_qubits, code_outer.get_logical_ops().shape[1]]
 
         if n_in % k_out != 0:
             raise TypeError(
@@ -1499,8 +1500,8 @@ class CSSCode(QuditCode):
     def canonical_concat_logicals(
         cls, code_inner: CSSCode, code_outer: CSSCode, connectivity: list | None = None
     ) -> np.array:
-        n_in, k_in = code_inner.get_code_params()[0:2]
-        n_out, k_out = code_outer.get_code_params()[0:2]
+        n_in, k_in = [code_inner.num_qubits, code_inner.get_logical_ops().shape[1]]
+        n_out, k_out = [code_outer.num_qubits, code_outer.get_logical_ops().shape[1]]
 
         if n_in % k_out != 0:
             raise TypeError(
