@@ -930,6 +930,75 @@ class QuditCode(AbstractCode):
         matrix = np.hstack([code_z.matrix, code_x.matrix])
         return QuditCode(matrix)
 
+    @classmethod
+    def concatenate(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        wiring: dict[int, int] | Sequence[int] | None = None,
+        inherit_logicals: bool = False,
+    ) -> QuditCode:
+        """Concatenate two qudit codes.
+
+        The concatenated code uses the logical qudits of the "inner" code as the physical qudits of
+        the "outer" code, with wiring[outer_physical_qudit_index] = inner_logical_qudit_index.
+        Copies of the inner and outer codes are stacked as necessary to make qudit numbers agree.
+
+        If inherit_logicals is True, use the logical operators of the outer code as the logical
+        operators of the concatenated code.  Otherwire, logical operators of the concatenated code
+        get recomputed from scratch.
+        """
+        if inner.field is not outer.field:
+            raise ValueError("Cannot concatenate codes over different fields")
+
+        # standardize wiring data and determine the number of copies of inner/outer to stack
+        if wiring is None:
+            gcd = math.gcd(inner.dimension, len(outer))
+            num_inner_blocks = len(outer) // gcd
+            num_outer_blocks = inner.dimension // gcd
+            wiring = tuple(range(num_outer_blocks * len(outer)))
+        else:
+            if len(wiring) % inner.dimension or len(wiring) % len(outer):
+                raise ValueError(
+                    f"Concatenation requires the wiring data length ({len(wiring)}) to be divisible"
+                    + f" by inner code dimension ({inner.dimension}) and outer code block length"
+                    + f" ({len(outer)})"
+                )
+            num_inner_blocks = len(wiring) // inner.dimension
+            num_outer_blocks = len(wiring) // len(outer)
+            wiring = tuple(wiring[qq] for qq in range(len(wiring)))
+
+        # stack copies of the inner and outer codes if necessary
+        inner = QuditCode.stack(*[inner] * num_inner_blocks) if num_inner_blocks > 1 else inner
+        outer = QuditCode.stack(*[outer] * num_outer_blocks) if num_outer_blocks > 1 else outer
+
+        # identify and permute the logical operators of the inner code
+        inner_logs_x = inner.get_logical_ops(Pauli.X)[wiring, :]
+        inner_logs_z = inner.get_logical_ops(Pauli.Z)[wiring, :]
+
+        # Expand the parity checks of the outer code using the logical operators of the inner code.
+        # Note that parity check vectors indicate the support of [Z|X] ops (as opposed to [X|Z] ops)
+        # because parity check vectors are dual vectors of a symplectic vector space.  This
+        # convention ensures that parity_check @ pauli_vector is a symplectic inner product.
+        outer_checks = outer.matrix @ np.vstack([inner_logs_z, inner_logs_x])
+
+        # swap X/Z sectors of the input space to recover symplectic dual vector parity checks
+        outer_checks = inner.field(
+            outer_checks.reshape(outer.num_checks, 2, -1)[:, ::-1, :].reshape(outer.num_checks, -1)
+        )
+
+        # combine parity checks of the inner and outer codes
+        code = QuditCode(np.vstack([inner.matrix, outer_checks]))
+
+        if inherit_logicals:
+            inner_logicals = np.vstack([inner_logs_x, inner_logs_z])
+            logicals_x = outer.get_logical_ops(Pauli.X) @ inner_logicals
+            logicals_z = outer.get_logical_ops(Pauli.Z) @ inner_logicals
+            shape = (2, outer.dimension, -1)
+            code._logical_ops = code.field(np.stack([logicals_x, logicals_z]).reshape(shape))
+
+        return code
+
 
 class CSSCode(QuditCode):
     """CSS qudit code, with separate X-type and Z-type parity checks.
@@ -1399,8 +1468,8 @@ class CSSCode(QuditCode):
     @classmethod
     def concatenate(
         cls,
-        inner: CSSCode,
-        outer: CSSCode,
+        inner: QuditCode,
+        outer: QuditCode,
         wiring: dict[int, int] | Sequence[int] | None = None,
         inherit_logicals: bool = False,
     ) -> CSSCode:
@@ -1414,6 +1483,8 @@ class CSSCode(QuditCode):
         operators of the concatenated code.  Otherwire, logical operators of the concatenated code
         get recomputed from scratch.
         """
+        if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
+            raise TypeError("CSSCode.concatenate requires CSSCode inputs")
         if inner.field is not outer.field:
             raise ValueError("Cannot concatenate codes over different fields")
 
