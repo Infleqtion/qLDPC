@@ -948,29 +948,8 @@ class QuditCode(AbstractCode):
         operators of the concatenated code.  Otherwire, logical operators of the concatenated code
         get recomputed from scratch.
         """
-        if inner.field is not outer.field:
-            raise ValueError("Cannot concatenate codes over different fields")
-
-        # standardize wiring data and determine the number of copies of inner/outer to stack
-        if wiring is None:
-            gcd = math.gcd(inner.dimension, len(outer))
-            num_inner_blocks = len(outer) // gcd
-            num_outer_blocks = inner.dimension // gcd
-            wiring = tuple(range(num_outer_blocks * len(outer)))
-        else:
-            if len(wiring) % inner.dimension or len(wiring) % len(outer):
-                raise ValueError(
-                    f"Concatenation requires the wiring data length ({len(wiring)}) to be divisible"
-                    + f" by inner code dimension ({inner.dimension}) and outer code block length"
-                    + f" ({len(outer)})"
-                )
-            num_inner_blocks = len(wiring) // inner.dimension
-            num_outer_blocks = len(wiring) // len(outer)
-            wiring = tuple(wiring[qq] for qq in range(len(wiring)))
-
-        # stack copies of the inner and outer codes if necessary
-        inner = QuditCode.stack(*[inner] * num_inner_blocks) if num_inner_blocks > 1 else inner
-        outer = QuditCode.stack(*[outer] * num_outer_blocks) if num_outer_blocks > 1 else outer
+        # standardize wiring data and stack copies of the inner and outer codes, if necessary
+        inner, outer, wiring = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
 
         # identify and permute the logical operators of the inner code
         inner_logs_x = inner.get_logical_ops(Pauli.X)[wiring, :]
@@ -998,6 +977,36 @@ class QuditCode(AbstractCode):
             code._logical_ops = code.field(np.stack([logicals_x, logicals_z]).reshape(shape))
 
         return code
+
+    @classmethod
+    def _standardize_concatenation_inputs(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        wiring: dict[int, int] | Sequence[int] | None,
+    ) -> tuple[QuditCode, QuditCode, tuple[int, ...]]:
+        """Standardize wiring data and stack copies of the inner and outer codes, if necessary."""
+        if inner.field is not outer.field:
+            raise ValueError("Cannot concatenate codes over different fields")
+
+        if wiring is None:
+            block_length = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
+            wiring = tuple(range(block_length))
+        if len(wiring) % inner.dimension or len(wiring) % len(outer):
+            raise ValueError(
+                f"Concatenation requires the wiring data length ({len(wiring)}) to be divisible"
+                + f" by inner code dimension ({inner.dimension}) and outer code block length"
+                + f" ({len(outer)})"
+            )
+        wiring = tuple(wiring[qq] for qq in range(len(wiring)))
+
+        # stack copies of the inner and outer codes if necessary
+        if (num_inner_blocks := len(wiring) // inner.dimension) > 1:
+            inner = inner.stack(*[inner] * num_inner_blocks)
+        if (num_outer_blocks := len(wiring) // len(outer)) > 1:
+            outer = outer.stack(*[outer] * num_outer_blocks)
+
+        return inner, outer, wiring
 
 
 class CSSCode(QuditCode):
@@ -1483,31 +1492,11 @@ class CSSCode(QuditCode):
         operators of the concatenated code.  Otherwire, logical operators of the concatenated code
         get recomputed from scratch.
         """
+        # standardize wiring data and stack copies of the inner and outer codes, if necessary
+        inner, outer, wiring = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
+
         if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
             raise TypeError("CSSCode.concatenate requires CSSCode inputs")
-        if inner.field is not outer.field:
-            raise ValueError("Cannot concatenate codes over different fields")
-
-        # standardize wiring data and determine the number of copies of inner/outer to stack
-        if wiring is None:
-            gcd = math.gcd(inner.dimension, len(outer))
-            num_inner_blocks = len(outer) // gcd
-            num_outer_blocks = inner.dimension // gcd
-            wiring = tuple(range(num_outer_blocks * len(outer)))
-        else:
-            if len(wiring) % inner.dimension or len(wiring) % len(outer):
-                raise ValueError(
-                    f"Concatenation requires the wiring data length ({len(wiring)}) to be divisible"
-                    + f" by inner code dimension ({inner.dimension}) and outer code block length"
-                    + f" ({len(outer)})"
-                )
-            num_inner_blocks = len(wiring) // inner.dimension
-            num_outer_blocks = len(wiring) // len(outer)
-            wiring = tuple(wiring[qq] for qq in range(len(wiring)))
-
-        # stack copies of the inner and outer codes if necessary
-        inner = CSSCode.stack(*[inner] * num_inner_blocks) if num_inner_blocks > 1 else inner
-        outer = CSSCode.stack(*[outer] * num_outer_blocks) if num_outer_blocks > 1 else outer
 
         # identify and permute the logical operators of the inner code
         inner_logs_x = inner.get_logical_ops(Pauli.X)[wiring, : len(inner)]
