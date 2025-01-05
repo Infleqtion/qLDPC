@@ -394,3 +394,29 @@ def test_stacking_css_codes() -> None:
     # stacking a CSSCode with a QuditCode yields a QuditCode
     code = codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
     assert not isinstance(code, codes.CSSCode)
+
+
+def test_code_concatenation() -> None:
+    """Concatenate CSS codes."""
+    code_c4 = codes.ToricCode(2)
+
+    # determine the number of copies of the inner code automatically
+    code = codes.CSSCode.concatenate(code_c4, code_c4)
+    assert len(code) == 2 * len(code_c4)
+    assert code.dimension == code_c4.dimension
+
+    # determine the number of copies of the inner code from wiring data
+    wiring = [0, 2, 4, 6, 1, 3, 5, 7]
+    code = codes.CSSCode.concatenate(code_c4, code_c4, wiring)
+    assert len(code) == 4 * len(code_c4)
+    assert code.dimension == 2 * code_c4.dimension
+
+    # inheriting logical operators yields different logical operators!
+    code_alt = codes.CSSCode.concatenate(code_c4, code_c4, wiring, inherit_logicals=True)
+    assert not np.array_equal(code.get_logical_ops(), code_alt.get_logical_ops())
+
+    # both sets of logical operators are valid
+    assert not np.any(code.matrix @ code.get_logical_ops(Pauli.X).T)
+    assert not np.any(code.matrix @ code.get_logical_ops(Pauli.Z).T)
+    assert not np.any(code_alt.matrix @ code_alt.get_logical_ops(Pauli.X).T)
+    assert not np.any(code_alt.matrix @ code_alt.get_logical_ops(Pauli.Z).T)
