@@ -1003,9 +1003,9 @@ class QuditCode(AbstractCode):
         else:
             if len(wiring) % inner.dimension or len(wiring) % len(outer):
                 raise ValueError(
-                    f"Concatenation requires the wiring data length ({len(wiring)}) to be divisible"
-                    + f" by inner code dimension ({inner.dimension}) and outer code block length"
-                    + f" ({len(outer)})"
+                    "Code concatenation requires the number of intermediate qudits for wiring"
+                    f" ({len(wiring)}) to be divisible by inner code dimension ({inner.dimension})"
+                    f" and outer code block length ({len(outer)})"
                 )
             wiring = tuple(wiring[qq] for qq in range(len(wiring)))
 
