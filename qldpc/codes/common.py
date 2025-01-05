@@ -948,12 +948,12 @@ class QuditCode(AbstractCode):
         operators of the concatenated code.  Otherwire, logical operators of the concatenated code
         get recomputed from scratch.
         """
-        # standardize wiring data and stack copies of the inner and outer codes, if necessary
-        inner, outer, wiring = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
+        # stack copies of the inner and outer codes (if necessary) and permute inner logicals
+        inner, outer = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
 
-        # identify and permute the logical operators of the inner code
-        inner_logs_x = inner.get_logical_ops(Pauli.X)[wiring, :]
-        inner_logs_z = inner.get_logical_ops(Pauli.Z)[wiring, :]
+        # identify the logical operators of the inner code
+        inner_logs_x = inner.get_logical_ops(Pauli.X)
+        inner_logs_z = inner.get_logical_ops(Pauli.Z)
 
         # Expand the parity checks of the outer code using the logical operators of the inner code.
         # Note that parity check vectors indicate the support of [Z|X] ops (as opposed to [X|Z] ops)
@@ -984,29 +984,39 @@ class QuditCode(AbstractCode):
         inner: QuditCode,
         outer: QuditCode,
         wiring: dict[int, int] | Sequence[int] | None,
-    ) -> tuple[QuditCode, QuditCode, tuple[int, ...]]:
-        """Standardize wiring data and stack copies of the inner and outer codes, if necessary."""
+    ) -> tuple[QuditCode, QuditCode]:
+        """Helper function for code concatenation.
+
+        This method...
+        - Stacks copies of the inner and outer codes as necessary to make the number of logical
+            qudits of the inner code equal to the number of physical qudits of the outer code, and
+        - Permutes the logical qudits of the inner code according to the provided wiring data.
+        """
         if inner.field is not outer.field:
             raise ValueError("Cannot concatenate codes over different fields")
 
         if wiring is None:
+            # default to the trivial wiring
             block_length = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
             wiring = tuple(range(block_length))
-        if len(wiring) % inner.dimension or len(wiring) % len(outer):
-            raise ValueError(
-                f"Concatenation requires the wiring data length ({len(wiring)}) to be divisible"
-                + f" by inner code dimension ({inner.dimension}) and outer code block length"
-                + f" ({len(outer)})"
-            )
-        wiring = tuple(wiring[qq] for qq in range(len(wiring)))
+        else:
+            if len(wiring) % inner.dimension or len(wiring) % len(outer):
+                raise ValueError(
+                    f"Concatenation requires the wiring data length ({len(wiring)}) to be divisible"
+                    + f" by inner code dimension ({inner.dimension}) and outer code block length"
+                    + f" ({len(outer)})"
+                )
+            wiring = tuple(wiring[qq] for qq in range(len(wiring)))
 
-        # stack copies of the inner and outer codes if necessary
+        # stack copies of the inner and outer codes, if necessary
         if (num_inner_blocks := len(wiring) // inner.dimension) > 1:
             inner = inner.stack(*[inner] * num_inner_blocks)
         if (num_outer_blocks := len(wiring) // len(outer)) > 1:
             outer = outer.stack(*[outer] * num_outer_blocks)
 
-        return inner, outer, wiring
+        # permute logical operators of the inner code and return
+        inner._logical_ops = inner.get_logical_ops()[:, wiring, :]
+        return inner, outer
 
 
 class CSSCode(QuditCode):
@@ -1492,15 +1502,15 @@ class CSSCode(QuditCode):
         operators of the concatenated code.  Otherwire, logical operators of the concatenated code
         get recomputed from scratch.
         """
-        # standardize wiring data and stack copies of the inner and outer codes, if necessary
-        inner, outer, wiring = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
+        # stack copies of the inner and outer codes (if necessary) and permute inner logicals
+        inner, outer = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
 
         if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
             raise TypeError("CSSCode.concatenate requires CSSCode inputs")
 
         # identify and permute the logical operators of the inner code
-        inner_logs_x = inner.get_logical_ops(Pauli.X)[wiring, : len(inner)]
-        inner_logs_z = inner.get_logical_ops(Pauli.Z)[wiring, len(inner) :]
+        inner_logs_x = inner.get_logical_ops(Pauli.X)[:, : len(inner)]
+        inner_logs_z = inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
 
         # expand the parity checks of the outer code using the logical operators of the inner code
         outer_checks_x = outer.matrix_x @ inner_logs_x

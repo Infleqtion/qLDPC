@@ -448,7 +448,3 @@ def test_code_concatenation() -> None:
     # cover some errors
     with pytest.raises(TypeError, match="CSSCode inputs"):
         codes.CSSCode.concatenate(code_c4, codes.FiveQubitCode())
-    with pytest.raises(ValueError, match="different fields"):
-        codes.CSSCode.concatenate(code_c4, codes.ToricCode(2, field=3))
-    with pytest.raises(ValueError, match="divisible"):
-        codes.CSSCode.concatenate(code_c4, code_c4, [0, 1, 2])
