@@ -997,9 +997,9 @@ class QuditCode(AbstractCode):
             raise ValueError("Cannot concatenate codes over different fields")
 
         if wiring is None:
-            # default to the trivial wiring
-            block_length = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
-            wiring = tuple(range(block_length))
+            # default to the trivial wiring with the smallest possible number of qudits
+            num_qudits = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
+            wiring = tuple(range(num_qudits))
         else:
             if len(wiring) % inner.dimension or len(wiring) % len(outer):
                 raise ValueError(
