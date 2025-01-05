@@ -391,9 +391,10 @@ def test_stacking_css_codes() -> None:
         qudit_code = codes.SurfaceCode(2, field=3)
         code = codes.CSSCode.stack(steane_code, qudit_code)
 
-    # stacking a CSSCode with a QuditCode yields a QuditCode
-    code = codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
-    assert not isinstance(code, codes.CSSCode)
+    # stacking a CSSCode with a QuditCode requires using QuditCode.stack
+    codes.QuditCode.stack(steane_code, codes.FiveQubitCode())
+    with pytest.raises(TypeError, match="requires CSSCode inputs"):
+        codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
 
 
 def test_code_concatenation() -> None:
