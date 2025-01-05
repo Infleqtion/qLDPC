@@ -22,7 +22,7 @@ import functools
 import itertools
 import random
 from collections.abc import Callable, Sequence
-from typing import Any, Iterator, Literal
+from typing import Any, Iterator, Literal, cast
 
 import galois
 import networkx as nx
@@ -504,20 +504,18 @@ class ClassicalCode(AbstractCode):
         return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
 
     @classmethod
-    def stack(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
-        """Stack two classical codes.
+    def stack(cls, *codes: ClassicalCode) -> ClassicalCode:
+        """Stack the given classical codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
-        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
-        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
+        in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        if code_a.field is not code_b.field:
-            raise ValueError("Cannot join codes over different fields")
-        block_matrix = [
-            [code_a.matrix, np.zeros((code_a.num_checks, len(code_b)), dtype=int)],
-            [np.zeros((code_b.num_checks, len(code_a)), dtype=int), code_b.matrix],
-        ]
-        return ClassicalCode(np.block(block_matrix), field=code_a.field.order)
+        fields = [code.field for code in codes]
+        if len(set(fields)) > 1:
+            raise ValueError("Cannot stack codes over different fields")
+        matrices = [code.matrix for code in codes]
+        return ClassicalCode(_block_diag(*matrices), field=fields[0].order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
@@ -917,23 +915,19 @@ class QuditCode(AbstractCode):
         return self._logical_ops
 
     @classmethod
-    def stack(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
-        """Stack two qudit codes.
+    def stack(cls, *codes: QuditCode) -> QuditCode:
+        """Stack the given qudit codes.
 
-        The stacked code is obtained by having the input codes act on disjoint sets of qudits.
-        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
-        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        The stacked code is obtained by having the input codes act on disjoint sets of bits.
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
+        in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        if code_a.field is not code_b.field:
-            raise ValueError("Cannot join codes over different fields")
-        matrix_a_z = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 0, :]
-        matrix_a_x = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 1, :]
-        matrix_b_z = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 0, :]
-        matrix_b_x = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 1, :]
-        code_z = ClassicalCode.stack(ClassicalCode(matrix_a_z), ClassicalCode(matrix_b_z))
-        code_x = ClassicalCode.stack(ClassicalCode(matrix_a_x), ClassicalCode(matrix_b_x))
+        codes_z = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 0, :]) for code in codes]
+        codes_x = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 1, :]) for code in codes]
+        code_z = ClassicalCode.stack(*codes_z)
+        code_x = ClassicalCode.stack(*codes_x)
         matrix = np.hstack([code_z.matrix, code_x.matrix])
-        return QuditCode(matrix, field=code_a.field.order)
+        return QuditCode(matrix)
 
 
 class CSSCode(QuditCode):
@@ -1301,12 +1295,8 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
-        logical_ops = [
-            [logicals_x, np.zeros_like(logicals_x)],
-            [np.zeros_like(logicals_z), logicals_z],
-        ]
-        shape = (2, self.dimension, 2 * self.num_qudits)
-        self._logical_ops = self.field(np.block(logical_ops).reshape(shape))
+        logical_ops = _block_diag(logicals_x, logicals_z)
+        self._logical_ops = self.field(logical_ops.reshape(2, self.dimension, -1))
         return self._logical_ops
 
     def get_random_logical_op(
@@ -1386,26 +1376,22 @@ class CSSCode(QuditCode):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
 
     @classmethod
-    def stack(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
-        """Stack two qudit codes.
+    def stack(cls, *codes: QuditCode) -> QuditCode:
+        """Stack the given CSS codes.
 
-        The stacked code is obtained by having the input codes act on disjoint sets of qudits.
-        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
-        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
-
-        If both input codes are CSS, the output code will likewise be a CSSCode.
+        The stacked code is obtained by having the input codes act on disjoint sets of bits.
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
+        in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        if code_a.field is not code_b.field:
-            raise ValueError("Cannot join codes over different fields")
-        if not isinstance(code_a, CSSCode) or not isinstance(code_b, CSSCode):
-            return QuditCode.stack(code_a, code_b)
-        code_x = ClassicalCode.stack(code_a.code_x, code_b.code_x)
-        code_z = ClassicalCode.stack(code_a.code_z, code_b.code_z)
+        if any(not isinstance(code, CSSCode) for code in codes):
+            return QuditCode.stack(*codes)
+        css_codes = cast(list[CSSCode], codes)
+        code_x = ClassicalCode.stack(*[code.code_x for code in css_codes])
+        code_z = ClassicalCode.stack(*[code.code_z for code in css_codes])
         return CSSCode(
             code_x,
             code_z,
-            field=code_a.field.order,
-            promise_balanced_codes=code_a._balanced_codes and code_b._balanced_codes,
+            promise_balanced_codes=all(code._balanced_codes for code in css_codes),
             skip_validation=True,
         )
 
@@ -1589,3 +1575,18 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[i
     matrix_rref = matrix.row_reduce()
     pivots = [int(np.argmax(row != 0)) for row in matrix_rref if np.any(row)]
     return matrix_rref, pivots
+
+
+def _block_diag(*blocks: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+    """Construct a block-diagonal matrix with the given blocks."""
+    num_rows = sum(block.shape[0] for block in blocks)
+    num_cols = sum(block.shape[1] for block in blocks)
+    matrix = np.zeros((num_rows, num_cols), dtype=int)
+    block_row_start, block_col_start = 0, 0
+    for block in blocks:
+        block_rows = slice(block_row_start, block_row_start + block.shape[0])
+        block_cols = slice(block_col_start, block_col_start + block.shape[1])
+        matrix[block_rows, block_cols] = block
+        block_row_start += block.shape[0]
+        block_col_start += block.shape[1]
+    return matrix
