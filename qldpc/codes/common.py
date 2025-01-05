@@ -504,20 +504,18 @@ class ClassicalCode(AbstractCode):
         return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
 
     @classmethod
-    def stack(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
-        """Stack two classical codes.
+    def stack(cls, *codes: ClassicalCode) -> ClassicalCode:
+        """Stack the given classical codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
-        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
-        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
+        in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        if code_a.field is not code_b.field:
-            raise ValueError("Cannot join codes over different fields")
-        block_matrix = [
-            [code_a.matrix, np.zeros((code_a.num_checks, len(code_b)), dtype=int)],
-            [np.zeros((code_b.num_checks, len(code_a)), dtype=int), code_b.matrix],
-        ]
-        return ClassicalCode(np.block(block_matrix), field=code_a.field.order)
+        fields = [code.field for code in codes]
+        if len(set(fields)) > 1:
+            raise ValueError("Cannot stack codes over different fields")
+        matrices = [code.matrix for code in codes]
+        return ClassicalCode(_block_diag(*matrices), field=fields[0].order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
@@ -1301,12 +1299,8 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
-        logical_ops = [
-            [logicals_x, np.zeros_like(logicals_x)],
-            [np.zeros_like(logicals_z), logicals_z],
-        ]
-        shape = (2, self.dimension, 2 * self.num_qudits)
-        self._logical_ops = self.field(np.block(logical_ops).reshape(shape))
+        logical_ops = _block_diag(logicals_x, logicals_z)
+        self._logical_ops = self.field(logical_ops.reshape(2, self.dimension, -1))
         return self._logical_ops
 
     def get_random_logical_op(
@@ -1444,3 +1438,18 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[i
     matrix_rref = matrix.row_reduce()
     pivots = [int(np.argmax(row != 0)) for row in matrix_rref if np.any(row)]
     return matrix_rref, pivots
+
+
+def _block_diag(*blocks: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+    """Construct a block-diagonal matrix with the given blocks."""
+    num_rows = sum(block.shape[0] for block in blocks)
+    num_cols = sum(block.shape[1] for block in blocks)
+    matrix = np.zeros((num_rows, num_cols), dtype=int)
+    block_row_start, block_col_start = 0, 0
+    for block in blocks:
+        block_rows = slice(block_row_start, block_row_start + block.shape[0])
+        block_cols = slice(block_col_start, block_col_start + block.shape[1])
+        matrix[block_rows, block_cols] = block
+        block_row_start += block.shape[0]
+        block_col_start += block.shape[1]
+    return matrix
