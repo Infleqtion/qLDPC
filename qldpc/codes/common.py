@@ -1376,7 +1376,7 @@ class CSSCode(QuditCode):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
 
     @classmethod
-    def stack(cls, *codes: QuditCode) -> QuditCode:
+    def stack(cls, *codes: QuditCode) -> CSSCode:
         """Stack the given CSS codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
@@ -1384,7 +1384,7 @@ class CSSCode(QuditCode):
         in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
         if any(not isinstance(code, CSSCode) for code in codes):
-            return QuditCode.stack(*codes)
+            raise TypeError("CSSCode.stack requires CSSCode inputs")
         css_codes = cast(list[CSSCode], codes)
         code_x = ClassicalCode.stack(*[code.code_x for code in css_codes])
         code_z = ClassicalCode.stack(*[code.code_z for code in css_codes])
