@@ -421,3 +421,9 @@ def test_code_concatenation() -> None:
     assert not np.any(code.matrix @ code.get_logical_ops(Pauli.Z).T)
     assert not np.any(code_alt.matrix @ code_alt.get_logical_ops(Pauli.X).T)
     assert not np.any(code_alt.matrix @ code_alt.get_logical_ops(Pauli.Z).T)
+
+    # cover some errors
+    with pytest.raises(ValueError, match="different fields"):
+        codes.CSSCode.concatenate(code_c4, codes.ToricCode(2, field=3))
+    with pytest.raises(ValueError, match="divisible"):
+        codes.CSSCode.concatenate(code_c4, code_c4, [0, 1, 2])
