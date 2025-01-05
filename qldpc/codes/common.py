@@ -1415,7 +1415,7 @@ class CSSCode(QuditCode):
         get recomputed from scratch.
         """
         if inner.field is not outer.field:
-            raise ValueError("Cannot concatenate CSS codes over different fields")
+            raise ValueError("Cannot concatenate codes over different fields")
 
         # standardize wiring data and determine the number of copies of inner/outer to stack
         if wiring is None:
