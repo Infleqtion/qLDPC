@@ -813,24 +813,22 @@ class QuditCode(AbstractCode):
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
-        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
-        qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
-        operators.  The last axis is "doubled" to indicate the support of physical X-type vs. Z-type
-        operators.
+        Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
+        k and n are, respectively, the numbers of logical and physical qudits in this code.
+        Each row of logical_ops is a vector that represents a logical operator.  The first
+        (respectively, second) n entries of this vector indicate the support of *physical* X-type
+        (respectively, Z-type) operators.  The rows j < k (respectively, j >= k) correspond to
+        logical X-type (respectively, Z-type) operators, and the operators at rows j and j+k are
+        dual to each other, which is to say that the logical operator at row j commutes with all
+        other operators except that at row j+k.
 
-        Specifically, each row of `logical_ops[0, :, :]` is logical X-type operator that -- due to
-        the way that logical operators are constructed here -- only addresses physical qudits by
-        physical X-type operators.  Each row of `logical_ops[1, :, :]` is a logical Z-type operator
-        that addresses at least one physical qudit by a physical Z-type operator, and may
-        additionally address physical qudits by physical X-type operators.
-
-        For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
-        logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
-        (Z-type) operator.
-
-        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
         operators of that type.
+
+        Due to the way that logical operators are constructed in this method, logical X-type
+        operators only address physical qudits by physical X-type operators, while logical Z-type
+        operators address at least one physical qudits a physical Z-type operator, but may
+        additionally address physical qudits with physical X-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
@@ -839,7 +837,9 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.get_logical_ops()[pauli]
+            num_ops = self.dimension
+            indices = slice(num_ops) if pauli == Pauli.X else slice(num_ops, 2 * num_ops)
+            return self.get_logical_ops()[indices]
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
@@ -910,8 +910,7 @@ class QuditCode(AbstractCode):
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
         logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
-        shape = (2, self.dimension, 2 * self.num_qudits)
-        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]).reshape(shape))
+        self._logical_ops = self.field(np.vstack([logicals_x, logicals_z]))
         return self._logical_ops
 
     @classmethod
@@ -1217,23 +1216,19 @@ class CSSCode(QuditCode):
     def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
-        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
-        qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
-        operators.  The last axis is "doubled" to indicate whether a physical qudit is addressed by
-        a physical X-type or Z-type operator.
+        Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
+        k and n are, respectively, the numbers of logical and physical qudits in this code.
+        Each row of logical_ops is a vector that represents a logical operator.  The first
+        (respectively, second) n entries of this vector indicate the support of *physical* X-type
+        (respectively, Z-type) operators.  The rows j < k (respectively, j >= k) correspond to
+        logical X-type (respectively, Z-type) operators, and the operators at rows j and j+k are
+        dual to each other, which is to say that the logical operator at row j commutes with all
+        other operators except that at row j+k.
 
-        Specifically, `logical_ops[0, :, :]` are logical X-type operators that address physical
-        qudits by physical X-type operators, while `logical_ops[1, :, :]` are logical Z-type
-        operators that address physical qudits by physical Z-type operators.
+        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical operators of that type.
 
-        For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
-        logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
-        (Z-type) operator.  The fact that logical operators come in conjugate pairs means that
-        `logical_ops(Pauli.X)[r, :] @ logical_ops(Pauli.Z)[s, :] == int(r == s)`.
-
-        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
-        operators of that type.
+        Logical X-type operators only address physical qudits by physical X-type operators, and
+        logical Z-type operators only address physical qudits by physical Z-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits and CSSCodes.
@@ -1242,7 +1237,9 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.get_logical_ops()[pauli]
+            num_ops = self.dimension
+            indices = slice(num_ops) if pauli == Pauli.X else slice(num_ops, 2 * num_ops)
+            return self.get_logical_ops()[indices]
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
@@ -1295,8 +1292,7 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
-        logical_ops = _block_diag(logicals_x, logicals_z)
-        self._logical_ops = self.field(logical_ops.reshape(2, self.dimension, -1))
+        self._logical_ops = self.field(_block_diag(logicals_x, logicals_z))
         return self._logical_ops
 
     def get_random_logical_op(
@@ -1336,6 +1332,9 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_index < self.dimension
 
+        dual_pauli = ~pauli
+        assert dual_pauli == Pauli.X or dual_pauli == Pauli.Z
+
         # effective check matrix = syndromes and other logical operators
         if pauli == Pauli.X:
             code = self.code_z
@@ -1343,7 +1342,7 @@ class CSSCode(QuditCode):
         else:
             code = self.code_x
             nonzero_dual_section = slice(self.num_qudits)
-        all_dual_ops = self.get_logical_ops()[~pauli, :, nonzero_dual_section]
+        all_dual_ops = self.get_logical_ops(dual_pauli)[:, nonzero_dual_section]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
         dual_op_index = code.num_checks + logical_index
 
@@ -1363,7 +1362,7 @@ class CSSCode(QuditCode):
         assert self._logical_ops is not None
         self._logical_ops.shape = (2, self.dimension, 2, self.num_qudits)
         self._logical_ops[pauli, logical_index, pauli, :] = candidate_logical_op
-        self._logical_ops.shape = (2, self.dimension, 2 * self.num_qudits)
+        self._logical_ops.shape = (2 * self.dimension, 2 * self.num_qudits)
 
     def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: Any) -> None:
         """Reduce the weight of all logical operators."""
