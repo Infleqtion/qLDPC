@@ -989,9 +989,11 @@ class QuditCode(AbstractCode):
         """Helper function for code concatenation.
 
         This method...
-        - Stacks copies of the inner and outer codes as necessary to make the number of logical
-            qudits of the inner code equal to the number of physical qudits of the outer code, and
-        - Permutes the logical qudits of the inner code according to the provided wiring data.
+        - stacks copies of the inner and outer codes as necessary to make the number of logical
+          qudits of the inner code equal to the number of physical qudits of the outer code, and
+        - permutes the logical qudits of the inner code according to the provided wiring data.  If
+          no wiring data is provided (wiring is None), then the k-th logical qudit of the inner code
+          is used as the k-th physical qudit of the outer code.
         """
         if inner.field is not outer.field:
             raise ValueError("Cannot concatenate codes over different fields")
