@@ -1011,10 +1011,9 @@ class QuditCode(AbstractCode):
             if num_qudits % inner.dimension or num_qudits % len(outer):
                 raise ValueError(
                     "Code concatenation requires the number of qudits mapped by"
-                    f" outer_physical_to_inner_logical ({len(outer_physical_to_inner_logical)})"
-                    f" to be divisible by the number of logical qudits of the inner code"
-                    f" ({inner.dimension}) and the number of physical qudits of the outer code"
-                    f" ({len(outer)})"
+                    f" outer_physical_to_inner_logical ({num_qudits}) to be divisible by the number"
+                    f" of logical qudits of the inner code ({inner.dimension}) and the number of"
+                    f" physical qudits of the outer code ({len(outer)})"
                 )
             outer_physical_to_inner_logical = tuple(
                 outer_physical_to_inner_logical[qq]
