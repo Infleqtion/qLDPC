@@ -751,7 +751,7 @@ class QuditCode(AbstractCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(bound=bound, vector=None, **decoder_args)
+        distance = self.get_distance(bound=bound, **decoder_args)
         return self.num_qudits, self.dimension, distance
 
     def get_distance(self, *, bound: int | bool | None = None, **decoder_args: Any) -> int | float:
