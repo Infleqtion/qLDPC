@@ -20,8 +20,9 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
+import math
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Iterator, Literal, cast
 
 import galois
@@ -555,14 +556,19 @@ class QuditCode(AbstractCode):
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
     written as a block matrix in the form H = [H_z|H_x].  Each block has num_qudits columns.
 
-    The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
-    X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
-    operators.  Specifically:
+    The entries H_x[c, d] = r_x and H_z[c, d] = r_z indicate that check c addresses qudit d with the
+    operator X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are
+    generalized Pauli operators.  Specifically:
     - X(r) = sum_{j=0}^{q-1} |j+r><j| is a shift operator, and
     - Z(r) = sum_{j=0}^{q-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / q).
 
-    Warning: here j, r, s, etc. not integers, but elements of the Galois field GF(q), which has
-    different rules for addition and multiplication when q is not a prime number.
+    Here j and r are not integers, but elements of the Galois field GF(q), which has different
+    rules for addition and multiplication when q is not a prime number.
+
+    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
+    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
+    that parity_check @ pauli_string is a symplectic inner product.
 
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
@@ -926,6 +932,118 @@ class QuditCode(AbstractCode):
         matrix = np.hstack([code_z.matrix, code_x.matrix])
         return QuditCode(matrix)
 
+    @classmethod
+    def concatenate(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
+        *,
+        inherit_logicals: bool = True,
+    ) -> QuditCode:
+        """Concatenate two qudit codes.
+
+        The concatenated code uses the logical qudits of the "inner" code as the physical qudits of
+        the "outer" code, with outer_physical_to_inner_logical defining the map from outer physical
+        qudit index to inner logical qudit index.
+
+        This method nominally assumes that len(outer_physical_to_inner_logical) is equal to both the
+        number of logical qudits of the inner code and the number of physical qudits of the outer
+        code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
+        or outer physicals, then copies of the inner and outer codes are used (stacked together) to
+        match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
+        mapping is provided, then this method stacks the minimal number of inner and outer codes
+        required make the number of inner logicals equal the number of outer physicals, and the k-th
+        inner logical qudit is identified with the k-th outer physical qudit.
+
+        If inherit_logicals is True, use the logical operators of the outer code as the logical
+        operators of the concatenated code.  Otherwise, logical operators of the concatenated code
+        get recomputed from scratch.
+        """
+        # stack copies of the inner and outer codes (if necessary) and permute inner logicals
+        inner, outer = QuditCode._standardize_concatenation_inputs(
+            inner, outer, outer_physical_to_inner_logical
+        )
+
+        """
+        Parity checks inherited from the outer code are nominally defined in terms of their support
+        on logical operators of the inner code.  Expand these parity checks into their support on
+        the physical qudits of the inner code.
+
+        Warning: whereas Pauli strings in this libray are generally represented by vectors that
+        indicate support on [X|Z] ops, parity checks are represented by vectors indicate the support
+        on [Z|X] ops to reflect that they are dual vectors of a symplectic inner product space,
+        thereby ensuring that that parity_check @ pauli_string is a symplectic inner product.  As a
+        consequence, we have to flip the X/Z sectors of the logical operator matrix when expanding
+        the parity checks of the outer code.
+        """
+        inner_logicals_zx = (
+            inner.get_logical_ops()
+            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]  # flip X/Z sectors
+            .reshape(2 * inner.dimension, 2 * len(inner))
+        )
+        outer_checks = outer.matrix @ inner_logicals_zx
+
+        # combine parity checks of the inner and outer codes
+        code = QuditCode(np.vstack([inner.matrix, outer_checks]))
+
+        if inherit_logicals:
+            code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
+        return code
+
+    @classmethod
+    def _standardize_concatenation_inputs(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None,
+    ) -> tuple[QuditCode, QuditCode]:
+        """Helper function for code concatenation.
+
+        This method...
+        - stacks copies of the inner and outer codes as necessary to make the number of logical
+          qudits of the inner code equal to the number of physical qudits of the outer code, and
+        - permutes logical qudits of the inner code according to outer_physical_to_inner_logical.
+          If no outer_physical_to_inner_logical mapping is provided, then the k-th logical qudit of
+          the inner code is used as the k-th physical qudit of the outer code.
+        """
+        if inner.field is not outer.field:
+            raise ValueError("Cannot concatenate codes over different fields")
+
+        # convert outer_physical_to_inner_logical into a tuple that we can use to permute an array
+        if outer_physical_to_inner_logical is None:
+            # default to the trivial mapping with the smallest possible number of qudits
+            num_qudits = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
+            outer_physical_to_inner_logical = tuple(range(num_qudits))
+        else:
+            num_qudits = len(outer_physical_to_inner_logical)
+            if num_qudits % inner.dimension or num_qudits % len(outer):
+                raise ValueError(
+                    "Code concatenation requires the number of qudits mapped by"
+                    f" outer_physical_to_inner_logical ({num_qudits}) to be divisible by the number"
+                    f" of logical qudits of the inner code ({inner.dimension}) and the number of"
+                    f" physical qudits of the outer code ({len(outer)})"
+                )
+            outer_physical_to_inner_logical = tuple(
+                outer_physical_to_inner_logical[qq]
+                for qq in range(len(outer_physical_to_inner_logical))
+            )
+
+        # stack copies of the inner and outer codes, if necessary
+        if (num_inner_blocks := len(outer_physical_to_inner_logical) // inner.dimension) > 1:
+            inner = inner.stack(*[inner] * num_inner_blocks)
+        if (num_outer_blocks := len(outer_physical_to_inner_logical) // len(outer)) > 1:
+            outer = outer.stack(*[outer] * num_outer_blocks)
+
+        # permute logical operators of the inner code
+        inner._logical_ops = inner.field(
+            inner.get_logical_ops()
+            .reshape(2, inner.dimension, -1)[:, outer_physical_to_inner_logical, :]
+            .reshape(2 * inner.dimension, -1)
+        )
+
+        return inner, outer
+
 
 class CSSCode(QuditCode):
     """CSS qudit code, with separate X-type and Z-type parity checks.
@@ -942,6 +1060,11 @@ class CSSCode(QuditCode):
     The full parity check matrix of a CSSCode is
     ⌈  0 , H_x ⌉
     ⌊ H_z,  0  ⌋.
+
+    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
+    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
+    that parity_check @ pauli_string is a symplectic inner product.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -1390,6 +1513,60 @@ class CSSCode(QuditCode):
             promise_balanced_codes=all(code._balanced_codes for code in css_codes),
             skip_validation=True,
         )
+
+    @classmethod
+    def concatenate(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
+        *,
+        inherit_logicals: bool = True,
+    ) -> CSSCode:
+        """Concatenate two CSS codes.
+
+        The concatenated code uses the logical qudits of the "inner" code as the physical qudits of
+        the "outer" code, with outer_physical_to_inner_logical defining the map from outer physical
+        qudit index to inner logical qudit index.
+
+        This method nominally assumes that len(outer_physical_to_inner_logical) is equal to both the
+        number of logical qudits of the inner code and the number of physical qudits of the outer
+        code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
+        or outer physicals, then copies of the inner and outer codes are used (stacked together) to
+        match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
+        mapping is provided, then this method stacks the minimal number of inner and outer codes
+        required make the number of inner logicals equal the number of outer physicals, and the k-th
+        inner logical qudit is identified with the k-th outer physical qudit.
+
+        If inherit_logicals is True, use the logical operators of the outer code as the logical
+        operators of the concatenated code.  Otherwise, logical operators of the concatenated code
+        get recomputed from scratch.
+        """
+        # stack copies of the inner and outer codes (if necessary) and permute inner logicals
+        inner, outer = QuditCode._standardize_concatenation_inputs(
+            inner, outer, outer_physical_to_inner_logical
+        )
+
+        if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
+            raise TypeError("CSSCode.concatenate requires CSSCode inputs")
+
+        """
+        Parity checks inherited from the outer code are nominally defined in terms of their support
+        on logical operators of the inner code.  Expand these parity checks into their support on
+        the physical qudits of the inner code.
+        """
+        outer_checks_x = outer.matrix_x @ inner.get_logical_ops(Pauli.X)[:, : len(inner)]
+        outer_checks_z = outer.matrix_z @ inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
+
+        # combine parity checks of the inner and outer codes
+        code = CSSCode(
+            np.vstack([inner.matrix_x, outer_checks_x]),
+            np.vstack([inner.matrix_z, outer_checks_z]),
+        )
+
+        if inherit_logicals:
+            code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
+        return code
 
 
 def _fix_decoder_args_for_nonbinary_fields(

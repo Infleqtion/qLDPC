@@ -298,6 +298,28 @@ def test_qudit_ops() -> None:
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
 
+def test_qudit_concatenation() -> None:
+    """Concatenate qudit codes."""
+    code_5q = codes.FiveQubitCode()
+
+    # determine the number of copies of the inner code automatically
+    code = codes.QuditCode.concatenate(code_5q, code_5q)
+    assert len(code) == 5 * len(code_5q)
+    assert code.dimension == code_5q.dimension
+
+    # determine the number of copies of the inner and outer codes from wiring data
+    wiring = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
+    code = codes.QuditCode.concatenate(code_5q, code_5q, wiring)
+    assert len(code) == 10 * len(code_5q)
+    assert code.dimension == 2 * code_5q.dimension
+
+    # cover some errors
+    with pytest.raises(ValueError, match="different fields"):
+        codes.QuditCode.concatenate(code_5q, codes.ToricCode(2, field=3))
+    with pytest.raises(ValueError, match="divisible"):
+        codes.QuditCode.concatenate(code_5q, code_5q, [0, 1, 2])
+
+
 ####################################################################################################
 # CSS code tests
 
@@ -395,3 +417,27 @@ def test_stacking_css_codes() -> None:
     codes.QuditCode.stack(steane_code, codes.FiveQubitCode())
     with pytest.raises(TypeError, match="requires CSSCode inputs"):
         codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
+
+
+def test_css_concatenation() -> None:
+    """Concatenate CSS codes."""
+    code_c4 = codes.ToricCode(2)
+
+    # determine the number of copies of the inner code automatically
+    code = codes.CSSCode.concatenate(code_c4, code_c4)
+    assert len(code) == 2 * len(code_c4)
+    assert code.dimension == code_c4.dimension
+
+    # determine the number of copies of the inner and outer codes from wiring data
+    wiring = [0, 2, 4, 6, 1, 3, 5, 7]
+    code = codes.CSSCode.concatenate(code_c4, code_c4, wiring)
+    assert len(code) == 4 * len(code_c4)
+    assert code.dimension == 2 * code_c4.dimension
+
+    # inheriting logical operators yields different logical operators!
+    code_alt = codes.CSSCode.concatenate(code_c4, code_c4, wiring, inherit_logicals=False)
+    assert not np.array_equal(code.get_logical_ops(), code_alt.get_logical_ops())
+
+    # cover some errors
+    with pytest.raises(TypeError, match="CSSCode inputs"):
+        codes.CSSCode.concatenate(code_c4, codes.FiveQubitCode())
