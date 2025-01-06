@@ -949,31 +949,26 @@ class QuditCode(AbstractCode):
         # stack copies of the inner and outer codes (if necessary) and permute inner logicals
         inner, outer = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
 
-        # identify the logical operators of the inner code
-        inner_logs_x = inner.get_logical_ops(Pauli.X)
-        inner_logs_z = inner.get_logical_ops(Pauli.Z)
-
-        # Expand the parity checks of the outer code using the logical operators of the inner code.
-        # Note that parity check vectors indicate the support of [Z|X] ops (as opposed to [X|Z] ops)
-        # because parity check vectors are dual vectors of a symplectic vector space.  This
-        # convention ensures that parity_check @ pauli_string is a symplectic inner product.
-        outer_checks = outer.matrix @ np.vstack([inner_logs_z, inner_logs_x])
-
-        # swap X/Z sectors of the input space to recover symplectic dual vector parity checks
-        outer_checks = inner.field(
-            outer_checks.reshape(outer.num_checks, 2, -1)[:, ::-1, :].reshape(outer.num_checks, -1)
+        """
+        Expand the parity checks of the outer code using the logical operators of the inner code.
+        Note that parity check vectors indicate the support of [Z|X] ops (as opposed to [X|Z] ops)
+        because parity check vectors are dual vectors of a symplectic vector space.  This convention
+        is convenient to ensure that parity_check @ pauli_string is a symplectic inner product, but
+        in this case requires us to flip the X/Z sectors of the inner logical operator matrix when
+        expanding the outer parity checks.
+        """
+        inner_logicals_zx = (
+            inner.get_logical_ops()
+            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]
+            .reshape(2 * inner.dimension, 2 * len(inner))
         )
+        outer_checks = outer.matrix @ inner_logicals_zx
 
         # combine parity checks of the inner and outer codes
         code = QuditCode(np.vstack([inner.matrix, outer_checks]))
 
         if inherit_logicals:
-            inner_logicals = np.vstack([inner_logs_x, inner_logs_z])
-            logicals_x = outer.get_logical_ops(Pauli.X) @ inner_logicals
-            logicals_z = outer.get_logical_ops(Pauli.Z) @ inner_logicals
-            shape = (2, outer.dimension, -1)
-            code._logical_ops = code.field(np.stack([logicals_x, logicals_z]).reshape(shape))
-
+            code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
 
     @classmethod
@@ -1014,8 +1009,13 @@ class QuditCode(AbstractCode):
         if (num_outer_blocks := len(wiring) // len(outer)) > 1:
             outer = outer.stack(*[outer] * num_outer_blocks)
 
-        # permute logical operators of the inner code and return
-        inner._logical_ops = inner.get_logical_ops()[:, wiring, :]
+        # permute logical operators of the inner code
+        inner._logical_ops = inner.field(
+            inner.get_logical_ops()
+            .reshape(2, inner.dimension, -1)[:, wiring, :]
+            .reshape(2 * inner.dimension, -1)
+        )
+
         return inner, outer
 
 
@@ -1508,13 +1508,9 @@ class CSSCode(QuditCode):
         if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
             raise TypeError("CSSCode.concatenate requires CSSCode inputs")
 
-        # identify and permute the logical operators of the inner code
-        inner_logs_x = inner.get_logical_ops(Pauli.X)[:, : len(inner)]
-        inner_logs_z = inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
-
         # expand the parity checks of the outer code using the logical operators of the inner code
-        outer_checks_x = outer.matrix_x @ inner_logs_x
-        outer_checks_z = outer.matrix_z @ inner_logs_z
+        outer_checks_x = outer.matrix_x @ inner.get_logical_ops(Pauli.X)[:, : len(inner)]
+        outer_checks_z = outer.matrix_z @ inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
 
         # combine parity checks of the inner and outer codes
         code = CSSCode(
@@ -1523,11 +1519,7 @@ class CSSCode(QuditCode):
         )
 
         if inherit_logicals:
-            logicals_x = outer.get_logical_ops(Pauli.X)[:, : len(outer)] @ inner_logs_x
-            logicals_z = outer.get_logical_ops(Pauli.Z)[:, len(outer) :] @ inner_logs_z
-            logical_ops = _block_diag(logicals_x, logicals_z)
-            code._logical_ops = code.field(logical_ops.reshape(2, code.dimension, -1))
-
+            code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
 
 
