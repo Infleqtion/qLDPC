@@ -952,7 +952,7 @@ class QuditCode(AbstractCode):
         inner logical qudit is identified with the k-th outer physical qudit.
 
         If inherit_logicals is True, use the logical operators of the outer code as the logical
-        operators of the concatenated code.  Otherwire, logical operators of the concatenated code
+        operators of the concatenated code.  Otherwise, logical operators of the concatenated code
         get recomputed from scratch.
         """
         # stack copies of the inner and outer codes (if necessary) and permute inner logicals
@@ -1525,7 +1525,7 @@ class CSSCode(QuditCode):
         inner logical qudit is identified with the k-th outer physical qudit.
 
         If inherit_logicals is True, use the logical operators of the outer code as the logical
-        operators of the concatenated code.  Otherwire, logical operators of the concatenated code
+        operators of the concatenated code.  Otherwise, logical operators of the concatenated code
         get recomputed from scratch.
         """
         # stack copies of the inner and outer codes (if necessary) and permute inner logicals
