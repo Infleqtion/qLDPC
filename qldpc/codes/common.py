@@ -837,9 +837,7 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            num_ops = self.dimension
-            indices = slice(num_ops) if pauli == Pauli.X else slice(num_ops, 2 * num_ops)
-            return self.get_logical_ops()[indices]
+            return self.field(self.get_logical_ops().reshape(2, self.dimension, -1)[pauli, :, :])
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
@@ -1238,9 +1236,7 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            num_ops = self.dimension
-            indices = slice(num_ops) if pauli == Pauli.X else slice(num_ops, 2 * num_ops)
-            return self.get_logical_ops()[indices]
+            return self.field(self.get_logical_ops().reshape(2, self.dimension, -1)[pauli, :, :])
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None:
