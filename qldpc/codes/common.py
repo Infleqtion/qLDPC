@@ -1001,6 +1001,7 @@ class QuditCode(AbstractCode):
         if inner.field is not outer.field:
             raise ValueError("Cannot concatenate codes over different fields")
 
+        # convert outer_physical_to_inner_logical into a tuple that we can use to permute an array
         if outer_physical_to_inner_logical is None:
             # default to the trivial mapping with the smallest possible number of qudits
             num_qudits = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
