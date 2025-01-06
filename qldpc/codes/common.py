@@ -959,7 +959,7 @@ class QuditCode(AbstractCode):
         """
         inner_logicals_zx = (
             inner.get_logical_ops()
-            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]
+            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]  # flip X/Z sectors
             .reshape(2 * inner.dimension, 2 * len(inner))
         )
         outer_checks = outer.matrix @ inner_logicals_zx
@@ -1012,7 +1012,7 @@ class QuditCode(AbstractCode):
         # permute logical operators of the inner code
         inner._logical_ops = inner.field(
             inner.get_logical_ops()
-            .reshape(2, inner.dimension, -1)[:, wiring, :]
+            .reshape(2, inner.dimension, -1)[:, wiring, :]  # permute logical qudits
             .reshape(2 * inner.dimension, -1)
         )
 
