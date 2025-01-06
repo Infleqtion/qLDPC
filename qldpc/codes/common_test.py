@@ -307,7 +307,7 @@ def test_qudit_concatenation() -> None:
     assert len(code) == 5 * len(code_5q)
     assert code.dimension == code_5q.dimension
 
-    # determine the number of copies of the inner code from wiring data
+    # determine the number of copies of the inner and outer codes from wiring data
     wiring = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
     code = codes.QuditCode.concatenate(code_5q, code_5q, wiring)
     assert len(code) == 10 * len(code_5q)
@@ -428,7 +428,7 @@ def test_css_concatenation() -> None:
     assert len(code) == 2 * len(code_c4)
     assert code.dimension == code_c4.dimension
 
-    # determine the number of copies of the inner code from wiring data
+    # determine the number of copies of the inner and outer codes from wiring data
     wiring = [0, 2, 4, 6, 1, 3, 5, 7]
     code = codes.CSSCode.concatenate(code_c4, code_c4, wiring)
     assert len(code) == 4 * len(code_c4)
