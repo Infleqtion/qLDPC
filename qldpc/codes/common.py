@@ -959,7 +959,7 @@ class QuditCode(AbstractCode):
         # Expand the parity checks of the outer code using the logical operators of the inner code.
         # Note that parity check vectors indicate the support of [Z|X] ops (as opposed to [X|Z] ops)
         # because parity check vectors are dual vectors of a symplectic vector space.  This
-        # convention ensures that parity_check @ pauli_vector is a symplectic inner product.
+        # convention ensures that parity_check @ pauli_string is a symplectic inner product.
         outer_checks = outer.matrix @ np.vstack([inner_logs_z, inner_logs_x])
 
         # swap X/Z sectors of the input space to recover symplectic dual vector parity checks
