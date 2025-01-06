@@ -556,14 +556,19 @@ class QuditCode(AbstractCode):
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
     written as a block matrix in the form H = [H_z|H_x].  Each block has num_qudits columns.
 
-    The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
-    X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
-    operators.  Specifically:
+    The entries H_x[c, d] = r_x and H_z[c, d] = r_z indicate that check c addresses qudit d with the
+    operator X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are
+    generalized Pauli operators.  Specifically:
     - X(r) = sum_{j=0}^{q-1} |j+r><j| is a shift operator, and
     - Z(r) = sum_{j=0}^{q-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / q).
 
-    Warning: here j, r, s, etc. not integers, but elements of the Galois field GF(q), which has
-    different rules for addition and multiplication when q is not a prime number.
+    Here j and r are not integers, but elements of the Galois field GF(q), which has different
+    rules for addition and multiplication when q is not a prime number.
+
+    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
+    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
+    that parity_check @ pauli_string is a symplectic inner product.
 
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
@@ -961,12 +966,16 @@ class QuditCode(AbstractCode):
         )
 
         """
-        Write the parity checks of the outer code in terms of logical operators of the inner code.
-        Note that parity check vectors indicate the support of [Z|X] ops (as opposed to [X|Z] ops)
-        because parity check vectors are dual vectors of a symplectic vector space.  This convention
-        is convenient to ensure that parity_check @ pauli_string is a symplectic inner product, but
-        in this case requires us to flip the X/Z sectors of the inner logical operator matrix to
-        "expand" the outer parity checks.
+        Parity checks inherited from the outer code are nominally defined in terms of their support
+        on logical operators of the inner code.  Expand these parity checks into their support on
+        the physical qudits of the inner code.
+
+        Warning: whereas Pauli strings in this libray are generally represented by vectors that
+        indicate support on [X|Z] ops, parity checks are represented by vectors indicate the support
+        on [Z|X] ops to reflect that they are dual vectors of a symplectic inner product space,
+        thereby ensuring that that parity_check @ pauli_string is a symplectic inner product.  As a
+        consequence, we have to flip the X/Z sectors of the logical operator matrix when expanding
+        the parity checks of the outer code.
         """
         inner_logicals_zx = (
             inner.get_logical_ops()
@@ -1051,6 +1060,11 @@ class CSSCode(QuditCode):
     The full parity check matrix of a CSSCode is
     ⌈  0 , H_x ⌉
     ⌊ H_z,  0  ⌋.
+
+    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
+    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
+    that parity_check @ pauli_string is a symplectic inner product.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -1536,7 +1550,11 @@ class CSSCode(QuditCode):
         if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
             raise TypeError("CSSCode.concatenate requires CSSCode inputs")
 
-        # write the parity checks of the outer code in terms of logical operators of the inner code
+        """
+        Parity checks inherited from the outer code are nominally defined in terms of their support
+        on logical operators of the inner code.  Expand these parity checks into their support on
+        the physical qudits of the inner code.
+        """
         outer_checks_x = outer.matrix_x @ inner.get_logical_ops(Pauli.X)[:, : len(inner)]
         outer_checks_z = outer.matrix_z @ inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
 
