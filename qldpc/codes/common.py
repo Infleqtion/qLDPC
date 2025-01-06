@@ -934,7 +934,7 @@ class QuditCode(AbstractCode):
         outer: QuditCode,
         wiring: dict[int, int] | Sequence[int] | None = None,
         *,
-        inherit_logicals: bool = False,
+        inherit_logicals: bool = True,
     ) -> QuditCode:
         """Concatenate two qudit codes.
 
@@ -1490,7 +1490,7 @@ class CSSCode(QuditCode):
         outer: QuditCode,
         wiring: dict[int, int] | Sequence[int] | None = None,
         *,
-        inherit_logicals: bool = False,
+        inherit_logicals: bool = True,
     ) -> CSSCode:
         """Concatenate two CSS codes.
 
