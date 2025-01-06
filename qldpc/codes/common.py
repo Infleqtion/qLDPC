@@ -22,7 +22,7 @@ import functools
 import itertools
 import math
 import random
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Iterator, Literal, cast
 
 import galois
@@ -932,22 +932,33 @@ class QuditCode(AbstractCode):
         cls,
         inner: QuditCode,
         outer: QuditCode,
-        wiring: dict[int, int] | Sequence[int] | None = None,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
         *,
         inherit_logicals: bool = True,
     ) -> QuditCode:
         """Concatenate two qudit codes.
 
         The concatenated code uses the logical qudits of the "inner" code as the physical qudits of
-        the "outer" code, with wiring[outer_physical_qudit_index] = inner_logical_qudit_index.
-        Copies of the inner and outer codes are stacked as necessary to make qudit numbers agree.
+        the "outer" code, with outer_physical_to_inner_logical defining the map from outer physical
+        qudit index to inner logical qudit index.
+
+        This method nominally assumes that len(outer_physical_to_inner_logical) is equal to both the
+        number of logical qudits of the inner code and the number of physical qudits of the outer
+        code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
+        or outer physicals, then copies of the inner and outer codes are used (stacked together) to
+        match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
+        mapping is provided, then this method stacks the minimal number of inner and outer codes
+        required make the number of inner logicals equal the number of outer physicals, and the k-th
+        inner logical qudit is identified with the k-th outer physical qudit.
 
         If inherit_logicals is True, use the logical operators of the outer code as the logical
         operators of the concatenated code.  Otherwire, logical operators of the concatenated code
         get recomputed from scratch.
         """
         # stack copies of the inner and outer codes (if necessary) and permute inner logicals
-        inner, outer = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
+        inner, outer = QuditCode._standardize_concatenation_inputs(
+            inner, outer, outer_physical_to_inner_logical
+        )
 
         """
         Write the parity checks of the outer code in terms of logical operators of the inner code.
@@ -976,43 +987,50 @@ class QuditCode(AbstractCode):
         cls,
         inner: QuditCode,
         outer: QuditCode,
-        wiring: dict[int, int] | Sequence[int] | None,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None,
     ) -> tuple[QuditCode, QuditCode]:
         """Helper function for code concatenation.
 
         This method...
         - stacks copies of the inner and outer codes as necessary to make the number of logical
           qudits of the inner code equal to the number of physical qudits of the outer code, and
-        - permutes the logical qudits of the inner code according to the provided wiring data.  If
-          no wiring data is provided (wiring is None), then the k-th logical qudit of the inner code
-          is used as the k-th physical qudit of the outer code.
+        - permutes logical qudits of the inner code according to outer_physical_to_inner_logical.
+          If no outer_physical_to_inner_logical mapping is provided, then the k-th logical qudit of
+          the inner code is used as the k-th physical qudit of the outer code.
         """
         if inner.field is not outer.field:
             raise ValueError("Cannot concatenate codes over different fields")
 
-        if wiring is None:
-            # default to the trivial wiring with the smallest possible number of qudits
+        if outer_physical_to_inner_logical is None:
+            # default to the trivial mapping with the smallest possible number of qudits
             num_qudits = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
-            wiring = tuple(range(num_qudits))
+            outer_physical_to_inner_logical = tuple(range(num_qudits))
         else:
-            if len(wiring) % inner.dimension or len(wiring) % len(outer):
+            if len(outer_physical_to_inner_logical) % inner.dimension or len(
+                outer_physical_to_inner_logical
+            ) % len(outer):
                 raise ValueError(
-                    "Code concatenation requires the number of intermediate qudits for wiring"
-                    f" ({len(wiring)}) to be divisible by inner code dimension ({inner.dimension})"
-                    f" and outer code block length ({len(outer)})"
+                    "Code concatenation requires the number of qudits mapped by"
+                    f" outer_physical_to_inner_logical ({len(outer_physical_to_inner_logical)})"
+                    f" to be divisible by the number of logical qudits of the inner code"
+                    f" ({inner.dimension}) and the number of physical qudits of the outer code"
+                    f" ({len(outer)})"
                 )
-            wiring = tuple(wiring[qq] for qq in range(len(wiring)))
+            outer_physical_to_inner_logical = tuple(
+                outer_physical_to_inner_logical[qq]
+                for qq in range(len(outer_physical_to_inner_logical))
+            )
 
         # stack copies of the inner and outer codes, if necessary
-        if (num_inner_blocks := len(wiring) // inner.dimension) > 1:
+        if (num_inner_blocks := len(outer_physical_to_inner_logical) // inner.dimension) > 1:
             inner = inner.stack(*[inner] * num_inner_blocks)
-        if (num_outer_blocks := len(wiring) // len(outer)) > 1:
+        if (num_outer_blocks := len(outer_physical_to_inner_logical) // len(outer)) > 1:
             outer = outer.stack(*[outer] * num_outer_blocks)
 
         # permute logical operators of the inner code
         inner._logical_ops = inner.field(
             inner.get_logical_ops()
-            .reshape(2, inner.dimension, -1)[:, wiring, :]  # permute logical qudits
+            .reshape(2, inner.dimension, -1)[:, outer_physical_to_inner_logical, :]
             .reshape(2 * inner.dimension, -1)
         )
 
@@ -1488,22 +1506,33 @@ class CSSCode(QuditCode):
         cls,
         inner: QuditCode,
         outer: QuditCode,
-        wiring: dict[int, int] | Sequence[int] | None = None,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
         *,
         inherit_logicals: bool = True,
     ) -> CSSCode:
         """Concatenate two CSS codes.
 
         The concatenated code uses the logical qudits of the "inner" code as the physical qudits of
-        the "outer" code, with wiring[outer_physical_qudit_index] = inner_logical_qudit_index.
-        Copies of the inner and outer codes are stacked as necessary to make qudit numbers agree.
+        the "outer" code, with outer_physical_to_inner_logical defining the map from outer physical
+        qudit index to inner logical qudit index.
+
+        This method nominally assumes that len(outer_physical_to_inner_logical) is equal to both the
+        number of logical qudits of the inner code and the number of physical qudits of the outer
+        code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
+        or outer physicals, then copies of the inner and outer codes are used (stacked together) to
+        match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
+        mapping is provided, then this method stacks the minimal number of inner and outer codes
+        required make the number of inner logicals equal the number of outer physicals, and the k-th
+        inner logical qudit is identified with the k-th outer physical qudit.
 
         If inherit_logicals is True, use the logical operators of the outer code as the logical
         operators of the concatenated code.  Otherwire, logical operators of the concatenated code
         get recomputed from scratch.
         """
         # stack copies of the inner and outer codes (if necessary) and permute inner logicals
-        inner, outer = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
+        inner, outer = QuditCode._standardize_concatenation_inputs(
+            inner, outer, outer_physical_to_inner_logical
+        )
 
         if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
             raise TypeError("CSSCode.concatenate requires CSSCode inputs")
