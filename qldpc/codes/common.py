@@ -1508,7 +1508,7 @@ class CSSCode(QuditCode):
         if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
             raise TypeError("CSSCode.concatenate requires CSSCode inputs")
 
-        # expand the parity checks of the outer code using the logical operators of the inner code
+        # write the parity checks of the outer code in terms of logical operators of the inner code
         outer_checks_x = outer.matrix_x @ inner.get_logical_ops(Pauli.X)[:, : len(inner)]
         outer_checks_z = outer.matrix_z @ inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
 
