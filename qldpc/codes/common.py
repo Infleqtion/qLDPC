@@ -950,12 +950,12 @@ class QuditCode(AbstractCode):
         inner, outer = QuditCode._standardize_concatenation_inputs(inner, outer, wiring)
 
         """
-        Expand the parity checks of the outer code using the logical operators of the inner code.
+        Write the parity checks of the outer code in terms of logical operators of the inner code.
         Note that parity check vectors indicate the support of [Z|X] ops (as opposed to [X|Z] ops)
         because parity check vectors are dual vectors of a symplectic vector space.  This convention
         is convenient to ensure that parity_check @ pauli_string is a symplectic inner product, but
-        in this case requires us to flip the X/Z sectors of the inner logical operator matrix when
-        expanding the outer parity checks.
+        in this case requires us to flip the X/Z sectors of the inner logical operator matrix to
+        "expand" the outer parity checks.
         """
         inner_logicals_zx = (
             inner.get_logical_ops()
