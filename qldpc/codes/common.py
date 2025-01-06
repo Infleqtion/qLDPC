@@ -1007,9 +1007,8 @@ class QuditCode(AbstractCode):
             num_qudits = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
             outer_physical_to_inner_logical = tuple(range(num_qudits))
         else:
-            if len(outer_physical_to_inner_logical) % inner.dimension or len(
-                outer_physical_to_inner_logical
-            ) % len(outer):
+            num_qudits = len(outer_physical_to_inner_logical)
+            if num_qudits % inner.dimension or num_qudits % len(outer):
                 raise ValueError(
                     "Code concatenation requires the number of qudits mapped by"
                     f" outer_physical_to_inner_logical ({len(outer_physical_to_inner_logical)})"
