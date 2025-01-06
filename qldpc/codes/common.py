@@ -1225,7 +1225,8 @@ class CSSCode(QuditCode):
         dual to each other, which is to say that the logical operator at row j commutes with all
         other operators except that at row j+k.
 
-        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical operators of that type.
+        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
+        operators of that type.
 
         Logical X-type operators only address physical qudits by physical X-type operators, and
         logical Z-type operators only address physical qudits by physical Z-type operators.
