@@ -419,7 +419,7 @@ def test_stacking_css_codes() -> None:
         codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
 
 
-def test_code_concatenation() -> None:
+def test_css_concatenation() -> None:
     """Concatenate CSS codes."""
     code_c4 = codes.ToricCode(2)
 
