@@ -240,3 +240,9 @@ def test_get_small_group_structure() -> None:
     ):
         structure = f"SmallGroup({order},{index})"
         assert external.groups.get_small_group_structure(order, index) == structure
+
+
+def test_known_groups() -> None:
+    """Retrieve known groups."""
+    for group, generators in external.groups.KNOWN_GROUPS.items():
+        assert external.groups.get_generators(group) == generators
