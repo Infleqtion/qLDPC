@@ -127,10 +127,8 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
 
     # code with randomly permuted qubits
     base_code = codes.FiveQubitCode()
-    matrix = base_code.matrix.reshape(-1, len(base_code))
-    permutation = np.eye(len(base_code), dtype=int)[np.random.permutation(len(base_code))]
-    permuted_matrix = (matrix @ base_code.field(permutation)).reshape(-1, 2 * len(base_code))
-    code = codes.QuditCode(permuted_matrix)
+    matrix = base_code.matrix.reshape(-1, 5)[:, np.random.permutation(5)].reshape(-1, 10)
+    code = codes.QuditCode(matrix)
 
     # logical circuit: random single-qubit Clifford recognized by Stim
     logical_op = np.random.choice(
