@@ -217,7 +217,6 @@ def test_get_small_group_structure() -> None:
     # fail to retrieve structure from GAP
     process = get_mock_process("")
     with (
-        unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_result", return_value=process),
         pytest.raises(ValueError, match="Group not recognized"),
@@ -227,7 +226,6 @@ def test_get_small_group_structure() -> None:
     # retrieve structure from GAP
     process = get_mock_process(structure)
     with (
-        unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_result", return_value=process),
     ):
@@ -235,7 +233,6 @@ def test_get_small_group_structure() -> None:
 
     # GAP is not installed
     with (
-        unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
     ):
         structure = f"SmallGroup({order},{index})"
