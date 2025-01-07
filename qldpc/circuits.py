@@ -229,7 +229,7 @@ def _get_transversal_automorphism_data(
     for aa in range(code.dimension, len(code)):
         decoded_stabilizer_before = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
         decoded_stabilizer_after = decoded_tableau(stim.PauliString(decoded_stabilizer_before))
-        decoded_correction += "_" if decoded_stabilizer_after.sign == -1 else "X"
+        decoded_correction += "_" if decoded_stabilizer_after.sign == 1 else "X"
     correction = encoder(stim.PauliString(decoded_correction))
     physical_circuit = _get_pauli_circuit(correction) + physical_circuit
 
