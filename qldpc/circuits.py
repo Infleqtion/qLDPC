@@ -85,7 +85,7 @@ def get_transversal_ops(
     local_gates: Collection[str] = ("S", "H", "SWAP"),
     *,
     remove_redundancies: bool = True,
-) -> tuple[list[stim.Tableau], list[stim.Circuit]]:
+) -> list[tuple[stim.Tableau, stim.Circuit]]:
     """Logical tableaus and physical circuits for transversal logical Clifford gates of a code.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
@@ -95,8 +95,7 @@ def get_transversal_ops(
     """
     group_aut = get_transversal_automorphism_group(code, local_gates)
 
-    logical_tableaus: list[stim.Tableau] = []
-    physical_circuits: list[stim.Circuit] = []
+    transversal_ops: list[tuple[stim.Tableau, stim.Circuit]] = []
     for generator in group_aut.generators:
         logical_tableau, physical_circuit = _get_transversal_automorphism_data(
             code, generator, local_gates
@@ -105,13 +104,12 @@ def get_transversal_ops(
             _is_pauli_tableau(logical_tableau)
             or any(
                 _tableaus_are_equivalent_mod_paulis(logical_tableau, tableau)
-                for tableau in logical_tableaus
+                for tableau, _ in transversal_ops
             )
         ):
-            logical_tableaus.append(logical_tableau)
-            physical_circuits.append(physical_circuit)
+            transversal_ops.append((logical_tableau, physical_circuit))
 
-    return logical_tableaus, physical_circuits
+    return transversal_ops
 
 
 def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
