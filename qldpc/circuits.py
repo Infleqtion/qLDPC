@@ -341,7 +341,7 @@ def maybe_get_transversal_circuit(
     logical_tableau = (
         logical_circuit_or_tableau
         if isinstance(logical_circuit_or_tableau, stim.Tableau)
-        else logical_circuit_or_tableau.to_tableau()
+        else (logical_circuit_or_tableau + stim.Circuit(f"I {code.dimension-1}")).to_tableau()
     )
 
     matching_tableau: stim.Tableau | None = None
