@@ -244,8 +244,8 @@ def test_get_small_group_structure() -> None:
 
 def test_known_groups() -> None:
     """Retrieve known groups."""
-    gap_is_installed = external.gap.is_installed()
     for group, generators in external.groups.KNOWN_GROUPS.items():
-        assert generators == external.groups.get_generators(group)
-        if gap_is_installed:
-            assert generators == external.groups.get_generators_with_gap(group)
+        assert external.groups.get_generators(group) == generators
+
+        gap_generators = external.groups.get_generators_with_gap(group)
+        assert gap_generators is None or gap_generators == generators

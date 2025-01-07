@@ -81,7 +81,7 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
 
     code: codes.QuditCode = codes.FiveQubitCode()
 
-    if external.gap.is_installed():
+    if external.gap.is_installed():  # pragma: no cover
         # randomly permute the qubits to switch things up!
         new_matrix = code.matrix.reshape(-1, 5)[:, np.random.permutation(5)].reshape(-1, 10)
         code = codes.QuditCode(new_matrix)
