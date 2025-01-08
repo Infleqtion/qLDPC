@@ -27,8 +27,13 @@ import pymatching
 
 
 class Decoder(Protocol):
-    def __init__(self, matrix: npt.NDArray[np.int_], **decoder_args: object) -> None: ...
-    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]: ...
+    """Template (protocol) for a decoder object."""
+
+    def __init__(self, matrix: npt.NDArray[np.int_], **decoder_args: object) -> None:
+        """Initialize a decoder for the given parity check matrix (and additional arguments)."""
+
+    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Decode the given syndrome."""
 
 
 def decode(
