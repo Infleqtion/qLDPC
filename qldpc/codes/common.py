@@ -1448,7 +1448,7 @@ class CSSCode(QuditCode):
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
         logical_ops = _block_diag([logicals_x, logicals_z])
-        self.set_logical_ops_xz(logical_ops, validate=validate)
+        self.set_logical_ops(logical_ops, validate=validate)
 
     def get_random_logical_op(
         self, pauli: PauliXZ, *, ensure_nontrivial: bool = False, seed: int | None = None
