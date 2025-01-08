@@ -341,11 +341,12 @@ def get_transversal_circuits(
     physical_circuits = [None] * len(logical_circuits_or_tableaus)
 
     # convert logical Cliffords into tableaus
+    identity = stim.Circuit(f"I {code.dimension-1}")  # to ensure circuits address all qubits
     logical_tableaus = [
         (
             logical_circuit_or_tableau
             if isinstance(logical_circuit_or_tableau, stim.Tableau)
-            else (logical_circuit_or_tableau + stim.Circuit(f"I {code.dimension-1}")).to_tableau()
+            else (logical_circuit_or_tableau + identity).to_tableau()
         )
         for logical_circuit_or_tableau in logical_circuits_or_tableaus
     ]
