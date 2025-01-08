@@ -917,6 +917,30 @@ class QuditCode(AbstractCode):
         self._logical_ops = self.field(np.vstack([logicals_x, logicals_z]))
         return self._logical_ops
 
+    def set_logical_ops(
+        self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
+    ) -> None:
+        """Set the logical operators of this code to the provided logical operators."""
+        if validate:
+            self.validate_logical_ops(logical_ops)
+        self._logical_ops = self.field(logical_ops)
+
+    def validate_logical_ops(
+        self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]]
+    ) -> None:
+        """Assert that the given logical operators are valid for this code."""
+        logical_ops = self.field(logical_ops)
+
+        logs_x = logical_ops[: self.dimension]
+        logs_z = logical_ops[self.dimension :]
+        logs_x_dual = logs_x.reshape(-1, 2, len(self))[:, ::-1, :].reshape(-1, 2 * len(self))
+        inner_products = logs_x_dual @ logs_z.T
+        if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
+            raise ValueError("The given logical operators have incorrect commutation relations")
+
+        if np.any(self.matrix @ logical_ops.T):
+            raise ValueError("The given logical operators do not commute with stabilizers")
+
     @classmethod
     def stack(cls, *codes: QuditCode) -> QuditCode:
         """Stack the given qudit codes.
@@ -1414,6 +1438,17 @@ class CSSCode(QuditCode):
 
         self._logical_ops = self.field(_block_diag(logicals_x, logicals_z))
         return self._logical_ops
+
+    def set_logical_ops_xz(
+        self,
+        logicals_x: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        logicals_z: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        *,
+        validate: bool = True,
+    ) -> None:
+        """Set the logical operators of this code to the provided logical operators."""
+        logical_ops = _block_diag(self.field(logicals_x), self.field(logicals_z))
+        self.set_logical_ops(logical_ops, validate=validate)
 
     def get_random_logical_op(
         self, pauli: PauliXZ, *, ensure_nontrivial: bool = False, seed: int | None = None

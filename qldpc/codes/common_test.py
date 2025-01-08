@@ -225,6 +225,9 @@ def test_qudit_code() -> None:
     redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
     assert codes.QuditCode.equiv(code, redundant_code)
 
+    # the logical ops of the redundant code are valid ops of the original code
+    code.set_logical_ops(redundant_code.get_logical_ops())  # also validates the logical ops
+
     # cover calls to the known code exact distance
     assert code.get_code_params() == (5, 1, 3)
     assert code.get_distance(bound=True) == 3
@@ -244,6 +247,18 @@ def test_qudit_code() -> None:
     two_codes = codes.QuditCode.stack(code, code)
     assert len(two_codes) == len(code) * 2
     assert two_codes.dimension == code.dimension * 2
+
+    # swapping logical X ops on the two encoded qubits breaks commutation relations
+    logical_ops = two_codes.get_logical_ops().copy()
+    logical_ops[0], logical_ops[1] = logical_ops[1], logical_ops[0]
+    with pytest.raises(ValueError, match="incorrect commutation relations"):
+        two_codes.validate_logical_ops(logical_ops)
+
+    # invalid modifications of logical operators break commutation relations
+    logical_ops = two_codes.get_logical_ops().copy()
+    logical_ops[0, -1] += two_codes.field(1)
+    with pytest.raises(ValueError, match="do not commute with stabilizers"):
+        two_codes.validate_logical_ops(logical_ops)
 
     # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
@@ -353,19 +368,11 @@ def test_css_ops() -> None:
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
     code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
 
-    # test that logical operators have trivial syndromes
-    logicals_x = code.get_logical_ops(Pauli.X)
-    logicals_z = code.get_logical_ops(Pauli.Z)
-    assert not np.any(logicals_x[:, len(code) :])
-    assert not np.any(logicals_z[:, : len(code)])
-    assert not np.any(code.matrix @ logicals_x.T)
-    assert not np.any(code.matrix @ logicals_z.T)
-    assert code.get_logical_ops() is code._logical_ops
-
-    # test that logical operators are dual to each other
-    logicals_x = logicals_x[:, : len(code)]
-    logicals_z = logicals_z[:, len(code) :]
-    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
+    # swap around logical operators
+    code.set_logical_ops_xz(
+        code.get_logical_ops(Pauli.X)[::-1, : len(code)],
+        code.get_logical_ops(Pauli.Z)[::-1, len(code) :],
+    )
 
     # successfullly construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
