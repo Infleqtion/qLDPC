@@ -27,7 +27,7 @@ def test_custom_decoder() -> None:
     """Custom decoder."""
     matrix = np.eye(2, dtype=int)
     syndrome = np.zeros(2, dtype=int)
-    result = decoder.decode(matrix, syndrome, decoder=lambda matrix, syndrome: None)
+    result = decoder.decode(matrix, syndrome, decoder=decoder.Decoder)
     assert result is None
 
 

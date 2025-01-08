@@ -50,13 +50,14 @@ def decode(
 
     In all cases, pass the `decoder_args` to the decoder that is used.
     """
-    if callable(custom_decoder := decoder_args.pop("decoder", None)):
-        return custom_decoder(matrix, syndrome, **decoder_args)
     return get_decoder(matrix, **decoder_args).decode(syndrome)
 
 
 def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Retrieve a decoder."""
+    if callable(custom_decoder := decoder_args.pop("decoder", None)):
+        return custom_decoder(matrix, **decoder_args)
+
     if decoder_args.pop("with_ILP", False):
         return get_decoder_ILP(matrix, **decoder_args)
 
