@@ -559,8 +559,8 @@ class ClassicalCode(AbstractCode):
         num_logical_errors = 0
         for _ in range(num_trials):
             error = np.random.choice([0, 1], p=[1 - error_rate, error_rate], size=len(self))
-            correction = decoder.decode(self.matrix @ error)
-            if np.any(self.matrix @ correction):
+            correction = decoder.decode(self.matrix @ self.field(error))
+            if np.any(self.matrix @ self.field(correction)):
                 num_logical_errors += 1
 
         return num_logical_errors / num_trials
@@ -1641,14 +1641,14 @@ class CSSCode(QuditCode):
             error = np.random.choice(range(4), p=pauli_probs, size=len(self))
 
             error_x = (error > 1).astype(int)
-            correction_x = decoder_x.decode(self.matrix_z @ error_x)
-            if np.any(self.matrix_z @ correction_x):
+            correction_x = decoder_x.decode(self.matrix_z @ self.field(error_x))
+            if np.any(self.matrix_z @ self.field(correction_x)):
                 num_logical_errors += 1
                 continue
 
             error_z = (error % 2).astype(int)
-            correction_z = decoder_z.decode(self.matrix_x @ error_z)
-            if np.any(self.matrix_x @ correction_z):
+            correction_z = decoder_z.decode(self.matrix_x @ self.field(error_z))
+            if np.any(self.matrix_x @ self.field(correction_z)):
                 num_logical_errors += 1
 
         return num_logical_errors / num_trials
