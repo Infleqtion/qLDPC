@@ -138,7 +138,7 @@ def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Dec
 class DecoderILP:
     """Decoder based on solving an integer linear program (ILP).
 
-    Supports integers modulo q for q > 2 with a "modulus" argument.
+    Supports integers modulo q for q >= 2 with a "modulus" argument (default: 2).
 
     If a "lower_bound_row" argument is provided, treat this linear constraint (by index) as a lower
     bound (>=), rather than an equality (==) constraint.
