@@ -138,7 +138,7 @@ def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Dec
 class DecoderILP:
     """Decoder based on solving an integer linear program (ILP).
 
-    Supports integers modulo q for q > 2 with a "modulus" argument.
+    Supports integers modulo q for q >= 2 with a "modulus" argument (default: 2).
 
     If a "lower_bound_row" argument is provided, treat this linear constraint (by index) as a lower
     bound (>=), rather than an equality (==) constraint.
@@ -147,6 +147,9 @@ class DecoderILP:
     """
 
     def __init__(self, matrix: npt.NDArray[np.int_], **decoder_args: object) -> None:
+        self.matrix = np.array(matrix) % self.modulus
+        num_checks, num_variables = self.matrix.shape
+
         modulus = decoder_args.pop("modulus", 2)
         if not isinstance(modulus, int) or modulus < 2:
             raise ValueError(
@@ -160,11 +163,8 @@ class DecoderILP:
             raise ValueError(f"Lower bound row index must be an integer, not {lower_bound_row}")
         assert lower_bound_row is None or isinstance(lower_bound_row, int)
         if isinstance(lower_bound_row, int):
-            lower_bound_row %= matrix.shape[0]
+            lower_bound_row %= num_checks
         self.lower_bound_row = lower_bound_row
-
-        self.matrix = np.array(matrix) % self.modulus
-        _, num_variables = self.matrix.shape
 
         # variables, their constraints, and the objective (minimizing number of nonzero variables)
         self.variable_constraints = []
