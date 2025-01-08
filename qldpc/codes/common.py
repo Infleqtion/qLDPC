@@ -554,13 +554,15 @@ class ClassicalCode(AbstractCode):
         logical error is then the fraction of physical errors (out of num_trials) that have
         nontrivial syndromes after decoding.
         """
+        probs = [1 - error_rate] + [error_rate / (self.field.order - 1)] * (self.field.order - 1)
         decoder = decoders.get_decoder(self.matrix, **decoder_args)
 
         num_logical_errors = 0
         for _ in range(num_trials):
-            error = np.random.choice([0, 1], p=[1 - error_rate, error_rate], size=len(self))
-            correction = decoder.decode(self.matrix @ self.field(error))
-            if np.any(self.matrix @ self.field(correction)):
+            error = self.field(np.random.choice(range(self.field.order), p=probs, size=len(self)))
+            correction = self.field(decoder.decode(self.matrix @ error))
+            final_error = error - correction
+            if np.any(self.matrix @ final_error):
                 num_logical_errors += 1
 
         return num_logical_errors / num_trials
@@ -1632,6 +1634,9 @@ class CSSCode(QuditCode):
         The logical error is then the fraction of physical errors (out of num_trials) that have
         nontrivial syndromes after decoding.
         """
+        if self.field.order != 2:
+            raise ValueError("Logical error rates are only supported for qubit codes")
+
         pauli_probs = [1 - error_rate] + [error_rate / 3] * 3  # probs of I, Z, X, Y
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
         decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
@@ -1640,15 +1645,17 @@ class CSSCode(QuditCode):
         for _ in range(num_trials):
             error = np.random.choice(range(4), p=pauli_probs, size=len(self))
 
-            error_x = (error > 1).astype(int)
-            correction_x = decoder_x.decode(self.matrix_z @ self.field(error_x))
-            if np.any(self.matrix_z @ self.field(correction_x)):
+            error_x = self.field(error > 1)
+            correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
+            final_error_x = error_x - correction_x
+            if np.any(self.matrix_z @ final_error_x):
                 num_logical_errors += 1
                 continue
 
-            error_z = (error % 2).astype(int)
-            correction_z = decoder_z.decode(self.matrix_x @ self.field(error_z))
-            if np.any(self.matrix_x @ self.field(correction_z)):
+            error_z = self.field(error % 2)
+            correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
+            final_error_z = error_z - correction_z
+            if np.any(self.matrix_x @ final_error_z):
                 num_logical_errors += 1
 
         return num_logical_errors / num_trials
