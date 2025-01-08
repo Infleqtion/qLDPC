@@ -37,9 +37,7 @@ class Decoder(Protocol):
 
 
 def decode(
-    matrix: npt.NDArray[np.int_],
-    syndrome: npt.NDArray[np.int_],
-    **decoder_args: object,
+    matrix: npt.NDArray[np.int_], syndrome: npt.NDArray[np.int_], **decoder_args: object
 ) -> npt.NDArray[np.int_]:
     """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
 
@@ -201,8 +199,7 @@ class DecoderILP:
         return self.variables.value.astype(int)
 
     def cvxpy_constraints_for_syndrome(
-        self,
-        syndrome: npt.NDArray[np.int_],
+        self, syndrome: npt.NDArray[np.int_]
     ) -> list[cvxpy.Constraint]:
         """Build cvxpy constraints of the form `matrix @ variables == syndrome (mod q)`.
 
