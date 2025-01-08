@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import collections
 import functools
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -326,46 +326,77 @@ def _get_pauli_circuit(string: stim.PauliString) -> stim.Circuit:
 
 
 @restrict_to_qubits
-def maybe_get_transversal_circuit(
+def get_transversal_circuits(
     code: codes.QuditCode,
-    logical_circuit_or_tableau: stim.Circuit | stim.Tableau,
+    logical_circuits_or_tableaus: Sequence[stim.Circuit | stim.Tableau],
     local_gates: Collection[str] = ("S", "H", "SWAP"),
 ) -> stim.Circuit | None:
-    """Find a transversal physical circuit to implement a logical Clifford operation, if it exists.
+    """Find a transversal physical circuits (if any) to implement given logical Clifford operations.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
 
     Warning: this method performs a brute-force search over the Clifford automorphisms of a code,
     and thereby generally has exponential runtime.
     """
-    logical_tableau = (
-        logical_circuit_or_tableau
-        if isinstance(logical_circuit_or_tableau, stim.Tableau)
-        else (logical_circuit_or_tableau + stim.Circuit(f"I {code.dimension-1}")).to_tableau()
-    )
+    physical_circuits = [None] * len(logical_circuits_or_tableaus)
 
-    matching_tableau: stim.Tableau | None = None
-    matching_circuit: stim.Circuit | None = None
+    # convert logical Cliffords into tableaus
+    identity = stim.Circuit(f"I {code.dimension-1}")  # to ensure circuits address all qubits
+    logical_tableaus = [
+        (
+            logical_circuit_or_tableau
+            if isinstance(logical_circuit_or_tableau, stim.Tableau)
+            else (logical_circuit_or_tableau + identity).to_tableau()
+        )
+        for logical_circuit_or_tableau in logical_circuits_or_tableaus
+    ]
+
+    # compute the group of transversal Cliffords
     group_aut = get_transversal_automorphism_group(code, local_gates)
+
+    # perform a brute-force search for matching Clifford operations
+    matching_ops: list[tuple[stim.Tableau, stim.Circuit] | None] = [None] * len(logical_tableaus)
     for automorphism in group_aut.generate():
         tableau, circuit = _get_transversal_automorphism_data(code, automorphism, local_gates)
-        if _tableaus_are_equivalent_mod_paulis(logical_tableau, tableau):
-            matching_tableau = tableau
-            matching_circuit = circuit
+        for tt, logical_tableau in enumerate(logical_tableaus):
+            if matching_ops[tt] is None and _tableaus_are_equivalent_mod_paulis(
+                logical_tableau, tableau
+            ):
+                matching_ops[tt] = tableau, circuit
+        if not any(op is None for op in matching_ops):
             break
 
-    if matching_tableau is None:
-        return None  # pragma: no cover
+    # add logical Pauli corrections to matching circuits
+    for tt, (logical_tableau, matching_op) in enumerate(zip(logical_tableaus, matching_ops)):
+        if matching_op is None:
+            continue
+        matching_tableau, matching_circuit = matching_op
 
-    # add logical Pauli corrections to fix the signs of the tableau
-    correction = code.field([0] * (2 * len(code)))
-    *_, x_signs_l, z_signs_l = logical_tableau.to_numpy()
-    *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
-    for logical_qubit in range(code.dimension):
-        if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
-            correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
-        if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
-            correction += code.get_logical_ops(Pauli.X)[logical_qubit]
-    correction_circuit = _get_pauli_circuit(op_to_string(correction))
+        correction = code.field([0] * (2 * len(code)))
+        *_, x_signs_l, z_signs_l = logical_tableau.to_numpy()
+        *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
+        for logical_qubit in range(code.dimension):
+            if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
+                correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
+            if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
+                correction += code.get_logical_ops(Pauli.X)[logical_qubit]
+        correction_circuit = _get_pauli_circuit(op_to_string(correction))
 
-    return correction_circuit + matching_circuit
+        physical_circuits[tt] = correction_circuit + matching_circuit
+
+    return physical_circuits
+
+
+def get_transversal_circuit(
+    code: codes.QuditCode,
+    logical_circuit_or_tableau: stim.Circuit | stim.Tableau,
+    local_gates: Collection[str] = ("S", "H", "SWAP"),
+) -> stim.Circuit | None:
+    """Find a transversal physical circuit (if any) to implement a logical Clifford operation.
+
+    Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
+
+    Warning: this method performs a brute-force search over the Clifford automorphisms of a code,
+    and thereby generally has exponential runtime.
+    """
+    return get_transversal_circuits(code, [logical_circuit_or_tableau], local_gates)[0]
