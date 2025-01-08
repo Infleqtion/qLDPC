@@ -30,7 +30,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 
-from qldpc import abstract, decoder, external
+from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
 
@@ -408,7 +408,7 @@ class ClassicalCode(AbstractCode):
         if vector is not None:
             # find the distance of the given vector from a code word
             _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
-            correction = decoder.decode(
+            correction = decoders.decode(
                 self.matrix, self.matrix @ self.field(vector), **decoder_args
             )
             return int(np.count_nonzero(correction))
@@ -425,7 +425,7 @@ class ClassicalCode(AbstractCode):
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             # find a low-weight candidate code word
-            candidate = decoder.decode(effective_check_matrix, effective_syndrome, **decoder_args)
+            candidate = decoders.decode(effective_check_matrix, effective_syndrome, **decoder_args)
 
             # check whether we found a valid candidate
             # NOTE: we can mod out by the field order because non-prime fields aren't allowed here
@@ -1346,7 +1346,7 @@ class CSSCode(QuditCode):
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
-            candidate_logical_op = decoder.decode(
+            candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
 
@@ -1508,7 +1508,7 @@ class CSSCode(QuditCode):
 
         logical_op_found = False
         while not logical_op_found:
-            candidate_logical_op = decoder.decode(
+            candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
             actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
@@ -1613,8 +1613,8 @@ class CSSCode(QuditCode):
         independent errors.
         """
         pauli_probs = [1 - error_rate] + [error_rate / 3] * 3
-        decoder_x = decoder.get_decoder(self.matrix_z, **decoder_args)
-        decoder_z = decoder.get_decoder(self.matrix_x, **decoder_args)
+        decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
+        decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
 
         num_logical_errors = 0
         for _ in range(num_trials):

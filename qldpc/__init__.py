@@ -1,6 +1,6 @@
 import importlib.metadata
 
-from . import abstract, cache, circuits, codes, decoder, external, objects
+from . import abstract, cache, circuits, codes, decoders, external, objects
 
 __version__ = importlib.metadata.version("qldpc")
 
@@ -10,7 +10,7 @@ __all__ = [
     "cache",
     "circuits",
     "codes",
-    "decoder",
+    "decoders",
     "external",
     "objects",
 ]
