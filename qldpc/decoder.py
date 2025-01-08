@@ -153,41 +153,39 @@ class DecoderILP:
             raise ValueError(
                 f"Decoding problems must have modulus >= 2 (provided modulus: {modulus}"
             )
+        assert isinstance(modulus, int)
+        self.modulus = modulus
 
         lower_bound_row = decoder_args.pop("lower_bound_row", None)
         if not (lower_bound_row is None or isinstance(lower_bound_row, int)):
             raise ValueError(f"Lower bound row index must be an integer, not {lower_bound_row}")
+        assert lower_bound_row is None or isinstance(lower_bound_row, int)
+        if isinstance(lower_bound_row, int):
+            lower_bound_row %= matrix.shape[0]
+        self.lower_bound_row = lower_bound_row
+
+        self.matrix = np.array(matrix) % self.modulus
+        _, num_variables = self.matrix.shape
 
         # variables, their constraints, and the objective (minimizing number of nonzero variables)
-        constraints = []
-        if modulus == 2:
-            variables = cvxpy.Variable(matrix.shape[1], boolean=True)
-            objective = cvxpy.Minimize(cvxpy.norm(variables, 1))
+        self.variable_constraints = []
+        if self.modulus == 2:
+            self.variables = cvxpy.Variable(num_variables, boolean=True)
+            self.objective = cvxpy.Minimize(cvxpy.norm(self.variables, 1))
         else:
-            variables = cvxpy.Variable(matrix.shape[1], integer=True)
-            nonzero_variable_flags = cvxpy.Variable(matrix.shape[1], boolean=True)
-            constraints += [var >= 0 for var in iter(variables)]
-            constraints += [var <= modulus - 1 for var in iter(variables)]
-            constraints += [modulus * nonzero_variable_flags >= variables]
-
-            objective = cvxpy.Minimize(cvxpy.norm(nonzero_variable_flags, 1))
-
-        self.matrix = matrix
-        self.variables = variables
-
-        self.objective = objective
-        self.base_constraints = constraints
-
-        self.modulus = modulus
-        self.lower_bound_row = lower_bound_row
+            self.variables = cvxpy.Variable(num_variables, integer=True)
+            nonzero_variable_flags = cvxpy.Variable(num_variables, boolean=True)
+            self.variable_constraints += [var >= 0 for var in iter(self.variables)]
+            self.variable_constraints += [var <= self.modulus - 1 for var in iter(self.variables)]
+            self.variable_constraints += [self.modulus * nonzero_variable_flags >= self.variables]
+            self.objective = cvxpy.Minimize(cvxpy.norm(nonzero_variable_flags, 1))
 
         self.decoder_args = decoder_args
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        # constraints for the decoding problem: matrix @ solution == syndrome (mod q)
-        constraints = self.base_constraints + _build_cvxpy_constraints(
-            self.variables, self.matrix, syndrome, self.modulus, self.lower_bound_row
-        )
+        """Decode the given syndrome."""
+        # identify all constraints
+        constraints = self.variable_constraints + self.cvxpy_constraints_for_syndrome(syndrome)
 
         # solve the optimization problem!
         problem = cvxpy.Problem(self.objective, constraints)
@@ -201,48 +199,41 @@ class DecoderILP:
         # return solution to the problem variables
         return self.variables.value.astype(int)
 
+    def cvxpy_constraints_for_syndrome(
+        self,
+        syndrome: npt.NDArray[np.int_],
+    ) -> list[cvxpy.Constraint]:
+        """Build cvxpy constraints of the form `matrix @ variables == syndrome (mod q)`.
 
-def _build_cvxpy_constraints(
-    variables: cvxpy.Variable,
-    matrix: npt.NDArray[np.int_],
-    syndrome: npt.NDArray[np.int_],
-    modulus: int,
-    lower_bound_row: int | None = None,
-) -> list[cvxpy.Constraint]:
-    """Build cvxpy constraints of the form `matrix @ variables == syndrome (mod q)`.
+        This method uses boolean slack variables {s_j} to relax each constraint of the form
+        `expression = val mod q`
+        to
+        `expression = val + sum_j q^j s_j`.
 
-    This method uses boolean slack variables {s_j} to relax each constraint of the form
-    `expression = val mod q`
-    to
-    `expression = val + sum_j q^j s_j`.
+        If `lower_bound_row is not None`, treat the constraint at this row index as a lower bound.
+        """
+        syndrome = np.array(syndrome) % self.modulus
 
-    If `lower_bound_row is not None`, treat the constraint at this row index as a lower bound.
-    """
-    matrix = np.array(matrix) % modulus
-    syndrome = np.array(syndrome) % modulus
-    if lower_bound_row is not None:
-        lower_bound_row %= syndrome.size
+        constraints = []
+        for idx, (check, syndrome_bit) in enumerate(zip(self.matrix, syndrome)):
+            # identify the largest power of q needed for the relaxation
+            max_zero = int(sum(check) * (self.modulus - 1) - syndrome_bit)
+            if max_zero == 0 or self.modulus == 2:
+                max_power_of_q = max_zero.bit_length() - 1
+            else:
+                max_power_of_q = int(np.log2(max_zero) / np.log2(self.modulus))
 
-    constraints = []
-    for idx, (check, syndrome_bit) in enumerate(zip(matrix, syndrome)):
-        # identify the largest power of q needed for the relaxation
-        max_zero = int(sum(check) * (modulus - 1) - syndrome_bit)
-        if max_zero == 0 or modulus == 2:
-            max_power_of_q = max_zero.bit_length() - 1
-        else:
-            max_power_of_q = int(np.log2(max_zero) / np.log2(modulus))
+            if max_power_of_q > 0:
+                powers_of_q = [self.modulus**jj for jj in range(1, max_power_of_q + 1)]
+                slack_variables = cvxpy.Variable(max_power_of_q, boolean=True)
+                zero_mod_q = powers_of_q @ slack_variables
+            else:
+                zero_mod_q = 0
 
-        if max_power_of_q > 0:
-            powers_of_q = [modulus**jj for jj in range(1, max_power_of_q + 1)]
-            slack_variables = cvxpy.Variable(max_power_of_q, boolean=True)
-            zero_mod_q = powers_of_q @ slack_variables
-        else:
-            zero_mod_q = 0
+            if idx == self.lower_bound_row:
+                constraint = check @ self.variables >= syndrome_bit + zero_mod_q
+            else:
+                constraint = check @ self.variables == syndrome_bit + zero_mod_q
+            constraints.append(constraint)
 
-        if idx == lower_bound_row:
-            constraint = check @ variables >= syndrome_bit + zero_mod_q
-        else:
-            constraint = check @ variables == syndrome_bit + zero_mod_q
-        constraints.append(constraint)
-
-    return constraints
+        return constraints
