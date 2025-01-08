@@ -147,9 +147,6 @@ class DecoderILP:
     """
 
     def __init__(self, matrix: npt.NDArray[np.int_], **decoder_args: object) -> None:
-        self.matrix = np.array(matrix) % self.modulus
-        num_checks, num_variables = self.matrix.shape
-
         modulus = decoder_args.pop("modulus", 2)
         if not isinstance(modulus, int) or modulus < 2:
             raise ValueError(
@@ -157,6 +154,9 @@ class DecoderILP:
             )
         assert isinstance(modulus, int)
         self.modulus = modulus
+
+        self.matrix = np.array(matrix) % self.modulus
+        num_checks, num_variables = self.matrix.shape
 
         lower_bound_row = decoder_args.pop("lower_bound_row", None)
         if not (lower_bound_row is None or isinstance(lower_bound_row, int)):
