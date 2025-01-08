@@ -1447,7 +1447,7 @@ class CSSCode(QuditCode):
         validate: bool = True,
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
-        logical_ops = _block_diag([logicals_x, logicals_z])
+        logical_ops = _block_diag(self.field(logicals_x), self.field(logicals_z))
         self.set_logical_ops(logical_ops, validate=validate)
 
     def get_random_logical_op(
