@@ -1603,6 +1603,36 @@ class CSSCode(QuditCode):
             code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
 
+    def get_logical_error_rate(
+        self, error_rate: float, num_trials: int, **decoder_args: Any
+    ) -> float:
+        """Compute a logical error rate in a code-capacity model with local depolarizing errors.
+
+        Here error_rate is the probability of a depolarizing error on each physical qubit.  The
+        final logical error rate is the fraction of logical errors when decoding num_trials
+        independent errors.
+        """
+        pauli_probs = [1 - error_rate] + [error_rate / 3] * 3
+        decoder_x = decoder.get_decoder(self.matrix_z, **decoder_args)
+        decoder_z = decoder.get_decoder(self.matrix_x, **decoder_args)
+
+        num_logical_errors = 0
+        for _ in range(num_trials):
+            error = np.random.choice(range(4), p=pauli_probs, size=len(self))
+
+            error_x = (error % 2).astype(int)
+            correction_x = decoder_x.decode(self.matrix_z @ error_x)
+            if np.any(self.matrix_z @ correction_x):
+                num_logical_errors += 1
+                continue
+
+            error_z = (error > 1).astype(int)
+            correction_z = decoder_z.decode(self.matrix_x @ error_z)
+            if np.any(self.matrix_x @ correction_z):
+                num_logical_errors += 1
+
+        return num_logical_errors / num_trials
+
 
 def _fix_decoder_args_for_nonbinary_fields(
     decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
