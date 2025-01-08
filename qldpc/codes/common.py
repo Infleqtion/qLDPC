@@ -1632,7 +1632,7 @@ class CSSCode(QuditCode):
         The logical error is then the fraction of physical errors (out of num_trials) that have
         nontrivial syndromes after decoding.
         """
-        pauli_probs = [1 - error_rate] + [error_rate / 3] * 3
+        pauli_probs = [1 - error_rate] + [error_rate / 3] * 3  # probs of I, Z, X, Y
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
         decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
 
@@ -1640,13 +1640,13 @@ class CSSCode(QuditCode):
         for _ in range(num_trials):
             error = np.random.choice(range(4), p=pauli_probs, size=len(self))
 
-            error_x = (error % 2).astype(int)
+            error_x = (error > 1).astype(int)
             correction_x = decoder_x.decode(self.matrix_z @ error_x)
             if np.any(self.matrix_z @ correction_x):
                 num_logical_errors += 1
                 continue
 
-            error_z = (error > 1).astype(int)
+            error_z = (error % 2).astype(int)
             correction_z = decoder_z.decode(self.matrix_x @ error_z)
             if np.any(self.matrix_x @ correction_z):
                 num_logical_errors += 1
