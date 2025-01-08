@@ -366,7 +366,7 @@ def get_transversal_circuits(
             break
 
     # add logical Pauli corrections to matching circuits
-    for tt, matching_op in enumerate(matching_ops):
+    for tt, (logical_tableau, matching_op) in enumerate(zip(logical_tableaus, matching_ops)):
         if matching_op is None:
             continue
         matching_tableau, matching_circuit = matching_op
