@@ -128,3 +128,6 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
         z_signs=z_signs[: code.dimension],
     )
     assert logical_circuit.to_tableau() == reconstructed_logical_tableau
+
+    # there are no logical two-qubit gates in this code
+    circuits.get_transversal_circuit(code, stim.Circuit("CX 0 1")) is None
