@@ -545,6 +545,26 @@ class ClassicalCode(AbstractCode):
             generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
         return ClassicalCode.from_generator(generator)
 
+    def get_logical_capacity_error_rate(
+        self, error_rate: float, num_trials: int, **decoder_args: Any
+    ) -> float:
+        """Compute a logical error rate in a code-capacity model with local bit-flip errors.
+
+        Physical errors are sampled by flipping each bit with the probability "error_rate".  The
+        logical error is then the fraction of physical errors (out of num_trials) that have
+        nontrivial syndromes after decoding.
+        """
+        decoder = decoders.get_decoder(self.matrix, **decoder_args)
+
+        num_logical_errors = 0
+        for _ in range(num_trials):
+            error = np.random.choice([0, 1], p=[1 - error_rate, error_rate], size=len(self))
+            correction = decoder.decode(self.matrix @ error)
+            if np.any(self.matrix @ correction):
+                num_logical_errors += 1
+
+        return num_logical_errors / num_trials
+
 
 ################################################################################
 # quantum codes
@@ -1603,14 +1623,14 @@ class CSSCode(QuditCode):
             code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
 
-    def get_logical_error_rate(
+    def get_logical_capacity_error_rate(
         self, error_rate: float, num_trials: int, **decoder_args: Any
     ) -> float:
         """Compute a logical error rate in a code-capacity model with local depolarizing errors.
 
-        Here error_rate is the probability of a depolarizing error on each physical qubit.  The
-        final logical error rate is the fraction of logical errors when decoding num_trials
-        independent errors.
+        Physical errors are sampled by depolarizing each qubit with the probability "error_rate".
+        The logical error is then the fraction of physical errors (out of num_trials) that have
+        nontrivial syndromes after decoding.
         """
         pauli_probs = [1 - error_rate] + [error_rate / 3] * 3
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
