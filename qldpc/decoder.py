@@ -17,7 +17,7 @@ limitations under the License.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import Protocol
 
 import cvxpy
 import ldpc
@@ -25,7 +25,10 @@ import numpy as np
 import numpy.typing as npt
 import pymatching
 
-DECODER = Callable
+
+class Decoder(Protocol):
+    def __init__(self, matrix: npt.NDArray[np.int_], **decoder_args: object) -> None: ...
+    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]: ...
 
 
 def decode(
@@ -47,7 +50,7 @@ def decode(
     return get_decoder(matrix, **decoder_args).decode(syndrome)
 
 
-def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object):
+def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Retrieve a decoder."""
     if decoder_args.pop("with_ILP", False):
         return get_decoder_ILP(matrix, **decoder_args)
@@ -65,7 +68,7 @@ def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object):
     return get_decoder_BP_OSD(matrix, **decoder_args)
 
 
-def get_decoder_BP_OSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> DECODER:
+def get_decoder_BP_OSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Decoder based on belief propagation with ordered statistics (BP+OSD).
 
     For details about the BD-OSD decoder and its arguments, see:
@@ -79,7 +82,7 @@ def get_decoder_BP_OSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> 
     )
 
 
-def get_decoder_BP_LSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> DECODER:
+def get_decoder_BP_LSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Decoder based on belief propagation with localized statistics (BP+LSD).
 
     For details about the BD-LSD decoder and its arguments, see:
@@ -93,7 +96,7 @@ def get_decoder_BP_LSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> 
     )
 
 
-def get_decoder_BF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> DECODER:
+def get_decoder_BF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Decoder based on belief finding (BF).
 
     For details about the BF decoder and its arguments, see:
@@ -110,12 +113,12 @@ def get_decoder_BF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> DECO
     )
 
 
-def get_decoder_MWPM(matrix: npt.NDArray[np.int_], **decoder_args: object) -> DECODER:
+def get_decoder_MWPM(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Decoder based on minimum weight perfect matching (MWPM)."""
     return pymatching.Matching.from_check_matrix(matrix, **decoder_args)
 
 
-def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> DECODER:
+def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Decoder based on solving an integer linear program (ILP).
 
     Supports integers modulo q for q > 2 with a "modulus" argument.
