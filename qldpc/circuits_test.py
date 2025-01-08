@@ -111,7 +111,8 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
     logical_circuit = stim.Circuit(f"{logical_op} 0")
 
     # construct physical circuit for the logical operation
-    physical_circuit = circuits.maybe_get_transversal_circuit(code, logical_circuit)
+    physical_circuit = circuits.get_transversal_circuit(code, logical_circuit)
+    assert physical_circuit is not None
 
     # check that the physical circuit has the correct logical tableau
     encoder = circuits.get_encoding_tableau(code)

@@ -354,7 +354,7 @@ def get_transversal_circuits(
     group_aut = get_transversal_automorphism_group(code, local_gates)
 
     # perform a brute-force search for matching Clifford operations
-    matching_ops: [tuple[stim.Tableau, stim.Circuit] | None] = [None] * len(logical_tableaus)
+    matching_ops: list[tuple[stim.Tableau, stim.Circuit] | None] = [None] * len(logical_tableaus)
     for automorphism in group_aut.generate():
         tableau, circuit = _get_transversal_automorphism_data(code, automorphism, local_gates)
         for tt, logical_tableau in enumerate(logical_tableaus):
