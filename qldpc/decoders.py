@@ -49,7 +49,8 @@ def decode(
     In all cases, pass the `decoder_args` to the decoder that is used.
     """
     if custom_decoder := decoder_args.get("decoder"):
-        return custom_decoder.decode(syndrome)  # type:ignore[attr-defined]
+        assert hasattr(custom_decoder, "decode"), "custom decoder does not have a 'decode' method"
+        return custom_decoder.decode(syndrome)
     return get_decoder(matrix, **decoder_args).decode(syndrome)
 
 
