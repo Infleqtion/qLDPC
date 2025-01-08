@@ -56,10 +56,10 @@ def test_decoding_errors() -> None:
     syndrome = np.array([0, 1], dtype=int)
 
     with pytest.raises(ValueError, match="must have modulus >= 2"):
-        decoder.decode_with_ILP(matrix, syndrome, with_ILP=True, modulus=1)
+        decoder.get_decoder_ILP(matrix, with_ILP=True, modulus=1)
 
     with pytest.raises(ValueError, match="row index must be an integer"):
-        decoder.decode_with_ILP(matrix, syndrome, with_ILP=True, lower_bound_row="x")
+        decoder.get_decoder_ILP(matrix, with_ILP=True, lower_bound_row="x")
 
     with pytest.raises(ValueError, match="could not be found"):
         with pytest.warns(UserWarning, match="infeasible or unbounded"):
