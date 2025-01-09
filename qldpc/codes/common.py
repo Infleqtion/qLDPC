@@ -1634,28 +1634,38 @@ class CSSCode(QuditCode):
         return code
 
     def get_logical_capacity_error_rate(
-        self, error_rate: float, num_trials: int, **decoder_args: Any
+        self, error_rate: float | Sequence[float], num_trials: int, **decoder_args: Any
     ) -> float:
         """Compute a logical error rate in a code-capacity model with local depolarizing errors.
 
         Physical errors are sampled by depolarizing each qubit with the probability "error_rate".
         The logical error is then the fraction of physical errors (out of num_trials) that have
         nontrivial syndromes after decoding.
+
+        If error_rate is a sequence of numbers, these are treated as the probabilities of X, Y, and
+        Z errors on each qubit.
         """
         if self.field.order != 2:
             raise ValueError("Logical error rates are only supported for binary codes")
 
-        pauli_probs = [1 - error_rate] + [error_rate / 3] * 3  # probs of I, Z, X, Y
+        # identify the probabilities of different Pauli errors errors
+        if hasattr(error_rate, "__iter__"):
+            probs = [1 - sum(error_rate)] + list(error_rate)
+            assert len(probs) == 4, f"must provide three error rates, not {len(probs) - 1}"
+            # change order from [I, X, Y, Z] to [I, Z, X, Y]
+            probs = [probs[0], probs[3], probs[1], probs[2]]
+        else:
+            probs = [1 - error_rate] + [error_rate / 3] * 3
+
+        # construct decoders and identify logical operators
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
         decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
-
-        # identify logical operators
         logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
         logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
 
         num_logical_errors = 0
         for _ in range(num_trials):
-            error = np.random.choice(range(4), p=pauli_probs, size=len(self))
+            error = np.random.choice(range(4), p=probs, size=len(self))
 
             # decode Z-type errors
             error_z = self.field(error % 2)
