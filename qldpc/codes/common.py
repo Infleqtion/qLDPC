@@ -1657,6 +1657,7 @@ class CSSCode(QuditCode):
         for _ in range(num_trials):
             error = np.random.choice(range(4), p=pauli_probs, size=len(self))
 
+            # decode Z-type errors
             error_z = self.field(error % 2)
             correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
             residual_z = error_z - correction_z
@@ -1664,6 +1665,7 @@ class CSSCode(QuditCode):
                 num_logical_errors += 1
                 continue
 
+            # decode X-type errors
             error_x = self.field((error > 1).astype(int))
             correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
             residual_x = error_x - correction_x
