@@ -553,16 +553,24 @@ class ClassicalCode(AbstractCode):
         Physical errors are sampled by flipping each bit with the probability "error_rate".  The
         logical error is then the fraction of physical errors (out of num_trials) that have
         nontrivial syndromes after decoding.
+
+        WARNING: if passing decoder arguments, note that decoders written for quantum codes may
+        generally perform poorly on classical codes.
         """
-        probs = [1 - error_rate] + [error_rate / (self.field.order - 1)] * (self.field.order - 1)
+        if self.field.order != 2:
+            raise ValueError("Logical error rates are only supported for binary codes")
+        if not decoder_args:
+            decoder_args = dict(with_ILP=True)
+
+        probs = [1 - error_rate, error_rate]
         decoder = decoders.get_decoder(self.matrix, **decoder_args)
 
         num_logical_errors = 0
         for _ in range(num_trials):
-            error = self.field(np.random.choice(range(self.field.order), p=probs, size=len(self)))
+            error = self.field(np.random.choice([0, 1], p=probs, size=len(self)))
             correction = self.field(decoder.decode(self.matrix @ error))
-            final_error = error - correction
-            if np.any(self.matrix @ final_error):
+            residual_error = error - correction
+            if np.any(residual_error):
                 num_logical_errors += 1
 
         return num_logical_errors / num_trials
@@ -1635,7 +1643,7 @@ class CSSCode(QuditCode):
         nontrivial syndromes after decoding.
         """
         if self.field.order != 2:
-            raise ValueError("Logical error rates are only supported for qubit codes")
+            raise ValueError("Logical error rates are only supported for binary codes")
 
         pauli_probs = [1 - error_rate] + [error_rate / 3] * 3  # probs of I, Z, X, Y
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
