@@ -182,9 +182,11 @@ def test_automorphism() -> None:
 
 def test_classical_capacity() -> None:
     """Logical error rates in a code capacity model."""
-    assert codes.RepetitionCode(2).get_logical_capacity_error_rate(error_rate=1, num_trials=1) == 1
+    code = codes.RepetitionCode(2)
+    assert code.get_logical_error_rate(error_rate=0, num_trials=1) == 0
+    assert code.get_logical_error_rate(error_rate=1, num_trials=1) == 1
     with pytest.raises(ValueError, match="binary codes"):
-        codes.RepetitionCode(2, field=3).get_logical_capacity_error_rate(error_rate=1, num_trials=1)
+        codes.RepetitionCode(2, field=3).get_logical_error_rate(error_rate=1, num_trials=1)
 
 
 ####################################################################################################
@@ -460,12 +462,12 @@ def test_css_concatenation() -> None:
 def test_quantum_capacity() -> None:
     """Logical error rates in a code capacity model."""
     code = codes.SurfaceCode(3)
-    assert isinstance(code.get_logical_capacity_error_rate(error_rate=1, num_trials=1), float)
+    assert code.get_logical_error_rate(error_rate=0, num_trials=1) == 0
 
     # guaranteed logical X and Z errors
-    assert code.get_logical_capacity_error_rate(error_rate=[1, 0, 0], num_trials=1) == 1
-    assert code.get_logical_capacity_error_rate(error_rate=[0, 0, 1], num_trials=1) == 1
+    assert code.get_logical_error_rate(error_rate=[1, 0, 0], num_trials=1) == 1
+    assert code.get_logical_error_rate(error_rate=[0, 0, 1], num_trials=1) == 1
 
     # this method only supports qubit codes
     with pytest.raises(ValueError, match="binary codes"):
-        codes.SurfaceCode(2, field=3).get_logical_capacity_error_rate(error_rate=1, num_trials=1)
+        codes.SurfaceCode(2, field=3).get_logical_error_rate(error_rate=1, num_trials=1)

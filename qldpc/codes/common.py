@@ -545,7 +545,7 @@ class ClassicalCode(AbstractCode):
             generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
         return ClassicalCode.from_generator(generator)
 
-    def get_logical_capacity_error_rate(
+    def get_logical_error_rate(
         self, error_rate: float, num_trials: int, **decoder_args: Any
     ) -> float:
         """Compute a logical error rate in a code-capacity model with local bit-flip errors.
@@ -1636,7 +1636,7 @@ class CSSCode(QuditCode):
             code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
 
-    def get_logical_capacity_error_rate(
+    def get_logical_error_rate(
         self, error_rate: float | Sequence[float], num_trials: int, **decoder_args: Any
     ) -> float:
         """Compute a logical error rate in a code-capacity model with local depolarizing errors.
