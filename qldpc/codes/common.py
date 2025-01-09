@@ -551,8 +551,8 @@ class ClassicalCode(AbstractCode):
         """Compute a logical error rate in a code-capacity model with local bit-flip errors.
 
         Physical errors are sampled by flipping each bit with the probability "error_rate".  The
-        logical error is then the fraction of physical errors (out of num_trials) that have
-        nontrivial syndromes after decoding.
+        logical error is then the fraction of physical errors (out of num_trials) that leave
+        a residual error after decoding and correction.
 
         WARNING: if passing decoder arguments, note that decoders written for quantum codes may
         generally perform poorly on classical codes.
@@ -1639,8 +1639,8 @@ class CSSCode(QuditCode):
         """Compute a logical error rate in a code-capacity model with local depolarizing errors.
 
         Physical errors are sampled by depolarizing each qubit with the probability "error_rate".
-        The logical error is then the fraction of physical errors (out of num_trials) that have
-        nontrivial syndromes after decoding.
+        The logical error is then the fraction of physical errors (out of num_trials) that
+        correspond to nontrivial logical operators after decoding and correction.
 
         If error_rate is a sequence of numbers, these are treated as the probabilities of X, Y, and
         Z errors on each qubit.
