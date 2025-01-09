@@ -180,6 +180,15 @@ def test_automorphism() -> None:
             assert not np.any(code.matrix @ group.lift(member) @ code.generator.T)
 
 
+def test_classical_capacity() -> None:
+    """Logical error rates in a code capacity model."""
+    code = codes.RepetitionCode(2)
+    assert code.get_logical_error_rate(error_rate=0, num_trials=1) == 0
+    assert code.get_logical_error_rate(error_rate=1, num_trials=1) == 1
+    with pytest.raises(ValueError, match="binary codes"):
+        codes.RepetitionCode(2, field=3).get_logical_error_rate(error_rate=1, num_trials=1)
+
+
 ####################################################################################################
 # quantum code tests
 
@@ -448,3 +457,17 @@ def test_css_concatenation() -> None:
     # cover some errors
     with pytest.raises(TypeError, match="CSSCode inputs"):
         codes.CSSCode.concatenate(code_c4, codes.FiveQubitCode())
+
+
+def test_quantum_capacity() -> None:
+    """Logical error rates in a code capacity model."""
+    code = codes.SurfaceCode(3)
+    assert code.get_logical_error_rate(error_rate=0, num_trials=1) == 0
+
+    # guaranteed logical X and Z errors
+    assert code.get_logical_error_rate(error_rate=[1, 0, 0], num_trials=1) == 1
+    assert code.get_logical_error_rate(error_rate=[0, 0, 1], num_trials=1) == 1
+
+    # this method only supports qubit codes
+    with pytest.raises(ValueError, match="binary codes"):
+        codes.SurfaceCode(2, field=3).get_logical_error_rate(error_rate=1, num_trials=1)

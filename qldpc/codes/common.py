@@ -545,6 +545,39 @@ class ClassicalCode(AbstractCode):
             generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
         return ClassicalCode.from_generator(generator)
 
+    def get_logical_error_rate(
+        self, error_rate: float, num_trials: int, **decoder_args: Any
+    ) -> float:
+        """Compute a logical error rate in a code-capacity model with local bit-flip errors.
+
+        Physical errors are sampled by flipping each bit with the probability "error_rate".  The
+        logical error is then the fraction of physical errors (out of num_trials) that leave
+        a residual error after decoding and correction.
+
+        WARNING: if passing decoder arguments, note that decoders written for quantum codes may
+        generally perform poorly on classical codes.
+        """
+        if self.field.order != 2:
+            raise ValueError("Logical error rates are only supported for binary codes")
+        if not decoder_args:
+            decoder_args = dict(with_ILP=True)
+
+        probs = [1 - error_rate, error_rate]
+        decoder = decoders.get_decoder(self.matrix, **decoder_args)
+
+        num_logical_errors = 0
+        for _ in range(num_trials):
+            error = self.field(np.random.choice([0, 1], p=probs, size=len(self)))
+            if not np.any(error):
+                continue
+
+            correction = self.field(decoder.decode(self.matrix @ error))
+            residual_error = error - correction
+            if np.any(residual_error):
+                num_logical_errors += 1
+
+        return num_logical_errors / num_trials
+
 
 ################################################################################
 # quantum codes
@@ -1602,6 +1635,59 @@ class CSSCode(QuditCode):
         if inherit_logicals:
             code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
+
+    def get_logical_error_rate(
+        self, error_rate: float | Sequence[float], num_trials: int, **decoder_args: Any
+    ) -> float:
+        """Compute a logical error rate in a code-capacity model with local depolarizing errors.
+
+        Physical errors are sampled by depolarizing each qubit with the probability "error_rate".
+        The logical error is then the fraction of physical errors (out of num_trials) that
+        correspond to nontrivial logical operators after decoding and correction.
+
+        If error_rate is a sequence of numbers, these are treated as the probabilities of X, Y, and
+        Z errors on each qubit.
+        """
+        if self.field.order != 2:
+            raise ValueError("Logical error rates are only supported for binary codes")
+
+        # identify the probabilities of different Pauli errors errors
+        if hasattr(error_rate, "__iter__"):
+            probs = [1 - sum(error_rate)] + list(error_rate)
+            assert len(probs) == 4, f"must provide three error rates, not {len(probs) - 1}"
+            # change order from [I, X, Y, Z] to [I, Z, X, Y]
+            probs = [probs[0], probs[3], probs[1], probs[2]]
+        else:
+            probs = [1 - error_rate] + [error_rate / 3] * 3
+
+        # construct decoders and identify logical operators
+        decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
+        decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
+        logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
+        logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
+
+        num_logical_errors = 0
+        for _ in range(num_trials):
+            error = np.random.choice(range(4), p=probs, size=len(self))
+            if not np.any(error):
+                continue
+
+            # decode Z-type errors
+            error_z = self.field(error % 2)
+            correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
+            residual_z = error_z - correction_z
+            if np.any(logicals_x @ residual_z):
+                num_logical_errors += 1
+                continue
+
+            # decode X-type errors
+            error_x = self.field((error > 1).astype(int))
+            correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
+            residual_x = error_x - correction_x
+            if np.any(logicals_z @ residual_x):
+                num_logical_errors += 1
+
+        return num_logical_errors / num_trials
 
 
 def _fix_decoder_args_for_nonbinary_fields(
