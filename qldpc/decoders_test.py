@@ -18,6 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 from qldpc import decoders
@@ -25,10 +26,17 @@ from qldpc import decoders
 
 def test_custom_decoder() -> None:
     """Custom decoder."""
+
+    class CustomDecoder(decoders.Decoder):
+        def __init__(self, matrix: npt.NDArray[np.int_]) -> None: ...
+        def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+            return syndrome
+
     matrix = np.eye(2, dtype=int)
     syndrome = np.zeros(2, dtype=int)
-    result = decoders.decode(matrix, syndrome, decoder=decoders.Decoder)
-    assert result is None
+    decoder = CustomDecoder(matrix)
+    result = decoders.decode(matrix, syndrome, decoder=decoder)
+    assert result is syndrome
 
 
 def test_decoding() -> None:
