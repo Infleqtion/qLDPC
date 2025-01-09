@@ -29,6 +29,7 @@ import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import scipy.special
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
@@ -1637,7 +1638,11 @@ class CSSCode(QuditCode):
         return code
 
     def get_logical_error_rate(
-        self, error_rate: float | Sequence[float], num_trials: int, **decoder_args: Any
+        self,
+        num_samples: int,
+        max_error_rate: float = 0.1,
+        pauli_bias: Sequence[float] | None = None,
+        **decoder_args: Any,
     ) -> float:
         """Compute a logical error rate in a code-capacity model with local depolarizing errors.
 
@@ -1651,14 +1656,14 @@ class CSSCode(QuditCode):
         if self.field.order != 2:
             raise ValueError("Logical error rates are only supported for binary codes")
 
-        # identify the probabilities of different Pauli errors errors
-        if hasattr(error_rate, "__iter__"):
-            probs = [1 - sum(error_rate)] + list(error_rate)
-            assert len(probs) == 4, f"must provide three error rates, not {len(probs) - 1}"
-            # change order from [I, X, Y, Z] to [I, Z, X, Y]
-            probs = [probs[0], probs[3], probs[1], probs[2]]
+        # collect relative probabilities of Z, X, and Y errors
+        pauli_bias_zxy: tuple[float, float, float] | None
+        if pauli_bias is not None:
+            assert len(pauli_bias) == 3
+            pauli_bias_zxy = np.array([pauli_bias[2], pauli_bias[0], pauli_bias[1]])
+            pauli_bias_zxy /= np.sum(pauli_bias_zxy)
         else:
-            probs = [1 - error_rate] + [error_rate / 3] * 3
+            pauli_bias_zxy = None
 
         # construct decoders and identify logical operators
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
@@ -1666,18 +1671,94 @@ class CSSCode(QuditCode):
         logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
         logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
 
-        num_logical_errors = 0
-        for _ in range(num_trials):
-            error = np.random.choice(range(4), p=probs, size=len(self))
-            if not np.any(error):
-                continue
+        """
+        The probability of k qudit errors is
+            p_k = (n choose k) p**k (1-p)**(n-k)
+        We want to choose k with probability p_k, but we don't care about k = 0, so we define a new
+        probability distribution that is proportional to p_k for k > 0:
+            q_0 = 0
+            q_(k>0) = (n choose k) p**k (1-p)**(n-k) / (1 - p_0)
+        Compute the values of log(q_k) at the maximum error probability.
+        We compute log(q_k) instead of q_k for numerical stability; otherwise, (n choose k) gets
+        too large to handle.
+        """
+        log_error_rate = np.log(max_error_rate)
+        log_one_minus_error_rate = np.log(1 - max_error_rate)
+        log_one_minus_prob_0 = np.log(1 - (1 - max_error_rate) ** len(self))
+        log_probs_k = np.array(
+            [
+                _log_choose(len(self), kk)
+                + kk * log_error_rate
+                + (len(self) - kk) * log_one_minus_error_rate
+                - log_one_minus_prob_0
+                for kk in range(len(self) + 1)
+            ]
+        )
+
+        # flatten the distribution to the left of its peak to determine true sample numbers
+        log_probs_k[: np.argmax(log_probs_k)] = log_probs_k.max()
+        sample_nums = np.round(np.exp(log_probs_k) * num_samples)
+        sample_nums = sample_nums[sample_nums > 0].astype(int)
+
+        # compute decoding fidelities for each k (number of qubit errors)
+        fidelities_k = np.ones(len(sample_nums), dtype=float)
+        for num_errors in range(1, len(sample_nums)):
+            num_samples_k = sample_nums[num_errors]
+            fidelities_k[num_errors] = self._estimate_logical_fidelity(
+                num_errors,
+                num_samples_k,
+                decoder_x,
+                decoder_z,
+                logicals_x,
+                logicals_z,
+                pauli_bias_zxy,
+            )
+
+        @np.vectorize
+        def logical_error_rate(error_rate: float) -> float:
+            """Compute a logical error rate in a code-capacity model."""
+            if error_rate > max_error_rate:
+                raise ValueError(
+                    "Cannot determine logical error rate for physical error rates greater than"
+                    f" {max_error_rate}"
+                )
+            log_error_rate = np.log(error_rate)
+            log_one_minus_error_rate = np.log(1 - error_rate)
+            log_probs_k = [
+                _log_choose(len(self), kk)
+                + kk * log_error_rate
+                + (len(self) - kk) * log_one_minus_error_rate
+                for kk in range(len(fidelities_k))
+            ]
+            return 1 - np.exp(log_probs_k) @ fidelities_k
+
+        return logical_error_rate
+
+    def _estimate_logical_fidelity(
+        self,
+        num_errors: int,
+        num_samples: int,
+        decoder_x: decoders.Decoder,
+        decoder_z: decoders.Decoder,
+        logicals_x: npt.NDArray[np.int_],
+        logicals_z: npt.NDArray[np.int_],
+        pauli_bias_zxy: Sequence[float] | None,
+    ) -> float:
+        """Estimate the logical fidelity when decoding a fixed number of errors."""
+        num_failures = 0
+        for _ in range(num_samples):
+            # construct an error
+            error_locations = random.sample(range(len(self)), num_errors)
+            pauli_errors = np.random.choice([1, 2, 3], size=num_errors, p=pauli_bias_zxy)
+            error = np.zeros(len(self), dtype=int)
+            error[error_locations] = pauli_errors
 
             # decode Z-type errors
             error_z = self.field(error % 2)
             correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
             residual_z = error_z - correction_z
             if np.any(logicals_x @ residual_z):
-                num_logical_errors += 1
+                num_failures += 1
                 continue
 
             # decode X-type errors
@@ -1685,9 +1766,9 @@ class CSSCode(QuditCode):
             correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
             residual_x = error_x - correction_x
             if np.any(logicals_z @ residual_x):
-                num_logical_errors += 1
+                num_failures += 1
 
-        return num_logical_errors / num_trials
+        return (num_samples - num_failures) / num_samples
 
 
 def _fix_decoder_args_for_nonbinary_fields(
@@ -1739,3 +1820,13 @@ def _block_diag(*blocks: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         block_row_start += block.shape[0]
         block_col_start += block.shape[1]
     return matrix
+
+
+@functools.cache
+def _log_choose(n: int, k: int) -> float:
+    """Natural logarithm of (n choose k."""
+    return (
+        scipy.special.gammaln(n + 1)
+        - scipy.special.gammaln(k + 1)
+        - scipy.special.gammaln(n - k + 1)
+    )
