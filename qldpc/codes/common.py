@@ -1649,21 +1649,25 @@ class CSSCode(QuditCode):
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
         decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
 
+        # identify logical operators
+        logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
+        logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
+
         num_logical_errors = 0
         for _ in range(num_trials):
             error = np.random.choice(range(4), p=pauli_probs, size=len(self))
 
-            error_x = self.field(error > 1)
-            correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
-            final_error_x = error_x - correction_x
-            if np.any(self.matrix_z @ final_error_x):
+            error_z = self.field(error % 2)
+            correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
+            residual_z = error_z - correction_z
+            if np.any(logicals_x @ residual_z):
                 num_logical_errors += 1
                 continue
 
-            error_z = self.field(error % 2)
-            correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
-            final_error_z = error_z - correction_z
-            if np.any(self.matrix_x @ final_error_z):
+            error_x = self.field((error > 1).astype(int))
+            correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
+            residual_x = error_x - correction_x
+            if np.any(logicals_z @ residual_x):
                 num_logical_errors += 1
 
         return num_logical_errors / num_trials
