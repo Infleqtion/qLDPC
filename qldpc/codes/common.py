@@ -568,6 +568,9 @@ class ClassicalCode(AbstractCode):
         num_logical_errors = 0
         for _ in range(num_trials):
             error = self.field(np.random.choice([0, 1], p=probs, size=len(self)))
+            if not np.any(error):
+                continue
+
             correction = self.field(decoder.decode(self.matrix @ error))
             residual_error = error - correction
             if np.any(residual_error):
@@ -1666,6 +1669,8 @@ class CSSCode(QuditCode):
         num_logical_errors = 0
         for _ in range(num_trials):
             error = np.random.choice(range(4), p=probs, size=len(self))
+            if not np.any(error):
+                continue
 
             # decode Z-type errors
             error_z = self.field(error % 2)
