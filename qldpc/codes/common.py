@@ -1643,18 +1643,18 @@ class CSSCode(QuditCode):
         max_error_rate: float = 0.1,
         pauli_bias: Sequence[float] | None = None,
         **decoder_args: Any,
-    ) -> float:
-        """Compute a logical error rate in a code-capacity model with local depolarizing errors.
+    ) -> Callable[[float], float]:
+        """Construct a function that maps physical --> logical error rate in a code capacity model.
 
-        Physical errors are sampled by depolarizing each qubit with the probability "error_rate".
-        The logical error is then the fraction of physical errors (out of num_trials) that
-        correspond to nontrivial logical operators after decoding and correction.
+        The physical error rate provided to the constructed function is the probability with which
+        each qubit experiences a depolarizing (X, Y, or Z) error.  The logical error rate is then
+        the probability with which an overall error on all physical qubits is converted into a
+        logical error after decoding and correction.
 
-        If error_rate is a sequence of numbers, these are treated as the probabilities of X, Y, and
-        Z errors on each qubit.
+        If provided a pauli_bias, treat it as the relative probabilities of local X, Y, or Z errors.
         """
         if self.field.order != 2:
-            raise ValueError("Logical error rates are only supported for binary codes")
+            raise ValueError("Logical error rate calculations are only supported for binary codes")
 
         # collect relative probabilities of Z, X, and Y errors
         pauli_bias_zxy: tuple[float, float, float] | None
