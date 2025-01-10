@@ -584,8 +584,9 @@ class ClassicalCode(AbstractCode):
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
         fidelities = np.ones(len(sample_allocation), dtype=float)
+        variances = np.zeros(len(sample_allocation), dtype=float)
         for weight in range(1, max_error_weight + 1):
-            fidelities[weight] = self._estimate_logical_fidelity(
+            fidelities[weight], variances[weight] = self._estimate_decoding_fidelity_and_variance(
                 weight, sample_allocation[weight], decoder
             )
 
@@ -599,16 +600,14 @@ class ClassicalCode(AbstractCode):
                     " max_error_rate."
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
-            infidenity = 1 - probs @ fidelities
-            variance = infidenity * (1 - infidenity) / sample_allocation.sum()
-            return infidenity, np.sqrt(variance)
+            return 1 - probs @ fidelities, np.sqrt(probs**2 @ variances)
 
         return get_logical_error_rate
 
-    def _estimate_logical_fidelity(
+    def _estimate_decoding_fidelity_and_variance(
         self, error_weight: int, num_samples: int, decoder: decoders.Decoder
-    ) -> float:
-        """Estimate the logical fidelity when decoding a fixed number of errors."""
+    ) -> tuple[float, float]:
+        """Estimate a fidelity and its variance when decoding a fixed number of errors."""
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
@@ -622,7 +621,9 @@ class ClassicalCode(AbstractCode):
             if np.any(residual_error):
                 num_failures += 1
 
-        return 1 - num_failures / num_samples
+        infidelity = num_failures / num_samples
+        variance = infidelity * (1 - infidelity) / num_samples
+        return 1 - infidelity, variance
 
 
 ################################################################################
@@ -1728,8 +1729,9 @@ class CSSCode(QuditCode):
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
         fidelities = np.ones(len(sample_allocation), dtype=float)
+        variances = np.zeros(len(sample_allocation), dtype=float)
         for weight in range(1, max_error_weight + 1):
-            fidelities[weight] = self._estimate_logical_fidelity(
+            fidelities[weight], variances[weight] = self._estimate_decoding_fidelity_and_variance(
                 weight,
                 sample_allocation[weight],
                 decoder_x,
@@ -1749,13 +1751,11 @@ class CSSCode(QuditCode):
                     " max_error_rate."
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
-            infidenity = 1 - probs @ fidelities
-            variance = infidenity * (1 - infidenity) / sample_allocation.sum()
-            return infidenity, np.sqrt(variance)
+            return 1 - probs @ fidelities, np.sqrt(probs**2 @ variances)
 
         return get_logical_error_rate
 
-    def _estimate_logical_fidelity(
+    def _estimate_decoding_fidelity_and_variance(
         self,
         error_weight: int,
         num_samples: int,
@@ -1764,8 +1764,8 @@ class CSSCode(QuditCode):
         logicals_x: npt.NDArray[np.int_],
         logicals_z: npt.NDArray[np.int_],
         pauli_bias_zxy: npt.NDArray[np.float_] | None,
-    ) -> float:
-        """Estimate the logical fidelity when decoding a fixed number of errors."""
+    ) -> tuple[float, float]:
+        """Estimate a fidelity and its standard error when decoding a fixed number of errors."""
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
@@ -1789,7 +1789,9 @@ class CSSCode(QuditCode):
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 
-        return 1 - num_failures / num_samples
+        infidelity = num_failures / num_samples
+        variance = infidelity * (1 - infidelity) / num_samples
+        return 1 - infidelity, variance
 
 
 def _fix_decoder_args_for_nonbinary_fields(
