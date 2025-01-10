@@ -1640,7 +1640,7 @@ class CSSCode(QuditCode):
     def get_logical_error_rate(
         self,
         num_samples: int,
-        max_error_rate: float = 0.1,
+        max_error_rate: float = 0.3,
         pauli_bias: Sequence[float] | None = None,
         **decoder_args: Any,
     ) -> Callable[[float], float]:
