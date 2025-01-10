@@ -567,9 +567,8 @@ class ClassicalCode(AbstractCode):
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
         fidelities = np.ones(len(sample_allocation), dtype=float)
-        variances = np.zeros(len(sample_allocation), dtype=float)
         for weight in range(1, max_error_weight + 1):
-            fidelities[weight], variances[weight] = self._estimate_logical_fidelity(
+            fidelities[weight] = self._estimate_logical_fidelity(
                 weight, sample_allocation[weight], decoder
             )
 
@@ -582,17 +581,16 @@ class ClassicalCode(AbstractCode):
                     f" {max_error_rate}"
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
-            return 1 - probs @ fidelities, np.sqrt(probs @ variances)
+            infidenity = 1 - probs @ fidelities
+            variance = infidenity * (1 - infidenity) / sample_allocation.sum()
+            return infidenity, np.sqrt(variance)
 
         return get_logical_error_rate
 
     def _estimate_logical_fidelity(
         self, error_weight: int, num_samples: int, decoder: decoders.Decoder
     ) -> tuple[float, float]:
-        """Estimate the logical fidelity when decoding a fixed number of errors.
-
-        Return both a fidelity estimate and variance of that estimate.
-        """
+        """Estimate the logical fidelity when decoding a fixed number of errors."""
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
@@ -606,9 +604,7 @@ class ClassicalCode(AbstractCode):
             if np.any(residual_error):
                 num_failures += 1
 
-        infidelity = num_failures / num_samples
-        variance = infidelity * (1 - infidelity) / num_samples
-        return 1 - infidelity, variance
+        return 1 - num_failures / num_samples
 
 
 ################################################################################
@@ -1709,9 +1705,8 @@ class CSSCode(QuditCode):
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
         fidelities = np.ones(len(sample_allocation), dtype=float)
-        variances = np.zeros(len(sample_allocation), dtype=float)
         for weight in range(1, max_error_weight + 1):
-            fidelities[weight], variances[weight] = self._estimate_logical_fidelity(
+            fidelities[weight] = self._estimate_logical_fidelity(
                 weight,
                 sample_allocation[weight],
                 decoder_x,
@@ -1730,7 +1725,9 @@ class CSSCode(QuditCode):
                     f" {max_error_rate}"
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
-            return 1 - probs @ fidelities, np.sqrt(probs @ variances)
+            infidenity = 1 - probs @ fidelities
+            variance = infidenity * (1 - infidenity) / sample_allocation.sum()
+            return infidenity, np.sqrt(variance)
 
         return get_logical_error_rate
 
@@ -1744,10 +1741,7 @@ class CSSCode(QuditCode):
         logicals_z: npt.NDArray[np.int_],
         pauli_bias_zxy: npt.NDArray[np.float_] | None,
     ) -> tuple[float, float]:
-        """Estimate the logical fidelity when decoding a fixed number of errors.
-
-        Return both a fidelity estimate and variance of that estimate.
-        """
+        """Estimate the logical fidelity when decoding a fixed number of errors."""
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
@@ -1771,9 +1765,7 @@ class CSSCode(QuditCode):
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 
-        infidenity = num_failures / num_samples
-        variance = infidenity * (1 - infidenity) / num_samples
-        return 1 - infidenity, variance
+        return 1 - num_failures / num_samples
 
 
 def _fix_decoder_args_for_nonbinary_fields(
