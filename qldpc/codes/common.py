@@ -591,7 +591,7 @@ class ClassicalCode(AbstractCode):
     ) -> tuple[float, float]:
         """Estimate the logical fidelity when decoding a fixed number of errors.
 
-        Return both an estimated fidelity and a standard error on that estimate.
+        Return both a fidelity estimate and standard error in that estimate.
         """
         num_failures = 0
         for _ in range(num_samples):
@@ -606,7 +606,9 @@ class ClassicalCode(AbstractCode):
             if np.any(residual_error):
                 num_failures += 1
 
-        return 1 - num_failures / num_samples, np.sqrt(num_failures) / num_samples
+        infidenity = num_failures / num_samples
+        variance = infidenity * (1 - infidenity) / num_samples
+        return 1 - infidenity, np.sqrt(variance)
 
 
 ################################################################################
@@ -1744,7 +1746,7 @@ class CSSCode(QuditCode):
     ) -> tuple[float, float]:
         """Estimate the logical fidelity when decoding a fixed number of errors.
 
-        Return a fidelity and an error bar on that fidelity.
+        Return both a fidelity estimate and standard error in that estimate.
         """
         num_failures = 0
         for _ in range(num_samples):
@@ -1769,7 +1771,9 @@ class CSSCode(QuditCode):
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 
-        return 1 - num_failures / num_samples, np.sqrt(num_failures) / num_samples
+        infidenity = num_failures / num_samples
+        variance = infidenity * (1 - infidenity) / num_samples
+        return 1 - infidenity, np.sqrt(variance)
 
 
 def _fix_decoder_args_for_nonbinary_fields(
