@@ -1644,7 +1644,7 @@ class CSSCode(QuditCode):
         pauli_bias: Sequence[float] | None = None,
         **decoder_args: Any,
     ) -> Callable[[float], float]:
-        """Construct a function that maps physical --> logical error rate in a code capacity model.
+        """Construct a function from physical --> logical error rate in a code capacity model.
 
         The physical error rate provided to the constructed function is the probability with which
         each qubit experiences a depolarizing (X, Y, or Z) error.  The logical error rate is then
@@ -1671,42 +1671,14 @@ class CSSCode(QuditCode):
         logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
         logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
 
-        """
-        The probability of k qudit errors is
-            p_k = (n choose k) p**k (1-p)**(n-k)
-        We want to choose k with probability p_k, but we don't care about k = 0, so we define a new
-        probability distribution that is proportional to p_k for k > 0:
-            q_0 = 0
-            q_(k>0) = (n choose k) p**k (1-p)**(n-k) / (1 - p_0)
-        Compute the values of log(q_k) at the maximum error probability.
-        We compute log(q_k) instead of q_k for numerical stability; otherwise, (n choose k) gets
-        too large to handle.
-        """
-        log_error_rate = np.log(max_error_rate)
-        log_one_minus_error_rate = np.log(1 - max_error_rate)
-        log_one_minus_prob_0 = np.log(1 - (1 - max_error_rate) ** len(self))
-        log_probs_k = np.array(
-            [
-                _log_choose(len(self), kk)
-                + kk * log_error_rate
-                + (len(self) - kk) * log_one_minus_error_rate
-                - log_one_minus_prob_0
-                for kk in range(len(self) + 1)
-            ]
-        )
-
-        # flatten the distribution to the left of its peak to determine true sample numbers
-        log_probs_k[: np.argmax(log_probs_k)] = log_probs_k.max()
-        sample_nums = np.round(np.exp(log_probs_k) * num_samples)
-        sample_nums = sample_nums[sample_nums > 0].astype(int)
-
-        # compute decoding fidelities for each k (number of qubit errors)
-        fidelities_k = np.ones(len(sample_nums), dtype=float)
-        for num_errors in range(1, len(sample_nums)):
-            num_samples_k = sample_nums[num_errors]
-            fidelities_k[num_errors] = self._estimate_logical_fidelity(
-                num_errors,
-                num_samples_k,
+        # compute decoding fidelities for each error weight
+        sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
+        max_error_weight = len(sample_allocation) - 1
+        fidelities = np.ones(len(sample_allocation), dtype=float)
+        for error_weight in range(1, max_error_weight + 1):
+            fidelities[error_weight] = self._estimate_logical_fidelity(
+                error_weight,
+                sample_allocation[error_weight],
                 decoder_x,
                 decoder_z,
                 logicals_x,
@@ -1722,21 +1694,14 @@ class CSSCode(QuditCode):
                     "Cannot determine logical error rate for physical error rates greater than"
                     f" {max_error_rate}"
                 )
-            log_error_rate = np.log(error_rate)
-            log_one_minus_error_rate = np.log(1 - error_rate)
-            log_probs_k = [
-                _log_choose(len(self), kk)
-                + kk * log_error_rate
-                + (len(self) - kk) * log_one_minus_error_rate
-                for kk in range(len(fidelities_k))
-            ]
-            return 1 - np.exp(log_probs_k) @ fidelities_k
+            probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
+            return 1 - probs @ fidelities
 
         return logical_error_rate
 
     def _estimate_logical_fidelity(
         self,
-        num_errors: int,
+        error_weight: int,
         num_samples: int,
         decoder_x: decoders.Decoder,
         decoder_z: decoders.Decoder,
@@ -1748,8 +1713,8 @@ class CSSCode(QuditCode):
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
-            error_locations = random.sample(range(len(self)), num_errors)
-            pauli_errors = np.random.choice([1, 2, 3], size=num_errors, p=pauli_bias_zxy)
+            error_locations = random.sample(range(len(self)), error_weight)
+            pauli_errors = np.random.choice([1, 2, 3], size=error_weight, p=pauli_bias_zxy)
             error = np.zeros(len(self), dtype=int)
             error[error_locations] = pauli_errors
 
@@ -1822,9 +1787,53 @@ def _block_diag(*blocks: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
     return matrix
 
 
+def _get_sample_allocation(
+    num_samples: int, block_length: int, max_error_rate: float
+) -> npt.NDArray[np.int_]:
+    """Construct an allocation of samples by error weight.
+
+    This method returns an array whose k-th entry is the nubmer of samples to devote to errors of
+    weight k, given a maximum error rate that we care about.
+    """
+    probs = _get_error_probs_by_weight(block_length, max_error_rate)
+
+    # zero out the distribution at k=0, flatten it out to the left of its peak, and renormalize
+    probs[0] = 0
+    probs[1 : np.argmax(probs)] = probs.max()
+    probs /= np.sum(probs)
+
+    # allocate a number of samples to each error weight
+    samples_by_weight = np.round(probs * num_samples).astype(int)
+    return samples_by_weight[samples_by_weight > 0]
+
+
+def _get_error_probs_by_weight(
+    block_length: int, error_rate: float, max_weight: int | None = None
+) -> npt.NDArray[np.float_]:
+    """Build an array whose k-th entry is the probability of a weight-k error in a code.
+
+    If a code has block_length n and each bit has an independent probability p = error_rate of an
+    error, then the probability of k errors is (n choose k) p**k (1-p)**(n-k).
+
+    We compute the above probability using logarithms because otherwise the combinatorial factor
+    (n choose k) might be too large to handle.
+    """
+    max_weight = max_weight or block_length
+    log_error_rate = np.log(error_rate)
+    log_one_minus_error_rate = np.log(1 - error_rate)
+    return np.exp(
+        [
+            _log_choose(block_length, kk)
+            + kk * log_error_rate
+            + (block_length - kk) * log_one_minus_error_rate
+            for kk in range(max_weight + 1)
+        ]
+    )
+
+
 @functools.cache
 def _log_choose(n: int, k: int) -> float:
-    """Natural logarithm of (n choose k."""
+    """Natural logarithm of (n choose k) = Gamma(n+1) / ( Gamma(k+1) * Gamma(n-k+1) )."""
     return (
         scipy.special.gammaln(n + 1)
         - scipy.special.gammaln(k + 1)
