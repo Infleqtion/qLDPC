@@ -564,14 +564,14 @@ class ClassicalCode(AbstractCode):
         The basic idea in this method is to first think of the decoding fidelity F(p) = 1 -
         logical_error_rate(p) as a function of the physical error rate p, and decompose
             F(p) = sum_k q_k(p) F_k,
-        where q_k(p) is the probability of a weight-k error, and F_k is the probability with which a
-        weight-k error is corrected by the decoder.  Importantly, F_k is independent of p.  We
-        therefore use our sample budget to compute estimates of F_k (according to some allocation of
-        samples to each weight k, which depends on the max_error_rate), and then recycle the values
-        of F_k to compute each F(p).
+        where q_k(p) = (n choose k) p**k (1-p)**(n-k) is the probability of a weight-k error (here n
+        is total number of bits in the code), and F_k is the probability with which a weight-k error
+        is corrected by the decoder.  Importantly, F_k is independent of p.  We therefore use our
+        sample budget to compute estimates of F_k (according to some allocation of samples to each
+        weight k, which depends on the max_error_rate), and then recycle the values of F_k to
+        compute each F(p).
 
-        There is one additional minor trick, which is that we can use the fact that F_k = 0 to
-        simplify
+        There is one more minor trick, which is that we can use the fact that F_k = 1 to simplify
             F(p) = q_0(p) + sum_(k>0) q_k(p) F_k.
         We thereby only need to sample errors of weight k > 0.
         """
