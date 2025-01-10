@@ -551,12 +551,29 @@ class ClassicalCode(AbstractCode):
     ) -> Callable[[float], tuple[float, float]]:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
-        In addition to the logical error rate, the function returns an uncertainty (standard error)
-        on that logical error rate.
+        In addition to the logical error rate, the constructed function returns an uncertainty
+        standard error) on that logical error rate.
 
         The physical error rate provided to the constructed function is the probability with which
-        each bit experiences a bit-flip error.  The logical error rate is then the probability with
-        which an overall error on all physical bits is decoded incorrectly.
+        each bit experiences a bit-flip error.  The constructed function will throw an error if
+        given a physical error rate larger than max_error_rate.
+
+        The logical error rate returned by the constructed function the probability with which a
+        code error (obtained by sampling independent errors on all bits) is decoded incorrectly.
+
+        The basic idea in this method is to first think of the decoding fidelity F(p) = 1 -
+        logical_error_rate(p) as a function of the physical error rate p, and decompose
+            F(p) = sum_k q_k(p) F_k,
+        where q_k(p) is the probability of a weight-k error, and F_k is the probability with which a
+        weight-k error is corrected by the decoder.  Importantly, F_k is independent of p.  We
+        therefore use our sample budget to compute estimates of F_k (according to some allocation of
+        samples to each weight k, which depends on the max_error_rate), and then recycle the values
+        of F_k to compute each F(p).
+
+        There is one additional minor trick, which is that we can use the fact that F_k = 0 to
+        simplify
+            F(p) = q_0(p) + sum_(k>0) q_k(p) F_k.
+        We thereby only need to sample errors of weight k > 0.
         """
         if self.field.order != 2:
             raise ValueError("Logical error rate calculations are only supported for binary codes")
@@ -577,8 +594,9 @@ class ClassicalCode(AbstractCode):
             """Compute a logical error rate in a code-capacity model."""
             if error_rate > max_error_rate:
                 raise ValueError(
-                    "Cannot determine logical error rate for physical error rates greater than"
-                    f" {max_error_rate}"
+                    "Cannot determine logical error rates for physical error rates greater than"
+                    f" {max_error_rate}.  Try running get_logical_error_rate_func with a larger"
+                    " max_error_rate."
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
             infidenity = 1 - probs @ fidelities
@@ -1673,15 +1691,20 @@ class CSSCode(QuditCode):
     ) -> Callable[[float], tuple[float, float]]:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
-        In addition to the logical error rate, the function returns an uncertainty (standard error)
-        on that logical error rate.
+        In addition to the logical error rate, the constructed function returns an uncertainty
+        standard error) on that logical error rate.
 
         The physical error rate provided to the constructed function is the probability with which
-        each qubit experiences a depolarizing (X, Y, or Z) error.  The logical error rate is then
-        the probability with which an overall error on all physical qubits is converted into a
-        logical error after decoding and correction.
+        each qubit experiences a Pauli error.  The constructed function will throw an error if
+        given a physical error rate larger than max_error_rate.  If a pauli_bias is provided, it is
+        treated as the relative probabilities of an X, Y, and Z error on each qubit; otherwise,
+        these errors occur with equal probability, corresponding to a depolarizing error.
 
-        If provided a pauli_bias, treat it as the relative probabilities of local X, Y, or Z errors.
+        The logical error rate returned by the constructed function the probability with which a
+        code error (obtained by sampling independent errors on all qubits) is converted into a
+        logical error by the decoder.
+
+        See ClassicalCode.get_logical_error_rate_func for more details about how this method works.
         """
         if self.field.order != 2:
             raise ValueError("Logical error rate calculations are only supported for binary codes")
@@ -1721,8 +1744,9 @@ class CSSCode(QuditCode):
             """Compute a logical error rate in a code-capacity model."""
             if error_rate > max_error_rate:
                 raise ValueError(
-                    "Cannot determine logical error rate for physical error rates greater than"
-                    f" {max_error_rate}"
+                    "Cannot determine logical error rates for physical error rates greater than"
+                    f" {max_error_rate}.  Try running get_logical_error_rate_func with a larger"
+                    " max_error_rate."
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
             infidenity = 1 - probs @ fidelities
@@ -1834,14 +1858,12 @@ def _get_sample_allocation(
     probs[1 : np.argmax(probs)] = probs.max()
     probs /= np.sum(probs)
 
-    # zere out the distribution anywhere it's too small
-
-    # assign sample numbers according to the probability distribution constructed above
-    # increase num_samples if necessary to deal with round-off errors (for pathological cases)
+    # assign sample numbers according to the probability distribution constructed above,
+    # increasing num_samples if necessary to deal with weird edge cases from round-off errors
     while np.sum(sample_allocation := np.round(probs * num_samples).astype(int)) < num_samples:
         num_samples += 1  # pragma: no cover
 
-    # return without trailing zeroes
+    # truncate trailing zeros and return
     nonzero = np.nonzero(sample_allocation)[0]
     return sample_allocation[: nonzero[-1] + 1]
 
