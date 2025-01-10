@@ -183,10 +183,16 @@ def test_automorphism() -> None:
 def test_classical_capacity() -> None:
     """Logical error rates in a code capacity model."""
     code = codes.RepetitionCode(2)
-    assert code.get_logical_error_rate(error_rate=0, num_trials=1) == 0
-    assert code.get_logical_error_rate(error_rate=1, num_trials=1) == 1
+    logical_error_rate = code.get_logical_error_rate(num_samples=1, max_error_rate=1)
+    assert logical_error_rate(0) == 0
+    assert logical_error_rate(1) == 1
+
+    logical_error_rate = code.get_logical_error_rate(num_samples=10, max_error_rate=0.5)
+    with pytest.raises(ValueError, match="error rates greater than"):
+        logical_error_rate(1) == 1
+
     with pytest.raises(ValueError, match="binary codes"):
-        codes.RepetitionCode(2, field=3).get_logical_error_rate(error_rate=1, num_trials=1)
+        codes.RepetitionCode(2, field=3).get_logical_error_rate(num_samples=10)
 
 
 ####################################################################################################
@@ -462,12 +468,17 @@ def test_css_concatenation() -> None:
 def test_quantum_capacity() -> None:
     """Logical error rates in a code capacity model."""
     code = codes.SurfaceCode(3)
-    assert code.get_logical_error_rate(error_rate=0, num_trials=1) == 0
+    logical_error_rate = code.get_logical_error_rate(num_samples=10)
+    assert logical_error_rate(0) == 0
+
+    with pytest.raises(ValueError, match="error rates greater than"):
+        logical_error_rate(1) == 1
 
     # guaranteed logical X and Z errors
-    assert code.get_logical_error_rate(error_rate=[1, 0, 0], num_trials=1) == 1
-    assert code.get_logical_error_rate(error_rate=[0, 0, 1], num_trials=1) == 1
+    for pauli_bias in [(1, 0, 0), (0, 0, 1)]:
+        logical_error_rate = code.get_logical_error_rate(10, 1, pauli_bias)
+        assert logical_error_rate(1) == 1
 
     # this method only supports qubit codes
     with pytest.raises(ValueError, match="binary codes"):
-        codes.SurfaceCode(2, field=3).get_logical_error_rate(error_rate=1, num_trials=1)
+        codes.SurfaceCode(2, field=3).get_logical_error_rate(num_samples=1)

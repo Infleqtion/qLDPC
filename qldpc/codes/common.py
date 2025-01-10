@@ -1679,10 +1679,10 @@ class CSSCode(QuditCode):
             raise ValueError("Logical error rate calculations are only supported for binary codes")
 
         # collect relative probabilities of Z, X, and Y errors
-        pauli_bias_zxy: tuple[float, float, float] | None
+        pauli_bias_zxy: npt.NDArray[np.float_] | None
         if pauli_bias is not None:
             assert len(pauli_bias) == 3
-            pauli_bias_zxy = np.array([pauli_bias[2], pauli_bias[0], pauli_bias[1]])
+            pauli_bias_zxy = np.array([pauli_bias[2], pauli_bias[0], pauli_bias[1]], dtype=float)
             pauli_bias_zxy /= np.sum(pauli_bias_zxy)
         else:
             pauli_bias_zxy = None
@@ -1729,7 +1729,7 @@ class CSSCode(QuditCode):
         decoder_z: decoders.Decoder,
         logicals_x: npt.NDArray[np.int_],
         logicals_z: npt.NDArray[np.int_],
-        pauli_bias_zxy: Sequence[float] | None,
+        pauli_bias_zxy: npt.NDArray[np.float_] | None,
     ) -> float:
         """Estimate the logical fidelity when decoding a fixed number of errors."""
         num_failures = 0
@@ -1824,9 +1824,16 @@ def _get_sample_allocation(
     probs[1 : np.argmax(probs)] = probs.max()
     probs /= np.sum(probs)
 
-    # allocate a number of samples to each error weight
-    samples_by_weight = np.round(probs * num_samples).astype(int)
-    return samples_by_weight[samples_by_weight > 0]
+    # zere out the distribution anywhere it's too small
+
+    # assign sample numbers according to the probability distribution constructed above
+    # increase num_samples if necessary to deal with round-off errors (for pathological cases)
+    while np.sum(sample_allocation := np.round(probs * num_samples).astype(int)) < num_samples:
+        num_samples += 1  # pragma: no cover
+
+    # return without trailing zeroes
+    nonzero = np.nonzero(sample_allocation)[0]
+    return sample_allocation[: nonzero[-1] + 1]
 
 
 def _get_error_probs_by_weight(
@@ -1841,6 +1848,17 @@ def _get_error_probs_by_weight(
     (n choose k) might be too large to handle.
     """
     max_weight = max_weight or block_length
+
+    # deal with some pathological cases
+    if error_rate == 0:
+        probs = np.zeros(max_weight + 1)
+        probs[0] = 1
+        return probs
+    elif error_rate == 1:
+        probs = np.zeros(max_weight + 1)
+        probs[block_length:] = 1
+        return probs
+
     log_error_rate = np.log(error_rate)
     log_one_minus_error_rate = np.log(1 - error_rate)
     return np.exp(
