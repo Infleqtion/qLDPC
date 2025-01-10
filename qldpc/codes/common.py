@@ -583,8 +583,8 @@ class ClassicalCode(AbstractCode):
         # compute decoding fidelities for each error weight
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
-        fidelities = np.ones(len(sample_allocation), dtype=float)
-        variances = np.zeros(len(sample_allocation), dtype=float)
+        fidelities = np.ones(max_error_weight + 1, dtype=float)
+        variances = np.zeros(max_error_weight + 1, dtype=float)
         for weight in range(1, max_error_weight + 1):
             fidelities[weight], variances[weight] = self._estimate_decoding_fidelity_and_variance(
                 weight, sample_allocation[weight], decoder
@@ -1728,8 +1728,8 @@ class CSSCode(QuditCode):
         # compute decoding fidelities for each error weight
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
-        fidelities = np.ones(len(sample_allocation), dtype=float)
-        variances = np.zeros(len(sample_allocation), dtype=float)
+        fidelities = np.ones(max_error_weight + 1, dtype=float)
+        variances = np.zeros(max_error_weight + 1, dtype=float)
         for weight in range(1, max_error_weight + 1):
             fidelities[weight], variances[weight] = self._estimate_decoding_fidelity_and_variance(
                 weight,
