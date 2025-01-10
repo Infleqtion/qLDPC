@@ -589,7 +589,7 @@ class ClassicalCode(AbstractCode):
 
     def _estimate_logical_fidelity(
         self, error_weight: int, num_samples: int, decoder: decoders.Decoder
-    ) -> tuple[float, float]:
+    ) -> float:
         """Estimate the logical fidelity when decoding a fixed number of errors."""
         num_failures = 0
         for _ in range(num_samples):
@@ -1740,7 +1740,7 @@ class CSSCode(QuditCode):
         logicals_x: npt.NDArray[np.int_],
         logicals_z: npt.NDArray[np.int_],
         pauli_bias_zxy: npt.NDArray[np.float_] | None,
-    ) -> tuple[float, float]:
+    ) -> float:
         """Estimate the logical fidelity when decoding a fixed number of errors."""
         num_failures = 0
         for _ in range(num_samples):
