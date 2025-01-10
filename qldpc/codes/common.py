@@ -564,9 +564,10 @@ class ClassicalCode(AbstractCode):
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
         fidelities = np.ones(len(sample_allocation), dtype=float)
-        for error_weight in range(1, max_error_weight + 1):
-            fidelities[error_weight] = self._estimate_logical_fidelity(
-                error_weight, sample_allocation[error_weight], decoder
+        uncertainties = np.zeros(len(sample_allocation), dtype=float)
+        for weight in range(1, max_error_weight + 1):
+            fidelities[weight], uncertainties[weight] = self._estimate_logical_fidelity(
+                weight, sample_allocation[weight], decoder
             )
 
         @np.vectorize
@@ -578,14 +579,17 @@ class ClassicalCode(AbstractCode):
                     f" {max_error_rate}"
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
-            return 1 - probs @ fidelities
+            return 1 - probs @ fidelities, probs @ uncertainties
 
         return logical_error_rate
 
     def _estimate_logical_fidelity(
         self, error_weight: int, num_samples: int, decoder: decoders.Decoder
-    ) -> float:
-        """Estimate the logical fidelity when decoding a fixed number of errors."""
+    ) -> tuple[float, float]:
+        """Estimate the logical fidelity when decoding a fixed number of errors.
+
+        Return both an estimated fidelity and a standard error on that estimate.
+        """
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
@@ -599,7 +603,7 @@ class ClassicalCode(AbstractCode):
             if np.any(residual_error):
                 num_failures += 1
 
-        return 1 - num_failures / num_samples
+        return 1 - num_failures / num_samples, np.sqrt(num_failures) / num_samples
 
 
 ################################################################################
@@ -1697,10 +1701,11 @@ class CSSCode(QuditCode):
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
         max_error_weight = len(sample_allocation) - 1
         fidelities = np.ones(len(sample_allocation), dtype=float)
-        for error_weight in range(1, max_error_weight + 1):
-            fidelities[error_weight] = self._estimate_logical_fidelity(
-                error_weight,
-                sample_allocation[error_weight],
+        uncertainties = np.zeros(len(sample_allocation), dtype=float)
+        for weight in range(1, max_error_weight + 1):
+            fidelities[weight], uncertainties[weight] = self._estimate_logical_fidelity(
+                weight,
+                sample_allocation[weight],
                 decoder_x,
                 decoder_z,
                 logicals_x,
@@ -1717,7 +1722,7 @@ class CSSCode(QuditCode):
                     f" {max_error_rate}"
                 )
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
-            return 1 - probs @ fidelities
+            return 1 - probs @ fidelities, probs @ uncertainties
 
         return logical_error_rate
 
@@ -1730,8 +1735,11 @@ class CSSCode(QuditCode):
         logicals_x: npt.NDArray[np.int_],
         logicals_z: npt.NDArray[np.int_],
         pauli_bias_zxy: npt.NDArray[np.float_] | None,
-    ) -> float:
-        """Estimate the logical fidelity when decoding a fixed number of errors."""
+    ) -> tuple[float, float]:
+        """Estimate the logical fidelity when decoding a fixed number of errors.
+
+        Return a fidelity and an error bar on that fidelity.
+        """
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
@@ -1755,7 +1763,7 @@ class CSSCode(QuditCode):
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 
-        return 1 - num_failures / num_samples
+        return 1 - num_failures / num_samples, np.sqrt(num_failures) / num_samples
 
 
 def _fix_decoder_args_for_nonbinary_fields(
