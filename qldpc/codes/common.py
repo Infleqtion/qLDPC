@@ -546,10 +546,13 @@ class ClassicalCode(AbstractCode):
             generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
         return ClassicalCode.from_generator(generator)
 
-    def get_logical_error_rate(
+    def get_logical_error_rate_func(
         self, num_samples: int, max_error_rate: float = 0.3, **decoder_args: Any
-    ) -> Callable[[float], float]:
+    ) -> Callable[[float], tuple[float, float]]:
         """Construct a function from physical --> logical error rate in a code capacity model.
+
+        In addition to the logical error rate, the function returns an uncertainty (standard error)
+        on that logical error rate.
 
         The physical error rate provided to the constructed function is the probability with which
         each bit experiences a bit-flip error.  The logical error rate is then the probability with
@@ -571,7 +574,7 @@ class ClassicalCode(AbstractCode):
             )
 
         @np.vectorize
-        def logical_error_rate(error_rate: float) -> float:
+        def get_logical_error_rate(error_rate: float) -> tuple[float, float]:
             """Compute a logical error rate in a code-capacity model."""
             if error_rate > max_error_rate:
                 raise ValueError(
@@ -581,7 +584,7 @@ class ClassicalCode(AbstractCode):
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
             return 1 - probs @ fidelities, probs @ uncertainties
 
-        return logical_error_rate
+        return get_logical_error_rate
 
     def _estimate_logical_fidelity(
         self, error_weight: int, num_samples: int, decoder: decoders.Decoder
@@ -1663,14 +1666,17 @@ class CSSCode(QuditCode):
             code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
 
-    def get_logical_error_rate(
+    def get_logical_error_rate_func(
         self,
         num_samples: int,
         max_error_rate: float = 0.3,
         pauli_bias: Sequence[float] | None = None,
         **decoder_args: Any,
-    ) -> Callable[[float], float]:
+    ) -> Callable[[float], tuple[float, float]]:
         """Construct a function from physical --> logical error rate in a code capacity model.
+
+        In addition to the logical error rate, the function returns an uncertainty (standard error)
+        on that logical error rate.
 
         The physical error rate provided to the constructed function is the probability with which
         each qubit experiences a depolarizing (X, Y, or Z) error.  The logical error rate is then
@@ -1714,7 +1720,7 @@ class CSSCode(QuditCode):
             )
 
         @np.vectorize
-        def logical_error_rate(error_rate: float) -> float:
+        def get_logical_error_rate(error_rate: float) -> tuple[float, float]:
             """Compute a logical error rate in a code-capacity model."""
             if error_rate > max_error_rate:
                 raise ValueError(
@@ -1724,7 +1730,7 @@ class CSSCode(QuditCode):
             probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
             return 1 - probs @ fidelities, probs @ uncertainties
 
-        return logical_error_rate
+        return get_logical_error_rate
 
     def _estimate_logical_fidelity(
         self,
