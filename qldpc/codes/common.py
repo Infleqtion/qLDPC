@@ -1875,14 +1875,13 @@ def _get_error_probs_by_weight(
 
     log_error_rate = np.log(error_rate)
     log_one_minus_error_rate = np.log(1 - error_rate)
-    return np.exp(
-        [
-            _log_choose(block_length, kk)
-            + kk * log_error_rate
-            + (block_length - kk) * log_one_minus_error_rate
-            for kk in range(max_weight + 1)
-        ]
-    )
+    log_probs = [
+        _log_choose(block_length, kk)
+        + kk * log_error_rate
+        + (block_length - kk) * log_one_minus_error_rate
+        for kk in range(max_weight + 1)
+    ]
+    return np.exp(log_probs)
 
 
 @functools.cache
