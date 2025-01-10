@@ -594,8 +594,8 @@ class ClassicalCode(AbstractCode):
         for _ in range(num_samples):
             # construct an error
             error_locations = random.sample(range(len(self)), error_weight)
-            error = np.zeros(len(self), dtype=int)
-            error[error_locations] = 1
+            error = self.field.Zeros(len(self))
+            error[error_locations] = self.field(1)
 
             # decode the error
             correction = self.field(decoder.decode(self.matrix @ error))
