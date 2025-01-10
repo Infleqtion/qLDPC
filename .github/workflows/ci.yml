@@ -37,7 +37,7 @@ jobs:
     name: Linting check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: 2
     needs: install
     steps:
       - uses: actions/checkout@v4
@@ -64,7 +64,7 @@ jobs:
     name: Type check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 1
+    timeout-minutes: 2
     needs: install
     steps:
       - uses: actions/checkout@v4
