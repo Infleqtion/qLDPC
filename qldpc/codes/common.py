@@ -554,10 +554,6 @@ class ClassicalCode(AbstractCode):
         The physical error rate provided to the constructed function is the probability with which
         each bit experiences a bit-flip error.  The logical error rate is then the probability with
         which an overall error on all physical bits is decoded incorrectly.
-
-        WARNING: if passing decoder arguments, note that decoders written for quantum codes may
-        generally perform poorly on classical codes.  As a fallback, you can pass with_ILP=True to
-        this function to guarantee that the decoder works (albeit very slowly).
         """
         if self.field.order != 2:
             raise ValueError("Logical error rate calculations are only supported for binary codes")
