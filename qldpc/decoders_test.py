@@ -25,7 +25,7 @@ from qldpc import decoders
 
 
 def test_custom_decoder() -> None:
-    """Custom decoder."""
+    """Inject custom decoders."""
 
     class CustomDecoder(decoders.Decoder):
         def __init__(self, matrix: npt.NDArray[np.int_]) -> None: ...
@@ -34,8 +34,11 @@ def test_custom_decoder() -> None:
 
     matrix = np.eye(2, dtype=int)
     syndrome = np.zeros(2, dtype=int)
+    result = decoders.decode(matrix, syndrome, decoder_constructor=CustomDecoder)
+    assert result is syndrome
+
     decoder = CustomDecoder(matrix)
-    result = decoders.decode(matrix, syndrome, decoder=decoder)
+    result = decoders.decode(matrix, syndrome, static_decoder=decoder)
     assert result is syndrome
 
 
