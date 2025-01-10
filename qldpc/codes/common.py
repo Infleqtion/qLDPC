@@ -1768,7 +1768,7 @@ class CSSCode(QuditCode):
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 
-        return (num_samples - num_failures) / num_samples
+        return 1 - num_failures / num_samples
 
 
 def _fix_decoder_args_for_nonbinary_fields(
