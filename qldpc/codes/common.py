@@ -606,9 +606,9 @@ class ClassicalCode(AbstractCode):
             if np.any(residual_error):
                 num_failures += 1
 
-        infidenity = num_failures / num_samples
-        variance = infidenity * (1 - infidenity) / num_samples
-        return 1 - infidenity, variance
+        infidelity = num_failures / num_samples
+        variance = infidelity * (1 - infidelity) / num_samples
+        return 1 - infidelity, variance
 
 
 ################################################################################
