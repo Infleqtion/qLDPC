@@ -547,37 +547,63 @@ class ClassicalCode(AbstractCode):
         return ClassicalCode.from_generator(generator)
 
     def get_logical_error_rate(
-        self, error_rate: float, num_trials: int, **decoder_args: Any
-    ) -> float:
-        """Compute a logical error rate in a code-capacity model with local bit-flip errors.
+        self, num_samples: int, max_error_rate: float = 0.3, **decoder_args: Any
+    ) -> Callable[[float], float]:
+        """Construct a function from physical --> logical error rate in a code capacity model.
 
-        Physical errors are sampled by flipping each bit with the probability "error_rate".  The
-        logical error is then the fraction of physical errors (out of num_trials) that leave
-        a residual error after decoding and correction.
+        The physical error rate provided to the constructed function is the probability with which
+        each bit experiences a bit-flip error.  The logical error rate is then the probability with
+        which an overall error on all physical bits is decoded incorrectly.
 
         WARNING: if passing decoder arguments, note that decoders written for quantum codes may
-        generally perform poorly on classical codes.
+        generally perform poorly on classical codes.  As a fallback, you can pass with_ILP=True to
+        this function to guarantee that the decoder works (albeit very slowly).
         """
         if self.field.order != 2:
-            raise ValueError("Logical error rates are only supported for binary codes")
-        if not decoder_args:
-            decoder_args = dict(with_ILP=True)
+            raise ValueError("Logical error rate calculations are only supported for binary codes")
 
-        probs = [1 - error_rate, error_rate]
         decoder = decoders.get_decoder(self.matrix, **decoder_args)
 
-        num_logical_errors = 0
-        for _ in range(num_trials):
-            error = self.field(np.random.choice([0, 1], p=probs, size=len(self)))
-            if not np.any(error):
-                continue
+        # compute decoding fidelities for each error weight
+        sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
+        max_error_weight = len(sample_allocation) - 1
+        fidelities = np.ones(len(sample_allocation), dtype=float)
+        for error_weight in range(1, max_error_weight + 1):
+            fidelities[error_weight] = self._estimate_logical_fidelity(
+                error_weight, sample_allocation[error_weight], decoder
+            )
 
+        @np.vectorize
+        def logical_error_rate(error_rate: float) -> float:
+            """Compute a logical error rate in a code-capacity model."""
+            if error_rate > max_error_rate:
+                raise ValueError(
+                    "Cannot determine logical error rate for physical error rates greater than"
+                    f" {max_error_rate}"
+                )
+            probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
+            return 1 - probs @ fidelities
+
+        return logical_error_rate
+
+    def _estimate_logical_fidelity(
+        self, error_weight: int, num_samples: int, decoder: decoders.Decoder
+    ) -> float:
+        """Estimate the logical fidelity when decoding a fixed number of errors."""
+        num_failures = 0
+        for _ in range(num_samples):
+            # construct an error
+            error_locations = random.sample(range(len(self)), error_weight)
+            error = np.zeros(len(self), dtype=int)
+            error[error_locations] = 1
+
+            # decode the error
             correction = self.field(decoder.decode(self.matrix @ error))
             residual_error = error - correction
             if np.any(residual_error):
-                num_logical_errors += 1
+                num_failures += 1
 
-        return num_logical_errors / num_trials
+        return 1 - num_failures / num_samples
 
 
 ################################################################################
