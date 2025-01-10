@@ -54,10 +54,14 @@ def decode(
 
 def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Retrieve a decoder."""
-    if custom_decoder := decoder_args.pop("decoder", None):
-        assert hasattr(custom_decoder, "decode") and callable(getattr(custom_decoder, "decode"))
-        assert not decoder_args, "if passed a decoder, we cannot process additional arguments"
-        return custom_decoder
+    if constructor := decoder_args.pop("decoder_constructor", None):
+        assert callable(constructor)
+        return constructor(matrix, **decoder_args)
+
+    if decoder := decoder_args.pop("static_decoder", None):
+        assert hasattr(decoder, "decode") and callable(getattr(decoder, "decode"))
+        assert not decoder_args, "if passed a static decoder, we cannot process decoding arguments"
+        return decoder
 
     if decoder_args.pop("with_ILP", False):
         return get_decoder_ILP(matrix, **decoder_args)
