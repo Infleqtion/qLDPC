@@ -903,10 +903,10 @@ class QuditCode(AbstractCode):
         k and n are, respectively, the numbers of logical and physical qudits in this code.
         Each row of logical_ops is a vector that represents a logical operator.  The first
         (respectively, second) n entries of this vector indicate the support of *physical* X-type
-        (respectively, Z-type) operators.  The rows j < k (respectively, j >= k) correspond to
-        logical X-type (respectively, Z-type) operators, and the operators at rows j and j+k are
-        dual to each other, which is to say that the logical operator at row j commutes with all
-        other operators except that at row j+k.
+        (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
+        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
+        each other, which is to say that the logical operator at row j commutes with the logical
+        operators in all other rows except row j+k.
 
         If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
         operators of that type.
@@ -1445,10 +1445,10 @@ class CSSCode(QuditCode):
         k and n are, respectively, the numbers of logical and physical qudits in this code.
         Each row of logical_ops is a vector that represents a logical operator.  The first
         (respectively, second) n entries of this vector indicate the support of *physical* X-type
-        (respectively, Z-type) operators.  The rows j < k (respectively, j >= k) correspond to
-        logical X-type (respectively, Z-type) operators, and the operators at rows j and j+k are
-        dual to each other, which is to say that the logical operator at row j commutes with all
-        other operators except that at row j+k.
+        (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
+        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
+        each other, which is to say that the logical operator at row j commutes with the logical
+        operators in all other rows except row j+k.
 
         If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
         operators of that type.
