@@ -181,10 +181,10 @@ enable = [
 
 # Enable the optional checks by parameter_documentation
 [tool.pylint.parameter_documentation]
-accept-no-param-doc=false # Do not accept totally missing parameter documentation.
-accept-no-raise-doc=false # Do not accept totally missing raises documentation.
-accept-no-return-doc=false # Do not accept totally missing return documentation.
-accept-no-yields-doc=false # Do not accept missing yields annotations.
+accept-no-param-doc = false       # Do not accept totally missing parameter documentation.
+accept-no-raise-doc = false       # Do not accept totally missing raises documentation.
+accept-no-return-doc = false      # Do not accept totally missing return documentation.
+accept-no-yields-doc = false      # Do not accept missing yields annotations.
 default-docstring-type = "google"
 
 # Ignore long lines containing urls or pylint directives.
