@@ -930,6 +930,7 @@ class QuditCode(AbstractCode):
             return self._logical_ops
 
         num_qudits = self.num_qudits
+        num_checks = self.num_checks
         dimension = self.dimension
         identity = self.field.Identity(dimension)
 
@@ -938,30 +939,30 @@ class QuditCode(AbstractCode):
 
         # row reduce and identify pivots in the Z sector
         matrix, pivots_z = _row_reduce(self.matrix)
-        pivots_z = [pivot for pivot in pivots_z if pivot < self.num_qudits]
-        other_z = [qq for qq in range(self.num_qudits) if qq not in pivots_z]
+        pivots_z = [pivot for pivot in pivots_z if pivot < num_qudits]
+        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
 
         # move the Z pivots to the back
-        matrix = matrix.reshape(self.num_checks * 2, self.num_qudits)
+        matrix = matrix.reshape(num_checks * 2, num_qudits)
         matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
         # row reduce and identify pivots in the X sector
-        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)
-        sub_matrix = matrix[len(pivots_z) :, self.num_qudits :]
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)
+        sub_matrix = matrix[len(pivots_z) :, num_qudits:]
         sub_matrix, pivots_x = _row_reduce(self.field(sub_matrix))
-        matrix[len(pivots_z) :, self.num_qudits :] = sub_matrix
-        other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
+        matrix[len(pivots_z) :, num_qudits:] = sub_matrix
+        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
 
         # move the X pivots to the back
-        matrix = matrix.reshape(self.num_checks * 2, self.num_qudits)
+        matrix = matrix.reshape(num_checks * 2, num_qudits)
         matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # identify X-pivot and Z-pivot parity checks
-        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)[: len(pivots_z + pivots_x), :]
-        checks_z = matrix[: len(pivots_z), :].reshape(len(pivots_z), 2, self.num_qudits)
-        checks_x = matrix[len(pivots_z) :, :].reshape(len(pivots_x), 2, self.num_qudits)
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)[: len(pivots_z + pivots_x), :]
+        checks_z = matrix[: len(pivots_z), :].reshape(len(pivots_z), 2, num_qudits)
+        checks_x = matrix[len(pivots_z) :, :].reshape(len(pivots_x), 2, num_qudits)
 
         # run some sanity checks
         assert len(pivots_x) == 0 or pivots_x[-1] < num_qudits - len(pivots_z)
@@ -971,7 +972,7 @@ class QuditCode(AbstractCode):
         # identify "sections" of columns / qudits
         section_k = slice(dimension)
         section_z = slice(dimension, dimension + len(pivots_z))
-        section_x = slice(dimension + len(pivots_z), self.num_qudits)
+        section_x = slice(dimension + len(pivots_z), num_qudits)
 
         # construct Z-pivot logical operators
         logicals_z = self.field.Zeros((dimension, 2, num_qudits))
@@ -1480,14 +1481,14 @@ class CSSCode(QuditCode):
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
         checks_x, pivots_x = _row_reduce(self.field(checks_x))
-        other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
+        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
         checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
         checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # row reduce the check matrix for Z-type errors and move its pivots to the back
         checks_z, pivots_z = _row_reduce(self.field(checks_z))
-        other_z = [qq for qq in range(self.num_qudits) if qq not in pivots_z]
+        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
         checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
@@ -1499,7 +1500,7 @@ class CSSCode(QuditCode):
         # identify "sections" of columns / qudits
         section_k = slice(dimension)
         section_x = slice(dimension, dimension + len(pivots_x))
-        section_z = slice(dimension + len(pivots_x), self.num_qudits)
+        section_z = slice(dimension + len(pivots_x), num_qudits)
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
