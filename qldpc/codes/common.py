@@ -552,7 +552,7 @@ class ClassicalCode(AbstractCode):
         """Construct a function from physical --> logical error rate in a code capacity model.
 
         In addition to the logical error rate, the constructed function returns an uncertainty
-        standard error) on that logical error rate.
+        (standard error) in that logical error rate.
 
         The physical error rate provided to the constructed function is the probability with which
         each bit experiences a bit-flip error.  The constructed function will throw an error if
@@ -1693,7 +1693,7 @@ class CSSCode(QuditCode):
         """Construct a function from physical --> logical error rate in a code capacity model.
 
         In addition to the logical error rate, the constructed function returns an uncertainty
-        standard error) on that logical error rate.
+        (standard error) in that logical error rate.
 
         The physical error rate provided to the constructed function is the probability with which
         each qubit experiences a Pauli error.  The constructed function will throw an error if
