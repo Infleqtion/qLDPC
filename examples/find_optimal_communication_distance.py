@@ -67,15 +67,15 @@ def get_qubit_assignment(
 def build_placement_graph(
     code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
 ) -> nx.Graph:
-    """Build a data qubit placement graph.
+    """Build a check qubit placement graph.
 
-    The data qubit placement graph consists of two vertex sets:
-        (a) data qubits, and
+    The check qubit placement graph consists of two vertex sets:
+        (a) check qubits, and
         (b) candidate locations.
     The graph draws an edge betweeen qubit qq and location ll if qq's neighbors are at most
     max_comm_dist away from ll.
     """
-    nodes = [node for node in code.graph.nodes() if node.is_data]
+    nodes = [node for node in code.graph.nodes() if not node.is_data]
     node_locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
     graph = nx.Graph()
