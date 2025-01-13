@@ -58,7 +58,7 @@ def get_qubit_assignment(
     If no such assignment exists, return None.
     """
     graph = build_placement_graph(code, folded_layout, max_comm_dist)
-    if any(degree == 0 for _, degree in graph.degree()):
+    if graph is None:
         return None
     matching = nx.max_weight_matching(graph, maxcardinality=True)
     return matching if nx.is_perfect_matching(graph, matching) else None
@@ -66,8 +66,8 @@ def get_qubit_assignment(
 
 def build_placement_graph(
     code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
-) -> nx.Graph:
-    """Build a check qubit placement graph.
+) -> nx.Graph | None:
+    """Build a check qubit placement graph.  If some check qubit cannot be placed, return None.
 
     The check qubit placement graph consists of two vertex sets:
         (a) check qubits, and
@@ -78,29 +78,22 @@ def build_placement_graph(
     nodes = [node for node in code.graph.nodes() if not node.is_data]
     node_locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
+    def satisfies_max_comm_dist(node: qldpc.objects.Node, loc: tuple[int, int]) -> bool:
+        """Does placing a node at the given location satisfy the max_comm_dist constraint?"""
+        neighbors = set(code.graph.successors(node)).union(code.graph.predecessors(node))
+        return not any(
+            get_dist(loc, code.get_qubit_pos(neighbor, folded_layout)) > max_comm_dist
+            for neighbor in neighbors
+        )
+
     graph = nx.Graph()
     for node in nodes:
-        graph.add_node(node)
-        for loc in node_locs:
-            if satisfies_max_comm_dist(code, folded_layout, max_comm_dist, node, loc):
-                graph.add_edge(node, loc)
+        edges = [(node, loc) for loc in node_locs if satisfies_max_comm_dist(node, loc)]
+        if not edges:
+            return None
+        graph.add_edges_from(edges)
 
     return graph
-
-
-def satisfies_max_comm_dist(
-    code: qldpc.codes.BBCode,
-    folded_layout: bool,
-    max_comm_dist: float,
-    node: qldpc.objects.Node,
-    loc: tuple[int, int],
-) -> bool:
-    """Does placing a node at the given location satisfy the max_comm_dist constraint?"""
-    neighbors = set(code.graph.successors(node)).union(code.graph.predecessors(node))
-    return not any(
-        get_dist(loc, code.get_qubit_pos(neighbor, folded_layout)) > max_comm_dist
-        for neighbor in neighbors
-    )
 
 
 @functools.cache
