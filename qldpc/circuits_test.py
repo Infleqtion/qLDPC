@@ -115,18 +115,7 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
     assert physical_circuit is not None
 
     # check that the physical circuit has the correct logical tableau
-    encoder = circuits.get_encoding_tableau(code)
-    decoder = encoder.inverse()
-    decoded_physical_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
-    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_physical_tableau.to_numpy()
-    reconstructed_logical_tableau = stim.Tableau.from_numpy(
-        x2x=x2x[: code.dimension, : code.dimension],
-        x2z=x2z[: code.dimension, : code.dimension],
-        z2x=z2x[: code.dimension, : code.dimension],
-        z2z=z2z[: code.dimension, : code.dimension],
-        x_signs=x_signs[: code.dimension],
-        z_signs=z_signs[: code.dimension],
-    )
+    reconstructed_logical_tableau = circuits.get_logical_tableau(code, physical_circuit)
     assert logical_circuit.to_tableau() == reconstructed_logical_tableau
 
     # there are no logical two-qubit gates in this code
