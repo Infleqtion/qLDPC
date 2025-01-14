@@ -233,22 +233,10 @@ def _get_transversal_automorphism_data(
     correction = encoder(stim.PauliString(decoded_correction))
     physical_circuit = _get_pauli_circuit(correction) + physical_circuit
 
-    # Identify the logical tableau implemented by the physical circuit, which is simply
-    # the "upper left" block of the decoded tableau that acts on all logical qubits.
-    decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
-    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
-    logical_tableau = stim.Tableau.from_numpy(
-        x2x=x2x[: code.dimension, : code.dimension],
-        x2z=x2z[: code.dimension, : code.dimension],
-        z2x=z2x[: code.dimension, : code.dimension],
-        z2z=z2z[: code.dimension, : code.dimension],
-        x_signs=x_signs[: code.dimension],
-        z_signs=z_signs[: code.dimension],
+    # identify the logical tableau implemented by the physical circuit
+    logical_tableau = _get_logical_tableau_from_code_data(
+        len(code), code.dimension, encoder, decoder, physical_circuit
     )
-
-    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
-    assert not np.any(z2x[:, code.dimension :])  # stabilizers and Z-type logicals
-    assert not np.any(x2x[: code.dimension, code.dimension :])  # X-type logicals
 
     return logical_tableau, physical_circuit
 
@@ -323,6 +311,46 @@ def _get_pauli_circuit(string: stim.PauliString) -> stim.Circuit:
         if indices := string.pauli_indices(pauli):
             circuit.append(pauli, indices)
     return circuit
+
+
+def get_logical_tableau(code: codes.CSSCode, physical_circuit: stim.Circuit) -> stim.Tableau:
+    """Identify the logical tableau implemented by the physical circuit."""
+    encoder = get_encoding_tableau(code)
+    decoder = encoder.inverse()
+    return _get_logical_tableau_from_code_data(
+        len(code), code.dimension, encoder, decoder, physical_circuit
+    )
+
+
+def _get_logical_tableau_from_code_data(
+    block_length: int,
+    dimension: int,
+    encoder: stim.Tableau,
+    decoder: stim.Tableau,
+    physical_circuit: stim.Circuit,
+) -> stim.Tableau:
+    """Identify the logical tableau implemented by the physical circuit."""
+    identity_phys = stim.Circuit(f"I {block_length - 1}")
+    physical_tableau = (physical_circuit + identity_phys).to_tableau()
+    decoder = encoder.inverse()
+
+    # compute the "upper left" block of the decoded tableau that acts on all logical qubits
+    decoded_tableau = encoder.then(physical_tableau).then(decoder)
+    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
+    logical_tableau = stim.Tableau.from_numpy(
+        x2x=x2x[:dimension, :dimension],
+        x2z=x2z[:dimension, :dimension],
+        z2x=z2x[:dimension, :dimension],
+        z2z=z2z[:dimension, :dimension],
+        x_signs=x_signs[:dimension],
+        z_signs=z_signs[:dimension],
+    )
+
+    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
+    assert not z2x[:, dimension:].any()  # stabilizers and Z-type logicals
+    assert not x2x[:dimension, dimension:].any()  # X-type logicals
+
+    return logical_tableau
 
 
 @restrict_to_qubits
