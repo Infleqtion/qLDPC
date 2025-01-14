@@ -313,7 +313,8 @@ def _get_pauli_circuit(string: stim.PauliString) -> stim.Circuit:
     return circuit
 
 
-def get_logical_tableau(code: codes.CSSCode, physical_circuit: stim.Circuit) -> stim.Tableau:
+@restrict_to_qubits
+def get_logical_tableau(code: codes.QuditCode, physical_circuit: stim.Circuit) -> stim.Tableau:
     """Identify the logical tableau implemented by the physical circuit."""
     encoder = get_encoding_tableau(code)
     decoder = encoder.inverse()
