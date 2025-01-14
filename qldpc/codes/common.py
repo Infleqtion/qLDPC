@@ -1023,7 +1023,7 @@ class QuditCode(AbstractCode):
             raise ValueError("The given logical operators do not commute with stabilizers")
 
     @classmethod
-    def stack(cls, *codes: QuditCode) -> QuditCode:
+    def stack(cls, *codes: QuditCode, inherit_logicals: bool = True) -> QuditCode:
         """Stack the given qudit codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
@@ -1035,7 +1035,20 @@ class QuditCode(AbstractCode):
         code_z = ClassicalCode.stack(*codes_z)
         code_x = ClassicalCode.stack(*codes_x)
         matrix = np.hstack([code_z.matrix, code_x.matrix])
-        return QuditCode(matrix)
+        code = QuditCode(matrix)
+        if inherit_logicals:
+            logicals_xx = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in codes]
+            logicals_zx = [code.get_logical_ops(Pauli.Z)[:, : len(code)] for code in codes]
+            logicals_xz = [code.get_logical_ops(Pauli.X)[:, len(code) :] for code in codes]
+            logicals_zz = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in codes]
+            logical_ops = np.block(
+                [
+                    [_block_diag(*logicals_xx), _block_diag(*logicals_xz)],
+                    [_block_diag(*logicals_zx), _block_diag(*logicals_zz)],
+                ]
+            )
+            code.set_logical_ops(logical_ops)
+        return code
 
     @classmethod
     def concatenate(
@@ -1611,7 +1624,7 @@ class CSSCode(QuditCode):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
 
     @classmethod
-    def stack(cls, *codes: QuditCode) -> CSSCode:
+    def stack(cls, *codes: QuditCode, inherit_logicals: bool = True) -> CSSCode:
         """Stack the given CSS codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
@@ -1623,12 +1636,17 @@ class CSSCode(QuditCode):
         css_codes = cast(list[CSSCode], codes)
         code_x = ClassicalCode.stack(*[code.code_x for code in css_codes])
         code_z = ClassicalCode.stack(*[code.code_z for code in css_codes])
-        return CSSCode(
+        code = CSSCode(
             code_x,
             code_z,
             promise_balanced_codes=all(code._balanced_codes for code in css_codes),
             skip_validation=True,
         )
+        if inherit_logicals:
+            logicals_x = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in css_codes]
+            logicals_z = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in css_codes]
+            code.set_logical_ops_xz(_block_diag(*logicals_x), _block_diag(*logicals_z))
+        return code
 
     @classmethod
     def concatenate(
