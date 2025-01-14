@@ -372,7 +372,7 @@ class BBCode(QCCode):
         These codes are "equivalent" in the sense that they can be obtained from one another by a
         permutation of data and check qubits.
 
-        To an find equivalent BBCode with a manifestly toric layouts, we take
+        To an find equivalent BBCode with a manifestly toric layout, we take
             poly_a = sum_j A_j --> poly_a / A_k = 1 + sum_{j != k} A_j/A_k, and
             poly_b = sum_j B_j --> poly_b / B_l = 1 + sum_{j != l} B_j/B_l.
         Each pair of terms (A_j/A_k, B_j/B_l) is then a candidate for generators (g, h).
