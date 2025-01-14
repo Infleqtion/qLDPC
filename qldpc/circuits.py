@@ -332,7 +332,6 @@ def _get_logical_tableau_from_code_data(
     """Identify the logical tableau implemented by the physical circuit."""
     identity_phys = stim.Circuit(f"I {block_length - 1}")
     physical_tableau = (physical_circuit + identity_phys).to_tableau()
-    decoder = encoder.inverse()
 
     # compute the "upper left" block of the decoded tableau that acts on all logical qubits
     decoded_tableau = encoder.then(physical_tableau).then(decoder)
