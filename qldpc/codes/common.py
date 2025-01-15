@@ -808,10 +808,14 @@ class QuditCode(AbstractCode):
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
-        num_checks = len(self.matrix)
-        matrix = np.reshape(self.matrix.copy(), (num_checks, 2, -1))
+        matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        return QuditCode(matrix.reshape(num_checks, -1), validate=validate)
+        code = QuditCode(matrix.reshape(-1, 2 * len(self)), validate=validate)
+        if self._logical_ops is not None:
+            logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
+            logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
+            code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)), validate=validate)
+        return code
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any

@@ -327,6 +327,9 @@ def test_qudit_ops() -> None:
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
+    assert code.get_stabilizers()[0] == "X Z Z X I"
+    assert code.conjugated([0]).get_stabilizers()[0] == "Z Z Z X I"
+
 
 def test_qudit_concatenation() -> None:
     """Concatenate qudit codes."""
