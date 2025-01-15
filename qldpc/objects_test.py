@@ -20,8 +20,18 @@ from __future__ import annotations
 import galois
 import numpy as np
 import pytest
+import stim
 
-from qldpc import abstract, objects
+from qldpc import abstract, codes, objects
+
+
+def test_pauli_strings() -> None:
+    """Stabilizers correctly converted into stim.PauliString objects."""
+    code = codes.FiveQubitCode()
+    assert all(
+        objects.op_to_string(row, flip_xz=True) == stim.PauliString(stabilizer.replace(" ", ""))
+        for row, stabilizer in zip(code.matrix, code.get_stabilizers())
+    )
 
 
 def test_pauli() -> None:

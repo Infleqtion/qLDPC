@@ -30,10 +30,11 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import scipy.special
+import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
+from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, op_to_string
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -810,12 +811,38 @@ class QuditCode(AbstractCode):
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
         matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        code = QuditCode(matrix.reshape(-1, 2 * len(self)), validate=validate)
+        code = QuditCode(
+            matrix.reshape(-1, 2 * len(self)), field=self.field.order, validate=validate
+        )
+
         if self._logical_ops is not None:
             logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
             logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
             code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)), validate=validate)
         return code
+
+    def deformed(
+        self, circuit: str | stim.Circuit, *, preserve_logicals: bool = False, validate: bool = True
+    ) -> QuditCode:
+        """Deform a code by the given circuit.
+
+        If preserve_logicals==True, preserve the logical operators of the original code.
+        """
+        if not self.field.order == 2:
+            raise ValueError("Code deformation is only supported for qubit codes")
+
+        circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
+
+        matrix = []
+        for check in self.matrix:
+            string = op_to_string(check, flip_xz=True)
+            xs, zs = string.after(circuit).to_numpy()
+            matrix.append(np.concatenate([zs, xs]))
+        new_code = QuditCode(matrix, field=self.field.order, validate=validate)
+
+        if preserve_logicals:
+            new_code.set_logical_ops(self.get_logical_ops(), validate=validate)
+        return new_code
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
