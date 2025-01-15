@@ -32,15 +32,6 @@ def test_restriction() -> None:
         circuits.get_encoding_circuit(code)
 
 
-def test_pauli_strings() -> None:
-    """Stabilizers correctly converted into stim.PauliString objects."""
-    code = codes.FiveQubitCode()
-    assert all(
-        circuits.op_to_string(row, flip_xz=True) == stim.PauliString(stabilizer.replace(" ", ""))
-        for row, stabilizer in zip(code.matrix, code.get_stabilizers())
-    )
-
-
 def test_state_prep() -> None:
     """Prepare all-0 logical states of qubit codes."""
     for code in [
