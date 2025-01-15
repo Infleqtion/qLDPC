@@ -235,7 +235,7 @@ def _get_transversal_automorphism_data(
 
     # identify the logical tableau implemented by the physical circuit
     logical_tableau = _get_logical_tableau_from_code_data(
-        len(code), code.dimension, encoder, decoder, physical_circuit
+        code.dimension, encoder, decoder, physical_circuit
     )
 
     return logical_tableau, physical_circuit
@@ -318,20 +318,15 @@ def get_logical_tableau(code: codes.QuditCode, physical_circuit: stim.Circuit) -
     """Identify the logical tableau implemented by the physical circuit."""
     encoder = get_encoding_tableau(code)
     decoder = encoder.inverse()
-    return _get_logical_tableau_from_code_data(
-        len(code), code.dimension, encoder, decoder, physical_circuit
-    )
+    return _get_logical_tableau_from_code_data(code.dimension, encoder, decoder, physical_circuit)
 
 
 def _get_logical_tableau_from_code_data(
-    block_length: int,
-    dimension: int,
-    encoder: stim.Tableau,
-    decoder: stim.Tableau,
-    physical_circuit: stim.Circuit,
+    dimension: int, encoder: stim.Tableau, decoder: stim.Tableau, physical_circuit: stim.Circuit
 ) -> stim.Tableau:
     """Identify the logical tableau implemented by the physical circuit."""
-    identity_phys = stim.Circuit(f"I {block_length - 1}")
+    assert len(encoder) == len(decoder) >= dimension
+    identity_phys = stim.Circuit(f"I {len(encoder) - 1}")
     physical_tableau = (physical_circuit + identity_phys).to_tableau()
 
     # compute the "upper left" block of the decoded tableau that acts on all logical qubits
