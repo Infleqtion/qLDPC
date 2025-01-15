@@ -898,7 +898,9 @@ class QuditCode(AbstractCode):
             "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
         )
 
-    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+    def get_logical_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+    ) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
@@ -925,10 +927,11 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.field(self.get_logical_ops().reshape(2, self.dimension, -1)[pauli, :, :])
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
+            return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
+        if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
         num_qudits = self.num_qudits
@@ -1454,7 +1457,9 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+    def get_logical_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+    ) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
@@ -1479,10 +1484,11 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.field(self.get_logical_ops().reshape(2, self.dimension, -1)[pauli, :, :])
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
+            return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
+        if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
         num_qudits = self.num_qudits
