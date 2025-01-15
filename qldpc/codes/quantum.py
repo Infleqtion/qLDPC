@@ -56,6 +56,7 @@ class SteaneCode(CSSCode):
         self._exact_distance_x = self._exact_distance_z = 3
         code = HammingCode(3, field=2)
         CSSCode.__init__(self, code, code, validate=False)
+        self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
 
 
 ################################################################################

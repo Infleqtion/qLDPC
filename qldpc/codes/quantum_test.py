@@ -32,9 +32,14 @@ from qldpc.objects import ChainComplex, Pauli
 def test_small_codes() -> None:
     """Five-qubit and Steane codes."""
     assert codes.SteaneCode().num_qubits == 7
+    assert codes.SteaneCode().dimension == 1
+
+    logical_ops_xz = codes.SteaneCode().get_logical_ops().sum(axis=0)
+    assert np.array_equal(logical_ops_xz, [1] * 14)
 
     code = codes.FiveQubitCode()
     assert code.num_qubits == 5
+    assert code.dimension == 1
     assert code.get_stabilizers()[0] == "X Z Z X I"
 
 
