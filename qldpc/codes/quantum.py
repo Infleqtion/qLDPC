@@ -53,10 +53,10 @@ class SteaneCode(CSSCode):
     """Smallest quantum error-correcting CSS code."""
 
     def __init__(self) -> None:
-        self._exact_distance_x = self._exact_distance_z = 3
         code = HammingCode(3, field=2)
         CSSCode.__init__(self, code, code, validate=False)
         self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
+        self._exact_distance_x = self._exact_distance_z = 3
 
 
 ################################################################################
