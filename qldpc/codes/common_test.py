@@ -327,8 +327,28 @@ def test_qudit_ops() -> None:
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
+
+def test_code_deformation() -> None:
+    """Deform a code by a physical Clifford transformation."""
+    code: codes.QuditCode
+
+    code = codes.FiveQubitCode()
+    code.get_logical_ops()
     assert code.get_stabilizers()[0] == "X Z Z X I"
     assert code.conjugated([0]).get_stabilizers()[0] == "Z Z Z X I"
+    assert code.deformed("H 0").get_stabilizers()[0] == "Z Z Z X I"
+    with pytest.raises(ValueError, match="do not commute with stabilizers"):
+        code.deformed("H 0", preserve_logicals=True)
+
+    code = codes.SteaneCode()
+    assert np.array_equal(
+        code.deformed("H 0 1 2 3 4 5 6", preserve_logicals=True).get_logical_ops(),
+        code.get_logical_ops(),
+    )
+
+    code = codes.ToricCode(2, field=3)
+    with pytest.raises(ValueError, match="only supported for qubit codes"):
+        code.deformed("H 0")
 
 
 def test_qudit_concatenation() -> None:

@@ -30,6 +30,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import scipy.special
+import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
@@ -816,6 +817,29 @@ class QuditCode(AbstractCode):
             logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
             code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)), validate=validate)
         return code
+
+    def deformed(
+        self, circuit: str | stim.Circuit, *, preserve_logicals: bool = False, validate: bool = True
+    ) -> QuditCode:
+        """Deform a code by the given circuit.
+
+        If preserve_logicals==True, preserve the logical operators of the original code.
+        """
+        if not self.field.order == 2:
+            raise ValueError("Code deformation is only supported for qubit codes")
+
+        circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
+
+        new_matrix = []
+        for check in self.matrix:
+            string = op_to_string(check, flip_xz=True)
+            xs, zs = string.after(circuit).to_numpy()
+            new_matrix.append(np.concatenate([zs, xs]))
+        new_code = QuditCode(new_matrix, validate=False)
+
+        if preserve_logicals:
+            new_code.set_logical_ops(self.get_logical_ops(), validate=validate)
+        return new_code
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
@@ -1939,3 +1963,25 @@ def _log_choose(n: int, k: int) -> float:
         - scipy.special.gammaln(k + 1)
         - scipy.special.gammaln(n - k + 1)
     )
+
+
+def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliString:
+    """Convert an integer array that represents a Pauli string into a stim.PauliString.
+
+    The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz==True.
+    """
+    assert len(op) % 2 == 0
+    support_xz = np.array(op, dtype=int).reshape(2, -1)
+    if flip_xz:
+        support_xz = support_xz[::-1, :]
+    paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
+    return stim.PauliString(map(str, paulis))
+
+    num_qubits = len(op) // 2
+    paulis = ""
+    for qubit in range(num_qubits):
+        val_x = int(op[qubit])
+        val_z = int(op[qubit + num_qubits])
+        pauli = Pauli((val_x, val_z))
+        paulis += str(pauli if not flip_xz else ~pauli)
+    return stim.PauliString(paulis)
