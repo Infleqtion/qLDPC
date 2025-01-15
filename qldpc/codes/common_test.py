@@ -218,7 +218,7 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
     """Construct a random (but probably trivial or invalid) QuditCode."""
     return codes.QuditCode(
         codes.ClassicalCode.random(2 * qudits, checks, field).matrix,
-        skip_validation=True,
+        validate=False,
     )
 
 
@@ -299,7 +299,7 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
     code_a = get_random_qudit_code(bits, checks, field)
     stabilizers = code_a.get_stabilizers()
-    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field, skip_validation=True)
+    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field, validate=False)
     assert code_a == code_b
     assert stabilizers == code_b.get_stabilizers()
 
@@ -310,7 +310,7 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 def test_trivial_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Trivial local Clifford deformations do not modify a code."""
     code = get_random_qudit_code(num_qudits, num_checks, field)
-    assert code == code.conjugated(skip_validation=True)
+    assert code == code.conjugated(validate=False)
 
 
 def test_qudit_ops() -> None:
@@ -326,6 +326,9 @@ def test_qudit_ops() -> None:
 
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
+
+    assert code.get_stabilizers()[0] == "X Z Z X I"
+    assert code.conjugated([0]).get_stabilizers()[0] == "Z Z Z X I"
 
 
 def test_qudit_concatenation() -> None:
