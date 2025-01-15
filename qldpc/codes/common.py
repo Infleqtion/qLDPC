@@ -663,11 +663,11 @@ class QuditCode(AbstractCode):
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
-        skip_validation: bool = False,
+        validate: bool = True,
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
-        if not skip_validation:
+        if validate:
             shape_xz = (self.num_checks, 2, -1)
             matrix_xz = self.matrix.reshape(shape_xz)[:, ::-1, :].reshape(self.matrix.shape)
             assert not np.any(self.matrix @ matrix_xz.T)
@@ -784,7 +784,7 @@ class QuditCode(AbstractCode):
 
     @classmethod
     def from_stabilizers(
-        cls, *stabilizers: str, field: int | None = None, skip_validation: bool = False
+        cls, *stabilizers: str, field: int | None = None, validate: bool = True
     ) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
@@ -800,12 +800,10 @@ class QuditCode(AbstractCode):
             for qudit, op in enumerate(check_op):
                 matrix[check, :, qudit] = operator.from_string(op).value[::-1]
 
-        return QuditCode(
-            matrix.reshape(num_checks, 2 * num_qudits), field, skip_validation=skip_validation
-        )
+        return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field, validate=validate)
 
     def conjugated(
-        self, qudits: slice | Sequence[int] | None = None, *, skip_validation: bool = False
+        self, qudits: slice | Sequence[int] | None = None, *, validate: bool = True
     ) -> QuditCode:
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
@@ -813,7 +811,7 @@ class QuditCode(AbstractCode):
         num_checks = len(self.matrix)
         matrix = np.reshape(self.matrix.copy(), (num_checks, 2, -1))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        return QuditCode(matrix.reshape(num_checks, -1), skip_validation=skip_validation)
+        return QuditCode(matrix.reshape(num_checks, -1), validate=validate)
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
@@ -1199,7 +1197,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
-        skip_validation: bool = False,
+        validate: bool = True,
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks."""
         self.code_x = ClassicalCode(code_x, field)
@@ -1209,7 +1207,7 @@ class CSSCode(QuditCode):
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field = self.code_x.field
 
-        if not skip_validation and self.code_x != self.code_z:
+        if validate:
             self._validate_subcodes()
 
         self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
@@ -1640,7 +1638,7 @@ class CSSCode(QuditCode):
             code_x,
             code_z,
             promise_balanced_codes=all(code._balanced_codes for code in css_codes),
-            skip_validation=True,
+            validate=False,
         )
         if inherit_logicals:
             logicals_x = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in css_codes]

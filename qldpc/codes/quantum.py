@@ -46,7 +46,7 @@ class FiveQubitCode(QuditCode):
             "Z X I X Z",
             field=2,
         )
-        QuditCode.__init__(self, code, skip_validation=True)
+        QuditCode.__init__(self, code, validate=False)
 
 
 class SteaneCode(CSSCode):
@@ -55,7 +55,7 @@ class SteaneCode(CSSCode):
     def __init__(self) -> None:
         self._exact_distance_x = self._exact_distance_z = 3
         code = HammingCode(3, field=2)
-        CSSCode.__init__(self, code, code)
+        CSSCode.__init__(self, code, code, validate=False)
 
 
 ################################################################################
@@ -84,12 +84,12 @@ class TBCode(CSSCode):
         field: int | None = None,
         *,
         promise_balanced_codes: bool = False,
-        skip_validation: bool = False,
+        validate: bool = True,
     ) -> None:
         """Construct a two-block quantum code."""
         matrix_a = ClassicalCode(matrix_a, field).matrix
         matrix_b = ClassicalCode(matrix_b, field).matrix
-        if not skip_validation and not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
+        if validate and not np.array_equal(matrix_a @ matrix_b, matrix_b @ matrix_a):
             raise ValueError("The matrices provided for this TBCode are incompatible")
 
         matrix_x = np.block([matrix_a, matrix_b])
@@ -100,7 +100,7 @@ class TBCode(CSSCode):
             matrix_z,
             field,
             promise_balanced_codes=promise_balanced_codes,
-            skip_validation=True,
+            validate=False,
         )
 
 
@@ -176,7 +176,7 @@ class QCCode(TBCode):
         matrix_a = self.eval(self.poly_a).lift()
         matrix_b = self.eval(self.poly_b).lift()
         TBCode.__init__(
-            self, matrix_a, matrix_b, field, promise_balanced_codes=True, skip_validation=True
+            self, matrix_a, matrix_b, field, promise_balanced_codes=True, validate=False
         )
 
     def eval(
@@ -574,9 +574,7 @@ class HGPCode(CSSCode):
         # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
         self._default_conjugate = slice(self.sector_size[0, 0], None)
 
-        CSSCode.__init__(
-            self, matrix_x.astype(int), matrix_z.astype(int), field, skip_validation=True
-        )
+        CSSCode.__init__(self, matrix_x.astype(int), matrix_z.astype(int), field, validate=False)
 
     @classmethod
     def get_matrix_product(
@@ -739,7 +737,7 @@ class LPCode(CSSCode):
             abstract.Protograph(matrix_x.astype(object)).lift(),
             abstract.Protograph(matrix_z.astype(object)).lift(),
             field,
-            skip_validation=True,
+            validate=False,
         )
 
 
@@ -813,7 +811,7 @@ class QTCode(CSSCode):
         self.code_b = code_b
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
-        CSSCode.__init__(self, code_x, code_z, field, skip_validation=True)
+        CSSCode.__init__(self, code_x, code_z, field, validate=False)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -1023,7 +1021,7 @@ class SurfaceCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, skip_validation=True)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field, validate=False)
 
     @classmethod
     def get_rotated_checks(
@@ -1132,7 +1130,7 @@ class ToricCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, skip_validation=True)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field, validate=False)
 
     @classmethod
     def get_rotated_checks(
@@ -1204,4 +1202,4 @@ class GeneralizedSurfaceCode(CSSCode):
         matrix_x, matrix_z = chain.op(1), chain.op(2).T
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
-        CSSCode.__init__(self, matrix_x, matrix_z, field, skip_validation=True)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, validate=False)
