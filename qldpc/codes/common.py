@@ -811,7 +811,10 @@ class QuditCode(AbstractCode):
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
         matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        code = QuditCode(matrix.reshape(-1, 2 * len(self)), validate=validate)
+        code = QuditCode(
+            matrix.reshape(-1, 2 * len(self)), field=self.field.order, validate=validate
+        )
+
         if self._logical_ops is not None:
             logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
             logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
@@ -830,12 +833,12 @@ class QuditCode(AbstractCode):
 
         circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
 
-        new_matrix = []
+        matrix = []
         for check in self.matrix:
             string = op_to_string(check, flip_xz=True)
             xs, zs = string.after(circuit).to_numpy()
-            new_matrix.append(np.concatenate([zs, xs]))
-        new_code = QuditCode(new_matrix, validate=False)
+            matrix.append(np.concatenate([zs, xs]))
+        new_code = QuditCode(matrix, field=self.field.order, validate=validate)
 
         if preserve_logicals:
             new_code.set_logical_ops(self.get_logical_ops(), validate=validate)

@@ -182,7 +182,7 @@ def test_automorphism() -> None:
 
 def test_classical_capacity() -> None:
     """Logical error rates in a code capacity model."""
-    code = codes.RepetitionCode(2)
+    code = codes.RepetitionCode(2, field=2)
     logical_error_rate = code.get_logical_error_rate_func(num_samples=1, max_error_rate=1)
     assert logical_error_rate(0) == (0, 0)  # no logical error with zero uncertainty
     assert logical_error_rate(1)[0] == 1  # guaranteed logical error
@@ -490,7 +490,7 @@ def test_css_concatenation() -> None:
 
 def test_quantum_capacity() -> None:
     """Logical error rates in a code capacity model."""
-    code = codes.SurfaceCode(3)
+    code = codes.SurfaceCode(3, field=2)
     logical_error_rate = code.get_logical_error_rate_func(num_samples=10)
     assert logical_error_rate(0) == (0, 0)  # no logical error with zero uncertainty
 

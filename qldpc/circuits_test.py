@@ -36,8 +36,8 @@ def test_state_prep() -> None:
     """Prepare all-0 logical states of qubit codes."""
     for code in [
         codes.FiveQubitCode(),
-        codes.HGPCode(codes.HammingCode(3)),
-        codes.HGPCode(codes.ClassicalCode.random(5, 3)),
+        codes.HGPCode(codes.HammingCode(3, field=2)),
+        codes.HGPCode(codes.ClassicalCode.random(5, 3, field=2)),
     ]:
         encoder = circuits.get_encoding_circuit(code)
         simulator = stim.TableauSimulator()
