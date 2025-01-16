@@ -236,6 +236,18 @@ def test_qudit_code() -> None:
     assert code.get_weight() == 4
     assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
+    # initialize from stabilizers in [X|Z] ops
+    equiv_code = codes.QuditCode(
+        [
+            [1, 0, 0, 1, 0, 0, 1, 1, 0, 0],
+            [0, 1, 0, 0, 1, 0, 0, 1, 1, 0],
+            [1, 0, 1, 0, 0, 0, 0, 0, 1, 1],
+            [0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
+        ],
+        flip_xz=True,
+    )
+    assert np.array_equal(code.matrix, equiv_code.matrix)
+
     # equivlence to code with redundant stabilizers
     redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
     assert codes.QuditCode.equiv(code, redundant_code)
