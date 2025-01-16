@@ -236,7 +236,7 @@ def test_qudit_code() -> None:
     assert code.get_weight() == 4
     assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
-    # initialize from stabilizers in [X|Z] ops
+    # initialize from stabilizers that are represented by their [X|Z] support
     equiv_code = codes.QuditCode(
         [
             [1, 0, 0, 1, 0, 0, 1, 1, 0, 0],
