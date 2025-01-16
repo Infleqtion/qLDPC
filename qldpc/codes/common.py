@@ -664,14 +664,19 @@ class QuditCode(AbstractCode):
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
+        flip_xz: bool = False,
         validate: bool = True,
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
-        if validate:
-            shape_xz = (self.num_checks, 2, -1)
-            matrix_xz = self.matrix.reshape(shape_xz)[:, ::-1, :].reshape(self.matrix.shape)
-            assert not np.any(self.matrix @ matrix_xz.T)
+        if flip_xz or validate:
+            shape_matrix = self.matrix.shape
+            shape_tensor = (-1, 2, len(self))
+            matrix_conj = self.matrix.reshape(shape_tensor)[:, ::-1, :].reshape(shape_matrix)
+            if validate:
+                assert not np.any(self.matrix @ matrix_conj.T)
+            if flip_xz:
+                self._matrix = self.field(matrix_conj)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
