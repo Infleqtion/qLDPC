@@ -189,16 +189,16 @@ def get_transversal_automorphism_group(
         matrix_z = logical_ops.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping Z <--> X
-        matrix = codes.ClassicalCode([matrix_z, matrix_x])
+        matrix = np.hstack([matrix_z, matrix_x])
     elif local_gates == {"S"}:
         # swapping sectors = swapping X <--> Y
-        matrix = codes.ClassicalCode([matrix_z, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_z, matrix_z + matrix_x])
     elif local_gates == {"SQRT_X"}:
         # swapping sectors = swapping Y <--> Z
-        matrix = codes.ClassicalCode([matrix_z + matrix_x, matrix_x])
+        matrix = np.hstack([matrix_z + matrix_x, matrix_x])
     else:
         # we have a complete local Clifford gate set that can arbitrarily permute Pauli ops
-        matrix = codes.ClassicalCode([matrix_z, matrix_x, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_z, matrix_x, matrix_z + matrix_x])
 
     # compute the automorphism group of an instrumental classical code
     instrumental_code = codes.ClassicalCode(matrix)
