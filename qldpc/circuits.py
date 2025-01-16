@@ -370,7 +370,7 @@ def get_transversal_circuits(
     code: codes.QuditCode,
     logical_circuits_or_tableaus: Sequence[stim.Circuit | stim.Tableau],
     local_gates: Collection[str] = ("S", "H", "SWAP"),
-) -> stim.Circuit | None:
+) -> list[stim.Circuit | None]:
     """Find a transversal physical circuits (if any) to implement given logical Clifford operations.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
