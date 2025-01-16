@@ -42,17 +42,57 @@ def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.
 
 @restrict_to_qubits
 def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
-    """Tableau to prepare an all-|0> logical state of a code from an all-|0> state of its qubits."""
-    logical_ops_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
-    code_stabs = [op_to_string(row, flip_xz=True) for row in code.matrix]
-    return stim.Tableau.from_stabilizers(
-        logical_ops_z + code_stabs, allow_redundant=True, allow_underconstrained=False
+    """Tableau to encode physical states at its input into logical states of the given code.
+
+    For all j in {0, 1, ..., code.dimension - 1}, this tableau maps weight-one X_j and Z_j operators
+    at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
+    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
+    mapped to destabilizers.
+    """
+    # identify logical operators
+    logicals_x = [op_to_string(op) for op in code.get_logical_ops(Pauli.X)]
+    logicals_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
+
+    # identify stabilizers
+    checks = code.matrix.row_reduce()
+    pivots = [int(np.argmax(row != 0)) for row in checks if np.any(row)]
+    stabilizers = [op_to_string(row, flip_xz=True) for row in checks]
+
+    # construct destabilizers
+    destabilizers: list[stim.PauliString] = []
+    for pivot in pivots:
+        # construct a candidate destabilizer that only anti-commutes with one stabilizer
+        vector_zx = code.field.Zeros(2 * len(code))
+        vector_zx[(pivot + len(code)) % (2 * len(code))] = 1
+        candidate_destabilizer = op_to_string(vector_zx, flip_xz=True)
+
+        # enforce that the candidate destabilizer commutes with all logical operators
+        for log_x, log_z in zip(logicals_x, logicals_z):
+            if not candidate_destabilizer.commutes(log_x):  # pragma: no cover
+                candidate_destabilizer *= log_z
+            if not candidate_destabilizer.commutes(log_z):  # pragma: no cover
+                candidate_destabilizer *= log_x
+
+        # enforce that the candidate destabilizer commutes with other destabilizers
+        for old_destabilizer, stabilizer in zip(destabilizers, stabilizers):
+            if not candidate_destabilizer.commutes(old_destabilizer):
+                candidate_destabilizer *= stabilizer
+        destabilizers.append(candidate_destabilizer)
+
+    return stim.Tableau.from_conjugated_generators(
+        xs=logicals_x + destabilizers, zs=logicals_z + stabilizers
     )
 
 
 @restrict_to_qubits
 def get_encoding_circuit(code: codes.QuditCode) -> stim.Tableau:
-    """Circuit to prepare an all-|0> logical state of a code from an all-|0> state of its qubits."""
+    """Circuit to encode physical states at its input into logical states of the given code.
+
+    For all j in {0, 1, ..., code.dimension - 1}, this circuit maps weight-one X_j and Z_j operators
+    at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
+    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
+    mapped to destabilizers.
+    """
     return get_encoding_tableau(code).to_circuit()
 
 
