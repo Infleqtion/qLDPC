@@ -101,7 +101,7 @@ def get_transversal_ops(
     code: codes.QuditCode,
     local_gates: Collection[str] = ("S", "H", "SWAP"),
     *,
-    with_code_deformation: bool = False,
+    allow_code_deformation: bool = False,
     remove_redundancies: bool = True,
 ) -> list[tuple[stim.Tableau, stim.Circuit]]:
     """Logical tableaus and physical circuits for transversal logical Clifford gates of a code.
@@ -112,13 +112,13 @@ def get_transversal_ops(
     https://arxiv.org/abs/2409.18175.
     """
     group_aut = get_transversal_automorphism_group(
-        code, local_gates, with_code_deformation=with_code_deformation
+        code, local_gates, allow_code_deformation=allow_code_deformation
     )
 
     transversal_ops: list[tuple[stim.Tableau, stim.Circuit]] = []
     for generator in group_aut.generators:
         logical_tableau, physical_circuit = _get_transversal_automorphism_data(
-            code, generator, local_gates, with_code_deformation=with_code_deformation
+            code, generator, local_gates, allow_code_deformation=allow_code_deformation
         )
         if not remove_redundancies or not (
             _is_pauli_tableau(logical_tableau)
@@ -164,7 +164,7 @@ def get_transversal_automorphism_group(
     code: codes.QuditCode,
     local_gates: Collection[str] = ("S", "H", "SWAP"),
     *,
-    with_code_deformation: bool = False,
+    allow_code_deformation: bool = False,
 ) -> abstract.Group:
     """Get the transversal automorphism group of a QuditCode, using the methods of arXiv.2409.18175.
 
@@ -180,7 +180,7 @@ def get_transversal_automorphism_group(
     local_gates.discard("SWAP")
 
     # construst the parity check matrix of an instrumental code
-    if not with_code_deformation:
+    if not allow_code_deformation:
         matrix_z = code.matrix.reshape(-1, 2, len(code))[:, 0, :]
         matrix_x = code.matrix.reshape(-1, 2, len(code))[:, 1, :]
     else:
@@ -232,7 +232,7 @@ def _get_transversal_automorphism_data(
     code: codes.QuditCode,
     automorphism: abstract.GroupMember,
     local_gates: Collection[str],
-    with_code_deformation: bool,
+    allow_code_deformation: bool,
 ) -> tuple[stim.Tableau, stim.Circuit]:
     """Logical tableau and physical circuit for a transversal automorphism of a code.
 
@@ -250,7 +250,7 @@ def _get_transversal_automorphism_data(
     # Determine the effect of physical_circuit on "decoded" qubits, for which
     # logicals, stabilizers, and destabilizers are single-qubit Paulis.
     encoder = get_encoding_tableau(code)
-    if not with_code_deformation:
+    if not allow_code_deformation:
         decoder = encoder.inverse()
     else:
         deformed_code = code.deformed(physical_circuit, preserve_logicals=True)
@@ -349,11 +349,11 @@ def _get_pauli_circuit(string: stim.PauliString) -> stim.Circuit:
 
 @restrict_to_qubits
 def get_logical_tableau(
-    code: codes.QuditCode, physical_circuit: stim.Circuit, *, with_code_deformation: bool = True
+    code: codes.QuditCode, physical_circuit: stim.Circuit, *, allow_code_deformation: bool = True
 ) -> stim.Tableau:
     """Identify the logical tableau implemented by the physical circuit."""
     encoder = get_encoding_tableau(code)
-    if not with_code_deformation:
+    if not allow_code_deformation:
         decoder = encoder.inverse()
     else:
         deformed_code = code.deformed(physical_circuit, preserve_logicals=True)
@@ -394,7 +394,7 @@ def get_transversal_circuits(
     logical_circuits_or_tableaus: Sequence[stim.Circuit | stim.Tableau],
     local_gates: Collection[str] = ("S", "H", "SWAP"),
     *,
-    with_code_deformation: bool = False,
+    allow_code_deformation: bool = False,
 ) -> list[stim.Circuit | None]:
     """Find a transversal physical circuits (if any) to implement given logical Clifford operations.
 
@@ -418,14 +418,14 @@ def get_transversal_circuits(
 
     # compute the group of transversal Cliffords
     group_aut = get_transversal_automorphism_group(
-        code, local_gates, with_code_deformation=with_code_deformation
+        code, local_gates, allow_code_deformation=allow_code_deformation
     )
 
     # perform a brute-force search for matching Clifford operations
     matching_ops: list[tuple[stim.Tableau, stim.Circuit] | None] = [None] * len(logical_tableaus)
     for automorphism in group_aut.generate():
         tableau, circuit = _get_transversal_automorphism_data(
-            code, automorphism, local_gates, with_code_deformation
+            code, automorphism, local_gates, allow_code_deformation
         )
         for tt, logical_tableau in enumerate(logical_tableaus):
             if matching_ops[tt] is None and _tableaus_are_equivalent_mod_paulis(
@@ -461,7 +461,7 @@ def get_transversal_circuit(
     logical_circuit_or_tableau: stim.Circuit | stim.Tableau,
     local_gates: Collection[str] = ("S", "H", "SWAP"),
     *,
-    with_code_deformation: bool = False,
+    allow_code_deformation: bool = False,
 ) -> stim.Circuit | None:
     """Find a transversal physical circuit (if any) to implement a logical Clifford operation.
 
@@ -471,5 +471,8 @@ def get_transversal_circuit(
     and thereby generally has exponential runtime.
     """
     return get_transversal_circuits(
-        code, [logical_circuit_or_tableau], local_gates, with_code_deformation=with_code_deformation
+        code,
+        [logical_circuit_or_tableau],
+        local_gates,
+        allow_code_deformation=allow_code_deformation,
     )[0]
