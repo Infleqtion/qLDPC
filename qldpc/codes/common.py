@@ -836,12 +836,14 @@ class QuditCode(AbstractCode):
         if not self.field.order == 2:
             raise ValueError("Code deformation is only supported for qubit codes")
 
+        identity = stim.Circuit(f"I {len(self) - 1}")
         circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
+        tableau = (circuit + identity).to_tableau()
 
         matrix = []
         for check in self.matrix:
             string = op_to_string(check, flip_xz=True)
-            xs, zs = string.after(circuit).to_numpy()
+            xs, zs = tableau(string).to_numpy()
             matrix.append(np.concatenate([zs, xs]))
         new_code = QuditCode(matrix, field=self.field.order, validate=validate)
 
