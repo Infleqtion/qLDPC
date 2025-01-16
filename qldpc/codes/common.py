@@ -729,10 +729,10 @@ class QuditCode(AbstractCode):
             code_a.canonicalized().matrix, code_b.canonicalized().matrix
         )
 
-    def canonicalized(self) -> QuditCode:
+    def canonicalized(self, *, validate: bool = True) -> QuditCode:
         """The same code with its parity matrix in reduced row echelon form."""
         rows = [row for row in self.matrix.row_reduce() if np.any(row)]
-        return QuditCode(rows, self.field.order)
+        return QuditCode(rows, self.field.order, validate=validate)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -1300,9 +1300,9 @@ class CSSCode(QuditCode):
         """Z-type parity checks."""
         return self.code_z.matrix
 
-    def canonicalized(self) -> CSSCode:
+    def canonicalized(self, *, validate: bool = True) -> CSSCode:
         """The same code with its parity matrix in reduced row echelon form."""
-        return CSSCode(self.code_x.canonicalized(), self.code_z.canonicalized())
+        return CSSCode(self.code_x.canonicalized(), self.code_z.canonicalized(), validate=validate)
 
     @property
     def num_checks_x(self) -> int:
