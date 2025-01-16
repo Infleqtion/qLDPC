@@ -60,7 +60,7 @@ def get_qubit_assignment(
     graph = build_placement_graph(code, folded_layout, max_comm_dist)
     if graph is None:
         return None
-    matching = nx.max_weight_matching(graph, maxcardinality=True)
+    matching = nx.bipartite.maximum_matching(graph)
     return matching if nx.is_perfect_matching(graph, matching) else None
 
 
