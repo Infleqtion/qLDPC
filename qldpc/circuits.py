@@ -395,7 +395,7 @@ def get_transversal_circuits(
     local_gates: Collection[str] = ("S", "H", "SWAP"),
     *,
     with_code_deformation: bool = False,
-) -> stim.Circuit | None:
+) -> list[stim.Circuit | None]:
     """Find a transversal physical circuits (if any) to implement given logical Clifford operations.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
