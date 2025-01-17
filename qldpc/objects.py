@@ -34,15 +34,23 @@ from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 
 
+def conjugate_xz(strings: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+    """Flip the X and Z sectors of the given Pauli strings.
+
+    This operation converts between vectors and dual vectors of the symplectic inner product space of
+    bitstrings that represent Pauli strings by their [X|Z] support.
+    """
+    assert strings.shape[-1] % 2 == 0
+    return strings.reshape(-1, 2, strings.shape[-1] // 2)[:, ::-1, :].reshape(strings.shape)
+
+
 def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliString:
     """Convert an integer array that represents a Pauli string into a stim.PauliString.
 
     The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz==True.
     """
-    assert len(op) % 2 == 0
+    op = conjugate_xz(op) if flip_xz else op
     support_xz = np.array(op, dtype=int).reshape(2, -1)
-    if flip_xz:
-        support_xz = support_xz[::-1, :]
     paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
     return stim.PauliString(map(str, paulis))
 
