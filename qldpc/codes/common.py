@@ -832,17 +832,18 @@ class QuditCode(AbstractCode):
         circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
         tableau = (circuit + identity).to_tableau()
 
-        def deform_strings(strings: npt.NDArray[np.int_]) -> Sequence[npt.NDArray[np.int_]]:
+        def deform_strings(strings: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+            """Deform the given Pauli strings."""
             new_strings = []
             for check in strings:
                 string = op_to_string(check)
                 xs_zs = tableau(string).to_numpy()
                 new_strings.append(np.concatenate(xs_zs))
-            return new_strings
+            return self.field(new_strings)
 
         # deform this code by transforming its stabilizers
         matrix = deform_strings(self.matrix)
-        new_code = QuditCode(matrix, field=self.field.order, validate=validate)
+        new_code = QuditCode(matrix, validate=validate)
 
         # preserve or update logical operators, as applicable
         if preserve_logicals:
@@ -951,10 +952,10 @@ class QuditCode(AbstractCode):
         If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
         operators of that type.
 
-        Due to the way that logical operators are constructed in this method, logical X-type
-        operators only address physical qudits by physical X-type operators, while logical Z-type
-        operators address at least one physical qudits a physical Z-type operator, but may
-        additionally address physical qudits with physical X-type operators.
+        Due to the way that logical operators are constructed in this method, logical Z-type
+        operators only address physical qudits by physical Z-type operators, while logical X-type
+        operators address at least one physical qudits a physical X-type operator, but may
+        additionally address physical qudits with physical Z-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
@@ -978,21 +979,9 @@ class QuditCode(AbstractCode):
         # keep track of current qudit locations
         qudit_locs = np.arange(num_qudits, dtype=int)
 
-        # row reduce and identify pivots in the Z sector
-        matrix, pivots_z = _row_reduce(self.matrix)
-        pivots_z = [pivot for pivot in pivots_z if pivot < num_qudits]
-        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
-
-        # move the Z pivots to the back
-        matrix = matrix.reshape(num_checks * 2, num_qudits)
-        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
-
         # row reduce and identify pivots in the X sector
-        matrix = matrix.reshape(num_checks, 2 * num_qudits)
-        sub_matrix = matrix[len(pivots_z) :, num_qudits:]
-        sub_matrix, pivots_x = _row_reduce(self.field(sub_matrix))
-        matrix[len(pivots_z) :, num_qudits:] = sub_matrix
+        matrix, pivots_x = _row_reduce(self.matrix)
+        pivots_x = [pivot for pivot in pivots_x if pivot < num_qudits]
         other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
 
         # move the X pivots to the back
@@ -1000,38 +989,50 @@ class QuditCode(AbstractCode):
         matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
+        # row reduce and identify pivots in the Z sector
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)
+        sub_matrix = matrix[len(pivots_x) :, num_qudits:]
+        sub_matrix, pivots_z = _row_reduce(self.field(sub_matrix))
+        matrix[len(pivots_x) :, num_qudits:] = sub_matrix
+        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
+
+        # move the Z pivots to the back
+        matrix = matrix.reshape(num_checks * 2, num_qudits)
+        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
+
         # identify X-pivot and Z-pivot parity checks
-        matrix = matrix.reshape(num_checks, 2 * num_qudits)[: len(pivots_z + pivots_x), :]
-        checks_z = matrix[: len(pivots_z), :].reshape(len(pivots_z), 2, num_qudits)
-        checks_x = matrix[len(pivots_z) :, :].reshape(len(pivots_x), 2, num_qudits)
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)[: len(pivots_x + pivots_z), :]
+        checks_x = matrix[: len(pivots_x), :].reshape(len(pivots_x), 2, num_qudits)
+        checks_z = matrix[len(pivots_x) :, :].reshape(len(pivots_z), 2, num_qudits)
 
         # run some sanity checks
-        assert len(pivots_x) == 0 or pivots_x[-1] < num_qudits - len(pivots_z)
-        assert dimension + len(pivots_z) + len(pivots_x) == num_qudits
-        assert not np.any(checks_x[:, 0, :])
+        assert len(pivots_z) == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
+        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
+        assert not np.any(checks_z[:, 0, :])
 
         # identify "sections" of columns / qudits
         section_k = slice(dimension)
-        section_z = slice(dimension, dimension + len(pivots_z))
-        section_x = slice(dimension + len(pivots_z), num_qudits)
-
-        # construct Z-pivot logical operators
-        logicals_z = self.field.Zeros((dimension, 2, num_qudits))
-        logicals_z[:, 0, section_k] = identity
-        logicals_z[:, 0, section_x] = -checks_x[:, 1, :dimension].T
-        logicals_z[:, 1, section_z] = -(
-            checks_z[:, 1, section_x] @ checks_x[:, 1, section_k] + checks_z[:, 1, section_k]
-        ).T
+        section_x = slice(dimension, dimension + len(pivots_x))
+        section_z = slice(dimension + len(pivots_x), num_qudits)
 
         # construct X-pivot logical operators
         logicals_x = self.field.Zeros((dimension, 2, num_qudits))
-        logicals_x[:, 1, section_k] = identity
-        logicals_x[:, 1, section_z] = -checks_z[:, 0, :dimension].T
+        logicals_x[:, 0, section_k] = identity
+        logicals_x[:, 0, section_z] = -checks_z[:, 1, :dimension].T
+        logicals_x[:, 1, section_x] = -(
+            checks_x[:, 1, section_z] @ checks_z[:, 1, section_k] + checks_x[:, 1, section_k]
+        ).T
 
-        # move qudits back to their original locations and swap X/Z sectors
+        # construct Z-pivot logical operators
+        logicals_z = self.field.Zeros((dimension, 2, num_qudits))
+        logicals_z[:, 1, section_k] = identity
+        logicals_z[:, 1, section_x] = -checks_x[:, 0, :dimension].T
+
+        # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)
-        logicals_x = logicals_x[:, ::-1, permutation]
-        logicals_z = logicals_z[:, ::-1, permutation]
+        logicals_x = logicals_x[:, :, permutation]
+        logicals_z = logicals_z[:, :, permutation]
 
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
