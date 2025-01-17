@@ -1143,7 +1143,11 @@ class QuditCode(AbstractCode):
         consequence, we have to flip the X/Z sectors of the logical operator matrix when expanding
         the parity checks of the outer code.
         """
-        inner_logicals_zx = conjugate_xz(inner.get_logical_ops())
+        inner_logicals_zx = (
+            inner.get_logical_ops()
+            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]  # flip X/Z sectors
+            .reshape(2 * inner.dimension, 2 * len(inner))
+        )
         outer_checks = outer.matrix @ inner_logicals_zx
 
         # combine parity checks of the inner and outer codes
