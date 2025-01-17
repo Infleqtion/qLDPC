@@ -54,7 +54,7 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
     logicals_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
 
     # identify stabilizers
-    checks = code.matrix.row_reduce()
+    checks = codes.ClassicalCode(code.matrix).canonicalized().matrix
     pivots = [int(np.argmax(row != 0)) for row in checks if np.any(row)]
     stabilizers = [op_to_string(row, flip_xz=True) for row in checks]
 
@@ -181,14 +181,25 @@ def get_transversal_automorphism_group(
     allow_swaps = "SWAP" in local_gates
     local_gates.discard("SWAP")
 
-    # construst the parity check matrix of an instrumental code
-    if not deform_code:
-        matrix_z = code.matrix.reshape(-1, 2, len(code))[:, 0, :]
-        matrix_x = code.matrix.reshape(-1, 2, len(code))[:, 1, :]
-    else:
-        logical_ops = code.get_logical_ops()
-        matrix_x = logical_ops.reshape(-1, 2, len(code))[:, 0, :]
-        matrix_z = logical_ops.reshape(-1, 2, len(code))[:, 1, :]
+    """
+    Construst the parity check matrix of an instrumental classical code whose code words represent
+    Pauli strings that commute with some "effective" stabilizers.
+
+    If computing the "ordinary" transversal automorphism group of a QuditCode (i.e., deform_code is
+    False), these effective stabilizers are just the actual stabilizers of the QuditCode, so the
+    automorphism group of the instrumental classical code is the group of transversal physical
+    operations that
+    (a) preserve commutation with stabilizers, or equivalently
+    (b) stabilize the logical Pauli group, thereby implementing logical Clifford operations.
+
+    If deform_code is True, the effective stabilizers are the logical Pauli operators of the
+    QuditCode, so the automorphism group of the instrumental code represents the group of code
+    deformations for which the logical Pauli group of the original QuditCode is a valid choice of
+    logical Pauli group for the deformed QuditCode.
+    """
+    effective_stabilizers = code.matrix if not deform_code else code.get_logical_ops()
+    matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
+    matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping Z <--> X
         matrix = np.hstack([matrix_z, matrix_x])
