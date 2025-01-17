@@ -44,12 +44,11 @@ def conjugate_xz(strings: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
     return strings.reshape(-1, 2, strings.shape[-1] // 2)[:, ::-1, :].reshape(strings.shape)
 
 
-def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliString:
+def op_to_string(op: npt.NDArray[np.int_]) -> stim.PauliString:
     """Convert an integer array that represents a Pauli string into a stim.PauliString.
 
-    The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz==True.
+    The (first, second) half the array indicates the support of (X, Z) Paulis.
     """
-    op = conjugate_xz(op) if flip_xz else op
     support_xz = np.array(op, dtype=int).reshape(2, -1)
     paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
     return stim.PauliString(map(str, paulis))
@@ -59,8 +58,7 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
     for qubit in range(num_qubits):
         val_x = int(op[qubit])
         val_z = int(op[qubit + num_qubits])
-        pauli = Pauli((val_x, val_z))
-        paulis += str(pauli if not flip_xz else ~pauli)
+        paulis = str(Pauli((val_x, val_z)))
     return stim.PauliString(paulis)
 
 

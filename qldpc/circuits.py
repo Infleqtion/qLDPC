@@ -56,15 +56,15 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
     # identify stabilizers
     matrix = codes.ClassicalCode(code.matrix).canonicalized().matrix
     pivots = [int(np.argmax(row != 0)) for row in matrix if np.any(row)]
-    stabilizers = [op_to_string(row, flip_xz=True) for row in matrix]
+    stabilizers = [op_to_string(row) for row in matrix]
 
     # construct destabilizers
     destabilizers: list[stim.PauliString] = []
     for pivot in pivots:
         # construct a candidate destabilizer that only anti-commutes with one stabilizer
-        vector_zx = code.field.Zeros(2 * len(code))
-        vector_zx[(pivot + len(code)) % (2 * len(code))] = 1
-        candidate_destabilizer = op_to_string(vector_zx, flip_xz=True)
+        vector = code.field.Zeros(2 * len(code))
+        vector[(pivot + len(code)) % (2 * len(code))] = 1
+        candidate_destabilizer = op_to_string(vector)
 
         # enforce that the candidate destabilizer commutes with all logical operators
         for log_x, log_z in zip(logicals_x, logicals_z):
