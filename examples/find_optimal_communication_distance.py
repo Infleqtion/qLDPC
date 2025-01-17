@@ -67,31 +67,44 @@ def get_qubit_assignment(
 def build_placement_graph(
     code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
 ) -> nx.Graph | None:
-    """Build a check qubit placement graph.  If some check qubit cannot be placed, return None.
+    """Build a check qubit placement graph. If some check qubit cannot be placed, return None.
 
     The check qubit placement graph consists of two vertex sets:
         (a) check qubits, and
         (b) candidate locations.
-    The graph draws an edge betweeen qubit qq and location ll if qq's neighbors are at most
+    The graph draws an edge between qubit qq and location ll if qq's neighbors are at most
     max_comm_dist away from ll.
     """
     nodes = [node for node in code.graph.nodes() if not node.is_data]
     node_locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
-    def satisfies_max_comm_dist(node: qldpc.objects.Node, loc: tuple[int, int]) -> bool:
-        """Does placing a node at the given location satisfy the max_comm_dist constraint?"""
-        neighbors = set(code.graph.successors(node)).union(code.graph.predecessors(node))
-        return not any(
-            get_dist(loc, code.get_qubit_pos(neighbor, folded_layout)) > max_comm_dist
-            for neighbor in neighbors
+    # Precompute distances for all candidate locations and neighbors
+    neighbor_positions = {
+        node: set(
+            code.get_qubit_pos(neighbor, folded_layout)
+            for neighbor in set(code.graph.successors(node)).union(code.graph.predecessors(node))
         )
+        for node in nodes
+    }
 
-    graph = nx.Graph()
+    # Precompute valid locations for each node based on max_comm_dist
+    valid_locations = {}
     for node in nodes:
-        edges = [(node, loc) for loc in node_locs if satisfies_max_comm_dist(node, loc)]
-        if not edges:
-            return None
-        graph.add_edges_from(edges)
+        valid_locs = []
+        for loc in node_locs:
+            if all(
+                get_dist(loc, neighbor_loc) <= max_comm_dist
+                for neighbor_loc in neighbor_positions[node]
+            ):
+                valid_locs.append(loc)
+        if not valid_locs:
+            return None  # If no valid locations, return None early
+        valid_locations[node] = valid_locs
+
+    # Build the graph using precomputed valid locations
+    graph = nx.Graph()
+    for node, locs in valid_locations.items():
+        graph.add_edges_from((node, loc) for loc in locs)
 
     return graph
 
