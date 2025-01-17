@@ -28,7 +28,8 @@ def test_pytest() -> None:
 
     def test_func() -> None: ...
 
-    assert test_func is qldpc.cache.use_disk_cache("test")(test_func)
+    assert qldpc.cache.use_disk_cache("test")(test_func) is test_func
+    assert qldpc.cache.get_disk_cache("test") == {}
 
 
 def test_use_disk_cache() -> None:

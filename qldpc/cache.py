@@ -29,6 +29,8 @@ import platformdirs
 
 def get_disk_cache(cache_name: str, *, cache_dir: str | None = None) -> diskcache.Cache:
     """Retrieve a dictionary-like cache object."""
+    if running_with_pytest():
+        return {}
     cache_dir = cache_dir or platformdirs.user_cache_dir()
     cache_path = os.path.join(cache_dir, cache_name)
     return diskcache.Cache(cache_path)

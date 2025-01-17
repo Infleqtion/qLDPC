@@ -20,18 +20,21 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
+import math
 import random
-from collections.abc import Callable, Sequence
-from typing import Any, Iterator, Literal
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Iterator, Literal, cast
 
 import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import scipy.special
+import stim
 
-from qldpc import abstract, decoder, external
+from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
+from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, op_to_string
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -407,7 +410,7 @@ class ClassicalCode(AbstractCode):
         if vector is not None:
             # find the distance of the given vector from a code word
             _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
-            correction = decoder.decode(
+            correction = decoders.decode(
                 self.matrix, self.matrix @ self.field(vector), **decoder_args
             )
             return int(np.count_nonzero(correction))
@@ -424,7 +427,7 @@ class ClassicalCode(AbstractCode):
             effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
 
             # find a low-weight candidate code word
-            candidate = decoder.decode(effective_check_matrix, effective_syndrome, **decoder_args)
+            candidate = decoders.decode(effective_check_matrix, effective_syndrome, **decoder_args)
 
             # check whether we found a valid candidate
             # NOTE: we can mod out by the field order because non-prime fields aren't allowed here
@@ -504,20 +507,18 @@ class ClassicalCode(AbstractCode):
         return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
 
     @classmethod
-    def stack(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
-        """Stack two classical codes.
+    def stack(cls, *codes: ClassicalCode) -> ClassicalCode:
+        """Stack the given classical codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
-        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
-        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
+        in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        if code_a.field is not code_b.field:
-            raise ValueError("Cannot join codes over different fields")
-        block_matrix = [
-            [code_a.matrix, np.zeros((code_a.num_checks, len(code_b)), dtype=int)],
-            [np.zeros((code_b.num_checks, len(code_a)), dtype=int), code_b.matrix],
-        ]
-        return ClassicalCode(np.block(block_matrix), field=code_a.field.order)
+        fields = [code.field for code in codes]
+        if len(set(fields)) > 1:
+            raise ValueError("Cannot stack codes over different fields")
+        matrices = [code.matrix for code in codes]
+        return ClassicalCode(_block_diag(*matrices), field=fields[0].order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
@@ -546,6 +547,85 @@ class ClassicalCode(AbstractCode):
             generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
         return ClassicalCode.from_generator(generator)
 
+    def get_logical_error_rate_func(
+        self, num_samples: int, max_error_rate: float = 0.3, **decoder_args: Any
+    ) -> Callable[[float | Sequence[float]], tuple[float, float]]:
+        """Construct a function from physical --> logical error rate in a code capacity model.
+
+        In addition to the logical error rate, the constructed function returns an uncertainty
+        (standard error) in that logical error rate.
+
+        The physical error rate provided to the constructed function is the probability with which
+        each bit experiences a bit-flip error.  The constructed function will throw an error if
+        given a physical error rate larger than max_error_rate.
+
+        The logical error rate returned by the constructed function the probability with which a
+        code error (obtained by sampling independent errors on all bits) is decoded incorrectly.
+
+        The basic idea in this method is to first think of the decoding fidelity F(p) = 1 -
+        logical_error_rate(p) as a function of the physical error rate p, and decompose
+            F(p) = sum_k q_k(p) F_k,
+        where q_k(p) = (n choose k) p**k (1-p)**(n-k) is the probability of a weight-k error (here n
+        is total number of bits in the code), and F_k is the probability with which a weight-k error
+        is corrected by the decoder.  Importantly, F_k is independent of p.  We therefore use our
+        sample budget to compute estimates of F_k (according to some allocation of samples to each
+        weight k, which depends on the max_error_rate), and then recycle the values of F_k to
+        compute each F(p).
+
+        There is one more minor trick, which is that we can use the fact that F_k = 1 to simplify
+            F(p) = q_0(p) + sum_(k>0) q_k(p) F_k.
+        We thereby only need to sample errors of weight k > 0.
+        """
+        if self.field.order != 2:
+            raise ValueError("Logical error rate calculations are only supported for binary codes")
+
+        decoder = decoders.get_decoder(self.matrix, **decoder_args)
+
+        # compute decoding fidelities for each error weight
+        sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
+        max_error_weight = len(sample_allocation) - 1
+        fidelities = np.ones(max_error_weight + 1, dtype=float)
+        variances = np.zeros(max_error_weight + 1, dtype=float)
+        for weight in range(1, max_error_weight + 1):
+            fidelities[weight], variances[weight] = self._estimate_decoding_fidelity_and_variance(
+                weight, sample_allocation[weight], decoder
+            )
+
+        @np.vectorize
+        def get_logical_error_rate(error_rate: float) -> tuple[float, float]:
+            """Compute a logical error rate in a code-capacity model."""
+            if error_rate > max_error_rate:
+                raise ValueError(
+                    "Cannot determine logical error rates for physical error rates greater than"
+                    f" {max_error_rate}.  Try running get_logical_error_rate_func with a larger"
+                    " max_error_rate."
+                )
+            probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
+            return 1 - probs @ fidelities, np.sqrt(probs**2 @ variances)
+
+        return get_logical_error_rate
+
+    def _estimate_decoding_fidelity_and_variance(
+        self, error_weight: int, num_samples: int, decoder: decoders.Decoder
+    ) -> tuple[float, float]:
+        """Estimate a fidelity and its variance when decoding a fixed number of errors."""
+        num_failures = 0
+        for _ in range(num_samples):
+            # construct an error
+            error_locations = random.sample(range(len(self)), error_weight)
+            error = self.field.Zeros(len(self))
+            error[error_locations] = self.field(1)
+
+            # decode the error
+            correction = self.field(decoder.decode(self.matrix @ error))
+            residual_error = error - correction
+            if np.any(residual_error):
+                num_failures += 1
+
+        infidelity = num_failures / num_samples
+        variance = infidelity * (1 - infidelity) / num_samples
+        return 1 - infidelity, variance
+
 
 ################################################################################
 # quantum codes
@@ -557,14 +637,19 @@ class QuditCode(AbstractCode):
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
     written as a block matrix in the form H = [H_z|H_x].  Each block has num_qudits columns.
 
-    The entries H_x[c, d] = r_x and H_z[c, d] = r_z iff check c addresses qudit d with the operator
-    X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are generalized Pauli
-    operators.  Specifically:
+    The entries H_x[c, d] = r_x and H_z[c, d] = r_z indicate that check c addresses qudit d with the
+    operator X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are
+    generalized Pauli operators.  Specifically:
     - X(r) = sum_{j=0}^{q-1} |j+r><j| is a shift operator, and
     - Z(r) = sum_{j=0}^{q-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / q).
 
-    Warning: here j, r, s, etc. not integers, but elements of the Galois field GF(q), which has
-    different rules for addition and multiplication when q is not a prime number.
+    Here j and r are not integers, but elements of the Galois field GF(q), which has different
+    rules for addition and multiplication when q is not a prime number.
+
+    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
+    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
+    that parity_check @ pauli_string is a symplectic inner product.
 
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
@@ -579,14 +664,19 @@ class QuditCode(AbstractCode):
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
-        skip_validation: bool = False,
+        flip_xz: bool = False,
+        validate: bool = True,
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
-        if not skip_validation:
-            shape_xz = (self.num_checks, 2, -1)
-            matrix_xz = self.matrix.reshape(shape_xz)[:, ::-1, :].reshape(self.matrix.shape)
-            assert not np.any(self.matrix @ matrix_xz.T)
+        if flip_xz or validate:
+            shape_matrix = self.matrix.shape
+            shape_tensor = (-1, 2, len(self))
+            matrix_conj = self.matrix.reshape(shape_tensor)[:, ::-1, :].reshape(shape_matrix)
+            if validate:
+                assert not np.any(self.matrix @ matrix_conj.T)
+            if flip_xz:
+                self._matrix = self.field(matrix_conj)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -639,10 +729,10 @@ class QuditCode(AbstractCode):
             code_a.canonicalized().matrix, code_b.canonicalized().matrix
         )
 
-    def canonicalized(self) -> QuditCode:
+    def canonicalized(self, *, validate: bool = True) -> QuditCode:
         """The same code with its parity matrix in reduced row echelon form."""
         rows = [row for row in self.matrix.row_reduce() if np.any(row)]
-        return QuditCode(rows, self.field.order)
+        return QuditCode(rows, self.field.order, validate=validate)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -700,7 +790,7 @@ class QuditCode(AbstractCode):
 
     @classmethod
     def from_stabilizers(
-        cls, *stabilizers: str, field: int | None = None, skip_validation: bool = False
+        cls, *stabilizers: str, field: int | None = None, validate: bool = True
     ) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
@@ -716,20 +806,61 @@ class QuditCode(AbstractCode):
             for qudit, op in enumerate(check_op):
                 matrix[check, :, qudit] = operator.from_string(op).value[::-1]
 
-        return QuditCode(
-            matrix.reshape(num_checks, 2 * num_qudits), field, skip_validation=skip_validation
-        )
+        return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field, validate=validate)
 
     def conjugated(
-        self, qudits: slice | Sequence[int] | None = None, *, skip_validation: bool = False
+        self, qudits: slice | Sequence[int] | None = None, *, validate: bool = True
     ) -> QuditCode:
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
-        num_checks = len(self.matrix)
-        matrix = np.reshape(self.matrix.copy(), (num_checks, 2, -1))
+        matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        return QuditCode(matrix.reshape(num_checks, -1), skip_validation=skip_validation)
+        code = QuditCode(
+            matrix.reshape(-1, 2 * len(self)), field=self.field.order, validate=validate
+        )
+
+        if self._logical_ops is not None:
+            logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
+            logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
+            code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)), validate=validate)
+        return code
+
+    def deformed(
+        self, circuit: str | stim.Circuit, *, preserve_logicals: bool = False, validate: bool = True
+    ) -> QuditCode:
+        """Deform a code by the given circuit.
+
+        If preserve_logicals==True, preserve the logical operators of the original code.
+        """
+        if not self.field.order == 2:
+            raise ValueError("Code deformation is only supported for qubit codes")
+
+        # convert the physical circuit into a tableau
+        identity = stim.Circuit(f"I {len(self) - 1}")
+        circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
+        tableau = (circuit + identity).to_tableau()
+
+        # deform this code by transforming its stabilizers
+        matrix = []
+        for check in self.matrix:
+            string = op_to_string(check, flip_xz=True)
+            xs, zs = tableau(string).to_numpy()
+            matrix.append(np.concatenate([zs, xs]))
+        new_code = QuditCode(matrix, field=self.field.order, validate=validate)
+
+        # preserve or update logical operators, as applicable
+        if preserve_logicals:
+            new_code.set_logical_ops(self.get_logical_ops(), validate=validate)
+        elif self._logical_ops is not None:
+            logical_ops = []
+            for op in self._logical_ops:
+                string = op_to_string(op)
+                xs, zs = tableau(string).to_numpy()
+                logical_ops.append(np.concatenate([xs, zs]))
+            new_code.set_logical_ops(logical_ops, validate=validate)
+
+        return new_code
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
@@ -747,7 +878,7 @@ class QuditCode(AbstractCode):
 
         Keyword arguments are passed to the calculation of code distance.
         """
-        distance = self.get_distance(bound=bound, vector=None, **decoder_args)
+        distance = self.get_distance(bound=bound, **decoder_args)
         return self.num_qudits, self.dimension, distance
 
     def get_distance(self, *, bound: int | bool | None = None, **decoder_args: Any) -> int | float:
@@ -812,27 +943,27 @@ class QuditCode(AbstractCode):
             "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
         )
 
-    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+    def get_logical_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+    ) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
-        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
-        qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
-        operators.  The last axis is "doubled" to indicate the support of physical X-type vs. Z-type
-        operators.
+        Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
+        k and n are, respectively, the numbers of logical and physical qudits in this code.
+        Each row of logical_ops is a vector that represents a logical operator.  The first
+        (respectively, second) n entries of this vector indicate the support of *physical* X-type
+        (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
+        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
+        each other, which is to say that the logical operator at row j commutes with the logical
+        operators in all other rows except row j+k.
 
-        Specifically, each row of `logical_ops[0, :, :]` is logical X-type operator that -- due to
-        the way that logical operators are constructed here -- only addresses physical qudits by
-        physical X-type operators.  Each row of `logical_ops[1, :, :]` is a logical Z-type operator
-        that addresses at least one physical qudit by a physical Z-type operator, and may
-        additionally address physical qudits by physical X-type operators.
-
-        For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
-        logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
-        (Z-type) operator.
-
-        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
         operators of that type.
+
+        Due to the way that logical operators are constructed in this method, logical X-type
+        operators only address physical qudits by physical X-type operators, while logical Z-type
+        operators address at least one physical qudits a physical Z-type operator, but may
+        additionally address physical qudits with physical X-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
@@ -841,13 +972,15 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.get_logical_ops()[pauli]
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
+            return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
+        if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
         num_qudits = self.num_qudits
+        num_checks = self.num_checks
         dimension = self.dimension
         identity = self.field.Identity(dimension)
 
@@ -856,30 +989,30 @@ class QuditCode(AbstractCode):
 
         # row reduce and identify pivots in the Z sector
         matrix, pivots_z = _row_reduce(self.matrix)
-        pivots_z = [pivot for pivot in pivots_z if pivot < self.num_qudits]
-        other_z = [qq for qq in range(self.num_qudits) if qq not in pivots_z]
+        pivots_z = [pivot for pivot in pivots_z if pivot < num_qudits]
+        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
 
         # move the Z pivots to the back
-        matrix = matrix.reshape(self.num_checks * 2, self.num_qudits)
+        matrix = matrix.reshape(num_checks * 2, num_qudits)
         matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
         # row reduce and identify pivots in the X sector
-        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)
-        sub_matrix = matrix[len(pivots_z) :, self.num_qudits :]
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)
+        sub_matrix = matrix[len(pivots_z) :, num_qudits:]
         sub_matrix, pivots_x = _row_reduce(self.field(sub_matrix))
-        matrix[len(pivots_z) :, self.num_qudits :] = sub_matrix
-        other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
+        matrix[len(pivots_z) :, num_qudits:] = sub_matrix
+        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
 
         # move the X pivots to the back
-        matrix = matrix.reshape(self.num_checks * 2, self.num_qudits)
+        matrix = matrix.reshape(num_checks * 2, num_qudits)
         matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # identify X-pivot and Z-pivot parity checks
-        matrix = matrix.reshape(self.num_checks, 2 * self.num_qudits)[: len(pivots_z + pivots_x), :]
-        checks_z = matrix[: len(pivots_z), :].reshape(len(pivots_z), 2, self.num_qudits)
-        checks_x = matrix[len(pivots_z) :, :].reshape(len(pivots_x), 2, self.num_qudits)
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)[: len(pivots_z + pivots_x), :]
+        checks_z = matrix[: len(pivots_z), :].reshape(len(pivots_z), 2, num_qudits)
+        checks_x = matrix[len(pivots_z) :, :].reshape(len(pivots_x), 2, num_qudits)
 
         # run some sanity checks
         assert len(pivots_x) == 0 or pivots_x[-1] < num_qudits - len(pivots_z)
@@ -889,7 +1022,7 @@ class QuditCode(AbstractCode):
         # identify "sections" of columns / qudits
         section_k = slice(dimension)
         section_z = slice(dimension, dimension + len(pivots_z))
-        section_x = slice(dimension + len(pivots_z), self.num_qudits)
+        section_x = slice(dimension + len(pivots_z), num_qudits)
 
         # construct Z-pivot logical operators
         logicals_z = self.field.Zeros((dimension, 2, num_qudits))
@@ -912,28 +1045,172 @@ class QuditCode(AbstractCode):
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
         logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
-        shape = (2, self.dimension, 2 * self.num_qudits)
-        self._logical_ops = self.field(np.stack([logicals_x, logicals_z]).reshape(shape))
+        self._logical_ops = self.field(np.vstack([logicals_x, logicals_z]))
         return self._logical_ops
 
-    @classmethod
-    def stack(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
-        """Stack two qudit codes.
+    def set_logical_ops(
+        self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
+    ) -> None:
+        """Set the logical operators of this code to the provided logical operators."""
+        if validate:
+            self.validate_candidate_logical_ops(logical_ops)
+        self._logical_ops = self.field(logical_ops)
 
-        The stacked code is obtained by having the input codes act on disjoint sets of qudits.
-        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
-        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
+    def validate_candidate_logical_ops(
+        self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]]
+    ) -> None:
+        """Assert that the given logical operators are valid for this code."""
+        logical_ops = self.field(logical_ops)
+
+        logs_x = logical_ops[: self.dimension]
+        logs_z = logical_ops[self.dimension :]
+        logs_x_dual = logs_x.reshape(-1, 2, len(self))[:, ::-1, :].reshape(-1, 2 * len(self))
+        inner_products = logs_x_dual @ logs_z.T
+        if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
+            raise ValueError("The given logical operators have incorrect commutation relations")
+
+        if np.any(self.matrix @ logical_ops.T):
+            raise ValueError("The given logical operators do not commute with stabilizers")
+
+    @classmethod
+    def stack(cls, *codes: QuditCode, inherit_logicals: bool = True) -> QuditCode:
+        """Stack the given qudit codes.
+
+        The stacked code is obtained by having the input codes act on disjoint sets of bits.
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
+        in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        if code_a.field is not code_b.field:
-            raise ValueError("Cannot join codes over different fields")
-        matrix_a_z = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 0, :]
-        matrix_a_x = code_a.matrix.reshape(code_a.num_checks, 2, len(code_a))[:, 1, :]
-        matrix_b_z = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 0, :]
-        matrix_b_x = code_b.matrix.reshape(code_b.num_checks, 2, len(code_b))[:, 1, :]
-        code_z = ClassicalCode.stack(ClassicalCode(matrix_a_z), ClassicalCode(matrix_b_z))
-        code_x = ClassicalCode.stack(ClassicalCode(matrix_a_x), ClassicalCode(matrix_b_x))
+        codes_z = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 0, :]) for code in codes]
+        codes_x = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 1, :]) for code in codes]
+        code_z = ClassicalCode.stack(*codes_z)
+        code_x = ClassicalCode.stack(*codes_x)
         matrix = np.hstack([code_z.matrix, code_x.matrix])
-        return QuditCode(matrix, field=code_a.field.order)
+        code = QuditCode(matrix)
+        if inherit_logicals:
+            logicals_xx = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in codes]
+            logicals_zx = [code.get_logical_ops(Pauli.Z)[:, : len(code)] for code in codes]
+            logicals_xz = [code.get_logical_ops(Pauli.X)[:, len(code) :] for code in codes]
+            logicals_zz = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in codes]
+            logical_ops = np.block(
+                [
+                    [_block_diag(*logicals_xx), _block_diag(*logicals_xz)],
+                    [_block_diag(*logicals_zx), _block_diag(*logicals_zz)],
+                ]
+            )
+            code.set_logical_ops(logical_ops)
+        return code
+
+    @classmethod
+    def concatenate(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
+        *,
+        inherit_logicals: bool = True,
+    ) -> QuditCode:
+        """Concatenate two qudit codes.
+
+        The concatenated code uses the logical qudits of the "inner" code as the physical qudits of
+        the "outer" code, with outer_physical_to_inner_logical defining the map from outer physical
+        qudit index to inner logical qudit index.
+
+        This method nominally assumes that len(outer_physical_to_inner_logical) is equal to both the
+        number of logical qudits of the inner code and the number of physical qudits of the outer
+        code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
+        or outer physicals, then copies of the inner and outer codes are used (stacked together) to
+        match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
+        mapping is provided, then this method stacks the minimal number of inner and outer codes
+        required make the number of inner logicals equal the number of outer physicals, and the k-th
+        inner logical qudit is identified with the k-th outer physical qudit.
+
+        If inherit_logicals is True, use the logical operators of the outer code as the logical
+        operators of the concatenated code.  Otherwise, logical operators of the concatenated code
+        get recomputed from scratch.
+        """
+        # stack copies of the inner and outer codes (if necessary) and permute inner logicals
+        inner, outer = QuditCode._standardize_concatenation_inputs(
+            inner, outer, outer_physical_to_inner_logical
+        )
+
+        """
+        Parity checks inherited from the outer code are nominally defined in terms of their support
+        on logical operators of the inner code.  Expand these parity checks into their support on
+        the physical qudits of the inner code.
+
+        Warning: whereas Pauli strings in this libray are generally represented by vectors that
+        indicate support on [X|Z] ops, parity checks are represented by vectors indicate the support
+        on [Z|X] ops to reflect that they are dual vectors of a symplectic inner product space,
+        thereby ensuring that that parity_check @ pauli_string is a symplectic inner product.  As a
+        consequence, we have to flip the X/Z sectors of the logical operator matrix when expanding
+        the parity checks of the outer code.
+        """
+        inner_logicals_zx = (
+            inner.get_logical_ops()
+            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]  # flip X/Z sectors
+            .reshape(2 * inner.dimension, 2 * len(inner))
+        )
+        outer_checks = outer.matrix @ inner_logicals_zx
+
+        # combine parity checks of the inner and outer codes
+        code = QuditCode(np.vstack([inner.matrix, outer_checks]))
+
+        if inherit_logicals:
+            code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
+        return code
+
+    @classmethod
+    def _standardize_concatenation_inputs(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None,
+    ) -> tuple[QuditCode, QuditCode]:
+        """Helper function for code concatenation.
+
+        This method...
+        - stacks copies of the inner and outer codes as necessary to make the number of logical
+          qudits of the inner code equal to the number of physical qudits of the outer code, and
+        - permutes logical qudits of the inner code according to outer_physical_to_inner_logical.
+          If no outer_physical_to_inner_logical mapping is provided, then the k-th logical qudit of
+          the inner code is used as the k-th physical qudit of the outer code.
+        """
+        if inner.field is not outer.field:
+            raise ValueError("Cannot concatenate codes over different fields")
+
+        # convert outer_physical_to_inner_logical into a tuple that we can use to permute an array
+        if outer_physical_to_inner_logical is None:
+            # default to the trivial mapping with the smallest possible number of qudits
+            num_qudits = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
+            outer_physical_to_inner_logical = tuple(range(num_qudits))
+        else:
+            num_qudits = len(outer_physical_to_inner_logical)
+            if num_qudits % inner.dimension or num_qudits % len(outer):
+                raise ValueError(
+                    "Code concatenation requires the number of qudits mapped by"
+                    f" outer_physical_to_inner_logical ({num_qudits}) to be divisible by the number"
+                    f" of logical qudits of the inner code ({inner.dimension}) and the number of"
+                    f" physical qudits of the outer code ({len(outer)})"
+                )
+            outer_physical_to_inner_logical = tuple(
+                outer_physical_to_inner_logical[qq]
+                for qq in range(len(outer_physical_to_inner_logical))
+            )
+
+        # stack copies of the inner and outer codes, if necessary
+        if (num_inner_blocks := len(outer_physical_to_inner_logical) // inner.dimension) > 1:
+            inner = inner.stack(*[inner] * num_inner_blocks)
+        if (num_outer_blocks := len(outer_physical_to_inner_logical) // len(outer)) > 1:
+            outer = outer.stack(*[outer] * num_outer_blocks)
+
+        # permute logical operators of the inner code
+        inner._logical_ops = inner.field(
+            inner.get_logical_ops()
+            .reshape(2, inner.dimension, -1)[:, outer_physical_to_inner_logical, :]
+            .reshape(2 * inner.dimension, -1)
+        )
+
+        return inner, outer
 
 
 class CSSCode(QuditCode):
@@ -951,6 +1228,11 @@ class CSSCode(QuditCode):
     The full parity check matrix of a CSSCode is
     ⌈  0 , H_x ⌉
     ⌊ H_z,  0  ⌋.
+
+    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
+    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
+    that parity_check @ pauli_string is a symplectic inner product.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -967,7 +1249,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
-        skip_validation: bool = False,
+        validate: bool = True,
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks."""
         self.code_x = ClassicalCode(code_x, field)
@@ -977,7 +1259,7 @@ class CSSCode(QuditCode):
             raise ValueError("The sub-codes provided for this CSSCode are over different fields")
         self._field = self.code_x.field
 
-        if not skip_validation and self.code_x != self.code_z:
+        if validate:
             self._validate_subcodes()
 
         self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
@@ -1031,9 +1313,9 @@ class CSSCode(QuditCode):
         """Z-type parity checks."""
         return self.code_z.matrix
 
-    def canonicalized(self) -> CSSCode:
+    def canonicalized(self, *, validate: bool = True) -> CSSCode:
         """The same code with its parity matrix in reduced row echelon form."""
-        return CSSCode(self.code_x.canonicalized(), self.code_z.canonicalized())
+        return CSSCode(self.code_x.canonicalized(), self.code_z.canonicalized(), validate=validate)
 
     @property
     def num_checks_x(self) -> int:
@@ -1208,7 +1490,7 @@ class CSSCode(QuditCode):
 
             # support of a candidate pauli-type logical operator
             effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
-            candidate_logical_op = decoder.decode(
+            candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
 
@@ -1220,26 +1502,25 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+    def get_logical_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+    ) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
-        Logical operators are represented by a three-dimensional array `logical_ops` with dimensions
-        `(2, k, 2 * n)`, where `k` and `n` are respectively the numbers of logical and physical
-        qudits in this code.  The first axis is used to keep track of conjugate pairs of logical
-        operators.  The last axis is "doubled" to indicate whether a physical qudit is addressed by
-        a physical X-type or Z-type operator.
+        Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
+        k and n are, respectively, the numbers of logical and physical qudits in this code.
+        Each row of logical_ops is a vector that represents a logical operator.  The first
+        (respectively, second) n entries of this vector indicate the support of *physical* X-type
+        (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
+        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
+        each other, which is to say that the logical operator at row j commutes with the logical
+        operators in all other rows except row j+k.
 
-        Specifically, `logical_ops[0, :, :]` are logical X-type operators that address physical
-        qudits by physical X-type operators, while `logical_ops[1, :, :]` are logical Z-type
-        operators that address physical qudits by physical Z-type operators.
-
-        For example, if `logical_ops[p, r, j] == 1` for `j < n` (`j >= n`), then the `p`-type
-        logical operator for logical qudit `r` addresses physical qudit `j` with a physical X-type
-        (Z-type) operator.  The fact that logical operators come in conjugate pairs means that
-        `logical_ops(Pauli.X)[r, :] @ logical_ops(Pauli.Z)[s, :] == int(r == s)`.
-
-        If passed a pauli operator (Pauli.X or Pauli.Z), return the two-dimensional array of logical
+        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
         operators of that type.
+
+        Logical X-type operators only address physical qudits by physical X-type operators, and
+        logical Z-type operators only address physical qudits by physical Z-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits and CSSCodes.
@@ -1248,10 +1529,11 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.get_logical_ops()[pauli]
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
+            return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
+        if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
         num_qudits = self.num_qudits
@@ -1265,14 +1547,14 @@ class CSSCode(QuditCode):
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
         checks_x, pivots_x = _row_reduce(self.field(checks_x))
-        other_x = [qq for qq in range(self.num_qudits) if qq not in pivots_x]
+        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
         checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
         checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # row reduce the check matrix for Z-type errors and move its pivots to the back
         checks_z, pivots_z = _row_reduce(self.field(checks_z))
-        other_z = [qq for qq in range(self.num_qudits) if qq not in pivots_z]
+        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
         checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
@@ -1284,7 +1566,7 @@ class CSSCode(QuditCode):
         # identify "sections" of columns / qudits
         section_k = slice(dimension)
         section_x = slice(dimension, dimension + len(pivots_x))
-        section_z = slice(dimension + len(pivots_x), self.num_qudits)
+        section_z = slice(dimension + len(pivots_x), num_qudits)
 
         # construct logical X operators
         logicals_x = self.field.Zeros((dimension, num_qudits))
@@ -1301,13 +1583,19 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
-        logical_ops = [
-            [logicals_x, np.zeros_like(logicals_x)],
-            [np.zeros_like(logicals_z), logicals_z],
-        ]
-        shape = (2, self.dimension, 2 * self.num_qudits)
-        self._logical_ops = self.field(np.block(logical_ops).reshape(shape))
+        self._logical_ops = self.field(_block_diag(logicals_x, logicals_z))
         return self._logical_ops
+
+    def set_logical_ops_xz(
+        self,
+        logicals_x: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        logicals_z: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        *,
+        validate: bool = True,
+    ) -> None:
+        """Set the logical operators of this code to the provided logical operators."""
+        logical_ops = _block_diag(self.field(logicals_x), self.field(logicals_z))
+        self.set_logical_ops(logical_ops, validate=validate)
 
     def get_random_logical_op(
         self, pauli: PauliXZ, *, ensure_nontrivial: bool = False, seed: int | None = None
@@ -1346,6 +1634,9 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_index < self.dimension
 
+        dual_pauli = ~pauli
+        assert dual_pauli == Pauli.X or dual_pauli == Pauli.Z
+
         # effective check matrix = syndromes and other logical operators
         if pauli == Pauli.X:
             code = self.code_z
@@ -1353,7 +1644,7 @@ class CSSCode(QuditCode):
         else:
             code = self.code_x
             nonzero_dual_section = slice(self.num_qudits)
-        all_dual_ops = self.get_logical_ops()[~pauli, :, nonzero_dual_section]
+        all_dual_ops = self.get_logical_ops(dual_pauli)[:, nonzero_dual_section]
         effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
         dual_op_index = code.num_checks + logical_index
 
@@ -1364,7 +1655,7 @@ class CSSCode(QuditCode):
 
         logical_op_found = False
         while not logical_op_found:
-            candidate_logical_op = decoder.decode(
+            candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
             actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
@@ -1373,7 +1664,7 @@ class CSSCode(QuditCode):
         assert self._logical_ops is not None
         self._logical_ops.shape = (2, self.dimension, 2, self.num_qudits)
         self._logical_ops[pauli, logical_index, pauli, :] = candidate_logical_op
-        self._logical_ops.shape = (2, self.dimension, 2 * self.num_qudits)
+        self._logical_ops.shape = (2 * self.dimension, 2 * self.num_qudits)
 
     def reduce_logical_ops(self, pauli: PauliXZ | None = None, **decoder_args: Any) -> None:
         """Reduce the weight of all logical operators."""
@@ -1386,28 +1677,193 @@ class CSSCode(QuditCode):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
 
     @classmethod
-    def stack(cls, code_a: QuditCode, code_b: QuditCode) -> QuditCode:
-        """Stack two qudit codes.
+    def stack(cls, *codes: QuditCode, inherit_logicals: bool = True) -> CSSCode:
+        """Stack the given CSS codes.
 
-        The stacked code is obtained by having the input codes act on disjoint sets of qudits.
-        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2] results in a single
-        code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
-
-        If both input codes are CSS, the output code will likewise be a CSSCode.
+        The stacked code is obtained by having the input codes act on disjoint sets of bits.
+        Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
+        in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        if code_a.field is not code_b.field:
-            raise ValueError("Cannot join codes over different fields")
-        if not isinstance(code_a, CSSCode) or not isinstance(code_b, CSSCode):
-            return QuditCode.stack(code_a, code_b)
-        code_x = ClassicalCode.stack(code_a.code_x, code_b.code_x)
-        code_z = ClassicalCode.stack(code_a.code_z, code_b.code_z)
-        return CSSCode(
+        if any(not isinstance(code, CSSCode) for code in codes):
+            raise TypeError("CSSCode.stack requires CSSCode inputs")
+        css_codes = cast(list[CSSCode], codes)
+        code_x = ClassicalCode.stack(*[code.code_x for code in css_codes])
+        code_z = ClassicalCode.stack(*[code.code_z for code in css_codes])
+        code = CSSCode(
             code_x,
             code_z,
-            field=code_a.field.order,
-            promise_balanced_codes=code_a._balanced_codes and code_b._balanced_codes,
-            skip_validation=True,
+            promise_balanced_codes=all(code._balanced_codes for code in css_codes),
+            validate=False,
         )
+        if inherit_logicals:
+            logicals_x = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in css_codes]
+            logicals_z = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in css_codes]
+            code.set_logical_ops_xz(_block_diag(*logicals_x), _block_diag(*logicals_z))
+        return code
+
+    @classmethod
+    def concatenate(
+        cls,
+        inner: QuditCode,
+        outer: QuditCode,
+        outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
+        *,
+        inherit_logicals: bool = True,
+    ) -> CSSCode:
+        """Concatenate two CSS codes.
+
+        The concatenated code uses the logical qudits of the "inner" code as the physical qudits of
+        the "outer" code, with outer_physical_to_inner_logical defining the map from outer physical
+        qudit index to inner logical qudit index.
+
+        This method nominally assumes that len(outer_physical_to_inner_logical) is equal to both the
+        number of logical qudits of the inner code and the number of physical qudits of the outer
+        code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
+        or outer physicals, then copies of the inner and outer codes are used (stacked together) to
+        match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
+        mapping is provided, then this method stacks the minimal number of inner and outer codes
+        required make the number of inner logicals equal the number of outer physicals, and the k-th
+        inner logical qudit is identified with the k-th outer physical qudit.
+
+        If inherit_logicals is True, use the logical operators of the outer code as the logical
+        operators of the concatenated code.  Otherwise, logical operators of the concatenated code
+        get recomputed from scratch.
+        """
+        # stack copies of the inner and outer codes (if necessary) and permute inner logicals
+        inner, outer = QuditCode._standardize_concatenation_inputs(
+            inner, outer, outer_physical_to_inner_logical
+        )
+
+        if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
+            raise TypeError("CSSCode.concatenate requires CSSCode inputs")
+
+        """
+        Parity checks inherited from the outer code are nominally defined in terms of their support
+        on logical operators of the inner code.  Expand these parity checks into their support on
+        the physical qudits of the inner code.
+        """
+        outer_checks_x = outer.matrix_x @ inner.get_logical_ops(Pauli.X)[:, : len(inner)]
+        outer_checks_z = outer.matrix_z @ inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
+
+        # combine parity checks of the inner and outer codes
+        code = CSSCode(
+            np.vstack([inner.matrix_x, outer_checks_x]),
+            np.vstack([inner.matrix_z, outer_checks_z]),
+        )
+
+        if inherit_logicals:
+            code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
+        return code
+
+    def get_logical_error_rate_func(
+        self,
+        num_samples: int,
+        max_error_rate: float = 0.3,
+        pauli_bias: Sequence[float] | None = None,
+        **decoder_args: Any,
+    ) -> Callable[[float | Sequence[float]], tuple[float, float]]:
+        """Construct a function from physical --> logical error rate in a code capacity model.
+
+        In addition to the logical error rate, the constructed function returns an uncertainty
+        (standard error) in that logical error rate.
+
+        The physical error rate provided to the constructed function is the probability with which
+        each qubit experiences a Pauli error.  The constructed function will throw an error if
+        given a physical error rate larger than max_error_rate.  If a pauli_bias is provided, it is
+        treated as the relative probabilities of an X, Y, and Z error on each qubit; otherwise,
+        these errors occur with equal probability, corresponding to a depolarizing error.
+
+        The logical error rate returned by the constructed function the probability with which a
+        code error (obtained by sampling independent errors on all qubits) is converted into a
+        logical error by the decoder.
+
+        See ClassicalCode.get_logical_error_rate_func for more details about how this method works.
+        """
+        if self.field.order != 2:
+            raise ValueError("Logical error rate calculations are only supported for binary codes")
+
+        # collect relative probabilities of Z, X, and Y errors
+        pauli_bias_zxy: npt.NDArray[np.float_] | None
+        if pauli_bias is not None:
+            assert len(pauli_bias) == 3
+            pauli_bias_zxy = np.array([pauli_bias[2], pauli_bias[0], pauli_bias[1]], dtype=float)
+            pauli_bias_zxy /= np.sum(pauli_bias_zxy)
+        else:
+            pauli_bias_zxy = None
+
+        # construct decoders and identify logical operators
+        decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
+        decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
+        logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
+        logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
+
+        # compute decoding fidelities for each error weight
+        sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
+        max_error_weight = len(sample_allocation) - 1
+        fidelities = np.ones(max_error_weight + 1, dtype=float)
+        variances = np.zeros(max_error_weight + 1, dtype=float)
+        for weight in range(1, max_error_weight + 1):
+            fidelities[weight], variances[weight] = self._estimate_decoding_fidelity_and_variance(
+                weight,
+                sample_allocation[weight],
+                decoder_x,
+                decoder_z,
+                logicals_x,
+                logicals_z,
+                pauli_bias_zxy,
+            )
+
+        @np.vectorize
+        def get_logical_error_rate(error_rate: float) -> tuple[float, float]:
+            """Compute a logical error rate in a code-capacity model."""
+            if error_rate > max_error_rate:
+                raise ValueError(
+                    "Cannot determine logical error rates for physical error rates greater than"
+                    f" {max_error_rate}.  Try running get_logical_error_rate_func with a larger"
+                    " max_error_rate."
+                )
+            probs = _get_error_probs_by_weight(len(self), error_rate, max_error_weight)
+            return 1 - probs @ fidelities, np.sqrt(probs**2 @ variances)
+
+        return get_logical_error_rate
+
+    def _estimate_decoding_fidelity_and_variance(
+        self,
+        error_weight: int,
+        num_samples: int,
+        decoder_x: decoders.Decoder,
+        decoder_z: decoders.Decoder,
+        logicals_x: npt.NDArray[np.int_],
+        logicals_z: npt.NDArray[np.int_],
+        pauli_bias_zxy: npt.NDArray[np.float_] | None,
+    ) -> tuple[float, float]:
+        """Estimate a fidelity and its standard error when decoding a fixed number of errors."""
+        num_failures = 0
+        for _ in range(num_samples):
+            # construct an error
+            error_locations = random.sample(range(len(self)), error_weight)
+            pauli_errors = np.random.choice([1, 2, 3], size=error_weight, p=pauli_bias_zxy)
+            error = np.zeros(len(self), dtype=int)
+            error[error_locations] = pauli_errors
+
+            # decode Z-type errors
+            error_z = self.field(error % 2)
+            correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
+            residual_z = error_z - correction_z
+            if np.any(logicals_x @ residual_z):
+                num_failures += 1
+                continue
+
+            # decode X-type errors
+            error_x = self.field((error > 1).astype(int))
+            correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
+            residual_x = error_x - correction_x
+            if np.any(logicals_z @ residual_x):
+                num_failures += 1
+
+        infidelity = num_failures / num_samples
+        variance = infidelity * (1 - infidelity) / num_samples
+        return 1 - infidelity, variance
 
 
 def _fix_decoder_args_for_nonbinary_fields(
@@ -1444,3 +1900,87 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[i
     matrix_rref = matrix.row_reduce()
     pivots = [int(np.argmax(row != 0)) for row in matrix_rref if np.any(row)]
     return matrix_rref, pivots
+
+
+def _block_diag(*blocks: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+    """Construct a block-diagonal matrix with the given blocks."""
+    num_rows = sum(block.shape[0] for block in blocks)
+    num_cols = sum(block.shape[1] for block in blocks)
+    matrix = np.zeros((num_rows, num_cols), dtype=int)
+    block_row_start, block_col_start = 0, 0
+    for block in blocks:
+        block_rows = slice(block_row_start, block_row_start + block.shape[0])
+        block_cols = slice(block_col_start, block_col_start + block.shape[1])
+        matrix[block_rows, block_cols] = block
+        block_row_start += block.shape[0]
+        block_col_start += block.shape[1]
+    return matrix
+
+
+def _get_sample_allocation(
+    num_samples: int, block_length: int, max_error_rate: float
+) -> npt.NDArray[np.int_]:
+    """Construct an allocation of samples by error weight.
+
+    This method returns an array whose k-th entry is the nubmer of samples to devote to errors of
+    weight k, given a maximum error rate that we care about.
+    """
+    probs = _get_error_probs_by_weight(block_length, max_error_rate)
+
+    # zero out the distribution at k=0, flatten it out to the left of its peak, and renormalize
+    probs[0] = 0
+    probs[1 : np.argmax(probs)] = probs.max()
+    probs /= np.sum(probs)
+
+    # assign sample numbers according to the probability distribution constructed above,
+    # increasing num_samples if necessary to deal with weird edge cases from round-off errors
+    while np.sum(sample_allocation := np.round(probs * num_samples).astype(int)) < num_samples:
+        num_samples += 1  # pragma: no cover
+
+    # truncate trailing zeros and return
+    nonzero = np.nonzero(sample_allocation)[0]
+    return sample_allocation[: nonzero[-1] + 1]
+
+
+def _get_error_probs_by_weight(
+    block_length: int, error_rate: float, max_weight: int | None = None
+) -> npt.NDArray[np.float_]:
+    """Build an array whose k-th entry is the probability of a weight-k error in a code.
+
+    If a code has block_length n and each bit has an independent probability p = error_rate of an
+    error, then the probability of k errors is (n choose k) p**k (1-p)**(n-k).
+
+    We compute the above probability using logarithms because otherwise the combinatorial factor
+    (n choose k) might be too large to handle.
+    """
+    max_weight = max_weight or block_length
+
+    # deal with some pathological cases
+    if error_rate == 0:
+        probs = np.zeros(max_weight + 1)
+        probs[0] = 1
+        return probs
+    elif error_rate == 1:
+        probs = np.zeros(max_weight + 1)
+        probs[block_length:] = 1
+        return probs
+
+    log_error_rate = np.log(error_rate)
+    log_one_minus_error_rate = np.log(1 - error_rate)
+    log_probs = [
+        _log_choose(block_length, kk)
+        + kk * log_error_rate
+        + (block_length - kk) * log_one_minus_error_rate
+        for kk in range(max_weight + 1)
+    ]
+    return np.exp(log_probs)
+
+
+@functools.cache
+def _log_choose(n: int, k: int) -> float:
+    """Natural logarithm of (n choose k) = Gamma(n+1) / ( Gamma(k+1) * Gamma(n-k+1) )."""
+    return (
+        scipy.special.gammaln(n + 1)
+        - scipy.special.gammaln(k + 1)
+        - scipy.special.gammaln(n - k + 1)
+    )

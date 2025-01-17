@@ -4,7 +4,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "qLDPC"
-version = "0.0.20"
+version = "0.0.23"
 description = "Tools for constructing and analyzing quantum low density parity check (qLDPC) codes."
 license = "Apache-2.0"
 authors = ["Michael A. Perlin <mika.perlin@gmail.com>"]
@@ -188,10 +188,10 @@ enable = [
 
 # Enable the optional checks by parameter_documentation
 [tool.pylint.parameter_documentation]
-accept-no-param-doc=false # Do not accept totally missing parameter documentation.
-accept-no-raise-doc=false # Do not accept totally missing raises documentation.
-accept-no-return-doc=false # Do not accept totally missing return documentation.
-accept-no-yields-doc=false # Do not accept missing yields annotations.
+accept-no-param-doc = false       # Do not accept totally missing parameter documentation.
+accept-no-raise-doc = false       # Do not accept totally missing raises documentation.
+accept-no-return-doc = false      # Do not accept totally missing return documentation.
+accept-no-yields-doc = false      # Do not accept missing yields annotations.
 default-docstring-type = "google"
 
 # Ignore long lines containing urls or pylint directives.

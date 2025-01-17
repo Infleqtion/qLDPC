@@ -19,14 +19,13 @@ from __future__ import annotations
 
 import collections
 import functools
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Sequence
 
 import numpy as np
-import numpy.typing as npt
 import stim
 
 from qldpc import abstract, codes
-from qldpc.objects import Pauli
+from qldpc.objects import Pauli, op_to_string
 
 
 def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.Circuit]:
@@ -41,41 +40,59 @@ def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.
     return qubit_func
 
 
-def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliString:
-    """Convert an integer array that represents a Pauli string into a stim.PauliString.
-
-    The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz==True.
-    """
-    assert len(op) % 2 == 0
-    support_xz = np.array(op, dtype=int).reshape(2, -1)
-    if flip_xz:
-        support_xz = support_xz[::-1, :]
-    paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
-    return stim.PauliString(map(str, paulis))
-
-    num_qubits = len(op) // 2
-    paulis = ""
-    for qubit in range(num_qubits):
-        val_x = int(op[qubit])
-        val_z = int(op[qubit + num_qubits])
-        pauli = Pauli((val_x, val_z))
-        paulis += str(pauli if not flip_xz else ~pauli)
-    return stim.PauliString(paulis)
-
-
 @restrict_to_qubits
 def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
-    """Tableau to prepare an all-|0> logical state of a code from an all-|0> state of its qubits."""
-    logical_ops_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
-    code_stabs = [op_to_string(row, flip_xz=True) for row in code.matrix]
-    return stim.Tableau.from_stabilizers(
-        logical_ops_z + code_stabs, allow_redundant=True, allow_underconstrained=False
+    """Tableau to encode physical states at its input into logical states of the given code.
+
+    For all j in {0, 1, ..., code.dimension - 1}, this tableau maps weight-one X_j and Z_j operators
+    at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
+    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
+    mapped to destabilizers.
+    """
+    # identify logical operators
+    logicals_x = [op_to_string(op) for op in code.get_logical_ops(Pauli.X)]
+    logicals_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
+
+    # identify stabilizers
+    checks = code.matrix.row_reduce()
+    pivots = [int(np.argmax(row != 0)) for row in checks if np.any(row)]
+    stabilizers = [op_to_string(row, flip_xz=True) for row in checks]
+
+    # construct destabilizers
+    destabilizers: list[stim.PauliString] = []
+    for pivot in pivots:
+        # construct a candidate destabilizer that only anti-commutes with one stabilizer
+        vector_zx = code.field.Zeros(2 * len(code))
+        vector_zx[(pivot + len(code)) % (2 * len(code))] = 1
+        candidate_destabilizer = op_to_string(vector_zx, flip_xz=True)
+
+        # enforce that the candidate destabilizer commutes with all logical operators
+        for log_x, log_z in zip(logicals_x, logicals_z):
+            if not candidate_destabilizer.commutes(log_x):  # pragma: no cover
+                candidate_destabilizer *= log_z
+            if not candidate_destabilizer.commutes(log_z):  # pragma: no cover
+                candidate_destabilizer *= log_x
+
+        # enforce that the candidate destabilizer commutes with other destabilizers
+        for old_destabilizer, stabilizer in zip(destabilizers, stabilizers):
+            if not candidate_destabilizer.commutes(old_destabilizer):
+                candidate_destabilizer *= stabilizer
+        destabilizers.append(candidate_destabilizer)
+
+    return stim.Tableau.from_conjugated_generators(
+        xs=logicals_x + destabilizers, zs=logicals_z + stabilizers
     )
 
 
 @restrict_to_qubits
 def get_encoding_circuit(code: codes.QuditCode) -> stim.Tableau:
-    """Circuit to prepare an all-|0> logical state of a code from an all-|0> state of its qubits."""
+    """Circuit to encode physical states at its input into logical states of the given code.
+
+    For all j in {0, 1, ..., code.dimension - 1}, this circuit maps weight-one X_j and Z_j operators
+    at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
+    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
+    mapped to destabilizers.
+    """
     return get_encoding_tableau(code).to_circuit()
 
 
@@ -85,7 +102,7 @@ def get_transversal_ops(
     local_gates: Collection[str] = ("S", "H", "SWAP"),
     *,
     remove_redundancies: bool = True,
-) -> tuple[list[stim.Tableau], list[stim.Circuit]]:
+) -> list[tuple[stim.Tableau, stim.Circuit]]:
     """Logical tableaus and physical circuits for transversal logical Clifford gates of a code.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
@@ -95,8 +112,7 @@ def get_transversal_ops(
     """
     group_aut = get_transversal_automorphism_group(code, local_gates)
 
-    logical_tableaus: list[stim.Tableau] = []
-    physical_circuits: list[stim.Circuit] = []
+    transversal_ops: list[tuple[stim.Tableau, stim.Circuit]] = []
     for generator in group_aut.generators:
         logical_tableau, physical_circuit = _get_transversal_automorphism_data(
             code, generator, local_gates
@@ -105,13 +121,12 @@ def get_transversal_ops(
             _is_pauli_tableau(logical_tableau)
             or any(
                 _tableaus_are_equivalent_mod_paulis(logical_tableau, tableau)
-                for tableau in logical_tableaus
+                for tableau, _ in transversal_ops
             )
         ):
-            logical_tableaus.append(logical_tableau)
-            physical_circuits.append(physical_circuit)
+            transversal_ops.append((logical_tableau, physical_circuit))
 
-    return logical_tableaus, physical_circuits
+    return transversal_ops
 
 
 def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
@@ -158,27 +173,28 @@ def get_transversal_automorphism_group(
     allow_swaps = "SWAP" in local_gates
     local_gates.discard("SWAP")
 
-    # compute the automorphism group of the "augmented" code for a transversal gate set
+    # construst the parity check matrix of an instrumental code
     matrix_z = code.matrix.reshape(code.num_checks, 2, len(code))[:, 0, :]
     matrix_x = code.matrix.reshape(code.num_checks, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping Z <--> X
-        augmented_matrix = np.hstack([matrix_z, matrix_x])
+        matrix = np.hstack([matrix_z, matrix_x])
     elif local_gates == {"S"}:
         # swapping sectors = swapping X <--> Y
-        augmented_matrix = np.hstack([matrix_z, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_z, matrix_z + matrix_x])
     elif local_gates == {"SQRT_X"}:
         # swapping sectors = swapping Y <--> Z
-        augmented_matrix = np.hstack([matrix_z + matrix_x, matrix_x])
+        matrix = np.hstack([matrix_z + matrix_x, matrix_x])
     else:
         # we have a complete local Clifford gate set that can arbitrarily permute Pauli ops
-        augmented_matrix = np.hstack([matrix_z, matrix_x, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_z, matrix_x, matrix_z + matrix_x])
 
-    code_checks = codes.ClassicalCode(augmented_matrix)
-    group_checks = code_checks.get_automorphism_group()
+    # compute the automorphism group of an instrumental classical code
+    instrumental_code = codes.ClassicalCode(matrix)
+    group_code = instrumental_code.get_automorphism_group()
 
-    # identify the group of augmented code transformations generated by the gate set
-    num_sectors = augmented_matrix.shape[1] // len(code)
+    # identify the group of instrumental code transformations generated by the gate set
+    num_sectors = len(instrumental_code) // len(code)
     column_perms = []
     if allow_swaps:
         # allow swapping qudits, which swaps corresponding columns in all "sectors" concurrently
@@ -196,7 +212,7 @@ def get_transversal_automorphism_group(
     group_gates = abstract.Group(*map(abstract.GroupMember, column_perms))
 
     # intersect the groups above to find the group generated by a SWAP-transversal gate set
-    group_aut_sympy = group_checks.to_sympy().subgroup_search(group_gates.to_sympy().contains)
+    group_aut_sympy = group_code.to_sympy().subgroup_search(group_gates.to_sympy().contains)
     return abstract.Group.from_sympy(group_aut_sympy, field=code.field.order)
 
 
@@ -231,26 +247,14 @@ def _get_transversal_automorphism_data(
     for aa in range(code.dimension, len(code)):
         decoded_stabilizer_before = "_" * aa + "Z" + "_" * (len(code) - aa - 1)
         decoded_stabilizer_after = decoded_tableau(stim.PauliString(decoded_stabilizer_before))
-        decoded_correction += "_" if decoded_stabilizer_after.sign == -1 else "X"
+        decoded_correction += "_" if decoded_stabilizer_after.sign == 1 else "X"
     correction = encoder(stim.PauliString(decoded_correction))
     physical_circuit = _get_pauli_circuit(correction) + physical_circuit
 
-    # Identify the logical tableau implemented by the physical circuit, which is simply
-    # the "upper left" block of the decoded tableau that acts on all logical qubits.
-    decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
-    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
-    logical_tableau = stim.Tableau.from_numpy(
-        x2x=x2x[: code.dimension, : code.dimension],
-        x2z=x2z[: code.dimension, : code.dimension],
-        z2x=z2x[: code.dimension, : code.dimension],
-        z2z=z2z[: code.dimension, : code.dimension],
-        x_signs=x_signs[: code.dimension],
-        z_signs=z_signs[: code.dimension],
+    # identify the logical tableau implemented by the physical circuit
+    logical_tableau = _get_logical_tableau_from_code_data(
+        code.dimension, encoder, decoder, physical_circuit
     )
-
-    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
-    assert not np.any(z2x[:, code.dimension :])  # stabilizers and Z-type logicals
-    assert not np.any(x2x[: code.dimension, code.dimension :])  # X-type logicals
 
     return logical_tableau, physical_circuit
 
@@ -328,46 +332,112 @@ def _get_pauli_circuit(string: stim.PauliString) -> stim.Circuit:
 
 
 @restrict_to_qubits
-def maybe_get_transversal_circuit(
+def get_logical_tableau(code: codes.QuditCode, physical_circuit: stim.Circuit) -> stim.Tableau:
+    """Identify the logical tableau implemented by the physical circuit."""
+    encoder = get_encoding_tableau(code)
+    decoder = encoder.inverse()
+    return _get_logical_tableau_from_code_data(code.dimension, encoder, decoder, physical_circuit)
+
+
+def _get_logical_tableau_from_code_data(
+    dimension: int, encoder: stim.Tableau, decoder: stim.Tableau, physical_circuit: stim.Circuit
+) -> stim.Tableau:
+    """Identify the logical tableau implemented by the physical circuit."""
+    assert len(encoder) == len(decoder) >= dimension
+    identity_phys = stim.Circuit(f"I {len(encoder) - 1}")
+    physical_tableau = (physical_circuit + identity_phys).to_tableau()
+
+    # compute the "upper left" block of the decoded tableau that acts on all logical qubits
+    decoded_tableau = encoder.then(physical_tableau).then(decoder)
+    x2x, x2z, z2x, z2z, x_signs, z_signs = decoded_tableau.to_numpy()
+    logical_tableau = stim.Tableau.from_numpy(
+        x2x=x2x[:dimension, :dimension],
+        x2z=x2z[:dimension, :dimension],
+        z2x=z2x[:dimension, :dimension],
+        z2z=z2z[:dimension, :dimension],
+        x_signs=x_signs[:dimension],
+        z_signs=z_signs[:dimension],
+    )
+
+    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
+    assert not z2x[:, dimension:].any()  # stabilizers and Z-type logicals
+    assert not x2x[:dimension, dimension:].any()  # X-type logicals
+
+    return logical_tableau
+
+
+@restrict_to_qubits
+def get_transversal_circuits(
     code: codes.QuditCode,
-    logical_circuit_or_tableau: stim.Circuit | stim.Tableau,
+    logical_circuits_or_tableaus: Sequence[stim.Circuit | stim.Tableau],
     local_gates: Collection[str] = ("S", "H", "SWAP"),
-) -> stim.Circuit | None:
-    """Find a transversal physical circuit to implement a logical Clifford operation, if it exists.
+) -> list[stim.Circuit | None]:
+    """Find a transversal physical circuits (if any) to implement given logical Clifford operations.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
 
     Warning: this method performs a brute-force search over the Clifford automorphisms of a code,
     and thereby generally has exponential runtime.
     """
-    logical_tableau = (
-        logical_circuit_or_tableau
-        if isinstance(logical_circuit_or_tableau, stim.Tableau)
-        else logical_circuit_or_tableau.to_tableau()
-    )
+    physical_circuits = [None] * len(logical_circuits_or_tableaus)
 
-    matching_tableau: stim.Tableau | None = None
-    matching_circuit: stim.Circuit | None = None
+    # convert logical Cliffords into tableaus
+    identity = stim.Circuit(f"I {code.dimension - 1}")  # to ensure circuits address all qubits
+    logical_tableaus = [
+        (
+            logical_circuit_or_tableau
+            if isinstance(logical_circuit_or_tableau, stim.Tableau)
+            else (logical_circuit_or_tableau + identity).to_tableau()
+        )
+        for logical_circuit_or_tableau in logical_circuits_or_tableaus
+    ]
+
+    # compute the group of transversal Cliffords
     group_aut = get_transversal_automorphism_group(code, local_gates)
+
+    # perform a brute-force search for matching Clifford operations
+    matching_ops: list[tuple[stim.Tableau, stim.Circuit] | None] = [None] * len(logical_tableaus)
     for automorphism in group_aut.generate():
         tableau, circuit = _get_transversal_automorphism_data(code, automorphism, local_gates)
-        if _tableaus_are_equivalent_mod_paulis(logical_tableau, tableau):
-            matching_tableau = tableau
-            matching_circuit = circuit
+        for tt, logical_tableau in enumerate(logical_tableaus):
+            if matching_ops[tt] is None and _tableaus_are_equivalent_mod_paulis(
+                logical_tableau, tableau
+            ):
+                matching_ops[tt] = tableau, circuit
+        if not any(op is None for op in matching_ops):
             break
 
-    if matching_tableau is None:
-        return None  # pragma: no cover
+    # add logical Pauli corrections to matching circuits
+    for tt, (logical_tableau, matching_op) in enumerate(zip(logical_tableaus, matching_ops)):
+        if matching_op is None:
+            continue
+        matching_tableau, matching_circuit = matching_op
 
-    # add logical Pauli corrections to fix the signs of the tableau
-    correction = code.field([0] * (2 * len(code)))
-    *_, x_signs_l, z_signs_l = logical_tableau.to_numpy()
-    *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
-    for logical_qubit in range(code.dimension):
-        if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
-            correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
-        if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
-            correction += code.get_logical_ops(Pauli.X)[logical_qubit]
-    correction_circuit = _get_pauli_circuit(op_to_string(correction))
+        correction = code.field([0] * (2 * len(code)))
+        *_, x_signs_l, z_signs_l = logical_tableau.to_numpy()
+        *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
+        for logical_qubit in range(code.dimension):
+            if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
+                correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
+            if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
+                correction += code.get_logical_ops(Pauli.X)[logical_qubit]
+        correction_circuit = _get_pauli_circuit(op_to_string(correction))
 
-    return correction_circuit + matching_circuit
+        physical_circuits[tt] = correction_circuit + matching_circuit
+
+    return physical_circuits
+
+
+def get_transversal_circuit(
+    code: codes.QuditCode,
+    logical_circuit_or_tableau: stim.Circuit | stim.Tableau,
+    local_gates: Collection[str] = ("S", "H", "SWAP"),
+) -> stim.Circuit | None:
+    """Find a transversal physical circuit (if any) to implement a logical Clifford operation.
+
+    Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
+
+    Warning: this method performs a brute-force search over the Clifford automorphisms of a code,
+    and thereby generally has exponential runtime.
+    """
+    return get_transversal_circuits(code, [logical_circuit_or_tableau], local_gates)[0]
