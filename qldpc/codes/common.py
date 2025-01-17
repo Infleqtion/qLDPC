@@ -836,17 +836,30 @@ class QuditCode(AbstractCode):
         if not self.field.order == 2:
             raise ValueError("Code deformation is only supported for qubit codes")
 
+        # convert the physical circuit into a tableau
+        identity = stim.Circuit(f"I {len(self) - 1}")
         circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
+        tableau = (circuit + identity).to_tableau()
 
+        # deform this code by transforming its stabilizers
         matrix = []
         for check in self.matrix:
             string = op_to_string(check, flip_xz=True)
-            xs, zs = string.after(circuit).to_numpy()
+            xs, zs = tableau(string).to_numpy()
             matrix.append(np.concatenate([zs, xs]))
         new_code = QuditCode(matrix, field=self.field.order, validate=validate)
 
+        # preserve or update logical operators, as applicable
         if preserve_logicals:
             new_code.set_logical_ops(self.get_logical_ops(), validate=validate)
+        elif self._logical_ops is not None:
+            logical_ops = []
+            for op in self._logical_ops:
+                string = op_to_string(op)
+                xs, zs = tableau(string).to_numpy()
+                logical_ops.append(np.concatenate([xs, zs]))
+            new_code.set_logical_ops(logical_ops, validate=validate)
+
         return new_code
 
     def get_code_params(
