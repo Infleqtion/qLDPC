@@ -34,7 +34,7 @@ import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, op_to_string
+from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -670,9 +670,7 @@ class QuditCode(AbstractCode):
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
         if flip_xz or validate:
-            shape_matrix = self.matrix.shape
-            shape_tensor = (-1, 2, len(self))
-            matrix_conj = self.matrix.reshape(shape_tensor)[:, ::-1, :].reshape(shape_matrix)
+            matrix_conj = conjugate_xz(self.matrix)
             if validate:
                 assert not np.any(self.matrix @ matrix_conj.T)
             if flip_xz:
@@ -816,14 +814,15 @@ class QuditCode(AbstractCode):
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
         matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        code = QuditCode(
-            matrix.reshape(-1, 2 * len(self)), field=self.field.order, validate=validate
-        )
+        matrix = matrix.reshape(-1, 2 * len(self))
+        code = QuditCode(matrix, field=self.field.order, validate=validate)
 
         if self._logical_ops is not None:
             logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
             logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
-            code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)), validate=validate)
+            logical_ops = logical_ops.reshape(-1, 2 * len(self))
+            code.set_logical_ops(logical_ops, validate=validate)
+
         return code
 
     def deformed(
@@ -1064,8 +1063,7 @@ class QuditCode(AbstractCode):
 
         logs_x = logical_ops[: self.dimension]
         logs_z = logical_ops[self.dimension :]
-        logs_x_dual = logs_x.reshape(-1, 2, len(self))[:, ::-1, :].reshape(-1, 2 * len(self))
-        inner_products = logs_x_dual @ logs_z.T
+        inner_products = conjugate_xz(logs_x) @ logs_z.T
         if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
             raise ValueError("The given logical operators have incorrect commutation relations")
 
@@ -1145,11 +1143,7 @@ class QuditCode(AbstractCode):
         consequence, we have to flip the X/Z sectors of the logical operator matrix when expanding
         the parity checks of the outer code.
         """
-        inner_logicals_zx = (
-            inner.get_logical_ops()
-            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]  # flip X/Z sectors
-            .reshape(2 * inner.dimension, 2 * len(inner))
-        )
+        inner_logicals_zx = conjugate_xz(inner.get_logical_ops())
         outer_checks = outer.matrix @ inner_logicals_zx
 
         # combine parity checks of the inner and outer codes
