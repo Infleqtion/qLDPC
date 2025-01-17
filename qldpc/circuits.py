@@ -378,7 +378,9 @@ def get_logical_tableau(
 
 
 @restrict_to_qubits
-def get_encoder_and_decoder(code: codes.QuditCode, deformation: stim.Circuit | None = None):
+def get_encoder_and_decoder(
+    code: codes.QuditCode, deformation: stim.Circuit | None = None
+) -> tuple[stim.Tableau, stim.Tableau]:
     """Encoder for a code, and decoder either the same code or a deformed code."""
     encoder = get_encoding_tableau(code)
     if deformation is None:
