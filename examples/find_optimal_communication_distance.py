@@ -61,9 +61,13 @@ def get_qubit_assignment(
     graph = build_placement_graph(code, folded_layout, max_comm_dist)
     if graph is None:
         return None
-    matching = nx.bipartite.maximum_matching(graph)
-    return matching if nx.is_perfect_matching(graph, matching) else None
 
+    if nx.is_connected(graph):
+        matching = nx.bipartite.maximum_matching(graph)
+    else:
+        matching = nx.max_weight_matching(graph, maxcardinality=True)
+
+    return matching if nx.is_perfect_matching(graph, matching) else None
 
 def build_placement_graph(
     code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
