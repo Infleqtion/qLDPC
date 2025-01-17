@@ -186,9 +186,9 @@ def get_transversal_automorphism_group(
         matrix_z = code.matrix.reshape(-1, 2, len(code))[:, 0, :]
         matrix_x = code.matrix.reshape(-1, 2, len(code))[:, 1, :]
     else:
-        non_logicals = code.get_logical_ops()
-        matrix_x = non_logicals.reshape(-1, 2, len(code))[:, 0, :]
-        matrix_z = non_logicals.reshape(-1, 2, len(code))[:, 1, :]
+        logical_ops = code.get_logical_ops()
+        matrix_x = logical_ops.reshape(-1, 2, len(code))[:, 0, :]
+        matrix_z = logical_ops.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping Z <--> X
         matrix = np.hstack([matrix_z, matrix_x])
