@@ -1053,10 +1053,10 @@ class QuditCode(AbstractCode):
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
         if validate:
-            self.validate_logical_ops(logical_ops)
+            self.validate_candidate_logical_ops(logical_ops)
         self._logical_ops = self.field(logical_ops)
 
-    def validate_logical_ops(
+    def validate_candidate_logical_ops(
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]]
     ) -> None:
         """Assert that the given logical operators are valid for this code."""
