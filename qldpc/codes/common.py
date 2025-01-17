@@ -646,7 +646,7 @@ class QuditCode(AbstractCode):
     Here j and r are not integers, but elements of the Galois field GF(q), which has different
     rules for addition and multiplication when q is not a prime number.
 
-    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    Warning: whereas Pauli strings in this library are generally represented by vectors that indicate
     support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
     to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
     that parity_check @ pauli_string is a symplectic inner product.
@@ -1138,7 +1138,7 @@ class QuditCode(AbstractCode):
         on logical operators of the inner code.  Expand these parity checks into their support on
         the physical qudits of the inner code.
 
-        Warning: whereas Pauli strings in this libray are generally represented by vectors that
+        Warning: whereas Pauli strings in this library are generally represented by vectors that
         indicate support on [X|Z] ops, parity checks are represented by vectors indicate the support
         on [Z|X] ops to reflect that they are dual vectors of a symplectic inner product space,
         thereby ensuring that that parity_check @ pauli_string is a symplectic inner product.  As a
@@ -1229,7 +1229,7 @@ class CSSCode(QuditCode):
     ⌈  0 , H_x ⌉
     ⌊ H_z,  0  ⌋.
 
-    Warning: whereas Pauli strings in this libray are generally represented by vectors that indicate
+    Warning: whereas Pauli strings in this library are generally represented by vectors that indicate
     support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
     to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
     that parity_check @ pauli_string is a symplectic inner product.
@@ -1922,7 +1922,7 @@ def _get_sample_allocation(
 ) -> npt.NDArray[np.int_]:
     """Construct an allocation of samples by error weight.
 
-    This method returns an array whose k-th entry is the nubmer of samples to devote to errors of
+    This method returns an array whose k-th entry is the number of samples to devote to errors of
     weight k, given a maximum error rate that we care about.
     """
     probs = _get_error_probs_by_weight(block_length, max_error_rate)
