@@ -30,10 +30,11 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import scipy.special
+import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
+from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, op_to_string
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -663,14 +664,19 @@ class QuditCode(AbstractCode):
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
+        flip_xz: bool = False,
         validate: bool = True,
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
-        if validate:
-            shape_xz = (self.num_checks, 2, -1)
-            matrix_xz = self.matrix.reshape(shape_xz)[:, ::-1, :].reshape(self.matrix.shape)
-            assert not np.any(self.matrix @ matrix_xz.T)
+        if flip_xz or validate:
+            shape_matrix = self.matrix.shape
+            shape_tensor = (-1, 2, len(self))
+            matrix_conj = self.matrix.reshape(shape_tensor)[:, ::-1, :].reshape(shape_matrix)
+            if validate:
+                assert not np.any(self.matrix @ matrix_conj.T)
+            if flip_xz:
+                self._matrix = self.field(matrix_conj)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -723,10 +729,10 @@ class QuditCode(AbstractCode):
             code_a.canonicalized().matrix, code_b.canonicalized().matrix
         )
 
-    def canonicalized(self) -> QuditCode:
+    def canonicalized(self, *, validate: bool = True) -> QuditCode:
         """The same code with its parity matrix in reduced row echelon form."""
         rows = [row for row in self.matrix.row_reduce() if np.any(row)]
-        return QuditCode(rows, self.field.order)
+        return QuditCode(rows, self.field.order, validate=validate)
 
     @classmethod
     def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
@@ -810,12 +816,51 @@ class QuditCode(AbstractCode):
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
         matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        code = QuditCode(matrix.reshape(-1, 2 * len(self)), validate=validate)
+        code = QuditCode(
+            matrix.reshape(-1, 2 * len(self)), field=self.field.order, validate=validate
+        )
+
         if self._logical_ops is not None:
             logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
             logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
             code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)), validate=validate)
         return code
+
+    def deformed(
+        self, circuit: str | stim.Circuit, *, preserve_logicals: bool = False, validate: bool = True
+    ) -> QuditCode:
+        """Deform a code by the given circuit.
+
+        If preserve_logicals==True, preserve the logical operators of the original code.
+        """
+        if not self.field.order == 2:
+            raise ValueError("Code deformation is only supported for qubit codes")
+
+        # convert the physical circuit into a tableau
+        identity = stim.Circuit(f"I {len(self) - 1}")
+        circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
+        tableau = (circuit + identity).to_tableau()
+
+        # deform this code by transforming its stabilizers
+        matrix = []
+        for check in self.matrix:
+            string = op_to_string(check, flip_xz=True)
+            xs, zs = tableau(string).to_numpy()
+            matrix.append(np.concatenate([zs, xs]))
+        new_code = QuditCode(matrix, field=self.field.order, validate=validate)
+
+        # preserve or update logical operators, as applicable
+        if preserve_logicals:
+            new_code.set_logical_ops(self.get_logical_ops(), validate=validate)
+        elif self._logical_ops is not None:
+            logical_ops = []
+            for op in self._logical_ops:
+                string = op_to_string(op)
+                xs, zs = tableau(string).to_numpy()
+                logical_ops.append(np.concatenate([xs, zs]))
+            new_code.set_logical_ops(logical_ops, validate=validate)
+
+        return new_code
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
@@ -898,7 +943,9 @@ class QuditCode(AbstractCode):
             "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
         )
 
-    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+    def get_logical_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+    ) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
@@ -925,10 +972,11 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.field(self.get_logical_ops().reshape(2, self.dimension, -1)[pauli, :, :])
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
+            return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
+        if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
         num_qudits = self.num_qudits
@@ -1005,10 +1053,10 @@ class QuditCode(AbstractCode):
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
         if validate:
-            self.validate_logical_ops(logical_ops)
+            self.validate_candidate_logical_ops(logical_ops)
         self._logical_ops = self.field(logical_ops)
 
-    def validate_logical_ops(
+    def validate_candidate_logical_ops(
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]]
     ) -> None:
         """Assert that the given logical operators are valid for this code."""
@@ -1265,9 +1313,9 @@ class CSSCode(QuditCode):
         """Z-type parity checks."""
         return self.code_z.matrix
 
-    def canonicalized(self) -> CSSCode:
+    def canonicalized(self, *, validate: bool = True) -> CSSCode:
         """The same code with its parity matrix in reduced row echelon form."""
-        return CSSCode(self.code_x.canonicalized(), self.code_z.canonicalized())
+        return CSSCode(self.code_x.canonicalized(), self.code_z.canonicalized(), validate=validate)
 
     @property
     def num_checks_x(self) -> int:
@@ -1454,7 +1502,9 @@ class CSSCode(QuditCode):
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
 
-    def get_logical_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+    def get_logical_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+    ) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
@@ -1479,10 +1529,11 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            return self.field(self.get_logical_ops().reshape(2, self.dimension, -1)[pauli, :, :])
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
+            return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None:
+        if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
         num_qudits = self.num_qudits

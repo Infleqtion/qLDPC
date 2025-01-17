@@ -39,15 +39,7 @@ class Decoder(Protocol):
 def decode(
     matrix: npt.NDArray[np.int_], syndrome: npt.NDArray[np.int_], **decoder_args: object
 ) -> npt.NDArray[np.int_]:
-    """Find a `vector` that solves `matrix @ vector == syndrome mod 2`.
-
-    - If passed an explicit decoder, use it.
-    - If passed `with_ILP=True`, solve exactly with an integer linear program.
-    - If passed `with_MWPM=True`, `with_BF=True`, or `with_BP_OSD=True`, use that decoder.
-    - Otherwise, use a BP-LSD decoder.
-
-    In all cases, pass the `decoder_args` to the decoder that is used.
-    """
+    """Find a `vector` that solves `matrix @ vector == syndrome mod 2`."""
     decoder = get_decoder(matrix, **decoder_args)
     return decoder.decode(syndrome)
 
@@ -132,7 +124,7 @@ def get_decoder_MWPM(matrix: npt.NDArray[np.int_], **decoder_args: object) -> De
 def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
     """Decoder based on solving an integer linear program (ILP).
 
-    Supports integers modulo q for q > 2 with a "modulus" argument.
+    Supports integers modulo q for q > 2 with a "modulus" argument, otherwise uses q = 2.
 
     If a "lower_bound_row" argument is provided, treat this linear constraint (by index) as a lower
     bound (>=), rather than an equality (==) constraint.

@@ -28,9 +28,32 @@ import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import stim
 
 from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
+
+
+def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliString:
+    """Convert an integer array that represents a Pauli string into a stim.PauliString.
+
+    The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz==True.
+    """
+    assert len(op) % 2 == 0
+    support_xz = np.array(op, dtype=int).reshape(2, -1)
+    if flip_xz:
+        support_xz = support_xz[::-1, :]
+    paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
+    return stim.PauliString(map(str, paulis))
+
+    num_qubits = len(op) // 2
+    paulis = ""
+    for qubit in range(num_qubits):
+        val_x = int(op[qubit])
+        val_z = int(op[qubit + num_qubits])
+        pauli = Pauli((val_x, val_z))
+        paulis += str(pauli if not flip_xz else ~pauli)
+    return stim.PauliString(paulis)
 
 
 class Pauli(enum.Enum):

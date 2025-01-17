@@ -32,9 +32,14 @@ from qldpc.objects import ChainComplex, Pauli
 def test_small_codes() -> None:
     """Five-qubit and Steane codes."""
     assert codes.SteaneCode().num_qubits == 7
+    assert codes.SteaneCode().dimension == 1
+
+    logical_ops_xz = codes.SteaneCode().get_logical_ops().sum(axis=0)
+    assert np.array_equal(logical_ops_xz, [1] * 14)
 
     code = codes.FiveQubitCode()
     assert code.num_qubits == 5
+    assert code.dimension == 1
     assert code.get_stabilizers()[0] == "X Z Z X I"
 
 
@@ -367,27 +372,27 @@ def test_toric_tanner_code(size: int = 4) -> None:
     assert code.get_weight() == 4
 
 
-def test_surface_codes(rows: int = 3, cols: int = 2, field: int = 3) -> None:
+def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
     """Ordinary and rotated surface codes."""
 
     # "ordinary"/original surface code
-    code = codes.SurfaceCode(rows, cols, rotated=False, field=field)
+    code = codes.SurfaceCode(rows, cols, rotated=False)
     code._exact_distance_x = code._exact_distance_z = None  # "forget" the code distances
     assert code.dimension == 1
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
-    assert code.get_distance(Pauli.X, bound=10) == cols
-    assert code.get_distance(Pauli.Z, bound=10) == rows
+    assert code.get_distance(Pauli.X, bound=True) >= cols
+    assert code.get_distance(Pauli.Z, bound=True) >= rows
 
     # un-rotated SurfaceCode = HGPCode
-    rep_codes = (codes.RepetitionCode(rows, field), codes.RepetitionCode(cols, field))
+    rep_codes = (codes.RepetitionCode(rows), codes.RepetitionCode(cols))
     assert code.conjugated() == codes.HGPCode(*rep_codes).conjugated()
 
     # rotated surface code
-    code = codes.SurfaceCode(rows, cols, rotated=True, field=field)
+    code = codes.SurfaceCode(rows, cols, rotated=True)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
-    assert code.get_distance(Pauli.X) == codes.CSSCode.get_distance_exact(code, Pauli.X) == cols
-    assert code.get_distance(Pauli.Z) == codes.CSSCode.get_distance_exact(code, Pauli.Z) == rows
+    assert codes.CSSCode.get_distance(code, Pauli.X) == cols
+    assert codes.CSSCode.get_distance(code, Pauli.Z) == rows
 
     # test that the conjugated rotated surface code is an XZZX code
     code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2)

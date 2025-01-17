@@ -182,7 +182,7 @@ def test_automorphism() -> None:
 
 def test_classical_capacity() -> None:
     """Logical error rates in a code capacity model."""
-    code = codes.RepetitionCode(2)
+    code = codes.RepetitionCode(2, field=2)
     logical_error_rate = code.get_logical_error_rate_func(num_samples=1, max_error_rate=1)
     assert logical_error_rate(0) == (0, 0)  # no logical error with zero uncertainty
     assert logical_error_rate(1)[0] == 1  # guaranteed logical error
@@ -235,6 +235,18 @@ def test_qudit_code() -> None:
     assert code.dimension == 1
     assert code.get_weight() == 4
     assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
+
+    # initialize from stabilizers that are represented by their [X|Z] support
+    equiv_code = codes.QuditCode(
+        [
+            [1, 0, 0, 1, 0, 0, 1, 1, 0, 0],
+            [0, 1, 0, 0, 1, 0, 0, 1, 1, 0],
+            [1, 0, 1, 0, 0, 0, 0, 0, 1, 1],
+            [0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
+        ],
+        flip_xz=True,
+    )
+    assert np.array_equal(code.matrix, equiv_code.matrix)
 
     # equivlence to code with redundant stabilizers
     redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
@@ -327,8 +339,28 @@ def test_qudit_ops() -> None:
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
+
+def test_code_deformation() -> None:
+    """Deform a code by a physical Clifford transformation."""
+    code: codes.QuditCode
+
+    code = codes.FiveQubitCode()
+    code.get_logical_ops()
     assert code.get_stabilizers()[0] == "X Z Z X I"
     assert code.conjugated([0]).get_stabilizers()[0] == "Z Z Z X I"
+    assert code.deformed("H 0").get_stabilizers()[0] == "Z Z Z X I"
+    with pytest.raises(ValueError, match="do not commute with stabilizers"):
+        code.deformed("H 0", preserve_logicals=True)
+
+    code = codes.SteaneCode()
+    assert np.array_equal(
+        code.deformed("H 0 1 2 3 4 5 6", preserve_logicals=True).get_logical_ops(),
+        code.get_logical_ops(),
+    )
+
+    code = codes.ToricCode(2, field=3)
+    with pytest.raises(ValueError, match="only supported for qubit codes"):
+        code.deformed("H 0")
 
 
 def test_qudit_concatenation() -> None:
@@ -470,7 +502,7 @@ def test_css_concatenation() -> None:
 
 def test_quantum_capacity() -> None:
     """Logical error rates in a code capacity model."""
-    code = codes.SurfaceCode(3)
+    code = codes.SurfaceCode(3, field=2)
     logical_error_rate = code.get_logical_error_rate_func(num_samples=10)
     assert logical_error_rate(0) == (0, 0)  # no logical error with zero uncertainty
 
