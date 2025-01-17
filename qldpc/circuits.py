@@ -25,7 +25,7 @@ import numpy as np
 import stim
 
 from qldpc import abstract, codes
-from qldpc.objects import Pauli, op_to_string
+from qldpc.objects import Pauli, conjugate_xz, op_to_string
 
 
 def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.Circuit]:
@@ -203,11 +203,7 @@ def get_transversal_automorphism_group(
     deformations for which the logical Pauli group of the original QuditCode is a valid choice of
     logical Pauli group for the deformed QuditCode.
     """
-    effective_stabilizers = (
-        code.matrix
-        if not deform_code
-        else code.get_logical_ops().reshape(-1, 2, len(code))[:, ::-1, :].reshape(-1, 2 * len(code))
-    )
+    effective_stabilizers = code.matrix if not deform_code else conjugate_xz(code.get_logical_ops())
     matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
     matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
