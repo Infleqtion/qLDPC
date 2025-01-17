@@ -54,7 +54,7 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
     logicals_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
 
     # identify stabilizers
-    checks = code.matrix.row_reduce()
+    checks = codes.ClassicalCode(code.matrix).canonicalized().matrix
     pivots = [int(np.argmax(row != 0)) for row in checks if np.any(row)]
     stabilizers = [op_to_string(row, flip_xz=True) for row in checks]
 
