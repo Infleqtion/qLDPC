@@ -174,8 +174,8 @@ def get_transversal_automorphism_group(
     local_gates.discard("SWAP")
 
     # construst the parity check matrix of an instrumental code
-    matrix_z = code.matrix.reshape(code.num_checks, 2, len(code))[:, 0, :]
-    matrix_x = code.matrix.reshape(code.num_checks, 2, len(code))[:, 1, :]
+    matrix_x = code.matrix.reshape(code.num_checks, 2, len(code))[:, 0, :]
+    matrix_z = code.matrix.reshape(code.num_checks, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping Z <--> X
         matrix = np.hstack([matrix_z, matrix_x])
