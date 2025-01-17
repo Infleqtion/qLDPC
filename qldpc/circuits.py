@@ -168,7 +168,7 @@ def get_transversal_automorphism_group(
     *,
     deform_code: bool = False,
 ) -> abstract.Group:
-    """Get the transversal Clifford automorphism group of a QuditCode.
+    """Construct the transversal Clifford automorphism group of a QuditCode.
 
     The transversal automorphism group of a QuditCode is the group of logical Clifford operations
     that can be implemented transversally with a given local gate set.
@@ -191,8 +191,8 @@ def get_transversal_automorphism_group(
     Construst the parity check matrix of an instrumental classical code whose code words represent
     Pauli strings that commute with some "effective" stabilizers.
 
-    If computing the "ordinary" transversal automorphism group of a QuditCode (i.e., deform_code is
-    False), these effective stabilizers are just the actual stabilizers of the QuditCode, so the
+    If computing the "ordinary" transversal automorphism group of a QuditCode (i.e., if deform_code
+    is False), these effective stabilizers are just the actual stabilizers of the QuditCode, so the
     automorphism group of the instrumental classical code is the group of transversal physical
     operations that
     (a) preserve commutation with stabilizers, or equivalently
@@ -422,7 +422,7 @@ def get_transversal_circuits(
     *,
     deform_code: bool = False,
 ) -> list[stim.Circuit | None]:
-    """Find a transversal physical circuits (if any) to implement given logical Clifford operations.
+    """Find transversal physical circuits (if any) that implement logical Clifford operations.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
 
@@ -492,7 +492,7 @@ def get_transversal_circuit(
     *,
     deform_code: bool = False,
 ) -> stim.Circuit | None:
-    """Find a transversal physical circuit (if any) to implement a logical Clifford operation.
+    """Find a transversal physical circuit (if any) that implements a logical Clifford operation.
 
     Here local_gates must be a subset of {"S", "H", "SQRT_X", "SWAP"}.
 
