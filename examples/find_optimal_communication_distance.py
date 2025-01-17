@@ -7,6 +7,7 @@ The qubit placement strategy is as described in arXiv:2404.18809.
 import functools
 import math
 
+import numpy as np
 import networkx as nx
 from sympy.abc import x, y
 
@@ -77,42 +78,41 @@ def build_placement_graph(
     """
     nodes = [node for node in code.graph.nodes() if not node.is_data]
     node_locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
+    node_locs = np.array(node_locs, dtype=float)
 
     # Precompute distances for all candidate locations and neighbors
     neighbor_positions = {
-        node: set(
+        node: np.array([
             code.get_qubit_pos(neighbor, folded_layout)
             for neighbor in set(code.graph.successors(node)).union(code.graph.predecessors(node))
-        )
+        ], dtype=float)
         for node in nodes
     }
 
     # Precompute valid locations for each node based on max_comm_dist
     valid_locations = {}
-    for node in nodes:
-        valid_locs = []
-        for loc in node_locs:
-            if all(
-                get_dist(loc, neighbor_loc) <= max_comm_dist
-                for neighbor_loc in neighbor_positions[node]
-            ):
-                valid_locs.append(loc)
-        if not valid_locs:
+    for node, neighbors in neighbor_positions.items():
+        if len(neighbors) == 0:
+            valid_locations[node] = node_locs
+            continue
+
+        # Vectorized distance calculation
+        diff = node_locs[:, None, :] - neighbors[None, :, :]  # Shape: (len(node_locs), len(neighbors), 2)
+        distances = np.sqrt(np.sum(diff**2, axis=-1))  # Compute Euclidean distances
+        max_distances = np.max(distances, axis=1)  # Maximum distance for each loc in node_locs
+
+        # Filter locations satisfying max_comm_dist
+        valid_locs = node_locs[max_distances <= max_comm_dist]
+        if len(valid_locs) == 0:
             return None  # If no valid locations, return None early
         valid_locations[node] = valid_locs
 
     # Build the graph using precomputed valid locations
     graph = nx.Graph()
     for node, locs in valid_locations.items():
-        graph.add_edges_from((node, loc) for loc in locs)
+        graph.add_edges_from((node, tuple(loc)) for loc in locs)
 
     return graph
-
-
-@functools.cache
-def get_dist(loc_a: tuple[int, ...], loc_b: tuple[int, ...]) -> float:
-    """Euclidean (L2) distance between two locations."""
-    return math.sqrt(sum((aa - bb) ** 2 for aa, bb in zip(loc_a, loc_b)))
 
 
 if __name__ == "__main__":
