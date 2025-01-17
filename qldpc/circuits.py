@@ -177,17 +177,17 @@ def get_transversal_automorphism_group(
     matrix_x = code.matrix.reshape(code.num_checks, 2, len(code))[:, 0, :]
     matrix_z = code.matrix.reshape(code.num_checks, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
-        # swapping sectors = swapping Z <--> X
-        matrix = np.hstack([matrix_z, matrix_x])
+        # swapping sectors = swapping X <--> Z
+        matrix = np.hstack([matrix_x, matrix_z])
     elif local_gates == {"S"}:
         # swapping sectors = swapping X <--> Y
-        matrix = np.hstack([matrix_z, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_z, matrix_x + matrix_z])
     elif local_gates == {"SQRT_X"}:
         # swapping sectors = swapping Y <--> Z
-        matrix = np.hstack([matrix_z + matrix_x, matrix_x])
+        matrix = np.hstack([matrix_x, matrix_x + matrix_z])
     else:
         # we have a complete local Clifford gate set that can arbitrarily permute Pauli ops
-        matrix = np.hstack([matrix_z, matrix_x, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_x, matrix_z, matrix_x + matrix_z])
 
     # compute the automorphism group of an instrumental classical code
     instrumental_code = codes.ClassicalCode(matrix)
@@ -305,15 +305,15 @@ def _get_pauli_permutation_circuit(
         for qubit in range(len(code)):
             pauli_perm = [automorphism(qubit + ss * len(code)) // len(code) for ss in range(3)]
             match pauli_perm:
-                case [1, 0, 2]:  # Z <--> X
+                case [1, 0, 2]:  # X <--> Z
                     gate_targets["H"].append(qubit)
-                case [2, 1, 0]:  # X <--> Y
+                case [0, 2, 1]:  # X <--> Y
                     gate_targets["S"].append(qubit)
-                case [0, 2, 1]:  # Y <--> Z
+                case [2, 1, 0]:  # Y <--> Z
                     gate_targets["H_YZ"].append(qubit)
-                case [1, 2, 0]:  # ZXY <--> XYZ
+                case [2, 0, 1]:  # ZXY <--> XYZ
                     gate_targets["C_ZYX"].append(qubit)  # pragma: no cover
-                case [2, 0, 1]:  # ZXY <--> ZYX
+                case [1, 2, 0]:  # ZXY <--> ZYX
                     gate_targets["C_XYZ"].append(qubit)  # pragma: no cover
 
         for gate, targets in gate_targets.items():
