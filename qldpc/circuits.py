@@ -379,7 +379,7 @@ def get_logical_tableau(
 
 @restrict_to_qubits
 def get_encoder_and_decoder(code: codes.QuditCode, deformation: stim.Circuit | None = None):
-    """Encoding tableau for a code, and decoder either the same code, or a deformed code."""
+    """Encoder for a code, and decoder either the same code or a deformed code."""
     encoder = get_encoding_tableau(code)
     if deformation is None:
         return encoder, encoder.inverse()
