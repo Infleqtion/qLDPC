@@ -277,8 +277,8 @@ class BBCode(QCCode):
 
     The polynomials A and B induce a "canonical" layout of the data and check qubits of a BBCode.
     In the canonical layout, qubits are organized into plaquettes of four qubits that look like
-        Z L
-        R X
+        X L
+        R Z
     where L and R are data qubits, and X and Z are check qubits.  More specifically:
     - L and R data qubits are addressed by the left and right halves of matrix_x (or matrix_z).
     - X are check qubits measure X-type parity checks, and are associated with rows of matrix_x.
@@ -353,8 +353,8 @@ class BBCode(QCCode):
         sector, aa, bb = qubit
         assert sector in ["L", "R", "X", "Z"]
 
-        xx = 2 * aa + int(sector in ["R", "X"])
-        yy = 2 * bb + int(sector in ["L", "X"])
+        xx = 2 * aa + int(sector in ["R", "Z"])
+        yy = 2 * bb + int(sector in ["L", "Z"])
         if folded_layout:
             xx = 2 * xx if xx < self.orders[0] else (2 * self.orders[0] - 1 - xx) * 2 + 1
             yy = 2 * yy if yy < self.orders[1] else (2 * self.orders[1] - 1 - yy) * 2 + 1
