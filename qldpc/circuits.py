@@ -269,12 +269,7 @@ def _get_transversal_automorphism_data(
 
     # Determine the effect of physical_circuit on "decoded" qubits, for which
     # logicals, stabilizers, and destabilizers are single-qubit Paulis.
-    encoder = get_encoding_tableau(code)
-    if not deform_code:
-        decoder = encoder.inverse()
-    else:
-        deformed_code = code.deformed(physical_circuit, preserve_logicals=True)
-        decoder = get_encoding_tableau(deformed_code).inverse()
+    encoder, decoder = _get_encoder_and_decoder(code, physical_circuit if deform_code else None)
     decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
 
     # Prepend Pauli corrections to the circuit: a product of destabilizers whose correspoding
@@ -378,13 +373,19 @@ def get_logical_tableau(
     (b) changing the code that encodes the logical state to
         code.deform(physical_circuit, preserve_logicals=True)
     """
-    encoder = get_encoding_tableau(code)
-    if not deform_code:
-        decoder = encoder.inverse()
-    else:
-        deformed_code = code.deformed(physical_circuit, preserve_logicals=True)
-        decoder = get_encoding_tableau(deformed_code).inverse()
+    encoder, decoder = _get_encoder_and_decoder(code, physical_circuit if deform_code else None)
     return _get_logical_tableau_from_code_data(code.dimension, encoder, decoder, physical_circuit)
+
+
+@restrict_to_qubits
+def _get_encoder_and_decoder(code: codes.QuditCode, deformation: stim.Circuit | None = None):
+    """Encoding tableau for a code, and decoder either the same code, or a deformed code."""
+    encoder = get_encoding_tableau(code)
+    if deformation is None:
+        return encoder, encoder.inverse()
+    deformed_code = code.deformed(deformation, preserve_logicals=True)
+    decoder = get_encoding_tableau(deformed_code).inverse()
+    return encoder, decoder
 
 
 def _get_logical_tableau_from_code_data(
