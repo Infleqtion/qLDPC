@@ -111,3 +111,28 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
 
     # there are no logical two-qubit gates in this code
     circuits.get_transversal_circuit(code, stim.Circuit("CX 0 1")) is None
+
+
+def test_deformed_decoder() -> None:
+    """Deform a code in such a way as to preserve its logicals, but change its stabilizers."""
+    code = codes.CSSCode([[1] * 6], [[1] * 6])
+    code.set_logical_ops_xz(
+        [
+            [1, 1, 0, 0, 0, 0],
+            [0, 1, 1, 0, 0, 0],
+            [0, 0, 0, 1, 1, 0],
+            [0, 0, 0, 0, 1, 1],
+        ],
+        [
+            [0, 1, 1, 0, 0, 0],
+            [1, 1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 1, 1],
+            [0, 0, 0, 1, 1, 0],
+        ],
+    )
+    deformation = stim.Circuit("H 0 1 2")
+    encoder, decoder = circuits.get_encoder_and_decoder(code)
+    deformation_encoder, deformation_decoder = circuits.get_encoder_and_decoder(code, deformation)
+    assert encoder == deformation_encoder
+    assert decoder == encoder.inverse()
+    assert decoder != deformation_decoder

@@ -203,9 +203,12 @@ def get_transversal_automorphism_group(
     deformations for which the logical Pauli group of the original QuditCode is a valid choice of
     logical Pauli group for the deformed QuditCode.
     """
-    effective_stabilizers = code.matrix if not deform_code else code.get_logical_ops()
-    matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
-    matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
+    if not deform_code:
+        matrix_z = code.matrix.reshape(-1, 2, len(code))[:, 0, :]
+        matrix_x = code.matrix.reshape(-1, 2, len(code))[:, 1, :]
+    else:
+        matrix_x = code.get_logical_ops().reshape(-1, 2, len(code))[:, 0, :]
+        matrix_z = code.get_logical_ops().reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping Z <--> X
         matrix = np.hstack([matrix_z, matrix_x])
