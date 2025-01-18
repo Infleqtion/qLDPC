@@ -22,12 +22,14 @@ import itertools
 import os
 from collections.abc import Collection, Sequence
 
+import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import sympy
 
 from qldpc import abstract
+from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
 from .classical import HammingCode, RepetitionCode, RingCode, TannerCode
@@ -160,7 +162,7 @@ class QCCode(TBCode):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 symbol_to_order[symbol] = order
 
-        # add more placeholder symbols if necessay
+        # add more placeholder symbols if necessary
         while len(symbol_to_order) < len(orders):
             unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
             symbol_to_order[unique_symbol] = orders[len(symbol_to_order)]
@@ -277,8 +279,8 @@ class BBCode(QCCode):
 
     The polynomials A and B induce a "canonical" layout of the data and check qubits of a BBCode.
     In the canonical layout, qubits are organized into plaquettes of four qubits that look like
-        Z L
-        R X
+        X L
+        R Z
     where L and R are data qubits, and X and Z are check qubits.  More specifically:
     - L and R data qubits are addressed by the left and right halves of matrix_x (or matrix_z).
     - X are check qubits measure X-type parity checks, and are associated with rows of matrix_x.
@@ -353,8 +355,8 @@ class BBCode(QCCode):
         sector, aa, bb = qubit
         assert sector in ["L", "R", "X", "Z"]
 
-        xx = 2 * aa + int(sector in ["R", "X"])
-        yy = 2 * bb + int(sector in ["L", "X"])
+        xx = 2 * aa + int(sector in ["R", "Z"])
+        yy = 2 * bb + int(sector in ["L", "Z"])
         if folded_layout:
             xx = 2 * xx if xx < self.orders[0] else (2 * self.orders[0] - 1 - xx) * 2 + 1
             yy = 2 * yy if yy < self.orders[1] else (2 * self.orders[1] - 1 - yy) * 2 + 1
@@ -618,7 +620,7 @@ class HGPCode(CSSCode):
                 node_qudit, sector_qudit = node_snd, sector_snd
 
             # start with an X-type operator
-            op = QuditOperator((data.get("val", 1), 0))
+            op = QuditOperator((data.get("val", 0), 0))
 
             # switch to Z-type operator for check qudits in the (0, 1) sector
             if sector_check == (0, 1):
@@ -655,31 +657,16 @@ class HGPCode(CSSCode):
         cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
     ) -> dict[tuple[Node, Node], Node]:
         """Map (dictionary) that re-labels nodes in the hypergraph product of two codes."""
-        num_qudits_a = sum(node.is_data for node in nodes_a)
-        num_qudits_b = sum(node.is_data for node in nodes_b)
-        num_checks_a = len(nodes_a) - num_qudits_a
-        num_checks_b = len(nodes_b) - num_qudits_b
-        sector_shapes = [
-            [(num_qudits_a, num_qudits_b), (num_qudits_a, num_checks_b)],
-            [(num_checks_a, num_qudits_b), (num_checks_a, num_checks_b)],
-        ]
-
         node_map = {}
+        index_data, index_check = 0, 0
         for node_a, node_b in itertools.product(sorted(nodes_a), sorted(nodes_b)):
-            # identify sector and whether this is a data vs. check qudit
-            sector = cls.get_sector(node_a, node_b)
-            is_data = sector in [(0, 0), (1, 1)]
-
-            # identify node index
-            sector_shape = sector_shapes[sector[0]][sector[1]]
-            index = int(np.ravel_multi_index((node_a.index, node_b.index), sector_shape))
-            if sector == (1, 1):
-                index += num_qudits_a * num_qudits_b
-            if sector == (0, 1):
-                index += num_checks_a * num_qudits_b
-
-            node_map[node_a, node_b] = Node(index=index, is_data=is_data)
-
+            if cls.get_sector(node_a, node_b) in [(0, 0), (1, 1)]:
+                node = Node(index=index_data, is_data=True)
+                index_data += 1
+            else:
+                node = Node(index=index_check, is_data=False)
+                index_check += 1
+            node_map[node_a, node_b] = node
         return node_map
 
 
@@ -1013,6 +1000,12 @@ class SurfaceCode(CSSCode):
                 if (row + col) % 2
             ]
 
+            # invert Z-type Pauli on every other qubit
+            code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            if code_field.order > 2:
+                matrix_z = code_field(matrix_z)
+                matrix_z[:, self._default_conjugate] *= -1
+
         else:
             # "original" surface code
             code_a = RepetitionCode(rows, field)
@@ -1022,7 +1015,7 @@ class SurfaceCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, validate=False)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field)
 
     @classmethod
     def get_rotated_checks(
@@ -1088,7 +1081,7 @@ class SurfaceCode(CSSCode):
 
 
 class ToricCode(CSSCode):
-    """Surface code with periodic bounary conditions, encoding two logical qudits.
+    """Surface code with periodic boundary conditions, encoding two logical qudits.
 
     Reference: https://errorcorrectionzoo.org/c/surface
     """
@@ -1122,6 +1115,12 @@ class ToricCode(CSSCode):
                 if (row + col) % 2
             ]
 
+            # invert Z-type Pauli on every other qubit
+            code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            if code_field.order > 2:
+                matrix_z = code_field(matrix_z)
+                matrix_z[:, self._default_conjugate] *= -1
+
         else:
             # "original" toric code
             code_a = RingCode(rows, field)
@@ -1131,7 +1130,7 @@ class ToricCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, validate=False)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field)
 
     @classmethod
     def get_rotated_checks(
@@ -1203,4 +1202,4 @@ class GeneralizedSurfaceCode(CSSCode):
         matrix_x, matrix_z = chain.op(1), chain.op(2).T
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
-        CSSCode.__init__(self, matrix_x, matrix_z, field, validate=False)
+        CSSCode.__init__(self, matrix_x, matrix_z, field)

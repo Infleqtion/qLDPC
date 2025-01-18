@@ -256,7 +256,7 @@ class Group:
 
     @functools.cached_property
     def lift_dim(self) -> int:
-        """Dimension of the repesentation for this group."""
+        """Dimension of the representation for this group."""
         return self._lift(next(iter(self._group.generators))).shape[0]
 
     @functools.cached_property
@@ -715,7 +715,7 @@ class AbelianGroup(Group):
     """Direct product of cyclic groups of the specified orders.
 
     By default, an AbelianGroup member of the form ∏_i g_i^{a_i}, where {g_i} are the generators of
-    the group, gets lifted to a direct sum ⨁_i L(g_i)^{a_i}.  If an AbelianGroup is initalized with
+    the group, gets lifted to a direct sum ⨁_i L(g_i)^{a_i}.  If an AbelianGroup is initialized with
     product_lift=True, the group members get lifted to a Kronecker product ⨂_i L(g_i)^{a_i}.
     """
 

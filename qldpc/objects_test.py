@@ -29,7 +29,7 @@ def test_pauli_strings() -> None:
     """Stabilizers correctly converted into stim.PauliString objects."""
     code = codes.FiveQubitCode()
     assert all(
-        objects.op_to_string(row, flip_xz=True) == stim.PauliString(stabilizer.replace(" ", ""))
+        objects.op_to_string(row) == stim.PauliString(stabilizer.replace(" ", ""))
         for row, stabilizer in zip(code.matrix, code.get_stabilizers())
     )
 
