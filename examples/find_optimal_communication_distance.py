@@ -60,7 +60,7 @@ def get_placement_data(
     when the node is placed at a given location.
     """
     # identify all node that need to be placed, and candidate locations for placement
-    nodes: list[qldpc.objects.Node] = [node for node in code.graph.nodes() if not node.is_data]
+    nodes = [node for node in code.graph.nodes() if not node.is_data]
     locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
     # precompute the locations of all nodes' neighbors (which have fixed locations)
