@@ -51,7 +51,7 @@ def get_minimal_communication_distance(
 
 def get_placement_data(
     code: qldpc.codes.BBCode, folded_layout: bool
-) -> tuple[list[qldpc.objects.Node], Sequence[tuple[int, int]], npt.NDArray[np.int_]]:
+) -> tuple[list[qldpc.objects.Node], list[tuple[int, int]], npt.NDArray[np.int_]]:
     """Check qubits, their candidate locations, and a placement matrix.
 
     Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
