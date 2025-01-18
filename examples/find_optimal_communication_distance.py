@@ -42,7 +42,7 @@ def get_minimal_communication_distance(
     low, high = 0.0, math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
     while high - low > precision:
         mid = (low + high) / 2
-        if get_qubit_assignment(nodes, locs, placement_matrix, mid**2):
+        if get_matching(nodes, locs, placement_matrix <= mid**2):
             high = mid
         else:
             low = mid
@@ -51,7 +51,7 @@ def get_minimal_communication_distance(
 
 def get_placement_data(
     code: qldpc.codes.BBCode, folded_layout: bool
-) -> tuple[list[qldpc.objects.Node], npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+) -> tuple[list[qldpc.objects.Node], Sequence[tuple[int, int]], npt.NDArray[np.int_]]:
     """Check qubits, their candidate locations, and a placement matrix.
 
     Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
@@ -61,23 +61,22 @@ def get_placement_data(
     """
     # identify all node that need to be placed, and candidate locations for placement
     nodes: list[qldpc.objects.Node] = [node for node in code.graph.nodes() if not node.is_data]
-    locs = np.array([code.get_qubit_pos(node, folded_layout) for node in nodes], dtype=int)
+    locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
     # precompute the locations of all nodes' neighbors (which have fixed locations)
-    node_neighbors = {
-        node: list(code.graph.successors(node)) + list(code.graph.predecessors(node))
-        for node in nodes
-    }
-    neighbor_locs = np.array(
-        [
-            [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors]
-            for node, neighbors in node_neighbors.items()
-        ],
-        dtype=int,
-    )
+    node_neighbors = [
+        list(code.graph.successors(node)) + list(code.graph.predecessors(node)) for node in nodes
+    ]
+    neighbor_locs = [
+        [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors]
+        for node, neighbors in zip(nodes, node_neighbors)
+    ]
 
     # vectorized displacement calculation; shape = (len(nodes), len(locs), num_neighbors, 2)
-    displacements = locs[None, :, None, :] - neighbor_locs[:, None, :, :]
+    displacements = (
+        np.array(locs, dtype=int)[None, :, None, :]
+        - np.array(neighbor_locs, dtype=int)[:, None, :, :]
+    )
 
     distances_squared = np.sum(displacements**2, axis=-1)
     placement_matrix = np.max(distances_squared, axis=-1)
@@ -85,34 +84,20 @@ def get_placement_data(
     return nodes, locs, placement_matrix
 
 
-def get_qubit_assignment(
-    nodes: Sequence[qldpc.objects.Node],
-    locs: npt.NDArray[np.int_],
-    placement_matrix: npt.NDArray[np.int_],
-    max_comm_dist_squared: float,
+def get_matching(
+    vertices_a: Sequence[object],
+    vertices_b: Sequence[object],
+    biadjacency_matrix: npt.NDArray[np.bool_],
 ) -> set[tuple[qldpc.objects.Node, tuple[int, int]]] | None:
-    """Find an assignment of data qubits to candidate locations, under a max_comm_dist constraint.
-
-    The stategy is to build a bipartite "placement graph" with two vertex sets:
-        (a) check qubits, and
-        (b) candidate locations.
-    The graph draws an edge between qubit qq and location ll if qq's neighbors are at most
-    max_comm_dist away from ll.
-
-    A perfect matching of this graph is an assignment of qubits to locations, in such a way as to
-    satisfy the maximum communication distance constraint.
-
-    If no perfect matching exists, return None.
-    """
-    # build the placement graph
-    graph = nx.Graph()
-    graph.add_nodes_from(nodes)
-    for node_idx, loc_idx in zip(*np.where(placement_matrix < max_comm_dist_squared)):
-        graph.add_edge(nodes[node_idx], tuple(locs[loc_idx]))
-
-    if not graph.edges:
-        # there are no valid placements
+    """Find a perfect matching of a bipartite graph.  If no matching exists, return None."""
+    # quit early if any vertex has no indicent edges
+    if not np.all(biadjacency_matrix.sum(axis=0)) or not np.all(biadjacency_matrix.sum(axis=1)):
         return None
+
+    # build the graph
+    graph = nx.Graph()
+    for idx_a, idx_b in zip(*np.where(biadjacency_matrix)):
+        graph.add_edge(vertices_a[idx_a], vertices_b[idx_b])
 
     # find a perfect matching of the graph
     if nx.is_connected(graph):
