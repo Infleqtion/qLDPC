@@ -101,47 +101,32 @@ def get_qubit_assignment(
 ) -> set[tuple[qldpc.objects.Node, tuple[int, int]]] | None:
     """Find an assignment of data qubits to candidate locations, under a max_comm_dist constraint.
 
-    If no such assignment exists, return None.
+    The stategy is to build a bipartite "placement graph" with two vertex sets:
+        (a) check qubits, and
+        (b) candidate locations.
+    The graph draws an edge between qubit qq and location ll if qq's neighbors are at most
+    max_comm_dist away from ll.
+
+    A perfect matching of this graph is an assignment of qubits to locations, in such a way as to
+    satisfy the maximum communication distance constraint.
+
+    If no perfect matching exists, return None.
     """
-    graph = get_placement_graph(nodes, locs, placement_matrix, max_comm_dist_squared)
-    if graph is None:
+    # build the placement graph
+    graph = nx.Graph()
+    for node_idx, loc_idx in zip(*np.where(placement_matrix < max_comm_dist_squared)):
+        graph.add_edge(nodes[node_idx], tuple(locs[loc_idx]))
+
+    if not graph:
+        # the graph is empty
         return None
+
+    # find a perfect matching of the graph
     if nx.is_connected(graph):
         matching = nx.bipartite.maximum_matching(graph)
     else:
         matching = nx.max_weight_matching(graph, maxcardinality=True)
     return matching if nx.is_perfect_matching(graph, matching) else None
-
-
-def get_placement_graph(
-    nodes: Sequence[qldpc.objects.Node],
-    locs: npt.NDArray[np.int_],
-    placement_matrix: npt.NDArray[np.int_],
-    max_comm_dist_squared: float,
-) -> nx.Graph | None:
-    """Build a check qubit placement graph.  If some check qubit cannot be placed, return None.
-
-    The check qubit placement graph consists of two vertex sets:
-        (a) check qubits, and
-        (b) candidate locations.
-    The graph draws an edge between qubit qq and location ll if qq's neighbors are at most
-    max_comm_dist away from ll.
-    """
-    # precompute valid locations for each node based on max_comm_dist
-    valid_locations = {}
-    for node_index, node in enumerate(nodes):
-        max_comm_distances = placement_matrix[node_index]
-        valid_locs = locs[max_comm_distances <= max_comm_dist_squared]
-        if len(valid_locs) == 0:
-            return None
-        valid_locations[node] = valid_locs
-
-    # build the graph using precomputed valid locations
-    graph = nx.Graph()
-    for node, locs in valid_locations.items():
-        graph.add_edges_from((node, tuple(loc)) for loc in locs)
-
-    return graph
 
 
 if __name__ == "__main__":
