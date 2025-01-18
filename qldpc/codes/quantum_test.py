@@ -264,8 +264,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = np.block(
         [
-            [zero_3, mat_2.T, mat_1, zero_2],
-            [-mat_2, zero_4, zero_1, mat_1.T],
+            [zero_1, mat_1.T, -mat_2, zero_4],
+            [mat_1, zero_2, zero_3, mat_2.T],
         ]
     )
 
