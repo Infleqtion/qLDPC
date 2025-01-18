@@ -664,9 +664,7 @@ class QuditCode(AbstractCode):
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
         if validate:
-            matrix_zx = conjugate_xz(self.matrix)
-            if validate:
-                assert not np.any(self.matrix @ matrix_zx.T)
+            assert not np.any(self.matrix @ conjugate_xz(self.matrix).T)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
