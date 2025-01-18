@@ -68,22 +68,19 @@ def get_placement_data(
         node: list(code.graph.successors(node)) + list(code.graph.predecessors(node))
         for node in nodes
     }
-    neighbor_positions = {
-        node: [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors]
-        for node, neighbors in node_neighbors.items()
-    }
+    neighbor_locs = np.array(
+        [
+            [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors]
+            for node, neighbors in node_neighbors.items()
+        ],
+        dtype=int,
+    )
 
-    # compute the placement matrix
-    placement_matrix = np.zeros([len(nodes)] * 2, dtype=int)
-    for node_index, (node, neighbor_locs) in enumerate(neighbor_positions.items()):
-        if len(neighbor_locs) == 0:
-            continue
+    # vectorized displacement calculation; shape = (len(nodes), len(locs), num_neighbors, 2)
+    displacements = locs[None, :, None, :] - neighbor_locs[:, None, :, :]
 
-        # vectorized distance calculation; shape = (len(candidate_locs), len(neighbor_locs), 2)
-        diff = locs[:, None, :] - np.array(neighbor_locs)[None, :, :]
-        distances_squared = np.sum(diff**2, axis=-1)
-        max_dist_squared = np.max(distances_squared, axis=-1)
-        placement_matrix[node_index] = max_dist_squared
+    distances_squared = np.sum(displacements**2, axis=-1)
+    placement_matrix = np.max(distances_squared, axis=-1)
 
     return nodes, locs, placement_matrix
 
