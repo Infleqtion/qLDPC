@@ -42,7 +42,7 @@ def get_minimal_communication_distance(
     low, high = 0.0, math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
     while high - low > precision:
         mid = (low + high) / 2
-        if get_matching(nodes, locs, placement_matrix <= mid**2):
+        if get_perfect_matching(nodes, locs, placement_matrix <= mid**2):
             high = mid
         else:
             low = mid
@@ -84,7 +84,7 @@ def get_placement_data(
     return nodes, locs, placement_matrix
 
 
-def get_matching(
+def get_perfect_matching(
     vertices_a: Sequence[object],
     vertices_b: Sequence[object],
     biadjacency_matrix: npt.NDArray[np.bool_],
