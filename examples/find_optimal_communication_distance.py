@@ -114,11 +114,12 @@ def get_qubit_assignment(
     """
     # build the placement graph
     graph = nx.Graph()
+    graph.add_nodes_from(nodes)
     for node_idx, loc_idx in zip(*np.where(placement_matrix < max_comm_dist_squared)):
         graph.add_edge(nodes[node_idx], tuple(locs[loc_idx]))
 
-    if not graph:
-        # the graph is empty
+    if not graph.edges:
+        # there are no valid placements
         return None
 
     # find a perfect matching of the graph
