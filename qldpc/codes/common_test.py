@@ -424,7 +424,7 @@ def test_css_ops() -> None:
         code.get_logical_ops(Pauli.Z)[::-1, len(code) :],
     )
 
-    # successfullly construct and reduce logical operators in a code with "over-complete" checks
+    # successfully construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
     code = codes.ToricCode(dist, rotated=True, field=2)
     code.reduce_logical_ops()

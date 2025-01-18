@@ -1895,7 +1895,7 @@ def _get_sample_allocation(
 ) -> npt.NDArray[np.int_]:
     """Construct an allocation of samples by error weight.
 
-    This method returns an array whose k-th entry is the nubmer of samples to devote to errors of
+    This method returns an array whose k-th entry is the number of samples to devote to errors of
     weight k, given a maximum error rate that we care about.
     """
     probs = _get_error_probs_by_weight(block_length, max_error_rate)

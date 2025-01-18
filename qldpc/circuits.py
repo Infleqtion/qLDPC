@@ -263,7 +263,7 @@ def _get_transversal_automorphism_data(
     physical_circuit += _get_pauli_permutation_circuit(code, automorphism, local_gates)
     physical_circuit += _get_swap_circuit(code, automorphism)
 
-    # make sure that the physical circuit acts on all physial qubits
+    # make sure that the physical circuit acts on all physical qubits
     if physical_circuit.num_qubits < len(code):
         physical_circuit.append("I", len(code) - 1)
 
@@ -272,7 +272,7 @@ def _get_transversal_automorphism_data(
     encoder, decoder = get_encoder_and_decoder(code, physical_circuit if deform_code else None)
     decoded_tableau = encoder.then(physical_circuit.to_tableau()).then(decoder)
 
-    # Prepend Pauli corrections to the circuit: a product of destabilizers whose correspoding
+    # Prepend Pauli corrections to the circuit: a product of destabilizers whose corresponding
     # stabilizers change sign under the physical_circuit.
     decoded_correction = "_" * code.dimension  # identity on the logical qubits
     for aa in range(code.dimension, len(code)):

@@ -162,7 +162,7 @@ class QCCode(TBCode):
                 assert isinstance(symbol, sympy.Symbol), f"Invalid symbol: {symbol}"
                 symbol_to_order[symbol] = order
 
-        # add more placeholder symbols if necessay
+        # add more placeholder symbols if necessary
         while len(symbol_to_order) < len(orders):
             unique_symbol = sympy.Symbol("~" + "".join(map(str, symbols)))
             symbol_to_order[unique_symbol] = orders[len(symbol_to_order)]
@@ -1081,7 +1081,7 @@ class SurfaceCode(CSSCode):
 
 
 class ToricCode(CSSCode):
-    """Surface code with periodic bounary conditions, encoding two logical qudits.
+    """Surface code with periodic boundary conditions, encoding two logical qudits.
 
     Reference: https://errorcorrectionzoo.org/c/surface
     """
