@@ -34,7 +34,7 @@ import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, op_to_string
+from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -635,7 +635,7 @@ class QuditCode(AbstractCode):
     """Quantum stabilizer code for Galois qudits, with dimension q = p^m for prime p and integer m.
 
     The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
-    written as a block matrix in the form H = [H_z|H_x].  Each block has num_qudits columns.
+    written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
 
     The entries H_x[c, d] = r_x and H_z[c, d] = r_z indicate that check c addresses qudit d with the
     operator X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are
@@ -645,11 +645,6 @@ class QuditCode(AbstractCode):
 
     Here j and r are not integers, but elements of the Galois field GF(q), which has different
     rules for addition and multiplication when q is not a prime number.
-
-    Warning: whereas Pauli strings in this library are generally represented by vectors that indicate
-    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
-    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
-    that parity_check @ pauli_string is a symplectic inner product.
 
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
@@ -664,19 +659,12 @@ class QuditCode(AbstractCode):
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
-        flip_xz: bool = False,
         validate: bool = True,
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
-        if flip_xz or validate:
-            shape_matrix = self.matrix.shape
-            shape_tensor = (-1, 2, len(self))
-            matrix_conj = self.matrix.reshape(shape_tensor)[:, ::-1, :].reshape(shape_matrix)
-            if validate:
-                assert not np.any(self.matrix @ matrix_conj.T)
-            if flip_xz:
-                self._matrix = self.field(matrix_conj)
+        if validate:
+            assert not np.any(self.matrix @ conjugate_xz(self.matrix).T)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -717,8 +705,8 @@ class QuditCode(AbstractCode):
 
     def get_weight(self) -> int:
         """Compute the weight of the largest check."""
-        matrix_x = self.matrix[:, len(self) :].view(np.ndarray)
-        matrix_z = self.matrix[:, : len(self)].view(np.ndarray)
+        matrix_x = self.matrix[:, : len(self)].view(np.ndarray)
+        matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
         matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
         return max(np.count_nonzero(row) for row in matrix)
 
@@ -739,14 +727,14 @@ class QuditCode(AbstractCode):
         """Convert a parity check matrix into a Tanner graph."""
         graph = nx.DiGraph()
         matrix = np.reshape(matrix, (len(matrix), 2, -1))
-        for row, col_zx, col in zip(*np.nonzero(matrix)):
+        for row, xz, col in zip(*np.nonzero(matrix)):
             node_check = Node(index=int(row), is_data=False)
             node_qudit = Node(index=int(col), is_data=True)
             graph.add_edge(node_check, node_qudit)
 
             qudit_op = graph[node_check][node_qudit].get(QuditOperator, QuditOperator())
             vals_xz = list(qudit_op.value)
-            vals_xz[1 - col_zx] += int(matrix[row, col_zx, col])
+            vals_xz[xz] += int(matrix[row, xz, col])
             graph[node_check][node_qudit][QuditOperator] = QuditOperator(tuple(vals_xz))
 
         # remember order of the field, and use Pauli operators if appropriate
@@ -767,7 +755,7 @@ class QuditCode(AbstractCode):
         matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
         for node_check, node_qudit, data in graph.edges(data=True):
             op = data.get(QuditOperator) or data.get(Pauli)
-            matrix[node_check.index, :, node_qudit.index] = op.value[::-1]
+            matrix[node_check.index, :, node_qudit.index] = op.value
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
@@ -778,8 +766,8 @@ class QuditCode(AbstractCode):
         for check in range(self.num_checks):
             ops = []
             for qudit in range(self.num_qudits):
-                val_x = matrix[check, ~Pauli.X, qudit]
-                val_z = matrix[check, ~Pauli.Z, qudit]
+                val_x = matrix[check, Pauli.X, qudit]
+                val_z = matrix[check, Pauli.Z, qudit]
                 vals_xz = (val_x, val_z)
                 if self.field.order == 2:
                     ops.append(str(Pauli(vals_xz)))
@@ -804,7 +792,7 @@ class QuditCode(AbstractCode):
             if len(check_op) != num_qudits:
                 raise ValueError(f"Stabilizers 0 and {check} have different lengths")
             for qudit, op in enumerate(check_op):
-                matrix[check, :, qudit] = operator.from_string(op).value[::-1]
+                matrix[check, :, qudit] = operator.from_string(op).value
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field, validate=validate)
 
@@ -816,14 +804,15 @@ class QuditCode(AbstractCode):
             qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
         matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        code = QuditCode(
-            matrix.reshape(-1, 2 * len(self)), field=self.field.order, validate=validate
-        )
+        matrix = matrix.reshape(-1, 2 * len(self))
+        code = QuditCode(matrix, field=self.field.order, validate=validate)
 
         if self._logical_ops is not None:
             logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
             logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
-            code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)), validate=validate)
+            logical_ops = logical_ops.reshape(-1, 2 * len(self))
+            code.set_logical_ops(logical_ops, validate=validate)
+
         return code
 
     def deformed(
@@ -841,23 +830,24 @@ class QuditCode(AbstractCode):
         circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
         tableau = (circuit + identity).to_tableau()
 
+        def deform_strings(strings: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+            """Deform the given Pauli strings."""
+            new_strings = []
+            for check in strings:
+                string = op_to_string(check)
+                xs_zs = tableau(string).to_numpy()
+                new_strings.append(np.concatenate(xs_zs))
+            return self.field(new_strings)
+
         # deform this code by transforming its stabilizers
-        matrix = []
-        for check in self.matrix:
-            string = op_to_string(check, flip_xz=True)
-            xs, zs = tableau(string).to_numpy()
-            matrix.append(np.concatenate([zs, xs]))
-        new_code = QuditCode(matrix, field=self.field.order, validate=validate)
+        matrix = deform_strings(self.matrix)
+        new_code = QuditCode(matrix, validate=validate)
 
         # preserve or update logical operators, as applicable
         if preserve_logicals:
             new_code.set_logical_ops(self.get_logical_ops(), validate=validate)
         elif self._logical_ops is not None:
-            logical_ops = []
-            for op in self._logical_ops:
-                string = op_to_string(op)
-                xs, zs = tableau(string).to_numpy()
-                logical_ops.append(np.concatenate([xs, zs]))
+            logical_ops = deform_strings(self.get_logical_ops())
             new_code.set_logical_ops(logical_ops, validate=validate)
 
         return new_code
@@ -960,10 +950,10 @@ class QuditCode(AbstractCode):
         If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
         operators of that type.
 
-        Due to the way that logical operators are constructed in this method, logical X-type
-        operators only address physical qudits by physical X-type operators, while logical Z-type
-        operators address at least one physical qudits a physical Z-type operator, but may
-        additionally address physical qudits with physical X-type operators.
+        Due to the way that logical operators are constructed in this method, logical Z-type
+        operators only address physical qudits by physical Z-type operators, while logical X-type
+        operators address at least one physical qudits a physical X-type operator, but may
+        additionally address physical qudits with physical Z-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
         thesis (arXiv:9705052), slightly modified for qudits.
@@ -987,21 +977,9 @@ class QuditCode(AbstractCode):
         # keep track of current qudit locations
         qudit_locs = np.arange(num_qudits, dtype=int)
 
-        # row reduce and identify pivots in the Z sector
-        matrix, pivots_z = _row_reduce(self.matrix)
-        pivots_z = [pivot for pivot in pivots_z if pivot < num_qudits]
-        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
-
-        # move the Z pivots to the back
-        matrix = matrix.reshape(num_checks * 2, num_qudits)
-        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
-
         # row reduce and identify pivots in the X sector
-        matrix = matrix.reshape(num_checks, 2 * num_qudits)
-        sub_matrix = matrix[len(pivots_z) :, num_qudits:]
-        sub_matrix, pivots_x = _row_reduce(self.field(sub_matrix))
-        matrix[len(pivots_z) :, num_qudits:] = sub_matrix
+        matrix, pivots_x = _row_reduce(self.matrix)
+        pivots_x = [pivot for pivot in pivots_x if pivot < num_qudits]
         other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
 
         # move the X pivots to the back
@@ -1009,38 +987,50 @@ class QuditCode(AbstractCode):
         matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
+        # row reduce and identify pivots in the Z sector
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)
+        sub_matrix = matrix[len(pivots_x) :, num_qudits:]
+        sub_matrix, pivots_z = _row_reduce(self.field(sub_matrix))
+        matrix[len(pivots_x) :, num_qudits:] = sub_matrix
+        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
+
+        # move the Z pivots to the back
+        matrix = matrix.reshape(num_checks * 2, num_qudits)
+        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
+
         # identify X-pivot and Z-pivot parity checks
-        matrix = matrix.reshape(num_checks, 2 * num_qudits)[: len(pivots_z + pivots_x), :]
-        checks_z = matrix[: len(pivots_z), :].reshape(len(pivots_z), 2, num_qudits)
-        checks_x = matrix[len(pivots_z) :, :].reshape(len(pivots_x), 2, num_qudits)
+        matrix = matrix.reshape(num_checks, 2 * num_qudits)[: len(pivots_x + pivots_z), :]
+        checks_x = matrix[: len(pivots_x), :].reshape(len(pivots_x), 2, num_qudits)
+        checks_z = matrix[len(pivots_x) :, :].reshape(len(pivots_z), 2, num_qudits)
 
         # run some sanity checks
-        assert len(pivots_x) == 0 or pivots_x[-1] < num_qudits - len(pivots_z)
-        assert dimension + len(pivots_z) + len(pivots_x) == num_qudits
-        assert not np.any(checks_x[:, 0, :])
+        assert len(pivots_z) == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
+        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
+        assert not np.any(checks_z[:, 0, :])
 
         # identify "sections" of columns / qudits
         section_k = slice(dimension)
-        section_z = slice(dimension, dimension + len(pivots_z))
-        section_x = slice(dimension + len(pivots_z), num_qudits)
-
-        # construct Z-pivot logical operators
-        logicals_z = self.field.Zeros((dimension, 2, num_qudits))
-        logicals_z[:, 0, section_k] = identity
-        logicals_z[:, 0, section_x] = -checks_x[:, 1, :dimension].T
-        logicals_z[:, 1, section_z] = -(
-            checks_z[:, 1, section_x] @ checks_x[:, 1, section_k] + checks_z[:, 1, section_k]
-        ).T
+        section_x = slice(dimension, dimension + len(pivots_x))
+        section_z = slice(dimension + len(pivots_x), num_qudits)
 
         # construct X-pivot logical operators
         logicals_x = self.field.Zeros((dimension, 2, num_qudits))
-        logicals_x[:, 1, section_k] = identity
-        logicals_x[:, 1, section_z] = -checks_z[:, 0, :dimension].T
+        logicals_x[:, 0, section_k] = identity
+        logicals_x[:, 0, section_z] = -checks_z[:, 1, :dimension].T
+        logicals_x[:, 1, section_x] = -(
+            checks_x[:, 1, section_z] @ checks_z[:, 1, section_k] + checks_x[:, 1, section_k]
+        ).T
 
-        # move qudits back to their original locations and swap X/Z sectors
+        # construct Z-pivot logical operators
+        logicals_z = self.field.Zeros((dimension, 2, num_qudits))
+        logicals_z[:, 1, section_k] = identity
+        logicals_z[:, 1, section_x] = -checks_x[:, 0, :dimension].T
+
+        # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)
-        logicals_x = logicals_x[:, ::-1, permutation]
-        logicals_z = logicals_z[:, ::-1, permutation]
+        logicals_x = logicals_x[:, :, permutation]
+        logicals_z = logicals_z[:, :, permutation]
 
         # reshape and return
         logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
@@ -1064,12 +1054,11 @@ class QuditCode(AbstractCode):
 
         logs_x = logical_ops[: self.dimension]
         logs_z = logical_ops[self.dimension :]
-        logs_x_dual = logs_x.reshape(-1, 2, len(self))[:, ::-1, :].reshape(-1, 2 * len(self))
-        inner_products = logs_x_dual @ logs_z.T
+        inner_products = conjugate_xz(logs_x) @ logs_z.T
         if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
             raise ValueError("The given logical operators have incorrect commutation relations")
 
-        if np.any(self.matrix @ logical_ops.T):
+        if np.any(self.matrix @ conjugate_xz(logical_ops).T):
             raise ValueError("The given logical operators do not commute with stabilizers")
 
     @classmethod
@@ -1080,11 +1069,11 @@ class QuditCode(AbstractCode):
         Stacking two codes with parameters [n_1, k_1, d_1] and [n_2, k_2, d_2], for example, results
         in a single code with parameters [n_1 + n_2, k_1 + k_2, min(d_1, d_2)].
         """
-        codes_z = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 0, :]) for code in codes]
-        codes_x = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 1, :]) for code in codes]
-        code_z = ClassicalCode.stack(*codes_z)
+        codes_x = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 0, :]) for code in codes]
+        codes_z = [ClassicalCode(code.matrix.reshape(-1, 2, len(code))[:, 1, :]) for code in codes]
         code_x = ClassicalCode.stack(*codes_x)
-        matrix = np.hstack([code_z.matrix, code_x.matrix])
+        code_z = ClassicalCode.stack(*codes_z)
+        matrix = np.hstack([code_x.matrix, code_z.matrix])
         code = QuditCode(matrix)
         if inherit_logicals:
             logicals_xx = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in codes]
@@ -1137,20 +1126,8 @@ class QuditCode(AbstractCode):
         Parity checks inherited from the outer code are nominally defined in terms of their support
         on logical operators of the inner code.  Expand these parity checks into their support on
         the physical qudits of the inner code.
-
-        Warning: whereas Pauli strings in this library are generally represented by vectors that
-        indicate support on [X|Z] ops, parity checks are represented by vectors indicate the support
-        on [Z|X] ops to reflect that they are dual vectors of a symplectic inner product space,
-        thereby ensuring that that parity_check @ pauli_string is a symplectic inner product.  As a
-        consequence, we have to flip the X/Z sectors of the logical operator matrix when expanding
-        the parity checks of the outer code.
         """
-        inner_logicals_zx = (
-            inner.get_logical_ops()
-            .reshape(2, inner.dimension, 2, len(inner))[::-1, :, ::-1, :]  # flip X/Z sectors
-            .reshape(2 * inner.dimension, 2 * len(inner))
-        )
-        outer_checks = outer.matrix @ inner_logicals_zx
+        outer_checks = outer.matrix @ inner.get_logical_ops()
 
         # combine parity checks of the inner and outer codes
         code = QuditCode(np.vstack([inner.matrix, outer_checks]))
@@ -1226,13 +1203,8 @@ class CSSCode(QuditCode):
     and H_z witnesses X-type errors.
 
     The full parity check matrix of a CSSCode is
-    ⌈  0 , H_x ⌉
-    ⌊ H_z,  0  ⌋.
-
-    Warning: whereas Pauli strings in this library are generally represented by vectors that indicate
-    support on [X|Z] ops, parity checks are represented by vectors indicate the support on [Z|X] ops
-    to reflect that they are dual vectors of a symplectic inner product space, thereby ensuring that
-    that parity_check @ pauli_string is a symplectic inner product.
+    ⌈  0 , H_z ⌉
+    ⌊ H_x,  0  ⌋.
     """
 
     code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
@@ -1297,8 +1269,8 @@ class CSSCode(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [np.zeros_like(self.matrix_x), self.matrix_x],
-                [self.matrix_z, np.zeros_like(self.matrix_z)],
+                [np.zeros_like(self.matrix_z), self.matrix_z],
+                [self.matrix_x, np.zeros_like(self.matrix_x)],
             ]
         )
         return self.field(matrix)
@@ -1729,13 +1701,14 @@ class CSSCode(QuditCode):
         operators of the concatenated code.  Otherwise, logical operators of the concatenated code
         get recomputed from scratch.
         """
+        if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
+            raise TypeError("CSSCode.concatenate requires CSSCode inputs")
+
         # stack copies of the inner and outer codes (if necessary) and permute inner logicals
         inner, outer = QuditCode._standardize_concatenation_inputs(
             inner, outer, outer_physical_to_inner_logical
         )
-
-        if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
-            raise TypeError("CSSCode.concatenate requires CSSCode inputs")
+        assert isinstance(inner, CSSCode) and isinstance(outer, CSSCode)
 
         """
         Parity checks inherited from the outer code are nominally defined in terms of their support

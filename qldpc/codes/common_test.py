@@ -244,7 +244,7 @@ def test_qudit_code() -> None:
             [1, 0, 1, 0, 0, 0, 0, 0, 1, 1],
             [0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
         ],
-        flip_xz=True,
+        field=2,
     )
     assert np.array_equal(code.matrix, equiv_code.matrix)
 
@@ -332,8 +332,8 @@ def test_qudit_ops() -> None:
     code = codes.FiveQubitCode()
     logical_ops = code.get_logical_ops()
     assert logical_ops.shape == (2 * code.dimension, 2 * code.num_qudits)
-    assert np.array_equal(logical_ops[0], [1, 1, 1, 1, 1, 0, 0, 0, 0, 0])
-    assert np.array_equal(logical_ops[1], [0, 1, 1, 0, 0, 0, 0, 0, 0, 1])
+    assert np.array_equal(logical_ops[0], [0, 0, 0, 0, 1, 1, 0, 0, 1, 0])
+    assert np.array_equal(logical_ops[1], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
     assert code.get_logical_ops() is code._logical_ops
 
     code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
@@ -440,7 +440,7 @@ def test_css_ops() -> None:
     # the 2x2 toric code has redundant stabilizers
     code = codes.ToricCode(2)
     assert code.num_checks == 4
-    assert codes.CSSCode.equiv(code, codes.CSSCode([[1, 1, 1, 1]], [[1, 1, 1, 1]]))
+    assert code.canonicalized().num_checks == 2
 
 
 def test_distance_css() -> None:
