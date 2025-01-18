@@ -22,12 +22,14 @@ import itertools
 import os
 from collections.abc import Collection, Sequence
 
+import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import sympy
 
 from qldpc import abstract
+from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
 from .classical import HammingCode, RepetitionCode, RingCode, TannerCode
@@ -998,6 +1000,12 @@ class SurfaceCode(CSSCode):
                 if (row + col) % 2
             ]
 
+            # invert Z-type Pauli on every other qubit
+            code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            if code_field.order > 2:
+                matrix_z = code_field(matrix_z)
+                matrix_z[:, self._default_conjugate] *= -1
+
         else:
             # "original" surface code
             code_a = RepetitionCode(rows, field)
@@ -1106,6 +1114,12 @@ class ToricCode(CSSCode):
                 for idx, (row, col) in enumerate(np.ndindex(self.rows, self.cols))
                 if (row + col) % 2
             ]
+
+            # invert Z-type Pauli on every other qubit
+            code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            if code_field.order > 2:
+                matrix_z = code_field(matrix_z)
+                matrix_z[:, self._default_conjugate] *= -1
 
         else:
             # "original" toric code
