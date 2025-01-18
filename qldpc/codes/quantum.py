@@ -22,12 +22,14 @@ import itertools
 import os
 from collections.abc import Collection, Sequence
 
+import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import sympy
 
 from qldpc import abstract
+from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
 from .classical import HammingCode, RepetitionCode, RingCode, TannerCode
@@ -998,6 +1000,12 @@ class SurfaceCode(CSSCode):
                 if (row + col) % 2
             ]
 
+            # invert Z-type Pauli on every other qubit
+            code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            if code_field.order > 2:
+                matrix_z = code_field(matrix_z)
+                matrix_z[:, self._default_conjugate] *= -1
+
         else:
             # "original" surface code
             code_a = RepetitionCode(rows, field)
@@ -1007,7 +1015,7 @@ class SurfaceCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, validate=False)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field)
 
     @classmethod
     def get_rotated_checks(
@@ -1107,6 +1115,12 @@ class ToricCode(CSSCode):
                 if (row + col) % 2
             ]
 
+            # invert Z-type Pauli on every other qubit
+            code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+            if code_field.order > 2:
+                matrix_z = code_field(matrix_z)
+                matrix_z[:, self._default_conjugate] *= -1
+
         else:
             # "original" toric code
             code_a = RingCode(rows, field)
@@ -1116,7 +1130,7 @@ class ToricCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, validate=False)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field)
 
     @classmethod
     def get_rotated_checks(
@@ -1188,4 +1202,4 @@ class GeneralizedSurfaceCode(CSSCode):
         matrix_x, matrix_z = chain.op(1), chain.op(2).T
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
-        CSSCode.__init__(self, matrix_x, matrix_z, field, validate=False)
+        CSSCode.__init__(self, matrix_x, matrix_z, field)

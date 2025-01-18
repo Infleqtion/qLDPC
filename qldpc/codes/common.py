@@ -1701,13 +1701,14 @@ class CSSCode(QuditCode):
         operators of the concatenated code.  Otherwise, logical operators of the concatenated code
         get recomputed from scratch.
         """
+        if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
+            raise TypeError("CSSCode.concatenate requires CSSCode inputs")
+
         # stack copies of the inner and outer codes (if necessary) and permute inner logicals
         inner, outer = QuditCode._standardize_concatenation_inputs(
             inner, outer, outer_physical_to_inner_logical
         )
-
-        if not isinstance(inner, CSSCode) or not isinstance(outer, CSSCode):
-            raise TypeError("CSSCode.concatenate requires CSSCode inputs")
+        assert isinstance(inner, CSSCode) and isinstance(outer, CSSCode)
 
         """
         Parity checks inherited from the outer code are nominally defined in terms of their support
