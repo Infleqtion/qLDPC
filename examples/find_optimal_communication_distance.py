@@ -18,7 +18,7 @@ import qldpc
 def get_optimal_code_variant(
     code: qldpc.codes.BBCode, folded_layout: bool
 ) -> tuple[qldpc.codes.BBCode, float]:
-    """Get an optimal toric variant of a code, and its minimal maximum communication distance."""
+    """Get an optimal toric variant of a code, and its maximum communication distance."""
     optimal_variant = code
     optimal_distance = get_minimal_communication_distance(code, folded_layout)
 
