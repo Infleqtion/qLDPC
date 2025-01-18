@@ -59,17 +59,16 @@ def get_placement_data(
     is the maximum squared distance between a node and its neighbors in the Tanner graph of the code
     when the node is placed at a given location.
     """
+    graph = code.graph.to_undirected()
+
     # identify all node that need to be placed, and candidate locations for placement
-    nodes = [node for node in code.graph.nodes() if not node.is_data]
+    nodes = [node for node in graph.nodes() if not node.is_data]
     locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
     # precompute the locations of all nodes' neighbors (which have fixed locations)
-    node_neighbors = [
-        list(code.graph.successors(node)) + list(code.graph.predecessors(node)) for node in nodes
-    ]
     neighbor_locs = [
-        [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors]
-        for node, neighbors in zip(nodes, node_neighbors)
+        [code.get_qubit_pos(neighbor, folded_layout) for neighbor in graph.neighbors(node)]
+        for node in nodes
     ]
 
     # vectorized displacement calculation; shape = (len(nodes), len(locs), num_neighbors, 2)
