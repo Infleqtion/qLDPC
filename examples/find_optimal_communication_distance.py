@@ -4,7 +4,6 @@
 The qubit placement strategy is as described in arXiv:2404.18809.
 """
 
-import functools
 import math
 
 import networkx as nx
@@ -79,38 +78,38 @@ def build_placement_graph(
     The graph draws an edge between qubit qq and location ll if qq's neighbors are at most
     max_comm_dist away from ll.
     """
-    nodes = [node for node in code.graph.nodes() if not node.is_data]
-    node_locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
-    node_locs = np.array(node_locs, dtype=float)
+    max_comm_dist_squared = max_comm_dist**2
 
-    # precompute distances for all candidate locations and neighbors
+    # identify all node that need to be placed, and precompute candidate locations for placement
+    nodes = [node for node in code.graph.nodes() if not node.is_data]
+    candidate_locs = np.array([code.get_qubit_pos(node, folded_layout) for node in nodes])
+
+    # precompute the locations of all neighbors (which have fixed locations)
+    node_neighbors = {
+        node: set(code.graph.successors(node)).union(code.graph.predecessors(node))
+        for node in nodes
+    }
     neighbor_positions = {
         node: np.array(
-            [
-                code.get_qubit_pos(neighbor, folded_layout)
-                for neighbor in set(code.graph.successors(node)).union(
-                    code.graph.predecessors(node)
-                )
-            ],
-            dtype=float,
+            [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors],
         )
-        for node in nodes
+        for node, neighbors in node_neighbors.items()
     }
 
     # precompute valid locations for each node based on max_comm_dist
     valid_locations = {}
-    for node, neighbors in neighbor_positions.items():
-        if len(neighbors) == 0:
-            valid_locations[node] = node_locs
+    for node, neighbor_locs in neighbor_positions.items():
+        if len(neighbor_locs) == 0:
+            valid_locations[node] = candidate_locs
             continue
 
-        # vectorized distance calculation; shape = (len(node_locs), len(neighbors), 2)
-        diff = node_locs[:, None, :] - neighbors[None, :, :]
-        distances = np.sqrt(np.sum(diff**2, axis=-1))  # Euclidean distances
-        max_distances = np.max(distances, axis=1)  # maximum distance for each loc in node_locs
+        # vectorized distance calculation; shape = (len(node_locs), len(neighbor_locs), 2)
+        diff = candidate_locs[:, None, :] - neighbor_locs[None, :, :]
+        distances_squared = np.sum(diff**2, axis=-1)
+        max_dist_squared = np.max(distances_squared, axis=-1)
 
         # filter locations satisfying max_comm_dist
-        valid_locs = node_locs[max_distances <= max_comm_dist]
+        valid_locs = candidate_locs[max_dist_squared <= max_comm_dist_squared]
         if len(valid_locs) == 0:
             return None
         valid_locations[node] = valid_locs
