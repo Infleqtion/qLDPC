@@ -103,7 +103,7 @@ def build_placement_graph(
             valid_locations[node] = candidate_locs
             continue
 
-        # vectorized distance calculation; shape = (len(node_locs), len(neighbor_locs), 2)
+        # vectorized distance calculation; shape = (len(candidate_locs), len(neighbor_locs), 2)
         diff = candidate_locs[:, None, :] - neighbor_locs[None, :, :]
         distances_squared = np.sum(diff**2, axis=-1)
         max_dist_squared = np.max(distances_squared, axis=-1)
