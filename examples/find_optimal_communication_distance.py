@@ -129,26 +129,26 @@ if __name__ == "__main__":
             x**3 + y + y**2,
             y**3 + x + x**2,
         ),
-        # qldpc.codes.BBCode(
-        #     {x: 15, y: 3},
-        #     x**9 + y + y**2,
-        #     1 + x**2 + x**7,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 9, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 12},
-        #     x**3 + y**2 + y**7,
-        #     y**3 + x + x**2,
-        # ),
+        qldpc.codes.BBCode(
+            {x: 15, y: 3},
+            x**9 + y + y**2,
+            1 + x**2 + x**7,
+        ),
+        qldpc.codes.BBCode(
+            {x: 9, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 12},
+            x**3 + y**2 + y**7,
+            y**3 + x + x**2,
+        ),
     ]
     folded_layout = True
 
