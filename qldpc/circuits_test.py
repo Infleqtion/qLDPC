@@ -45,7 +45,7 @@ def test_state_prep() -> None:
 
         # the state of the simulator is a +1 eigenstate of code stabilizers
         for row in code.matrix:
-            string = circuits.op_to_string(row, flip_xz=True)
+            string = circuits.op_to_string(row)
             assert simulator.peek_observable_expectation(string) == 1
 
         # the state of the simulator is a +1 eigenstate of all logical Z operators

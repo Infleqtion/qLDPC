@@ -56,15 +56,15 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
     # identify stabilizers
     matrix = codes.ClassicalCode(code.matrix).canonicalized().matrix
     pivots = [int(np.argmax(row != 0)) for row in matrix if np.any(row)]
-    stabilizers = [op_to_string(row, flip_xz=True) for row in matrix]
+    stabilizers = [op_to_string(row) for row in matrix]
 
     # construct destabilizers
     destabilizers: list[stim.PauliString] = []
     for pivot in pivots:
         # construct a candidate destabilizer that only anti-commutes with one stabilizer
-        vector_zx = code.field.Zeros(2 * len(code))
-        vector_zx[(pivot + len(code)) % (2 * len(code))] = 1
-        candidate_destabilizer = op_to_string(vector_zx, flip_xz=True)
+        vector = code.field.Zeros(2 * len(code))
+        vector[(pivot + len(code)) % (2 * len(code))] = 1
+        candidate_destabilizer = op_to_string(vector)
 
         # enforce that the candidate destabilizer commutes with all logical operators
         for log_x, log_z in zip(logicals_x, logicals_z):
@@ -204,20 +204,20 @@ def get_transversal_automorphism_group(
     logical Pauli group for the deformed QuditCode.
     """
     effective_stabilizers = code.matrix if not deform_code else conjugate_xz(code.get_logical_ops())
-    matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
-    matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
+    matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
+    matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
-        # swapping sectors = swapping Z <--> X
-        matrix = np.hstack([matrix_z, matrix_x])
+        # swapping sectors = swapping X <--> Z
+        matrix = np.hstack([matrix_x, matrix_z])
     elif local_gates == {"S"}:
         # swapping sectors = swapping X <--> Y
-        matrix = np.hstack([matrix_z, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_z, matrix_x + matrix_z])
     elif local_gates == {"SQRT_X"}:
         # swapping sectors = swapping Y <--> Z
-        matrix = np.hstack([matrix_z + matrix_x, matrix_x])
+        matrix = np.hstack([matrix_x, matrix_x + matrix_z])
     else:
         # we have a complete local Clifford gate set that can arbitrarily permute Pauli ops
-        matrix = np.hstack([matrix_z, matrix_x, matrix_z + matrix_x])
+        matrix = np.hstack([matrix_x, matrix_z, matrix_x + matrix_z])
 
     # compute the automorphism group of an instrumental classical code
     instrumental_code = codes.ClassicalCode(matrix)
@@ -336,15 +336,15 @@ def _get_pauli_permutation_circuit(
         for qubit in range(len(code)):
             pauli_perm = [automorphism(qubit + ss * len(code)) // len(code) for ss in range(3)]
             match pauli_perm:
-                case [1, 0, 2]:  # Z <--> X
+                case [1, 0, 2]:  # X <--> Z
                     gate_targets["H"].append(qubit)
-                case [2, 1, 0]:  # X <--> Y
+                case [0, 2, 1]:  # X <--> Y
                     gate_targets["S"].append(qubit)
-                case [0, 2, 1]:  # Y <--> Z
+                case [2, 1, 0]:  # Y <--> Z
                     gate_targets["H_YZ"].append(qubit)
-                case [1, 2, 0]:  # ZXY <--> XYZ
+                case [2, 0, 1]:  # ZXY <--> XYZ
                     gate_targets["C_ZYX"].append(qubit)  # pragma: no cover
-                case [2, 0, 1]:  # ZXY <--> ZYX
+                case [1, 2, 0]:  # ZXY <--> ZYX
                     gate_targets["C_XYZ"].append(qubit)  # pragma: no cover
 
         for gate, targets in gate_targets.items():
