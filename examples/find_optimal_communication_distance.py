@@ -7,8 +7,8 @@ The qubit placement strategy is as described in arXiv:2404.18809.
 import functools
 import math
 
-import numpy as np
 import networkx as nx
+import numpy as np
 from sympy.abc import x, y
 
 import qldpc
@@ -61,18 +61,17 @@ def get_qubit_assignment(
     graph = build_placement_graph(code, folded_layout, max_comm_dist)
     if graph is None:
         return None
-
     if nx.is_connected(graph):
         matching = nx.bipartite.maximum_matching(graph)
     else:
         matching = nx.max_weight_matching(graph, maxcardinality=True)
-
     return matching if nx.is_perfect_matching(graph, matching) else None
+
 
 def build_placement_graph(
     code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
 ) -> nx.Graph | None:
-    """Build a check qubit placement graph. If some check qubit cannot be placed, return None.
+    """Build a check qubit placement graph.  If some check qubit cannot be placed, return None.
 
     The check qubit placement graph consists of two vertex sets:
         (a) check qubits, and
@@ -84,34 +83,39 @@ def build_placement_graph(
     node_locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
     node_locs = np.array(node_locs, dtype=float)
 
-    # Precompute distances for all candidate locations and neighbors
+    # precompute distances for all candidate locations and neighbors
     neighbor_positions = {
-        node: np.array([
-            code.get_qubit_pos(neighbor, folded_layout)
-            for neighbor in set(code.graph.successors(node)).union(code.graph.predecessors(node))
-        ], dtype=float)
+        node: np.array(
+            [
+                code.get_qubit_pos(neighbor, folded_layout)
+                for neighbor in set(code.graph.successors(node)).union(
+                    code.graph.predecessors(node)
+                )
+            ],
+            dtype=float,
+        )
         for node in nodes
     }
 
-    # Precompute valid locations for each node based on max_comm_dist
+    # precompute valid locations for each node based on max_comm_dist
     valid_locations = {}
     for node, neighbors in neighbor_positions.items():
         if len(neighbors) == 0:
             valid_locations[node] = node_locs
             continue
 
-        # Vectorized distance calculation
-        diff = node_locs[:, None, :] - neighbors[None, :, :]  # Shape: (len(node_locs), len(neighbors), 2)
-        distances = np.sqrt(np.sum(diff**2, axis=-1))  # Compute Euclidean distances
-        max_distances = np.max(distances, axis=1)  # Maximum distance for each loc in node_locs
+        # vectorized distance calculation; shape = (len(node_locs), len(neighbors), 2)
+        diff = node_locs[:, None, :] - neighbors[None, :, :]
+        distances = np.sqrt(np.sum(diff**2, axis=-1))  # Euclidean distances
+        max_distances = np.max(distances, axis=1)  # maximum distance for each loc in node_locs
 
-        # Filter locations satisfying max_comm_dist
+        # filter locations satisfying max_comm_dist
         valid_locs = node_locs[max_distances <= max_comm_dist]
         if len(valid_locs) == 0:
-            return None  # If no valid locations, return None early
+            return None
         valid_locations[node] = valid_locs
 
-    # Build the graph using precomputed valid locations
+    # build the graph using precomputed valid locations
     graph = nx.Graph()
     for node, locs in valid_locations.items():
         graph.add_edges_from((node, tuple(loc)) for loc in locs)
