@@ -39,7 +39,7 @@ def get_minimal_communication_distance(
     nodes, locs, placement_matrix = get_placement_data(code, folded_layout)
 
     precision = 10**-digits
-    low, high = 0.0, math.sqrt(get_max_comm_dist_squared(code))
+    low, high = 0.0, math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
     while high - low > precision:
         mid = (low + high) / 2
         if get_qubit_assignment(nodes, locs, placement_matrix, mid**2):
@@ -86,11 +86,6 @@ def get_placement_data(
         placement_matrix[node_index] = max_dist_squared
 
     return nodes, locs, placement_matrix
-
-
-def get_max_comm_dist_squared(code: qldpc.codes.BBCode) -> int:
-    """Get the maximum squared distance between any pair of qubits in a code."""
-    return sum((2 * xx) ** 2 for xx in code.orders)
 
 
 def get_qubit_assignment(
