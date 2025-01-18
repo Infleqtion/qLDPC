@@ -5,9 +5,11 @@ The qubit placement strategy is as described in arXiv:2404.18809.
 """
 
 import math
+from collections.abc import Sequence
 
 import networkx as nx
 import numpy as np
+import numpy.typing as npt
 from sympy.abc import x, y
 
 import qldpc
@@ -34,30 +36,74 @@ def get_minimal_communication_distance(
     code: qldpc.codes.BBCode, folded_layout: bool, *, digits: int = 1
 ) -> float:
     """Fix check qubit locations, and find the minimum communication distance for the given code."""
+    nodes, locs, placement_matrix = get_placement_data(code, folded_layout)
+
     precision = 10**-digits
-    low, high = 0.0, get_max_communication_distance(code)
+    low, high = 0.0, math.sqrt(get_max_comm_dist_squared(code))
     while high - low > precision:
         mid = (low + high) / 2
-        if get_qubit_assignment(code, folded_layout, mid):
+        if get_qubit_assignment(nodes, locs, placement_matrix, mid**2):
             high = mid
         else:
             low = mid
     return round(high, digits)
 
 
-def get_max_communication_distance(code: qldpc.codes.BBCode) -> float:
-    """Get the maximum distance between any pair of qubits in a code."""
-    return math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
+def get_placement_data(
+    code: qldpc.codes.BBCode, folded_layout: bool
+) -> tuple[list[qldpc.objects.Node], npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+    """Check qubits, their candidate locations, and a placement matrix.
+
+    Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
+    locations (locs) for these nodes, such that the value at placement_matrix[node_index][loc_index]
+    is the maximum squared distance between a node and its neighbors in the Tanner graph of the code
+    when the node is placed at a given location.
+    """
+    # identify all node that need to be placed, and candidate locations for placement
+    nodes: list[qldpc.objects.Node] = [node for node in code.graph.nodes() if not node.is_data]
+    locs = np.array([code.get_qubit_pos(node, folded_layout) for node in nodes], dtype=int)
+
+    # precompute the locations of all nodes' neighbors (which have fixed locations)
+    node_neighbors = {
+        node: list(code.graph.successors(node)) + list(code.graph.predecessors(node))
+        for node in nodes
+    }
+    neighbor_positions = {
+        node: [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors]
+        for node, neighbors in node_neighbors.items()
+    }
+
+    # compute the placement matrix
+    placement_matrix = np.zeros([len(nodes)] * 2, dtype=int)
+    for node_index, (node, neighbor_locs) in enumerate(neighbor_positions.items()):
+        if len(neighbor_locs) == 0:
+            continue
+
+        # vectorized distance calculation; shape = (len(candidate_locs), len(neighbor_locs), 2)
+        diff = locs[:, None, :] - np.array(neighbor_locs)[None, :, :]
+        distances_squared = np.sum(diff**2, axis=-1)
+        max_dist_squared = np.max(distances_squared, axis=-1)
+        placement_matrix[node_index] = max_dist_squared
+
+    return nodes, locs, placement_matrix
+
+
+def get_max_comm_dist_squared(code: qldpc.codes.BBCode) -> int:
+    """Get the maximum squared distance between any pair of qubits in a code."""
+    return sum((2 * xx) ** 2 for xx in code.orders)
 
 
 def get_qubit_assignment(
-    code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
+    nodes: Sequence[qldpc.objects.Node],
+    locs: npt.NDArray[np.int_],
+    placement_matrix: npt.NDArray[np.int_],
+    max_comm_dist_squared: float,
 ) -> set[tuple[qldpc.objects.Node, tuple[int, int]]] | None:
     """Find an assignment of data qubits to candidate locations, under a max_comm_dist constraint.
 
     If no such assignment exists, return None.
     """
-    graph = build_placement_graph(code, folded_layout, max_comm_dist)
+    graph = get_placement_graph(nodes, locs, placement_matrix, max_comm_dist_squared)
     if graph is None:
         return None
     if nx.is_connected(graph):
@@ -67,8 +113,11 @@ def get_qubit_assignment(
     return matching if nx.is_perfect_matching(graph, matching) else None
 
 
-def build_placement_graph(
-    code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
+def get_placement_graph(
+    nodes: Sequence[qldpc.objects.Node],
+    locs: npt.NDArray[np.int_],
+    placement_matrix: npt.NDArray[np.int_],
+    max_comm_dist_squared: float,
 ) -> nx.Graph | None:
     """Build a check qubit placement graph.  If some check qubit cannot be placed, return None.
 
@@ -78,38 +127,11 @@ def build_placement_graph(
     The graph draws an edge between qubit qq and location ll if qq's neighbors are at most
     max_comm_dist away from ll.
     """
-    max_comm_dist_squared = max_comm_dist**2
-
-    # identify all node that need to be placed, and precompute candidate locations for placement
-    nodes = [node for node in code.graph.nodes() if not node.is_data]
-    candidate_locs = np.array([code.get_qubit_pos(node, folded_layout) for node in nodes])
-
-    # precompute the locations of all neighbors (which have fixed locations)
-    node_neighbors = {
-        node: set(code.graph.successors(node)).union(code.graph.predecessors(node))
-        for node in nodes
-    }
-    neighbor_positions = {
-        node: np.array(
-            [code.get_qubit_pos(neighbor, folded_layout) for neighbor in neighbors],
-        )
-        for node, neighbors in node_neighbors.items()
-    }
-
     # precompute valid locations for each node based on max_comm_dist
     valid_locations = {}
-    for node, neighbor_locs in neighbor_positions.items():
-        if len(neighbor_locs) == 0:
-            valid_locations[node] = candidate_locs
-            continue
-
-        # vectorized distance calculation; shape = (len(candidate_locs), len(neighbor_locs), 2)
-        diff = candidate_locs[:, None, :] - neighbor_locs[None, :, :]
-        distances_squared = np.sum(diff**2, axis=-1)
-        max_dist_squared = np.max(distances_squared, axis=-1)
-
-        # filter locations satisfying max_comm_dist
-        valid_locs = candidate_locs[max_dist_squared <= max_comm_dist_squared]
+    for node_index, node in enumerate(nodes):
+        max_comm_distances = placement_matrix[node_index]
+        valid_locs = locs[max_comm_distances <= max_comm_dist_squared]
         if len(valid_locs) == 0:
             return None
         valid_locations[node] = valid_locs
