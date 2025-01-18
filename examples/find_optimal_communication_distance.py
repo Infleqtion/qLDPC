@@ -100,10 +100,7 @@ def get_perfect_matching(
         graph.add_edge(vertices_a[idx_a], vertices_b[idx_b])
 
     # find a perfect matching of the graph
-    if nx.is_connected(graph):
-        matching = nx.bipartite.maximum_matching(graph)
-    else:
-        matching = nx.max_weight_matching(graph, maxcardinality=True)
+    matching = nx.bipartite.maximum_matching(graph, top_nodes=vertices_a)
     return matching if nx.is_perfect_matching(graph, matching) else None
 
 
