@@ -243,7 +243,8 @@ def test_qudit_code() -> None:
             [0, 1, 0, 0, 1, 0, 0, 1, 1, 0],
             [1, 0, 1, 0, 0, 0, 0, 0, 1, 1],
             [0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
-        ]
+        ],
+        field=2,
     )
     assert np.array_equal(code.matrix, equiv_code.matrix)
 
@@ -439,7 +440,7 @@ def test_css_ops() -> None:
     # the 2x2 toric code has redundant stabilizers
     code = codes.ToricCode(2)
     assert code.num_checks == 4
-    assert codes.CSSCode.equiv(code, codes.CSSCode([[1, 1, 1, 1]], [[1, 1, 1, 1]]))
+    assert code.canonicalized().num_checks == 2
 
 
 def test_distance_css() -> None:

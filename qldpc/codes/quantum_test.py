@@ -388,14 +388,14 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
     assert code.conjugated() == codes.HGPCode(*rep_codes).conjugated()
 
     # rotated surface code
-    code = codes.SurfaceCode(rows, cols, rotated=True)
+    code = codes.SurfaceCode(rows, cols, rotated=True, field=3)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
     assert codes.CSSCode.get_distance(code, Pauli.X) == cols
     assert codes.CSSCode.get_distance(code, Pauli.Z) == rows
 
     # test that the conjugated rotated surface code is an XZZX code
-    code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2)
+    code = codes.SurfaceCode(max(rows, cols), rotated=True)
     for row in code.conjugated().matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
@@ -420,7 +420,7 @@ def test_toric_codes() -> None:
 
     # rotated toric code
     distance = 4
-    code = codes.ToricCode(distance, rotated=True)
+    code = codes.ToricCode(distance, rotated=True, field=3)
     assert code.dimension == 2
     assert code.num_qudits == distance**2
     assert codes.CSSCode.get_distance(code) == distance
