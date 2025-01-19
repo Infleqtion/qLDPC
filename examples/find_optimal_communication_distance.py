@@ -4,6 +4,7 @@
 The qudit placement strategy is as described in arXiv:2404.18809.
 """
 
+import itertools
 import math
 
 import numpy as np
@@ -56,18 +57,18 @@ def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.N
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
-    graph = code.graph.to_undirected()
-
     # identify all node that need to be placed, and candidate locations for placement
-    nodes = [node for node in graph.nodes() if not node.is_data]
+    nodes = [qldpc.objects.Node(index, is_data=False) for index in range(len(code))]
     locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
-    # compute the locations of all nodes' neighbors (which have fixed locations)
+    # compute the (fixed) locations of all check qubits' neighbors
     neighbor_locs = [
-        [code.get_qubit_pos(neighbor, folded_layout) for neighbor in graph.neighbors(node)]
-        for node in nodes
+        [
+            code.get_qubit_pos(qldpc.objects.Node(data_qubit_index, is_data=True), folded_layout)
+            for data_qubit_index, *_ in zip(*np.where(stabilizer))
+        ]
+        for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)
     ]
-
     """
     Vectorized calculation of displacements, with shape = (len(nodes), len(locs), num_neighbors, 2).
     Here dispalacements[node_idx, loc_idx, neighbor_idx, :] is the displacement between a given node
