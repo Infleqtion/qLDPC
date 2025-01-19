@@ -39,7 +39,7 @@ def get_minimal_communication_distance(
     placement_matrix = get_placement_matrix(code, folded_layout)
 
     precision = 10**-digits
-    low, high = 0.0, math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
+    low, high = 0.0, 2 * math.sqrt(sum(xx**2 for xx in code.orders))
     while high - low > precision:
         mid = (low + high) / 2
         if has_perfect_matching(placement_matrix <= mid**2):
