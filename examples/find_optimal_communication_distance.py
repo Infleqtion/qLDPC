@@ -5,11 +5,10 @@ The qubit placement strategy is as described in arXiv:2404.18809.
 """
 
 import math
-from collections.abc import Sequence
 
-import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import scipy.optimize
 from sympy.abc import x, y
 
 import qldpc
@@ -36,27 +35,27 @@ def get_minimal_communication_distance(
     code: qldpc.codes.BBCode, folded_layout: bool, *, digits: int = 1
 ) -> float:
     """Fix check qubit locations, and find the minimum communication distance for the given code."""
-    nodes, locs, placement_matrix = get_placement_data(code, folded_layout)
+    placement_matrix = get_placement_matrix(code, folded_layout)
 
     precision = 10**-digits
     low, high = 0.0, math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
     while high - low > precision:
         mid = (low + high) / 2
-        if get_perfect_matching(nodes, locs, placement_matrix <= mid**2):
+        if has_perfect_matching(placement_matrix <= mid**2):
             high = mid
         else:
             low = mid
     return round(high, digits)
 
 
-def get_placement_data(
+def get_placement_matrix(
     code: qldpc.codes.BBCode, folded_layout: bool
 ) -> tuple[list[qldpc.objects.Node], list[tuple[int, int]], npt.NDArray[np.int_]]:
-    """Check qubits, their candidate locations, and a placement matrix.
+    """Construct a placment matrix of squared maximum communication distances.
 
     Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
     locations (locs) for these nodes, such that the value at placement_matrix[node_index][loc_index]
-    is the maximum squared distance between a node and its neighbors in the Tanner graph of the code
+    is the squared maximum distance between a node and its neighbors in the Tanner graph of the code
     when the node is placed at a given location.
     """
     graph = code.graph.to_undirected()
@@ -65,7 +64,7 @@ def get_placement_data(
     nodes = [node for node in graph.nodes() if not node.is_data]
     locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
-    # precompute the locations of all nodes' neighbors (which have fixed locations)
+    # compute the locations of all nodes' neighbors (which have fixed locations)
     neighbor_locs = [
         [code.get_qubit_pos(neighbor, folded_layout) for neighbor in graph.neighbors(node)]
         for node in nodes
@@ -77,30 +76,22 @@ def get_placement_data(
         - np.array(neighbor_locs, dtype=int)[:, None, :, :]
     )
 
+    # squared communication distances
     distances_squared = np.sum(displacements**2, axis=-1)
-    placement_matrix = np.max(distances_squared, axis=-1)
 
-    return nodes, locs, placement_matrix
+    # matrix of maximum squared communication distances
+    return np.max(distances_squared, axis=-1)
 
 
-def get_perfect_matching(
-    vertices_a: Sequence[object],
-    vertices_b: Sequence[object],
+def has_perfect_matching(
     biadjacency_matrix: npt.NDArray[np.bool_],
 ) -> set[tuple[qldpc.objects.Node, tuple[int, int]]] | None:
-    """Find a perfect matching of a bipartite graph.  If no matching exists, return None."""
+    """Does a bipartite graph with the given biadjacenty matrix have a perfect matching?"""
     # quit early if any vertex has no indicent edges <--> any row/column is all zeros
     if np.any(~np.any(biadjacency_matrix, axis=0)) or np.any(~np.any(biadjacency_matrix, axis=1)):
         return None
-
-    # build the graph
-    graph = nx.Graph()
-    for idx_a, idx_b in zip(*np.where(biadjacency_matrix)):
-        graph.add_edge(vertices_a[idx_a], vertices_b[idx_b])
-
-    # find a perfect matching of the graph
-    matching = nx.bipartite.maximum_matching(graph, top_nodes=vertices_a)
-    return matching if nx.is_perfect_matching(graph, matching) else None
+    rows, cols = scipy.optimize.linear_sum_assignment(biadjacency_matrix, maximize=True)
+    return np.all(biadjacency_matrix[rows, cols])
 
 
 if __name__ == "__main__":
