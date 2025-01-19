@@ -35,7 +35,7 @@ def get_optimal_code_variant(
 def get_minimal_communication_distance(
     code: qldpc.codes.BBCode, folded_layout: bool, *, digits: int = 1
 ) -> float:
-    """Fix check qubit locations, and find the minimum communication distance for the given code."""
+    """Fix check qubit locations, and minimize the maximum communication distance for the code."""
     placement_matrix = get_placement_matrix(code, folded_layout)
 
     precision = 10**-digits
