@@ -50,7 +50,7 @@ def get_minimal_communication_distance(
 
 
 def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.NDArray[np.int_]:
-    """Construct a placment matrix of squared maximum communication distances.
+    """Construct a placement matrix of squared maximum communication distances.
 
     Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
     locations (locs) for these nodes, such that the value at placement_matrix[node_index][loc_index]
