@@ -68,7 +68,11 @@ def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.N
         for node in nodes
     ]
 
-    # vectorized displacement calculation; shape = (len(nodes), len(locs), num_neighbors, 2)
+    """
+    Vectorized calculation of displacements, with shape = (len(nodes), len(locs), num_neighbors, 2).
+    Here dispalacements[node_idx, loc_idx, neighbor_idx, :] is the displacement between a given node
+    and a given neighbor when placed at a given location.
+    """
     displacements = (
         np.array(locs, dtype=int)[None, :, None, :]
         - np.array(neighbor_locs, dtype=int)[:, None, :, :]
