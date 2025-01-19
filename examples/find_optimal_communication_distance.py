@@ -90,7 +90,7 @@ def get_perfect_matching(
 ) -> set[tuple[qldpc.objects.Node, tuple[int, int]]] | None:
     """Find a perfect matching of a bipartite graph.  If no matching exists, return None."""
     # quit early if any vertex has no indicent edges
-    if not np.all(biadjacency_matrix.sum(axis=0)) or not np.all(biadjacency_matrix.sum(axis=1)):
+    if np.any(~np.any(biadjacency_matrix, axis=0)) or np.any(~np.any(biadjacency_matrix, axis=1)):
         return None
 
     # build the graph
