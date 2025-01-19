@@ -4,10 +4,12 @@
 The qudit placement strategy is as described in arXiv:2404.18809.
 """
 
-import functools
+import itertools
 import math
 
-import networkx as nx
+import numpy as np
+import numpy.typing as npt
+import scipy.optimize
 from sympy.abc import x, y
 
 import qldpc
@@ -16,7 +18,7 @@ import qldpc
 def get_optimal_code_variant(
     code: qldpc.codes.BBCode, folded_layout: bool
 ) -> tuple[qldpc.codes.BBCode, float]:
-    """Get an optimal toric variant of a code, and its minimal maximum communication distance."""
+    """Get an optimal toric variant of a code, and its maximum communication distance."""
     optimal_variant = code
     optimal_distance = get_minimal_communication_distance(code, folded_layout)
 
@@ -34,72 +36,63 @@ def get_minimal_communication_distance(
     code: qldpc.codes.BBCode, folded_layout: bool, *, digits: int = 1
 ) -> float:
     """Fix check qubit locations, and find the minimum communication distance for the given code."""
+    placement_matrix = get_placement_matrix(code, folded_layout)
+
     precision = 10**-digits
-    low, high = 0.0, get_max_communication_distance(code)
+    low, high = 0.0, math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
     while high - low > precision:
         mid = (low + high) / 2
-        if get_qubit_assignment(code, folded_layout, mid):
+        if has_perfect_matching(placement_matrix <= mid**2):
             high = mid
         else:
             low = mid
     return round(high, digits)
 
 
-def get_max_communication_distance(code: qldpc.codes.BBCode) -> float:
-    """Get the maximum distance between any pair of qubits in a code."""
-    return math.sqrt(sum((2 * xx) ** 2 for xx in code.orders))
+def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.NDArray[np.int_]:
+    """Construct a placement matrix of squared maximum communication distances.
 
-
-def get_qubit_assignment(
-    code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
-) -> set[tuple[qldpc.objects.Node, tuple[int, int]]] | None:
-    """Find an assignment of data qubits to candidate locations, under a max_comm_dist constraint.
-
-    If no such assignment exists, return None.
+    Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
+    locations (locs) for these nodes, such that the value at placement_matrix[node_index][loc_index]
+    is the answer to the question: when the given node is placed at the given location, what is that
+    node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
-    graph = build_placement_graph(code, folded_layout, max_comm_dist)
-    if graph is None:
-        return None
-    matching = nx.bipartite.maximum_matching(graph)
-    return matching if nx.is_perfect_matching(graph, matching) else None
+    # identify all node that need to be placed, and candidate locations for placement
+    nodes = [qldpc.objects.Node(index, is_data=False) for index in range(len(code))]
+    locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
 
-
-def build_placement_graph(
-    code: qldpc.codes.BBCode, folded_layout: bool, max_comm_dist: float
-) -> nx.Graph | None:
-    """Build a check qubit placement graph.  If some check qubit cannot be placed, return None.
-
-    The check qubit placement graph consists of two vertex sets:
-        (a) check qubits, and
-        (b) candidate locations.
-    The graph draws an edge betweeen qubit qq and location ll if qq's neighbors are at most
-    max_comm_dist away from ll.
+    # compute the (fixed) locations of all check qubits' neighbors
+    neighbor_locs = [
+        [
+            code.get_qubit_pos(qldpc.objects.Node(data_qubit_index, is_data=True), folded_layout)
+            for data_qubit_index, *_ in zip(*np.where(stabilizer))
+        ]
+        for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)
+    ]
     """
-    nodes = [node for node in code.graph.nodes() if not node.is_data]
-    node_locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
+    Vectorized calculation of displacements, with shape = (len(nodes), len(locs), num_neighbors, 2).
+    Here dispalacements[node_idx, loc_idx, neighbor_idx, :] is the displacement between a given node
+    and a given neighbor when the node is placed at a given location.
+    """
+    displacements = (
+        np.array(locs, dtype=int)[None, :, None, :]
+        - np.array(neighbor_locs, dtype=int)[:, None, :, :]
+    )
 
-    def satisfies_max_comm_dist(node: qldpc.objects.Node, loc: tuple[int, int]) -> bool:
-        """Does placing a node at the given location satisfy the max_comm_dist constraint?"""
-        neighbors = set(code.graph.successors(node)).union(code.graph.predecessors(node))
-        return not any(
-            get_dist(loc, code.get_qubit_pos(neighbor, folded_layout)) > max_comm_dist
-            for neighbor in neighbors
-        )
+    # squared communication distances
+    distances_squared = np.sum(displacements**2, axis=-1)
 
-    graph = nx.Graph()
-    for node in nodes:
-        edges = [(node, loc) for loc in node_locs if satisfies_max_comm_dist(node, loc)]
-        if not edges:
-            return None
-        graph.add_edges_from(edges)
-
-    return graph
+    # matrix of maximum squared communication distances
+    return np.max(distances_squared, axis=-1)
 
 
-@functools.cache
-def get_dist(loc_a: tuple[int, ...], loc_b: tuple[int, ...]) -> float:
-    """Euclidean (L2) distance between two locations."""
-    return math.sqrt(sum((aa - bb) ** 2 for aa, bb in zip(loc_a, loc_b)))
+def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np.bool_:
+    """Does a bipartite graph with the given biadjacenty matrix have a perfect matching?"""
+    # quit early if any vertex has no indicent edges <--> any row/column is all zeros
+    if np.any(~np.any(biadjacency_matrix, axis=0)) or np.any(~np.any(biadjacency_matrix, axis=1)):
+        return False
+    rows, cols = scipy.optimize.linear_sum_assignment(biadjacency_matrix, maximize=True)
+    return np.all(biadjacency_matrix[rows, cols])
 
 
 if __name__ == "__main__":
@@ -109,26 +102,26 @@ if __name__ == "__main__":
             x**3 + y + y**2,
             y**3 + x + x**2,
         ),
-        # qldpc.codes.BBCode(
-        #     {x: 15, y: 3},
-        #     x**9 + y + y**2,
-        #     1 + x**2 + x**7,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 9, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 12},
-        #     x**3 + y**2 + y**7,
-        #     y**3 + x + x**2,
-        # ),
+        qldpc.codes.BBCode(
+            {x: 15, y: 3},
+            x**9 + y + y**2,
+            1 + x**2 + x**7,
+        ),
+        qldpc.codes.BBCode(
+            {x: 9, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 12},
+            x**3 + y**2 + y**7,
+            y**3 + x + x**2,
+        ),
     ]
     folded_layout = True
 
