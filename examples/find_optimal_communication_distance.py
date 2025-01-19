@@ -53,8 +53,8 @@ def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.N
 
     Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
     locations (locs) for these nodes, such that the value at placement_matrix[node_index][loc_index]
-    is the squared maximum distance between a node and its neighbors in the Tanner graph of the code
-    when the node is placed at a given location.
+    is the answer to the question: when the given node is placed at the given location, what is that
+    node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
     graph = code.graph.to_undirected()
 
