@@ -342,9 +342,7 @@ class BBCode(QCCode):
         return sector, int(aa), int(bb)
 
     def get_qubit_pos(
-        self,
-        qubit: Node | tuple[str, int, int],
-        folded_layout: bool = False,
+        self, qubit: Node | tuple[str, int, int], folded_layout: bool = False
     ) -> tuple[int, int]:
         """Get the canonical position of a qubit with the given label.
 
