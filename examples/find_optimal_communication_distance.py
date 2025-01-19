@@ -48,9 +48,7 @@ def get_minimal_communication_distance(
     return round(high, digits)
 
 
-def get_placement_matrix(
-    code: qldpc.codes.BBCode, folded_layout: bool
-) -> tuple[list[qldpc.objects.Node], list[tuple[int, int]], npt.NDArray[np.int_]]:
+def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.NDArray[np.int_]:
     """Construct a placment matrix of squared maximum communication distances.
 
     Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
@@ -83,13 +81,11 @@ def get_placement_matrix(
     return np.max(distances_squared, axis=-1)
 
 
-def has_perfect_matching(
-    biadjacency_matrix: npt.NDArray[np.bool_],
-) -> set[tuple[qldpc.objects.Node, tuple[int, int]]] | None:
+def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np.bool_:
     """Does a bipartite graph with the given biadjacenty matrix have a perfect matching?"""
     # quit early if any vertex has no indicent edges <--> any row/column is all zeros
     if np.any(~np.any(biadjacency_matrix, axis=0)) or np.any(~np.any(biadjacency_matrix, axis=1)):
-        return None
+        return False
     rows, cols = scipy.optimize.linear_sum_assignment(biadjacency_matrix, maximize=True)
     return np.all(biadjacency_matrix[rows, cols])
 
