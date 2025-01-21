@@ -78,7 +78,6 @@ def get_optimal_layout_params(
                     optimal_vecs_r = vecs_r
                     optimal_shift_lr = shift_lr
                     optimal_distance = min_distance
-                    print(min_distance)
 
     return optimal_vecs_l, optimal_vecs_r, optimal_shift_lr, optimal_distance
 
