@@ -16,7 +16,7 @@ import qldpc
 
 
 def get_optimal_layout_params(
-    code: qldpc.codes.BBCode, folded_layout: bool, *, cheat: bool = False
+    code: qldpc.codes.BBCode, folded_layout: bool, *, verbose: bool = False, cheat: bool = False
 ) -> tuple[qldpc.codes.BBCode, float]:
     """Get an optimal toric variant of a code, and its maximum communication distance."""
     optimal_distance = 2 * math.sqrt(sum(xx**2 for xx in code.orders))
@@ -25,25 +25,25 @@ def get_optimal_layout_params(
         # return the "known answer"
         code_params = len(code), code.dimension
         if code_params == (72, 12):
-            vecs_l = ((2, 1), (5, 5))
-            vecs_r = ((4, 5), (1, 1))
-            shift_lr = (3, 0)
+            vecs_l = ((1, 1), (1, 2))
+            vecs_r = ((-1, -1), (-1, -2))
+            shift_lr = (4, 5)
         elif code_params == (90, 8):
-            vecs_l = ((5, 0), (9, 1))
-            vecs_r = ((10, 0), (6, 2))
-            shift_lr = (1, 0)
+            vecs_l = ((0, 1), (2, 0))
+            vecs_r = ((0, -1), (-2, 0))
+            shift_lr = (0, 1)
         elif code_params == (108, 8):
-            vecs_l = ((3, 1), (7, 2))
-            vecs_r = ((3, 1), (2, 4))
-            shift_lr = (5, 0)
+            vecs_l = ((3, 1), (4, 4))
+            vecs_r = ((-3, -1), (-4, -4))
+            shift_lr = (5, 3)
         elif code_params == (144, 12):
-            vecs_l = ((2, 3), (11, 4))
-            vecs_r = ((2, 3), (11, 4))
-            shift_lr = (1, 4)
+            vecs_l = ((0, 1), (1, 0))
+            vecs_r = ((0, 1), (1, 0))
+            shift_lr = (11, 1)
         elif code_params == (288, 12):
-            vecs_l = ((0, 7), (1, 9))
-            vecs_r = ((0, 7), (1, 9))
-            shift_lr = (11, 9)
+            vecs_l = ((0, 5), (1, 0))
+            vecs_r = ((0, 5), (1, 0))
+            shift_lr = (11, 3)
         else:
             raise ValueError(f"Optima unknown for code with parameters {code_params}")
         optimal_distance = get_minimal_communication_distance(
@@ -78,6 +78,12 @@ def get_optimal_layout_params(
                     optimal_vecs_r = vecs_r
                     optimal_shift_lr = shift_lr
                     optimal_distance = min_distance
+                    if verbose:
+                        print()
+                        print("new best found:", min_distance)
+                        print("vecs_l:", vecs_l)
+                        print("vecs_r:", vecs_r)
+                        print("shift_lr:", shift_lr)
 
     return optimal_vecs_l, optimal_vecs_r, optimal_shift_lr, optimal_distance
 
@@ -202,8 +208,7 @@ if __name__ == "__main__":
     folded_layout = True
 
     for code in codes:
-        *_, min_distance = get_optimal_layout_params(code, folded_layout, cheat=True)
-        nn, kk = len(code), code.dimension
         print()
-        print("(n, k):", (nn, kk))
+        print("(n, k):", (len(code), code.dimension))
+        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=False)
         print("min_distance:", min_distance)
