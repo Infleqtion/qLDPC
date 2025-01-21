@@ -15,41 +15,111 @@ from sympy.abc import x, y
 import qldpc
 
 
-def get_optimal_code_variant(
-    code: qldpc.codes.BBCode, folded_layout: bool
+def get_optimal_layout_params(
+    code: qldpc.codes.BBCode, folded_layout: bool, *, cheat: bool = False
 ) -> tuple[qldpc.codes.BBCode, float]:
     """Get an optimal toric variant of a code, and its maximum communication distance."""
-    optimal_variant = code
-    optimal_distance = get_minimal_communication_distance(code, folded_layout)
+    optimal_distance = 2 * math.sqrt(sum(xx**2 for xx in code.orders))
 
-    for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
-        variant = qldpc.codes.BBCode(orders, poly_a, poly_b)
-        min_distance = get_minimal_communication_distance(variant, folded_layout)
-        if min_distance < optimal_distance:
-            optimal_variant = variant
-            optimal_distance = min_distance
+    if cheat:
+        # return the "known answer"
+        code_params = len(code), code.dimension
+        if code_params == (72, 12):
+            vecs_l = ((2, 1), (5, 5))
+            vecs_r = ((4, 5), (1, 1))
+            shift_lr = (3, 0)
+        elif code_params == (90, 8):
+            vecs_l = ((5, 0), (9, 1))
+            vecs_r = ((10, 0), (6, 2))
+            shift_lr = (1, 0)
+        elif code_params == (108, 8):
+            vecs_l = ((3, 1), (7, 2))
+            vecs_r = ((3, 1), (2, 4))
+            shift_lr = (5, 0)
+        elif code_params == (144, 12):
+            vecs_l = ((2, 3), (11, 4))
+            vecs_r = ((2, 3), (11, 4))
+            shift_lr = (1, 4)
+        elif code_params == (288, 12):
+            vecs_l = ((0, 7), (1, 9))
+            vecs_r = ((0, 7), (1, 9))
+            shift_lr = (11, 9)
+        else:
+            raise ValueError(f"Optima unknown for code with parameters {code_params}")
+        optimal_distance = get_minimal_communication_distance(
+            code, folded_layout, vecs_l, vecs_r, shift_lr, optimal_distance
+        )
+        return vecs_l, vecs_r, shift_lr, optimal_distance
 
-    return optimal_variant, optimal_distance
+    # construct the set of pairs of lattice vector that span a torus with shape code.orders
+    lattice_vectors = [
+        (vec_a, vec_b)
+        for vec_a, vec_b in itertools.combinations(np.ndindex(code.orders), 2)
+        if code.vectors_span_torus(vec_a, vec_b)
+    ]
+
+    # iterate over all lattice vectors used to place qubits in the "left" partition
+    for vecs_l in lattice_vectors:
+        # iterate over a restricted set of lattice vectors for the "right" partition
+        (aa, bb), (cc, dd) = vecs_l
+        for vecs_r in [
+            ((-aa, -bb), (-cc, -dd)),
+            ((aa, bb), (-cc, -dd)),
+            ((-aa, -bb), (cc, dd)),
+            ((aa, bb), (cc, dd)),
+        ]:
+            # iterate over all relative shifts between the left and right partitions
+            for shift_lr in np.ndindex(code.orders):
+                min_distance = get_minimal_communication_distance(
+                    code, folded_layout, vecs_l, vecs_r, shift_lr, optimal_distance
+                )
+                if min_distance < optimal_distance:
+                    optimal_vecs_l = vecs_l
+                    optimal_vecs_r = vecs_r
+                    optimal_shift_lr = shift_lr
+                    optimal_distance = min_distance
+                    print(min_distance)
+
+    return optimal_vecs_l, optimal_vecs_r, optimal_shift_lr, optimal_distance
 
 
 def get_minimal_communication_distance(
-    code: qldpc.codes.BBCode, folded_layout: bool, *, digits: int = 1
+    code: qldpc.codes.BBCode,
+    folded_layout: bool,
+    vecs_l: tuple[tuple[int, int], tuple[int, int]],
+    vecs_r: tuple[tuple[int, int], tuple[int, int]],
+    shift_lr: tuple[int, int],
+    cutoff: float,
+    *,
+    digits: int = 1,
 ) -> float:
-    """Fix check qubit locations, and minimize the maximum communication distance for the code."""
-    placement_matrix = get_placement_matrix(code, folded_layout)
+    """Fix check qubit locations, and minimize the maximum communication distance for the code.
 
-    precision = 10**-digits
-    low, high = 0.0, 2 * math.sqrt(sum(xx**2 for xx in code.orders))
-    while high - low > precision:
+    If the minimum is greater than some cutoff, quit early and return a loose upper bound.
+    """
+    placement_matrix = get_placement_matrix(code, folded_layout, vecs_l, vecs_r, shift_lr)
+
+    precision = 10**-digits / 2
+    low, high = 0.0, 2 * cutoff + precision
+    while True:
         mid = (low + high) / 2
-        if has_perfect_matching(placement_matrix <= mid**2):
+        if has_perfect_matching(placement_matrix <= int(mid**2)):
             high = mid
+            if high - low < precision:
+                return round(mid, digits)
         else:
             low = mid
-    return round(high, digits)
+            if high - low < precision or low > cutoff:
+                return round(high, digits)
 
 
-def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.NDArray[np.int_]:
+def get_placement_matrix(
+    code: qldpc.codes.BBCode,
+    folded_layout: bool,
+    vecs_l: tuple[tuple[int, int], tuple[int, int]],
+    vecs_r: tuple[tuple[int, int], tuple[int, int]],
+    shift_lr: tuple[int, int],
+) -> npt.NDArray[np.int_]:
     """Construct a placement matrix of squared maximum communication distances.
 
     Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
@@ -57,16 +127,23 @@ def get_placement_matrix(code: qldpc.codes.BBCode, folded_layout: bool) -> npt.N
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
-    # identify all node that need to be placed, and candidate locations for placement
-    nodes = [qldpc.objects.Node(index, is_data=False) for index in range(len(code))]
-    locs = [code.get_qubit_pos(node, folded_layout) for node in nodes]
+
+    def get_qubit_pos(qubit_index: int, *, is_data: str) -> tuple[int, int]:
+        """Get the default position of the given qubit/node."""
+        return code.get_qubit_pos(
+            qldpc.objects.Node(qubit_index, is_data=is_data),
+            folded_layout,
+            basis=vecs_l if qubit_index < len(code) // 2 else vecs_r,
+            shift=(0, 0) if qubit_index < len(code) // 2 else shift_lr,
+            validate=False,
+        )
+
+    # identify all candidate locations for check qubit placement
+    locs = [get_qubit_pos(qubit_index, is_data=False) for qubit_index in range(code.num_checks)]
 
     # compute the (fixed) locations of all check qubits' neighbors
     neighbor_locs = [
-        [
-            code.get_qubit_pos(qldpc.objects.Node(data_qubit_index, is_data=True), folded_layout)
-            for data_qubit_index, *_ in zip(*np.where(stabilizer))
-        ]
+        [get_qubit_pos(qubit_index, is_data=True) for qubit_index, *_ in zip(*np.where(stabilizer))]
         for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)
     ]
     """
@@ -126,12 +203,8 @@ if __name__ == "__main__":
     folded_layout = True
 
     for code in codes:
-        variant, min_distance = get_optimal_code_variant(code, folded_layout)
-        nn, kk = len(variant), variant.dimension
-        orders = {xx: oo for xx, oo in zip(code.symbols, code.orders)}
+        *_, min_distance = get_optimal_layout_params(code, folded_layout, cheat=True)
+        nn, kk = len(code), code.dimension
         print()
         print("(n, k):", (nn, kk))
-        print("orders:", orders)
-        print("poly_a:", variant.poly_a.as_expr())
-        print("poly_b:", variant.poly_b.as_expr())
         print("min_distance:", min_distance)
