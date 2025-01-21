@@ -22,7 +22,7 @@ def get_optimal_layout_params(
     optimal_distance = 2 * math.sqrt(sum(xx**2 for xx in code.orders))
 
     if cheat:
-        # return the "known answer"
+        # return parameters that we know are pretty good
         code_params = len(code), code.dimension
         if code_params == (72, 12):
             vecs_l = ((1, 1), (1, 2))
@@ -30,8 +30,8 @@ def get_optimal_layout_params(
             shift_lr = (4, 5)
         elif code_params == (90, 8):
             vecs_l = ((0, 1), (2, 0))
-            vecs_r = ((0, -1), (-2, 0))
-            shift_lr = (0, 1)
+            vecs_r = ((0, 1), (2, 0))
+            shift_lr = (0, 0)
         elif code_params == (108, 8):
             vecs_l = ((3, 1), (4, 4))
             vecs_r = ((-3, -1), (-4, -4))
@@ -63,15 +63,13 @@ def get_optimal_layout_params(
         # iterate over a restricted set of lattice vectors for the "right" partition
         (aa, bb), (cc, dd) = vecs_l
         for vecs_r in [
-            ((-aa, -bb), (-cc, -dd)),
-            ((aa, bb), (-cc, -dd)),
-            ((-aa, -bb), (cc, dd)),
             ((aa, bb), (cc, dd)),
+            ((-aa, -bb), (-cc, -dd)),
         ]:
             # iterate over all relative shifts between the left and right partitions
             for shift_lr in np.ndindex(code.orders):
                 min_distance = get_minimal_communication_distance(
-                    code, folded_layout, vecs_l, vecs_r, shift_lr, optimal_distance
+                    code, folded_layout, vecs_l, vecs_r, shift_lr, optimal_distance, validate=False
                 )
                 if min_distance < optimal_distance:
                     optimal_vecs_l = vecs_l
@@ -97,12 +95,15 @@ def get_minimal_communication_distance(
     cutoff: float,
     *,
     digits: int = 1,
+    validate: bool = True,
 ) -> float:
     """Fix check qubit locations, and minimize the maximum communication distance for the code.
 
     If the minimum is greater than some cutoff, quit early and return a loose upper bound.
     """
-    placement_matrix = get_placement_matrix(code, folded_layout, vecs_l, vecs_r, shift_lr)
+    placement_matrix = get_placement_matrix(
+        code, folded_layout, vecs_l, vecs_r, shift_lr, validate=validate
+    )
 
     precision = 10**-digits / 2
     low, high = 0.0, 2 * cutoff + precision
@@ -124,6 +125,8 @@ def get_placement_matrix(
     vecs_l: tuple[tuple[int, int], tuple[int, int]],
     vecs_r: tuple[tuple[int, int], tuple[int, int]],
     shift_lr: tuple[int, int],
+    *,
+    validate: bool = True,
 ) -> npt.NDArray[np.int_]:
     """Construct a placement matrix of squared maximum communication distances.
 
@@ -140,7 +143,7 @@ def get_placement_matrix(
             folded_layout,
             basis=vecs_l if qubit_index < len(code) // 2 else vecs_r,
             shift=(0, 0) if qubit_index < len(code) // 2 else shift_lr,
-            validate=False,
+            validate=validate,
         )
 
     # identify all candidate locations for check qubit placement
