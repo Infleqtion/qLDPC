@@ -350,32 +350,23 @@ class BBCode(QCCode):
         qubit: Node | tuple[str, int, int],
         folded_layout: bool = False,
         *,
-        shift: tuple[int, int] | None = None,
-        plaquette_map: Mapping[tuple[int, int], tuple[int, int]] | None = None,
         orders: tuple[int, int] | None = None,
     ) -> tuple[int, int]:
         """Get the canonical position of a qubit with the given label.
 
         If folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
-        If provided a shift, translate all plaquettes by that shift.
-        If provided a plaquette_map, remap plaquette coordinates accordingly.
         If provided a orders, use them as the cyclic group orders in the folded layout.
         """
         # identify qubit sector and plaquette coordinates
         sector, aa, bb = self.get_node_label(qubit) if isinstance(qubit, Node) else qubit
-        if shift is not None:
-            aa = (aa + shift[0]) % self.orders[0]
-            bb = (bb + shift[1]) % self.orders[1]
-        if plaquette_map is not None:
-            aa, bb = plaquette_map[aa, bb]
 
         # convert sector and plaquette coordinates into qubit coordinates
         xx = 2 * aa + int(sector in ["R", "Z"])
         yy = 2 * bb + int(sector in ["L", "Z"])
         if folded_layout:
-            order_0, order_1 = orders or self.orders
-            xx = 2 * xx if xx < order_0 else (2 * order_0 - 1 - xx) * 2 + 1
-            yy = 2 * yy if yy < order_1 else (2 * order_1 - 1 - yy) * 2 + 1
+            order_a, order_b = orders or self.orders
+            xx = 2 * xx if xx < order_a else (2 * order_a - 1 - xx) * 2 + 1
+            yy = 2 * yy if yy < order_b else (2 * order_b - 1 - yy) * 2 + 1
         return xx, yy
 
     def get_equivalent_toric_layout_code_data(
