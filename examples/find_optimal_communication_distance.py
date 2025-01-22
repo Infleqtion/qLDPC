@@ -104,7 +104,7 @@ def get_optimal_layout_params(
 
 def get_minimal_communication_distance(
     code: qldpc.codes.BBCode,
-    check_supports: Sequence[Sequence[int]],
+    check_supports: Sequence[npt.NDArray[np.int_]],
     folded_layout: bool,
     vecs_l: tuple[tuple[int, int], tuple[int, int]],
     vecs_r: tuple[tuple[int, int], tuple[int, int]],
@@ -138,7 +138,7 @@ def get_minimal_communication_distance(
 
 def get_placement_matrix(
     code: qldpc.codes.BBCode,
-    check_supports: Sequence[Sequence[int]],
+    check_supports: Sequence[npt.NDArray[np.int_]],
     folded_layout: bool,
     vecs_l: tuple[tuple[int, int], tuple[int, int]],
     vecs_r: tuple[tuple[int, int], tuple[int, int]],
