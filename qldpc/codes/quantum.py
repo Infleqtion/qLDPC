@@ -371,8 +371,8 @@ class BBCode(QCCode):
         sector, aa, bb = qubit
 
         if shift is not None:
-            aa = (aa - shift[0]) % self.orders[0]
-            bb = (bb - shift[1]) % self.orders[1]
+            aa = (aa + shift[0]) % self.orders[0]
+            bb = (bb + shift[1]) % self.orders[1]
         if plaquette_map is not None:
             aa, bb = plaquette_map[aa, bb]
 
