@@ -480,7 +480,7 @@ class BBCode(QCCode):
     ) -> tuple[int, int, int, int]:
         """Find coefficients that change monomial basis from self.symbols to (gen_g, gen_h).
 
-        Specifically, letting (gen_x, gen_y = self.symbols, compute coefficients gx, gy, hx, hy for
+        Specifically, letting (gen_x, gen_y) = self.symbols, compute coefficients gx, gy, hx, hy for
         which
             gen_x = gen_g**gx * gen_h**hx,
             gen_y = gen_g**gy * gen_h**hy.
