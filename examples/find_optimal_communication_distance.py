@@ -135,6 +135,8 @@ def get_placement_matrix(
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
+    num_plaquettes = len(code) // 2
+
     # precompute plaquette mappings
     plaquette_map_l = get_plaquette_map(code, *vecs_l)
     plaquette_map_r = get_plaquette_map(code, *vecs_r)
@@ -143,12 +145,13 @@ def get_placement_matrix(
 
     def get_qubit_pos(qubit_index: int, *, is_data: str) -> tuple[int, int]:
         """Get the default position of the given qubit/node."""
+        sector_l = qubit_index < num_plaquettes
         return code.get_qubit_pos(
             qldpc.objects.Node(qubit_index, is_data=is_data),
             folded_layout,
-            shift=(0, 0) if qubit_index < len(code) // 2 else shift_r,
-            plaquette_map=plaquette_map_l if qubit_index < len(code) // 2 else plaquette_map_r,
-            orders=orders_l if qubit_index < len(code) // 2 else orders_r,
+            shift=(0, 0) if sector_l else shift_r,
+            plaquette_map=plaquette_map_l if sector_l else plaquette_map_r,
+            orders=orders_l if sector_l else orders_r,
         )
 
     # identify all candidate locations for check qubit placement
