@@ -16,12 +16,12 @@ from sympy.abc import x, y
 
 import qldpc
 
-BasisType = tuple[tuple[int, int], tuple[int, int]]
+Basis2D = tuple[tuple[int, int], tuple[int, int]]
 
 
 def get_optimal_layout_params(
     code: qldpc.codes.BBCode, folded_layout: bool, *, verbose: bool = False, cheat: bool = False
-) -> tuple[BasisType, BasisType, tuple[int, int], float]:
+) -> tuple[Basis2D, Basis2D, tuple[int, int], float]:
     """Get an optimal toric variant of a code, and its maximum communication distance."""
     optimal_distance = 2 * math.sqrt(sum(xx**2 for xx in code.orders))
 
@@ -62,7 +62,7 @@ def get_optimal_layout_params(
 
     # construct the set of pairs of lattice vector that span a torus with shape code.orders
     sites = np.ndindex(code.orders)
-    pairs: Iterable[BasisType] = itertools.combinations(sites, 2)  # type:ignore[assignment]
+    pairs: Iterable[Basis2D] = itertools.combinations(sites, 2)  # type:ignore[assignment]
     lattice_vectors = [
         (vec_a, vec_b) for vec_a, vec_b in pairs if code.is_valid_basis(vec_a, vec_b)
     ]
@@ -106,8 +106,8 @@ def get_minimal_communication_distance(
     code: qldpc.codes.BBCode,
     check_supports: Sequence[npt.NDArray[np.int_]],
     folded_layout: bool,
-    vecs_l: tuple[tuple[int, int], tuple[int, int]],
-    vecs_r: tuple[tuple[int, int], tuple[int, int]],
+    vecs_l: Basis2D,
+    vecs_r: Basis2D,
     shift_r: tuple[int, int],
     cutoff: float,
     *,
@@ -140,8 +140,8 @@ def get_placement_matrix(
     code: qldpc.codes.BBCode,
     check_supports: Sequence[npt.NDArray[np.int_]],
     folded_layout: bool,
-    vecs_l: tuple[tuple[int, int], tuple[int, int]],
-    vecs_r: tuple[tuple[int, int], tuple[int, int]],
+    vecs_l: Basis2D,
+    vecs_r: Basis2D,
     shift_r: tuple[int, int],
     *,
     validate: bool = True,
@@ -185,8 +185,8 @@ def get_placement_matrix(
 def get_qubit_pos_func(
     code: qldpc.codes.BBCode,
     folded_layout: bool,
-    vecs_l: tuple[tuple[int, int], tuple[int, int]],
-    vecs_r: tuple[tuple[int, int], tuple[int, int]],
+    vecs_l: Basis2D,
+    vecs_r: Basis2D,
     shift_r: tuple[int, int],
     *,
     validate: bool = True,
@@ -194,8 +194,8 @@ def get_qubit_pos_func(
     """Construct a function that gives qubit positions."""
 
     # precompute plaquette mappings
-    plaquette_map_l = get_plaquette_map(code, *vecs_l, validate=validate)
-    plaquette_map_r = get_plaquette_map(code, *vecs_r, validate=validate)
+    plaquette_map_l = get_plaquette_map(code, vecs_l, validate=validate)
+    plaquette_map_r = get_plaquette_map(code, vecs_r, validate=validate)
     orders_l = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
     orders_r = (code.get_order(vecs_r[0]), code.get_order(vecs_r[1]))
     num_plaquettes = len(code) // 2
@@ -224,17 +224,14 @@ def get_qubit_pos_func(
 
 
 def get_plaquette_map(
-    code: qldpc.codes.BBCode,
-    vec_a: tuple[int, int],
-    vec_b: tuple[int, int],
-    *,
-    validate: bool = True,
+    code: qldpc.codes.BBCode, basis: Basis2D, *, validate: bool = True
 ) -> dict[tuple[int, int], tuple[int, int]]:
     """Construct a map that re-labels plaquettes according to a new basis.
 
     If the old label of a plaquette was (x, y), the new label is the coefficients (a, b) for which
-    (x, y) = a * vec_a + b * vec_b.
+    (x, y) = a * basis[0] + b * basis[1].
     """
+    vec_a, vec_b = basis
     if validate:
         assert code.is_valid_basis(vec_a, vec_b)
     order_a = code.get_order(vec_a)
