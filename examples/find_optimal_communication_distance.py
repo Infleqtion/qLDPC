@@ -27,29 +27,29 @@ def get_optimal_layout_params(
         if code_params == (72, 12):
             vecs_l = ((1, 1), (1, 2))
             vecs_r = ((-1, -1), (-1, -2))
-            shift_lr = (4, 5)
+            shift_r = (4, 5)
         elif code_params == (90, 8):
             vecs_l = ((0, 1), (2, 0))
             vecs_r = ((0, 1), (2, 0))
-            shift_lr = (0, 0)
+            shift_r = (0, 0)
         elif code_params == (108, 8):
             vecs_l = ((3, 1), (4, 4))
             vecs_r = ((-3, -1), (-4, -4))
-            shift_lr = (5, 3)
+            shift_r = (5, 3)
         elif code_params == (144, 12):
             vecs_l = ((0, 1), (1, 0))
             vecs_r = ((0, 1), (1, 0))
-            shift_lr = (11, 1)
+            shift_r = (11, 1)
         elif code_params == (288, 12):
             vecs_l = ((0, 5), (1, 0))
             vecs_r = ((0, 5), (1, 0))
-            shift_lr = (11, 3)
+            shift_r = (11, 3)
         else:
             raise ValueError(f"Optima unknown for code with parameters {code_params}")
         optimal_distance = get_minimal_communication_distance(
-            code, folded_layout, vecs_l, vecs_r, shift_lr, optimal_distance
+            code, folded_layout, vecs_l, vecs_r, shift_r, optimal_distance
         )
-        return vecs_l, vecs_r, shift_lr, optimal_distance
+        return vecs_l, vecs_r, shift_r, optimal_distance
 
     # construct the set of pairs of lattice vector that span a torus with shape code.orders
     lattice_vectors = [
@@ -67,23 +67,23 @@ def get_optimal_layout_params(
             ((-aa, -bb), (-cc, -dd)),
         ]:
             # iterate over all relative shifts between the left and right partitions
-            for shift_lr in np.ndindex(code.orders):
+            for shift_r in np.ndindex(code.orders):
                 min_distance = get_minimal_communication_distance(
-                    code, folded_layout, vecs_l, vecs_r, shift_lr, optimal_distance, validate=False
+                    code, folded_layout, vecs_l, vecs_r, shift_r, optimal_distance, validate=False
                 )
                 if min_distance < optimal_distance:
                     optimal_vecs_l = vecs_l
                     optimal_vecs_r = vecs_r
-                    optimal_shift_lr = shift_lr
+                    optimal_shift_r = shift_r
                     optimal_distance = min_distance
                     if verbose:
                         print()
                         print("new best found:", min_distance)
                         print("vecs_l:", vecs_l)
                         print("vecs_r:", vecs_r)
-                        print("shift_lr:", shift_lr)
+                        print("shift_r:", shift_r)
 
-    return optimal_vecs_l, optimal_vecs_r, optimal_shift_lr, optimal_distance
+    return optimal_vecs_l, optimal_vecs_r, optimal_shift_r, optimal_distance
 
 
 def get_minimal_communication_distance(
@@ -91,7 +91,7 @@ def get_minimal_communication_distance(
     folded_layout: bool,
     vecs_l: tuple[tuple[int, int], tuple[int, int]],
     vecs_r: tuple[tuple[int, int], tuple[int, int]],
-    shift_lr: tuple[int, int],
+    shift_r: tuple[int, int],
     cutoff: float,
     *,
     digits: int = 1,
@@ -102,7 +102,7 @@ def get_minimal_communication_distance(
     If the minimum is greater than some cutoff, quit early and return a loose upper bound.
     """
     placement_matrix = get_placement_matrix(
-        code, folded_layout, vecs_l, vecs_r, shift_lr, validate=validate
+        code, folded_layout, vecs_l, vecs_r, shift_r, validate=validate
     )
 
     precision = 10**-digits / 2
@@ -124,7 +124,7 @@ def get_placement_matrix(
     folded_layout: bool,
     vecs_l: tuple[tuple[int, int], tuple[int, int]],
     vecs_r: tuple[tuple[int, int], tuple[int, int]],
-    shift_lr: tuple[int, int],
+    shift_r: tuple[int, int],
     *,
     validate: bool = True,
 ) -> npt.NDArray[np.int_]:
@@ -135,15 +135,20 @@ def get_placement_matrix(
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
+    # precompute plaquette mappings
+    plaquette_map_l = get_plaquette_map(code, *vecs_l)
+    plaquette_map_r = get_plaquette_map(code, *vecs_r)
+    orders_l = [code.get_order(vec) for vec in vecs_l]
+    orders_r = [code.get_order(vec) for vec in vecs_r]
 
     def get_qubit_pos(qubit_index: int, *, is_data: str) -> tuple[int, int]:
         """Get the default position of the given qubit/node."""
         return code.get_qubit_pos(
             qldpc.objects.Node(qubit_index, is_data=is_data),
             folded_layout,
-            basis=vecs_l if qubit_index < len(code) // 2 else vecs_r,
-            shift=(0, 0) if qubit_index < len(code) // 2 else shift_lr,
-            validate=validate,
+            shift=(0, 0) if qubit_index < len(code) // 2 else shift_r,
+            plaquette_map=plaquette_map_l if qubit_index < len(code) // 2 else plaquette_map_r,
+            orders=orders_l if qubit_index < len(code) // 2 else orders_r,
         )
 
     # identify all candidate locations for check qubit placement
@@ -169,6 +174,23 @@ def get_placement_matrix(
 
     # matrix of maximum squared communication distances
     return np.max(distances_squared, axis=-1)
+
+
+def get_plaquette_map(
+    code: qldpc.codes.BBCode,
+    vec_a: tuple[int, int],
+    vec_b: tuple[int, int],
+) -> dict[tuple[int, int], tuple[int, int]]:
+    order_a = code.get_order(vec_a)
+    order_b = code.get_order(vec_b)
+    return {
+        (
+            (aa * vec_a[0] + bb * vec_b[0]) % code.orders[0],
+            (aa * vec_a[1] + bb * vec_b[1]) % code.orders[1],
+        ): (aa, bb)
+        for aa in range(order_a)
+        for bb in range(order_b)
+    }
 
 
 def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np.bool_:
@@ -213,5 +235,5 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=True)
+        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=False)
         print("min_distance:", min_distance)
