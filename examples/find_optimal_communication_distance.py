@@ -7,7 +7,6 @@ The qudit placement strategy is as described in arXiv:2404.18809.
 import functools
 import itertools
 import math
-import sys
 from collections.abc import Callable, Iterable, Sequence
 
 import numpy as np
@@ -99,7 +98,6 @@ def get_optimal_layout_params(
                         print("vecs_l:", vecs_l)
                         print("vecs_r:", vecs_r)
                         print("shift_r:", shift_r)
-                        sys.stdout.flush()
 
     return optimal_vecs_l, optimal_vecs_r, optimal_shift_r, optimal_distance
 
@@ -272,30 +270,26 @@ if __name__ == "__main__":
             x**9 + y + y**2,
             1 + x**2 + x**7,
         ),
-        # qldpc.codes.BBCode(
-        #     {x: 9, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 12},
-        #     x**3 + y**2 + y**7,
-        #     y**3 + x + x**2,
-        # ),
+        qldpc.codes.BBCode(
+            {x: 9, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 12},
+            x**3 + y**2 + y**7,
+            y**3 + x + x**2,
+        ),
     ]
     folded_layout = True
-
-    import time
 
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        start = time.time()
-        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=False)
+        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=True)
         print("min_distance:", min_distance)
-        print("search time:", time.time() - start)
