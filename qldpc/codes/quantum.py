@@ -400,9 +400,9 @@ class BBCode(QCCode):
         *,
         validate: bool = True,
     ) -> tuple[int, int]:
-        """Solve xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders for (xx, yy).
+        """Brute force: solve xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders for (xx, yy).
 
-        Return also the orders of basis[0] and basis[1].  Do all of this by brute force.
+        Return also the orders of basis[0] and basis[1].
         """
         if validate:
             assert self.vectors_span_torus(basis[0], basis[1])
@@ -420,7 +420,7 @@ class BBCode(QCCode):
         raise ValueError(f"Uninvertible system of equations: {basis}, {aa}, {bb}")
 
     def vectors_span_torus(self, vec_a: tuple[int, int], vec_b: tuple[int, int]) -> bool:
-        """Do the given vectors span the torus of plaquettes for this code?
+        """Brute force: do the given vectors span the torus of plaquettes for this code?
 
         The plaquettes for this code tile a torus with shape self.orders.
         """
