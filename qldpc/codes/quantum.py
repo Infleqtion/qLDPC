@@ -355,7 +355,7 @@ class BBCode(QCCode):
         """Get the canonical position of a qubit with the given label.
 
         If folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
-        If provided a orders, use them as the cyclic group orders in the folded layout.
+        If provided orders, use them as the cyclic group orders in the folded layout.
         """
         # identify qubit sector and plaquette coordinates
         sector, aa, bb = self.get_node_label(qubit) if isinstance(qubit, Node) else qubit
