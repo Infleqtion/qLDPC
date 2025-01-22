@@ -21,7 +21,7 @@ import ast
 import itertools
 import math
 import os
-from collections.abc import Collection, Sequence
+from collections.abc import Collection, Mapping, Sequence
 
 import galois
 import networkx as nx
@@ -355,69 +355,35 @@ class BBCode(QCCode):
         folded_layout: bool = False,
         *,
         shift: tuple[int, int] | None = None,
-        basis: tuple[tuple[int, int], tuple[int, int]] | None = None,
-        validate: bool = True,
+        plaquette_map: Mapping[tuple[int, int], tuple[int, int]] | None = None,
+        orders: tuple[int, int] | None = None,
     ) -> tuple[int, int]:
         """Get the canonical position of a qubit with the given label.
 
-        If a folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
-
+        If folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
         If provided a shift, then translate all plaquettes by that shift.
-
-        If provided a basis of lattice vectors, rearrange the plaquettes onto a rectangular grid such that the plaquette at (a, b) after the basis change is the plaquette at
-        "a * basis[0] + b * basis[1]" before the basis change.
+        If provided a plaquette_map, remap plaquette coordinates accordingly.
+        If provided a orders, use them as the cyclic group orders in the folded layout.
         """
         # identify qubit sector and plaquette coordinates
         if isinstance(qubit, Node):
             qubit = self.get_node_label(qubit)
         sector, aa, bb = qubit
-        assert sector in ["L", "R", "X", "Z"]
 
-        # shift plaquette coordinates, if applicable
         if shift is not None:
             aa = (aa - shift[0]) % self.orders[0]
             bb = (bb - shift[1]) % self.orders[1]
-
-        # change basis to the lattice vectors, if applicable
-        if basis:
-            aa, bb, order_0, order_1 = self._modular_inverse(basis, aa, bb, validate=validate)
-        else:
-            order_0, order_1 = self.orders
+        if plaquette_map is not None:
+            aa, bb = plaquette_map[aa, bb]
 
         # convert sector and plaquette coordinates into qubit coordinates
         xx = 2 * aa + int(sector in ["R", "Z"])
         yy = 2 * bb + int(sector in ["L", "Z"])
         if folded_layout:
+            order_0, order_1 = orders or self.orders
             xx = 2 * xx if xx < order_0 else (2 * order_0 - 1 - xx) * 2 + 1
             yy = 2 * yy if yy < order_1 else (2 * order_1 - 1 - yy) * 2 + 1
         return xx, yy
-
-    def _modular_inverse(
-        self,
-        basis: tuple[tuple[int, int], tuple[int, int]],
-        aa: int,
-        bb: int,
-        *,
-        validate: bool = True,
-    ) -> tuple[int, int]:
-        """Brute force: solve xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders for (xx, yy).
-
-        Return also the orders of basis[0] and basis[1].
-        """
-        if validate:
-            assert self.vectors_span_torus(basis[0], basis[1])
-        aa = aa % self.orders[0]
-        bb = bb % self.orders[1]
-        order_0 = self.get_order(basis[0])
-        order_1 = self.get_order(basis[1])
-        for xx in range(order_0):
-            for yy in range(order_1):
-                if (
-                    aa == (xx * basis[0][0] + yy * basis[1][0]) % self.orders[0]
-                    and bb == (xx * basis[0][1] + yy * basis[1][1]) % self.orders[1]
-                ):
-                    return xx, yy, order_0, order_1
-        raise ValueError(f"Uninvertible system of equations: {basis}, {aa}, {bb}")
 
     def vectors_span_torus(self, vec_a: tuple[int, int], vec_b: tuple[int, int]) -> bool:
         """Brute force: do the given vectors span the torus of plaquettes for this code?
@@ -530,8 +496,8 @@ class BBCode(QCCode):
             vec_g = tuple(exponents_g.get(symbol, 0) for symbol in self.symbols)
             vec_h = tuple(exponents_h.get(symbol, 0) for symbol in self.symbols)
             basis_gh = vec_g, vec_h
-            gx, hx, *_ = self._modular_inverse(basis_gh, 1, 0, validate=False)
-            gy, hy, *_ = self._modular_inverse(basis_gh, 0, 1, validate=False)
+            gx, hx = self._modular_inverse(basis_gh, 1, 0, validate=False)
+            gy, hy = self._modular_inverse(basis_gh, 0, 1, validate=False)
             gen_x = symbol_g**gx * symbol_h**hx
             gen_y = symbol_g**gy * symbol_h**hy
 
@@ -552,6 +518,30 @@ class BBCode(QCCode):
                 toric_layout_generating_data.append(generating_data)
 
         return toric_layout_generating_data
+
+    def _modular_inverse(
+        self,
+        basis: tuple[tuple[int, int], tuple[int, int]],
+        aa: int,
+        bb: int,
+        *,
+        validate: bool = True,
+    ) -> tuple[int, int]:
+        """Brute force: solve xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders for xx, yy."""
+        if validate:
+            assert self.vectors_span_torus(basis[0], basis[1])
+        aa = aa % self.orders[0]
+        bb = bb % self.orders[1]
+        order_0 = self.get_order(basis[0])
+        order_1 = self.get_order(basis[1])
+        for xx in range(order_0):
+            for yy in range(order_1):
+                if (
+                    aa == (xx * basis[0][0] + yy * basis[1][0]) % self.orders[0]
+                    and bb == (xx * basis[0][1] + yy * basis[1][1]) % self.orders[1]
+                ):
+                    return xx, yy
+        raise ValueError(f"Uninvertible system of equations: {basis}, {aa}, {bb}")
 
 
 ################################################################################
