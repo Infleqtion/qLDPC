@@ -27,7 +27,7 @@ def get_optimal_layout_params(
         if code_params == (72, 12):
             vecs_l = ((1, 1), (1, 2))
             vecs_r = ((-1, -1), (-1, -2))
-            shift_r = (4, 5)
+            shift_r = (2, 1)
         elif code_params == (90, 8):
             vecs_l = ((0, 1), (2, 0))
             vecs_r = ((0, 1), (2, 0))
@@ -35,15 +35,15 @@ def get_optimal_layout_params(
         elif code_params == (108, 8):
             vecs_l = ((3, 1), (4, 4))
             vecs_r = ((-3, -1), (-4, -4))
-            shift_r = (5, 3)
+            shift_r = (1, 2)
         elif code_params == (144, 12):
             vecs_l = ((0, 1), (1, 0))
             vecs_r = ((0, 1), (1, 0))
-            shift_r = (11, 1)
+            shift_r = (1, 2)
         elif code_params == (288, 12):
             vecs_l = ((0, 5), (1, 0))
             vecs_r = ((0, 5), (1, 0))
-            shift_r = (11, 3)
+            shift_r = (1, 9)
         else:
             raise ValueError(f"Optima unknown for code with parameters {code_params}")
         optimal_distance = get_minimal_communication_distance(
@@ -238,5 +238,5 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=False)
+        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=True)
         print("min_distance:", min_distance)
