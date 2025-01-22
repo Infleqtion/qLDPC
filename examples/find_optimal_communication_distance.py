@@ -7,6 +7,7 @@ The qudit placement strategy is as described in arXiv:2404.18809.
 import functools
 import itertools
 import math
+from collections.abc import Callable, Iterable
 
 import numpy as np
 import numpy.typing as npt
@@ -15,10 +16,12 @@ from sympy.abc import x, y
 
 import qldpc
 
+BasisType = tuple[tuple[int, int], tuple[int, int]]
+
 
 def get_optimal_layout_params(
     code: qldpc.codes.BBCode, folded_layout: bool, *, verbose: bool = False, cheat: bool = False
-) -> tuple[qldpc.codes.BBCode, float]:
+) -> tuple[BasisType, BasisType, tuple[int, int], float]:
     """Get an optimal toric variant of a code, and its maximum communication distance."""
     optimal_distance = 2 * math.sqrt(sum(xx**2 for xx in code.orders))
 
@@ -53,10 +56,10 @@ def get_optimal_layout_params(
         return vecs_l, vecs_r, shift_r, optimal_distance
 
     # construct the set of pairs of lattice vector that span a torus with shape code.orders
+    sites = np.ndindex(code.orders)
+    pairs: Iterable[BasisType] = itertools.combinations(sites, 2)  # type:ignore[assignment]
     lattice_vectors = [
-        (vec_a, vec_b)
-        for vec_a, vec_b in itertools.combinations(np.ndindex(code.orders), 2)
-        if code.vectors_span_torus(vec_a, vec_b)
+        (vec_a, vec_b) for vec_a, vec_b in pairs if code.is_valid_basis(vec_a, vec_b)
     ]
 
     # iterate over all lattice vectors used to place qubits in the "left" partition
@@ -68,7 +71,7 @@ def get_optimal_layout_params(
             ((-aa, -bb), (-cc, -dd)),
         ]:
             # iterate over all relative shifts between the left and right partitions
-            for shift_r in np.ndindex(code.orders):
+            for shift_r in np.ndindex(code.orders):  # type:ignore[assignment]
                 min_distance = get_minimal_communication_distance(
                     code, folded_layout, vecs_l, vecs_r, shift_r, optimal_distance, validate=False
                 )
@@ -136,32 +139,16 @@ def get_placement_matrix(
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
-    num_plaquettes = len(code) // 2
-
-    # precompute plaquette mappings
-    plaquette_map_l = get_plaquette_map(code, *vecs_l)
-    plaquette_map_r = get_plaquette_map(code, *vecs_r)
-    orders_l = [code.get_order(vec) for vec in vecs_l]
-    orders_r = [code.get_order(vec) for vec in vecs_r]
-
-    @functools.cache
-    def get_qubit_pos(qubit_index: int, *, is_data: str) -> tuple[int, int]:
-        """Get the default position of the given qubit/node."""
-        sector_l = qubit_index < num_plaquettes
-        return code.get_qubit_pos(
-            qldpc.objects.Node(qubit_index, is_data=is_data),
-            folded_layout,
-            shift=(0, 0) if sector_l else shift_r,
-            plaquette_map=plaquette_map_l if sector_l else plaquette_map_r,
-            orders=orders_l if sector_l else orders_r,
-        )
+    get_qubit_pos = get_qubit_pos_func(
+        code, folded_layout, vecs_l, vecs_r, shift_r, validate=validate
+    )
 
     # identify all candidate locations for check qubit placement
-    locs = [get_qubit_pos(qubit_index, is_data=False) for qubit_index in range(code.num_checks)]
+    locs = [get_qubit_pos(qubit_index, False) for qubit_index in range(code.num_checks)]
 
     # compute the (fixed) locations of all check qubits' neighbors
     neighbor_locs = [
-        [get_qubit_pos(qubit_index, is_data=True) for qubit_index, *_ in zip(*np.where(stabilizer))]
+        [get_qubit_pos(qubit_index, True) for qubit_index, *_ in zip(*np.where(stabilizer))]
         for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)
     ]
     """
@@ -181,11 +168,53 @@ def get_placement_matrix(
     return np.max(distances_squared, axis=-1)
 
 
+def get_qubit_pos_func(
+    code: qldpc.codes.BBCode,
+    folded_layout: bool,
+    vecs_l: tuple[tuple[int, int], tuple[int, int]],
+    vecs_r: tuple[tuple[int, int], tuple[int, int]],
+    shift_r: tuple[int, int],
+    *,
+    validate: bool = True,
+) -> Callable[[int, bool], tuple[int, int]]:
+    """Construct a function that gives qubit positions."""
+
+    # precompute plaquette mappings
+    plaquette_map_l = get_plaquette_map(code, *vecs_l)
+    plaquette_map_r = get_plaquette_map(code, *vecs_r)
+    orders_l = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
+    orders_r = (code.get_order(vecs_r[0]), code.get_order(vecs_r[1]))
+    num_plaquettes = len(code) // 2
+
+    @functools.cache
+    def get_qubit_pos(qubit_index: int, is_data: bool) -> tuple[int, int]:
+        """Get the default position of the given qubit/node."""
+        sector_l = qubit_index < num_plaquettes
+        return code.get_qubit_pos(
+            qldpc.objects.Node(qubit_index, is_data=is_data),
+            folded_layout,
+            shift=(0, 0) if sector_l else shift_r,
+            plaquette_map=plaquette_map_l if sector_l else plaquette_map_r,
+            orders=orders_l if sector_l else orders_r,
+        )
+
+    return get_qubit_pos
+
+
 def get_plaquette_map(
     code: qldpc.codes.BBCode,
     vec_a: tuple[int, int],
     vec_b: tuple[int, int],
+    *,
+    validate: bool = True,
 ) -> dict[tuple[int, int], tuple[int, int]]:
+    """Construct a map that re-labels plaquettes according to a new basis.
+
+    If the old label of a plaquette was (x, y), the new label is the coefficients (a, b) for which
+    (x, y) = a * vec_a + b * vec_b.
+    """
+    if validate:
+        assert code.is_valid_basis(vec_a, vec_b)
     order_a = code.get_order(vec_a)
     order_b = code.get_order(vec_b)
     return {
