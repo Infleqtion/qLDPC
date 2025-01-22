@@ -7,7 +7,7 @@ The qudit placement strategy is as described in arXiv:2404.18809.
 import functools
 import itertools
 import math
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -24,6 +24,11 @@ def get_optimal_layout_params(
 ) -> tuple[BasisType, BasisType, tuple[int, int], float]:
     """Get an optimal toric variant of a code, and its maximum communication distance."""
     optimal_distance = 2 * math.sqrt(sum(xx**2 for xx in code.orders))
+
+    # precompute the supports of parity checks
+    check_supports = [
+        np.where(stabilizer)[0] for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)
+    ]
 
     if cheat:
         # return parameters that we know are pretty good
@@ -51,7 +56,7 @@ def get_optimal_layout_params(
         else:
             raise ValueError(f"Optima unknown for code with parameters {code_params}")
         optimal_distance = get_minimal_communication_distance(
-            code, folded_layout, vecs_l, vecs_r, shift_r, optimal_distance
+            code, check_supports, folded_layout, vecs_l, vecs_r, shift_r, optimal_distance
         )
         return vecs_l, vecs_r, shift_r, optimal_distance
 
@@ -73,7 +78,14 @@ def get_optimal_layout_params(
             # iterate over all relative shifts between the left and right partitions
             for shift_r in np.ndindex(code.orders):  # type:ignore[assignment]
                 min_distance = get_minimal_communication_distance(
-                    code, folded_layout, vecs_l, vecs_r, shift_r, optimal_distance, validate=False
+                    code,
+                    check_supports,
+                    folded_layout,
+                    vecs_l,
+                    vecs_r,
+                    shift_r,
+                    optimal_distance,
+                    validate=False,
                 )
                 if min_distance < optimal_distance:
                     optimal_vecs_l = vecs_l
@@ -92,6 +104,7 @@ def get_optimal_layout_params(
 
 def get_minimal_communication_distance(
     code: qldpc.codes.BBCode,
+    check_supports: Sequence[Sequence[int]],
     folded_layout: bool,
     vecs_l: tuple[tuple[int, int], tuple[int, int]],
     vecs_r: tuple[tuple[int, int], tuple[int, int]],
@@ -106,7 +119,7 @@ def get_minimal_communication_distance(
     If the minimum is greater than some cutoff, quit early and return a loose upper bound.
     """
     placement_matrix = get_placement_matrix(
-        code, folded_layout, vecs_l, vecs_r, shift_r, validate=validate
+        code, check_supports, folded_layout, vecs_l, vecs_r, shift_r, validate=validate
     )
 
     precision = 10**-digits / 2
@@ -125,6 +138,7 @@ def get_minimal_communication_distance(
 
 def get_placement_matrix(
     code: qldpc.codes.BBCode,
+    check_supports: Sequence[Sequence[int]],
     folded_layout: bool,
     vecs_l: tuple[tuple[int, int], tuple[int, int]],
     vecs_r: tuple[tuple[int, int], tuple[int, int]],
@@ -148,8 +162,7 @@ def get_placement_matrix(
 
     # compute the (fixed) locations of all check qubits' neighbors
     neighbor_locs = [
-        [get_qubit_pos(qubit_index, True) for qubit_index, *_ in zip(*np.where(stabilizer))]
-        for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)
+        [get_qubit_pos(qubit_index, True) for qubit_index in support] for support in check_supports
     ]
     """
     Vectorized calculation of displacements, with shape = (len(nodes), len(locs), num_neighbors, 2).
