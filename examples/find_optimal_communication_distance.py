@@ -37,6 +37,12 @@ def get_best_known_layout_params(
     for qubit in range(len(code)):
         print(qubit, get_qubit_pos(qubit))
     ```
+    Optimized check qubit locations can similarly be found with
+    ```
+    check_qubit_locations = get_check_qubit_locations(code, layout_params, min_max_distance)
+    for qubit, location in check_qubit_locations.items():
+        print(qubit, location)
+    ```
     """
     code_params = len(code), code.dimension
     if code_params == (72, 12) and folded_layout:
@@ -86,6 +92,12 @@ def find_layout_params(
     for qubit in range(len(code)):
         print(qubit, get_qubit_pos(qubit))
     ```
+    Optimized check qubit locations can similarly be found with
+    ```
+    check_qubit_locations = get_check_qubit_locations(code, layout_params, min_max_distance)
+    for qubit, location in check_qubit_locations.items():
+        print(qubit, location)
+    ```
     """
     # initialize the optimized (min-max) communication distance to an upper bound
     optimal_distance = get_max_distance(code)
@@ -111,21 +123,21 @@ def find_layout_params(
             # iterate over all relative shifts between the left and right partitions
             shift_r: tuple[int, int]
             for shift_r in np.ndindex(code.orders):  # type:ignore[assignment]
-                min_distance = get_min_max_communication_distance(
+                min_max_distance = get_min_max_communication_distance(
                     code,
                     (folded_layout, vecs_l, vecs_r, shift_r),
                     distance_cutoff=optimal_distance,
                     check_supports=check_supports,
                     validate=False,
                 )
-                if min_distance < optimal_distance:
+                if min_max_distance < optimal_distance:
                     optimal_vecs_l = vecs_l
                     optimal_vecs_r = vecs_r
                     optimal_shift_r = shift_r
-                    optimal_distance = min_distance
+                    optimal_distance = min_max_distance
                     if verbose:
                         print()
-                        print("new best found:", min_distance)
+                        print("new best found:", min_max_distance)
                         print("vecs_l:", vecs_l)
                         print("vecs_r:", vecs_r)
                         print("shift_r:", shift_r)
@@ -339,6 +351,6 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        # *layout_params, min_distance = find_layout_params(code, folded_layout)
-        *layout_params, min_distance = get_best_known_layout_params(code, folded_layout)
-        print("min_distance:", min_distance)
+        layout_params, min_max_distance = find_layout_params(code, folded_layout)
+        # layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
+        print("min_max_distance:", min_max_distance)
