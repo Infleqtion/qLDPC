@@ -213,5 +213,5 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=False)
+        *_, min_distance = get_optimal_layout_params(code, folded_layout, verbose=True, cheat=True)
         print("min_distance:", min_distance)
