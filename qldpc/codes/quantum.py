@@ -410,10 +410,6 @@ class BBCode(QCCode):
             # a connected tanner graph is required for a toric layout to exist
             return []
 
-        # identify unique symbols to use as placeholders for the new generators
-        symbol_g = sympy.Symbol("".join(map(str, self.symbols)))
-        symbol_h = sympy.Symbol("".join(map(str, self.symbols * 2)))
-
         # identify individual monomials (terms without their coefficients) in the polynomials
         monomials_a = [term.as_coeff_Mul()[1] for term in self.poly_a.as_expr().args]
         monomials_b = [term.as_coeff_Mul()[1] for term in self.poly_b.as_expr().args]
@@ -423,13 +419,9 @@ class BBCode(QCCode):
         for (a_1, a_2), (b_1, b_2) in itertools.product(
             itertools.combinations(monomials_a, 2), itertools.combinations(monomials_b, 2)
         ):
-            member_g = self.to_group_member(a_2 / a_1)
-            member_h = self.to_group_member(b_2 / b_1)
-            if (
-                self.group.order
-                == member_g.order() * member_h.order()
-                == abstract.Group(member_g, member_h).order
-            ):
+            vec_g = self.as_exponent_vector(a_2 / a_1)
+            vec_h = self.as_exponent_vector(b_2 / b_1)
+            if self.is_valid_basis(vec_g, vec_h):
                 toric_params.append((a_1, a_2, b_1, b_2))
                 toric_params.append((a_1, a_2, b_2, b_1))
                 toric_params.append((a_2, a_1, b_1, b_2))
@@ -437,14 +429,16 @@ class BBCode(QCCode):
 
         toric_layout_generating_data = []
         for a_1, a_2, b_1, b_2 in toric_params:
-            # new generators and their corresponding cyclic group orders
+            # new generators and their identify their cyclic group orders
             gen_g = a_2 / a_1
             gen_h = b_2 / b_1
-            orders = (self.to_group_member(gen_g).order(), self.to_group_member(gen_h).order())
+            vec_g = self.as_exponent_vector(gen_g)
+            vec_h = self.as_exponent_vector(gen_h)
+            orders = (self.get_order(vec_g), self.get_order(vec_h))
 
             # new "shifted" polynomials
-            shifted_poly_a = self.poly_a / a_1
-            shifted_poly_b = self.poly_b / b_1
+            shifted_poly_a = (self.poly_a / a_1).expand()
+            shifted_poly_b = (self.poly_b / b_1).expand()
 
             # without loss of generality, enforce that the toric layout "height" >= "width"
             if orders[0] < orders[1]:
@@ -452,52 +446,61 @@ class BBCode(QCCode):
                 gen_g, gen_h = gen_h, gen_g
                 shifted_poly_a, shifted_poly_b = shifted_poly_b, shifted_poly_a
 
-            # express generators x, y in terms of g and h
-            gx, gy, hx, hy = self.basis_change_coefs(gen_g, gen_h, validate=False)
-            gen_x = symbol_g**gx * symbol_h**hx
-            gen_y = symbol_g**gy * symbol_h**hy
+            # change polynomial basis to gen_g and gen_h
+            new_poly_a, new_poly_b = self.change_poly_basis(
+                gen_g, gen_h, shifted_poly_a, shifted_poly_b, orders=orders, validate=False
+            )
 
-            # build polynomials for an equivalent BBCode with a manifestly toric layout
-            new_polys = []
-            for poly in [shifted_poly_a, shifted_poly_b]:
-                # expand (x, y) in terms of (g, h), then "rename" (g, h) to (x, y)
-                poly = poly.expand()
-                poly = poly.subs({self.symbols[0]: gen_x, self.symbols[1]: gen_y})
-                poly = poly.subs({symbol_g: self.symbols[0], symbol_h: self.symbols[1]})
-
-                # add canonical form of this polynomial, with exponents in (-order/2, order/2]
-                new_polys.append(self.get_canonical_form(poly, orders))
-
-            new_poly_a, new_poly_b = new_polys
+            # add new generating data
             generating_data = (orders, new_poly_a, new_poly_b)
             if generating_data not in toric_layout_generating_data:
                 toric_layout_generating_data.append(generating_data)
 
         return toric_layout_generating_data
 
-    def basis_change_coefs(
-        self, gen_g: sympy.Mul, gen_h: sympy.Mul, *, validate: bool = True
-    ) -> tuple[int, int, int, int]:
-        """Find coefficients that change monomial basis from self.symbols to (gen_g, gen_h).
+    def as_exponent_vector(self, monomial: sympy.Mul) -> tuple[int, int]:
+        """Express the given monomial as a vector of exponents, as in x**3/y**2 -> (3, -2)."""
+        _, exponents = self.get_coefficient_and_exponents(monomial)
+        return (exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0))
 
-        Specifically, letting (gen_x, gen_y) = self.symbols, compute coefficients gx, gy, hx, hy for
-        which
-            gen_x = gen_g**gx * gen_h**hx,
-            gen_y = gen_g**gy * gen_h**hy.
-        """
-        # identify the exponents pp and qq for which gg = xx**pp * yy**qq; likewise for hh
-        _, exponents_g = self.get_coefficient_and_exponents(gen_g)
-        _, exponents_h = self.get_coefficient_and_exponents(gen_h)
+    def change_poly_basis(
+        self,
+        new_x: sympy.Mul,
+        new_y: sympy.Mul,
+        *polys: sympy.Basic,
+        orders: tuple[int, int] | None = None,
+        validate: bool = True,
+    ) -> list[sympy.Basic]:
+        """Change polynomial bases from (old_x, old_y) = self.symbols to (new_x, new_y)."""
+        # identify vectors of exponents, as in new_x = old_x**pp * old_y**qq -> (pp, qq)
+        vec_new_x = self.as_exponent_vector(new_x)
+        vec_new_y = self.as_exponent_vector(new_y)
 
-        # collect the exponents into a tuple, (pp, qq)
-        vec_g = (exponents_g.get(self.symbols[0], 0), exponents_g.get(self.symbols[1], 0))
-        vec_h = (exponents_h.get(self.symbols[0], 0), exponents_h.get(self.symbols[1], 0))
+        # identify the orders of new_x and new_y
+        orders = orders or (self.get_order(vec_new_x), self.get_order(vec_new_y))
 
-        # invert the system of equations for each of xx and yy
-        basis_gh = vec_g, vec_h
-        gx, hx = self.modular_inverse(basis_gh, 1, 0, validate=validate)
-        gy, hy = self.modular_inverse(basis_gh, 0, 1, validate=validate)
-        return gx, gy, hx, hy
+        # invert the system of equations for each of old_x and old_y
+        new_basis = vec_new_x, vec_new_y
+        xx, xy = self.modular_inverse(new_basis, 1, 0, validate=validate)
+        yx, yy = self.modular_inverse(new_basis, 0, 1, validate=False)
+
+        # express generators old_x, old_y in terms of new_x and new_y
+        symbol_new_x = sympy.Symbol("".join(map(str, self.symbols)))
+        symbol_new_y = sympy.Symbol("".join(map(str, self.symbols * 2)))
+        old_x = symbol_new_x**xx * symbol_new_y**xy
+        old_y = symbol_new_x**yx * symbol_new_y**yy
+
+        # build polynomials for an equivalent BBCode with a manifestly toric layout
+        new_polys = []
+        for poly in polys:
+            # expand (x, y) in terms of (g, h), then "rename" (g, h) to (x, y)
+            poly = poly.subs({self.symbols[0]: old_x, self.symbols[1]: old_y})
+            poly = poly.subs({symbol_new_x: self.symbols[0], symbol_new_y: self.symbols[1]})
+
+            # add canonical form of this polynomial, with exponents in (-order/2, order/2]
+            new_polys.append(self.get_canonical_form(poly, orders))
+
+        return new_polys
 
     def modular_inverse(
         self,
@@ -505,15 +508,15 @@ class BBCode(QCCode):
         aa: int,
         bb: int,
         *,
+        orders: tuple[int, int] | None = None,
         validate: bool = True,
     ) -> tuple[int, int]:
         """Brute force: solve xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders for xx, yy."""
         if validate:
-            assert self.vectors_span_torus(basis[0], basis[1])
+            assert self.is_valid_basis(basis[0], basis[1])
         aa = aa % self.orders[0]
         bb = bb % self.orders[1]
-        order_0 = self.get_order(basis[0])
-        order_1 = self.get_order(basis[1])
+        order_0, order_1 = orders or (self.get_order(basis[0]), self.get_order(basis[1]))
         for xx in range(order_0):
             for yy in range(order_1):
                 if (
@@ -523,23 +526,6 @@ class BBCode(QCCode):
                     return xx, yy
         raise ValueError(f"Uninvertible system of equations: {basis}, {aa}, {bb}")
 
-    def vectors_span_torus(self, vec_a: tuple[int, int], vec_b: tuple[int, int]) -> bool:
-        """Brute force: do the given vectors span the torus of plaquettes for this code?
-
-        The plaquettes for this code tile a torus with shape self.orders.
-        """
-        order_a = self.get_order(vec_a)
-        order_b = self.get_order(vec_b)
-
-        points = set()
-        for aa in range(order_a):
-            for bb in range(order_b):
-                xx = (aa * vec_a[0] + bb * vec_b[0]) % self.orders[0]
-                yy = (aa * vec_a[1] + bb * vec_b[1]) % self.orders[1]
-                points.add((xx, yy))
-
-        return len(points) == len(self) // 2
-
     def get_order(self, vec: tuple[int, int]) -> int:
         """What multiple of the vector hits the "origin" on the torus of plaquettes for this code?
 
@@ -548,6 +534,25 @@ class BBCode(QCCode):
         period_0 = self.orders[0] // math.gcd(vec[0], self.orders[0])
         period_1 = self.orders[1] // math.gcd(vec[1], self.orders[1])
         return period_0 * period_1 // math.gcd(period_0, period_1)
+
+    def is_valid_basis(self, vec_a: tuple[int, int], vec_b: tuple[int, int]) -> bool:
+        """Are the given vectors a valid basis for the plaquettes of this code?
+
+        The plaquettes for this code tile a torus with shape self.orders.
+        """
+        order_a = self.get_order(vec_a)
+        order_b = self.get_order(vec_b)
+        if not order_a * order_b == len(self) // 2:
+            return False
+
+        # brute-force determine whether every plaquette can be reached by the basis vectors
+        reached = np.zeros(self.orders, dtype=bool)
+        for aa in range(order_a):
+            for bb in range(order_b):
+                xx = (aa * vec_a[0] + bb * vec_b[0]) % self.orders[0]
+                yy = (aa * vec_a[1] + bb * vec_b[1]) % self.orders[1]
+                reached[xx, yy] = True
+        return bool(np.all(reached))
 
 
 ################################################################################
