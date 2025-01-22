@@ -385,32 +385,6 @@ class BBCode(QCCode):
             yy = 2 * yy if yy < order_1 else (2 * order_1 - 1 - yy) * 2 + 1
         return xx, yy
 
-    def vectors_span_torus(self, vec_a: tuple[int, int], vec_b: tuple[int, int]) -> bool:
-        """Brute force: do the given vectors span the torus of plaquettes for this code?
-
-        The plaquettes for this code tile a torus with shape self.orders.
-        """
-        period_a = self.get_order(vec_a)
-        period_b = self.get_order(vec_b)
-
-        points = set()
-        for mm in range(period_a):
-            for nn in range(period_b):
-                aa = (mm * vec_a[0] + nn * vec_b[0]) % self.orders[0]
-                bb = (mm * vec_a[1] + nn * vec_b[1]) % self.orders[1]
-                points.add((aa, bb))
-
-        return len(points) == len(self) // 2
-
-    def get_order(self, vec: tuple[int, int]) -> int:
-        """What multiple of the vector hits the "origin" on the torus of plaquettes for this code?
-
-        The plaquettes for this code tile a torus with shape self.orders.
-        """
-        period_0 = self.orders[0] // math.gcd(vec[0], self.orders[0])
-        period_1 = self.orders[1] // math.gcd(vec[1], self.orders[1])
-        return period_0 * period_1 // math.gcd(period_0, period_1)
-
     def get_equivalent_toric_layout_code_data(
         self,
     ) -> Sequence[tuple[tuple[int, int], sympy.Poly, sympy.Poly]]:
@@ -489,15 +463,15 @@ class BBCode(QCCode):
             More specifically, we need to find exponents (gx, hx) and (gy, hy) for which
                 x = g^gx h^hx,
                 y = g^gy h^hy.
-            We find these exponents by inverting a sytem of equations, with self._modular_inverse.
+            We find these exponents by inverting a sytem of equations, with self.modular_inverse.
             """
             _, exponents_g = self.get_coefficient_and_exponents(gen_g)
             _, exponents_h = self.get_coefficient_and_exponents(gen_h)
             vec_g = tuple(exponents_g.get(symbol, 0) for symbol in self.symbols)
             vec_h = tuple(exponents_h.get(symbol, 0) for symbol in self.symbols)
             basis_gh = vec_g, vec_h
-            gx, hx = self._modular_inverse(basis_gh, 1, 0, validate=False)
-            gy, hy = self._modular_inverse(basis_gh, 0, 1, validate=False)
+            gx, hx = self.modular_inverse(basis_gh, 1, 0, validate=False)
+            gy, hy = self.modular_inverse(basis_gh, 0, 1, validate=False)
             gen_x = symbol_g**gx * symbol_h**hx
             gen_y = symbol_g**gy * symbol_h**hy
 
@@ -519,7 +493,7 @@ class BBCode(QCCode):
 
         return toric_layout_generating_data
 
-    def _modular_inverse(
+    def modular_inverse(
         self,
         basis: tuple[tuple[int, int], tuple[int, int]],
         aa: int,
@@ -542,6 +516,32 @@ class BBCode(QCCode):
                 ):
                     return xx, yy
         raise ValueError(f"Uninvertible system of equations: {basis}, {aa}, {bb}")
+
+    def vectors_span_torus(self, vec_a: tuple[int, int], vec_b: tuple[int, int]) -> bool:
+        """Brute force: do the given vectors span the torus of plaquettes for this code?
+
+        The plaquettes for this code tile a torus with shape self.orders.
+        """
+        order_a = self.get_order(vec_a)
+        order_b = self.get_order(vec_b)
+
+        points = set()
+        for aa in range(order_a):
+            for bb in range(order_b):
+                xx = (aa * vec_a[0] + bb * vec_b[0]) % self.orders[0]
+                yy = (aa * vec_a[1] + bb * vec_b[1]) % self.orders[1]
+                points.add((xx, yy))
+
+        return len(points) == len(self) // 2
+
+    def get_order(self, vec: tuple[int, int]) -> int:
+        """What multiple of the vector hits the "origin" on the torus of plaquettes for this code?
+
+        The plaquettes for this code tile a torus with shape self.orders.
+        """
+        period_0 = self.orders[0] // math.gcd(vec[0], self.orders[0])
+        period_1 = self.orders[1] // math.gcd(vec[1], self.orders[1])
+        return period_0 * period_1 // math.gcd(period_0, period_1)
 
 
 ################################################################################
