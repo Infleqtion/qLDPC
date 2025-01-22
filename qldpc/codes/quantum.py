@@ -338,12 +338,7 @@ class BBCode(QCCode):
         The qubit label identifies the sector (L, R, X, Y) within a plaquette, and the coordinates
         of the plaquette that contains the given node (qubit).
         """
-        # compute numpy.unravel_index(node.index, (2,) + self.orders) manually, which is faster...
-        num_plaquettes = len(self) // 2
-        plaquette_index = node.index % num_plaquettes
-        ss = node.index // num_plaquettes
-        aa = plaquette_index // self.orders[1]
-        bb = plaquette_index % self.orders[1]
+        ss, aa, bb = np.unravel_index(node.index, (2,) + self.orders)
         if node.is_data:
             sector = "L" if ss == 0 else "R"
         else:
