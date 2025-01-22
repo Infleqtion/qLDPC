@@ -21,7 +21,7 @@ import ast
 import itertools
 import math
 import os
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Sequence
 
 import galois
 import networkx as nx
@@ -435,7 +435,7 @@ class BBCode(QCCode):
 
             # change polynomial basis to gen_g and gen_h
             new_poly_a, new_poly_b = self.change_poly_basis(
-                gen_g, gen_h, shifted_poly_a, shifted_poly_b, orders=orders, validate=False
+                gen_g, gen_h, shifted_poly_a, shifted_poly_b
             )
 
             # add new generating data
@@ -451,12 +451,7 @@ class BBCode(QCCode):
         return (exponents.get(self.symbols[0], 0), exponents.get(self.symbols[1], 0))
 
     def change_poly_basis(
-        self,
-        new_x: sympy.Mul,
-        new_y: sympy.Mul,
-        *polys: sympy.Basic,
-        orders: tuple[int, int] | None = None,
-        validate: bool = True,
+        self, new_x: sympy.Mul, new_y: sympy.Mul, *polys: sympy.Basic
     ) -> list[sympy.Basic]:
         """Change polynomial bases from (old_x, old_y) = self.symbols to (new_x, new_y)."""
         # identify vectors of exponents, as in new_x = old_x**pp * old_y**qq -> (pp, qq)
@@ -464,12 +459,12 @@ class BBCode(QCCode):
         vec_new_y = self.as_exponent_vector(new_y)
 
         # identify the orders of new_x and new_y
-        orders = orders or (self.get_order(vec_new_x), self.get_order(vec_new_y))
+        orders = self.get_order(vec_new_x), self.get_order(vec_new_y)
 
         # invert the system of equations for each of old_x and old_y
         new_basis = vec_new_x, vec_new_y
-        xx, xy = self.modular_inverse(new_basis, 1, 0, validate=validate)
-        yx, yy = self.modular_inverse(new_basis, 0, 1, validate=False)
+        xx, xy = self.modular_inverse(new_basis, 1, 0)
+        yx, yy = self.modular_inverse(new_basis, 0, 1)
 
         # express generators old_x, old_y in terms of new_x and new_y
         symbol_new_x = sympy.Symbol("".join(map(str, self.symbols)))
@@ -490,20 +485,16 @@ class BBCode(QCCode):
         return new_polys
 
     def modular_inverse(
-        self,
-        basis: tuple[tuple[int, int], tuple[int, int]],
-        aa: int,
-        bb: int,
-        *,
-        orders: tuple[int, int] | None = None,
-        validate: bool = True,
+        self, basis: tuple[tuple[int, int], tuple[int, int]], aa: int, bb: int
     ) -> tuple[int, int]:
-        """Brute force: solve xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders for xx, yy."""
-        if validate:
-            assert self.is_valid_basis(basis[0], basis[1])
+        """Brute force: solve xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders for xx, yy.
+
+        If provided orders, treat them as the orders of the basis vectors.
+        """
         aa = aa % self.orders[0]
         bb = bb % self.orders[1]
-        order_0, order_1 = orders or (self.get_order(basis[0]), self.get_order(basis[1]))
+        order_0 = self.get_order(basis[0])
+        order_1 = self.get_order(basis[1])
         for xx in range(order_0):
             for yy in range(order_1):
                 if (
