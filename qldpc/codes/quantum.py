@@ -476,17 +476,18 @@ class BBCode(QCCode):
         return toric_layout_generating_data
 
     def basis_change_coefs(
-        self, gg: sympy.Mul, hh: sympy.Mul, *, validate: bool = True
+        self, gen_g: sympy.Mul, gen_h: sympy.Mul, *, validate: bool = True
     ) -> tuple[int, int, int, int]:
-        """Find coefficients that change monomial basis from (xx, yy) = self.symbols to (gg, hh).
+        """Find coefficients that change monomial basis from self.symbols to (gen_g, gen_h).
 
-        Specifically, compute coefficients gx, gy, hx, hy for which
-            xx = gg**gx * hh**hx,
-            yy = gg**gy * hh**hy.
+        Specifically, letting (gen_x, gen_y = self.symbols, compute coefficients gx, gy, hx, hy for
+        which
+            gen_x = gen_g**gx * gen_h**hx,
+            gen_y = gen_g**gy * gen_h**hy.
         """
         # identify the exponents pp and qq for which gg = xx**pp * yy**qq; likewise for hh
-        _, exponents_g = self.get_coefficient_and_exponents(gg)
-        _, exponents_h = self.get_coefficient_and_exponents(hh)
+        _, exponents_g = self.get_coefficient_and_exponents(gen_g)
+        _, exponents_h = self.get_coefficient_and_exponents(gen_h)
 
         # collect the exponents into a tuple, (pp, qq)
         vec_g = (exponents_g.get(self.symbols[0], 0), exponents_g.get(self.symbols[1], 0))
