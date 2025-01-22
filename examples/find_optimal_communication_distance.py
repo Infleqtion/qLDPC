@@ -180,8 +180,8 @@ def get_qubit_pos_func(
     """Construct a function that gives qubit positions."""
 
     # precompute plaquette mappings
-    plaquette_map_l = get_plaquette_map(code, *vecs_l)
-    plaquette_map_r = get_plaquette_map(code, *vecs_r)
+    plaquette_map_l = get_plaquette_map(code, *vecs_l, validate=validate)
+    plaquette_map_r = get_plaquette_map(code, *vecs_r, validate=validate)
     orders_l = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
     orders_r = (code.get_order(vecs_r[0]), code.get_order(vecs_r[1]))
     num_plaquettes = len(code) // 2
