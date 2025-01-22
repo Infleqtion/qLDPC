@@ -101,6 +101,15 @@ def test_bivariate_bicycle_codes() -> None:
     with pytest.raises(ValueError, match="should have exactly two"):
         codes.BBCode({}, x, y + z)
 
+    # fail to invert a system of equations
+    dims = (3, 3)
+    poly_a = 1 + x + x * y
+    poly_b = 1 + y + x * y
+    code = codes.BBCode(dims, poly_a, poly_b)
+    with pytest.raises(ValueError, match="Uninvertible system of equations"):
+        basis = (1, 0), (0, 0)
+        code.modular_inverse(basis, 0, 1)
+
 
 def test_bivariate_bicycle_neighbors() -> None:
     """In a toric layout of a code, check qubits address their nearest neighbors."""
