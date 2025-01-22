@@ -333,8 +333,17 @@ class BBCode(QCCode):
         QCCode.__init__(self, orders, poly_a, poly_b, field)
 
     def get_node_label(self, node: Node) -> tuple[str, int, int]:
-        """Convert a node of this code's Tanner graph into a qubit label."""
-        ss, aa, bb = np.unravel_index(node.index, (2,) + self.orders)
+        """Convert a node of this code's Tanner graph into a qubit label.
+
+        The qubit label identifies the sector (L, R, X, Y) within a plaquette, and the coordinates
+        of the plaquette that contains the given node (qubit).
+        """
+        # compute numpy.unravel_index(node.index, (2,) + self.orders) manually, which is faster...
+        num_plaquettes = len(self) // 2
+        plaquette_index = node.index % num_plaquettes
+        ss = node.index // num_plaquettes
+        aa = plaquette_index // self.orders[1]
+        bb = plaquette_index % self.orders[1]
         if node.is_data:
             sector = "L" if ss == 0 else "R"
         else:
