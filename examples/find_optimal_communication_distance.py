@@ -177,7 +177,7 @@ def get_placement_matrix(
     )
 
     # squared communication distances
-    distances_squared = np.sum(displacements**2, axis=-1)
+    distances_squared = np.einsum("...i,...i->...", displacements, displacements)
 
     # matrix of maximum squared communication distances
     return np.max(distances_squared, axis=-1)
