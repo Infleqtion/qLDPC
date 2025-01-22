@@ -189,14 +189,21 @@ def get_qubit_pos_func(
     @functools.cache
     def get_qubit_pos(qubit_index: int, is_data: bool) -> tuple[int, int]:
         """Get the default position of the given qubit/node."""
-        sector_l = qubit_index < num_plaquettes
-        return code.get_qubit_pos(
-            qldpc.objects.Node(qubit_index, is_data=is_data),
-            folded_layout,
-            shift=(0, 0) if sector_l else shift_r,
-            plaquette_map=plaquette_map_l if sector_l else plaquette_map_r,
-            orders=orders_l if sector_l else orders_r,
-        )
+        plaquette_index = qubit_index % num_plaquettes
+        if qubit_index < num_plaquettes:
+            sector = "X" if is_data else "L"
+            orders = orders_l
+            aa, bb = plaquette_index // code.orders[1], plaquette_index % code.orders[1]
+            aa, bb = plaquette_map_l[aa, bb]
+
+        else:
+            sector = "Z" if is_data else "R"
+            orders = orders_r
+            aa = (plaquette_index // orders[1] + shift_r[0]) % code.orders[0]
+            bb = (plaquette_index % orders[1] + shift_r[1]) % code.orders[1]
+            aa, bb = plaquette_map_r[aa, bb]
+
+        return code.get_qubit_pos((sector, aa, bb), folded_layout, orders=orders)
 
     return get_qubit_pos
 
