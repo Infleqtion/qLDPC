@@ -361,7 +361,7 @@ class BBCode(QCCode):
         """Get the canonical position of a qubit with the given label.
 
         If folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
-        If provided a shift, then translate all plaquettes by that shift.
+        If provided a shift, translate all plaquettes by that shift.
         If provided a plaquette_map, remap plaquette coordinates accordingly.
         If provided a orders, use them as the cyclic group orders in the folded layout.
         """
