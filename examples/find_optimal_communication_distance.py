@@ -268,9 +268,9 @@ def get_plaquette_map(
     (x, y) = a * basis[0] + b * basis[1].  Here (x, y) is taken modulo code.orders, and (a, b) is
     taken modulo the order of the basis vectors on a torus with dimensions code.orders.
     """
-    vec_a, vec_b = basis
     if validate:
-        assert code.is_valid_basis(vec_a, vec_b)
+        assert code.is_valid_basis(*basis)
+    vec_a, vec_b = basis
     order_a = code.get_order(vec_a)
     order_b = code.get_order(vec_b)
     return {
