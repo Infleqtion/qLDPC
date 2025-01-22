@@ -339,10 +339,11 @@ class BBCode(QCCode):
         of the plaquette that contains the given node (qubit).
         """
         # compute numpy.unravel_index(node.index, (2,) + self.orders) manually, which is faster...
-        num_sites = len(self) // 2
-        ss = node.index // num_sites
-        aa = (node.index % num_sites) // self.orders[1]
-        bb = (node.index % num_sites) % self.orders[1]
+        num_plaquettes = len(self) // 2
+        plaquette_index = node.index % num_plaquettes
+        ss = node.index // num_plaquettes
+        aa = plaquette_index // self.orders[1]
+        bb = plaquette_index % self.orders[1]
         if node.is_data:
             sector = "L" if ss == 0 else "R"
         else:
