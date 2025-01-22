@@ -116,7 +116,8 @@ def get_minimal_communication_distance(
 ) -> float:
     """Fix check qubit locations, and minimize the maximum communication distance for the code.
 
-    If the minimum is greater than some cutoff, quit early and return a loose upper bound.
+    The cutoff argument is used for early stopping: if the minimum is greater than the cutoff, quit
+    early and return a number greater than the cutoff.
     """
     placement_matrix = get_placement_matrix(
         code, check_supports, folded_layout, vecs_l, vecs_r, shift_r, validate=validate
