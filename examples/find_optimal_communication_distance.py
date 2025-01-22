@@ -24,10 +24,18 @@ def get_best_known_layout_params(
 ) -> tuple[Basis2D, Basis2D, tuple[int, int], float]:
     """Retrieve the best known layout parameters for a bivariate bicycle code.
 
-    This function can be used to identify optimized qubit locations by running:
-        *layout_params, max_distance = get_best_known_layout_params(code, folded_layout)
-        get_qubit_pos = get_qubit_pos_func(code, folded_layout, *layout_params)
-    ...
+    This function can be used to identify optimized data qubit layout parameters with:
+    ```
+    *layout_params, max_distance = get_best_known_layout_params(code, folded_layout)
+    ```
+    Here max_distance is the maximum communication distance between neighboring qubits in the Tanner
+    graph of the code after additionally optimizing over check qubit locations.  The location of the
+    data qubits in the retrieved layout are given by:
+    ```
+    get_qubit_pos = get_qubit_pos_func(code, folded_layout, *layout_params)
+    for qubit in range(len(code)):
+        print(qubit, get_qubit_pos(qubit))
+    ```
     """
     code_params = len(code), code.dimension
     if code_params == (72, 12) and folded_layout:
@@ -52,7 +60,7 @@ def get_best_known_layout_params(
         shift_r = (1, 9)
     else:
         raise ValueError(
-            f"Optima unknown for code with parameters {code_params}"
+            f"Layout parameters unknown for BBCode with parameters {code_params}"
             f" and folded_layout={folded_layout}"
         )
     max_distance = get_minimal_communication_distance(code, folded_layout, vecs_l, vecs_r, shift_r)
@@ -64,12 +72,20 @@ def find_layout_params(
 ) -> tuple[Basis2D, Basis2D, tuple[int, int], float]:
     """Opitmize BBCode layout parameters, as described in arXiv:2404.18809.
 
-    This function can be used to identify optimized qubit locations by running:
-        *layout_params, max_distance = find_layout_params(code, folded_layout)
-        get_qubit_pos = get_qubit_pos_func(code, folded_layout, *layout_params)
-    ...
+    This function can be used to identify optimized data qubit layout parameters with:
+    ```
+    *layout_params, max_distance = find_layout_params(code, folded_layout)
+    ```
+    Here max_distance is the maximum communication distance between neighboring qubits in the Tanner
+    graph of the code after additionally optimizing over check qubit locations.  The location of the
+    data qubits in the retrieved layout are given by:
+    ```
+    get_qubit_pos = get_qubit_pos_func(code, folded_layout, *layout_params)
+    for qubit in range(len(code)):
+        print(qubit, get_qubit_pos(qubit))
+    ```
     """
-    # initialize the optimal communication distance to an upper bound
+    # initialize the optimized (min-max) communication distance to an upper bound
     optimal_distance = get_max_distance(code)
 
     # precomupte the support of parity checks
@@ -99,7 +115,7 @@ def find_layout_params(
                     vecs_l,
                     vecs_r,
                     shift_r,
-                    cutoff=optimal_distance,
+                    distance_cutoff=optimal_distance,
                     check_supports=check_supports,
                     validate=False,
                 )
@@ -135,17 +151,17 @@ def get_minimal_communication_distance(
     vecs_r: Basis2D,
     shift_r: tuple[int, int],
     *,
-    cutoff: float | None = None,
+    distance_cutoff: float | None = None,
     check_supports: Sequence[npt.NDArray[np.int_]] | None = None,
     digits: int = 1,
     validate: bool = True,
 ) -> float:
     """Fix check qubit locations, and minimize the maximum communication distance for the code.
 
-    The cutoff argument is used for early stopping: if the minimum is greater than the cutoff, quit
-    early and return a number greater than the cutoff.
+    The distance_cutoff argument is used for early stopping: if the minimum is greater than the
+    distance_cutoff, then quit early and return a number greater than the distance_cutoff.
     """
-    cutoff = cutoff or get_max_distance(code)
+    distance_cutoff = distance_cutoff or get_max_distance(code)
     check_supports = check_supports or get_check_supports(code)
     placement_matrix = get_placement_matrix(
         code,
@@ -158,7 +174,7 @@ def get_minimal_communication_distance(
     )
 
     precision = 10**-digits / 2
-    low, high = 0.0, 2 * cutoff + precision
+    low, high = 0.0, 2 * distance_cutoff + precision
     while True:
         mid = (low + high) / 2
         if has_perfect_matching(placement_matrix <= int(mid**2)):
@@ -167,7 +183,7 @@ def get_minimal_communication_distance(
                 return round(mid, digits)
         else:
             low = mid
-            if high - low < precision or low > cutoff:
+            if high - low < precision or low > distance_cutoff:
                 return round(high, digits)
 
 
@@ -228,7 +244,7 @@ def get_qubit_pos_func(
     *,
     validate: bool = True,
 ) -> Callable[[int, bool], tuple[int, int]]:
-    """Construct a function that gives qubit positions."""
+    """Construct a function that gives qubit positions in particular layout of a BBCode."""
 
     # precompute plaquette mappings
     plaquette_map_l = get_plaquette_map(code, vecs_l, validate=validate)
@@ -238,7 +254,7 @@ def get_qubit_pos_func(
     num_plaquettes = len(code) // 2
 
     @functools.cache
-    def get_qubit_pos(qubit_index: int, is_data: bool) -> tuple[int, int]:
+    def get_qubit_pos(qubit_index: int, is_data: bool = True) -> tuple[int, int]:
         """Get the default position of the given qubit/node."""
         plaquette_index = qubit_index % num_plaquettes
         if qubit_index < num_plaquettes:
@@ -266,7 +282,8 @@ def get_plaquette_map(
     """Construct a map that re-labels plaquettes according to a new basis.
 
     If the old label of a plaquette was (x, y), the new label is the coefficients (a, b) for which
-    (x, y) = a * basis[0] + b * basis[1].
+    (x, y) = a * basis[0] + b * basis[1].  Here (x, y) is taken modulo code.orders, and (a, b) is
+    taken modulo the order of the basis vectors on a torus with dimensions code.orders.
     """
     vec_a, vec_b = basis
     if validate:
@@ -325,5 +342,6 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
+        # *layout_params, min_distance = find_layout_params(code, folded_layout)
         *layout_params, min_distance = get_best_known_layout_params(code, folded_layout)
         print("min_distance:", min_distance)
