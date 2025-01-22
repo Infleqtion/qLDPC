@@ -452,23 +452,8 @@ class BBCode(QCCode):
                 gen_g, gen_h = gen_h, gen_g
                 shifted_poly_a, shifted_poly_b = shifted_poly_b, shifted_poly_a
 
-            """
-            Let x and y be the generators of the polynomials in the original BBCode.
-            We want to "change basis" from generators (x, y) to generators (g, h), where
-                g = x^p y^q,
-                h = x^u y^v.
-            More specifically, we need to find exponents (gx, hx) and (gy, hy) for which
-                x = g^gx h^hx,
-                y = g^gy h^hy.
-            We find these exponents by inverting a sytem of equations, with self.modular_inverse.
-            """
-            _, exponents_g = self.get_coefficient_and_exponents(gen_g)
-            _, exponents_h = self.get_coefficient_and_exponents(gen_h)
-            vec_g = tuple(exponents_g.get(symbol, 0) for symbol in self.symbols)
-            vec_h = tuple(exponents_h.get(symbol, 0) for symbol in self.symbols)
-            basis_gh = vec_g, vec_h
-            gx, hx = self.modular_inverse(basis_gh, 1, 0, validate=False)
-            gy, hy = self.modular_inverse(basis_gh, 0, 1, validate=False)
+            # express generators x, y in terms of g and h
+            gx, gy, hx, hy = self.basis_change_coefs(gen_g, gen_h, validate=False)
             gen_x = symbol_g**gx * symbol_h**hx
             gen_y = symbol_g**gy * symbol_h**hy
 
@@ -489,6 +474,29 @@ class BBCode(QCCode):
                 toric_layout_generating_data.append(generating_data)
 
         return toric_layout_generating_data
+
+    def basis_change_coefs(
+        self, gg: sympy.Mul, hh: sympy.Mul, *, validate: bool = True
+    ) -> tuple[int, int, int, int]:
+        """Find coefficients that change monomial basis from (xx, yy) = self.symbols to (gg, hh).
+
+        Specifically, compute coefficients gx, gy, hx, hy for which
+            xx = gg**gx * hh**hx,
+            yy = gg**gy * hh**hy.
+        """
+        # identify the exponents pp and qq for which gg = xx**pp * yy**qq; likewise for hh
+        _, exponents_g = self.get_coefficient_and_exponents(gg)
+        _, exponents_h = self.get_coefficient_and_exponents(hh)
+
+        # collect the exponents into a tuple, (pp, qq)
+        vec_g = (exponents_g.get(self.symbols[0], 0), exponents_g.get(self.symbols[1], 0))
+        vec_h = (exponents_h.get(self.symbols[0], 0), exponents_h.get(self.symbols[1], 0))
+
+        # invert the system of equations for each of xx and yy
+        basis_gh = vec_g, vec_h
+        gx, hx = self.modular_inverse(basis_gh, 1, 0, validate=validate)
+        gy, hy = self.modular_inverse(basis_gh, 0, 1, validate=validate)
+        return gx, gy, hx, hy
 
     def modular_inverse(
         self,
