@@ -4,6 +4,7 @@
 The qudit placement strategy is as described in arXiv:2404.18809.
 """
 
+import functools
 import itertools
 import math
 
@@ -143,6 +144,7 @@ def get_placement_matrix(
     orders_l = [code.get_order(vec) for vec in vecs_l]
     orders_r = [code.get_order(vec) for vec in vecs_r]
 
+    @functools.cache
     def get_qubit_pos(qubit_index: int, *, is_data: str) -> tuple[int, int]:
         """Get the default position of the given qubit/node."""
         sector_l = qubit_index < num_plaquettes
