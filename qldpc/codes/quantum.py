@@ -366,10 +366,7 @@ class BBCode(QCCode):
         If provided a orders, use them as the cyclic group orders in the folded layout.
         """
         # identify qubit sector and plaquette coordinates
-        if isinstance(qubit, Node):
-            qubit = self.get_node_label(qubit)
-        sector, aa, bb = qubit
-
+        sector, aa, bb = self.get_node_label(qubit) if isinstance(qubit, Node) else qubit
         if shift is not None:
             aa = (aa + shift[0]) % self.orders[0]
             bb = (bb + shift[1]) % self.orders[1]
