@@ -344,27 +344,27 @@ if __name__ == "__main__":
             x**9 + y + y**2,
             1 + x**2 + x**7,
         ),
-        # qldpc.codes.BBCode(
-        #     {x: 9, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 12},
-        #     x**3 + y**2 + y**7,
-        #     y**3 + x + x**2,
-        # ),
+        qldpc.codes.BBCode(
+            {x: 9, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 12},
+            x**3 + y**2 + y**7,
+            y**3 + x + x**2,
+        ),
     ]
     folded_layout = True
 
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        layout_params, min_max_distance = find_layout_params(code, folded_layout)
-        # layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
+        # layout_params, min_max_distance = find_layout_params(code, folded_layout)
+        layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
         print("min_max_distance:", min_max_distance)
