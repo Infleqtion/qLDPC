@@ -240,7 +240,7 @@ def get_data_qubit_locs(
 def get_data_qubit_pos_func(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
 ) -> Callable[[int], tuple[int, int]]:
-    """Construct a function that gives qubit positions in particular layout of a BBCode."""
+    """Construct a function that gives positions of data qubits in particular layout of a BBCode."""
     folded_layout, vecs_l, vecs_r, shift_r = layout_params
     orders = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
     if validate:
@@ -253,7 +253,7 @@ def get_data_qubit_pos_func(
 
     @functools.cache
     def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
-        """Get the default position of the given qubit/node."""
+        """Get the position of a data qubit in a BBCode."""
         plaquette_index = qubit_index % num_plaquettes
         if qubit_index < num_plaquettes:
             sector = "L"
@@ -275,7 +275,7 @@ def get_data_qubit_pos_func(
 def get_plaquette_map(
     code: qldpc.codes.BBCode, basis: Basis2D, *, validate: bool = True
 ) -> dict[tuple[int, int], tuple[int, int]]:
-    """Construct a map that re-labels plaquettes by coefficients in a basis that span the torus.
+    """Construct a map that re-labels plaquettes by coefficients in a basis that spans the torus.
 
     If the old label of a plaquette was (x, y), the new label is the coefficients (a, b) for which
     (x, y) = a * basis[0] + b * basis[1].  Here (x, y) is taken modulo code.orders, and (a, b) is
@@ -381,17 +381,17 @@ if __name__ == "__main__":
             x**3 + y + y**2,
             y**3 + x + x**2,
         ),
-        qldpc.codes.BBCode(
-            {x: 12, y: 12},
-            x**3 + y**2 + y**7,
-            y**3 + x + x**2,
-        ),
+        # qldpc.codes.BBCode(
+        #     {x: 12, y: 12},
+        #     x**3 + y**2 + y**7,
+        #     y**3 + x + x**2,
+        # ),
     ]
     folded_layout = True
 
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        # layout_params, min_max_distance = find_layout_params(code, folded_layout)
-        layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
+        layout_params, min_max_distance = find_layout_params(code, folded_layout, verbose=False)
+        # layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
         print("min_max_distance:", min_max_distance)
