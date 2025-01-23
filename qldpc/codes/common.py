@@ -29,6 +29,7 @@ import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import scipy.linalg
 import scipy.special
 import stim
 
@@ -518,7 +519,7 @@ class ClassicalCode(AbstractCode):
         if len(set(fields)) > 1:
             raise ValueError("Cannot stack codes over different fields")
         matrices = [code.matrix for code in codes]
-        return ClassicalCode(_block_diag(*matrices), field=fields[0].order)
+        return ClassicalCode(scipy.linalg.block_diag(*matrices), field=fields[0].order)
 
     def puncture(self, *bits: int) -> ClassicalCode:
         """Delete the specified bits from a code.
@@ -1082,8 +1083,8 @@ class QuditCode(AbstractCode):
             logicals_zz = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in codes]
             logical_ops = np.block(
                 [
-                    [_block_diag(*logicals_xx), _block_diag(*logicals_xz)],
-                    [_block_diag(*logicals_zx), _block_diag(*logicals_zz)],
+                    [scipy.linalg.block_diag(*logicals_xx), scipy.linalg.block_diag(*logicals_xz)],
+                    [scipy.linalg.block_diag(*logicals_zx), scipy.linalg.block_diag(*logicals_zz)],
                 ]
             )
             code.set_logical_ops(logical_ops)
@@ -1555,7 +1556,7 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
-        self._logical_ops = self.field(_block_diag(logicals_x, logicals_z))
+        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
         return self._logical_ops
 
     def set_logical_ops_xz(
@@ -1566,7 +1567,7 @@ class CSSCode(QuditCode):
         validate: bool = True,
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
-        logical_ops = _block_diag(self.field(logicals_x), self.field(logicals_z))
+        logical_ops = scipy.linalg.block_diag(self.field(logicals_x), self.field(logicals_z))
         self.set_logical_ops(logical_ops, validate=validate)
 
     def get_random_logical_op(
@@ -1670,7 +1671,9 @@ class CSSCode(QuditCode):
         if inherit_logicals:
             logicals_x = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in css_codes]
             logicals_z = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in css_codes]
-            code.set_logical_ops_xz(_block_diag(*logicals_x), _block_diag(*logicals_z))
+            code.set_logical_ops_xz(
+                scipy.linalg.block_diag(*logicals_x), scipy.linalg.block_diag(*logicals_z)
+            )
         return code
 
     @classmethod
@@ -1873,21 +1876,6 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[i
     matrix_rref = matrix.row_reduce()
     pivots = [int(np.argmax(row != 0)) for row in matrix_rref if np.any(row)]
     return matrix_rref, pivots
-
-
-def _block_diag(*blocks: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-    """Construct a block-diagonal matrix with the given blocks."""
-    num_rows = sum(block.shape[0] for block in blocks)
-    num_cols = sum(block.shape[1] for block in blocks)
-    matrix = np.zeros((num_rows, num_cols), dtype=int)
-    block_row_start, block_col_start = 0, 0
-    for block in blocks:
-        block_rows = slice(block_row_start, block_row_start + block.shape[0])
-        block_cols = slice(block_col_start, block_col_start + block.shape[1])
-        matrix[block_rows, block_cols] = block
-        block_row_start += block.shape[0]
-        block_col_start += block.shape[1]
-    return matrix
 
 
 def _get_sample_allocation(
