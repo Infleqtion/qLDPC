@@ -206,55 +206,41 @@ def get_placement_matrix(
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
-    folded_layout, (vec_a, vec_b) = layout_params[:2]
-    orders = code.get_order(vec_a), code.get_order(vec_b)
-
-    # identify how data qubits are permuted from the default layout on a torus with shape "orders"
-    default_data_locs = get_default_qubit_locs(folded_layout, orders, data=True)
-    layout_qubit_locs = get_data_qubit_locs(code, layout_params, validate=validate)
-    permutation = np.array(
-        [
-            np.where((default_data_locs[:, 0] == aa) & (default_data_locs[:, 1] == bb))[0][0]
-            for aa, bb in layout_qubit_locs
-        ],
-        dtype=int,
-    )
+    # identify how data qubits are permuted relative to the default data qubit layout
+    layout_data_locs = get_data_qubit_locs(code, layout_params, validate=validate)
+    layout_perm = np.lexsort(layout_data_locs.T)
+    inverse_perm = np.empty_like(layout_perm)
+    inverse_perm[layout_perm] = np.arange(layout_perm.size, dtype=int)
 
     # identify matrix of squared distances between all pairs of (check, data) qubit locations
-    squared_distance_matrix = get_squared_distance_matrix(folded_layout, orders)[:, permutation]
+    folded_layout, (vec_a, vec_b) = layout_params[:2]
+    orders = code.get_order(vec_a), code.get_order(vec_b)
+    squared_distance_matrix = get_squared_distance_matrix(folded_layout, orders)[:, inverse_perm]
 
     """
-    Compute a tensor of squared distances, with shape (num_checks, num_sites, num_neighbors), for
-    which squared_distance_tensor[check_index, loc_index, neighbor_index] is the squared distance
+    Compute a tensor of squared distances, with shape (num_sites, num_checks, num_neighbors), for
+    which squared_distance_tensor[loc_index, check_index, neighbor_index] is the squared distance
     between a check qubit and one of its neighbors when the check qubit in a given location.
     """
     check_supports = check_supports or get_check_supports(code)
-    squared_distance_tensor = np.array(
-        [squared_distance_matrix[:, support] for support in check_supports], dtype=int
-    )
+    squared_distance_tensor = squared_distance_matrix[:, check_supports]
 
     # matrix of maximum squared communication distances
-    return np.max(squared_distance_tensor, axis=-1)
-
-
-@functools.cache
-def get_default_qubit_locs(
-    folded_layout: bool, torus_shape: tuple[int, int], *, data: bool
-) -> npt.NDArray[np.int_]:
-    """Identify the default location of a qubit when placed on a torus with the given dimensions."""
-    num_checks = 2 * torus_shape[0] * torus_shape[1]
-    nodes = [qldpc.objects.Node(index, is_data=data) for index in range(num_checks)]
-    locs = [
-        qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, torus_shape)
-        for node in nodes
-    ]
-    return np.array(locs, dtype=int)
+    return np.max(squared_distance_tensor, axis=-1).T
 
 
 def get_data_qubit_locs(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
 ) -> npt.NDArray[np.int_]:
     """Get the locations of data qubits in particular layout of a BBCode."""
+    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params, validate=validate)
+    return np.array([get_data_qubit_pos(index) for index in range(len(code))], dtype=int)
+
+
+def get_data_qubit_pos_func(
+    code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
+) -> Callable[[int], tuple[int, int]]:
+    """Construct a function that gives qubit positions in particular layout of a BBCode."""
     folded_layout, vecs_l, vecs_r, shift_r = layout_params
     orders = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
     if validate:
@@ -265,6 +251,7 @@ def get_data_qubit_locs(
     plaquette_map_l = get_plaquette_map(code, vecs_l, validate=validate)
     plaquette_map_r = get_plaquette_map(code, vecs_r, validate=validate)
 
+    @functools.cache
     def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
         """Get the default position of the given qubit/node."""
         plaquette_index = qubit_index % num_plaquettes
@@ -282,7 +269,7 @@ def get_data_qubit_locs(
             ]
         return code.get_qubit_pos_from_orders((sector, aa, bb), folded_layout, orders)
 
-    return np.array([get_data_qubit_pos(index) for index in range(len(code))], dtype=int)
+    return get_data_qubit_pos
 
 
 def get_plaquette_map(
@@ -317,29 +304,34 @@ def get_squared_distance_matrix(
 
     Here torus_shape is the dimensions of the grid of qubit plaquettes that the qubits live on.
     """
-    num_qubits = 2 * torus_shape[0] * torus_shape[1]
-
-    # identify default check qubit locations
-    check_nodes = [qldpc.objects.Node(index, is_data=False) for index in range(num_qubits)]
-    check_locs = [
-        qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, torus_shape)
-        for node in check_nodes
-    ]
-
-    # identify default data qubit locations
-    data_nodes = [qldpc.objects.Node(index, is_data=True) for index in range(num_qubits)]
-    data_locs = [
-        qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, torus_shape)
-        for node in data_nodes
-    ]
+    # identify locations of data and check qubits
+    data_locs = get_default_qubit_locs(folded_layout, torus_shape, data=True)
+    check_locs = get_default_qubit_locs(folded_layout, torus_shape, data=False)
 
     # construct a tensor of all pair-wise displacements
-    displacements = (
-        np.array(check_locs, dtype=int)[:, None, :] - np.array(data_locs, dtype=int)[None, :, :]
-    )
+    displacements = check_locs[:, None, :] - data_locs[None, :, :]
 
     # square displacements to get squared distances
     return np.einsum("...i,...i->...", displacements, displacements)
+
+
+@functools.cache
+def get_default_qubit_locs(
+    folded_layout: bool, torus_shape: tuple[int, int], *, data: bool
+) -> npt.NDArray[np.int_]:
+    """Identify the default location of a qubit when placed on a torus with the given dimensions."""
+    num_checks = 2 * torus_shape[0] * torus_shape[1]
+    nodes = [qldpc.objects.Node(index, is_data=data) for index in range(num_checks)]
+    locs = [
+        qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, torus_shape)
+        for node in nodes
+    ]
+    return with_sorted_rows(np.array(locs, dtype=int))
+
+
+def with_sorted_rows(array: npt.NDArray[np.int_], axis: int = 0) -> npt.NDArray[np.int_]:
+    """Sort the rows of a 2D numpy array."""
+    return array[np.lexsort(array.T)]
 
 
 def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np.bool_:
@@ -353,8 +345,8 @@ def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np
 
 def get_check_qubit_locations(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, max_comm_distance: float
-) -> dict[int, tuple[int, int]] | None:
-    """If possible, find check qubit locations satisfying a max_comm_distance constraint."""
+) -> dict[int, tuple[int, int]]:
+    """Find check qubit locations satisfying a max_comm_distance constraint."""
     folded_layout, (vec_a, vec_b) = layout_params[:2]
     orders = code.get_order(vec_a), code.get_order(vec_b)
     candidate_locs = get_default_qubit_locs(folded_layout, orders, data=False)
@@ -362,7 +354,6 @@ def get_check_qubit_locations(
     placement_matrix = get_placement_matrix(code, layout_params)
     biadjacency_matrix = placement_matrix <= max_comm_distance**2
     rows, cols = scipy.optimize.linear_sum_assignment(biadjacency_matrix, maximize=True)
-
     return {
         qubit_index: tuple(candidate_locs[loc_index]) for qubit_index, loc_index in zip(rows, cols)
     }
@@ -380,27 +371,27 @@ if __name__ == "__main__":
             x**9 + y + y**2,
             1 + x**2 + x**7,
         ),
-        # qldpc.codes.BBCode(
-        #     {x: 9, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 6},
-        #     x**3 + y + y**2,
-        #     y**3 + x + x**2,
-        # ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 12},
-        #     x**3 + y**2 + y**7,
-        #     y**3 + x + x**2,
-        # ),
+        qldpc.codes.BBCode(
+            {x: 9, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 6},
+            x**3 + y + y**2,
+            y**3 + x + x**2,
+        ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 12},
+            x**3 + y**2 + y**7,
+            y**3 + x + x**2,
+        ),
     ]
     folded_layout = True
 
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        layout_params, min_max_distance = find_layout_params(code, folded_layout)
-        # layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
+        # layout_params, min_max_distance = find_layout_params(code, folded_layout)
+        layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
         print("min_max_distance:", min_max_distance)
