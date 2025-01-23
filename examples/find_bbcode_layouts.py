@@ -30,7 +30,7 @@ def get_best_known_layout_params(
     layout_params, max_distance = get_best_known_layout_params(code, folded_layout)
     ```
     Here max_distance is the maximum communication distance between neighboring qubits in the Tanner
-    graph of the code after additionally optimizing over check qubit locations.  The location of the
+    graph of the code after additionally optimizing over check qubit locations.  The locations of the
     data qubits in the retrieved layout are given by:
     ```
     get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params)
@@ -78,14 +78,14 @@ def get_best_known_layout_params(
 def find_layout_params(
     code: qldpc.codes.BBCode, folded_layout: bool, *, verbose: bool = True
 ) -> tuple[LayoutParams, float]:
-    """Opitmize BBCode layout parameters, as described in arXiv:2404.18809.
+    """Optimize BBCode layout parameters, as described in arXiv:2404.18809.
 
     This function can be used to identify optimized data qubit layout parameters with:
     ```
     layout_params, max_distance = find_layout_params(code, folded_layout)
     ```
     Here max_distance is the maximum communication distance between neighboring qubits in the Tanner
-    graph of the code after additionally optimizing over check qubit locations.  The location of the
+    graph of the code after additionally optimizing over check qubit locations.  The locations of the
     data qubits in the retrieved layout are given by:
     ```
     get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params)
