@@ -102,7 +102,7 @@ def find_layout_params(
     # initialize the optimized (min-max) communication distance to an upper bound
     optimal_distance = get_max_distance(code)
 
-    # precomupte the support of parity checks
+    # precompute the support of parity checks
     check_supports = get_check_supports(code)
 
     # construct the set of pairs of lattice vector that span a torus with shape code.orders

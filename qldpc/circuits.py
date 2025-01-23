@@ -188,7 +188,7 @@ def get_transversal_automorphism_group(
     local_gates.discard("SWAP")
 
     """
-    Construst the parity check matrix of an instrumental classical code whose code words represent
+    Construct the parity check matrix of an instrumental classical code whose code words represent
     Pauli strings that commute with some "effective" stabilizers.
 
     If computing the "ordinary" transversal automorphism group of a QuditCode (i.e., if deform_code
