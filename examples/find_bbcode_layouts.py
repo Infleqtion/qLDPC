@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Minimize required real-space qudit communication distances for various bivariate bicycle codes.
+"""Find BBCode qudit layouts with minimal real-space qudit communication distances.
 
-The qudit placement strategy is as described in arXiv:2404.18809.
+The qudit placement strategy is described in arXiv:2404.18809.
 """
 
 import functools
