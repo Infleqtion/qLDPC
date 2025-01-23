@@ -33,9 +33,9 @@ def get_best_known_layout_params(
     graph of the code after additionally optimizing over check qubit locations.  The location of the
     data qubits in the retrieved layout are given by:
     ```
-    get_qubit_pos = get_qubit_pos_func(code, layout_params)
+    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params)
     for qubit in range(len(code)):
-        print(qubit, get_qubit_pos(qubit))
+        print(qubit, get_data_qubit_pos(qubit))
     ```
     Optimized check qubit locations can similarly be found with
     ```
@@ -88,9 +88,9 @@ def find_layout_params(
     graph of the code after additionally optimizing over check qubit locations.  The location of the
     data qubits in the retrieved layout are given by:
     ```
-    get_qubit_pos = get_qubit_pos_func(code, layout_params)
+    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params)
     for qubit in range(len(code)):
-        print(qubit, get_qubit_pos(qubit))
+        print(qubit, get_data_qubit_pos(qubit))
     ```
     Optimized check qubit locations can similarly be found with
     ```
@@ -208,14 +208,15 @@ def get_placement_matrix(
     """
     check_supports = check_supports or get_check_supports(code)
 
-    get_qubit_pos = get_qubit_pos_func(code, layout_params, validate=validate)
-
     # identify all candidate locations for check qubit placement
-    locs = [get_qubit_pos(qubit_index, False) for qubit_index in range(code.num_checks)]
+    folded_layout, (vec_a, vec_b) = layout_params[:2]
+    orders = code.get_order(vec_a), code.get_order(vec_b)
+    candidate_locs = get_candidate_check_qubit_locs(folded_layout, orders)
 
     # compute the (fixed) locations of all check qubits' neighbors
+    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params, validate=validate)
     neighbor_locs = [
-        [get_qubit_pos(qubit_index, True) for qubit_index in support] for support in check_supports
+        [get_data_qubit_pos(qubit_index) for qubit_index in support] for support in check_supports
     ]
 
     """
@@ -224,8 +225,7 @@ def get_placement_matrix(
     and a given neighbor when the node is placed at a given location.
     """
     displacements = (
-        np.array(locs, dtype=int)[None, :, None, :]
-        - np.array(neighbor_locs, dtype=int)[:, None, :, :]
+        candidate_locs[None, :, None, :] - np.array(neighbor_locs, dtype=int)[:, None, :, :]
     )
 
     # squared communication distances
@@ -235,9 +235,20 @@ def get_placement_matrix(
     return np.max(distances_squared, axis=-1)
 
 
-def get_qubit_pos_func(
+@functools.cache
+def get_candidate_check_qubit_locs(
+    folded_layout: bool, shape: tuple[int, int]
+) -> npt.NDArray[np.int_]:
+    """Identify all candidate locations for check qubit placement."""
+    num_checks = 2 * shape[0] * shape[1]
+    nodes = [qldpc.objects.Node(index, is_data=False) for index in range(num_checks)]
+    locs = [qldpc.codes.BBCode.get_qubit_pos(node, folded_layout, orders=shape) for node in nodes]
+    return np.array(locs, dtype=int)
+
+
+def get_data_qubit_pos_func(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
-) -> Callable[[int, bool], tuple[int, int]]:
+) -> Callable[[int], tuple[int, int]]:
     """Construct a function that gives qubit positions in particular layout of a BBCode."""
     folded_layout, vecs_l, vecs_r, shift_r = layout_params
 
@@ -249,18 +260,18 @@ def get_qubit_pos_func(
     num_plaquettes = len(code) // 2
 
     @functools.cache
-    def get_qubit_pos(qubit_index: int, is_data: bool = True) -> tuple[int, int]:
+    def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
         """Get the default position of the given qubit/node."""
         plaquette_index = qubit_index % num_plaquettes
         if qubit_index < num_plaquettes:
-            sector = "L" if is_data else "X"
+            sector = "L"
             aa, bb = plaquette_map_l[
                 plaquette_index // code.orders[1],
                 plaquette_index % code.orders[1],
             ]
             orders = orders_l
         else:
-            sector = "R" if is_data else "Z"
+            sector = "R"
             aa, bb = plaquette_map_r[
                 (plaquette_index // code.orders[1] + shift_r[0]) % code.orders[0],
                 (plaquette_index % code.orders[1] + shift_r[1]) % code.orders[1],
@@ -268,7 +279,7 @@ def get_qubit_pos_func(
             orders = orders_r
         return code.get_qubit_pos((sector, aa, bb), folded_layout, orders=orders)
 
-    return get_qubit_pos
+    return get_data_qubit_pos
 
 
 def get_plaquette_map(
@@ -308,14 +319,17 @@ def get_check_qubit_locations(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, max_comm_distance: float
 ) -> dict[int, tuple[int, int]] | None:
     """If possible, find check qubit locations satisfying a max_comm_distance constraint."""
-    get_default_qubit_pos = get_qubit_pos_func(code, layout_params)
-    locs = [get_default_qubit_pos(qubit_index, False) for qubit_index in range(code.num_checks)]
+    folded_layout, (vec_a, vec_b) = layout_params[:2]
+    orders = code.get_order(vec_a), code.get_order(vec_b)
+    candidate_locs = get_candidate_check_qubit_locs(folded_layout, orders)
 
     placement_matrix = get_placement_matrix(code, layout_params)
     biadjacency_matrix = placement_matrix <= max_comm_distance**2
     rows, cols = scipy.optimize.linear_sum_assignment(biadjacency_matrix, maximize=True)
 
-    return {qubit_index: locs[loc_index] for qubit_index, loc_index in zip(rows, cols)}
+    return {
+        qubit_index: tuple(candidate_locs[loc_index]) for qubit_index, loc_index in zip(rows, cols)
+    }
 
 
 if __name__ == "__main__":
@@ -330,21 +344,21 @@ if __name__ == "__main__":
             x**9 + y + y**2,
             1 + x**2 + x**7,
         ),
-        qldpc.codes.BBCode(
-            {x: 9, y: 6},
-            x**3 + y + y**2,
-            y**3 + x + x**2,
-        ),
-        qldpc.codes.BBCode(
-            {x: 12, y: 6},
-            x**3 + y + y**2,
-            y**3 + x + x**2,
-        ),
-        qldpc.codes.BBCode(
-            {x: 12, y: 12},
-            x**3 + y**2 + y**7,
-            y**3 + x + x**2,
-        ),
+        # qldpc.codes.BBCode(
+        #     {x: 9, y: 6},
+        #     x**3 + y + y**2,
+        #     y**3 + x + x**2,
+        # ),
+        # qldpc.codes.BBCode(
+        #     {x: 12, y: 6},
+        #     x**3 + y + y**2,
+        #     y**3 + x + x**2,
+        # ),
+        # qldpc.codes.BBCode(
+        #     {x: 12, y: 12},
+        #     x**3 + y**2 + y**7,
+        #     y**3 + x + x**2,
+        # ),
     ]
     folded_layout = True
 

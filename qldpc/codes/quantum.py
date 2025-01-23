@@ -332,21 +332,26 @@ class BBCode(QCCode):
             )
         QCCode.__init__(self, orders, poly_a, poly_b, field)
 
-    def get_node_label(self, node: Node) -> tuple[str, int, int]:
+    @classmethod
+    def get_node_label(
+        cls, node: Node, *, orders: tuple[int, int] | None = None
+    ) -> tuple[str, int, int]:
         """Convert a node of this code's Tanner graph into a qubit label.
 
         The qubit label identifies the sector (L, R, X, Y) within a plaquette, and the coordinates
         of the plaquette that contains the given node (qubit).
         """
-        ss, aa, bb = np.unravel_index(node.index, (2,) + self.orders)
+        orders = cls._get_orders(orders)
+        ss, aa, bb = np.unravel_index(node.index, (2,) + orders)
         if node.is_data:
             sector = "L" if ss == 0 else "R"
         else:
             sector = "X" if ss == 0 else "Z"
         return sector, int(aa), int(bb)
 
+    @classmethod
     def get_qubit_pos(
-        self,
+        cls,
         qubit: Node | tuple[str, int, int],
         folded_layout: bool = False,
         *,
@@ -358,16 +363,24 @@ class BBCode(QCCode):
         If provided orders, use them as the cyclic group orders in the folded layout.
         """
         # identify qubit sector and plaquette coordinates
-        sector, aa, bb = self.get_node_label(qubit) if isinstance(qubit, Node) else qubit
+        ss, aa, bb = cls.get_node_label(qubit, orders=orders) if isinstance(qubit, Node) else qubit
 
         # convert sector and plaquette coordinates into qubit coordinates
-        xx = 2 * aa + int(sector in ["R", "Z"])
-        yy = 2 * bb + int(sector in ["L", "Z"])
+        xx = 2 * aa + int(ss == "R" or ss == "Z")
+        yy = 2 * bb + int(ss == "L" or ss == "Z")
         if folded_layout:
-            order_a, order_b = orders or self.orders
+            order_a, order_b = cls._get_orders(orders)
             xx = 2 * xx if xx < order_a else (2 * order_a - 1 - xx) * 2 + 1
             yy = 2 * yy if yy < order_b else (2 * order_b - 1 - yy) * 2 + 1
         return xx, yy
+
+    @classmethod
+    def _get_orders(cls, orders: tuple[int, int] | None) -> tuple[int, int]:
+        if orders is not None:
+            return orders
+        if hasattr(cls, "orders"):
+            return cls.orders  # type:ignore[return-value]
+        raise ValueError("Cannot determine cyclic group orders")
 
     def get_equivalent_toric_layout_code_data(
         self,
