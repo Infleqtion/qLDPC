@@ -416,7 +416,7 @@ class BBCode(QCCode):
 
         toric_layout_generating_data = []
         for a_1, a_2, b_1, b_2 in toric_params:
-            # new generators and their identify their cyclic group orders
+            # new generators and their their cyclic group orders
             gen_g = a_2 / a_1
             gen_h = b_2 / b_1
             vec_g = self.as_exponent_vector(gen_g)
