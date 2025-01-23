@@ -206,46 +206,35 @@ def get_placement_matrix(
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
-    check_supports = check_supports or get_check_supports(code)
+    # identify how data qubits are permuted relative to the default data qubit layout
+    layout_data_locs = get_data_qubit_locs(code, layout_params, validate=validate)
+    layout_perm = np.lexsort(layout_data_locs.T)
+    inverse_perm = np.empty_like(layout_perm)
+    inverse_perm[layout_perm] = np.arange(layout_perm.size, dtype=int)
 
-    # identify all candidate locations for check qubit placement
+    # identify matrix of squared distances between all pairs of (check, data) qubit locations
     folded_layout, (vec_a, vec_b) = layout_params[:2]
     orders = code.get_order(vec_a), code.get_order(vec_b)
-    candidate_locs = get_candidate_check_qubit_locs(folded_layout, orders)
-
-    # compute the (fixed) locations of all check qubits' neighbors
-    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params, validate=validate)
-    neighbor_locs = [
-        [get_data_qubit_pos(qubit_index) for qubit_index in support] for support in check_supports
-    ]
+    squared_distance_matrix = get_squared_distance_matrix(folded_layout, orders)[:, inverse_perm]
 
     """
-    Vectorized calculation of displacements, with shape = (len(nodes), len(locs), num_neighbors, 2).
-    Here dispalacements[node_idx, loc_idx, neighbor_idx, :] is the displacement between a given node
-    and a given neighbor when the node is placed at a given location.
+    Compute a tensor of squared distances, with shape (num_sites, num_checks, num_neighbors), for
+    which squared_distance_tensor[loc_index, check_index, neighbor_index] is the squared distance
+    between a check qubit and one of its neighbors when the check qubit in a given location.
     """
-    displacements = (
-        candidate_locs[None, :, None, :] - np.array(neighbor_locs, dtype=int)[:, None, :, :]
-    )
-
-    # squared communication distances
-    distances_squared = np.einsum("...i,...i->...", displacements, displacements)
+    check_supports = check_supports or get_check_supports(code)
+    squared_distance_tensor = squared_distance_matrix[:, check_supports]
 
     # matrix of maximum squared communication distances
-    return np.max(distances_squared, axis=-1)
+    return np.max(squared_distance_tensor, axis=-1).T
 
 
-@functools.cache
-def get_candidate_check_qubit_locs(
-    folded_layout: bool, shape: tuple[int, int]
+def get_data_qubit_locs(
+    code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
 ) -> npt.NDArray[np.int_]:
-    """Identify all candidate locations for check qubit placement."""
-    num_checks = 2 * shape[0] * shape[1]
-    nodes = [qldpc.objects.Node(index, is_data=False) for index in range(num_checks)]
-    locs = [
-        qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, shape) for node in nodes
-    ]
-    return np.array(locs, dtype=int)
+    """Get the locations of data qubits in particular layout of a BBCode."""
+    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params, validate=validate)
+    return np.array([get_data_qubit_pos(index) for index in range(len(code))], dtype=int)
 
 
 def get_data_qubit_pos_func(
@@ -253,13 +242,14 @@ def get_data_qubit_pos_func(
 ) -> Callable[[int], tuple[int, int]]:
     """Construct a function that gives qubit positions in particular layout of a BBCode."""
     folded_layout, vecs_l, vecs_r, shift_r = layout_params
+    orders = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
+    if validate:
+        assert orders == (code.get_order(vecs_r[0]), code.get_order(vecs_r[1]))
 
     # precompute plaquette mappings
+    num_plaquettes = len(code) // 2
     plaquette_map_l = get_plaquette_map(code, vecs_l, validate=validate)
     plaquette_map_r = get_plaquette_map(code, vecs_r, validate=validate)
-    orders_l = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
-    orders_r = (code.get_order(vecs_r[0]), code.get_order(vecs_r[1]))
-    num_plaquettes = len(code) // 2
 
     @functools.cache
     def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
@@ -271,14 +261,12 @@ def get_data_qubit_pos_func(
                 plaquette_index // code.orders[1],
                 plaquette_index % code.orders[1],
             ]
-            orders = orders_l
         else:
             sector = "R"
             aa, bb = plaquette_map_r[
                 (plaquette_index // code.orders[1] + shift_r[0]) % code.orders[0],
                 (plaquette_index % code.orders[1] + shift_r[1]) % code.orders[1],
             ]
-            orders = orders_r
         return code.get_qubit_pos_from_orders((sector, aa, bb), folded_layout, orders)
 
     return get_data_qubit_pos
@@ -287,7 +275,7 @@ def get_data_qubit_pos_func(
 def get_plaquette_map(
     code: qldpc.codes.BBCode, basis: Basis2D, *, validate: bool = True
 ) -> dict[tuple[int, int], tuple[int, int]]:
-    """Construct a map that re-labels plaquettes according to a new basis.
+    """Construct a map that re-labels plaquettes by coefficients in a basis that span the torus.
 
     If the old label of a plaquette was (x, y), the new label is the coefficients (a, b) for which
     (x, y) = a * basis[0] + b * basis[1].  Here (x, y) is taken modulo code.orders, and (a, b) is
@@ -308,6 +296,44 @@ def get_plaquette_map(
     }
 
 
+@functools.cache
+def get_squared_distance_matrix(
+    folded_layout: bool, torus_shape: tuple[int, int]
+) -> npt.NDArray[np.int_]:
+    """Compute a matrix of squared distances between default check and data qubit locations.
+
+    Here torus_shape is the dimensions of the grid of qubit plaquettes that the qubits live on.
+    """
+    # identify locations of data and check qubits
+    data_locs = get_default_qubit_locs(folded_layout, torus_shape, data=True)
+    check_locs = get_default_qubit_locs(folded_layout, torus_shape, data=False)
+
+    # construct a tensor of all pair-wise displacements
+    displacements = check_locs[:, None, :] - data_locs[None, :, :]
+
+    # square displacements to get squared distances
+    return np.einsum("...i,...i->...", displacements, displacements)
+
+
+@functools.cache
+def get_default_qubit_locs(
+    folded_layout: bool, torus_shape: tuple[int, int], *, data: bool
+) -> npt.NDArray[np.int_]:
+    """Identify the default location of a qubit when placed on a torus with the given dimensions."""
+    num_checks = 2 * torus_shape[0] * torus_shape[1]
+    nodes = [qldpc.objects.Node(index, is_data=data) for index in range(num_checks)]
+    locs = [
+        qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, torus_shape)
+        for node in nodes
+    ]
+    return with_sorted_rows(np.array(locs, dtype=int))
+
+
+def with_sorted_rows(array: npt.NDArray[np.int_], axis: int = 0) -> npt.NDArray[np.int_]:
+    """Sort the rows of a 2D numpy array."""
+    return array[np.lexsort(array.T)]
+
+
 def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np.bool_:
     """Does a bipartite graph with the given biadjacenty matrix have a perfect matching?"""
     # quit early if any vertex has no indicent edges <--> any row/column is all zeros
@@ -319,16 +345,15 @@ def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np
 
 def get_check_qubit_locations(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, max_comm_distance: float
-) -> dict[int, tuple[int, int]] | None:
-    """If possible, find check qubit locations satisfying a max_comm_distance constraint."""
+) -> dict[int, tuple[int, int]]:
+    """Find check qubit locations satisfying a max_comm_distance constraint."""
     folded_layout, (vec_a, vec_b) = layout_params[:2]
     orders = code.get_order(vec_a), code.get_order(vec_b)
-    candidate_locs = get_candidate_check_qubit_locs(folded_layout, orders)
+    candidate_locs = get_default_qubit_locs(folded_layout, orders, data=False)
 
     placement_matrix = get_placement_matrix(code, layout_params)
     biadjacency_matrix = placement_matrix <= max_comm_distance**2
     rows, cols = scipy.optimize.linear_sum_assignment(biadjacency_matrix, maximize=True)
-
     return {
         qubit_index: tuple(candidate_locs[loc_index]) for qubit_index, loc_index in zip(rows, cols)
     }
