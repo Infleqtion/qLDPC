@@ -242,7 +242,9 @@ def get_candidate_check_qubit_locs(
     """Identify all candidate locations for check qubit placement."""
     num_checks = 2 * shape[0] * shape[1]
     nodes = [qldpc.objects.Node(index, is_data=False) for index in range(num_checks)]
-    locs = [qldpc.codes.BBCode.get_qubit_pos(node, folded_layout, orders=shape) for node in nodes]
+    locs = [
+        qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, shape) for node in nodes
+    ]
     return np.array(locs, dtype=int)
 
 
@@ -277,7 +279,7 @@ def get_data_qubit_pos_func(
                 (plaquette_index % code.orders[1] + shift_r[1]) % code.orders[1],
             ]
             orders = orders_r
-        return code.get_qubit_pos((sector, aa, bb), folded_layout, orders=orders)
+        return code.get_qubit_pos_from_orders((sector, aa, bb), folded_layout, orders)
 
     return get_data_qubit_pos
 

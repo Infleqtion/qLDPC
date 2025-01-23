@@ -26,7 +26,7 @@ import pytest
 import sympy
 
 from qldpc import abstract, codes
-from qldpc.objects import ChainComplex, Pauli
+from qldpc.objects import ChainComplex, Node, Pauli
 
 
 def test_small_codes() -> None:
@@ -96,6 +96,12 @@ def test_bivariate_bicycle_codes() -> None:
     poly_b = y**3 + x**2 + x**4
     code = codes.BBCode(dims, poly_a, poly_b)
     assert not code.get_equivalent_toric_layout_code_data()
+
+    # retrieve node labels
+    assert code.get_node_label(Node(0, is_data=True)) == ("L", 0, 0)
+    assert code.get_node_label(Node(len(code) // 2, is_data=True)) == ("R", 0, 0)
+    assert code.get_node_label(Node(0, is_data=False)) == ("X", 0, 0)
+    assert code.get_node_label(Node(len(code) // 2, is_data=False)) == ("Z", 0, 0)
 
     # codes with more than 2 symbols are unsupported
     with pytest.raises(ValueError, match="should have exactly two"):

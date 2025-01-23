@@ -331,17 +331,26 @@ class BBCode(QCCode):
                 f"{len(orders)} orders and {len(symbols)} symbols."
             )
         QCCode.__init__(self, orders, poly_a, poly_b, field)
+        self.orders: tuple[int, int]
+        self.symbols: tuple[sympy.Symbol, sympy.Symbol]
 
-    @classmethod
-    def get_node_label(
-        cls, node: Node, *, orders: tuple[int, int] | None = None
-    ) -> tuple[str, int, int]:
+    def get_node_label(self, node: Node) -> tuple[str, int, int]:
         """Convert a node of this code's Tanner graph into a qubit label.
 
         The qubit label identifies the sector (L, R, X, Y) within a plaquette, and the coordinates
         of the plaquette that contains the given node (qubit).
         """
-        orders = cls._get_orders(orders)
+        return self.get_node_label_from_orders(node, self.orders)
+
+    @classmethod
+    def get_node_label_from_orders(
+        cls, node: Node, orders: tuple[int, int]
+    ) -> tuple[str, int, int]:
+        """Get the label of a qubit in a BBCode with cyclic groups of the given orders.
+
+        The qubit label identifies the sector (L, R, X, Y) within a plaquette, and the coordinates
+        of the plaquette that contains the given node (qubit).
+        """
         ss, aa, bb = np.unravel_index(node.index, (2,) + orders)
         if node.is_data:
             sector = "L" if ss == 0 else "R"
@@ -349,38 +358,38 @@ class BBCode(QCCode):
             sector = "X" if ss == 0 else "Z"
         return sector, int(aa), int(bb)
 
-    @classmethod
     def get_qubit_pos(
-        cls,
-        qubit: Node | tuple[str, int, int],
-        folded_layout: bool = False,
-        *,
-        orders: tuple[int, int] | None = None,
+        self, qubit: Node | tuple[str, int, int], folded_layout: bool = False
     ) -> tuple[int, int]:
-        """Get the canonical position of a qubit with the given label.
+        """Get the canonical position of a qubit in this code.
 
         If folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
-        If provided orders, use them as the cyclic group orders in the folded layout.
         """
-        # identify qubit sector and plaquette coordinates
-        ss, aa, bb = cls.get_node_label(qubit, orders=orders) if isinstance(qubit, Node) else qubit
+        return self.get_qubit_pos_from_orders(qubit, folded_layout, self.orders)
+
+    @classmethod
+    def get_qubit_pos_from_orders(
+        cls,
+        qubit: Node | tuple[str, int, int],
+        folded_layout: bool,
+        orders: tuple[int, int],
+    ) -> tuple[int, int]:
+        """Get the canonical position of a qubit in a BBCode with cyclic groups of the given orders.
+
+        If folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
+        """
+        if isinstance(qubit, Node):
+            qubit = cls.get_node_label_from_orders(qubit, orders)
+        ss, aa, bb = qubit
 
         # convert sector and plaquette coordinates into qubit coordinates
         xx = 2 * aa + int(ss == "R" or ss == "Z")
         yy = 2 * bb + int(ss == "L" or ss == "Z")
         if folded_layout:
-            order_a, order_b = cls._get_orders(orders)
+            order_a, order_b = orders
             xx = 2 * xx if xx < order_a else (2 * order_a - 1 - xx) * 2 + 1
             yy = 2 * yy if yy < order_b else (2 * order_b - 1 - yy) * 2 + 1
         return xx, yy
-
-    @classmethod
-    def _get_orders(cls, orders: tuple[int, int] | None) -> tuple[int, int]:
-        if orders is not None:
-            return orders
-        if hasattr(cls, "orders"):
-            return cls.orders  # type:ignore[return-value]
-        raise ValueError("Cannot determine cyclic group orders")
 
     def get_equivalent_toric_layout_code_data(
         self,
