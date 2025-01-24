@@ -30,7 +30,7 @@ from qldpc.objects import ChainComplex, Node, Pauli
 
 
 def test_small_codes() -> None:
-    """Five-qubit and Steane codes."""
+    """Small named codes."""
     assert codes.SteaneCode().num_qubits == 7
     assert codes.SteaneCode().dimension == 1
 
@@ -41,6 +41,9 @@ def test_small_codes() -> None:
     assert code.num_qubits == 5
     assert code.dimension == 1
     assert code.get_stabilizers()[0] == "X Z Z X I"
+
+    for rank in range(2, 6):
+        assert codes.IcebergCode(rank).get_code_params() == (2 * rank, 2 * rank - 2, 2)
 
 
 def test_two_block_code_error() -> None:
