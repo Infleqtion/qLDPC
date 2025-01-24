@@ -443,11 +443,11 @@ if __name__ == "__main__":
             x**3 + y + y**2,
             y**3 + x + x**2,
         ),
-        # qldpc.codes.BBCode(
-        #     {x: 12, y: 12},
-        #     x**3 + y**2 + y**7,
-        #     y**3 + x + x**2,
-        # ),
+        qldpc.codes.BBCode(
+            {x: 12, y: 12},
+            x**3 + y**2 + y**7,
+            y**3 + x + x**2,
+        ),
     ]
     folded_layout = True
 
@@ -456,8 +456,8 @@ if __name__ == "__main__":
         print("(n, k):", (len(code), code.dimension))
 
         start = time.time()
-        layout_params = find_layout_params(code, folded_layout)
-        # layout_params = get_best_known_layout_params(code, folded_layout)
+        # layout_params = find_layout_params(code, folded_layout)
+        layout_params = get_best_known_layout_params(code, folded_layout)
         print("optimization time:", time.time() - start)
 
         max_distance = get_max_comm_distance(code, layout_params)
