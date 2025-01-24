@@ -58,28 +58,33 @@ def test_bivariate_bicycle_codes() -> None:
     """Bivariate bicycle codes from arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y, z
 
-    dims: tuple[int, int] | dict[sympy.Symbol, int]
+    orders: tuple[int, int] | dict[sympy.Symbol, int]
 
     # last code in Table II of arXiv:2311.16980
-    dims = (12, 4)
+    orders = {x: 12, y: 4}
     poly_a = 1 + y + x * y + x**9
     poly_b = 1 + x**2 + x**7 + x**9 * y**2
-    code = codes.BBCode(dims, poly_a, poly_b, field=2)
+    code = codes.BBCode(orders, poly_a, poly_b, field=2)
     assert code.num_qudits == 96
     assert code.dimension == 10
     assert code.get_weight() == 8
 
+    code_string = str(code)
+    assert str(orders) in code_string
+    assert str(poly_a.as_expr()) in code_string
+    assert str(poly_a.as_expr()) in code_string
+
     # [[144, 12, 12]] code in Table 3 and Figure 2 of arXiv:2308.07915
-    dims = {x: 12, y: 6}
+    orders = (12, 6)
     poly_a = x**3 + y + y**2
     poly_b = y**3 + x + x**2
-    code = codes.BBCode(dims, poly_a, poly_b, field=2)
+    code = codes.BBCode(orders, poly_a, poly_b, field=2)
     assert code.num_qudits == 144
     assert code.dimension == 12
     assert code.get_weight() == 6
 
     # toric layouts of a qutrit BBCode
-    code = codes.BBCode(dims, poly_a, poly_b, field=3)
+    code = codes.BBCode(orders, poly_a, poly_b, field=3)
     assert code.dimension == 8
     for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
         # assert that the polynomials look like 1 + x + ... and 1 + y + ...
@@ -94,10 +99,10 @@ def test_bivariate_bicycle_codes() -> None:
         assert equiv_code.dimension == code.dimension
 
     # check a code with no toric layouts
-    dims = (6, 6)
+    orders = (6, 6)
     poly_a = 1 + y + y**2
     poly_b = y**3 + x**2 + x**4
-    code = codes.BBCode(dims, poly_a, poly_b)
+    code = codes.BBCode(orders, poly_a, poly_b)
     assert not code.get_equivalent_toric_layout_code_data()
 
     # retrieve node labels
@@ -111,10 +116,10 @@ def test_bivariate_bicycle_codes() -> None:
         codes.BBCode({}, x, y + z)
 
     # fail to invert a system of equations
-    dims = (3, 3)
+    orders = (3, 3)
     poly_a = 1 + x + x * y
     poly_b = 1 + y + x * y
-    code = codes.BBCode(dims, poly_a, poly_b)
+    code = codes.BBCode(orders, poly_a, poly_b)
     with pytest.raises(ValueError, match="Uninvertible system of equations"):
         basis = (1, 0), (0, 0)
         code.modular_inverse(basis, 0, 1)
