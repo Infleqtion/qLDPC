@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Find BBCode qudit layouts with minimal real-space qudit communication distances.
+"""Find BBCode qubit layouts with minimal real-space qubit communication distances.
 
-The qudit placement strategy is described in arXiv:2404.18809.
+The qubit placement strategy is described in arXiv:2404.18809.
 """
 
 import functools
