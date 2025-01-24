@@ -347,15 +347,20 @@ def get_check_qubit_locations(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, max_comm_distance: float
 ) -> dict[int, tuple[int, int]]:
     """Find check qubit locations satisfying a max_comm_distance constraint."""
+    # identify candidate check qubit locations
     folded_layout, (vec_a, vec_b) = layout_params[:2]
     orders = code.get_order(vec_a), code.get_order(vec_b)
     candidate_locs = get_default_qubit_locs(folded_layout, orders, data=False)
 
+    # assign check qubits to locations
     placement_matrix = get_placement_matrix(code, layout_params)
     biadjacency_matrix = placement_matrix <= max_comm_distance**2
-    rows, cols = scipy.optimize.linear_sum_assignment(biadjacency_matrix, maximize=True)
+    qubit_indices, loc_indices = scipy.optimize.linear_sum_assignment(
+        biadjacency_matrix, maximize=True
+    )
     return {
-        qubit_index: tuple(candidate_locs[loc_index]) for qubit_index, loc_index in zip(rows, cols)
+        qubit_index: tuple(candidate_locs[loc_index])
+        for qubit_index, loc_index in zip(qubit_indices, loc_indices)
     }
 
 
