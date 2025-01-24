@@ -400,6 +400,6 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        layout_params, min_max_distance = find_layout_params(code, folded_layout, verbose=False)
-        # layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
+        # layout_params, min_max_distance = find_layout_params(code, folded_layout)
+        layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
         print("min_max_distance:", min_max_distance)
