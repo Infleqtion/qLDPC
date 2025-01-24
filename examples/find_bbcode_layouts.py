@@ -352,19 +352,17 @@ def get_squared_distance_matrix(
 def get_default_qubit_locs(
     folded_layout: bool, torus_shape: tuple[int, int], *, data: bool
 ) -> npt.NDArray[np.int_]:
-    """Identify the default location of a qubit when placed on a torus with the given dimensions."""
+    """Identify the default locations qubits when placed on a torus with the given dimensions."""
     num_checks = 2 * torus_shape[0] * torus_shape[1]
     nodes = [qldpc.objects.Node(index, is_data=data) for index in range(num_checks)]
     locs = [
         qldpc.codes.BBCode.get_qubit_pos_from_orders(node, folded_layout, torus_shape)
         for node in nodes
     ]
-    return with_sorted_rows(np.array(locs, dtype=int))
 
-
-def with_sorted_rows(array: npt.NDArray[np.int_], axis: int = 0) -> npt.NDArray[np.int_]:
-    """Sort the rows of a 2D numpy array."""
-    return array[np.lexsort(array.T)]
+    # sort the locations and return
+    locs_array = np.array(locs, dtype=int)
+    return locs_array[np.lexsort(locs_array.T)]
 
 
 def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np.bool_:
