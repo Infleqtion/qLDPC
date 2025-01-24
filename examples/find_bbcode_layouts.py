@@ -7,7 +7,7 @@ The qudit placement strategy is described in arXiv:2404.18809.
 import functools
 import itertools
 import math
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 
 import numpy as np
 import numpy.typing as npt
@@ -46,37 +46,41 @@ def get_best_known_layout_params(
     """
     code_params = len(code), code.dimension
     if code_params == (72, 12) and folded_layout:
-        vecs_l = ((1, 1), (1, 2))
-        vecs_r = ((-1, -1), (-1, -2))
-        shift_r = (2, 1)
+        basis_l = ((1, 1), (1, 2))
+        basis_r = ((-1, -1), (-1, -2))
+        shift_lr = (2, 1)
     elif code_params == (90, 8) and folded_layout:
-        vecs_l = ((0, 1), (2, 0))
-        vecs_r = ((0, 1), (2, 0))
-        shift_r = (0, 0)
+        basis_l = ((0, 1), (2, 0))
+        basis_r = ((0, 1), (2, 0))
+        shift_lr = (0, 0)
     elif code_params == (108, 8) and folded_layout:
-        vecs_l = ((3, 1), (4, 4))
-        vecs_r = ((-3, -1), (-4, -4))
-        shift_r = (1, 2)
+        basis_l = ((3, 1), (4, 4))
+        basis_r = ((-3, -1), (-4, -4))
+        shift_lr = (1, 2)
     elif code_params == (144, 12) and folded_layout:
-        vecs_l = ((0, 1), (1, 0))
-        vecs_r = ((0, 1), (1, 0))
-        shift_r = (1, 2)
+        basis_l = ((0, 1), (1, 0))
+        basis_r = ((0, 1), (1, 0))
+        shift_lr = (1, 2)
     elif code_params == (288, 12) and folded_layout:
-        vecs_l = ((0, 5), (1, 0))
-        vecs_r = ((0, 5), (1, 0))
-        shift_r = (1, 9)
+        basis_l = ((0, 5), (1, 0))
+        basis_r = ((0, 5), (1, 0))
+        shift_lr = (1, 9)
     else:
         raise ValueError(
             f"Layout parameters unknown for BBCode with parameters {code_params}"
             f" and folded_layout={folded_layout}"
         )
-    layout_params = (folded_layout, vecs_l, vecs_r, shift_r)
+    layout_params = (folded_layout, basis_l, basis_r, shift_lr)
     max_distance = get_min_max_communication_distance(code, layout_params)
     return layout_params, max_distance
 
 
 def find_layout_params(
-    code: qldpc.codes.BBCode, folded_layout: bool, *, verbose: bool = True
+    code: qldpc.codes.BBCode,
+    folded_layout: bool,
+    *,
+    restricted_search: bool = True,
+    verbose: bool = True,
 ) -> tuple[LayoutParams, float]:
     """Optimize BBCode layout parameters, as described in arXiv:2404.18809.
 
@@ -105,44 +109,28 @@ def find_layout_params(
     # precompute the support of parity checks
     check_supports = get_check_supports(code)
 
-    # construct the set of pairs of lattice vector that span a torus with shape code.orders
-    pairs: Iterable[Basis2D]
-    pairs = itertools.combinations(np.ndindex(code.orders), 2)  # type:ignore[assignment]
-    lattice_vectors = [
-        (vec_a, vec_b) for vec_a, vec_b in pairs if code.is_valid_basis(vec_a, vec_b)
-    ]
+    # iterate over layout parameters of the BBCode
+    for basis_l, basis_r, shift_lr in get_layout_search_space(code, restricted_search):
+        min_max_distance = get_min_max_communication_distance(
+            code,
+            (folded_layout, basis_l, basis_r, shift_lr),
+            distance_cutoff=optimal_distance,
+            check_supports=check_supports,
+            validate=False,
+        )
+        if min_max_distance < optimal_distance:
+            optimal_basis_l = basis_l
+            optimal_basis_r = basis_r
+            optimal_shift_lr = shift_lr
+            optimal_distance = min_max_distance
+            if verbose:
+                print()
+                print("new best found:", min_max_distance)
+                print("basis_l:", basis_l)
+                print("basis_r:", basis_r)
+                print("shift_lr:", shift_lr)
 
-    # iterate over all lattice vectors used to place qubits in the "left" partition
-    for vecs_l in lattice_vectors:
-        # iterate over a restricted set of lattice vectors for the "right" partition
-        (aa, bb), (cc, dd) = vecs_l
-        for vecs_r in [
-            ((aa, bb), (cc, dd)),
-            ((-aa, -bb), (-cc, -dd)),
-        ]:
-            # iterate over all relative shifts between the left and right partitions
-            shift_r: tuple[int, int]
-            for shift_r in np.ndindex(code.orders):  # type:ignore[assignment]
-                min_max_distance = get_min_max_communication_distance(
-                    code,
-                    (folded_layout, vecs_l, vecs_r, shift_r),
-                    distance_cutoff=optimal_distance,
-                    check_supports=check_supports,
-                    validate=False,
-                )
-                if min_max_distance < optimal_distance:
-                    optimal_vecs_l = vecs_l
-                    optimal_vecs_r = vecs_r
-                    optimal_shift_r = shift_r
-                    optimal_distance = min_max_distance
-                    if verbose:
-                        print()
-                        print("new best found:", min_max_distance)
-                        print("vecs_l:", vecs_l)
-                        print("vecs_r:", vecs_r)
-                        print("shift_r:", shift_r)
-
-    return (folded_layout, optimal_vecs_l, optimal_vecs_r, optimal_shift_r), optimal_distance
+    return (folded_layout, optimal_basis_l, optimal_basis_r, optimal_shift_lr), optimal_distance
 
 
 def get_max_distance(code: qldpc.codes.BBCode) -> float:
@@ -156,6 +144,53 @@ def get_check_supports(code: qldpc.codes.BBCode) -> npt.NDArray[np.int_]:
         [np.where(stabilizer)[0] for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)],
         dtype=int,
     )
+
+
+def get_layout_search_space(
+    code: qldpc.codes.BBCode, restricted_search: bool
+) -> Iterator[tuple[Basis2D, Basis2D, tuple[int, int]]]:
+    """Iterate over layout parameters of a BBCode.
+
+    Each instance of layout parameters corresponds to:
+    - a basis of lattice vectors for determining the placement of L-type qubits,
+    - a basis of lattice vectors for determining the placement of R-type qubits,
+    - a relative shift (between L and R) of the qubit plaquettes of the BBCode.
+    """
+    # identify the sets of lattice vectors that are used to relabel qubit plaquettes
+    vector_pairs: Iterable[Basis2D]
+    vector_pairs = itertools.combinations(np.ndindex(code.orders), 2)  # type:ignore[assignment]
+    lattice_vectors = [
+        (vec_a, vec_b) for vec_a, vec_b in vector_pairs if code.is_valid_basis(vec_a, vec_b)
+    ]
+
+    def get_orders(basis: Basis2D) -> tuple[int, int]:
+        """Get the orders of the vectors in a basis.
+
+        The order of a vector is the multiple of that vector that equals the "zero vector".
+        """
+        return code.get_order(basis[0]), code.get_order(basis[1])
+
+    # iterate over all lattice vector bases for L-type qubits
+    for basis_l in lattice_vectors:
+        orders_l = code.get_order(basis_l[0]), code.get_order(basis_l[1])
+
+        # determine the search space of lattice vectors for R-type qubits
+        if restricted_search:
+            # only consider the same basis, or "minus" the same basis
+            (aa, bb), (cc, dd) = basis_l
+            bases_r = [((aa, bb), (cc, dd)), ((-aa, -bb), (-cc, -dd))]
+        else:
+            # consider all lattice vectors with the same orders
+            bases_r = [
+                basis_r if orders_r == orders_l else basis_r[::-1]
+                for basis_r in lattice_vectors
+                if (orders_r := get_orders(basis_r)) == orders_l or orders_r == orders_l[::-1]
+            ]
+
+        for basis_r in bases_r:
+            shift_lr: tuple[int, int]
+            for shift_lr in np.ndindex(code.orders):  # type:ignore[assignment]
+                yield basis_l, basis_r, shift_lr
 
 
 def get_min_max_communication_distance(
@@ -244,15 +279,15 @@ def get_data_qubit_pos_func(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
 ) -> Callable[[int], tuple[int, int]]:
     """Construct a function that gives positions of data qubits in particular layout of a BBCode."""
-    folded_layout, vecs_l, vecs_r, shift_r = layout_params
-    orders = (code.get_order(vecs_l[0]), code.get_order(vecs_l[1]))
+    folded_layout, basis_l, basis_r, shift_lr = layout_params
+    orders = (code.get_order(basis_l[0]), code.get_order(basis_l[1]))
     if validate:
-        assert orders == (code.get_order(vecs_r[0]), code.get_order(vecs_r[1]))
+        assert orders == (code.get_order(basis_r[0]), code.get_order(basis_r[1]))
 
     # precompute plaquette mappings
     num_plaquettes = len(code) // 2
-    plaquette_map_l = get_plaquette_map(code, vecs_l, validate=validate)
-    plaquette_map_r = get_plaquette_map(code, vecs_r, validate=validate)
+    plaquette_map_l = get_plaquette_map(code, basis_l, validate=validate)
+    plaquette_map_r = get_plaquette_map(code, basis_r, validate=validate)
 
     @functools.cache
     def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
@@ -267,8 +302,8 @@ def get_data_qubit_pos_func(
         else:
             sector = "R"
             aa, bb = plaquette_map_r[
-                (plaquette_index // code.orders[1] + shift_r[0]) % code.orders[0],
-                (plaquette_index % code.orders[1] + shift_r[1]) % code.orders[1],
+                (plaquette_index // code.orders[1] + shift_lr[0]) % code.orders[0],
+                (plaquette_index % code.orders[1] + shift_lr[1]) % code.orders[1],
             ]
         return code.get_qubit_pos_from_orders((sector, aa, bb), folded_layout, orders)
 
