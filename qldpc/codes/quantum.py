@@ -212,9 +212,9 @@ class QCCode(TBCode):
             output *= self.symbol_gens[base] ** exponent
         return output
 
-    @classmethod
+    @staticmethod
     def get_coefficient_and_exponents(
-        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul
+        expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul,
     ) -> tuple[int, dict[sympy.Symbol, int]]:
         """Extract the coefficients and exponents in a monomial expression.
 
@@ -342,10 +342,8 @@ class BBCode(QCCode):
         """
         return self.get_node_label_from_orders(node, self.orders)
 
-    @classmethod
-    def get_node_label_from_orders(
-        cls, node: Node, orders: tuple[int, int]
-    ) -> tuple[str, int, int]:
+    @staticmethod
+    def get_node_label_from_orders(node: Node, orders: tuple[int, int]) -> tuple[str, int, int]:
         """Get the label of a qubit in a BBCode with cyclic groups of the given orders.
 
         The qubit label identifies the sector (L, R, X, Y) within a plaquette, and the coordinates
@@ -367,9 +365,8 @@ class BBCode(QCCode):
         """
         return self.get_qubit_pos_from_orders(qubit, folded_layout, self.orders)
 
-    @classmethod
+    @staticmethod
     def get_qubit_pos_from_orders(
-        cls,
         qubit: Node | tuple[str, int, int],
         folded_layout: bool,
         orders: tuple[int, int],
@@ -379,7 +376,7 @@ class BBCode(QCCode):
         If folded_layout is True, "fold" the array of qubits as in Figure 2 of arXiv:2404.18809.
         """
         if isinstance(qubit, Node):
-            qubit = cls.get_node_label_from_orders(qubit, orders)
+            qubit = BBCode.get_node_label_from_orders(qubit, orders)
         ss, aa, bb = qubit
 
         # convert sector and plaquette coordinates into qubit coordinates
@@ -654,9 +651,8 @@ class HGPCode(CSSCode):
 
         CSSCode.__init__(self, matrix_x.astype(int), matrix_z.astype(int), field, validate=False)
 
-    @classmethod
+    @staticmethod
     def get_matrix_product(
-        cls,
         matrix_a: npt.NDArray[np.int_ | np.object_],
         matrix_b: npt.NDArray[np.int_ | np.object_],
     ) -> tuple[npt.NDArray[np.int_ | np.object_], npt.NDArray[np.int_ | np.object_]]:
@@ -672,8 +668,8 @@ class HGPCode(CSSCode):
         matrix_z = np.block([-mat_In1_H2, mat_H1_Im2_T])
         return matrix_x, matrix_z
 
-    @classmethod
-    def get_graph_product(cls, graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> nx.DiGraph:
+    @staticmethod
+    def get_graph_product(graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> nx.DiGraph:
         """Hypergraph product of two Tanner graphs."""
 
         # start with a cartesian products of the input graphs
@@ -683,8 +679,8 @@ class HGPCode(CSSCode):
         graph = nx.DiGraph()
         for node_fst, node_snd, data in graph_product.edges(data=True):
             # identify the sectors of two nodes
-            sector_fst = cls.get_sector(*node_fst)
-            sector_snd = cls.get_sector(*node_snd)
+            sector_fst = HGPCode.get_sector(*node_fst)
+            sector_snd = HGPCode.get_sector(*node_snd)
 
             # identify data-qudit vs. check nodes, and their sectors
             if sector_fst in [(0, 0), (1, 1)]:
@@ -722,20 +718,20 @@ class HGPCode(CSSCode):
 
         return graph
 
-    @classmethod
-    def get_sector(cls, node_a: Node, node_b: Node) -> tuple[int, int]:
+    @staticmethod
+    def get_sector(node_a: Node, node_b: Node) -> tuple[int, int]:
         """Get the sector of a node in a graph product."""
         return int(not node_a.is_data), int(not node_b.is_data)
 
-    @classmethod
+    @staticmethod
     def get_product_node_map(
-        cls, nodes_a: Collection[Node], nodes_b: Collection[Node]
+        nodes_a: Collection[Node], nodes_b: Collection[Node]
     ) -> dict[tuple[Node, Node], Node]:
         """Map (dictionary) that re-labels nodes in the hypergraph product of two codes."""
         node_map = {}
         index_data, index_check = 0, 0
         for node_a, node_b in itertools.product(sorted(nodes_a), sorted(nodes_b)):
-            if cls.get_sector(node_a, node_b) in [(0, 0), (1, 1)]:
+            if HGPCode.get_sector(node_a, node_b) in [(0, 0), (1, 1)]:
                 node = Node(index=index_data, is_data=True)
                 index_data += 1
             else:
@@ -886,9 +882,9 @@ class QTCode(CSSCode):
             and other.complex.bipartite == other.complex.bipartite
         )
 
-    @classmethod
+    @staticmethod
     def get_subcodes(
-        cls, cayplex: CayleyComplex, code_a: ClassicalCode, code_b: ClassicalCode
+        cayplex: CayleyComplex, code_a: ClassicalCode, code_b: ClassicalCode
     ) -> tuple[TannerCode, TannerCode]:
         """Get the classical Tanner subcodes of a quantum Tanner code."""
         subgraph_x, subgraph_z = QTCode.get_subgraphs(cayplex)
@@ -896,8 +892,8 @@ class QTCode(CSSCode):
         subcode_z = ~ClassicalCode.tensor_product(~code_a, ~code_b)
         return TannerCode(subgraph_x, subcode_x), TannerCode(subgraph_z, subcode_z)
 
-    @classmethod
-    def get_subgraphs(cls, cayplex: CayleyComplex) -> tuple[nx.DiGraph, nx.DiGraph]:
+    @staticmethod
+    def get_subgraphs(cayplex: CayleyComplex) -> tuple[nx.DiGraph, nx.DiGraph]:
         """Build the subgraphs of the inner (classical) Tanner codes for a quantum Tanner code.
 
         These subgraphs are defined using the faces of a Cayley complex.  Each face looks like:
@@ -954,9 +950,8 @@ class QTCode(CSSCode):
 
         return subgraph_x, subgraph_z
 
-    @classmethod
+    @staticmethod
     def random(
-        cls,
         group: abstract.Group,
         code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
@@ -1008,8 +1003,8 @@ class QTCode(CSSCode):
             file.write(f"# base field: {self.field.order}\n")
             file.write(f"# bipartite: {self.complex.bipartite}\n")
 
-    @classmethod
-    def load(cls, path: str) -> QTCode:
+    @staticmethod
+    def load(path: str) -> QTCode:
         """Load a QTCode from a file."""
         if not os.path.isfile(path):
             raise ValueError(f"Path does not exist: {path}")
@@ -1092,9 +1087,9 @@ class SurfaceCode(CSSCode):
 
         CSSCode.__init__(self, matrix_x, matrix_z, field=field)
 
-    @classmethod
+    @staticmethod
     def get_rotated_checks(
-        cls, rows: int, cols: int
+        rows: int, cols: int
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Build X-sector and Z-sector parity check matrices.
 
@@ -1207,9 +1202,9 @@ class ToricCode(CSSCode):
 
         CSSCode.__init__(self, matrix_x, matrix_z, field=field)
 
-    @classmethod
+    @staticmethod
     def get_rotated_checks(
-        cls, rows: int, cols: int
+        rows: int, cols: int
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Build X-sector and Z-sector parity check matrices.
 

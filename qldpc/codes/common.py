@@ -153,14 +153,14 @@ class AbstractCode(abc.ABC):
     def __len__(self) -> int:
         """The block length of this code."""
 
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
+    def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
 
-    @classmethod
+    @staticmethod
     @abc.abstractmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
+    def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
 
     @abc.abstractmethod
@@ -210,8 +210,8 @@ class ClassicalCode(AbstractCode):
         """Does this code contain the given word(s)?"""
         return not np.any(self.matrix @ self.field(words).T)
 
-    @classmethod
-    def equiv(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> bool:
+    @staticmethod
+    def equiv(code_a: ClassicalCode, code_b: ClassicalCode) -> bool:
         """Are two classical codes equivalent?  That is, do they have the same code words?"""
         return code_a.field is code_b.field and np.array_equal(
             code_a.canonicalized().matrix, code_b.canonicalized().matrix
@@ -222,8 +222,8 @@ class ClassicalCode(AbstractCode):
         rows = [row for row in self.matrix.row_reduce() if np.any(row)]
         return ClassicalCode(rows, self.field.order)
 
-    @classmethod
-    def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
+    @staticmethod
+    def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix H into a Tanner graph.
 
         The Tanner graph is a bipartite graph with (num_checks, num_bits) vertices, respectively
@@ -239,8 +239,8 @@ class ClassicalCode(AbstractCode):
             graph.order = type(matrix).order
         return graph
 
-    @classmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
+    @staticmethod
+    def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
         num_bits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_bits
@@ -286,8 +286,8 @@ class ClassicalCode(AbstractCode):
     def __invert__(self) -> ClassicalCode:
         return self.dual()
 
-    @classmethod
-    def tensor_product(cls, code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
+    @staticmethod
+    def tensor_product(code_a: ClassicalCode, code_b: ClassicalCode) -> ClassicalCode:
         """Tensor product C_a ⨂ C_b of two codes C_a and C_b.
 
         Let G_a and G_b respectively denote the generators C_a and C_b.
@@ -460,9 +460,9 @@ class ClassicalCode(AbstractCode):
         """Compute the weight of the largest check."""
         return max(np.count_nonzero(row) for row in self.matrix)
 
-    @classmethod
+    @staticmethod
     def random(
-        cls, bits: int, checks: int, field: int | None = None, *, seed: int | None = None
+        bits: int, checks: int, field: int | None = None, *, seed: int | None = None
     ) -> ClassicalCode:
         """Construct a random linear code with the given number of bits and checks.
 
@@ -478,15 +478,15 @@ class ClassicalCode(AbstractCode):
         matrix = get_random_array(code_field, (checks, bits), satisfy=nontrivial, seed=seed)
         return ClassicalCode(matrix)
 
-    @classmethod
+    @staticmethod
     def from_generator(
-        self, generator: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
+        generator: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
     ) -> ClassicalCode:
         """Construct a ClassicalCode from a generator matrix."""
         return ~ClassicalCode(generator, field)
 
-    @classmethod
-    def from_name(cls, name: str) -> ClassicalCode:
+    @staticmethod
+    def from_name(name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # remove whitespace
         matrix, field = external.codes.get_code(standardized_name)
@@ -507,8 +507,8 @@ class ClassicalCode(AbstractCode):
         group_str = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
         return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
 
-    @classmethod
-    def stack(cls, *codes: ClassicalCode) -> ClassicalCode:
+    @staticmethod
+    def stack(*codes: ClassicalCode) -> ClassicalCode:
         """Stack the given classical codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
@@ -711,8 +711,8 @@ class QuditCode(AbstractCode):
         matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
         return max(np.count_nonzero(row) for row in matrix)
 
-    @classmethod
-    def equiv(cls, code_a: QuditCode, code_b: QuditCode) -> bool:
+    @staticmethod
+    def equiv(code_a: QuditCode, code_b: QuditCode) -> bool:
         """Are two quantum codes equivalent?  That is, do they have the same code space?"""
         return code_a.field is code_b.field and np.array_equal(
             code_a.canonicalized().matrix, code_b.canonicalized().matrix
@@ -723,8 +723,8 @@ class QuditCode(AbstractCode):
         rows = [row for row in self.matrix.row_reduce() if np.any(row)]
         return QuditCode(rows, self.field.order, validate=validate)
 
-    @classmethod
-    def matrix_to_graph(cls, matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
+    @staticmethod
+    def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
         graph = nx.DiGraph()
         matrix = np.reshape(matrix, (len(matrix), 2, -1))
@@ -748,8 +748,8 @@ class QuditCode(AbstractCode):
 
         return graph
 
-    @classmethod
-    def graph_to_matrix(cls, graph: nx.DiGraph) -> galois.FieldArray:
+    @staticmethod
+    def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
         num_qudits = sum(1 for node in graph.nodes() if node.is_data)
         num_checks = len(graph.nodes()) - num_qudits
@@ -777,9 +777,9 @@ class QuditCode(AbstractCode):
             stabilizers.append(" ".join(ops))
         return stabilizers
 
-    @classmethod
+    @staticmethod
     def from_stabilizers(
-        cls, *stabilizers: str, field: int | None = None, validate: bool = True
+        *stabilizers: str, field: int | None = None, validate: bool = True
     ) -> QuditCode:
         """Construct a QuditCode from the provided stabilizers."""
         field = field or DEFAULT_FIELD_ORDER
@@ -1062,8 +1062,8 @@ class QuditCode(AbstractCode):
         if np.any(self.matrix @ conjugate_xz(logical_ops).T):
             raise ValueError("The given logical operators do not commute with stabilizers")
 
-    @classmethod
-    def stack(cls, *codes: QuditCode, inherit_logicals: bool = True) -> QuditCode:
+    @staticmethod
+    def stack(*codes: QuditCode, inherit_logicals: bool = True) -> QuditCode:
         """Stack the given qudit codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
@@ -1090,9 +1090,8 @@ class QuditCode(AbstractCode):
             code.set_logical_ops(logical_ops)
         return code
 
-    @classmethod
+    @staticmethod
     def concatenate(
-        cls,
         inner: QuditCode,
         outer: QuditCode,
         outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
@@ -1137,9 +1136,8 @@ class QuditCode(AbstractCode):
             code._logical_ops = outer.get_logical_ops() @ inner.get_logical_ops()
         return code
 
-    @classmethod
+    @staticmethod
     def _standardize_concatenation_inputs(
-        cls,
         inner: QuditCode,
         outer: QuditCode,
         outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None,
@@ -1649,8 +1647,8 @@ class CSSCode(QuditCode):
             for logical_index in range(self.dimension):
                 self.reduce_logical_op(pauli, logical_index, **decoder_args)
 
-    @classmethod
-    def stack(cls, *codes: QuditCode, inherit_logicals: bool = True) -> CSSCode:
+    @staticmethod
+    def stack(*codes: QuditCode, inherit_logicals: bool = True) -> CSSCode:
         """Stack the given CSS codes.
 
         The stacked code is obtained by having the input codes act on disjoint sets of bits.
@@ -1676,9 +1674,8 @@ class CSSCode(QuditCode):
             )
         return code
 
-    @classmethod
+    @staticmethod
     def concatenate(
-        cls,
         inner: QuditCode,
         outer: QuditCode,
         outer_physical_to_inner_logical: Mapping[int, int] | Sequence[int] | None = None,
