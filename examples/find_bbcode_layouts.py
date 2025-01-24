@@ -106,8 +106,8 @@ def find_layout_params(
     check_supports = get_check_supports(code)
 
     # construct the set of pairs of lattice vector that span a torus with shape code.orders
-    sites = np.ndindex(code.orders)
-    pairs: Iterable[Basis2D] = itertools.combinations(sites, 2)  # type:ignore[assignment]
+    pairs: Iterable[Basis2D]
+    pairs = itertools.combinations(np.ndindex(code.orders), 2)  # type:ignore[assignment]
     lattice_vectors = [
         (vec_a, vec_b) for vec_a, vec_b in pairs if code.is_valid_basis(vec_a, vec_b)
     ]
