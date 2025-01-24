@@ -39,7 +39,7 @@ def get_best_known_layout_params(
     ```
     Optimized check qubit locations can similarly be found with
     ```
-    check_qubit_locations = get_check_qubit_locations(code, layout_params, min_max_distance)
+    check_qubit_locations = get_check_qubit_locations(code, layout_params, max_distance)
     for qubit, location in check_qubit_locations.items():
         print(qubit, location)
     ```
@@ -98,7 +98,7 @@ def find_layout_params(
     ```
     Optimized check qubit locations can similarly be found with
     ```
-    check_qubit_locations = get_check_qubit_locations(code, layout_params, min_max_distance)
+    check_qubit_locations = get_check_qubit_locations(code, layout_params, max_distance)
     for qubit, location in check_qubit_locations.items():
         print(qubit, location)
     ```
