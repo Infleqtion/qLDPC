@@ -18,6 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import ast
+import functools
 import itertools
 import math
 import os
@@ -343,6 +344,7 @@ class BBCode(QCCode):
         return self.get_node_label_from_orders(node, self.orders)
 
     @staticmethod
+    @functools.cache
     def get_node_label_from_orders(node: Node, orders: tuple[int, int]) -> tuple[str, int, int]:
         """Get the label of a qubit in a BBCode with cyclic groups of the given orders.
 
@@ -366,6 +368,7 @@ class BBCode(QCCode):
         return self.get_qubit_pos_from_orders(qubit, folded_layout, self.orders)
 
     @staticmethod
+    @functools.cache
     def get_qubit_pos_from_orders(
         qubit: Node | tuple[str, int, int],
         folded_layout: bool,
