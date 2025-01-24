@@ -81,7 +81,7 @@ def find_layout_params(
     This function can be used to identify optimized qubit layout parameters, the maximum qubit
     communication distance for that layout, and the qubit positions for that layout with:
     ```
-    layout_params = get_best_known_layout_params(code, folded_layout)
+    layout_params = find_layout_params(code, folded_layout)
     max_distance = get_max_comm_distance(code, layout_params)
     print("max_distance:", max_distance)
     get_qubit_pos = get_qubit_pos_func(code, layout_params, max_distance)
