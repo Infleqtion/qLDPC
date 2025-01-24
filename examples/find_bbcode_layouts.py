@@ -7,7 +7,7 @@ The qudit placement strategy is described in arXiv:2404.18809.
 import functools
 import itertools
 import math
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable
 
 import numpy as np
 import numpy.typing as npt
