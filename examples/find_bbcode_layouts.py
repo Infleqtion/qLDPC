@@ -7,6 +7,7 @@ The qubit placement strategy is described in arXiv:2404.18809.
 import functools
 import itertools
 import math
+from mpi4py import MPI
 from collections.abc import Callable, Iterable, Iterator
 
 import numpy as np
@@ -107,34 +108,64 @@ def find_layout_params(
         print(qubit, location)
     ```
     """
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    size = comm.Get_size()
+
     # initialize the optimized (min-max) communication distance to an upper bound
-    optimal_distance = get_max_distance(code)
+    global_optimal_distance = get_max_distance(code)
 
     # precompute the support of parity checks
     check_supports = get_check_supports(code)
 
-    # iterate over layout parameters of the BBCode
-    for basis_l, basis_r, shift_lr in get_layout_search_space(code, restricted_search):
-        min_max_distance = get_min_max_communication_distance(
+    # Each rank keeps its own "local best"
+    local_optimal_distance = global_optimal_distance
+    local_best_params = None
+    
+    # Static distribution: rank r gets items i where i % size == r
+    for i, (basis_l, basis_r, shift_lr) in enumerate(get_layout_search_space(code, restricted_search)):
+        if i % size != rank:
+            continue
+        
+        dist = get_min_max_communication_distance(
             code,
             (folded_layout, basis_l, basis_r, shift_lr),
-            distance_cutoff=optimal_distance,
+            distance_cutoff=local_optimal_distance,
             check_supports=check_supports,
             validate=False,
         )
-        if min_max_distance < optimal_distance:
-            optimal_basis_l = basis_l
-            optimal_basis_r = basis_r
-            optimal_shift_lr = shift_lr
-            optimal_distance = min_max_distance
+        if dist < local_optimal_distance:
+            local_optimal_distance = dist
+            local_best_params = (basis_l, basis_r, shift_lr)
             if verbose:
-                print()
-                print("new best found:", min_max_distance)
-                print("basis_l:", basis_l)
-                print("basis_r:", basis_r)
-                print("shift_lr:", shift_lr)
+                print(f"[Rank {rank}] Found new local best = {dist}, params = {local_best_params}")
 
-    return (folded_layout, optimal_basis_l, optimal_basis_r, optimal_shift_lr), optimal_distance
+    # Gather all local bests on rank 0
+    best_data = (local_optimal_distance, local_best_params)
+    all_bests = comm.gather(best_data, root=0)
+    
+    if rank == 0:
+        # Pick the global best among them
+        global_best = (global_optimal_distance, None)  # (distance, params)
+        for (dist, params) in all_bests:
+            if params is not None and dist < global_best[0]:
+                global_best = (dist, params)
+        
+        (best_dist, best_params) = global_best
+        if best_params is not None and verbose:
+            print("\n[Rank 0] Global best found =", best_dist)
+            print("        basis_l:", best_params[0])
+            print("        basis_r:", best_params[1])
+            print("        shift_lr:", best_params[2])
+    else:
+        best_dist, best_params = None, None
+    
+    # Broadcast the final global best to all processes
+    best_dist = comm.bcast(best_dist, root=0)
+    best_params = comm.bcast(best_params, root=0)
+    
+    # Every rank returns the same final result
+    return (folded_layout, *best_params), best_dist
 
 
 def get_max_distance(code: qldpc.codes.BBCode) -> float:
@@ -400,26 +431,26 @@ def get_check_qubit_locations(
 
 if __name__ == "__main__":
     codes = [
-        qldpc.codes.BBCode(
-            {x: 6, y: 6},
-            x**3 + y + y**2,
-            y**3 + x + x**2,
-        ),
-        qldpc.codes.BBCode(
-            {x: 15, y: 3},
-            x**9 + y + y**2,
-            1 + x**2 + x**7,
-        ),
-        qldpc.codes.BBCode(
-            {x: 9, y: 6},
-            x**3 + y + y**2,
-            y**3 + x + x**2,
-        ),
-        qldpc.codes.BBCode(
-            {x: 12, y: 6},
-            x**3 + y + y**2,
-            y**3 + x + x**2,
-        ),
+        # qldpc.codes.BBCode(
+        #     {x: 6, y: 6},
+        #     x**3 + y + y**2,
+        #     y**3 + x + x**2,
+        # ),
+        # qldpc.codes.BBCode(
+        #     {x: 15, y: 3},
+        #     x**9 + y + y**2,
+        #     1 + x**2 + x**7,
+        # ),
+        # qldpc.codes.BBCode(
+        #     {x: 9, y: 6},
+        #     x**3 + y + y**2,
+        #     y**3 + x + x**2,
+        # ),
+        # qldpc.codes.BBCode(
+        #     {x: 12, y: 6},
+        #     x**3 + y + y**2,
+        #     y**3 + x + x**2,
+        # ),
         qldpc.codes.BBCode(
             {x: 12, y: 12},
             x**3 + y**2 + y**7,
@@ -431,6 +462,7 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        # layout_params, min_max_distance = find_layout_params(code, folded_layout)
-        layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
+        # layout_params, min_max_distance = find_layout_params(code, folded_layout, restricted_search=False)
+        layout_params, min_max_distance = find_layout_params(code, folded_layout, restricted_search=False)
+        # layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
         print("min_max_distance:", min_max_distance)
