@@ -140,9 +140,8 @@ def get_max_distance(code: qldpc.codes.BBCode) -> float:
 
 def get_check_supports(code: qldpc.codes.BBCode) -> npt.NDArray[np.int_]:
     """Identify the support of the parity checks of the given code."""
-    return np.array(
-        [np.where(stabilizer)[0] for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)],
-        dtype=int,
+    return np.vstack(
+        [np.where(stabilizer)[0] for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)]
     )
 
 
