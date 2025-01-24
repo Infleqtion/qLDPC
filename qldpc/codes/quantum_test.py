@@ -42,8 +42,8 @@ def test_small_codes() -> None:
     assert code.dimension == 1
     assert code.get_stabilizers()[0] == "X Z Z X I"
 
-    for rank in range(2, 6):
-        assert codes.IcebergCode(rank).get_code_params() == (2 * rank, 2 * rank - 2, 2)
+    for size in range(2, 6):
+        assert codes.IcebergCode(size).get_code_params() == (2 * size, 2 * size - 2, 2)
 
 
 def test_two_block_code_error() -> None:

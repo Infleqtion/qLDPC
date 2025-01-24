@@ -70,8 +70,8 @@ class IcebergCode(CSSCode):
     - https://errorcorrectionzoo.org/c/iceberg
     """
 
-    def __init__(self, rank: int) -> None:
-        checks = [[1] * (2 * rank)]
+    def __init__(self, size: int) -> None:
+        checks = [[1] * (2 * size)]
         CSSCode.__init__(self, checks, checks, field=2, validate=False)
         self._exact_distance_x = self._exact_distance_z = 2
 
