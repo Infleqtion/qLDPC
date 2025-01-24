@@ -44,32 +44,36 @@ def get_best_known_layout_params(
         print(qubit, location)
     ```
     """
-    code_params = len(code), code.dimension
-    if code_params == (72, 12) and folded_layout:
-        basis_l = ((1, 1), (1, 2))
-        basis_r = ((-1, -1), (-1, -2))
-        shift_lr = (2, 1)
-    elif code_params == (90, 8) and folded_layout:
-        basis_l = ((0, 1), (2, 0))
-        basis_r = ((0, 1), (2, 0))
-        shift_lr = (0, 0)
-    elif code_params == (108, 8) and folded_layout:
-        basis_l = ((3, 1), (4, 4))
-        basis_r = ((-3, -1), (-4, -4))
-        shift_lr = (1, 2)
-    elif code_params == (144, 12) and folded_layout:
-        basis_l = ((0, 1), (1, 0))
-        basis_r = ((0, 1), (1, 0))
-        shift_lr = (1, 2)
-    elif code_params == (288, 12) and folded_layout:
-        basis_l = ((0, 5), (1, 0))
-        basis_r = ((0, 5), (1, 0))
-        shift_lr = (1, 9)
-    else:
+    basis_l = basis_r = shift_lr = None
+
+    if folded_layout:
+        if code == qldpc.codes.BBCode({x: 6, y: 6}, x**3 + y + y**2, y**3 + x + x**2):
+            basis_l = ((1, 1), (1, 2))
+            basis_r = ((-1, -1), (-1, -2))
+            shift_lr = (2, 1)
+        elif code == qldpc.codes.BBCode({x: 15, y: 3}, x**9 + y + y**2, 1 + x**2 + x**7):
+            basis_l = ((0, 1), (2, 0))
+            basis_r = ((0, 1), (2, 0))
+            shift_lr = (0, 0)
+        elif code == qldpc.codes.BBCode({x: 9, y: 6}, x**3 + y + y**2, y**3 + x + x**2):
+            basis_l = ((3, 1), (4, 4))
+            basis_r = ((-3, -1), (-4, -4))
+            shift_lr = (1, 2)
+        elif code == qldpc.codes.BBCode({x: 12, y: 6}, x**3 + y + y**2, y**3 + x + x**2):
+            basis_l = ((0, 1), (1, 0))
+            basis_r = ((0, 1), (1, 0))
+            shift_lr = (1, 2)
+        elif code == qldpc.codes.BBCode({x: 12, y: 12}, x**3 + y**2 + y**7, y**3 + x + x**2):
+            basis_l = ((0, 5), (1, 0))
+            basis_r = ((0, 5), (1, 0))
+            shift_lr = (1, 9)
+
+    if basis_l is None or basis_r is None or shift_lr is None:
         raise ValueError(
-            f"Layout parameters unknown for BBCode with parameters {code_params}"
-            f" and folded_layout={folded_layout}"
+            f"Layout parameters unknown for the following BBCode with"
+            f" folded_layout={folded_layout}:\n{code}"
         )
+
     layout_params = (folded_layout, basis_l, basis_r, shift_lr)
     max_distance = get_min_max_communication_distance(code, layout_params)
     return layout_params, max_distance

@@ -348,6 +348,19 @@ class BBCode(QCCode):
         self.orders: tuple[int, int]
         self.symbols: tuple[sympy.Symbol, sympy.Symbol]
 
+    def __str__(self) -> str:
+        """Human-readable representation of this code."""
+        text = ""
+        if self.field.order == 2:
+            text += f"{self.name} on {self.num_qubits} qubits"
+        else:
+            text += f"{self.name} on {self.num_qudits} qudits over {self.field_name}"
+        orders = dict(zip(self.symbols, self.orders))
+        text += f" with cyclic group orders {orders} and generating polynomials"
+        text += f"\n  A = {self.poly_a.as_expr()}"
+        text += f"\n  B = {self.poly_b.as_expr()}"
+        return text
+
     def get_node_label(self, node: Node) -> tuple[str, int, int]:
         """Convert a node of this code's Tanner graph into a qubit label.
 
