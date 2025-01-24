@@ -160,19 +160,14 @@ def get_layout_search_space(
     vector_pairs: Iterable[Basis2D]
     vector_pairs = itertools.combinations(np.ndindex(code.orders), 2)  # type:ignore[assignment]
     lattice_vectors = [
-        (vec_a, vec_b) for vec_a, vec_b in vector_pairs if code.is_valid_basis(vec_a, vec_b)
+        (vec_a, vec_b) if code.get_order(vec_a) >= code.get_order(vec_b) else (vec_b, vec_a)
+        for vec_a, vec_b in vector_pairs
+        if code.is_valid_basis(vec_a, vec_b)
     ]
-
-    def get_orders(basis: Basis2D) -> tuple[int, int]:
-        """Get the orders of the vectors in a basis.
-
-        The order of a vector is the multiple of that vector that equals the "zero vector".
-        """
-        return code.get_order(basis[0]), code.get_order(basis[1])
 
     # iterate over all lattice vector bases for L-type qubits
     for basis_l in lattice_vectors:
-        orders_l = code.get_order(basis_l[0]), code.get_order(basis_l[1])
+        order_0 = code.get_order(basis_l[0])
 
         # determine the search space of lattice vectors for R-type qubits
         if restricted_search:
@@ -182,9 +177,9 @@ def get_layout_search_space(
         else:
             # consider all lattice vectors with the same orders
             bases_r = [
-                basis_r if orders_r == orders_l else basis_r[::-1]
-                for basis_r in lattice_vectors
-                if (orders_r := get_orders(basis_r)) == orders_l or orders_r == orders_l[::-1]
+                (vec_a, vec_b)
+                for vec_a, vec_b in lattice_vectors
+                if code.get_order(vec_a) == order_0
             ]
 
         for basis_r in bases_r:
