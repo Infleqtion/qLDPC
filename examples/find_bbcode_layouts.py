@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Find BBCode qubit layouts with minimal real-space qubit communication distances.
+"""Find bivariate bicycle code qubit layouts with minimal real-space qubit communication distances.
 
 The qubit placement strategy is described in arXiv:2404.18809.
 """
