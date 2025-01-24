@@ -129,23 +129,23 @@ class ReedMullerCode(ClassicalCode):
         self._matrix = ClassicalCode(generator, field).generator
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
-    @classmethod
-    def get_generator(cls, order: int, size: int) -> npt.NDArray[np.int_]:
+    @staticmethod
+    def get_generator(order: int, size: int) -> npt.NDArray[np.int_]:
         """Get the generator matrix for the specified Reed-Muller code."""
-        cls._assert_valid_params(order, size)
+        ReedMullerCode._assert_valid_params(order, size)
 
         if order == 0:
             return np.ones(2**size, dtype=int)
         if order == size:
             return np.identity(2**size, dtype=int)
 
-        mat_a = cls.get_generator(order, size - 1)
-        mat_b = cls.get_generator(order - 1, size - 1)
+        mat_a = ReedMullerCode.get_generator(order, size - 1)
+        mat_b = ReedMullerCode.get_generator(order - 1, size - 1)
         mat_z = np.zeros_like(mat_b)
         return np.block([[mat_a, mat_a], [mat_z, mat_b]]).astype(int)
 
-    @classmethod
-    def _assert_valid_params(self, order: int, size: int) -> None:
+    @staticmethod
+    def _assert_valid_params(order: int, size: int) -> None:
         if not (size >= 0 and 0 <= order <= size):
             raise ValueError(
                 "Reed-Muller code R(r,m) must have m >= 0 and 0 <= r <= m\n"
@@ -210,8 +210,8 @@ class TannerCode(ClassicalCode):
             key=lambda neighbor: self.subgraph[node][neighbor].get("sort", neighbor),
         )
 
-    @classmethod
-    def as_directed_subgraph(self, subgraph: nx.Graph) -> nx.DiGraph:
+    @staticmethod
+    def as_directed_subgraph(subgraph: nx.Graph) -> nx.DiGraph:
         """Convert an undirected graph for a Tanner code into a directed graph for the same code."""
         directed_subgraph = nx.DiGraph()
         for node_a, node_b, edge_data in subgraph.edges(data=True):
