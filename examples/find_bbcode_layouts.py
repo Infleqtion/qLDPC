@@ -150,9 +150,12 @@ def get_max_distance(code: qldpc.codes.BBCode) -> float:
     return 2 * math.sqrt(sum(xx**2 for xx in code.orders))
 
 
-def get_check_supports(code: qldpc.codes.BBCode) -> Sequence[npt.NDArray[np.int_]]:
+def get_check_supports(code: qldpc.codes.BBCode) -> npt.NDArray[np.int_]:
     """Identify the support of the parity checks of the given code."""
-    return [np.where(stabilizer)[0] for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)]
+    return np.array(
+        [np.where(stabilizer)[0] for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)],
+        dtype=int,
+    )
 
 
 def get_min_max_communication_distance(
@@ -160,7 +163,7 @@ def get_min_max_communication_distance(
     layout_params: LayoutParams,
     *,
     distance_cutoff: float | None = None,
-    check_supports: Sequence[npt.NDArray[np.int_]] | None = None,
+    check_supports: npt.NDArray[np.int_] | None = None,
     digits: int = 1,
     validate: bool = True,
 ) -> float:
@@ -170,7 +173,7 @@ def get_min_max_communication_distance(
     distance_cutoff, then quit early and return a number greater than the distance_cutoff.
     """
     distance_cutoff = distance_cutoff or get_max_distance(code)
-    check_supports = check_supports or get_check_supports(code)
+    check_supports = check_supports if check_supports is not None else get_check_supports(code)
     placement_matrix = get_placement_matrix(
         code,
         layout_params,
@@ -196,7 +199,7 @@ def get_placement_matrix(
     code: qldpc.codes.BBCode,
     layout_params: LayoutParams,
     *,
-    check_supports: Sequence[npt.NDArray[np.int_]] | None = None,
+    check_supports: npt.NDArray[np.int_] | None = None,
     validate: bool = True,
 ) -> npt.NDArray[np.int_]:
     """Construct a placement matrix of squared maximum communication distances.
@@ -222,7 +225,7 @@ def get_placement_matrix(
     which squared_distance_tensor[loc_index, check_index, neighbor_index] is the squared distance
     between a check qubit and one of its neighbors when the check qubit in a given location.
     """
-    check_supports = check_supports or get_check_supports(code)
+    check_supports = check_supports if check_supports is not None else get_check_supports(code)
     squared_distance_tensor = squared_distance_matrix[:, check_supports]
 
     # matrix of maximum squared communication distances
@@ -397,6 +400,6 @@ if __name__ == "__main__":
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
-        # layout_params, min_max_distance = find_layout_params(code, folded_layout)
-        layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
+        layout_params, min_max_distance = find_layout_params(code, folded_layout, verbose=False)
+        # layout_params, min_max_distance = get_best_known_layout_params(code, folded_layout)
         print("min_max_distance:", min_max_distance)
