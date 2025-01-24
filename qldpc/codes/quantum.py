@@ -42,7 +42,6 @@ class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
     def __init__(self) -> None:
-        self._exact_distance = 3
         code = QuditCode.from_stabilizers(
             "X Z Z X I",
             "I X Z Z X",
@@ -51,6 +50,7 @@ class FiveQubitCode(QuditCode):
             field=2,
         )
         QuditCode.__init__(self, code, validate=False)
+        self._exact_distance = 3
 
 
 class SteaneCode(CSSCode):
@@ -61,6 +61,19 @@ class SteaneCode(CSSCode):
         CSSCode.__init__(self, code, code, validate=False)
         self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
         self._exact_distance_x = self._exact_distance_z = 3
+
+
+class IcebergCode(CSSCode):
+    """Quantum error detecting code: [2m, 2m-2, 2].
+
+    References:
+    - https://errorcorrectionzoo.org/c/iceberg
+    """
+
+    def __init__(self, size: int) -> None:
+        checks = [[1] * (2 * size)]
+        CSSCode.__init__(self, checks, checks, field=2, validate=False)
+        self._exact_distance_x = self._exact_distance_z = 2
 
 
 ################################################################################
