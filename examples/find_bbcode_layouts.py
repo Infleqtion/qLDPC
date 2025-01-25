@@ -255,12 +255,14 @@ def get_data_qubit_pos_func(
     folded_layout, basis_l, basis_r, shift_lr = layout_params
     orders = (code.get_order(basis_l[0]), code.get_order(basis_l[1]))
     if validate:
+        assert code.is_valid_basis(*basis_l)
+        assert code.is_valid_basis(*basis_r)
         assert orders == (code.get_order(basis_r[0]), code.get_order(basis_r[1]))
 
     # precompute plaquette mappings
     num_plaquettes = len(code) // 2
-    plaquette_map_l = get_plaquette_map(code, basis_l, validate=validate)
-    plaquette_map_r = get_plaquette_map(code, basis_r, validate=validate)
+    plaquette_map_l = get_plaquette_map(basis_l, orders, code.orders)
+    plaquette_map_r = get_plaquette_map(basis_r, orders, code.orders)
 
     @functools.cache
     def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
@@ -283,8 +285,9 @@ def get_data_qubit_pos_func(
     return get_data_qubit_pos
 
 
+@functools.cache
 def get_plaquette_map(
-    code: qldpc.codes.BBCode, basis: Basis2D, *, validate: bool = True
+    basis: Basis2D, basis_orders: tuple[int, int], torus_shape: tuple[int, int]
 ) -> dict[tuple[int, int], tuple[int, int]]:
     """Construct a map that re-labels plaquettes by coefficients in a basis that spans the torus.
 
@@ -292,18 +295,13 @@ def get_plaquette_map(
     (x, y) = a * basis[0] + b * basis[1].  Here (x, y) is taken modulo code.orders, and (a, b) is
     taken modulo the order of the basis vectors on a torus with dimensions code.orders.
     """
-    if validate:
-        assert code.is_valid_basis(*basis)
     vec_a, vec_b = basis
-    order_a = code.get_order(vec_a)
-    order_b = code.get_order(vec_b)
     return {
         (
-            (aa * vec_a[0] + bb * vec_b[0]) % code.orders[0],
-            (aa * vec_a[1] + bb * vec_b[1]) % code.orders[1],
+            (aa * vec_a[0] + bb * vec_b[0]) % torus_shape[0],
+            (aa * vec_a[1] + bb * vec_b[1]) % torus_shape[1],
         ): (aa, bb)
-        for aa in range(order_a)
-        for bb in range(order_b)
+        for aa, bb in itertools.product(range(basis_orders[0]), range(basis_orders[1]))
     }
 
 
