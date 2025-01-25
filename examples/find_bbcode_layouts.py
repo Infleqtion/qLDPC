@@ -21,6 +21,8 @@ import qldpc
 Basis2D = tuple[tuple[int, int], tuple[int, int]]
 LayoutParams = tuple[bool, Basis2D, Basis2D, tuple[int, int]]
 
+DEFAULT_PRECISION = 0.1
+
 
 def get_best_known_layout_params(code: qldpc.codes.BBCode, folded_layout: bool) -> LayoutParams:
     """Retrieve the best known layout parameters for a bivariate bicycle code.
@@ -29,7 +31,7 @@ def get_best_known_layout_params(code: qldpc.codes.BBCode, folded_layout: bool) 
     with that layout, and the maximum qubit communication distance for the layout with:
     ```
     layout_params = get_best_known_layout_params(code, folded_layout)
-    get_qubit_pos = get_qubit_pos_func(code, layout_params, max_distance)
+    get_qubit_pos = get_qubit_pos_func(code, layout_params)
     for node in code.graph.nodes:
         print(node, get_qubit_pos(node))
     max_distance = get_max_comm_distance(code, layout_params)
@@ -81,8 +83,8 @@ def find_layout_params(
     This function can be used to identify optimized qubit layout parameters, the locations of qubits
     with that layout, and the maximum qubit communication distance for the layout with:
     ```
-    layout_params = get_best_known_layout_params(code, folded_layout)
-    get_qubit_pos = get_qubit_pos_func(code, layout_params, max_distance)
+    layout_params = find_layout_params(code, folded_layout)
+    get_qubit_pos = get_qubit_pos_func(code, layout_params)
     for node in code.graph.nodes:
         print(node, get_qubit_pos(node))
     max_distance = get_max_comm_distance(code, layout_params)
@@ -175,7 +177,10 @@ def get_layout_search_space(
 
 
 def get_min_max_communication_distance(
-    placement_matrix: npt.NDArray[np.int_], distance_cutoff: float, *, precision: float = 0.1
+    placement_matrix: npt.NDArray[np.int_],
+    distance_cutoff: float,
+    *,
+    precision: float = DEFAULT_PRECISION,
 ) -> float:
     """Minimize the maximum communication distance for a given placement matrix.
 
@@ -352,53 +357,37 @@ def has_perfect_matching(biadjacency_matrix: npt.NDArray[np.bool_]) -> bool | np
     return np.all(biadjacency_matrix[rows, cols])
 
 
-def get_max_comm_distance(
-    code: qldpc.codes.BBCode, layout_params: LayoutParams, *, precision: float = 0.1
-) -> float:
-    """Get the maximum qubit communication distance in particular BBCode layout."""
-    placement_matrix = get_placement_matrix(code, layout_params)
-    distance_cutoff = get_max_qubit_distance(code)
-    min_max_distance = get_min_max_communication_distance(
-        placement_matrix, distance_cutoff, precision=precision
-    )
-    get_qubit_pos = get_qubit_pos_func(code, layout_params, min_max_distance)
-
-    max_squared_distance = 0
-    for check_qubit_index in range(len(code)):
-        node = qldpc.objects.Node(check_qubit_index, is_data=False)
-        loc_0 = get_qubit_pos(node)
-        for neighbor in code.graph.successors(node):
-            loc_1 = get_qubit_pos(neighbor)
-            squared_distance = (loc_0[0] - loc_1[0]) ** 2 + (loc_0[1] - loc_1[1]) ** 2
-            if squared_distance > max_squared_distance:
-                max_squared_distance = squared_distance
-
-    return math.sqrt(max_squared_distance)
-
-
 def get_qubit_pos_func(
     code: qldpc.codes.BBCode,
     layout_params: LayoutParams,
-    max_comm_distance: float,
+    max_comm_distance: float | None = None,
     *,
+    precision: float = DEFAULT_PRECISION,
     validate: bool = True,
 ) -> Callable[[qldpc.objects.Node], tuple[int, int]]:
     """Construct a function that gives positions of qubits in particular layout of a BBCode.
 
-    Check qubits are required to satisfy a maximum communication distance constraint.
+    Check qubits are required to satisfy a maximum communication distance constraint.  If no such
+    constraint is provided, minimize the maximum communication distance.
     """
     # identify candidate check qubit locations
     folded_layout, (vec_a, vec_b) = layout_params[:2]
     orders = code.get_order(vec_a), code.get_order(vec_b)
     candidate_locs = get_default_qubit_locs(folded_layout, orders, data=False)
 
-    # assign check qubits to locations
+    # identify the maximum qubit communication distance that we will tolerate
     placement_matrix = get_placement_matrix(code, layout_params)
+    if not max_comm_distance:
+        distance_cutoff = get_max_qubit_distance(code)
+        max_comm_distance = get_min_max_communication_distance(
+            placement_matrix, distance_cutoff, precision=precision
+        )
+
+    # assign check qubits to locations
     biadjacency_matrix = placement_matrix <= (max_comm_distance + 1e-15) ** 2
     check_loc_indices, check_qubit_indices = scipy.optimize.linear_sum_assignment(
         biadjacency_matrix, maximize=True
     )
-
     if not np.all(biadjacency_matrix[check_loc_indices, check_qubit_indices]):
         raise ValueError(f"A maximum communication distance of {max_comm_distance} is unachievable")
 
@@ -413,6 +402,25 @@ def get_qubit_pos_func(
     return get_qubit_pos
 
 
+def get_max_comm_distance(
+    code: qldpc.codes.BBCode, layout_params: LayoutParams, *, precision: float = DEFAULT_PRECISION
+) -> float:
+    """Get the maximum qubit communication distance in particular BBCode layout."""
+    get_qubit_pos = get_qubit_pos_func(code, layout_params, precision=precision)
+
+    max_squared_distance = 0
+    for check_qubit_index in range(len(code)):
+        node = qldpc.objects.Node(check_qubit_index, is_data=False)
+        loc_0 = get_qubit_pos(node)
+        for neighbor in code.graph.successors(node):
+            loc_1 = get_qubit_pos(neighbor)
+            squared_distance = (loc_0[0] - loc_1[0]) ** 2 + (loc_0[1] - loc_1[1]) ** 2
+            if squared_distance > max_squared_distance:
+                max_squared_distance = squared_distance
+
+    return math.sqrt(max_squared_distance)
+
+
 def get_completed_qubit_pos_func(
     code: qldpc.codes.BBCode,
     data_qubit_locs: npt.NDArray[np.int_],
@@ -420,7 +428,7 @@ def get_completed_qubit_pos_func(
     lattice_shape: tuple[int, int] | None = None,
     check_supports: npt.NDArray[np.int_] | None = None,
     max_comm_distance: float | None = None,
-    precision: float = 0.1,
+    precision: float = DEFAULT_PRECISION,
 ) -> Callable[[qldpc.objects.Node], tuple[int, int]]:
     """Complete a qubit location assignment for a BBCode.
 
@@ -538,7 +546,7 @@ if __name__ == "__main__":
         # print("optimization time:", time.time() - start)
 
         # # print qubit positions
-        # get_qubit_pos = get_qubit_pos_func(code, layout_params, max_distance)
+        # get_qubit_pos = get_qubit_pos_func(code, layout_params)
         # for node in code.graph.nodes:
         #     print(node, get_qubit_pos(node))
 
