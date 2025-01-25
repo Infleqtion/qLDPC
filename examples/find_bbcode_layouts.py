@@ -413,29 +413,46 @@ def get_qubit_pos_func(
 def get_completed_qubit_pos_func(
     code: qldpc.codes.BBCode,
     data_qubit_locs: npt.NDArray[np.int_],
-    max_comm_distance: float | None = None,
     *,
+    lattice_shape: tuple[int, int] | None = None,
     check_supports: npt.NDArray[np.int_] | None = None,
+    max_comm_distance: float | None = None,
     precision: float = 0.1,
 ) -> Callable[[qldpc.objects.Node], tuple[int, int]]:
     """Complete a qubit layout assignment for a BBCode.
 
     Here "data_qubit_locs" is a 2-D array for which data_qubit_locs[data_qubit_index] is the
     location of the data qubit with index data_qubit_index.
+
+    Other arguments:
+    - lattice_shape: the dimensions of the rectangular grid that the qubits live on
+    - check_supports: the supports of the parity checks; should be get_check_supports(code)
+    - max_comm_distance: the maximum communication distance to enforce
+    - precision: the precision to which we care about max_comm_distance
     """
-    # identify candidate (unoccupied) locations for check qubits
-    plaquette_grid_shape = np.ceil(np.max(data_qubit_locs, axis=0) / 2).astype(int)
-    all_qubit_locs = np.ndindex(tuple(2 * plaquette_grid_shape))
-    candidate_locs = np.vstack(
-        [loc for loc in all_qubit_locs if ~np.any(np.all(data_qubit_locs == loc, axis=1))]
-    )
-    assert candidate_locs.shape[0] == data_qubit_locs.shape[0]
+    if lattice_shape is None:
+        # try to guess the shape of the qubit grid
+        lattice_shape = (2 * code.orders[0], 2 * code.orders[1])
+        if (
+            np.max(data_qubit_locs[:, 0]) >= lattice_shape[0]
+            or np.max(data_qubit_locs[:, 1]) >= lattice_shape[1]
+        ):
+            lattice_shape = lattice_shape[::-1]
+    num_sites = lattice_shape[0] * lattice_shape[1]
 
-    # construct a matrix of maximum distances between candidate and occupied locations
-    displacements = candidate_locs[:, None, :] - data_qubit_locs[None, :, :]
-    squared_distance_matrix = np.einsum("...i,...i->...", displacements, displacements)
+    # identify indices of lattice sites occupied by data qubits
+    data_loc_indices = np.ravel_multi_index(data_qubit_locs.T, dims=lattice_shape)
 
-    # construct a matrix of squared max_comm_distances for each (check_qubit, candidate_loc) pair.
+    # identify unoccupied lattice sites (by index)
+    all_loc_indices = np.arange(num_sites)
+    check_loc_indices = all_loc_indices[~np.isin(all_loc_indices, data_loc_indices)]
+
+    # construct a matrix of squared distances between (check_qubit_location, data_qubit) pairs
+    squared_distance_matrix = get_full_squared_distance_matrix(lattice_shape)[
+        np.ix_(check_loc_indices, data_loc_indices)
+    ]
+
+    # compute a matrix of squared communication distances
     check_supports = check_supports if check_supports is not None else get_check_supports(code)
     squared_distance_tensor = squared_distance_matrix[:, check_supports]
     placement_matrix = np.max(squared_distance_tensor, axis=-1).T
@@ -453,6 +470,8 @@ def get_completed_qubit_pos_func(
         biadjacency_matrix, maximize=True
     )
 
+    # identify all check qubit locations by the index of the check qubit assigned to them
+    candidate_locs = np.array(np.unravel_index(check_loc_indices, shape=lattice_shape), dtype=int).T
     check_qubit_locs = candidate_locs[check_loc_indices[check_qubit_indices]]
 
     def get_qubit_pos(node: qldpc.objects.Node) -> tuple[int, int]:
@@ -460,6 +479,14 @@ def get_completed_qubit_pos_func(
         return tuple(data_qubit_locs[node.index] if node.is_data else check_qubit_locs[node.index])
 
     return get_qubit_pos
+
+
+@functools.cache
+def get_full_squared_distance_matrix(lattice_shape: tuple[int, int] | None) -> npt.NDArray[np.int_]:
+    """Construct a matrix of squared distances between all pair of lattice points."""
+    locs = np.array(list(np.ndindex(lattice_shape)), dtype=int)
+    displacements = locs[:, None, :] - locs[None, :, :]
+    return np.einsum("...i,...i->...", displacements, displacements)
 
 
 if __name__ == "__main__":
