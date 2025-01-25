@@ -42,23 +42,23 @@ def get_best_known_layout_params(code: qldpc.codes.BBCode, folded_layout: bool) 
         if code == qldpc.codes.BBCode({x: 6, y: 6}, x**3 + y + y**2, y**3 + x + x**2):
             basis_l = ((1, 1), (1, 2))
             basis_r = ((-1, -1), (-1, -2))
-            shift_lr = (4, 5)
+            shift_lr = (-2, -1)
         elif code == qldpc.codes.BBCode({x: 15, y: 3}, x**9 + y + y**2, 1 + x**2 + x**7):
             basis_l = ((2, 0), (0, 1))
             basis_r = ((2, 0), (0, 1))
             shift_lr = (0, 1)
         elif code == qldpc.codes.BBCode({x: 9, y: 6}, x**3 + y + y**2, y**3 + x + x**2):
-            basis_l = ((7, 2), (6, 5))
-            basis_r = ((-7, -2), (-6, -5))
-            shift_lr = (5, 0)
+            basis_l = ((-2, 2), (-3, -1))
+            basis_r = ((2, -2), (3, 1))
+            shift_lr = (-4, 0)
         elif code == qldpc.codes.BBCode({x: 12, y: 6}, x**3 + y + y**2, y**3 + x + x**2):
             basis_l = ((1, 1), (0, 1))
             basis_r = ((-1, -1), (0, -1))
-            shift_lr = (11, 0)
+            shift_lr = (-1, 0)
         elif code == qldpc.codes.BBCode({x: 12, y: 12}, x**3 + y**2 + y**7, y**3 + x + x**2):
-            basis_l = ((0, 5), (1, 9))
-            basis_r = ((0, 5), (1, 9))
-            shift_lr = (11, 2)
+            basis_l = ((0, 5), (1, -3))
+            basis_r = ((0, 5), (1, -3))
+            shift_lr = (-1, 2)
 
     if basis_l is None or basis_r is None or shift_lr is None:
         raise ValueError(
