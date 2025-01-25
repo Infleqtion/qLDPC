@@ -448,7 +448,7 @@ def get_completed_qubit_pos_func(
         dims=lattice_shape,
     )
 
-    # identify unoccupied lattice sites by index
+    # identify unoccupied lattice sites and the indices of those lattice sites
     num_sites = lattice_shape[0] * lattice_shape[1]
     all_loc_indices = np.arange(num_sites)
     check_qubit_loc_indices = all_loc_indices[~np.isin(all_loc_indices, data_qubit_loc_indices)]
