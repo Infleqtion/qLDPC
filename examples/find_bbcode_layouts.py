@@ -438,18 +438,18 @@ def get_completed_qubit_pos_func(
             or np.max(data_qubit_locs[:, 1]) >= lattice_shape[1]
         ):
             lattice_shape = lattice_shape[::-1]
-    num_sites = lattice_shape[0] * lattice_shape[1]
 
     # identify indices of lattice sites occupied by data qubits
-    data_loc_indices = np.ravel_multi_index(data_qubit_locs.T, dims=lattice_shape)
+    data_qubit_loc_indices = np.ravel_multi_index(data_qubit_locs.T, dims=lattice_shape)
 
     # identify unoccupied lattice sites (by index)
+    num_sites = lattice_shape[0] * lattice_shape[1]
     all_loc_indices = np.arange(num_sites)
-    check_loc_indices = all_loc_indices[~np.isin(all_loc_indices, data_loc_indices)]
+    check_qubit_loc_indices = all_loc_indices[~np.isin(all_loc_indices, data_qubit_loc_indices)]
 
     # construct a matrix of squared distances between (check_qubit_location, data_qubit) pairs
     squared_distance_matrix = get_full_squared_distance_matrix(lattice_shape)[
-        np.ix_(check_loc_indices, data_loc_indices)
+        np.ix_(check_qubit_loc_indices, data_qubit_loc_indices)
     ]
 
     # compute a matrix of squared communication distances
@@ -471,7 +471,9 @@ def get_completed_qubit_pos_func(
     )
 
     # identify all check qubit locations by the index of the check qubit assigned to them
-    candidate_locs = np.array(np.unravel_index(check_loc_indices, shape=lattice_shape), dtype=int).T
+    candidate_locs = np.array(
+        np.unravel_index(check_qubit_loc_indices, shape=lattice_shape), dtype=int
+    ).T
     check_qubit_locs = candidate_locs[check_loc_indices[check_qubit_indices]]
 
     def get_qubit_pos(node: qldpc.objects.Node) -> tuple[int, int]:
