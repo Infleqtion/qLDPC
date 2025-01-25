@@ -257,8 +257,7 @@ def get_data_qubit_locs(
 
     # shift the plaquettes of R-type qubits
     qubit_locs_r = qubit_locs_r.reshape(*orders, 2)
-    qubit_locs_r = np.roll(qubit_locs_r, shift_lr[0], axis=0)
-    qubit_locs_r = np.roll(qubit_locs_r, shift_lr[1], axis=1)
+    qubit_locs_r = np.roll(qubit_locs_r, shift=shift_lr, axis=(0, 1))
     qubit_locs_r = qubit_locs_r.reshape(-1, 2)
 
     return np.vstack([qubit_locs_l, qubit_locs_r])
