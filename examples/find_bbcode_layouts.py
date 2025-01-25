@@ -419,10 +419,11 @@ def get_completed_qubit_pos_func(
     max_comm_distance: float | None = None,
     precision: float = 0.1,
 ) -> Callable[[qldpc.objects.Node], tuple[int, int]]:
-    """Complete a qubit layout assignment for a BBCode.
+    """Complete a qubit location assignment for a BBCode.
 
-    Here "data_qubit_locs" is a 2-D array for which data_qubit_locs[data_qubit_index] is the
-    location of the data qubit with index data_qubit_index.
+    Here "data_qubit_locs" is a 2-D array with shape (num_data_qubits, 2) for which
+    data_qubit_locs[data_qubit_index] is the location of the data qubit with index data_qubit_index.
+    From that data, this method returns a function that maps (any) qubit to a location.
 
     Other arguments:
     - lattice_shape: the dimensions of the rectangular grid that the qubits live on
