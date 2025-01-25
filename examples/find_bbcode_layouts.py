@@ -452,7 +452,7 @@ def get_completed_qubit_pos_func(
         np.ix_(check_qubit_loc_indices, data_qubit_loc_indices)
     ]
 
-    # compute a matrix of squared communication distances
+    # matrix of squared maximum comm distances for (check_qubit, check_qubit_loc) assignments
     check_supports = check_supports if check_supports is not None else get_check_supports(code)
     squared_distance_tensor = squared_distance_matrix[:, check_supports]
     placement_matrix = np.max(squared_distance_tensor, axis=-1).T
