@@ -175,11 +175,7 @@ def get_layout_search_space(
 
 
 def get_min_max_communication_distance(
-    placement_matrix: npt.NDArray[np.int_],
-    distance_cutoff: float,
-    *,
-    precision: float = 0.1,
-    validate: bool = True,
+    placement_matrix: npt.NDArray[np.int_], distance_cutoff: float, *, precision: float = 0.1
 ) -> float:
     """Minimize the maximum communication distance for a given placement matrix.
 
@@ -414,6 +410,58 @@ def get_qubit_pos_func(
     return get_qubit_pos
 
 
+def get_completed_qubit_pos_func(
+    code: qldpc.codes.BBCode,
+    data_qubit_locs: npt.NDArray[np.int_],
+    max_comm_distance: float | None = None,
+    *,
+    check_supports: npt.NDArray[np.int_] | None = None,
+    precision: float = 0.1,
+) -> Callable[[qldpc.objects.Node], tuple[int, int]]:
+    """Complete a qubit layout assignment for a BBCode.
+
+    Here "data_qubit_locs" is a 2-D array for which data_qubit_locs[data_qubit_index] is the
+    location of the data qubit with index data_qubit_index.
+    """
+    # identify candidate (unoccupied) locations for check qubits
+    plaquette_grid_shape = np.ceil(np.max(data_qubit_locs, axis=0) / 2).astype(int)
+    all_qubit_locs = np.ndindex(tuple(2 * plaquette_grid_shape))
+    candidate_locs = np.vstack(
+        [loc for loc in all_qubit_locs if ~np.any(np.all(data_qubit_locs == loc, axis=1))]
+    )
+    assert candidate_locs.shape[0] == data_qubit_locs.shape[0]
+
+    # construct a matrix of maximum distances between candidate and occupied locations
+    displacements = candidate_locs[:, None, :] - data_qubit_locs[None, :, :]
+    squared_distance_matrix = np.einsum("...i,...i->...", displacements, displacements)
+
+    # construct a matrix of squared max_comm_distances for each (check_qubit, candidate_loc) pair.
+    check_supports = check_supports if check_supports is not None else get_check_supports(code)
+    squared_distance_tensor = squared_distance_matrix[:, check_supports]
+    placement_matrix = np.max(squared_distance_tensor, axis=-1).T
+
+    if max_comm_distance is None:
+        # minimize the maximum communication distance for all check qubit location assignments
+        max_qubit_distance = get_max_qubit_distance(code)
+        max_comm_distance = get_min_max_communication_distance(
+            placement_matrix, max_qubit_distance, precision=precision
+        )
+
+    # assign check qubits to candidate locations
+    biadjacency_matrix = placement_matrix <= (max_comm_distance + 1e-15) ** 2
+    check_qubit_indices, check_loc_indices = scipy.optimize.linear_sum_assignment(
+        biadjacency_matrix, maximize=True
+    )
+
+    check_qubit_locs = candidate_locs[check_loc_indices[check_qubit_indices]]
+
+    def get_qubit_pos(node: qldpc.objects.Node) -> tuple[int, int]:
+        """Get the position of a qubit in a BBCode (with a particular layout)."""
+        return tuple(data_qubit_locs[node.index] if node.is_data else check_qubit_locs[node.index])
+
+    return get_qubit_pos
+
+
 if __name__ == "__main__":
     codes = [
         qldpc.codes.BBCode(
@@ -455,5 +503,3 @@ if __name__ == "__main__":
 
         max_distance = get_max_comm_distance(code, layout_params)
         print("max_distance:", max_distance)
-
-# TODO: add function that takes in data qubit locations, and spits out check qubit locations
