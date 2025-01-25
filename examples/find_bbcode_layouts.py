@@ -269,7 +269,7 @@ def get_data_qubit_locs(
             sector = "R"
             aa, bb = plaquette_map_r[
                 (plaquette_index // code.orders[1] + shift_lr[0]) % code.orders[0],
-                (plaquette_index % code.orders[1] + shift_lr[1]) % code.orders[1],
+                (plaquette_index + shift_lr[1]) % code.orders[1],
             ]
         return code.get_qubit_pos_from_orders((sector, aa, bb), folded_layout, orders)
 
