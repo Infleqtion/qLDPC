@@ -480,7 +480,7 @@ def get_completed_qubit_pos_func(
     candidate_locs = np.array(
         np.unravel_index(check_qubit_loc_indices, shape=lattice_shape), dtype=int
     ).T
-    check_qubit_locs = candidate_locs[check_loc_indices[check_qubit_indices]]
+    check_qubit_locs = candidate_locs[np.argsort(check_qubit_indices)]
 
     def get_qubit_pos(node: qldpc.objects.Node) -> tuple[int, int]:
         """Get the position of a qubit in a BBCode (with a particular layout)."""
