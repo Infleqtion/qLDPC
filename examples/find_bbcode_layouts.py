@@ -425,11 +425,11 @@ def get_completed_qubit_pos_func(
     data_qubit_locs[data_qubit_index] is the location of the data qubit with index data_qubit_index.
     From that data, this method returns a function that maps (any) qubit to a location.
 
-    Other arguments:
+    Other optional arguments that may speed things up:
     - lattice_shape: the dimensions of the rectangular grid that the qubits live on
     - check_supports: the supports of the parity checks; should be get_check_supports(code)
     - max_comm_distance: the maximum communication distance to enforce
-    - precision: the precision to which we care about max_comm_distance
+    - precision: the precision to which we minimize max_comm_distance, if a value was not provided
     """
     if lattice_shape is None:
         # try to guess the shape of the qubit grid
