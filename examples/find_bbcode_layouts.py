@@ -97,13 +97,13 @@ def find_layout_params(
 
     # iterate over layout parameters of the BBCode
     for basis_l, basis_r, shift_lr in get_layout_search_space(code, restricted_search):
-        min_max_distance = get_min_max_communication_distance(
-            code,
-            (folded_layout, basis_l, basis_r, shift_lr),
-            distance_cutoff=optimal_distance,
-            check_supports=check_supports,
-            validate=False,
+        # compute a matrix of squared communication distances for this layout
+        layout_params = folded_layout, basis_l, basis_r, shift_lr
+        placement_matrix = get_placement_matrix(
+            code, layout_params, check_supports=check_supports, validate=False
         )
+        # minimize the maximum communication distance for this layout
+        min_max_distance = get_min_max_communication_distance(placement_matrix, optimal_distance)
         if min_max_distance < optimal_distance:
             optimal_basis_l = basis_l
             optimal_basis_r = basis_r
@@ -175,35 +175,24 @@ def get_layout_search_space(
 
 
 def get_min_max_communication_distance(
-    code: qldpc.codes.BBCode,
-    layout_params: LayoutParams,
+    placement_matrix: npt.NDArray[np.int_],
+    distance_cutoff: float,
     *,
-    distance_cutoff: float | None = None,
-    check_supports: npt.NDArray[np.int_] | None = None,
     precision: float = 0.1,
     validate: bool = True,
 ) -> float:
-    """Fix data qubit locations, and minimize the maximum communication distance for the code.
+    """Minimize the maximum communication distance for a given placement matrix.
 
-    The distance_cutoff argument is used for early stopping: if the minimum is greater than the
-    distance_cutoff, then quit early and return a number greater than the distance_cutoff.
-    """
-    distance_cutoff = distance_cutoff or get_max_qubit_distance(code)
-    check_supports = check_supports if check_supports is not None else get_check_supports(code)
-    placement_matrix = get_placement_matrix(
-        code,
-        layout_params,
-        check_supports=check_supports,
-        validate=validate,
-    )
+    The optimization stategy is to initialize lower and upper bounds for the min-max communication
+    distance, and repeatedly bisect these bounds until we reach a desired precision for the min-max.
 
-    """
-    Initialize lower and upper bounds for the min-max communication distance, and repeatedly bisect
-    these bounds until we reach the desired precision.
+    The distance_cutoff argument is used for early stopping: if the lower bound for the  min-max is
+    greater than the distance_cutoff, then quit early and return a number greater than the
+    distance_cutoff.
 
-    Initialize the upper bound to twice the distance cutoff plus a little bit, so that if the
-    min-max for this layout is above the cutoff, the first bisection will fail and we will terminate
-    early right away.
+    We initialize the upper bound to twice the distance_cutoff plus a little bit, so that if the
+    min-max for this placement_matrix is above the cutoff, the first bisection will fail and we will
+    terminate right away.
     """
     low, high = 0.0, 2 * distance_cutoff + precision
     while True:
@@ -371,7 +360,11 @@ def get_max_comm_distance(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, *, precision: float = 0.1
 ) -> float:
     """Get the maximum qubit communication distance in particular BBCode layout."""
-    min_max_distance = get_min_max_communication_distance(code, layout_params, precision=precision)
+    placement_matrix = get_placement_matrix(code, layout_params)
+    distance_cutoff = get_max_qubit_distance(code)
+    min_max_distance = get_min_max_communication_distance(
+        placement_matrix, distance_cutoff, precision=precision
+    )
     get_qubit_pos = get_qubit_pos_func(code, layout_params, min_max_distance)
 
     max_squared_distance = 0
