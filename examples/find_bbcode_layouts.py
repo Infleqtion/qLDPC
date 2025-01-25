@@ -440,7 +440,10 @@ def get_completed_qubit_pos_func(
             lattice_shape = lattice_shape[::-1]
 
     # identify indices of lattice sites occupied by data qubits
-    data_qubit_loc_indices = np.ravel_multi_index(data_qubit_locs.T, dims=lattice_shape)
+    data_qubit_loc_indices = np.ravel_multi_index(  # type:ignore[call-overload]
+        data_qubit_locs.T,
+        dims=lattice_shape,
+    )
 
     # identify unoccupied lattice sites (by index)
     num_sites = lattice_shape[0] * lattice_shape[1]
@@ -484,9 +487,9 @@ def get_completed_qubit_pos_func(
 
 
 @functools.cache
-def get_full_squared_distance_matrix(lattice_shape: tuple[int, int] | None) -> npt.NDArray[np.int_]:
+def get_full_squared_distance_matrix(lattice_shape: tuple[int, int]) -> npt.NDArray[np.int_]:
     """Construct a matrix of squared distances between all pair of lattice points."""
-    locs = np.array(list(np.ndindex(lattice_shape)), dtype=int)
+    locs = np.array(list(np.ndindex(lattice_shape)))
     displacements = locs[:, None, :] - locs[None, :, :]
     return np.einsum("...i,...i->...", displacements, displacements)
 
