@@ -212,8 +212,8 @@ def get_placement_matrix(
 ) -> npt.NDArray[np.int_]:
     """Construct a placement matrix of squared maximum communication distances.
 
-    Rows and columns of the placement matrix are indexed by check qubits (nodes) and candidate
-    locations (locs) for these nodes, such that the value at placement_matrix[node_index][loc_index]
+    Rows and columns of the placement matrix are indexed by candidate qubit locations (locs) and
+    check qubits for placement, such that the value at placement_matrix[loc_index][node_index]
     is the answer to the question: when the given node is placed at the given location, what is that
     node's maximum squared distance to any of its neighbors in the Tanner graph of the code?
     """
@@ -237,7 +237,7 @@ def get_placement_matrix(
     squared_distance_tensor = squared_distance_matrix[:, check_supports]
 
     # matrix of maximum squared communication distances
-    return np.max(squared_distance_tensor, axis=-1).T
+    return np.max(squared_distance_tensor, axis=2)
 
 
 def get_data_qubit_locs(
@@ -395,15 +395,15 @@ def get_qubit_pos_func(
     # assign check qubits to locations
     placement_matrix = get_placement_matrix(code, layout_params)
     biadjacency_matrix = placement_matrix <= (max_comm_distance + 1e-15) ** 2
-    qubit_indices, loc_indices = scipy.optimize.linear_sum_assignment(
+    check_loc_indices, check_qubit_indices = scipy.optimize.linear_sum_assignment(
         biadjacency_matrix, maximize=True
     )
 
-    if not np.all(biadjacency_matrix[qubit_indices, loc_indices]):
+    if not np.all(biadjacency_matrix[check_loc_indices, check_qubit_indices]):
         raise ValueError(f"A maximum communication distance of {max_comm_distance} is unachievable")
 
     data_qubit_locs = get_data_qubit_locs(code, layout_params, validate=validate)
-    check_qubit_locs = candidate_locs[loc_indices[qubit_indices]]
+    check_qubit_locs = candidate_locs[np.argsort(check_qubit_indices)]
 
     def get_qubit_pos(node: qldpc.objects.Node) -> tuple[int, int]:
         """Get the position of a qubit in a BBCode (with a particular layout)."""
@@ -461,7 +461,7 @@ def get_completed_qubit_pos_func(
     # matrix of squared maximum comm distances for (check_qubit, check_qubit_loc) assignments
     check_supports = check_supports if check_supports is not None else get_check_supports(code)
     squared_distance_tensor = squared_distance_matrix[:, check_supports]
-    placement_matrix = np.max(squared_distance_tensor, axis=-1).T
+    placement_matrix = np.max(squared_distance_tensor, axis=2)
 
     if max_comm_distance is None:
         # minimize the maximum communication distance for all check qubit location assignments
@@ -472,7 +472,7 @@ def get_completed_qubit_pos_func(
 
     # assign check qubits to candidate locations
     biadjacency_matrix = placement_matrix <= (max_comm_distance + 1e-15) ** 2
-    check_qubit_indices, check_loc_indices = scipy.optimize.linear_sum_assignment(
+    check_loc_indices, check_qubit_indices = scipy.optimize.linear_sum_assignment(
         biadjacency_matrix, maximize=True
     )
 
