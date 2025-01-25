@@ -251,49 +251,61 @@ def get_data_qubit_locs(
         assert code.is_valid_basis(*basis_r)
         assert orders == (code.get_order(basis_r[0]), code.get_order(basis_r[1]))
 
-    # precompute plaquette mappings
-    num_plaquettes = len(code) // 2
-    plaquette_map_l = get_plaquette_map(basis_l, orders, code.orders)
-    plaquette_map_r = get_plaquette_map(basis_r, orders, code.orders)
+    # get qubit locations in each sector
+    qubit_locs_l = get_layout_sector_qubit_locs(basis_l, orders, code.orders, folded_layout, "L")
+    qubit_locs_r = get_layout_sector_qubit_locs(basis_r, orders, code.orders, folded_layout, "R")
 
-    def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
-        """Get the position of a data qubit in a BBCode."""
-        plaquette_index = qubit_index % num_plaquettes
-        if qubit_index < num_plaquettes:
-            sector = "L"
-            aa, bb = plaquette_map_l[
-                plaquette_index // code.orders[1],
-                plaquette_index % code.orders[1],
-            ]
-        else:
-            sector = "R"
-            aa, bb = plaquette_map_r[
-                (plaquette_index // code.orders[1] + shift_lr[0]) % code.orders[0],
-                (plaquette_index + shift_lr[1]) % code.orders[1],
-            ]
-        return code.get_qubit_pos_from_orders((sector, aa, bb), folded_layout, orders)
+    # shift the plaquettes of R-type qubits
+    qubit_locs_r = qubit_locs_r.reshape(*orders, 2)
+    qubit_locs_r = np.roll(qubit_locs_r, shift_lr[0], axis=0)
+    qubit_locs_r = np.roll(qubit_locs_r, shift_lr[1], axis=1)
+    qubit_locs_r = qubit_locs_r.reshape(-1, 2)
 
-    return np.array([get_data_qubit_pos(index) for index in range(len(code))], dtype=int)
+    return np.vstack([qubit_locs_l, qubit_locs_r])
 
 
 @functools.cache
-def get_plaquette_map(
-    basis: Basis2D, basis_orders: tuple[int, int], torus_shape: tuple[int, int]
-) -> dict[tuple[int, int], tuple[int, int]]:
-    """Construct a map that re-labels plaquettes by coefficients in a basis that spans the torus.
+def get_layout_sector_qubit_locs(
+    basis: Basis2D,
+    basis_orders: tuple[int, int],
+    torus_shape: tuple[int, int],
+    folded_layout: bool,
+    sector: str,
+) -> npt.NDArray[np.int_]:
+    """Get the locations of qubits in a particular sector of a particular layout of a BBCode.
 
-    If the old label of a plaquette was (x, y), the new label is the coefficients (a, b) for which
-    (x, y) = a * basis[0] + b * basis[1].  Here (x, y) is taken modulo code.orders, and (a, b) is
-    taken modulo the order of the basis vectors on a torus with dimensions code.orders.
+    First, relabel qubit plaquettes, which naturally live on torus with shape torus_shape and are
+    thereby labeled by their "plaquette coordinates" on a rectangular grid.  If the old plaquette
+    label was (x, y) (mod torus_shape), the new label is the coefficients (a, b) (mod basis_orders)
+    for which (x, y) = a * basis[0] + b * basis[1].
+
+    After relabeling plaquettes by their coordinates in a new basis for a torus, assign qubit
+    positions identically to qldpc.codes.BBCode.get_qubit_pos in a vectorized manner.
     """
     vec_a, vec_b = basis
-    return {
-        (
+
+    # invert the modular system of equations (x, y) = a * basis[0] + b * basis[1]
+    plaquette_map = np.empty(torus_shape + (2,), dtype=int)
+    for aa, bb in itertools.product(range(basis_orders[0]), range(basis_orders[1])):
+        plaquette_map[
             (aa * vec_a[0] + bb * vec_b[0]) % torus_shape[0],
             (aa * vec_a[1] + bb * vec_b[1]) % torus_shape[1],
-        ): (aa, bb)
-        for aa, bb in itertools.product(range(basis_orders[0]), range(basis_orders[1]))
-    }
+        ] = aa, bb
+
+    # assign qubit locations identically to qldpc.codes.BBCode.get_qubit_pos
+    qubit_locs = plaquette_map.reshape(-1, 2)
+    qubit_locs = 2 * qubit_locs
+    if sector == "R" or sector == "Z":
+        qubit_locs[:, 0] += 1
+    if sector == "L" or sector == "Z":
+        qubit_locs[:, 1] += 1
+    if folded_layout:
+        for axis in range(2):
+            low = qubit_locs[:, axis] < basis_orders[axis]
+            qubit_locs[low, axis] = 2 * qubit_locs[low, axis]
+            qubit_locs[~low, axis] = (2 * basis_orders[axis] - 1 - qubit_locs[~low, axis]) * 2 + 1
+
+    return qubit_locs
 
 
 @functools.cache
