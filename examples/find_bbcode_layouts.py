@@ -244,14 +244,6 @@ def get_data_qubit_locs(
     code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
 ) -> npt.NDArray[np.int_]:
     """Get the locations of data qubits in particular layout of a BBCode."""
-    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params, validate=validate)
-    return np.array([get_data_qubit_pos(index) for index in range(len(code))], dtype=int)
-
-
-def get_data_qubit_pos_func(
-    code: qldpc.codes.BBCode, layout_params: LayoutParams, *, validate: bool = True
-) -> Callable[[int], tuple[int, int]]:
-    """Construct a function that gives positions of data qubits in particular layout of a BBCode."""
     folded_layout, basis_l, basis_r, shift_lr = layout_params
     orders = (code.get_order(basis_l[0]), code.get_order(basis_l[1]))
     if validate:
@@ -264,7 +256,6 @@ def get_data_qubit_pos_func(
     plaquette_map_l = get_plaquette_map(basis_l, orders, code.orders)
     plaquette_map_r = get_plaquette_map(basis_r, orders, code.orders)
 
-    @functools.cache
     def get_data_qubit_pos(qubit_index: int) -> tuple[int, int]:
         """Get the position of a data qubit in a BBCode."""
         plaquette_index = qubit_index % num_plaquettes
@@ -282,7 +273,7 @@ def get_data_qubit_pos_func(
             ]
         return code.get_qubit_pos_from_orders((sector, aa, bb), folded_layout, orders)
 
-    return get_data_qubit_pos
+    return np.array([get_data_qubit_pos(index) for index in range(len(code))], dtype=int)
 
 
 @functools.cache
@@ -375,7 +366,11 @@ def get_max_comm_distance(
 
 
 def get_qubit_pos_func(
-    code: qldpc.codes.BBCode, layout_params: LayoutParams, max_comm_distance: float
+    code: qldpc.codes.BBCode,
+    layout_params: LayoutParams,
+    max_comm_distance: float,
+    *,
+    validate: bool = True,
 ) -> Callable[[qldpc.objects.Node], tuple[int, int]]:
     """Construct a function that gives positions of qubits in particular layout of a BBCode.
 
@@ -396,14 +391,12 @@ def get_qubit_pos_func(
     if not np.all(biadjacency_matrix[qubit_indices, loc_indices]):
         raise ValueError(f"A maximum communication distance of {max_comm_distance} is unachievable")
 
-    get_data_qubit_pos = get_data_qubit_pos_func(code, layout_params)
+    data_qubit_locs = get_data_qubit_locs(code, layout_params, validate=validate)
     check_qubit_locs = candidate_locs[loc_indices[qubit_indices]]
 
     def get_qubit_pos(node: qldpc.objects.Node) -> tuple[int, int]:
         """Get the position of a qubit in a BBCode (with a particular layout)."""
-        return (
-            get_data_qubit_pos(node.index) if node.is_data else tuple(check_qubit_locs[node.index])
-        )
+        return data_qubit_locs[node.index] if node.is_data else tuple(check_qubit_locs[node.index])
 
     return get_qubit_pos
 
