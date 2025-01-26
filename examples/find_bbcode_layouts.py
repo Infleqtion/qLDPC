@@ -396,7 +396,7 @@ def get_qubit_pos_func(
 
     def get_qubit_pos(node: qldpc.objects.Node) -> tuple[int, int]:
         """Get the position of a qubit in a BBCode (with a particular layout)."""
-        loc = data_qubit_locs[node.index] if node.is_data else tuple(check_qubit_locs[node.index])
+        loc = data_qubit_locs[node.index] if node.is_data else check_qubit_locs[node.index]
         return tuple(loc)
 
     return get_qubit_pos
@@ -453,13 +453,11 @@ def get_completed_qubit_pos_func(
 
     # identify indices of lattice sites occupied by data qubits
     data_qubit_loc_indices = np.ravel_multi_index(  # type:ignore[call-overload]
-        data_qubit_locs.T,
-        dims=lattice_shape,
+        data_qubit_locs.T, dims=lattice_shape
     )
 
     # identify unoccupied lattice sites and the indices of those lattice sites
-    num_sites = lattice_shape[0] * lattice_shape[1]
-    all_loc_indices = np.arange(num_sites)
+    all_loc_indices = np.arange(len(code), dtype=int)
     check_qubit_loc_indices = all_loc_indices[~np.isin(all_loc_indices, data_qubit_loc_indices)]
     candidate_locs = np.array(
         np.unravel_index(check_qubit_loc_indices, shape=lattice_shape), dtype=int
