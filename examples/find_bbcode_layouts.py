@@ -505,6 +505,7 @@ def get_full_squared_distance_matrix(lattice_shape: tuple[int, int]) -> npt.NDAr
 
 
 if __name__ == "__main__":
+    # the codes in Table 1 of arXiv:2404.18809, whose layouts we want to optimize
     codes = [
         qldpc.codes.BBCode(
             {x: 6, y: 6},
@@ -532,11 +533,13 @@ if __name__ == "__main__":
             y**3 + x + x**2,
         ),
     ]
+    # consider "folded" qubit layouts, as in Figure 2 of arXiv:2404.18809
     folded_layout = True
 
     for code in codes:
         print()
         print("(n, k):", (len(code), code.dimension))
+        print(code)
 
         start = time.time()
         layout_params = get_best_known_layout_params(code, folded_layout)
