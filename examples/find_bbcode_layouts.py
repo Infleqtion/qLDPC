@@ -546,10 +546,10 @@ if __name__ == "__main__":
         # layout_params = find_layout_params(code, folded_layout)
         # print("optimization time:", time.time() - start)
 
-        # # print qubit positions
-        # get_qubit_pos = get_qubit_pos_func(code, layout_params)
-        # for node in code.graph.nodes:
+        # print qubit positions
+        get_qubit_pos = get_qubit_pos_func(code, layout_params)
+        # for node in sorted(code.graph.nodes):
         #     print(node, get_qubit_pos(node))
 
         max_distance = get_max_comm_distance(code, layout_params)
-        print("max_distance:", max_distance)
+        print("maximum communication distance:", max_distance)
