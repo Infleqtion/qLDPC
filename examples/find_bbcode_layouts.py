@@ -21,7 +21,7 @@ import qldpc
 Basis2D = tuple[tuple[int, int], tuple[int, int]]
 LayoutParams = tuple[bool, Basis2D, Basis2D, tuple[int, int]]
 
-DEFAULT_PRECISION = 0.1
+DEFAULT_PRECISION = 0.01
 
 
 def get_best_known_layout_params(code: qldpc.codes.BBCode, folded_layout: bool) -> LayoutParams:
@@ -48,7 +48,7 @@ def get_best_known_layout_params(code: qldpc.codes.BBCode, folded_layout: bool) 
         elif code == qldpc.codes.BBCode({x: 15, y: 3}, x**9 + y + y**2, 1 + x**2 + x**7):
             basis_l = ((2, 0), (0, 1))
             basis_r = ((2, 0), (0, 1))
-            shift_lr = (0, 1)
+            shift_lr = (0, 0)
         elif code == qldpc.codes.BBCode({x: 9, y: 6}, x**3 + y + y**2, y**3 + x + x**2):
             basis_l = ((-2, 2), (-3, -1))
             basis_r = ((2, -2), (3, 1))
@@ -75,6 +75,7 @@ def find_layout_params(
     code: qldpc.codes.BBCode,
     folded_layout: bool,
     *,
+    precision: float = DEFAULT_PRECISION,
     restricted_search: bool = True,
     verbose: bool = True,
 ) -> LayoutParams:
@@ -105,7 +106,9 @@ def find_layout_params(
             code, layout_params, check_supports=check_supports, validate=False
         )
         # minimize the maximum communication distance for this layout
-        min_max_distance = get_min_max_communication_distance(placement_matrix, optimal_distance)
+        min_max_distance = get_min_max_communication_distance(
+            placement_matrix, optimal_distance, precision=precision
+        )
         if min_max_distance < optimal_distance:
             optimal_basis_l = basis_l
             optimal_basis_r = basis_r
