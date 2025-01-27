@@ -1,5 +1,6 @@
 from .classical import (
     BCHCode,
+    ExtendedHammingCode,
     HammingCode,
     ReedMullerCode,
     ReedSolomonCode,
@@ -29,6 +30,7 @@ from .quantum import (
 
 __all__ = [
     "BCHCode",
+    "ExtendedHammingCode",
     "HammingCode",
     "ReedMullerCode",
     "ReedSolomonCode",

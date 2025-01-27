@@ -78,6 +78,22 @@ class HammingCode(ClassicalCode):
         self._exact_distance = 3
 
 
+class ExtendedHammingCode(ClassicalCode):
+    """Classical extended Hamming code: the ordinary Hamming code with an extra parity bit.
+
+    The extended Hamming code of rank r is also equal to ReedMullerCode(r-2, r).
+    """
+
+    def __init__(self, rank: int) -> None:
+        """Construct an extended Hamming code of a given rank."""
+        matrix = HammingCode(rank, field=2).matrix
+        matrix = np.column_stack([np.zeros(matrix.shape[0], dtype=int), matrix])
+        matrix = np.row_stack([matrix, np.ones(matrix.shape[1], dtype=int)])
+        matrix[-1] += matrix[0]
+        ClassicalCode.__init__(self, matrix)
+        self._exact_distance = 4
+
+
 class ReedSolomonCode(ClassicalCode):
     """Classical Reed-Solomon code.
 
