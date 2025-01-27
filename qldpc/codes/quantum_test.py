@@ -69,6 +69,7 @@ def test_bivariate_bicycle_codes() -> None:
     assert code.dimension == 10
     assert code.get_weight() == 8
 
+    # print the generating data of the code in human-readable form
     code_string = str(code)
     assert str(orders) in code_string
     assert str(poly_a.as_expr()) in code_string
@@ -85,6 +86,7 @@ def test_bivariate_bicycle_codes() -> None:
 
     # toric layouts of a qutrit BBCode
     code = codes.BBCode(orders, poly_a, poly_b, field=3)
+    assert "GF(3)" in str(code)
     assert code.dimension == 8
     for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
         # assert that the polynomials look like 1 + x + ... and 1 + y + ...
