@@ -205,6 +205,10 @@ def get_layout_search_space(
                 (vec_a, vec_b)
                 for vec_a, vec_b in lattice_vectors
                 if code.get_order(vec_a) == order_0
+            ] + [
+                (vec_b, vec_a)
+                for vec_a, vec_b in lattice_vectors
+                if vec_a != vec_b and code.get_order(vec_b) == order_0
             ]
 
         for basis_r in bases_r:
