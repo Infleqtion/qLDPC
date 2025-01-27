@@ -88,8 +88,8 @@ class ExtendedHammingCode(ClassicalCode):
         """Construct an extended Hamming code of a given rank."""
         matrix = HammingCode(rank, field=2).matrix
         matrix = np.column_stack([np.zeros(matrix.shape[0], dtype=int), matrix])
-        matrix = np.row_stack([matrix, np.ones(matrix.shape[1], dtype=int)])
-        matrix[-1] += matrix[0]
+        matrix = np.row_stack([np.ones(matrix.shape[1], dtype=int), matrix])
+        matrix[0] += matrix[1]
         ClassicalCode.__init__(self, matrix)
         self._exact_distance = 4
 
