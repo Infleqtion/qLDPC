@@ -47,7 +47,7 @@ def get_distance_subcode_64(
     """Distance of one (X or Z) sector of a CSS code."""
     cdef uint64_t num_qubits = logical_ops.shape[1]
     if num_qubits > 64:
-        raise ValueError("Fast distance calculation not supported for > 64 qubits")
+        raise ValueError("Fast exact distance calculation is not supported for block lengths >64")
 
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
