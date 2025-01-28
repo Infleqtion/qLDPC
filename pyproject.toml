@@ -62,7 +62,7 @@ warn_unused_ignores = true
 install_types = true
 non_interactive = true
 no_implicit_optional = true
-plugins = ["numpy.typing.mypy_plugin", "pydantic.mypy"]
+plugins = ["numpy.typing.mypy_plugin"]
 
 [tool.pytest.ini_options]
 addopts = "--disable-socket"
