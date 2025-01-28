@@ -351,13 +351,10 @@ class ClassicalCode(AbstractCode):
 
         # we do not know the exact distance, so compute it
         if self.field.order == 2 and len(self) <= 64:
-            self._exact_distance = get_distance_classical_64(
-                self.generator.view(np.ndarray).astype(np.uint8)
-            )
+            distance = get_distance_classical_64(self.generator.view(np.ndarray).astype(np.uint8))
         else:
-            self._exact_distance = min(
-                np.count_nonzero(word) for word in self.iter_words(skip_zero=True)
-            )
+            distance = min(np.count_nonzero(word) for word in self.iter_words(skip_zero=True))
+        self._exact_distance = int(distance)
         return self._exact_distance
 
     def _get_distance_if_known(

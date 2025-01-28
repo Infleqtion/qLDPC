@@ -8,7 +8,7 @@ import numpy
 from Cython.Build import cythonize
 
 
-def build():
+def build() -> None:
     extension = Extension(
         "*",
         ["*/**/*.pyx"],
