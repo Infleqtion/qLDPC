@@ -23,7 +23,7 @@ def _weight(uint64_t nn) -> uint64_t:
 
 def _gray_code_flips(uint64_t nn) -> Iterator[uint64_t]:
     """Iterate over the bits to flip in a Gray code over a bitstring of the given length."""
-    for counter in range(1, 1 << nn):
+    for counter in range(<uint64_t>1, <uint64_t>1 << nn):
         yield __builtin_ctzl(counter)
 
 
