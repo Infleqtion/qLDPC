@@ -4,7 +4,6 @@ import numpy as np
 
 cimport numpy as cnp
 from libc.stdint cimport uint64_t
-from libcpp.vector cimport vector
 
 
 cdef extern from "stdint.h":
@@ -145,7 +144,7 @@ def _get_css_sector_distance_large(
     cdef cnp.ndarray[cnp.uint64_t, ndim=2] int_logical_ops = _rows_to_uints(logical_ops)
 
     # iterate over all products of logical operators and stabilizers
-    cdef uint64_t num_ints = ((num_qubits + 64 - 1) // 64) * 64
+    cdef uint64_t num_ints = int_logical_ops.shape[0]
     cdef cnp.ndarray[cnp.uint64_t] logical_op = np.zeros(num_ints, dtype=np.uint64)
     cdef uint64_t min_weight = num_qubits
     cdef uint64_t log_idx, stab_idx, int_idx, weight
@@ -168,7 +167,7 @@ def _rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array):
     """Convert the rows of a binary array into integers."""
     cdef uint64_t num_rows = binary_array.shape[0]
     cdef uint64_t num_cols = binary_array.shape[1]
-    cdef cnp.ndarray[cnp.uint64_t, ndim=1] int_array = np.zeros(num_rows, dtype=np.uint64)
+    cdef cnp.ndarray[cnp.uint64_t] int_array = np.zeros(num_rows, dtype=np.uint64)
     cdef uint64_t value
     for rr in range(num_rows):
         value = 0
@@ -225,7 +224,7 @@ def _rows_to_uints(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array) -> cnp.ndarray
     """Convert the rows of a binary array into integers."""
     cdef uint64_t num_rows = binary_array.shape[0]
     cdef uint64_t bin_cols = binary_array.shape[1]
-    cdef uint64_t int_cols = ((bin_cols + 64 - 1) // 64) * 64
+    cdef uint64_t int_cols = (bin_cols + 64 - 1) // 64
     cdef cnp.ndarray[cnp.uint64_t, ndim=2] int_array = np.zeros(
         (num_rows, int_cols), dtype=np.uint64
     )
