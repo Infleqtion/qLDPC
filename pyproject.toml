@@ -47,48 +47,9 @@ dev = ["checks-superstaq"]
 
 # Check script configuration:
 
-[tool.pytest.ini_options]
-addopts = "--disable-socket"
-filterwarnings = [
-  "ignore::UserWarning:qtrl.*",
-  "ignore::PendingDeprecationWarning:qtrl.utils.config",
-  "ignore::PendingDeprecationWarning:ruamel.yaml.main",
-]
-
 [tool.ruff]
 line-length = 100
 lint.extend-select = ["I"]
-
-[tool.black]
-color = true
-line_length = 100
-
-[tool.isort]
-profile = "black"
-line_length = 100
-color_output = true
-known_first_party = "qldpc" # REPO-SPECIFIC CONFIG
-
-[tool.flake8]
-max-line-length = 100
-max-complexity = 10
-show_source = true
-statistics = true
-count = true
-enable-extensions = ["TC", "TC1"]
-extend-ignore = [
-  "E203",
-  "I100",
-  "I101",
-  "I201",
-  "I202",
-] # these errors conflict with black and/or isort
-type_checking_exempt_modules = ["collections.abc"]
-# Configuration for flake8-modern-annotations
-modern-annotations-postponed = "always"
-modern-annotations-deprecated = "always"
-modern-annotations-union = "always"
-modern-annotations-optional = "always"
 
 [tool.mypy]
 pretty = true
@@ -101,99 +62,16 @@ warn_unused_ignores = true
 install_types = true
 non_interactive = true
 no_implicit_optional = true
-plugins = ["numpy.typing.mypy_plugin", "pydantic.mypy"]
+plugins = ["numpy.typing.mypy_plugin"]
+
+[tool.pytest.ini_options]
+addopts = "--disable-socket"
 
 [tool.coverage.report]
 fail_under = 100
 show_missing = true
 skip_covered = true
-exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "@overload"]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
 
 [tool.coverage.run]
 include = ["./*"]
-
-[tool.pylint.main]
-max-line-length = 100
-disable = "all"
-load-plugins = [
-  "pylint.extensions.docparams",
-  "pylint.extensions.docstyle",
-  "checks_superstaq.pylint_init_return",
-  "checks_superstaq.pylint_import_annotations",
-]
-output-format = "colorized"
-score = false
-reports = false
-enable = [
-  "anomalous-backslash-in-string",
-  "assert-on-tuple",
-  "bad-indentation",
-  "bad-option-value",
-  "bad-reversed-sequence",
-  "bad-super-call",
-  "consider-merging-isinstance",
-  "continue-in-finally",
-  "dangerous-default-value",
-  "docstyle",
-  "duplicate-argument-name",
-  "expression-not-assigned",
-  "function-redefined",
-  "import-future-annotations",
-  "inconsistent-mro",
-  "init-return-check",
-  "init-is-generator",
-  "line-too-long",
-  "lost-exception",
-  "missing-class-docstring",
-  "missing-function-docstring",
-  "missing-kwoa",
-  "mixed-line-endings",
-  "not-callable",
-  "no-value-for-parameter",
-  "nonexistent-operator",
-  "not-in-loop",
-  "parameter_documentation",
-  "pointless-statement",
-  "redefined-builtin",
-  "relative-beyond-top-level",
-  "return-arg-in-generator",
-  "return-in-init",
-  "return-outside-function",
-  "simplifiable-if-statement",
-  "syntax-error",
-  "too-many-function-args",
-  "trailing-whitespace",
-  "undefined-variable",
-  "unexpected-keyword-arg",
-  "unhashable-dict-key",
-  "unnecessary-pass",
-  "unreachable",
-  "unrecognized-inline-option",
-  "unused-argument",
-  "unused-import",
-  "unnecessary-semicolon",
-  "unused-variable",
-  "unused-wildcard-import",
-  "wildcard-import",
-  "wrong-import-order",
-  "wrong-import-position",
-  "yield-outside-function",
-]
-
-# Enable the optional checks by parameter_documentation
-[tool.pylint.parameter_documentation]
-accept-no-param-doc = false       # Do not accept totally missing parameter documentation.
-accept-no-raise-doc = false       # Do not accept totally missing raises documentation.
-accept-no-return-doc = false      # Do not accept totally missing return documentation.
-accept-no-yields-doc = false      # Do not accept missing yields annotations.
-default-docstring-type = "google"
-
-# Ignore long lines containing urls or pylint directives.
-[tool.pylint.format]
-ignore-long-lines = '^(.*#\w*pylint: disable.*|\s*(# )?<?https?://\S+>?)$'
-
-# List of members which are set dynamically and missed by pylint inference
-# system, and so shouldn't trigger E1101 when accessed. Python regular
-# expressions are accepted.
-[tool.pylint.typecheck]
-generated-members = "numpy.*"
