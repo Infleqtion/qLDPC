@@ -1,5 +1,5 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=1.0.0", "cython", "setuptools", "numpy"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
@@ -23,7 +23,11 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Mathematics",
   "Topic :: Scientific/Engineering :: Physics",
 ]
-include = ["qldpc/py.typed"]
+include = ["qldpc/py.typed", { path = "qldpc/**/*.so", format = "wheel" }]
+
+[tool.poetry.build]
+generate-setup-file = false
+script = "build.py"
 
 [tool.poetry.dependencies]
 python = "^3.10"

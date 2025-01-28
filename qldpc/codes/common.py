@@ -37,6 +37,8 @@ from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
+from ._distance import get_classical_distance_64, get_subcode_distance_64
+
 
 def get_scrambled_seed(seed: int) -> int:
     """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
@@ -347,9 +349,15 @@ class ClassicalCode(AbstractCode):
             vector = self.field(vector)
             return min(np.count_nonzero(word - vector) for word in self.iter_words())
 
-        self._exact_distance = min(
-            np.count_nonzero(word) for word in self.iter_words(skip_zero=True)
-        )
+        # we do not know the exact distance, so compute it
+        if self.field.order == 2 and len(self) <= 64:
+            self._exact_distance = get_classical_distance_64(
+                self.generator.view(np.ndarray).astype(np.uint8)
+            )
+        else:
+            self._exact_distance = min(
+                np.count_nonzero(word) for word in self.iter_words(skip_zero=True)
+            )
         return self._exact_distance
 
     def _get_distance_if_known(
@@ -1346,11 +1354,20 @@ class CSSCode(QuditCode):
             return min(self.get_distance_exact(Pauli.X), self.get_distance_exact(Pauli.Z))
 
         # we do not know the exact distance, so compute it
-        code_x = self.code_x if pauli == Pauli.X else self.code_z
-        code_z = self.code_z if pauli == Pauli.X else self.code_x
-        dual_code_x = ~code_x
-        nontrivial_ops_x = (word for word in code_z.iter_words() if word not in dual_code_x)
-        distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
+        if self.field.order == 2 and len(self) <= 64:
+            code = self.code_x if pauli == Pauli.X else self.code_z
+            stabilizers = code.canonicalized().matrix
+            logical_ops = self.get_logical_ops(pauli).reshape(-1, 2, len(self))[:, pauli, :]
+            distance = get_subcode_distance_64(
+                logical_ops.view(np.ndarray).astype(np.uint8),
+                stabilizers.view(np.ndarray).astype(np.uint8),
+            )
+        else:
+            code_x = self.code_x if pauli == Pauli.X else self.code_z
+            code_z = self.code_z if pauli == Pauli.X else self.code_x
+            dual_code_x = ~code_x
+            nontrivial_ops_x = (word for word in code_z.iter_words() if word not in dual_code_x)
+            distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
 
         # save the exact distance and return
         if pauli == Pauli.X or self._balanced_codes:
