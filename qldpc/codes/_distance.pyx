@@ -49,12 +49,12 @@ def get_subcode_distance_64(
     if num_qubits > 64:
         raise ValueError("Fast distance calculation not supported for > 64 qubits")
 
-    cdef uint64_t num_stabilizers = stabilizers.shape[0]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
+    cdef uint64_t num_stabilizers = stabilizers.shape[0]
 
     # convert each Pauli string into an integer
-    cdef cnp.ndarray[cnp.uint64_t] int_stabilizers = _rows_to_uint64(stabilizers)
     cdef cnp.ndarray[cnp.uint64_t] int_logical_ops = _rows_to_uint64(logical_ops)
+    cdef cnp.ndarray[cnp.uint64_t] int_stabilizers = _rows_to_uint64(stabilizers)
 
     # iterate over all products of logical operators and stabilizers
     cdef uint64_t logical_op = 0
