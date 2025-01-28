@@ -144,6 +144,11 @@ def test_distance_classical(bits: int = 3) -> None:
         == trivial_code.get_one_distance_bound(vector=random_vector)
     )
 
+    # compute distance of a trinary repetition code
+    rep_code = codes.RepetitionCode(bits, field=3)
+    rep_code._exact_distance = None
+    assert rep_code.get_distance_exact() == 3
+
 
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     """Conversions between matrix and graph representations of a classical code."""
@@ -445,10 +450,15 @@ def test_css_ops() -> None:
 
 def test_distance_css() -> None:
     """Distance calculations for CSS codes."""
+    # qutrit code distance
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance_bound(cutoff=len(code)) == len(code)
     assert code.get_distance(bound=True) <= len(code)
     assert code.get_distance(bound=False) == 2
+
+    # qubit code distance
+    code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    assert code.get_distance_exact() == 2
 
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
