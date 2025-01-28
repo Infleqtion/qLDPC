@@ -22,7 +22,7 @@ def build():
     cmd.ensure_finalized()
     cmd.run()
 
-    # copy *.co files to their respective *.pyx directories
+    # copy *.so files to their respective *.pyx directories
     for output in cmd.get_outputs():
         relative_extension = os.path.relpath(output, cmd.build_lib)
         shutil.copyfile(output, relative_extension)
