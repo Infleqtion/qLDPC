@@ -5,7 +5,7 @@ import numpy as np
 import qldpc
 import test
 
-code = qldpc.codes.SurfaceCode(8)
+code = qldpc.codes.ToricCode(10)
 code._exact_distance_x = None
 code._exact_distance_z = None
 
@@ -18,7 +18,12 @@ for stabilizers, pauli in [
 ]:
     stabilizers = stabilizers.row_reduce()
     logical_ops = code.get_logical_ops(pauli).reshape(-1, 2, len(code))[:, pauli, :]
-    dist = test.get_css_sector_distance_64_2(stabilizers, logical_ops)
+    dist = test.get_css_sector_distance(stabilizers, logical_ops)
     print(pauli, dist)
 
+print(time.time() - start)
+
+start = time.time()
+for _ in range(1):
+    test.get_css_sector_distance(stabilizers, logical_ops)
 print(time.time() - start)

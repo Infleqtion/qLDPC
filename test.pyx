@@ -22,10 +22,28 @@ def _gray_code_flips(uint64_t nn) -> Iterator[uint64_t]:
         yield __builtin_ctzl(counter)
 
 
-def get_css_sector_distance_64(
+def get_css_sector_distance(
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers, cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops
 ) -> int:
     """Distance one (X or Z) sector of a CSS code."""
+    cdef uint64_t num_qubits = logical_ops.shape[1]
+    assert num_qubits <= 128
+    if num_qubits <= 64:
+        return _get_css_sector_distance_64(stabilizers, logical_ops)
+    return _get_css_sector_distance_64_2(stabilizers, logical_ops)
+
+
+def get_classical_distance(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
+    """Distance of a classical code with the given generator matrix."""
+    cdef uint64_t num_bits = generator.shape[1]
+    null_matrix =  np.zeros((0, num_bits), dtype=np.uint8)
+    return get_css_sector_distance(null_matrix, generator)
+
+
+def _get_css_sector_distance_64(
+    cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers, cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops
+) -> int:
+    """Distance one (X or Z) sector of a CSS code with <= 64 qubits."""
     cdef uint64_t num_qubits = logical_ops.shape[1]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
@@ -47,10 +65,10 @@ def get_css_sector_distance_64(
     return min_weight
 
 
-def get_css_sector_distance_64_2(
+def _get_css_sector_distance_64_2(
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers, cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops
 ) -> int:
-    """Distance one (X or Z) sector of a CSS code."""
+    """Distance one (X or Z) sector of a CSS code with <= 128 qubits."""
     cdef uint64_t num_qubits = logical_ops.shape[1]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
@@ -73,13 +91,6 @@ def get_css_sector_distance_64_2(
             logical_op_1 ^= int_stabilizers[log_idx, 1]
             min_weight = min(_weight(logical_op_0) + _weight(logical_op_1), min_weight)
     return min_weight
-
-
-def get_classical_distance_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
-    """Distance of a classical code with the given generator matrix."""
-    cdef uint64_t num_bits = generator.shape[1]
-    null_matrix =  np.zeros((0, num_bits), dtype=np.uint8)
-    return get_css_sector_distance_64(null_matrix, generator)
 
 
 def _rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array):
