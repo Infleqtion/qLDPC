@@ -28,11 +28,11 @@ def _rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array):
     cdef uint64_t num_cols = binary_array.shape[1]
     cdef cnp.ndarray[cnp.uint64_t] int_array = np.zeros(num_rows, dtype=np.uint64)
     cdef uint64_t value
-    for rr in range(num_rows):
+    for row in range(num_rows):
         value = 0
-        for cc in range(num_cols):
-            value = (value << 1) | binary_array[rr, cc]
-        int_array[rr] = value
+        for col in range(num_cols):
+            value = (value << 1) | binary_array[row, col]
+        int_array[row] = value
     return int_array
 
 
@@ -53,13 +53,13 @@ def get_subcode_distance_64(
 
     # iterate over all products of logical operators and stabilizers
     cdef uint64_t logical_op = 0
-    cdef uint64_t log_idx, stab_idx
+    cdef uint64_t ll, ss
     cdef uint64_t min_weight = num_qubits
-    for log_idx in _gray_code_flips(num_logical_ops):
-        logical_op ^= int_logical_ops[log_idx]
+    for ll in _gray_code_flips(num_logical_ops):
+        logical_op ^= int_logical_ops[ll]
         min_weight = min(_weight(logical_op), min_weight)
-        for stab_idx in _gray_code_flips(num_stabilizers):
-            logical_op ^= int_stabilizers[stab_idx]
+        for ss in _gray_code_flips(num_stabilizers):
+            logical_op ^= int_stabilizers[ss]
             min_weight = min(_weight(logical_op), min_weight)
     return min_weight
 
