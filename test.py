@@ -2,8 +2,8 @@ import time
 
 import qldpc
 
-code = qldpc.codes.ToricCode(5, 5, rotated=False)
-code = qldpc.codes.ToricCode(4)
+# code = qldpc.codes.ToricCode(5, 6, rotated=False)
+code = qldpc.codes.ToricCode(8)
 code._exact_distance_x = None
 code._exact_distance_z = None
 

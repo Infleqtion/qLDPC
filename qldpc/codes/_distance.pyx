@@ -41,7 +41,7 @@ def _rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array) -> cnp.ndarra
     return int_array
 
 
-def get_subcode_distance_64(
+def get_distance_subcode_64(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
 ) -> int:
     """Distance of one (X or Z) sector of a CSS code."""
@@ -69,7 +69,7 @@ def get_subcode_distance_64(
     return min_weight
 
 
-def get_classical_distance_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
+def get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     """Distance of a classical code with the given generator matrix."""
     cdef uint64_t num_bits = generator.shape[1]
     null_matrix =  np.zeros((0, num_bits), dtype=np.uint8)
