@@ -44,7 +44,7 @@ scipy = ">=1.14.1"
 stim = ">=1.14.0"
 sympy = ">=1.12"
 
-checks-superstaq = { version = ">=0.5.31", optional = true }
+checks-superstaq = { version = ">=0.5.34", optional = true }
 
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
