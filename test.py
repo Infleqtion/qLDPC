@@ -4,6 +4,8 @@ import qldpc
 import test
 
 code = qldpc.codes.SurfaceCode(6)
+code._exact_distance_x = None
+code._exact_distance_z = None
 
 # for stabilizers, pauli in [
 #     (code.matrix_x, qldpc.objects.Pauli.X),
