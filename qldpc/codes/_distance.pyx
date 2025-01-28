@@ -22,7 +22,7 @@ def _gray_code_flips(uint64_t nn) -> Iterator[uint64_t]:
         yield __builtin_ctzl(counter)
 
 
-def _rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array):
+def _rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array) -> cnp.ndarray[cnp.uint64_t]:
     """Convert the rows of a binary array into integers."""
     cdef uint64_t num_rows = binary_array.shape[0]
     cdef uint64_t num_cols = binary_array.shape[1]
