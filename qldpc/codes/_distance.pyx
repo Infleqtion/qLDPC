@@ -25,10 +25,10 @@ cdef uint64_t hamming_weight(uint64_t num):
     return __builtin_popcountl(num)
 
 
-cdef uint64_t symplectic_weight(uint64_t num):
+cdef uint64_t symplectic_weight(uint64_t num, uint64_t half_length):
     """Symplectic weight of an integer."""
-    cdef uint32_t first_bits = num >> <uint64_t>32
-    cdef uint32_t last_bits = num & <uint64_t>0xFFFFFFFF
+    cdef uint64_t first_bits = num >> half_length
+    cdef uint64_t last_bits = num & ((<uint64_t>1 << half_length) - <uint64_t>1)
     return hamming_weight(first_bits | last_bits)
 
 
@@ -116,10 +116,9 @@ cdef uint64_t get_distance_classical_large(cnp.ndarray[cnp.uint8_t, ndim=2] gene
 
 
 def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
-    """Distance of a quantum code with the given symplectic generator matrix."""
-    cdef uint64_t num_qubits = generator.shape[1]
-    if num_qubits > 64:
-        raise ValueError("Fast distance calculation not supported for QuditCodes on >32 qubits")
+    """Distance of a qubit quantum code with block length <= 32."""
+    cdef uint64_t num_qubits = generator.shape[1] // 2
+    assert num_qubits <= 32
 
     # convert each generating word into integer form
     cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)[:, 0]
@@ -131,7 +130,7 @@ def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     cdef uint64_t min_weight = num_qubits
     for ww in gray_code_flips(num_basis_words):
         word ^= int_words[ww]
-        min_weight = min(min_weight, symplectic_weight(word))
+        min_weight = min(min_weight, symplectic_weight(word, num_qubits))
     return min_weight
 
 
