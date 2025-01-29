@@ -23,7 +23,7 @@ cdef uint64_t hamming_weight(uint64_t num):
 cdef uint64_t symplectic_weight(uint64_t num):
     """Symplectic weight of an integer."""
     cdef uint32_t first_bits = num >> <uint64_t>32
-    cdef uint32_t last_bits = num & 0xFFFFFFFF
+    cdef uint32_t last_bits = num & <uint64_t>0xFFFFFFFF
     return hamming_weight(first_bits | last_bits)
 
 
