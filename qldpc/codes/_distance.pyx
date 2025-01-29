@@ -1,8 +1,8 @@
 from libc.stdint cimport uint32_t, uint64_t
 
 cdef extern from "stdint.h":
-    int __builtin_popcountl(uint64_t nn)  # hamming weight of a unit64
-    int __builtin_ctzll(uint64_t nn)  # count trailing zeroes in a unit64
+    uint64_t __builtin_popcountl(uint64_t nn)  # hamming weight of a unit64
+    uint64_t __builtin_ctzll(uint64_t nn)  # count trailing zeroes in a unit64
 
 
 # disable deprecated numpy API
