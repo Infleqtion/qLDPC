@@ -49,3 +49,10 @@ def test_use_disk_cache() -> None:
         get_five("test_arg")  # save results to cache
         assert cache == {("test_arg",): 5}  # check cache
         assert cache[("test_arg",)] == get_five("test_arg")  # retrieve results
+
+        @qldpc.cache.use_disk_cache("test_name", key_func=lambda _: None)
+        def get_six(_: str) -> int:
+            return 6
+
+        assert get_six("test_arg") == 6
+        assert cache == {("test_arg",): 5, None: 6}
