@@ -1,9 +1,9 @@
+# C imports
 from libc.stdint cimport uint32_t, uint64_t
 
 cdef extern from "stdint.h":
     uint64_t __builtin_popcountl(uint64_t nn)  # hamming weight of a unit64
     uint64_t __builtin_ctzll(uint64_t nn)  # count trailing zeroes in a unit64
-
 
 # disable deprecated numpy API
 cdef extern from *:
@@ -11,9 +11,11 @@ cdef extern from *:
     #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
     """
 
+# Python imports
 from typing import Iterator
 import numpy as np
 cimport numpy as cnp
+
 
 cdef uint64_t hamming_weight(uint64_t num):
     """Hamming weight of an integer."""
