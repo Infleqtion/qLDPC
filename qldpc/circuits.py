@@ -85,7 +85,7 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
 
 
 @restrict_to_qubits
-def get_encoding_circuit(code: codes.QuditCode) -> stim.Tableau:
+def get_encoding_circuit(code: codes.QuditCode) -> stim.Circuit:
     """Circuit to encode physical states at its input into logical states of the given code.
 
     For all j in {0, 1, ..., code.dimension - 1}, this circuit maps weight-one X_j and Z_j operators
