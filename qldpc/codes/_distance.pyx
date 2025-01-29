@@ -72,5 +72,5 @@ def get_distance_subcode_64(
 def get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     """Distance of a classical code with the given generator matrix."""
     cdef uint64_t num_bits = generator.shape[1]
-    null_matrix =  np.zeros((0, num_bits), dtype=np.uint8)
+    null_matrix = np.zeros((0, num_bits), dtype=np.uint8)
     return get_distance_subcode_64(generator, null_matrix)
