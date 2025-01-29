@@ -17,6 +17,8 @@ import scipy.optimize
 from sympy.abc import x, y
 
 import qldpc
+import numba
+from numba import njit
 
 Basis2D = tuple[tuple[int, int], tuple[int, int]]
 LayoutParams = tuple[bool, Basis2D, Basis2D, tuple[int, int]]
@@ -246,10 +248,32 @@ def get_placement_matrix(
     between a check qubit and one of its neighbors when the check qubit in a given location.
     """
     check_supports = check_supports if check_supports is not None else get_check_supports(code)
-    squared_distance_tensor = squared_distance_matrix[:, check_supports]
+    # result = np.amax(squared_distance_matrix[:, check_supports], axis=2)
+    result = max_along_check_supports_numba(squared_distance_matrix, check_supports)
+    # assert np.allclose(result, result2), "Mismatch between Numba and NumPy results!"
 
-    # matrix of maximum squared communication distances
-    return np.max(squared_distance_tensor, axis=2)
+    return result
+
+
+@njit
+def max_along_check_supports_numba(squared_distance_matrix, check_supports):
+    N = squared_distance_matrix.shape[0]
+    L = check_supports.shape[0]
+    K = check_supports.shape[1]
+
+    out = np.empty((N, L), dtype=squared_distance_matrix.dtype)
+
+    for i in range(N):
+        for j in range(L):
+            max_val = squared_distance_matrix[i, check_supports[j, 0]]
+            for k in range(1, K):
+                idx = check_supports[j, k]
+                val = squared_distance_matrix[i, idx]
+                if val > max_val:
+                    max_val = val
+            out[i, j] = max_val
+
+    return out
 
 
 def get_data_qubit_locs(
