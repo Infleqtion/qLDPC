@@ -16,6 +16,9 @@ from typing import Iterator
 import numpy as np
 cimport numpy as cnp
 
+####################################################################################################
+# utility functions
+
 
 cdef uint64_t hamming_weight(uint64_t num):
     """Hamming weight of an integer."""
@@ -55,40 +58,81 @@ cdef cnp.ndarray[cnp.uint64_t, ndim=2] rows_to_uint64(
     return int_array
 
 
-def get_distance_classical_64(
-    cnp.ndarray[cnp.uint8_t, ndim=2] generator, *, bint symplectic=False
-) -> int:
-    """Distance of a classical code with the given generator matrix."""
+####################################################################################################
+# classical code distance
+
+
+def get_distance_classical(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
+    """Distance of a classical linear binary code with the given generator matrix."""
     cdef uint64_t num_bits = generator.shape[1]
-    if num_bits > 64:
-        raise ValueError("Fast distance calculation not supported for ClassicalCodes on >64 bits")
+    if num_bits <= 64:
+        return get_distance_classical_64(generator)
+    return get_distance_classical_large(generator)
 
-    # decide whether to use the hamming or symplectic weight of bitstrings
-    cdef uint64_t (*weight)(uint64_t)
-    if not symplectic:
-        weight = hamming_weight
-    else:
-        assert num_bits % 2 == 0
-        weight = symplectic_weight
 
-    cdef uint64_t num_words = generator.shape[0]
+cdef uint64_t get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
+    """Distance of a classical linear binary code with block length <= 64."""
+    cdef uint64_t num_bits = generator.shape[1]
+    assert num_bits <= 64
+
+    # convert each generating word into integer form
     cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)[:, 0]
+    cdef uint64_t num_basis_words = int_words.shape[0]
 
-    # iterate over code words and minimize over their weight
+    # iterate over all code words and minimize over their Hamming weight
     cdef uint64_t ww
     cdef uint64_t word = 0
     cdef uint64_t min_weight = num_bits
-    for ww in gray_code_flips(num_words):
+    for ww in gray_code_flips(num_basis_words):
         word ^= int_words[ww]
-        min_weight = min(weight(word), min_weight)
+        min_weight = min(min_weight, hamming_weight(word))
     return min_weight
+
+
+cdef uint64_t get_distance_classical_large(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
+    """Distance of a classical linear binary code with arbitrary block length."""
+    cdef uint64_t num_bits = generator.shape[1]
+
+    # convert each generating word into integer form
+    cdef cnp.ndarray[cnp.uint64_t, ndim=2] int_words = rows_to_uint64(generator)
+    cdef uint64_t num_basis_words = int_words.shape[0]
+    cdef uint64_t num_word_parts = int_words.shape[1]
+
+    # iterate over all code words and minimize over their Hamming weight
+    cdef uint64_t cc, ww, weight
+    cdef cnp.ndarray[cnp.uint64_t] word = np.zeros(num_word_parts, dtype=np.uint64)
+    cdef uint64_t min_weight = num_bits
+    for ww in gray_code_flips(num_basis_words):
+        weight = 0
+        for pp in range(num_word_parts):
+            word[pp] ^= int_words[ww, pp]
+            weight += hamming_weight(word[pp])
+        min_weight = min(min_weight, weight)
+    return min_weight
+
+
+####################################################################################################
+# quantum code distance
 
 
 def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     """Distance of a quantum code with the given symplectic generator matrix."""
-    if generator.shape[1] > 64:
+    cdef uint64_t num_qubits = generator.shape[1]
+    if num_qubits > 64:
         raise ValueError("Fast distance calculation not supported for QuditCodes on >32 qubits")
-    return get_distance_classical_64(generator, symplectic=True)
+
+    # convert each generating word into integer form
+    cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)[:, 0]
+    cdef uint64_t num_basis_words = int_words.shape[0]
+
+    # iterate over all code words and minimize over their symplectic weight
+    cdef uint64_t ww
+    cdef uint64_t word = 0
+    cdef uint64_t min_weight = num_qubits
+    for ww in gray_code_flips(num_basis_words):
+        word ^= int_words[ww]
+        min_weight = min(min_weight, symplectic_weight(word))
+    return min_weight
 
 
 def get_distance_sector_xz_64(
@@ -99,21 +143,20 @@ def get_distance_sector_xz_64(
     if num_qubits > 64:
         raise ValueError("Fast distance calculation not supported for CSSCodes on >64 qubits")
 
-    cdef uint64_t num_logical_ops = logical_ops.shape[0]
-    cdef uint64_t num_stabilizers = stabilizers.shape[0]
-
-    # convert each Pauli string into an integer
+    # convert each Pauli string into integer form
     cdef cnp.ndarray[cnp.uint64_t] int_logical_ops = rows_to_uint64(logical_ops)[:, 0]
     cdef cnp.ndarray[cnp.uint64_t] int_stabilizers = rows_to_uint64(stabilizers)[:, 0]
+    cdef uint64_t num_logical_ops = int_logical_ops.shape[0]
+    cdef uint64_t num_stabilizers = int_stabilizers.shape[0]
 
     # iterate over all products of logical operators and stabilizers
     cdef uint64_t ll, ss
     cdef uint64_t logical_op = 0
-    cdef uint64_t minhamming_weight = num_qubits
+    cdef uint64_t min_weight = num_qubits
     for ll in gray_code_flips(num_logical_ops):
         logical_op ^= int_logical_ops[ll]
-        minhamming_weight = min(hamming_weight(logical_op), minhamming_weight)
+        min_weight = min(min_weight, hamming_weight(logical_op))
         for ss in gray_code_flips(num_stabilizers):
             logical_op ^= int_stabilizers[ss]
-            minhamming_weight = min(hamming_weight(logical_op), minhamming_weight)
-    return minhamming_weight
+            min_weight = min(min_weight, hamming_weight(logical_op))
+    return min_weight

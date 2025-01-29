@@ -37,7 +37,7 @@ from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
-from ._distance import get_distance_classical_64, get_distance_quantum_32, get_distance_sector_xz_64
+from ._distance import get_distance_classical, get_distance_quantum_32, get_distance_sector_xz_64
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -350,8 +350,8 @@ class ClassicalCode(AbstractCode):
             return min(np.count_nonzero(word - vector) for word in self.iter_words())
 
         # we do not know the exact distance, so compute it
-        if self.field.order == 2 and len(self) <= 64:
-            distance = get_distance_classical_64(self.generator.view(np.ndarray).astype(np.uint8))
+        if self.field.order == 2:
+            distance = get_distance_classical(self.generator.view(np.ndarray).astype(np.uint8))
         else:
             distance = min(np.count_nonzero(word) for word in self.iter_words(skip_zero=True))
         self._exact_distance = int(distance)
