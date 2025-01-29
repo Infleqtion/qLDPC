@@ -2,7 +2,7 @@ from libc.stdint cimport uint32_t, uint64_t
 
 cdef extern from "stdint.h":
     int __builtin_popcountl(uint64_t nn)  # hamming weight of a unit64
-    int __builtin_ctzl(uint64_t nn)  # count trailing zeroes in a unit64
+    int __builtin_ctzll(uint64_t nn)  # count trailing zeroes in a unit64
 
 
 # disable deprecated numpy API
@@ -31,7 +31,7 @@ cdef uint64_t _symplectic_weight(uint64_t num):
 def _gray_code_flips(uint64_t num) -> Iterator[uint64_t]:
     """Iterate over the bits to flip in a Gray code for bitstrings of the given length."""
     for counter in range(<uint64_t>1, <uint64_t>1 << num):
-        yield __builtin_ctzl(counter)
+        yield __builtin_ctzll(counter)
 
 
 cdef cnp.ndarray[cnp.uint64_t] _rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array):
