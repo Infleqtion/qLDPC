@@ -894,6 +894,9 @@ class QuditCode(AbstractCode):
         """Compute the minimum weight of nontrivial logical operators by brute force."""
         if (known_distance := self._get_distance_if_known()) is not None:
             return known_distance
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
+        print("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 
         if self.field.order == 2 and len(self) <= 32:
             generator = ClassicalCode(self.matrix).generator
