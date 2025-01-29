@@ -37,7 +37,7 @@ from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
-from ._distance import get_distance_classical_64, get_distance_subcode_64
+from ._distance import get_distance_classical_64, get_distance_quantum_32, get_distance_subcode_64
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -895,15 +895,19 @@ class QuditCode(AbstractCode):
         if (known_distance := self._get_distance_if_known()) is not None:
             return known_distance
 
-        minimum_weight = len(self)
-        for word in ClassicalCode(self.matrix).iter_words(skip_zero=True):
-            support_x = word[: len(self)].view(np.ndarray)
-            support_z = word[len(self) :].view(np.ndarray)
-            support = support_x + support_z  # nonzero wherever a word addresses a qudit
-            minimum_weight = min(minimum_weight, np.count_nonzero(support))
+        if self.field.order == 2 and len(self) <= 32:
+            generator = ClassicalCode(self.matrix).generator
+            distance = get_distance_quantum_32(generator.view(np.ndarray).astype(np.uint8))
+        else:
+            distance = len(self)
+            for word in ClassicalCode(self.matrix).iter_words(skip_zero=True):
+                support_x = word[: len(self)].view(np.ndarray)
+                support_z = word[len(self) :].view(np.ndarray)
+                support = support_x + support_z  # nonzero wherever a word addresses a qudit
+                distance = min(distance, np.count_nonzero(support))
 
-        self._exact_distance = minimum_weight
-        return minimum_weight
+        self._exact_distance = int(distance)
+        return distance
 
     def _get_distance_if_known(self) -> int | float | None:
         """Retrieve exact distance, if known.  Otherwise return None."""
