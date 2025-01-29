@@ -79,7 +79,7 @@ def get_distance_classical_64(
 
 def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     """Distance of a quantum code with the given symplectic generator matrix."""
-    if generator.shape[1] > 32:
+    if generator.shape[1] > 64:
         raise ValueError("Fast distance calculation not supported for QuditCodes on >32 qubits")
     return get_distance_classical_64(generator, _symplectic=True)
 
