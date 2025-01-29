@@ -33,17 +33,23 @@ def gray_code_flips(uint64_t num) -> Iterator[uint64_t]:
         yield __builtin_ctzll(counter)
 
 
-cdef cnp.ndarray[cnp.uint64_t] rows_to_uint64(cnp.ndarray[cnp.uint8_t, ndim=2] binary_array):
-    """Convert the rows of a binary array into integers."""
+cdef cnp.ndarray[cnp.uint64_t, ndim=2] rows_to_uint64(
+    cnp.ndarray[cnp.uint8_t, ndim=2] binary_array
+):
+    """Convert the rows of a binary array into a vector of unsigned 64-bit integers."""
     cdef uint64_t num_rows = binary_array.shape[0]
-    cdef uint64_t num_cols = binary_array.shape[1]
-    cdef cnp.ndarray[cnp.uint64_t] int_array = np.zeros(num_rows, dtype=np.uint64)
+    cdef uint64_t bin_cols = binary_array.shape[1]
+    cdef uint64_t int_cols = (bin_cols + <uint64_t>63) // <uint64_t>64
+    cdef cnp.ndarray[cnp.uint64_t, ndim=2] int_array = np.zeros(
+        (num_rows, int_cols), dtype=np.uint64
+    )
     cdef uint64_t value
     for row in range(num_rows):
-        value = 0
-        for col in range(num_cols):
-            value = (value << 1) | binary_array[row, col]
-        int_array[row] = value
+        for c_int in range(int_cols):
+            value = 0
+            for c_bin in range(64 * c_int, min(64 * (c_int + 1), bin_cols)):
+                value = (value << 1) | binary_array[row, c_bin]
+            int_array[row, c_int] = value
     return int_array
 
 
@@ -64,7 +70,7 @@ def get_distance_classical_64(
         weight = symplectic_weight
 
     cdef uint64_t num_words = generator.shape[0]
-    cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)
+    cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)[:, 0]
 
     # iterate over code words and minimize over their weight
     cdef uint64_t ww
@@ -95,8 +101,8 @@ def get_distance_sector_xz_64(
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
 
     # convert each Pauli string into an integer
-    cdef cnp.ndarray[cnp.uint64_t] int_logical_ops = rows_to_uint64(logical_ops)
-    cdef cnp.ndarray[cnp.uint64_t] int_stabilizers = rows_to_uint64(stabilizers)
+    cdef cnp.ndarray[cnp.uint64_t] int_logical_ops = rows_to_uint64(logical_ops)[:, 0]
+    cdef cnp.ndarray[cnp.uint64_t] int_stabilizers = rows_to_uint64(stabilizers)[:, 0]
 
     # iterate over all products of logical operators and stabilizers
     cdef uint64_t ll, ss
