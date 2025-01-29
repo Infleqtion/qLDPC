@@ -73,7 +73,7 @@ def get_distance_classical_64(
     cdef uint64_t min_weight = num_bits
     for ww in _gray_code_flips(num_words):
         word ^= int_words[ww]
-        min_hamming_weight = min(weight(word), min_weight)
+        min_weight = min(weight(word), min_weight)
     return min_weight
 
 
