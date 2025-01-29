@@ -79,3 +79,6 @@ exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
 
 [tool.coverage.run]
 include = ["./*"]
+
+[tool.cython-lint]
+max-line-length = 100
