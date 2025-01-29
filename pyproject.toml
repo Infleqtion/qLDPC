@@ -2,6 +2,10 @@
 requires = ["poetry-core>=1.0.0", "cython", "setuptools", "numpy"]
 build-backend = "poetry.core.masonry.api"
 
+[tool.poetry.build]
+generate-setup-file = false
+script = "build-cython.py"
+
 [tool.poetry]
 name = "qLDPC"
 version = "0.0.24"
@@ -24,10 +28,6 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Physics",
 ]
 include = ["qldpc/py.typed", { path = "qldpc/**/*.so", format = "wheel" }]
-
-[tool.poetry.build]
-generate-setup-file = false
-script = "build.py"
 
 [tool.poetry.dependencies]
 python = "^3.10"
