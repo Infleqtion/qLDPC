@@ -16,14 +16,14 @@ import numpy as np
 cimport numpy as cnp
 
 
-def _weight(uint64_t nn) -> uint64_t:
+def _weight(uint64_t num) -> uint64_t:
     """Hamming weight of an integer."""
-    return __builtin_popcountl(nn)
+    return __builtin_popcountl(num)
 
 
-def _gray_code_flips(uint64_t nn) -> Iterator[uint64_t]:
-    """Iterate over the bits to flip in a Gray code over a bitstring of the given length."""
-    for counter in range(<uint64_t>1, <uint64_t>1 << nn):
+def _gray_code_flips(uint64_t num) -> Iterator[uint64_t]:
+    """Iterate over the bits to flip in a Gray code for bitstrings of the given length."""
+    for counter in range(<uint64_t>1, <uint64_t>1 << num):
         yield __builtin_ctzl(counter)
 
 
