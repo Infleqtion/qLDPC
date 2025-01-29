@@ -28,7 +28,7 @@ import sympy
 from qldpc import abstract, cache, codes
 from qldpc.objects import Pauli, conjugate_xz, op_to_string
 
-CACHE_NAME = "qldpc_intersection_generators"
+CACHE_NAME = "qldpc_automorphisms"
 
 
 def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.Circuit]:
@@ -99,7 +99,25 @@ def get_encoding_circuit(code: codes.QuditCode) -> stim.Tableau:
     return get_encoding_tableau(code).to_circuit()
 
 
+def _transversal_ops_cache(
+    code: codes.QuditCode,
+    local_gates: Collection[str],
+    *,
+    deform_code: bool = False,
+    remove_redundancies: bool = True,
+) -> Hashable:
+    """Cache the arguments to get_transversal_ops."""
+    matrix = code.canonicalized().matrix.view(np.ndarray)
+    checks_str = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
+    matrix_str = "[" + ",".join(checks_str) + "]"
+    local_gates = _standardize_local_gates(local_gates)
+    local_gates.discard("SWAP")
+    local_gates = tuple(sorted(local_gates))
+    return matrix_str, local_gates, deform_code, remove_redundancies
+
+
 @restrict_to_qubits
+@cache.use_disk_cache(CACHE_NAME, key_func=_transversal_ops_cache)
 def get_transversal_ops(
     code: codes.QuditCode,
     local_gates: Collection[str] = ("S", "H", "SWAP"),
