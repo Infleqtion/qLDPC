@@ -68,13 +68,13 @@ def get_distance_classical_64(
     cdef cnp.ndarray[cnp.uint64_t] int_words = _rows_to_uint64(generator)
 
     # iterate over code words and minimize over their weight
-    cdef uint64_t word = 0
     cdef uint64_t ww
-    cdef uint64_t min_hamming_weight = num_bits
+    cdef uint64_t word = 0
+    cdef uint64_t min_weight = num_bits
     for ww in _gray_code_flips(num_words):
         word ^= int_words[ww]
-        min_hamming_weight = min(weight(word), min_hamming_weight)
-    return min_hamming_weight
+        min_hamming_weight = min(weight(word), min_weight)
+    return min_weight
 
 
 def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
@@ -100,8 +100,8 @@ def get_distance_subcode_64(
     cdef cnp.ndarray[cnp.uint64_t] int_stabilizers = _rows_to_uint64(stabilizers)
 
     # iterate over all products of logical operators and stabilizers
-    cdef uint64_t logical_op = 0
     cdef uint64_t ll, ss
+    cdef uint64_t logical_op = 0
     cdef uint64_t min_hamming_weight = num_qubits
     for ll in _gray_code_flips(num_logical_ops):
         logical_op ^= int_logical_ops[ll]
