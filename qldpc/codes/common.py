@@ -505,7 +505,7 @@ class ClassicalCode(AbstractCode):
         The auomorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
         """
-        matrix = np.array([row for row in self.canonicalized().matrix])
+        matrix = self.canonicalized().matrix.view(np.ndarray)
         checks_str = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
         matrix_str = "[" + ",".join(checks_str) + "]"
         code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"

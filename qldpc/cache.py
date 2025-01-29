@@ -37,7 +37,10 @@ def get_disk_cache(cache_name: str, *, cache_dir: str | None = None) -> diskcach
 
 
 def use_disk_cache(
-    cache_name: str, *, cache_dir: str | None = None
+    cache_name: str,
+    *,
+    cache_dir: str | None = None,
+    key_func: Callable[..., Hashable] | None = None,
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorator to cache results to disk."""
 
@@ -49,7 +52,10 @@ def use_disk_cache(
         def function_with_cache(*args: Hashable, **kwargs: Hashable) -> Any:
             # retrieve results from cache, if available
             cache = get_disk_cache(cache_name, cache_dir=cache_dir)
-            key = args + tuple(kwargs.items())
+            if key_func is not None:
+                key = key_func(*args, **kwargs)
+            else:
+                key = args + tuple(kwargs.items())
             if key in cache:
                 return cache[key]
 
