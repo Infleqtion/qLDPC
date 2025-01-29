@@ -19,11 +19,10 @@ from __future__ import annotations
 
 import collections
 import functools
-from collections.abc import Callable, Collection, Hashable, Sequence
+from collections.abc import Callable, Collection, Sequence
 
 import numpy as np
 import stim
-import sympy
 
 from qldpc import abstract, cache, codes
 from qldpc.objects import Pauli, conjugate_xz, op_to_string
