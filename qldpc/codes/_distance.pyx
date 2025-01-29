@@ -84,7 +84,7 @@ def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     return get_distance_classical_64(generator, _symplectic=True)
 
 
-def get_distance_subcode_64(
+def get_distance_sector_xz_64(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
 ) -> int:
     """Distance of one (X or Z) sector of a quantum CSS code."""
