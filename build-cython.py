@@ -15,7 +15,7 @@ def build_cython() -> None:
         include_dirs=[numpy.get_include()],
         extra_compile_args=["-O3", "-march=native", "-Wall"],
     )
-    ext_modules = cythonize(extension)
+    ext_modules = cythonize(extension, compiler_directives={"language_level": "3"})
     distribution = Distribution(dict(ext_modules=ext_modules))
 
     cmd = build_ext(distribution)

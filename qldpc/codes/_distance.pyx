@@ -1,5 +1,3 @@
-# cython: language_level=3
-
 # C imports
 from libc.stdint cimport uint64_t
 
@@ -24,8 +22,8 @@ cimport numpy as cnp
 # utility functions
 
 
-cdef uint64_t ODD_BITS_MASK = 0x5555555555555555
-cdef uint64_t EVEN_BITS_MASK = 0xAAAAAAAAAAAAAAAA
+cdef uint64_t ODD_BITS_MASK = 0x5555555555555555  # 1 on the odd bits of a 64-bit integer
+cdef uint64_t EVEN_BITS_MASK = 0xAAAAAAAAAAAAAAAA  # 1 on the even bits of a 64-bit integer
 
 
 cdef uint64_t hamming_weight(uint64_t num):
