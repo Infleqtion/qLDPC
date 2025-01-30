@@ -37,7 +37,7 @@ from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
-from ._distance import get_distance_classical, get_distance_quantum, get_distance_sector_xz
+from ._distance import get_distance_classical, get_distance_quantum
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -898,7 +898,7 @@ class QuditCode(AbstractCode):
         if self.field.order == 2:
             stabilizers = self.canonicalized().matrix
             logical_ops = self.get_logical_ops()
-            distance = get_distance_sector_xz(
+            distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
                 stabilizers.view(np.ndarray).astype(np.uint8),
             )
@@ -1363,9 +1363,10 @@ class CSSCode(QuditCode):
             code = self.code_x if pauli == Pauli.X else self.code_z
             stabilizers = code.canonicalized().matrix
             logical_ops = self.get_logical_ops(pauli).reshape(-1, 2, len(self))[:, pauli, :]
-            distance = get_distance_sector_xz(
+            distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
                 stabilizers.view(np.ndarray).astype(np.uint8),
+                homogeneous=True,
             )
         else:
             code_x = self.code_x if pauli == Pauli.X else self.code_z

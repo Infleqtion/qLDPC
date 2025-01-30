@@ -122,48 +122,46 @@ cdef uint64_t get_distance_classical_long(cnp.ndarray[cnp.uint8_t, ndim=2] gener
 # quantum code distance
 
 
-def get_distance_sector_xz(
-    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
-    cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-) -> int:
-    """Distance of one (X or Z) sector of a quantum binary CSS code."""
-    cdef uint64_t num_qubits = logical_ops.shape[1]
-
-    # compute quantum code distance with an ordinary (Hamming) bitstring weight function
-    if num_qubits <= 64:
-        return get_distance_quantum_64(logical_ops, stabilizers, symplectic=False)
-    if num_qubits <= 128:
-        return get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=False)
-    return get_distance_quantum_long(logical_ops, stabilizers, symplectic=False)
-
-
 def get_distance_quantum(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
+    bint homogeneous=False,
 ) -> int:
-    """Distance of a binary quantum code."""
-    cdef uint64_t num_qubits = logical_ops.shape[1] // 2
+    """Distance of a binary quantum code.
 
-    # "riffle" Pauli strings, putting X and Z support bits next to each other
-    cdef cnp.ndarray[cnp.uint8_t, ndim=2] riffled_logical_ops = (
-        logical_ops.reshape(-1, 2, num_qubits).transpose(0, 2, 1).reshape(-1, 2 * num_qubits)
-    )
-    cdef cnp.ndarray[cnp.uint8_t, ndim=2] riffled_stabilizers = (
-        stabilizers.reshape(-1, 2, num_qubits).transpose(0, 2, 1).reshape(-1, 2 * num_qubits)
-    )
+    If homogeneous is True, all logical operators and stabilizers have the same homogeneous (X or Z)
+    type, meaning:
+    - Pauli strings are represented by bitstrings that indicate their support on each qubit, so
+    - the weight of a Pauli string is the Hamming weight of the corresponding bitstring.
 
-    # compute quantum code distance with a symplectic bitstring weight function
-    if num_qubits <= 32:
-        return get_distance_quantum_64(riffled_logical_ops, riffled_stabilizers, symplectic=True)
-    if num_qubits <= 64:
-        return get_distance_quantum_64_2(riffled_logical_ops, riffled_stabilizers, symplectic=True)
-    return get_distance_quantum_long(riffled_logical_ops, riffled_stabilizers, symplectic=True)
+    If homogeneous is False, each Pauli string is represented by a bitstring with length equal to
+    twice the qubit number.  The first and second half of this bitstring indicate, respectively, the
+    X and Z support of the corresponding Pauli string.  The weight of a Pauli string is then the
+    symplectic weight of the corresponding bitstring.
+    """
+    cdef uint64_t num_bits = logical_ops.shape[1]
+
+    if not homogeneous:
+        # "riffle" Pauli strings, putting the X and Z support bits for each qubit next to each other
+        assert num_bits % 2 == 0
+        logical_ops = (
+            logical_ops.reshape(-1, 2, num_bits // 2).transpose(0, 2, 1).reshape(-1, num_bits)
+        )
+        stabilizers = (
+            stabilizers.reshape(-1, 2, num_bits // 2).transpose(0, 2, 1).reshape(-1, num_bits)
+        )
+
+    if num_bits <= 64:
+        return get_distance_quantum_64(logical_ops, stabilizers, homogeneous)
+    if num_bits <= 128:
+        return get_distance_quantum_64_2(logical_ops, stabilizers, homogeneous)
+    return get_distance_quantum_long(logical_ops, stabilizers, homogeneous)
 
 
 cdef uint64_t get_distance_quantum_64(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic,
+    bint homogeneous,
 ):
     """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
@@ -174,11 +172,10 @@ cdef uint64_t get_distance_quantum_64(
 
     # decide which weight function to use
     cdef uint64_t (*weight_func)(uint64_t)
-    if symplectic:
-        assert num_bits % 2
-        weight_func = symplectic_weight
-    else:
+    if homogeneous:
         weight_func = hamming_weight
+    else:
+        weight_func = symplectic_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:] int_logical_ops = rows_to_uint64(logical_ops).ravel()
@@ -202,7 +199,7 @@ cdef uint64_t get_distance_quantum_64(
 cdef uint64_t get_distance_quantum_64_2(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic,
+    bint homogeneous,
 ):
     """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
@@ -213,11 +210,10 @@ cdef uint64_t get_distance_quantum_64_2(
 
     # decide which weight function to use
     cdef uint64_t (*weight_func)(uint64_t)
-    if symplectic:
-        assert num_bits % 2
-        weight_func = symplectic_weight
-    else:
+    if homogeneous:
         weight_func = hamming_weight
+    else:
+        weight_func = symplectic_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:, :] int_logical_ops = rows_to_uint64(logical_ops)
@@ -252,7 +248,7 @@ cdef uint64_t get_distance_quantum_64_2(
 cdef uint64_t get_distance_quantum_long(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic,
+    bint homogeneous,
 ):
     """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
@@ -262,11 +258,10 @@ cdef uint64_t get_distance_quantum_long(
 
     # decide which weight function to use
     cdef uint64_t (*weight_func)(uint64_t)
-    if symplectic:
-        assert num_bits % 2
-        weight_func = symplectic_weight
-    else:
+    if homogeneous:
         weight_func = hamming_weight
+    else:
+        weight_func = symplectic_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:, :] int_logical_ops = rows_to_uint64(logical_ops)
