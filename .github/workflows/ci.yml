@@ -7,7 +7,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    types: [ opened, synchronize, reopened, ready_for_review ]  # these are the defaults, plus ready_for_review
+    types: [ opened, synchronize, reopened, ready_for_review ]  # defaults plus ready_for_review
     branches: [ main ]
   workflow_dispatch:
   workflow_call:

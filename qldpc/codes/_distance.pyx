@@ -1,3 +1,5 @@
+# cython: language_level=3
+
 # C imports
 from libc.stdint cimport uint64_t
 
