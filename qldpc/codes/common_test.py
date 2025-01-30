@@ -147,7 +147,8 @@ def test_distance_classical(bits: int = 3) -> None:
     # compute distance of a trinary repetition code
     rep_code = codes.RepetitionCode(bits, field=3)
     rep_code._exact_distance = None
-    assert rep_code.get_distance_exact() == 3
+    with pytest.warns(UserWarning, match="may take a very long time"):
+        assert rep_code.get_distance_exact() == 3
 
 
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
@@ -308,7 +309,8 @@ def test_distance_qudit() -> None:
     # fallback pythonic brute-force distance calculation
     surface_code = codes.SurfaceCode(2, field=3)
     surface_code._exact_distance_x = surface_code._exact_distance_z = None
-    assert codes.QuditCode.get_distance_exact(surface_code) == 2
+    with pytest.warns(UserWarning, match="may take a very long time"):
+        assert codes.QuditCode.get_distance_exact(surface_code) == 2
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -462,7 +464,8 @@ def test_distance_css() -> None:
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance_bound(cutoff=len(code)) == len(code)
     assert code.get_distance(bound=True) <= len(code)
-    assert code.get_distance(bound=False) == 2
+    with pytest.warns(UserWarning, match="may take a very long time"):
+        assert code.get_distance(bound=False) == 2
 
     # qubit code distance
     code = codes.HGPCode(codes.RepetitionCode(2, field=2))

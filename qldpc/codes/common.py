@@ -22,6 +22,7 @@ import functools
 import itertools
 import math
 import random
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Iterator, Literal, cast
 
@@ -353,6 +354,9 @@ class ClassicalCode(AbstractCode):
         if self.field.order == 2:
             distance = get_distance_classical(self.generator.view(np.ndarray).astype(np.uint8))
         else:
+            warnings.warn(
+                "Computing the exact distance of a non-binary code may take a (very) long time"
+            )
             distance = min(np.count_nonzero(word) for word in self.iter_words(skip_zero=True))
         self._exact_distance = int(distance)
         return self._exact_distance
@@ -903,8 +907,17 @@ class QuditCode(AbstractCode):
                 stabilizers.view(np.ndarray).astype(np.uint8),
             )
         else:
+            warnings.warn(
+                "Computing the exact distance of a non-binary code may take a (very) long time"
+            )
             distance = len(self)
-            for word in ClassicalCode(self.matrix).iter_words(skip_zero=True):
+            code_logical_ops = ClassicalCode.from_generator(self.get_logical_ops())
+            code_stabilizers = ClassicalCode.from_generator(self.matrix)
+            for word_l, word_s in itertools.product(
+                code_logical_ops.iter_words(skip_zero=True),
+                code_stabilizers.iter_words(),
+            ):
+                word = word_l + word_s
                 support_x = word[: len(self)].view(np.ndarray)
                 support_z = word[len(self) :].view(np.ndarray)
                 support = support_x + support_z  # nonzero wherever a word addresses a qudit
@@ -1326,9 +1339,7 @@ class CSSCode(QuditCode):
 
         Equivalently, the number of linearly independent parity checks in this code.
         """
-        rank_x = self.code_x.rank
-        rank_z = rank_x if self._balanced_codes else self.code_z.rank
-        return rank_x + rank_z
+        return self.code_x.rank + self.code_z.rank
 
     def get_distance(
         self, pauli: PauliXZ | None = None, *, bound: int | bool | None = None, **decoder_args: Any
@@ -1369,6 +1380,9 @@ class CSSCode(QuditCode):
                 homogeneous=True,
             )
         else:
+            warnings.warn(
+                "Computing the exact distance of a non-binary code may take a (very) long time"
+            )
             code_x = self.code_x if pauli == Pauli.X else self.code_z
             code_z = self.code_z if pauli == Pauli.X else self.code_x
             dual_code_x = ~code_x

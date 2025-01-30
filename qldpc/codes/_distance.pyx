@@ -12,7 +12,9 @@ cdef extern from *:
     """
 
 # Python imports
+import warnings
 from typing import Iterator
+
 import numpy as np
 cimport numpy as cnp
 
@@ -66,6 +68,9 @@ cdef cnp.ndarray[cnp.uint64_t, ndim=2] rows_to_uint64(
 
 def get_distance_classical(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     """Distance of a classical linear binary code."""
+    if generator.shape[0] > 30:
+        warnings.warn("Computing the exact distance of a large code may take a (very) long time")
+
     cdef uint64_t num_bits = generator.shape[1]
     if num_bits <= 64:
         return get_distance_classical_64(generator)
@@ -168,6 +173,9 @@ def get_distance_quantum(
     X and Z support of the corresponding Pauli string.  The weight of a Pauli string is then the
     symplectic weight of the corresponding bitstring.
     """
+    if logical_ops.shape[0] + stabilizers.shape[0] > 30:
+        warnings.warn("Computing the exact distance of a large code may take a (very) long time")
+
     cdef uint64_t num_bits = logical_ops.shape[1]
 
     if not homogeneous:
