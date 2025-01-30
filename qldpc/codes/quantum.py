@@ -1087,9 +1087,9 @@ class SurfaceCode(CSSCode):
         self.rows = rows
         self.cols = cols
 
-        # save known distances
         self._exact_distance_x = cols
         self._exact_distance_z = rows
+        self._balanced_codes = rows == cols
 
         if rotated:
             # rotated surface code
@@ -1198,8 +1198,8 @@ class ToricCode(CSSCode):
         self.rows = rows
         self.cols = cols
 
-        # save known distances
         self._exact_distance_x = self._exact_distance_z = min(rows, cols)
+        self._balanced_codes = rows == cols
 
         if rotated:
             if rows % 2 or cols % 2:
