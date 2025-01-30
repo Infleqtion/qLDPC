@@ -72,14 +72,13 @@ def get_distance_classical(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
 
 cdef uint64_t get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
     """Distance of a classical linear binary code with block length <= 64."""
-    assert generator.shape[0] < 64
-
     cdef uint64_t num_bits = generator.shape[1]
+    cdef uint64_t num_basis_words = generator.shape[0]
     assert num_bits <= 64
+    assert num_basis_words < 64  # the Gray code breaks otherwise
 
     # convert each generating word into integer form
     cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)[:, 0]
-    cdef uint64_t num_basis_words = int_words.shape[0]
 
     # iterate over all code words and minimize over their Hamming weight
     cdef uint64_t ww
@@ -93,13 +92,12 @@ cdef uint64_t get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generat
 
 cdef uint64_t get_distance_classical_large(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
     """Distance of a classical linear binary code with arbitrary block length."""
-    assert generator.shape[0] < 64
-
     cdef uint64_t num_bits = generator.shape[1]
+    cdef uint64_t num_basis_words = generator.shape[0]
+    assert num_basis_words < 64  # the Gray code breaks otherwise
 
     # convert each generating word into integer form
     cdef cnp.ndarray[cnp.uint64_t, ndim=2] int_words = rows_to_uint64(generator)
-    cdef uint64_t num_basis_words = int_words.shape[0]
     cdef uint64_t num_int_parts = int_words.shape[1]
 
     # iterate over all code words and minimize over their Hamming weight
@@ -133,16 +131,15 @@ cdef uint64_t get_distance_sector_xz_64(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
 ):
     """Distance of one (X or Z) sector of a quantum binary CSS code with block length <= 64."""
-    assert logical_ops.shape[0] < 64 and stabilizers.shape[0] < 64
-
     cdef uint64_t num_qubits = logical_ops.shape[1]
+    cdef uint64_t num_logical_ops = logical_ops.shape[0]
+    cdef uint64_t num_stabilizers = stabilizers.shape[0]
     assert num_qubits <= 64
+    assert num_logical_ops < 64 and num_stabilizers < 64  # the Gray code breaks otherwise
 
     # convert each Pauli string into integer form
     cdef cnp.ndarray[cnp.uint64_t] int_logical_ops = rows_to_uint64(logical_ops)[:, 0]
     cdef cnp.ndarray[cnp.uint64_t] int_stabilizers = rows_to_uint64(stabilizers)[:, 0]
-    cdef uint64_t num_logical_ops = int_logical_ops.shape[0]
-    cdef uint64_t num_stabilizers = int_stabilizers.shape[0]
 
     # iterate over all products of logical operators and stabilizers
     cdef uint64_t ll, ss
@@ -161,15 +158,14 @@ cdef uint64_t get_distance_sector_xz_large(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
 ):
     """Distance of one (X or Z) sector of a quantum binary CSS code with arbitrary block length."""
-    assert logical_ops.shape[0] < 64 and stabilizers.shape[0] < 64
-
     cdef uint64_t num_qubits = logical_ops.shape[1]
+    cdef uint64_t num_logical_ops = logical_ops.shape[0]
+    cdef uint64_t num_stabilizers = stabilizers.shape[0]
+    assert num_logical_ops < 64 and num_stabilizers < 64  # the Gray code breaks otherwise
 
     # convert each Pauli string into integer form
     cdef cnp.ndarray[cnp.uint64_t, ndim=2] int_logical_ops = rows_to_uint64(logical_ops)
     cdef cnp.ndarray[cnp.uint64_t, ndim=2] int_stabilizers = rows_to_uint64(stabilizers)
-    cdef uint64_t num_logical_ops = int_logical_ops.shape[0]
-    cdef uint64_t num_stabilizers = int_stabilizers.shape[0]
     cdef uint64_t num_int_parts = int_logical_ops.shape[1]
 
     # iterate over all products of logical operators and stabilizers
@@ -198,11 +194,12 @@ cdef uint64_t get_distance_sector_xz_large(
 def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     """Distance of a binary quantum code with block length <= 32."""
     cdef uint64_t num_qubits = generator.shape[1] // 2
+    cdef uint64_t num_basis_words = generator.shape[0]
     assert num_qubits <= 32
+    assert num_basis_words < 64  # the Gray code breaks otherwise
 
     # convert each generating word into integer form
     cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)[:, 0]
-    cdef uint64_t num_basis_words = int_words.shape[0]
 
     # iterate over all code words and minimize over their symplectic weight
     cdef uint64_t ww
