@@ -20,16 +20,18 @@ cimport numpy as cnp
 # common utility functions
 
 
+cdef uint64_t ODD_BITS_MASK = 0x5555555555555555
+cdef uint64_t EVEN_BITS_MASK = 0xAAAAAAAAAAAAAAAA
+
+
 cdef uint64_t hamming_weight(uint64_t num):
     """Hamming weight of an integer."""
     return __builtin_popcountl(num)
 
 
-cdef uint64_t symplectic_weight(uint64_t num, uint64_t half_length):
+cdef uint64_t symplectic_weight(uint64_t num):
     """Symplectic weight of an integer."""
-    cdef uint64_t first_bits = num >> half_length
-    cdef uint64_t last_bits = num & ((<uint64_t>1 << half_length) - <uint64_t>1)
-    return hamming_weight(first_bits | last_bits)
+    return hamming_weight((num & ODD_BITS_MASK) | (num & EVEN_BITS_MASK))
 
 
 def gray_code_flips(uint64_t num) -> Iterator[uint64_t]:
@@ -117,59 +119,98 @@ cdef uint64_t _get_distance_classical_long(cnp.ndarray[cnp.uint8_t, ndim=2] gene
 
 
 ####################################################################################################
-# quantum CSS code distance
+# quantum code distance
 
 
 def get_distance_sector_xz(
-    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
+    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
+    cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
 ) -> int:
     """Distance of one (X or Z) sector of a quantum binary CSS code."""
     cdef uint64_t num_qubits = logical_ops.shape[1]
     if num_qubits <= 64:
-        return _get_distance_sector_xz_64(logical_ops, stabilizers)
+        return _get_distance_quantum_64(logical_ops, stabilizers, symplectic=False)
     if num_qubits <= 128:
-        return _get_distance_sector_xz_64_2(logical_ops, stabilizers)
-    return _get_distance_sector_xz_long(logical_ops, stabilizers)
+        return _get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=False)
+    return _get_distance_quantum_long(logical_ops, stabilizers, symplectic=False)
 
 
-cdef uint64_t _get_distance_sector_xz_64(
-    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
+def get_distance_quantum(
+    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
+    cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
+) -> int:
+    """Distance of a binary quantum code."""
+    cdef uint64_t num_qubits = logical_ops.shape[1] // 2
+    cdef cnp.ndarray[cnp.uint8_t, ndim=2] riffled_logical_ops = (
+        logical_ops.reshape(-1, 2, num_qubits).transpose(0, 2, 1).reshape(-1, 2 * num_qubits)
+    )
+    cdef cnp.ndarray[cnp.uint8_t, ndim=2] riffled_stabilizers = (
+        stabilizers.reshape(-1, 2, num_qubits).transpose(0, 2, 1).reshape(-1, 2 * num_qubits)
+    )
+    if num_qubits <= 32:
+        return _get_distance_quantum_64(logical_ops, stabilizers, symplectic=True)
+    if num_qubits <= 64:
+        return _get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=True)
+    return _get_distance_quantum_long(logical_ops, stabilizers, symplectic=True)
+
+
+cdef uint64_t _get_distance_quantum_64(
+    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
+    cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
+    bint symplectic,
 ):
     """Distance of one (X or Z) sector of a quantum binary CSS code."""
-    cdef uint64_t num_qubits = logical_ops.shape[1]
+    cdef uint64_t num_bits = logical_ops.shape[1]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
     assert num_logical_ops < 64 and num_stabilizers < 64  # the Gray code breaks otherwise
-    assert num_qubits <= 64
+    assert num_bits <= 64
+
+    # decide which weight function to use
+    cdef uint64_t (*weight_func)(uint64_t)
+    if not symplectic:
+        weight_func = hamming_weight
+    else:
+        weight_func = symplectic_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:] int_logical_ops = rows_to_uint64(logical_ops).ravel()
     cdef cnp.uint64_t[:] int_stabilizers = rows_to_uint64(stabilizers).ravel()
 
     # initialize a minimum weight and logical operator
-    cdef uint64_t min_weight = num_qubits
+    cdef uint64_t min_weight = num_bits
     cdef uint64_t logical_op = 0
 
     # iterate over all products of logical operators and stabilizers
     cdef uint64_t ll, ss
     for ll in gray_code_flips(num_logical_ops):
         logical_op ^= int_logical_ops[ll]
-        min_weight = min(min_weight, hamming_weight(logical_op))
+        min_weight = min(min_weight, weight_func(logical_op))
         for ss in gray_code_flips(num_stabilizers):
             logical_op ^= int_stabilizers[ss]
-            min_weight = min(min_weight, hamming_weight(logical_op))
+            min_weight = min(min_weight, weight_func(logical_op))
     return min_weight
 
 
-cdef uint64_t _get_distance_sector_xz_64_2(
-    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
+cdef uint64_t _get_distance_quantum_64_2(
+    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
+    cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
+    bint symplectic,
 ):
     """Distance of one (X or Z) sector of a quantum binary CSS code."""
-    cdef uint64_t num_qubits = logical_ops.shape[1]
+    cdef uint64_t num_bits = logical_ops.shape[1]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
     assert num_logical_ops < 64 and num_stabilizers < 64  # the Gray code breaks otherwise
-    assert 64 < num_qubits <= 128
+    assert 64 < num_bits <= 128
+
+    # decide which weight function to use
+    cdef uint64_t (*weight_func)(uint64_t)
+    if not symplectic:
+        weight_func = hamming_weight
+    else:
+        assert num_bits % 2 == 0
+        weight_func = symplectic_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:, :] int_logical_ops = rows_to_uint64(logical_ops)
@@ -180,7 +221,7 @@ cdef uint64_t _get_distance_sector_xz_64_2(
     cdef cnp.uint64_t[:] int_stabilizers_1 = int_stabilizers[:, 1]
 
     # initialize a minimum weight and logical operator
-    cdef uint64_t min_weight = num_qubits
+    cdef uint64_t min_weight = num_bits
     cdef uint64_t logical_op_0 = 0
     cdef uint64_t logical_op_1 = 1
 
@@ -190,32 +231,42 @@ cdef uint64_t _get_distance_sector_xz_64_2(
         logical_op_0 ^= int_logical_ops_0[ll]
         logical_op_1 ^= int_logical_ops_1[ll]
         min_weight = min(
-            min_weight, hamming_weight(logical_op_0) + hamming_weight(logical_op_1)
+            min_weight, weight_func(logical_op_0) + weight_func(logical_op_1)
         )
         for ss in gray_code_flips(num_stabilizers):
             logical_op_0 ^= int_stabilizers_0[ll]
             logical_op_1 ^= int_stabilizers_1[ll]
             min_weight = min(
-                min_weight, hamming_weight(logical_op_0) + hamming_weight(logical_op_1)
+                min_weight, weight_func(logical_op_0) + weight_func(logical_op_1)
             )
     return min_weight
 
 
-cdef uint64_t _get_distance_sector_xz_long(
-    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops, cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers
+cdef uint64_t _get_distance_quantum_long(
+    cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
+    cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
+    bint symplectic,
 ):
     """Distance of one (X or Z) sector of a quantum binary CSS code."""
-    cdef uint64_t num_qubits = logical_ops.shape[1]
+    cdef uint64_t num_bits = logical_ops.shape[1]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
     assert num_logical_ops < 64 and num_stabilizers < 64  # the Gray code breaks otherwise
+
+    # decide which weight function to use
+    cdef uint64_t (*weight_func)(uint64_t)
+    if not symplectic:
+        weight_func = hamming_weight
+    else:
+        assert num_bits % 2 == 0
+        weight_func = symplectic_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:, :] int_logical_ops = rows_to_uint64(logical_ops)
     cdef cnp.uint64_t[:, :] int_stabilizers = rows_to_uint64(stabilizers)
 
     # initialize a minimum weight and logical operator
-    cdef uint64_t min_weight = num_qubits
+    cdef uint64_t min_weight = num_bits
     cdef uint64_t num_int_parts = int_logical_ops.shape[1]
     cdef cnp.uint64_t[:] logical_op = np.zeros(num_int_parts, dtype=np.uint64)
 
@@ -225,36 +276,12 @@ cdef uint64_t _get_distance_sector_xz_long(
         weight = 0
         for ll_pp in range(num_int_parts):
             logical_op[ll_pp] ^= int_logical_ops[ll, ll_pp]
-            weight += hamming_weight(logical_op[ll_pp])
+            weight += weight_func(logical_op[ll_pp])
         min_weight = min(min_weight, weight)
         for ss in gray_code_flips(num_stabilizers):
             weight = 0
             for ss_pp in range(num_int_parts):
                 logical_op[ss_pp] ^= int_stabilizers[ss, ss_pp]
-                weight += hamming_weight(logical_op[ss_pp])
+                weight += weight_func(logical_op[ss_pp])
             min_weight = min(min_weight, weight)
-    return min_weight
-
-
-####################################################################################################
-# quantum non-CSS code distance
-
-
-def get_distance_quantum_32(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
-    """Distance of a binary quantum code with block length <= 32."""
-    cdef uint64_t num_qubits = generator.shape[1] // 2
-    cdef uint64_t num_basis_words = generator.shape[0]
-    assert num_qubits <= 32
-    assert num_basis_words < 64  # the Gray code breaks otherwise
-
-    # convert each generating word into integer form
-    cdef cnp.ndarray[cnp.uint64_t] int_words = rows_to_uint64(generator)[:, 0]
-
-    # iterate over all code words and minimize over their symplectic weight
-    cdef uint64_t ww
-    cdef uint64_t word = 0
-    cdef uint64_t min_weight = num_qubits
-    for ww in gray_code_flips(num_basis_words):
-        word ^= int_words[ww]
-        min_weight = min(min_weight, symplectic_weight(word, num_qubits))
     return min_weight

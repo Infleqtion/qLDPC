@@ -37,7 +37,7 @@ from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
-from ._distance import get_distance_classical, get_distance_quantum_32, get_distance_sector_xz
+from ._distance import get_distance_classical, get_distance_quantum, get_distance_sector_xz
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -895,9 +895,13 @@ class QuditCode(AbstractCode):
         if (known_distance := self._get_distance_if_known()) is not None:
             return known_distance
 
-        if self.field.order == 2 and len(self) <= 32:
-            generator = ClassicalCode(self.matrix).generator
-            distance = get_distance_quantum_32(generator.view(np.ndarray).astype(np.uint8))
+        if self.field.order == 2:
+            stabilizers = self.canonicalized().matrix
+            logical_ops = self.get_logical_ops()
+            distance = get_distance_sector_xz(
+                logical_ops.view(np.ndarray).astype(np.uint8),
+                stabilizers.view(np.ndarray).astype(np.uint8),
+            )
         else:
             distance = len(self)
             for word in ClassicalCode(self.matrix).iter_words(skip_zero=True):
