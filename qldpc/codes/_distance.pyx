@@ -68,11 +68,11 @@ def get_distance_classical(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     """Distance of a classical linear binary code."""
     cdef uint64_t num_bits = generator.shape[1]
     if num_bits <= 64:
-        return _get_distance_classical_64(generator)
-    return _get_distance_classical_long(generator)
+        return get_distance_classical_64(generator)
+    return get_distance_classical_long(generator)
 
 
-cdef uint64_t _get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
+cdef uint64_t get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
     """Distance of a classical linear binary code."""
     cdef uint64_t num_bits = generator.shape[1]
     cdef uint64_t num_basis_words = generator.shape[0]
@@ -93,7 +93,7 @@ cdef uint64_t _get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] genera
     return min_weight
 
 
-cdef uint64_t _get_distance_classical_long(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
+cdef uint64_t get_distance_classical_long(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
     """Distance of a classical linear binary code."""
     cdef uint64_t num_bits = generator.shape[1]
     cdef uint64_t num_basis_words = generator.shape[0]
@@ -129,10 +129,10 @@ def get_distance_sector_xz(
     """Distance of one (X or Z) sector of a quantum binary CSS code."""
     cdef uint64_t num_qubits = logical_ops.shape[1]
     if num_qubits <= 64:
-        return _get_distance_quantum_64(logical_ops, stabilizers, symplectic=False)
+        return get_distance_quantum_64(logical_ops, stabilizers, symplectic=False)
     if num_qubits <= 128:
-        return _get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=False)
-    return _get_distance_quantum_long(logical_ops, stabilizers, symplectic=False)
+        return get_distance_quantum_64_2(logical_ops, stabilizers)
+    return get_distance_quantum_long(logical_ops, stabilizers)
 
 
 def get_distance_quantum(
@@ -141,25 +141,29 @@ def get_distance_quantum(
 ) -> int:
     """Distance of a binary quantum code."""
     cdef uint64_t num_qubits = logical_ops.shape[1] // 2
+
+    # "riffle" Pauli strings, putting X and Z support bits next to each other
     cdef cnp.ndarray[cnp.uint8_t, ndim=2] riffled_logical_ops = (
         logical_ops.reshape(-1, 2, num_qubits).transpose(0, 2, 1).reshape(-1, 2 * num_qubits)
     )
     cdef cnp.ndarray[cnp.uint8_t, ndim=2] riffled_stabilizers = (
         stabilizers.reshape(-1, 2, num_qubits).transpose(0, 2, 1).reshape(-1, 2 * num_qubits)
     )
+
+    # call the quantum distance calculation with a symplectic bitstring weight function
     if num_qubits <= 32:
-        return _get_distance_quantum_64(logical_ops, stabilizers, symplectic=True)
+        return get_distance_quantum_64(logical_ops, stabilizers, symplectic=True)
     if num_qubits <= 64:
-        return _get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=True)
-    return _get_distance_quantum_long(logical_ops, stabilizers, symplectic=True)
+        return get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=True)
+    return get_distance_quantum_long(logical_ops, stabilizers, symplectic=True)
 
 
-cdef uint64_t _get_distance_quantum_64(
+cdef uint64_t get_distance_quantum_64(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic,
+    bint symplectic=False,
 ):
-    """Distance of one (X or Z) sector of a quantum binary CSS code."""
+    """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
@@ -193,12 +197,12 @@ cdef uint64_t _get_distance_quantum_64(
     return min_weight
 
 
-cdef uint64_t _get_distance_quantum_64_2(
+cdef uint64_t get_distance_quantum_64_2(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic,
+    bint symplectic=False,
 ):
-    """Distance of one (X or Z) sector of a quantum binary CSS code."""
+    """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
@@ -243,12 +247,12 @@ cdef uint64_t _get_distance_quantum_64_2(
     return min_weight
 
 
-cdef uint64_t _get_distance_quantum_long(
+cdef uint64_t get_distance_quantum_long(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic,
+    bint symplectic=False,
 ):
-    """Distance of one (X or Z) sector of a quantum binary CSS code."""
+    """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
     cdef uint64_t num_logical_ops = logical_ops.shape[0]
     cdef uint64_t num_stabilizers = stabilizers.shape[0]
