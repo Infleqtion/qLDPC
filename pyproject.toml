@@ -45,6 +45,7 @@ stim = ">=1.14.0"
 sympy = ">=1.12"
 
 checks-superstaq = { version = ">=0.5.34", optional = true }
+cython-lint = { version = ">=0.16.6", optional = true }
 
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
