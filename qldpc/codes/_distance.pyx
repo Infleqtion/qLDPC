@@ -17,7 +17,7 @@ import numpy as np
 cimport numpy as cnp
 
 ####################################################################################################
-# common utility functions
+# utility functions
 
 
 cdef uint64_t ODD_BITS_MASK = 0x5555555555555555
