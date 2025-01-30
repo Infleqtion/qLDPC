@@ -20,3 +20,8 @@ __pycache__
 
 # sphinx documentation
 docs/build
+
+# cython build artifacts
+build
+*.c
+*.so

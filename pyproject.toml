@@ -1,6 +1,10 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=1.0.0", "cython", "setuptools", "numpy"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.build]
+generate-setup-file = false
+script = "build-cython.py"
 
 [tool.poetry]
 name = "qLDPC"
@@ -23,7 +27,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Mathematics",
   "Topic :: Scientific/Engineering :: Physics",
 ]
-include = ["qldpc/py.typed"]
+include = ["qldpc/py.typed", { path = "qldpc/**/*.so", format = "wheel" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -41,6 +45,7 @@ stim = ">=1.14.0"
 sympy = ">=1.12"
 
 checks-superstaq = { version = ">=0.5.34", optional = true }
+cython-lint = { version = ">=0.16.6", optional = true }
 
 [tool.poetry.extras]
 dev = ["checks-superstaq"]
@@ -75,3 +80,6 @@ exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
 
 [tool.coverage.run]
 include = ["./*"]
+
+[tool.cython-lint]
+max-line-length = 100

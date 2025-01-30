@@ -7,7 +7,7 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    types: [ opened, synchronize, reopened, ready_for_review ]  # these are the defaults, plus ready_for_review
+    types: [ opened, synchronize, reopened, ready_for_review ]  # defaults plus ready_for_review
     branches: [ main ]
   workflow_dispatch:
   workflow_call:
@@ -17,7 +17,7 @@ jobs:
     name: Installation check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.11
@@ -27,7 +27,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml') }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml', 'build-cython.py') }}
       - name: Install package and dependencies
         run: |
           python3 -m pip install --upgrade pip
