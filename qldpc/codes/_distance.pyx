@@ -69,6 +69,8 @@ def get_distance_classical(cnp.ndarray[cnp.uint8_t, ndim=2] generator) -> int:
     cdef uint64_t num_bits = generator.shape[1]
     if num_bits <= 64:
         return get_distance_classical_64(generator)
+    if num_bits <= 128:
+        return get_distance_classical_64_2(generator)
     return get_distance_classical_long(generator)
 
 
@@ -77,6 +79,7 @@ cdef uint64_t get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generat
     cdef uint64_t num_bits = generator.shape[1]
     cdef uint64_t num_basis_words = generator.shape[0]
     assert num_basis_words < 64  # the Gray code breaks otherwise
+    assert num_bits <= 64
 
     # convert each generating word into integer form
     cdef cnp.uint64_t[:] int_words = rows_to_uint64(generator).ravel()
@@ -90,6 +93,32 @@ cdef uint64_t get_distance_classical_64(cnp.ndarray[cnp.uint8_t, ndim=2] generat
     for ww in gray_code_flips(num_basis_words):
         word ^= int_words[ww]
         min_weight = min(min_weight, hamming_weight(word))
+    return min_weight
+
+
+cdef uint64_t get_distance_classical_64_2(cnp.ndarray[cnp.uint8_t, ndim=2] generator):
+    """Distance of a classical linear binary code."""
+    cdef uint64_t num_bits = generator.shape[1]
+    cdef uint64_t num_basis_words = generator.shape[0]
+    assert num_basis_words < 64  # the Gray code breaks otherwise
+    assert 64 < num_bits <= 128
+
+    # convert each generating word into integer form
+    cdef cnp.uint64_t[:, :] int_words = rows_to_uint64(generator)
+    cdef cnp.uint64_t[:] int_words_0 = int_words[:, 0]
+    cdef cnp.uint64_t[:] int_words_1 = int_words[:, 1]
+
+    # initialize a minimum weight and code word
+    cdef uint64_t min_weight = num_bits
+    cdef uint64_t word_0 = 0
+    cdef uint64_t word_1 = 0
+
+    # iterate over all code words
+    cdef uint64_t ww
+    for ww in gray_code_flips(num_basis_words):
+        word_0 ^= int_words_0[ww]
+        word_1 ^= int_words_1[ww]
+        min_weight = min(min_weight, hamming_weight(word_0) + hamming_weight(word_1))
     return min_weight
 
 
