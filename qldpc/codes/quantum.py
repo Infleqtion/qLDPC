@@ -1115,7 +1115,7 @@ class SurfaceCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field, promise_balanced_codes=rows == cols)
 
     @staticmethod
     def get_rotated_checks(
@@ -1230,7 +1230,7 @@ class ToricCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field)
+        CSSCode.__init__(self, matrix_x, matrix_z, field=field, promise_balanced_codes=rows == cols)
 
     @staticmethod
     def get_rotated_checks(
