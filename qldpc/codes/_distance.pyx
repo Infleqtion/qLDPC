@@ -168,10 +168,11 @@ cdef uint64_t _get_distance_quantum_64(
 
     # decide which weight function to use
     cdef uint64_t (*weight_func)(uint64_t)
-    if not symplectic:
-        weight_func = hamming_weight
-    else:
+    if symplectic:
+        assert num_bits % 2
         weight_func = symplectic_weight
+    else:
+        weight_func = hamming_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:] int_logical_ops = rows_to_uint64(logical_ops).ravel()
@@ -206,11 +207,11 @@ cdef uint64_t _get_distance_quantum_64_2(
 
     # decide which weight function to use
     cdef uint64_t (*weight_func)(uint64_t)
-    if not symplectic:
-        weight_func = hamming_weight
-    else:
-        assert num_bits % 2 == 0
+    if symplectic:
+        assert num_bits % 2
         weight_func = symplectic_weight
+    else:
+        weight_func = hamming_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:, :] int_logical_ops = rows_to_uint64(logical_ops)
@@ -255,11 +256,11 @@ cdef uint64_t _get_distance_quantum_long(
 
     # decide which weight function to use
     cdef uint64_t (*weight_func)(uint64_t)
-    if not symplectic:
-        weight_func = hamming_weight
-    else:
-        assert num_bits % 2 == 0
+    if symplectic:
+        assert num_bits % 2
         weight_func = symplectic_weight
+    else:
+        weight_func = hamming_weight
 
     # convert each Pauli string into integer form
     cdef cnp.uint64_t[:, :] int_logical_ops = rows_to_uint64(logical_ops)
