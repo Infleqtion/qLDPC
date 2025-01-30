@@ -154,10 +154,10 @@ def get_distance_quantum(
 
     # compute quantum code distance with a symplectic bitstring weight function
     if num_qubits <= 32:
-        return get_distance_quantum_64(logical_ops, stabilizers, symplectic=True)
+        return get_distance_quantum_64(riffled_logical_ops, riffled_stabilizers, symplectic=True)
     if num_qubits <= 64:
-        return get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=True)
-    return get_distance_quantum_long(logical_ops, stabilizers, symplectic=True)
+        return get_distance_quantum_64_2(riffled_logical_ops, riffled_stabilizers, symplectic=True)
+    return get_distance_quantum_long(riffled_logical_ops, riffled_stabilizers, symplectic=True)
 
 
 cdef uint64_t get_distance_quantum_64(
