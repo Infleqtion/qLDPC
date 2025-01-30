@@ -128,11 +128,13 @@ def get_distance_sector_xz(
 ) -> int:
     """Distance of one (X or Z) sector of a quantum binary CSS code."""
     cdef uint64_t num_qubits = logical_ops.shape[1]
+
+    # compute quantum code distance with an ordinary (Hamming) bitstring weight function
     if num_qubits <= 64:
         return get_distance_quantum_64(logical_ops, stabilizers, symplectic=False)
     if num_qubits <= 128:
-        return get_distance_quantum_64_2(logical_ops, stabilizers)
-    return get_distance_quantum_long(logical_ops, stabilizers)
+        return get_distance_quantum_64_2(logical_ops, stabilizers, symplectic=False)
+    return get_distance_quantum_long(logical_ops, stabilizers, symplectic=False)
 
 
 def get_distance_quantum(
@@ -150,7 +152,7 @@ def get_distance_quantum(
         stabilizers.reshape(-1, 2, num_qubits).transpose(0, 2, 1).reshape(-1, 2 * num_qubits)
     )
 
-    # call the quantum distance calculation with a symplectic bitstring weight function
+    # compute quantum code distance with a symplectic bitstring weight function
     if num_qubits <= 32:
         return get_distance_quantum_64(logical_ops, stabilizers, symplectic=True)
     if num_qubits <= 64:
@@ -161,7 +163,7 @@ def get_distance_quantum(
 cdef uint64_t get_distance_quantum_64(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic=False,
+    bint symplectic,
 ):
     """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
@@ -200,7 +202,7 @@ cdef uint64_t get_distance_quantum_64(
 cdef uint64_t get_distance_quantum_64_2(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic=False,
+    bint symplectic,
 ):
     """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
@@ -250,7 +252,7 @@ cdef uint64_t get_distance_quantum_64_2(
 cdef uint64_t get_distance_quantum_long(
     cnp.ndarray[cnp.uint8_t, ndim=2] logical_ops,
     cnp.ndarray[cnp.uint8_t, ndim=2] stabilizers,
-    bint symplectic=False,
+    bint symplectic,
 ):
     """Distance of a binary quantum code."""
     cdef uint64_t num_bits = logical_ops.shape[1]
