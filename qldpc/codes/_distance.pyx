@@ -263,7 +263,7 @@ cdef uint64_t get_distance_quantum_64_2(
     # initialize a minimum weight and logical operator
     cdef uint64_t min_weight = num_bits
     cdef uint64_t logical_op_0 = 0
-    cdef uint64_t logical_op_1 = 1
+    cdef uint64_t logical_op_1 = 0
 
     # iterate over all products of logical operators and stabilizers
     cdef uint64_t ll, ss
