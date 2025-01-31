@@ -109,6 +109,8 @@ def find_layout_params(
 
     # iterate over layout parameters of the BBCode
     for i, (basis_l, basis_r, shift_lr) in enumerate(get_layout_search_space(code, restricted_search)):
+        if i % 1e6 == 0:
+            print(f"Worker {rank} is up to instance {i}",flush=True)
         if i % size != rank:
             continue
         layout_params = folded_layout, basis_l, basis_r, shift_lr
