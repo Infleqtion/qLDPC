@@ -54,13 +54,33 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
       - name: Run ruff format
+        id: ruff-format
         run: checks/format_.py
         continue-on-error: true
       - name: Run ruff check
+        id: ruff-check
         run: checks/lint_.py
         continue-on-error: true
       - name: Run mypy
+        id: mypy
         run: checks/mypy_.py
+        continue-on-error: true
+      - name: Check for failures
+        run: |
+          FAILED=0
+          if [ ${{ steps.ruff-format.outcome }} != 'success' ]; then
+            echo "ruff format failed"
+            FAILED=1
+          fi
+          if [ ${{ steps.ruff-check.outcome }} != 'success' ]; then
+            echo "ruff check failed"
+            FAILED=1
+          fi
+          if [ ${{ steps.mypy.outcome }} != 'success' ]; then
+            echo "mypy failed"
+            FAILED=1
+          fi
+          exit $FAILED
 
   coverage:
     name: Pytest and coverage check
