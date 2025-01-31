@@ -1383,11 +1383,15 @@ class CSSCode(QuditCode):
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
-            code_x = self.code_x if pauli == Pauli.X else self.code_z
-            code_z = self.code_z if pauli == Pauli.X else self.code_x
-            dual_code_x = ~code_x
-            nontrivial_ops_x = (word for word in code_z.iter_words() if word not in dual_code_x)
-            distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
+            logical_ops = self.get_logical_ops(pauli).reshape(-1, 2, len(self))[:, pauli, :]
+            matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
+            code_logical_ops = ClassicalCode.from_generator(logical_ops)
+            code_stabilizers = ClassicalCode.from_generator(matrix)
+            distance = min(
+                np.count_nonzero(word_l + word_s)
+                for word_l in code_logical_ops.iter_words(skip_zero=True)
+                for word_s in code_stabilizers.iter_words()
+            )
 
         # save the exact distance and return
         if pauli == Pauli.X or self._balanced_codes:
