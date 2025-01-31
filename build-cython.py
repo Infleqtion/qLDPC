@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 import os
 import shutil
-from distutils.command.build_ext import build_ext
-from distutils.core import Distribution, Extension
 
 import numpy
 from Cython.Build import cythonize
+from setuptools import Distribution, Extension
+from setuptools.command.build_ext import build_ext
 
 
 def build_cython() -> None:
