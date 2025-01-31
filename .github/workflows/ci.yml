@@ -34,7 +34,7 @@ jobs:
           python3 -m pip install '.[dev]'
 
   format:
-    name: Linting and type check
+    name: Lint and type check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 2
