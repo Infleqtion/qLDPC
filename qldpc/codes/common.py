@@ -32,9 +32,9 @@ import numpy as np
 import numpy.typing as npt
 import scipy.linalg
 import scipy.special
-import stim
 
 from qldpc import abstract, decoders, external
+import stim
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
@@ -42,12 +42,12 @@ from ._distance import get_distance_classical, get_distance_quantum
 
 
 def get_scrambled_seed(seed: int) -> int:
-    """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
-    state = np.random.get_state()
-    np.random.seed(seed)
-    new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
-    np.random.set_state(state)
-    return new_seed
+     """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
+     state = np.random.get_state()
+     np.random.seed(seed)
+     new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
+     np.random.set_state(state)
+     return new_seed
 
 
 def get_random_array(
