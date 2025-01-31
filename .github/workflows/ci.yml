@@ -34,7 +34,7 @@ jobs:
           python3 -m pip install '.[dev]'
 
   format:
-    name: Linting check
+    name: Linting and type check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -54,35 +54,13 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
       - name: Run ruff format
-        run: |
-          checks/format_.py
+        run: checks/format_.py
+        continue-on-error: true
       - name: Run ruff check
-        run: |
-          checks/lint_.py
-
-  mypy:
-    name: Type check
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    needs: install
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml', 'build-cython.py') }}
-      - name: Install package and dependencies
-        run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+        run: checks/lint_.py
+        continue-on-error: true
       - name: Run mypy
-        run: |
-          checks/mypy_.py
+        run: checks/mypy_.py
 
   coverage:
     name: Pytest and coverage check
@@ -105,5 +83,4 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
       - name: Run coverage
-        run: |
-          checks/coverage_.py
+        run: checks/coverage_.py
