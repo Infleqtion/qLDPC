@@ -22,6 +22,7 @@ import functools
 import itertools
 import math
 import random
+import warnings
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any, Iterator, Literal, cast
 
@@ -36,6 +37,8 @@ import stim
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
+
+from ._distance import get_distance_classical, get_distance_quantum
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -347,9 +350,15 @@ class ClassicalCode(AbstractCode):
             vector = self.field(vector)
             return min(np.count_nonzero(word - vector) for word in self.iter_words())
 
-        self._exact_distance = min(
-            np.count_nonzero(word) for word in self.iter_words(skip_zero=True)
-        )
+        # we do not know the exact distance, so compute it
+        if self.field.order == 2:
+            distance = get_distance_classical(self.generator.view(np.ndarray).astype(np.uint8))
+        else:
+            warnings.warn(
+                "Computing the exact distance of a non-binary code may take a (very) long time"
+            )
+            distance = min(np.count_nonzero(word) for word in self.iter_words(skip_zero=True))
+        self._exact_distance = int(distance)
         return self._exact_distance
 
     def _get_distance_if_known(
@@ -500,7 +509,7 @@ class ClassicalCode(AbstractCode):
         The auomorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
         """
-        matrix = np.array([row for row in self.canonicalized().matrix])
+        matrix = self.canonicalized().matrix.view(np.ndarray)
         checks_str = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
         matrix_str = "[" + ",".join(checks_str) + "]"
         code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"
@@ -890,15 +899,32 @@ class QuditCode(AbstractCode):
         if (known_distance := self._get_distance_if_known()) is not None:
             return known_distance
 
-        minimum_weight = len(self)
-        for word in ClassicalCode(self.matrix).iter_words(skip_zero=True):
-            support_x = word[: len(self)].view(np.ndarray)
-            support_z = word[len(self) :].view(np.ndarray)
-            support = support_x + support_z  # nonzero wherever a word addresses a qudit
-            minimum_weight = min(minimum_weight, np.count_nonzero(support))
+        if self.field.order == 2:
+            stabilizers = self.canonicalized().matrix
+            logical_ops = self.get_logical_ops()
+            distance = get_distance_quantum(
+                logical_ops.view(np.ndarray).astype(np.uint8),
+                stabilizers.view(np.ndarray).astype(np.uint8),
+            )
+        else:
+            warnings.warn(
+                "Computing the exact distance of a non-binary code may take a (very) long time"
+            )
+            distance = len(self)
+            code_logical_ops = ClassicalCode.from_generator(self.get_logical_ops())
+            code_stabilizers = ClassicalCode.from_generator(self.matrix)
+            for word_l, word_s in itertools.product(
+                code_logical_ops.iter_words(skip_zero=True),
+                code_stabilizers.iter_words(),
+            ):
+                word = word_l + word_s
+                support_x = word[: len(self)].view(np.ndarray)
+                support_z = word[len(self) :].view(np.ndarray)
+                support = support_x + support_z  # nonzero wherever a word addresses a qudit
+                distance = min(distance, np.count_nonzero(support))
 
-        self._exact_distance = minimum_weight
-        return minimum_weight
+        self._exact_distance = int(distance)
+        return distance
 
     def _get_distance_if_known(self) -> int | float | None:
         """Retrieve exact distance, if known.  Otherwise return None."""
@@ -1313,9 +1339,7 @@ class CSSCode(QuditCode):
 
         Equivalently, the number of linearly independent parity checks in this code.
         """
-        rank_x = self.code_x.rank
-        rank_z = rank_x if self._balanced_codes else self.code_z.rank
-        return rank_x + rank_z
+        return self.code_x.rank + self.code_z.rank
 
     def get_distance(
         self, pauli: PauliXZ | None = None, *, bound: int | bool | None = None, **decoder_args: Any
@@ -1346,11 +1370,28 @@ class CSSCode(QuditCode):
             return min(self.get_distance_exact(Pauli.X), self.get_distance_exact(Pauli.Z))
 
         # we do not know the exact distance, so compute it
-        code_x = self.code_x if pauli == Pauli.X else self.code_z
-        code_z = self.code_z if pauli == Pauli.X else self.code_x
-        dual_code_x = ~code_x
-        nontrivial_ops_x = (word for word in code_z.iter_words() if word not in dual_code_x)
-        distance = min(np.count_nonzero(word) for word in nontrivial_ops_x)
+        if self.field.order == 2:
+            code = self.code_x if pauli == Pauli.X else self.code_z
+            stabilizers = code.canonicalized().matrix
+            logical_ops = self.get_logical_ops(pauli).reshape(-1, 2, len(self))[:, pauli, :]
+            distance = get_distance_quantum(
+                logical_ops.view(np.ndarray).astype(np.uint8),
+                stabilizers.view(np.ndarray).astype(np.uint8),
+                homogeneous=True,
+            )
+        else:
+            warnings.warn(
+                "Computing the exact distance of a non-binary code may take a (very) long time"
+            )
+            logical_ops = self.get_logical_ops(pauli).reshape(-1, 2, len(self))[:, pauli, :]
+            matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
+            code_logical_ops = ClassicalCode.from_generator(logical_ops)
+            code_stabilizers = ClassicalCode.from_generator(matrix)
+            distance = min(
+                np.count_nonzero(word_l + word_s)
+                for word_l in code_logical_ops.iter_words(skip_zero=True)
+                for word_s in code_stabilizers.iter_words()
+            )
 
         # save the exact distance and return
         if pauli == Pauli.X or self._balanced_codes:

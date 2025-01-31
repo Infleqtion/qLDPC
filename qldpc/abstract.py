@@ -412,6 +412,10 @@ class Group:
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
         return Group(*generators, name=standardized_name, field=field)
 
+    def hashable_generators(self) -> tuple[tuple[int, ...], ...]:
+        """Generators of this group in a hashable form."""
+        return tuple(tuple(generator) for generator in self.generators)
+
 
 ################################################################################
 # elements of a group algebra

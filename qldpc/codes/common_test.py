@@ -144,6 +144,12 @@ def test_distance_classical(bits: int = 3) -> None:
         == trivial_code.get_one_distance_bound(vector=random_vector)
     )
 
+    # compute distance of a trinary repetition code
+    rep_code = codes.RepetitionCode(bits, field=3)
+    rep_code._exact_distance = None
+    with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
+        assert rep_code.get_distance_exact() == 3
+
 
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     """Conversions between matrix and graph representations of a classical code."""
@@ -255,21 +261,6 @@ def test_qudit_code() -> None:
     # the logical ops of the redundant code are valid ops of the original code
     code.set_logical_ops(redundant_code.get_logical_ops())  # also validates the logical ops
 
-    # cover calls to the known code exact distance
-    assert code.get_code_params() == (5, 1, 3)
-    assert code.get_distance(bound=True) == 3
-
-    # "forget" the code distance and recompute
-    code._exact_distance = None
-    assert code.get_distance_bound(cutoff=5) == 5
-    assert code.get_distance_exact() == 3
-
-    code._exact_distance = None
-    with pytest.raises(NotImplementedError, match="not implemented"):
-        code.get_distance(bound=True)
-    with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
-        code.get_distance(bound=True) == 3
-
     # stacking two codes
     two_codes = codes.QuditCode.stack(code, code)
     assert len(two_codes) == len(code) * 2
@@ -293,9 +284,33 @@ def test_qudit_code() -> None:
         codes.QuditCode.stack(code, second_code)
 
 
-def test_undefined_distance() -> None:
-    """The distance of dimension-0 codes is undefined."""
+def test_distance_qudit() -> None:
+    """Distance calculations."""
+    code = codes.FiveQubitCode()
+
+    # cover calls to the known code exact distance
+    assert code.get_code_params() == (5, 1, 3)
+    assert code.get_distance(bound=True) == 3
+
+    # "forget" the code distance and recompute
+    code._exact_distance = None
+    assert code.get_distance_bound(cutoff=5) == 5
+    assert code.get_distance_exact() == 3
+
+    code._exact_distance = None
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        code.get_distance(bound=True)
+    with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
+        code.get_distance(bound=True)
+
+    # the distance of dimension-0 codes is undefined
     assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
+
+    # fallback pythonic brute-force distance calculation
+    surface_code = codes.SurfaceCode(2, field=3)
+    surface_code._exact_distance_x = surface_code._exact_distance_z = None
+    with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
+        assert codes.QuditCode.get_distance_exact(surface_code) == 2
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -445,10 +460,16 @@ def test_css_ops() -> None:
 
 def test_distance_css() -> None:
     """Distance calculations for CSS codes."""
+    # qutrit code distance
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance_bound(cutoff=len(code)) == len(code)
     assert code.get_distance(bound=True) <= len(code)
-    assert code.get_distance(bound=False) == 2
+    with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
+        assert code.get_distance(bound=False) == 2
+
+    # qubit code distance
+    code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    assert code.get_distance_exact() == 2
 
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
