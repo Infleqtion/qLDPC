@@ -147,13 +147,13 @@ class LookupDecoder(Decoder):
             raise ValueError("Lookup decoding is only supported for qubit codes")
 
         self.field = galois.GF(2)
-        self.matrix = field(matrix)
+        self.matrix = self.field(matrix)
         self.num_qubits = matrix.shape[1]
 
         self.table = {}
         for weight in range(max_weight, 0, -1):
             for error_bits in itertools.combinations(range(self.num_qubits), weight):
-                error = field.Zeros(self.num_qubits)
+                error = self.field.Zeros(self.num_qubits)
                 error[np.asarray(error_bits, dtype=int)] = 1
                 syndrome = self.matrix @ error
                 syndrome_bits = tuple(np.where(syndrome)[0])
