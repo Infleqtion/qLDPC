@@ -141,7 +141,7 @@ class LookupDecoder(Decoder):
 
     def __init__(self, matrix: npt.NDArray[np.int_], max_weight: int) -> None:
         if not (
-            (isinstance(matrix, galois.FieldArray) and matrix.field.order == 2)
+            (isinstance(matrix, galois.FieldArray) and type(matrix).order == 2)
             or np.max(matrix) == 1
         ):
             raise ValueError("Lookup decoding is only supported for qubit codes")
