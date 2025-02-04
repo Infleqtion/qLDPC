@@ -146,13 +146,14 @@ class LookupDecoder(Decoder):
         ):
             raise ValueError("Lookup decoding is only supported for qubit codes")
 
-        self.matrix = np.asarray(matrix, dtype=bool)
+        self.field = galois.GF(2)
+        self.matrix = field(matrix)
         self.num_qubits = matrix.shape[1]
 
         self.table = {}
         for weight in range(max_weight, 0, -1):
             for error_bits in itertools.combinations(range(self.num_qubits), weight):
-                error = np.zeros(self.num_qubits, dtype=np.uint8)
+                error = field.Zeros(self.num_qubits)
                 error[np.asarray(error_bits, dtype=int)] = 1
                 syndrome = self.matrix @ error
                 syndrome_bits = tuple(np.where(syndrome)[0])
@@ -161,7 +162,7 @@ class LookupDecoder(Decoder):
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode the given syndrome."""
         syndrome_bits = tuple(np.where(syndrome)[0])
-        return self.table.get(syndrome_bits, np.zeros(self.num_qubits, dtype=np.uint8))
+        return self.table.get(syndrome_bits, self.field.Zeros(self.num_qubits))
 
 
 def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILPDecoder:
