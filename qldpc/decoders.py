@@ -17,9 +17,11 @@ limitations under the License.
 
 from __future__ import annotations
 
+import itertools
 from typing import Protocol
 
 import cvxpy
+import galois
 import ldpc
 import numpy as np
 import numpy.typing as npt
@@ -28,9 +30,6 @@ import pymatching
 
 class Decoder(Protocol):
     """Template (protocol) for a decoder object."""
-
-    def __init__(self, matrix: npt.NDArray[np.int_], **decoder_args: object) -> None:
-        """Initialize a decoder for the given parity check matrix (and additional arguments)."""
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode the given syndrome."""
@@ -54,6 +53,9 @@ def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder
         assert hasattr(decoder, "decode") and callable(getattr(decoder, "decode"))
         assert not decoder_args, "if passed a static decoder, we cannot process decoding arguments"
         return decoder
+
+    if decoder_args.pop("with_lookup", False):
+        return get_decoder_lookup(matrix, **decoder_args)
 
     if decoder_args.pop("with_ILP", False):
         return get_decoder_ILP(matrix, **decoder_args)
@@ -121,7 +123,48 @@ def get_decoder_MWPM(matrix: npt.NDArray[np.int_], **decoder_args: object) -> De
     return pymatching.Matching.from_check_matrix(matrix, **decoder_args)
 
 
-def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
+def get_decoder_lookup(matrix: npt.NDArray[np.int_], **decoder_args: object) -> LookupDecoder:
+    """Lookup decoder that corrects (distance - 1) // 2 errors."""
+    max_weight = decoder_args.pop("max_weight", None)
+    if not isinstance(max_weight, int) or max_weight < 1:
+        raise ValueError(
+            "Lookup decoders must be initialized with a positive max_weight for errors"
+        )
+    if decoder_args:
+        raise ValueError(f"Arguments not recognized by the lookup decoder: {decoder_args}")
+    return LookupDecoder(matrix, max_weight)
+
+
+class LookupDecoder(Decoder):
+    """Lookup table decoder for qubit codes."""
+
+    def __init__(self, matrix: npt.NDArray[np.int_], max_weight: int) -> None:
+        if not (
+            (isinstance(matrix, galois.FieldArray) and type(matrix).order == 2)
+            or np.max(matrix) == 1
+        ):
+            raise ValueError("Lookup decoding is only supported for qubit codes")
+
+        self.field = galois.GF(2)
+        self.matrix = self.field(matrix)
+        self.num_qubits = matrix.shape[1]
+
+        self.table = {}
+        for weight in range(max_weight, 0, -1):
+            for error_bits in itertools.combinations(range(self.num_qubits), weight):
+                error = self.field.Zeros(self.num_qubits)
+                error[np.asarray(error_bits, dtype=int)] = 1
+                syndrome = self.matrix @ error
+                syndrome_bits = tuple(np.where(syndrome)[0])
+                self.table[syndrome_bits] = error.view(np.ndarray)
+
+    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Decode the given syndrome."""
+        syndrome_bits = tuple(np.where(syndrome)[0])
+        return self.table.get(syndrome_bits, np.zeros(self.num_qubits, dtype=int))
+
+
+def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILPDecoder:
     """Decoder based on solving an integer linear program (ILP).
 
     Supports integers modulo q for q > 2 with a "modulus" argument, otherwise uses q = 2.
@@ -131,10 +174,10 @@ def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Dec
 
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
-    return DecoderILP(matrix, **decoder_args)
+    return ILPDecoder(matrix, **decoder_args)
 
 
-class DecoderILP:
+class ILPDecoder(Decoder):
     """Decoder based on solving an integer linear program (ILP).
 
     Supports integers modulo q for q >= 2 with a "modulus" argument (default: 2).
@@ -154,7 +197,7 @@ class DecoderILP:
         assert isinstance(modulus, int)
         self.modulus = modulus
 
-        self.matrix = np.array(matrix) % self.modulus
+        self.matrix = np.asarray(matrix, dtype=int) % self.modulus
         num_checks, num_variables = self.matrix.shape
 
         lower_bound_row = decoder_args.pop("lower_bound_row", None)
