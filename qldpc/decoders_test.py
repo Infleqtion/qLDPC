@@ -47,7 +47,7 @@ def test_decoding() -> None:
     matrix = np.eye(3, 2, dtype=int)
     syndrome = np.array([1, 1, 0])
     error = np.array([1, 1], dtype=int)
-    assert np.allclose(error, decoders.decode(matrix, syndrome, with_ILP=False))
+    assert np.allclose(error, decoders.decode(matrix, syndrome, with_lookup=True, max_weight=2))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_ILP=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_MWPM=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_BF=True))
@@ -75,3 +75,13 @@ def test_decoding_errors() -> None:
     with pytest.raises(ValueError, match="could not be found"):
         with pytest.warns(UserWarning, match="infeasible or unbounded"):
             decoders.decode(matrix, syndrome, with_ILP=True)
+
+    with pytest.raises(ValueError, match="positive max_weight"):
+        decoders.get_decoder_lookup(matrix, max_weight=0)
+
+    with pytest.raises(ValueError, match="Arguments not recognized"):
+        decoders.get_decoder_lookup(matrix, max_weight=1, test=True)
+
+    matrix[0, 0] = 2
+    with pytest.raises(ValueError, match="only supported for qubit codes"):
+        decoders.get_decoder_lookup(matrix, max_weight=1)

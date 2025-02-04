@@ -127,7 +127,9 @@ def get_decoder_lookup(matrix: npt.NDArray[np.int_], **decoder_args: object) -> 
     """Lookup decoder that corrects (distance - 1) // 2 errors."""
     max_weight = decoder_args.pop("max_weight", None)
     if not isinstance(max_weight, int) or max_weight < 1:
-        raise ValueError("Lookup decoders must be initialized with a max_weight of errors")
+        raise ValueError(
+            "Lookup decoders must be initialized with a positive max_weight for errors"
+        )
     if decoder_args:
         raise ValueError(f"Arguments not recognized by the lookup decoder: {decoder_args}")
     return LookupDecoder(matrix, max_weight)
@@ -154,12 +156,12 @@ class LookupDecoder(Decoder):
                 error[np.asarray(error_bits, dtype=int)] = 1
                 syndrome = self.matrix @ error
                 syndrome_bits = tuple(np.where(syndrome)[0])
-                self.table[syndrome_bits] = error
+                self.table[syndrome_bits] = error.view(np.ndarray)
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode the given syndrome."""
         syndrome_bits = tuple(np.where(syndrome)[0])
-        return self.table.get(syndrome_bits, self.field.Zeros(self.num_qubits))
+        return self.table.get(syndrome_bits, np.zeros(self.num_qubits, dtype=int))
 
 
 def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILPDecoder:
@@ -195,7 +197,7 @@ class ILPDecoder(Decoder):
         assert isinstance(modulus, int)
         self.modulus = modulus
 
-        self.matrix = np.array(matrix) % self.modulus
+        self.matrix = np.asarray(matrix, dtype=int) % self.modulus
         num_checks, num_variables = self.matrix.shape
 
         lower_bound_row = decoder_args.pop("lower_bound_row", None)
