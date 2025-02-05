@@ -33,7 +33,7 @@ from qldpc import codes
 class Decoder(Protocol):
     """Template (protocol) for a decoder object."""
 
-    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+    def decode(self, syndrome: npt.NDArray[np.int_ | np.unit_]) -> npt.NDArray[np.int_]:
         """Decode the given syndrome."""
 
 
