@@ -503,8 +503,8 @@ def test_css_concatenation() -> None:
 
     # determine the number of copies of the inner code automatically
     code = codes.CSSCode.concatenate(code_c4, code_c4)
-    assert len(code) == 2 * len(code_c4)
-    assert code.dimension == code_c4.dimension
+    assert len(code) == len(code_c4) ** 2
+    assert code.dimension == code_c4.dimension**2
 
     # determine the number of copies of the inner and outer codes from wiring data
     wiring = [0, 2, 4, 6, 1, 3, 5, 7]
