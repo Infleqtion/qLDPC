@@ -20,7 +20,6 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
-import math
 import random
 import warnings
 from collections.abc import Callable, Mapping, Sequence
@@ -1135,9 +1134,8 @@ class QuditCode(AbstractCode):
         code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
         or outer physicals, then copies of the inner and outer codes are used (stacked together) to
         match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
-        mapping is provided, then this method stacks the minimal number of inner and outer codes
-        required make the number of inner logicals equal the number of outer physicals, and the k-th
-        inner logical qudit is identified with the k-th outer physical qudit.
+        mapping is provided, then this method "interleaves" intermediate qubits, using each logical
+        qubit of an inner block as a physical qubit of a different outer code block.
 
         If inherit_logicals is True, use the logical operators of the outer code as the logical
         operators of the concatenated code.  Otherwise, logical operators of the concatenated code
@@ -1174,17 +1172,20 @@ class QuditCode(AbstractCode):
         - stacks copies of the inner and outer codes as necessary to make the number of logical
           qudits of the inner code equal to the number of physical qudits of the outer code, and
         - permutes logical qudits of the inner code according to outer_physical_to_inner_logical.
-          If no outer_physical_to_inner_logical mapping is provided, then the k-th logical qudit of
-          the inner code is used as the k-th physical qudit of the outer code.
+          If no outer_physical_to_inner_logical mapping is provided, then this method "interleaves"
+          intermediate qubits, using each logical qubit of an inner block as a physical qubit of a
+          different outer code block.
         """
         if inner.field is not outer.field:
             raise ValueError("Cannot concatenate codes over different fields")
 
         # convert outer_physical_to_inner_logical into a tuple that we can use to permute an array
         if outer_physical_to_inner_logical is None:
-            # default to the trivial mapping with the smallest possible number of qudits
-            num_qudits = inner.dimension * len(outer) // math.gcd(inner.dimension, len(outer))
-            outer_physical_to_inner_logical = tuple(range(num_qudits))
+            outer_physical_to_inner_logical = tuple(
+                np.arange(len(outer) * inner.dimension, dtype=int)
+                .reshape(len(outer), inner.dimension)
+                .T.ravel()
+            )
         else:
             num_qudits = len(outer_physical_to_inner_logical)
             if num_qudits % inner.dimension or num_qudits % len(outer):
@@ -1734,9 +1735,8 @@ class CSSCode(QuditCode):
         code.  If len(outer_physical_to_inner_logical) is larger than the number of inner logicals
         or outer physicals, then copies of the inner and outer codes are used (stacked together) to
         match the expected number of "intermediate" qudits.  If no outer_physical_to_inner_logical
-        mapping is provided, then this method stacks the minimal number of inner and outer codes
-        required make the number of inner logicals equal the number of outer physicals, and the k-th
-        inner logical qudit is identified with the k-th outer physical qudit.
+        mapping is provided, then this method "interleaves" intermediate qubits, using each logical
+        qubit of an inner block as a physical qubit of a different outer code block.
 
         If inherit_logicals is True, use the logical operators of the outer code as the logical
         operators of the concatenated code.  Otherwise, logical operators of the concatenated code
