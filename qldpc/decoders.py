@@ -126,8 +126,8 @@ def get_decoder_MWPM(matrix: npt.NDArray[np.int_], **decoder_args: object) -> De
 
 
 def get_decoder_lookup(matrix: npt.NDArray[np.int_], **decoder_args: object) -> LookupDecoder:
-    """Lookup decoder that corrects (distance - 1) // 2 errors."""
-    return LookupDecoder(matrix, **decoder_args)
+    """Decoder based on a lookup table from errors to syndromes."""
+    return LookupDecoder(matrix, **decoder_args)  # type:ignore[arg-type]
 
 
 class LookupDecoder(Decoder):
@@ -145,17 +145,17 @@ class LookupDecoder(Decoder):
 
         if max_weight is None:
             code_distance = codes.ClassicalCode(matrix).get_distance()
-            max_weight = (code_distance // 2) if code_distance is not np.nan else 0
+            max_weight = (code_distance // 2) if isinstance(code_distance, int) else 0
 
         self.table = {}
         num_qubits = matrix.shape[1]
         for weight in range(max_weight, 0, -1):
             for error_bits in itertools.combinations(range(num_qubits), weight):
-                error = binary_field.Zeros(num_qubits)
-                error[np.asarray(error_bits, dtype=int)] = 1
-                syndrome = matrix @ error
+                code_error = binary_field.Zeros(num_qubits)
+                code_error[np.asarray(error_bits, dtype=int)] = 1
+                syndrome = matrix @ code_error
                 syndrome_bits = tuple(np.where(syndrome)[0])
-                self.table[syndrome_bits] = error.view(np.ndarray)
+                self.table[syndrome_bits] = code_error.view(np.ndarray)
 
         self.null_correction = np.zeros(num_qubits, dtype=int)
 
