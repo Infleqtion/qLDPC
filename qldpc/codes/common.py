@@ -20,7 +20,6 @@ from __future__ import annotations
 import abc
 import functools
 import itertools
-import math
 import random
 import warnings
 from collections.abc import Callable, Mapping, Sequence
@@ -1183,8 +1182,9 @@ class QuditCode(AbstractCode):
         # convert outer_physical_to_inner_logical into a tuple that we can use to permute an array
         if outer_physical_to_inner_logical is None:
             outer_physical_to_inner_logical = tuple(
-                np.arange(inner.dimension * len(outer))
+                np.arange(inner.dimension * len(outer), dtype=int)
                 .reshape(inner.dimension, len(outer))
+                .T.ravel()
                 .T.ravel()
             )
         else:
