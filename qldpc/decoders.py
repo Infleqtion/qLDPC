@@ -296,7 +296,6 @@ class BlockDecoder(Decoder):
         """Decode the given syndrome by parts."""
         corrections = []
         for start in range(0, len(syndrome), self.syndrome_length):
-            syndrome_bits = range(start, start + self.syndrome_length)
-            block_syndrome = syndrome[syndrome_bits]
-            corrections.append(self.decoder.decode(block_syndrome))
+            section = range(start, start + self.syndrome_length)
+            corrections.append(self.decoder.decode(syndrome[section]))
         return np.concatenate(corrections)
