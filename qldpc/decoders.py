@@ -134,14 +134,8 @@ class LookupDecoder(Decoder):
     """Lookup table decoder for qubit codes."""
 
     def __init__(self, matrix: npt.NDArray[np.int_], max_weight: int | None = None) -> None:
-        binary_field = galois.GF(2)
-        try:
-            matrix = binary_field(matrix)
-        except ValueError as error:
-            if "GF(2) arrays" in str(error):
-                raise ValueError("Lookup decoding is only supported for qubit codes")
-            else:  # pragma: no cover
-                raise error
+        field = type(matrix) if isinstance(matrix, galois.FieldArray) else galois.GF(2)
+        matrix = field(matrix)
 
         if max_weight is None:
             code_distance = codes.ClassicalCode(matrix).get_distance()
@@ -150,12 +144,14 @@ class LookupDecoder(Decoder):
         self.table = {}
         num_qubits = matrix.shape[1]
         for weight in range(max_weight, 0, -1):
-            for error_bits in itertools.combinations(range(num_qubits), weight):
-                code_error = binary_field.Zeros(num_qubits)
-                code_error[np.asarray(error_bits, dtype=int)] = 1
-                syndrome = matrix @ code_error
-                syndrome_bits = tuple(np.where(syndrome)[0])
-                self.table[syndrome_bits] = code_error.view(np.ndarray)
+            for error_sites in itertools.combinations(range(num_qubits), weight):
+                error_site_indices = np.asarray(error_sites, dtype=int)
+                for errors in itertools.product(range(1, field.order), repeat=weight):
+                    code_error = field.Zeros(num_qubits)
+                    code_error[error_site_indices] = errors
+                    syndrome = matrix @ code_error
+                    syndrome_bits = tuple(np.where(syndrome)[0])
+                    self.table[syndrome_bits] = code_error.view(np.ndarray)
 
         self.null_correction = np.zeros(num_qubits, dtype=int)
 
@@ -319,9 +315,15 @@ class MeasurementDecoder(Decoder):
     """
 
     def __init__(self, matrix: npt.NDArray[np.int_], decoder: Decoder) -> None:
-        self.matrix = matrix.view(np.ndarray) if isinstance(matrix, galois.FieldArray) else matrix
+        self.field = type(matrix) if isinstance(matrix, galois.FieldArray) else None
+        self.matrix = matrix
         self.decoder = decoder
 
     def decode(self, measurements: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode using the given measurement outcomes."""
-        return self.decoder.decode(self.matrix @ measurements % 2)
+        syndrome = (
+            self.matrix @ measurements % 2
+            if self.field is None
+            else self.matrix @ self.field(measurements)
+        )
+        return self.decoder.decode(syndrome)

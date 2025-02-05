@@ -92,7 +92,3 @@ def test_decoding_errors() -> None:
     with pytest.raises(ValueError, match="could not be found"):
         with pytest.warns(UserWarning, match="infeasible or unbounded"):
             decoders.decode(matrix, syndrome, with_ILP=True)
-
-    matrix[0, 0] = 2
-    with pytest.raises(ValueError, match="only supported for qubit codes"):
-        decoders.get_decoder_lookup(matrix)
