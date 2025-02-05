@@ -286,8 +286,9 @@ class BlockDecoder(Decoder):
     A BlockDecoder is instantiated from:
     - the length of a syndrome vector for one code block (syndrome_length), and
     - a decoder for a one code block.
-    When asked to decode a syndrome, a BlockDecdoer breaks the syndrome into sections of length syndrome_length, and
-    decodes those sections using the single-code-block decoder it was instantiated with.
+    When asked to decode a syndrome, a BlockDecdoer breaks the syndrome into sections of size
+    syndrome_length, and decodes each section using the single-code-block decoder that it was
+    instantiated with.
     """
 
     def __init__(self, syndrome_length: int, decoder: Decoder) -> None:
