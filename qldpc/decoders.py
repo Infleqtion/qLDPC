@@ -281,11 +281,14 @@ class ILPDecoder(Decoder):
 
 
 class BlockDecoder(Decoder):
-    """Decoder for a composite syndrome built from identical and independent code blocks.
+    """Decoder for a composite syndrome built from independent identical code blocks.
 
     A BlockDecoder is instantiated from:
-    - the length of a syndrome vector for one code block
-    - a decoder for a one code block
+    - the length of a syndrome vector for one code block (syndrome_length), and
+    - a decoder for a one code block.
+    When asked to decode a syndrome, a BlockDecdoer breaks the syndrome into sections of size
+    syndrome_length, and decodes each section using the single-code-block decoder that it was
+    instantiated with.
     """
 
     def __init__(self, syndrome_length: int, decoder: Decoder) -> None:
@@ -294,8 +297,31 @@ class BlockDecoder(Decoder):
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode the given syndrome by parts."""
-        corrections = []
-        for start in range(0, len(syndrome), self.syndrome_length):
-            section = range(start, start + self.syndrome_length)
-            corrections.append(self.decoder.decode(syndrome[section]))
+        corrections = [
+            self.decoder.decode(sub_syndrome)
+            for sub_syndrome in syndrome.reshape(-1, self.syndrome_length)
+        ]
         return np.concatenate(corrections)
+
+
+class MeasurementDecoder(Decoder):
+    """Decode directly from measurement outcomes of a code block.
+
+    A MeasurementDecoder can be useful for Steane-type and Knill-type error correction, for which an
+    entire code block is measured out to diagnose errors.
+
+    A MeasurementDecoder is instantiated from:
+    - a parity check matrix, and
+    - a syndrome decoder.
+    When asked to decode measurement outcomes, a MeasurementDecoder first converts these outcomes
+    into a syndrome vector using the provided parity check matrix, then decodes with the provided
+    syndrome decoder.
+    """
+
+    def __init__(self, matrix: npt.NDArray[np.int_], decoder: Decoder) -> None:
+        self.matrix = matrix.view(np.ndarray) if isinstance(matrix, galois.FieldArray) else matrix
+        self.decoder = decoder
+
+    def decode(self, measurements: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Decode using the given measurement outcomes."""
+        return self.decoder.decode(self.matrix @ measurements % 2)

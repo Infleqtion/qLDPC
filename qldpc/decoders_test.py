@@ -47,11 +47,13 @@ def test_decoding() -> None:
     matrix = np.eye(3, 2, dtype=int)
     error = np.array([1, 1], dtype=int)
     syndrome = np.array([1, 1, 0], dtype=int)
+    default_decoder = decoders.get_decoder(matrix)
+
+    assert np.allclose(error, default_decoder.decode(syndrome))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_ILP=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_MWPM=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_BF=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_BP_LSD=True))
-    assert np.allclose(error, decoders.decode(matrix, syndrome, with_BP_OSD=True))
 
     # the distance of the given code is undefined, so lookup decoding to half the distance fails
     assert np.allclose([0, 0], decoders.decode(matrix, syndrome, with_lookup=True))
@@ -62,8 +64,12 @@ def test_decoding() -> None:
     # decode two copies of the problem
     block_error = np.concatenate([error, error])
     block_syndrome = np.concatenate([syndrome, syndrome])
-    block_decoder = decoders.BlockDecoder(syndrome.size, decoders.get_decoder(matrix))
+    block_decoder = decoders.BlockDecoder(syndrome.size, default_decoder)
     assert np.allclose(block_error, block_decoder.decode(block_syndrome))
+
+    # decode directly from measurement outcomes
+    measurement_decoder = decoders.MeasurementDecoder(matrix, default_decoder)
+    assert np.allclose(error, measurement_decoder.decode(error))
 
     # decode over trinary field
     modulus = 3
