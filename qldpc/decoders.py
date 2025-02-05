@@ -322,6 +322,6 @@ class MeasurementDecoder(Decoder):
         self.matrix = matrix.view(np.ndarray) if isinstance(matrix, galois.FieldArray) else matrix
         self.decoder = decoder
 
-    def decode(self, measurements: npt.NDArray[np.int_]):
+    def decode(self, measurements: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode using the given measurement outcomes."""
         return self.decoder.decode(self.matrix @ measurements % 2)
