@@ -278,3 +278,25 @@ class ILPDecoder(Decoder):
             constraints.append(constraint)
 
         return constraints
+
+
+class BlockDecoder(Decoder):
+    """Decoder for a composite syndrome built from identical and independent code blocks.
+
+    A BlockDecoder is instantiated from:
+    - the length of a syndrome vector for one code block
+    - a decoder for a one code block
+    """
+
+    def __init__(self, syndrome_length: int, decoder: Decoder) -> None:
+        self.syndrome_length = syndrome_length
+        self.decoder = decoder
+
+    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Decode the given syndrome by parts."""
+        corrections = []
+        for start in range(0, len(syndrome), self.syndrome_length):
+            syndrome_bits = range(start, start + self.syndrome_length)
+            block_syndrome = syndrome[syndrome_bits]
+            corrections.append(self.decoder.decode(block_syndrome))
+        return np.concatenate(corrections)
