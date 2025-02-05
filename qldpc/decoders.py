@@ -307,7 +307,8 @@ class BlockDecoder(Decoder):
 class MeasurementDecoder(Decoder):
     """Decode directly from measurement outcomes of a code block.
 
-    This can be useful in Steane-type or Knill-type QEC.
+    A MeasurementDecoder can be useful for Steane-type and Knill-type error correction, for which an
+    entire code block is measured out to diagnose errors.
 
     A MeasurementDecoder is instantiated from:
     - a parity check matrix, and
