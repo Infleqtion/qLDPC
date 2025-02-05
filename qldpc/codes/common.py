@@ -1182,9 +1182,8 @@ class QuditCode(AbstractCode):
         # convert outer_physical_to_inner_logical into a tuple that we can use to permute an array
         if outer_physical_to_inner_logical is None:
             outer_physical_to_inner_logical = tuple(
-                np.arange(inner.dimension * len(outer), dtype=int)
-                .reshape(inner.dimension, len(outer))
-                .T.ravel()
+                np.arange(len(outer) * inner.dimension, dtype=int)
+                .reshape(len(outer), inner.dimension)
                 .T.ravel()
             )
         else:
