@@ -145,7 +145,7 @@ class LookupDecoder(Decoder):
 
         if max_weight is None:
             code_distance = codes.ClassicalCode(matrix).get_distance()
-            max_weight = (code_distance // 2) if code_distance is not np.nan else 1
+            max_weight = (code_distance // 2) if code_distance is not np.nan else 0
 
         self.table = {}
         num_qubits = matrix.shape[1]
