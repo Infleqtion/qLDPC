@@ -27,6 +27,8 @@ import numpy as np
 import numpy.typing as npt
 import pymatching
 
+from qldpc import codes
+
 
 class Decoder(Protocol):
     """Template (protocol) for a decoder object."""
@@ -124,44 +126,43 @@ def get_decoder_MWPM(matrix: npt.NDArray[np.int_], **decoder_args: object) -> De
 
 
 def get_decoder_lookup(matrix: npt.NDArray[np.int_], **decoder_args: object) -> LookupDecoder:
-    """Lookup decoder that corrects (distance - 1) // 2 errors."""
-    max_weight = decoder_args.pop("max_weight", None)
-    if not isinstance(max_weight, int) or max_weight < 1:
-        raise ValueError(
-            "Lookup decoders must be initialized with a positive max_weight for errors"
-        )
-    if decoder_args:
-        raise ValueError(f"Arguments not recognized by the lookup decoder: {decoder_args}")
-    return LookupDecoder(matrix, max_weight)
+    """Decoder based on a lookup table from errors to syndromes."""
+    return LookupDecoder(matrix, **decoder_args)  # type:ignore[arg-type]
 
 
 class LookupDecoder(Decoder):
     """Lookup table decoder for qubit codes."""
 
-    def __init__(self, matrix: npt.NDArray[np.int_], max_weight: int) -> None:
-        if not (
-            (isinstance(matrix, galois.FieldArray) and type(matrix).order == 2)
-            or np.max(matrix) == 1
-        ):
-            raise ValueError("Lookup decoding is only supported for qubit codes")
+    def __init__(self, matrix: npt.NDArray[np.int_], max_weight: int | None = None) -> None:
+        binary_field = galois.GF(2)
+        try:
+            matrix = binary_field(matrix)
+        except ValueError as error:
+            if "GF(2) arrays" in str(error):
+                raise ValueError("Lookup decoding is only supported for qubit codes")
+            else:  # pragma: no cover
+                raise error
 
-        self.field = galois.GF(2)
-        self.matrix = self.field(matrix)
-        self.num_qubits = matrix.shape[1]
+        if max_weight is None:
+            code_distance = codes.ClassicalCode(matrix).get_distance()
+            max_weight = (code_distance // 2) if isinstance(code_distance, int) else 0
 
         self.table = {}
+        num_qubits = matrix.shape[1]
         for weight in range(max_weight, 0, -1):
-            for error_bits in itertools.combinations(range(self.num_qubits), weight):
-                error = self.field.Zeros(self.num_qubits)
-                error[np.asarray(error_bits, dtype=int)] = 1
-                syndrome = self.matrix @ error
+            for error_bits in itertools.combinations(range(num_qubits), weight):
+                code_error = binary_field.Zeros(num_qubits)
+                code_error[np.asarray(error_bits, dtype=int)] = 1
+                syndrome = matrix @ code_error
                 syndrome_bits = tuple(np.where(syndrome)[0])
-                self.table[syndrome_bits] = error.view(np.ndarray)
+                self.table[syndrome_bits] = code_error.view(np.ndarray)
+
+        self.null_correction = np.zeros(num_qubits, dtype=int)
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode the given syndrome."""
         syndrome_bits = tuple(np.where(syndrome)[0])
-        return self.table.get(syndrome_bits, np.zeros(self.num_qubits, dtype=int))
+        return self.table.get(syndrome_bits, self.null_correction.copy())
 
 
 def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILPDecoder:
