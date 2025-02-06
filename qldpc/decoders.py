@@ -151,7 +151,10 @@ class LookupDecoder(Decoder):
                     code_error[error_site_indices] = errors
                     syndrome = matrix @ code_error
                     syndrome_bits = tuple(np.where(syndrome)[0])
-                    self.table[syndrome_bits] = code_error.view(np.ndarray)
+                    if (previous_error := self.table.get(syndrome_bits)) is None or (
+                        np.count_nonzero(previous_error) > np.count_nonzero(code_error)
+                    ):
+                        self.table[syndrome_bits] = code_error.view(np.ndarray)
 
         self.null_correction = np.zeros(num_qubits, dtype=int)
 
