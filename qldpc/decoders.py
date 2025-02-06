@@ -131,7 +131,7 @@ def get_decoder_lookup(matrix: npt.NDArray[np.int_], **decoder_args: object) -> 
 
 
 class LookupDecoder(Decoder):
-    """Lookup table decoder for qubit codes."""
+    """Lookup table decoder for classical codes."""
 
     def __init__(self, matrix: npt.NDArray[np.int_], max_weight: int | None = None) -> None:
         field = type(matrix) if isinstance(matrix, galois.FieldArray) else galois.GF(2)
@@ -142,18 +142,18 @@ class LookupDecoder(Decoder):
             max_weight = (code_distance // 2) if isinstance(code_distance, int) else 0
 
         self.table: dict[tuple[int, ...], npt.NDArray[np.int_]] = {}
-        num_qubits = matrix.shape[1]
+        num_bits = matrix.shape[1]
         for weight in range(max_weight, 0, -1):
-            for error_sites in itertools.combinations(range(num_qubits), weight):
+            for error_sites in itertools.combinations(range(num_bits), weight):
                 error_site_indices = np.asarray(error_sites, dtype=int)
                 for errors in itertools.product(range(1, field.order), repeat=weight):
-                    code_error = field.Zeros(num_qubits)
+                    code_error = field.Zeros(num_bits)
                     code_error[error_site_indices] = errors
                     syndrome = matrix @ code_error
                     syndrome_bits = tuple(np.where(syndrome)[0])
                     self.table[syndrome_bits] = code_error.view(np.ndarray)
 
-        self.null_correction = np.zeros(num_qubits, dtype=int)
+        self.null_correction = np.zeros(num_bits, dtype=int)
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode the given syndrome."""
