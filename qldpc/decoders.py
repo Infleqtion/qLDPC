@@ -141,7 +141,7 @@ class LookupDecoder(Decoder):
             code_distance = codes.ClassicalCode(matrix).get_distance()
             max_weight = (code_distance // 2) if isinstance(code_distance, int) else 0
 
-        self.table = {}
+        self.table: dict[tuple[int, ...], npt.NDArray[np.int_]] = {}
         num_qubits = matrix.shape[1]
         for weight in range(max_weight, 0, -1):
             for error_sites in itertools.combinations(range(num_qubits), weight):
