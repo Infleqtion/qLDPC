@@ -28,6 +28,7 @@ import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
+import scipy
 import sympy
 
 from qldpc import abstract
@@ -66,14 +67,53 @@ class SteaneCode(CSSCode):
 class IcebergCode(CSSCode):
     """Quantum error detecting code: [2m, 2m-2, 2].
 
+    The m = 3 IcebergCode is the [6, 4, 2] code that is used to construct concatenated
+    many-hypercube codes.
+
     References:
     - https://errorcorrectionzoo.org/c/iceberg
+    - https://errorcorrectionzoo.org/c/stab_6_4_2
+    - https://arxiv.org/abs/2403.16054
     """
 
     def __init__(self, size: int) -> None:
         checks = [[1] * (2 * size)]
         CSSCode.__init__(self, checks, checks, field=2, validate=False)
         self._exact_distance_x = self._exact_distance_z = 2
+
+        if size == 3:
+            # make a specific choice of logical operators for the [6, 4, 2] code, splitting the
+            # four logical qubits into pairs with disjoint support on the physical qubits
+            sector_ops_x = [[1, 1, 0], [0, 1, 1]]
+            sector_ops_z = sector_ops_x[::-1]
+            ops_x = scipy.linalg.block_diag(sector_ops_x, sector_ops_x)
+            ops_z = scipy.linalg.block_diag(sector_ops_z, sector_ops_z)
+            self.set_logical_ops_xz(ops_x, ops_z)
+
+
+class C4Code(IcebergCode):
+    """A [4, 2, 2] code, commonly known as the "C4" code.
+
+    References:
+    - https://errorcorrectionzoo.org/c/stab_4_2_2
+    """
+
+    def __init__(self) -> None:
+        IcebergCode.__init__(self, 2)
+
+
+class C6Code(CSSCode):
+    """A [6, 2, 2] code, commonly known as the "C6" code.
+
+    References:
+    - https://errorcorrectionzoo.org/c/stab_6_2_2
+    """
+
+    def __init__(self) -> None:
+        checks = [[1, 1, 0, 0, 1, 1], [0, 1, 1, 1, 1, 0]]
+        CSSCode.__init__(self, checks, checks, field=2, validate=False)
+        logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
+        self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
 
 
 ################################################################################

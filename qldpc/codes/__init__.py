@@ -15,6 +15,8 @@ from .common import (
 )
 from .quantum import (
     BBCode,
+    C4Code,
+    C6Code,
     FiveQubitCode,
     GeneralizedSurfaceCode,
     HGPCode,
@@ -41,6 +43,8 @@ __all__ = [
     "CSSCode",
     "QuditCode",
     "BBCode",
+    "C4Code",
+    "C6Code",
     "FiveQubitCode",
     "GeneralizedSurfaceCode",
     "HGPCode",
