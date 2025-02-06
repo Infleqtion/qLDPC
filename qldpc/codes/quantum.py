@@ -114,6 +114,7 @@ class C6Code(CSSCode):
         CSSCode.__init__(self, checks, checks, field=2, validate=False)
         logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
         self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
+        self._exact_distance_x = self._exact_distance_z = 2
 
 
 ################################################################################

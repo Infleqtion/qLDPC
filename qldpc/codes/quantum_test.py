@@ -45,6 +45,9 @@ def test_small_codes() -> None:
     for size in range(2, 6):
         assert codes.IcebergCode(size).get_code_params() == (2 * size, 2 * size - 2, 2)
 
+    assert codes.CSSCode.equiv(codes.C4Code(), codes.IcebergCode(2))
+    assert codes.C6Code().get_code_params() == (6, 2, 2)
+
 
 def test_two_block_code_error() -> None:
     """Raise error when trying to construct incompatible two-block codes."""
