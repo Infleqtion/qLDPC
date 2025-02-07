@@ -313,8 +313,12 @@ class DirectDecoder(Decoder):
     candidate word.
     """
 
-    def __init__(self, decode: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]]) -> None:
-        self.decode = decode
+    def __init__(self, decode_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]]) -> None:
+        self.decode_func = decode_func
+
+    def decode(self, word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Decode the given corrupted code word."""
+        return self.decode_func(word)
 
     @staticmethod
     def from_indirect(decoder: Decoder, matrix: npt.NDArray[np.int_]) -> DirectDecoder:
