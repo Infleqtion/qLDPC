@@ -589,6 +589,8 @@ class ClassicalCode(AbstractCode):
             raise ValueError("Logical error rate calculations are only supported for binary codes")
 
         decoder = decoders.get_decoder(self.matrix, **decoder_args)
+        if not isinstance(decoder, decoders.DirectDecoder):
+            decoder = decoders.DirectDecoder.from_indirect(decoder, self.matrix)
 
         # compute decoding fidelities for each error weight
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)
@@ -625,10 +627,9 @@ class ClassicalCode(AbstractCode):
             error = self.field.Zeros(len(self))
             error[error_locations] = self.field(1)
 
-            # decode the error
-            correction = self.field(decoder.decode(self.matrix @ error))
-            residual_error = error - correction
-            if np.any(residual_error):
+            # decode a corrupted all-zero code word
+            decoded_word = decoder.decode(error)
+            if np.any(decoded_word):
                 num_failures += 1
 
         infidelity = num_failures / num_samples
@@ -1805,9 +1806,15 @@ class CSSCode(QuditCode):
         else:
             pauli_bias_zxy = None
 
-        # construct decoders and identify logical operators
+        # construct decoders
         decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
         decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
+        if not isinstance(decoder_x, decoders.DirectDecoder):
+            decoder_x = decoders.DirectDecoder.from_indirect(decoder_x, self.matrix_z)
+        if not isinstance(decoder_z, decoders.DirectDecoder):
+            decoder_z = decoders.DirectDecoder.from_indirect(decoder_z, self.matrix_x)
+
+        # identify logical operators
         logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
         logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
 
@@ -1861,17 +1868,15 @@ class CSSCode(QuditCode):
             error[error_locations] = pauli_errors
 
             # decode Z-type errors
-            error_z = self.field(error % 2)
-            correction_z = self.field(decoder_z.decode(self.matrix_x @ error_z))
-            residual_z = error_z - correction_z
+            error_z = error % 2
+            residual_z = self.field(decoder_z.decode(error_z))
             if np.any(logicals_x @ residual_z):
                 num_failures += 1
                 continue
 
             # decode X-type errors
-            error_x = self.field((error > 1).astype(int))
-            correction_x = self.field(decoder_x.decode(self.matrix_z @ error_x))
-            residual_x = error_x - correction_x
+            error_x = (error > 1).astype(int)
+            residual_x = self.field(decoder_x.decode(error_x))
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 
