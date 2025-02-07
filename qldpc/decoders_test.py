@@ -17,6 +17,7 @@ limitations under the License.
 
 from __future__ import annotations
 
+import galois
 import numpy as np
 import numpy.typing as npt
 import pytest
@@ -67,15 +68,25 @@ def test_decoding() -> None:
     block_decoder = decoders.BlockDecoder(syndrome.size, default_decoder)
     assert np.allclose(block_error, block_decoder.decode(block_syndrome))
 
-    # decode directly from measurement outcomes
-    measurement_decoder = decoders.MeasurementDecoder(matrix, default_decoder)
-    assert np.allclose(error, measurement_decoder.decode(error))
+    # decode directly from a corrupted code word
+    code_word = np.zeros_like(error)
+    corrupted_code_word = (code_word + error) % 2
+    direct_decoder = decoders.DirectDecoder.from_indirect(default_decoder, matrix)
+    assert np.allclose(code_word, direct_decoder.decode(corrupted_code_word))
 
     # decode over trinary field
     modulus = 3
-    answer = -error % modulus
-    result = decoders.decode(-matrix, syndrome, with_ILP=True, modulus=modulus, lower_bound_row=-1)
-    assert np.allclose(answer, result)
+    matrix = -matrix % modulus
+    error = -error % modulus
+    ilp_decoder = decoders.ILPDecoder(matrix, modulus=modulus, lower_bound_row=-1)
+    assert np.allclose(error, ilp_decoder.decode(syndrome))
+
+    # decode directly from a corrupted code word
+    field = galois.GF(modulus)
+    code_word = field.Zeros(error.size)
+    corrupted_code_word = code_word + field(error)
+    direct_decoder = decoders.DirectDecoder.from_indirect(ilp_decoder, field(matrix))
+    assert np.allclose(code_word.view(np.ndarray), direct_decoder.decode(corrupted_code_word))
 
 
 def test_decoding_errors() -> None:

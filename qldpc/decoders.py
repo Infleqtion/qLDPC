@@ -18,7 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import itertools
-from typing import Protocol
+from typing import Callable, Protocol
 
 import cvxpy
 import galois
@@ -300,30 +300,39 @@ class BlockDecoder(Decoder):
         return np.concatenate(corrections)
 
 
-class MeasurementDecoder(Decoder):
-    """Decode directly from measurement outcomes of a code block.
+class DirectDecoder(Decoder):
+    """Decoder that maps corrupted code words to corrected code words of a classical code.
 
-    A MeasurementDecoder can be useful for Steane-type and Knill-type error correction, for which an
-    entire code block is measured out to diagnose errors.
+    In contrast, an "indirect" decoder maps a syndrome to an error.
 
-    A MeasurementDecoder is instantiated from:
-    - a parity check matrix, and
-    - a syndrome decoder.
-    When asked to decode measurement outcomes, a MeasurementDecoder first converts these outcomes
-    into a syndrome vector using the provided parity check matrix, then decodes with the provided
-    syndrome decoder.
+    A DirectDecoder can be instantiated from:
+    - an indirect decoder, and
+    - a parity check matrix.
+    When asked to decode a candidate code word, a DirectDecoder first computes a syndrome, decodes
+    the syndrome with an indirect decoder to infer an error, and then subtracts the error from the
+    candidate word.
     """
 
-    def __init__(self, matrix: npt.NDArray[np.int_], decoder: Decoder) -> None:
-        self.field = type(matrix) if isinstance(matrix, galois.FieldArray) else None
-        self.matrix = matrix
-        self.decoder = decoder
+    def __init__(self, decode: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]]) -> None:
+        self.decode = decode
 
-    def decode(self, measurements: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode using the given measurement outcomes."""
-        syndrome = (
-            self.matrix @ measurements % 2
-            if self.field is None
-            else self.matrix @ self.field(measurements)
-        )
-        return self.decoder.decode(syndrome)
+    @staticmethod
+    def from_indirect(decoder: Decoder, matrix: npt.NDArray[np.int_]) -> DirectDecoder:
+        """Instantiate a DirectDecoder from an indirect decoder and a parity check matrix."""
+        field = type(matrix) if isinstance(matrix, galois.FieldArray) else None
+
+        if field is None:
+
+            def decode_func(candidate_word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+                syndrome = matrix @ candidate_word % 2
+                return (candidate_word - decoder.decode(syndrome)) % 2
+
+        else:
+
+            def decode_func(candidate_word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+                candidate_word = field(candidate_word)
+                syndrome = matrix @ candidate_word
+                error = field(decoder.decode(syndrome.view(np.ndarray)))
+                return (candidate_word - error).view(np.ndarray)
+
+        return DirectDecoder(decode_func)
