@@ -34,7 +34,7 @@ class Decoder(Protocol):
     """Template (protocol) for a decoder object."""
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode the given syndrome."""
+        """Decode an error syndrome and return an inferred error."""
 
 
 def decode(
@@ -156,7 +156,7 @@ class LookupDecoder(Decoder):
         self.null_correction = np.zeros(num_bits, dtype=int)
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode the given syndrome."""
+        """Decode an error syndrome and return an inferred error."""
         syndrome_bits = tuple(np.where(syndrome)[0])
         return self.table.get(syndrome_bits, self.null_correction.copy())
 
@@ -221,7 +221,7 @@ class ILPDecoder(Decoder):
         self.decoder_args = decoder_args
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode the given syndrome."""
+        """Decode an error syndrome and return an inferred error."""
         # identify all constraints
         constraints = self.variable_constraints + self.cvxpy_constraints_for_syndrome(syndrome)
 
@@ -292,7 +292,7 @@ class BlockDecoder(Decoder):
         self.decoder = decoder
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode the given syndrome by parts."""
+        """Decode an error syndrome by parts and return a net inferred error."""
         corrections = [
             self.decoder.decode(sub_syndrome)
             for sub_syndrome in syndrome.reshape(-1, self.syndrome_length)
@@ -317,7 +317,7 @@ class DirectDecoder(Decoder):
         self.decode_func = decode_func
 
     def decode(self, word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode the given corrupted code word."""
+        """Decode a corrupted code word and return an inferred code word."""
         return self.decode_func(word)
 
     @staticmethod
