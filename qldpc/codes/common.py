@@ -628,7 +628,7 @@ class ClassicalCode(AbstractCode):
             error[error_locations] = self.field(1)
 
             # decode a corrupted all-zero code word
-            decoded_word = decoder.decode(error)
+            decoded_word = decoder.decode(error.view(np.ndarray))
             if np.any(decoded_word):
                 num_failures += 1
 
