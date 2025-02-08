@@ -1917,8 +1917,9 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[i
     occur at a unique columns for each row; these columns are the "pivots" of matrix_rref.
     """
     matrix_rref = matrix.row_reduce()
-    pivots = [int(np.argmax(row != 0)) for row in matrix_rref if np.any(row)]
-    return matrix_rref, pivots
+    sub_matrix = matrix_rref[np.any(matrix_rref, axis=1), :]  # submatrix with nonzero rows
+    pivots = np.argmax(sub_matrix.view(np.ndarray).astype(bool), axis=1)
+    return matrix_rref, list(pivots)
 
 
 def _get_sample_allocation(
