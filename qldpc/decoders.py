@@ -406,7 +406,7 @@ class BlockDecoder(Decoder):
 
 
 class DirectDecoder(Decoder):
-    """Decoder that maps corrupted code words to corrected code words of a classical code.
+    """Decoder that maps corrupted code words to corrected code words.
 
     In contrast, an "indirect" decoder maps a syndrome to an error.
 
