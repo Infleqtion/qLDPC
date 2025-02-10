@@ -289,7 +289,7 @@ class GUFDecoder(Decoder):
         bits = [node.index for node in interior_data_nodes]
 
         # the order of checks, bits is technically arbitrary, but according to unofficial empirical
-        # tests, reverse-sorted this seems to work well for concatenated codes
+        # tests, reverse-sorted order works better for concatenated codes
         return sorted(checks, reverse=True), sorted(bits, reverse=True)
 
 
