@@ -23,7 +23,6 @@ from typing import Callable, Protocol
 import cvxpy
 import galois
 import ldpc
-import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import pymatching
