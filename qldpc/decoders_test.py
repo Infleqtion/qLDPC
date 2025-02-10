@@ -51,6 +51,7 @@ def test_decoding() -> None:
     default_decoder = decoders.get_decoder(matrix)
 
     assert np.allclose(error, default_decoder.decode(syndrome))
+    assert np.allclose(error, decoders.decode(matrix, syndrome, with_GUF=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_ILP=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_MWPM=True))
     assert np.allclose(error, decoders.decode(matrix, syndrome, with_BF=True))

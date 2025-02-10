@@ -28,6 +28,7 @@ import numpy.typing as npt
 import pymatching
 
 from qldpc import codes
+from qldpc.objects import Node
 
 
 class Decoder(Protocol):
@@ -58,6 +59,9 @@ def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder
 
     if decoder_args.pop("with_lookup", False):
         return get_decoder_lookup(matrix, **decoder_args)
+
+    if decoder_args.pop("with_GUF", False):
+        return get_decoder_GUF(matrix, **decoder_args)
 
     if decoder_args.pop("with_ILP", False):
         return get_decoder_ILP(matrix, **decoder_args)
@@ -166,6 +170,114 @@ class LookupDecoder(Decoder):
         """Decode an error syndrome and return an inferred error."""
         syndrome_bits = tuple(np.where(syndrome)[0])
         return self.table.get(syndrome_bits, self.null_correction.copy())
+
+
+def get_decoder_GUF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> LookupDecoder:
+    """Decoder based on a generalization of Union-Find, described in arXiv:2103.08049."""
+    return GUFDecoder(matrix, **decoder_args)  # type:ignore[arg-type]
+
+
+class GUFDecoder(Decoder):
+    """The generalized Union-Find decoder in https://arxiv.org/pdf/2103.08049.
+
+    If passed a max_weight argument, this decoder tries to find an error with weight <= max_weight,
+    and returns the first such error that it finds.  If no such error is found, this decoder returns
+    the minimum-weight error that it found while trying.  Be warned that passing a max_weight makes
+    this decoder have worst-case exponential runtime.
+
+    Warning: this implementation of the generalized Union-Find decoder is highly unoptimized.  For
+    one, it is written entirely in Python.  Moreover, this implementation does not factor an error
+    set into connected componenents.
+    """
+
+    def __init__(
+        self,
+        matrix: npt.NDArray[np.int_],
+        *,
+        max_weight: int | None = None,
+    ) -> None:
+        self.code = codes.ClassicalCode(matrix)
+        self.graph = self.code.graph.to_undirected()
+
+        self.max_weight = max_weight
+        self.minus_one = -self.code.field(1)
+
+    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Decode an error syndrome and return an inferred error."""
+        syndrome_bits = np.where(syndrome)[0]
+        if not syndrome_bits.size:
+            return np.zeros(len(self.code), dtype=int)
+
+        # construct an "error set", within which we look for solutions to the decoding problem
+        error_set = set(Node(index, is_data=False) for index in syndrome_bits)
+        solutions = np.zeros((0, len(self.code)), dtype=int)
+        while solutions.size == 0:
+            if len(error_set) == np.sum(self.code.matrix.shape):
+                # there is no valid solution to this decoding problem
+                return np.zeros(len(self.code), dtype=int)
+
+            # grow the error set by one step on the Tanner graph
+            error_set |= set(
+                neighbor for node in error_set for neighbor in self.graph.neighbors(node)
+            )
+
+            # check whether the syndrome can be induced by errors in the interior of the error_set
+            checks, bits = self.get_sub_problem_indices(syndrome, error_set)
+            sub_matrix = self.code.matrix[np.ix_(checks, bits)]
+            sub_syndrome = syndrome[checks]
+
+            """
+            Try to identify errors in the interior of the error_set that reproduce the syndrome.
+            We are essentially looking for solutions to H @ x = s, or [H|s] @ [x,-1].T = 0.
+            """
+            augmented_matrix = np.column_stack([sub_matrix, sub_syndrome])
+            candidate_solutions = augmented_matrix.null_space()  # type:ignore[attr-defined]
+            solutions = candidate_solutions[candidate_solutions[:, -1] == self.minus_one, :-1]
+
+        # identify the minimum-weight solution found so far
+        min_weight_solution = min(solutions, key=lambda solution: np.count_nonzero(solution))
+        weight = np.count_nonzero(min_weight_solution)
+
+        if self.max_weight is not None and weight > self.max_weight:
+            # minimize the weight of the solution over additions of null-syndrome vectors
+            null_solutions = sub_matrix.null_space()
+
+            min_weight = weight
+            one_solution = min_weight_solution.copy()
+            null_vector_coefficients = itertools.product(
+                self.code.field.elements, repeat=len(null_solutions)
+            )
+            next(null_vector_coefficients)  # skip the all-0 vector of coefficients
+            for coefficients in null_vector_coefficients:
+                solution = one_solution + self.code.field(coefficients) @ null_solutions
+                weight = np.count_nonzero(solution)
+                if weight < min_weight:
+                    min_weight_solution = solution
+                    min_weight = np.count_nonzero(solution)
+                    if weight <= self.max_weight:
+                        break
+
+        # construct and return the error in the full code block
+        error = self.code.field.Zeros(len(self.code))
+        error[bits] = min_weight_solution
+        return error.view(np.ndarray)
+
+    def get_sub_problem_indices(
+        self, syndrome: npt.NDArray[np.int_], error_set: set[Node]
+    ) -> tuple[list[int], list[int]]:
+        """Syndrome and data bit indices for decoding on the interior of the given error set."""
+        # identify the "interior" of error set: nodes whose neighbors are contained in the set
+        interior_nodes = [
+            node for node in error_set if error_set.issuperset(self.graph.neighbors(node))
+        ]
+        # identify interior data bit nodes, and their neighbors
+        interior_data_nodes = [node for node in interior_nodes if node.is_data]
+        check_nodes = set(node for node in error_set if not node.is_data) | set(
+            neighbor for node in interior_data_nodes for neighbor in self.graph.neighbors(node)
+        )
+        checks = [node.index for node in check_nodes]
+        bits = [node.index for node in interior_data_nodes]
+        return sorted(checks), sorted(bits)
 
 
 def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILPDecoder:
