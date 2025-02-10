@@ -55,7 +55,10 @@ def test_special_codes() -> None:
         codes.ReedMullerCode(-1, 0)
 
     # the extended Hamming code's parity check matrix is a super set of the ordinary Hamming code
-    assert np.array_equal(codes.ExtendedHammingCode(4).matrix[1:, 1:], codes.HammingCode(4).matrix)
+    assert np.array_equal(
+        codes.ExtendedHammingCode(4).matrix[1:, 1:],
+        codes.HammingCode(4, field=2).matrix,
+    )
 
 
 def test_tanner_code() -> None:
