@@ -18,6 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import functools
+
 import galois
 import numpy as np
 import numpy.typing as npt
