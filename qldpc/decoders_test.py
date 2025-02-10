@@ -96,7 +96,7 @@ def test_decoding() -> None:
     # the naive GUF decoder can fail sometimes
     code = functools.reduce(codes.CSSCode.concatenate, [codes.C4Code()] * 3)
     error = code.field.Zeros(len(code))
-    error[[0, 4]] = 1
+    error[[3, 4]] = 1
     matrix = code.matrix_z
     syndrome = matrix @ error
     assert np.count_nonzero(decoders.decode(matrix, syndrome, with_GUF=True)) > 2

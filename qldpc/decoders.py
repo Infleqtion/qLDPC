@@ -287,7 +287,10 @@ class GUFDecoder(Decoder):
         )
         checks = [node.index for node in check_nodes]
         bits = [node.index for node in interior_data_nodes]
-        return sorted(checks), sorted(bits)
+
+        # the order of checks, bits is technically arbitrary, but according to unofficial empirical
+        # tests, reverse-sorted this seems to work well for concatenated codes
+        return sorted(checks, reverse=True), sorted(bits, reverse=True)
 
 
 def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILPDecoder:
