@@ -418,7 +418,6 @@ class ClassicalCode(AbstractCode):
         """
         if vector is not None:
             # find the distance of the given vector from a code word
-            _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field)
             correction = decoders.decode(
                 self.matrix, self.matrix @ self.field(vector), **decoder_args
             )
@@ -427,20 +426,18 @@ class ClassicalCode(AbstractCode):
         # effective syndrome: a trivial "actual" syndrome, and a nonzero overlap with a random word
         effective_syndrome = np.zeros(self.num_checks + 1, dtype=int)
         effective_syndrome[-1] = 1
-        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=-1)
 
         valid_candidate_found = False
         while not valid_candidate_found:
             # construct an effective check matrix with a random nonzero word
             random_word = get_random_array(self.field, self.num_bits, satisfy=lambda vec: vec.any())
-            effective_check_matrix = np.vstack([self.matrix, random_word]).view(np.ndarray)
+            effective_check_matrix = np.vstack([self.matrix, random_word])
 
             # find a low-weight candidate code word
             candidate = decoders.decode(effective_check_matrix, effective_syndrome, **decoder_args)
 
             # check whether we found a valid candidate
-            # NOTE: we can mod out by the field order because non-prime fields aren't allowed here
-            actual_syndrome = effective_check_matrix @ candidate % self.field.order
+            actual_syndrome = effective_check_matrix @ self.field(candidate)
             valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         return int(np.count_nonzero(candidate))
@@ -1495,7 +1492,6 @@ class CSSCode(QuditCode):
         # construct the effective syndrome
         effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
         effective_syndrome[-1] = 1
-        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=-1)
 
         logical_op_found = False
         while not logical_op_found:
@@ -1503,14 +1499,13 @@ class CSSCode(QuditCode):
             word = self.get_random_logical_op(pauli_z, ensure_nontrivial=True)
 
             # support of a candidate pauli-type logical operator
-            effective_check_matrix = np.vstack([code_z.matrix, word]).view(np.ndarray)
+            effective_check_matrix = np.vstack([code_z.matrix, word])
             candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
 
             # check whether decoding was successful
-            # NOTE: we can mod out by the field order because non-prime fields aren't allowed here
-            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
+            actual_syndrome = effective_check_matrix @ self.field(candidate_logical_op)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
@@ -1659,20 +1654,19 @@ class CSSCode(QuditCode):
             code = self.code_x
             nonzero_dual_section = slice(self.num_qudits)
         all_dual_ops = self.get_logical_ops(dual_pauli)[:, nonzero_dual_section]
-        effective_check_matrix = np.vstack([code.matrix, all_dual_ops]).view(np.ndarray)
+        effective_check_matrix = np.vstack([code.matrix, all_dual_ops])
         dual_op_index = code.num_checks + logical_index
 
         # enforce that the new logical operator commutes with everything except its dual
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[dual_op_index] = 1
-        _fix_decoder_args_for_nonbinary_fields(decoder_args, self.field, bound_index=dual_op_index)
 
         logical_op_found = False
         while not logical_op_found:
             candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
-            actual_syndrome = effective_check_matrix @ candidate_logical_op % self.field.order
+            actual_syndrome = effective_check_matrix @ self.field(candidate_logical_op)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
@@ -1883,27 +1877,6 @@ class CSSCode(QuditCode):
         infidelity = num_failures / num_samples
         variance = infidelity * (1 - infidelity) / num_samples
         return 1 - infidelity, variance
-
-
-def _fix_decoder_args_for_nonbinary_fields(
-    decoder_args: dict[str, object], field: type[galois.FieldArray], bound_index: int | None = None
-) -> None:
-    """Fix decoder arguments for nonbinary number fields.
-
-    If the field has order greater than 2, then we can only decode
-    (a) prime number fields, with
-    (b) an integer-linear program decoder.
-
-    If provided a bound_index, treat the constraint corresponding to this row of the parity check
-    matrix as a lower bound (>=) rather than a strict equality (==) constraint.
-    """
-    if field.order > 2:
-        if field.degree > 1:
-            raise ValueError("Method only supported for prime number fields")
-        decoder_args["with_ILP"] = True
-        decoder_args["modulus"] = field.order
-        if bound_index is not None:
-            decoder_args["lower_bound_row"] = bound_index
 
 
 def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[int]]:

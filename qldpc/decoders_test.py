@@ -75,16 +75,15 @@ def test_decoding() -> None:
     assert np.allclose(code_word, direct_decoder.decode(corrupted_code_word))
 
     # decode over trinary field
-    modulus = 3
-    matrix = -matrix % modulus
-    error = -error % modulus
-    ilp_decoder = decoders.ILPDecoder(matrix, modulus=modulus, lower_bound_row=-1)
-    assert np.allclose(error, ilp_decoder.decode(syndrome))
+    field = galois.GF(3)
+    matrix = -field(matrix)
+    error = -field(error)
+    assert np.allclose(error.view(np.ndarray), decoders.decode(matrix, syndrome))
 
     # decode directly from a corrupted code word
-    field = galois.GF(modulus)
     code_word = field.Zeros(error.size)
     corrupted_code_word = code_word + field(error)
+    ilp_decoder = decoders.ILPDecoder(matrix)
     direct_decoder = decoders.DirectDecoder.from_indirect(ilp_decoder, field(matrix))
     assert np.allclose(code_word.view(np.ndarray), direct_decoder.decode(corrupted_code_word))
 
@@ -94,11 +93,8 @@ def test_decoding_errors() -> None:
     matrix = np.ones((2, 2), dtype=int)
     syndrome = np.array([0, 1], dtype=int)
 
-    with pytest.raises(ValueError, match="must have modulus >= 2"):
-        decoders.get_decoder_ILP(matrix, with_ILP=True, modulus=1)
-
-    with pytest.raises(ValueError, match="row index must be an integer"):
-        decoders.get_decoder_ILP(matrix, with_ILP=True, lower_bound_row="x")
+    with pytest.raises(ValueError, match="ILP decoding only supports prime number fields"):
+        decoders.decode(galois.GF(4)(matrix), syndrome, with_ILP=True)
 
     with pytest.raises(ValueError, match="could not be found"):
         with pytest.warns(UserWarning, match="infeasible or unbounded"):
