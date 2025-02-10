@@ -447,11 +447,6 @@ def test_css_ops() -> None:
     assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.X))
     assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.Z))
 
-    # reducing logical operator weight only supported for prime number fields
-    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
-    with pytest.raises(ValueError, match="prime number fields"):
-        code.reduce_logical_op(Pauli.X, 0)
-
     # the 2x2 toric code has redundant stabilizers
     code = codes.ToricCode(2)
     assert code.num_checks == 4

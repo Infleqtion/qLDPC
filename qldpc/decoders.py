@@ -71,6 +71,11 @@ def get_decoder(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder
     if decoder_args.pop("with_BP_LSD", False):
         return get_decoder_BP_LSD(matrix, **decoder_args)
 
+    # use a different default decoder for non-binary fields
+    if isinstance(matrix, galois.FieldArray) and type(matrix).order != 2:
+        decoder_args.pop("with_ILP", None)
+        return get_decoder_ILP(matrix, **decoder_args)
+
     decoder_args.pop("with_BP_OSD", None)
     return get_decoder_BP_OSD(matrix, **decoder_args)
 
@@ -171,11 +176,6 @@ class LookupDecoder(Decoder):
 def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILPDecoder:
     """Decoder based on solving an integer linear program (ILP).
 
-    Supports integers modulo q for q > 2 with a "modulus" argument, otherwise uses q = 2.
-
-    If a "lower_bound_row" argument is provided, treat this linear constraint (by index) as a lower
-    bound (>=), rather than an equality (==) constraint.
-
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
     return ILPDecoder(matrix, **decoder_args)
@@ -184,33 +184,16 @@ def get_decoder_ILP(matrix: npt.NDArray[np.int_], **decoder_args: object) -> ILP
 class ILPDecoder(Decoder):
     """Decoder based on solving an integer linear program (ILP).
 
-    Supports integers modulo q for q > 2 with a "modulus" argument, otherwise uses q = 2.
-
-    If a "lower_bound_row" argument is provided, treat this linear constraint (by index) as a lower
-    bound (>=), rather than an equality (==) constraint.
-
     All remaining keyword arguments are passed to `cvxpy.Problem.solve`.
     """
 
     def __init__(self, matrix: npt.NDArray[np.int_], **decoder_args: object) -> None:
-        modulus = decoder_args.pop("modulus", 2)
-        if not isinstance(modulus, int) or modulus < 2:
-            raise ValueError(
-                f"Decoding problems must have modulus >= 2 (provided modulus: {modulus}"
-            )
-        assert isinstance(modulus, int)
-        self.modulus = modulus
+        self.modulus = type(matrix).order if isinstance(matrix, galois.FieldArray) else 2
+        if not galois.is_prime(self.modulus):
+            raise ValueError("ILP decoding only supports prime number fields")
 
         self.matrix = np.asarray(matrix, dtype=int) % self.modulus
         num_checks, num_variables = self.matrix.shape
-
-        lower_bound_row = decoder_args.pop("lower_bound_row", None)
-        if not (lower_bound_row is None or isinstance(lower_bound_row, int)):
-            raise ValueError(f"Lower bound row index must be an integer, not {lower_bound_row}")
-        assert lower_bound_row is None or isinstance(lower_bound_row, int)
-        if isinstance(lower_bound_row, int):
-            lower_bound_row %= num_checks
-        self.lower_bound_row = lower_bound_row
 
         # variables, their constraints, and the objective (minimizing number of nonzero variables)
         self.variable_constraints = []
@@ -253,10 +236,8 @@ class ILPDecoder(Decoder):
         `expression = val mod q`
         to
         `expression = val + sum_j q^j s_j`.
-
-        If `lower_bound_row is not None`, treat the constraint at this row index as a lower bound.
         """
-        syndrome = np.array(syndrome) % self.modulus
+        syndrome = np.asarray(syndrome, dtype=int) % self.modulus
 
         constraints = []
         for idx, (check, syndrome_bit) in enumerate(zip(self.matrix, syndrome)):
@@ -274,10 +255,7 @@ class ILPDecoder(Decoder):
             else:
                 zero_mod_q = 0
 
-            if idx == self.lower_bound_row:
-                constraint = check @ self.variables >= syndrome_bit + zero_mod_q
-            else:
-                constraint = check @ self.variables == syndrome_bit + zero_mod_q
+            constraint = check @ self.variables == syndrome_bit + zero_mod_q
             constraints.append(constraint)
 
         return constraints
