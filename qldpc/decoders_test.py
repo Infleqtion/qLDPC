@@ -95,7 +95,8 @@ def test_decoding() -> None:
     assert np.array_equal(code_word, direct_decoder.decode(corrupted_code_word))
 
     # the naive GUF decoder can fail sometimes
-    code = functools.reduce(codes.CSSCode.concatenate, [codes.C4Code()] * 3)
+    base_code: codes.CSSCode = codes.C4Code()
+    code = functools.reduce(codes.CSSCode.concatenate, [base_code] * 3)
     error = code.field.Zeros(len(code))
     error[[3, 4]] = 1
     matrix = code.matrix_z

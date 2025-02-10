@@ -177,7 +177,7 @@ class LookupDecoder(Decoder):
         return self.table.get(syndrome_bits, self.null_correction.copy())
 
 
-def get_decoder_GUF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> LookupDecoder:
+def get_decoder_GUF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> GUFDecoder:
     """Decoder based on a generalization of Union-Find, described in arXiv:2103.08049."""
     return GUFDecoder(matrix, **decoder_args)  # type:ignore[arg-type]
 
