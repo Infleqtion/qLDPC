@@ -207,10 +207,8 @@ class GUFDecoder(Decoder):
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode an error syndrome and return an inferred error."""
-        syndrome_bits = np.where(syndrome)[0]
-        if not syndrome_bits.size:
-            return np.zeros(len(self.code), dtype=int)
         syndrome = self.code.field(syndrome)
+        syndrome_bits = np.where(syndrome)[0]
 
         # construct an "error set", within which we look for solutions to the decoding problem
         error_set = set(Node(index, is_data=False) for index in syndrome_bits)
@@ -241,10 +239,10 @@ class GUFDecoder(Decoder):
             solutions = candidate_solutions[np.where(candidate_solutions[:, -1])]
 
         # convert solutions [y,c] --> [y/c,1] --> y
-        if self.code.field.order != 2:
-            solutions = solutions[:, :-1] / solutions[:, -1][:, None]
+        if self.code.field.order == 2:
+            solutions = solutions[:, :-1]
         else:
-            solutions = solutions[:, -1]
+            solutions = solutions[:, :-1] / solutions[:, -1][:, None]
 
         # identify the minimum-weight solution found so far
         min_weight_solution = min(solutions, key=lambda solution: np.count_nonzero(solution))
