@@ -249,17 +249,18 @@ class GUFDecoder(Decoder):
         weight = np.count_nonzero(min_weight_solution)
 
         if self.max_weight is not None and weight > self.max_weight:
-            # minimize the weight of the solution over additions of null-syndrome vectors
-            null_solutions = sub_matrix.null_space()
+            # identify null-syndrome vectors
+            null_vectors = sub_matrix.null_space()
 
+            # minimize the weight of the solution over additions of null-syndrome vectors
             min_weight = weight
             one_solution = min_weight_solution.copy()
             null_vector_coefficients = itertools.product(
-                self.code.field.elements, repeat=len(null_solutions)
+                self.code.field.elements, repeat=len(null_vectors)
             )
             next(null_vector_coefficients)  # skip the all-0 vector of coefficients
             for coefficients in null_vector_coefficients:
-                solution = one_solution + self.code.field(coefficients) @ null_solutions
+                solution = one_solution + self.code.field(coefficients) @ null_vectors
                 weight = np.count_nonzero(solution)
                 if weight < min_weight:
                     min_weight = weight
