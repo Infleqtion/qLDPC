@@ -262,8 +262,8 @@ class GUFDecoder(Decoder):
                 solution = one_solution + self.code.field(coefficients) @ null_solutions
                 weight = np.count_nonzero(solution)
                 if weight < min_weight:
+                    min_weight = weight
                     min_weight_solution = solution
-                    min_weight = np.count_nonzero(solution)
                     if weight <= self.max_weight:
                         break
 
