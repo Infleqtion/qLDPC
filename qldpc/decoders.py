@@ -131,15 +131,22 @@ def get_decoder_lookup(matrix: npt.NDArray[np.int_], **decoder_args: object) -> 
 
 
 class LookupDecoder(Decoder):
-    """Lookup table decoder for classical codes."""
+    """Decoder based on a lookup table from errors to syndromes.
 
-    def __init__(self, matrix: npt.NDArray[np.int_], max_weight: int | None = None) -> None:
+    In addition to a parity check matrix, this decoder can be initialized with a max_weight, in
+    which case it builds a lookup table for all errors with weight <= max_weight.  If no max_weight
+    is provided, this code computes the distance of a classical code with the provided parity check
+    matrix, and sets max_weight to the highest weight for which an error is guaranteed to be
+    correctable, namely (code_distance - 1) // 2.
+    """
+
+    def __init__(self, matrix: npt.NDArray[np.int_], *, max_weight: int | None = None) -> None:
         field = type(matrix) if isinstance(matrix, galois.FieldArray) else galois.GF(2)
         matrix = field(matrix)
 
         if max_weight is None:
             code_distance = codes.ClassicalCode(matrix).get_distance()
-            max_weight = (code_distance // 2) if isinstance(code_distance, int) else 0
+            max_weight = (code_distance - 1) // 2 if isinstance(code_distance, int) else 0
 
         self.table: dict[tuple[int, ...], npt.NDArray[np.int_]] = {}
         num_bits = matrix.shape[1]
