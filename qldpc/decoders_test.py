@@ -17,6 +17,7 @@ limitations under the License.
 
 from __future__ import annotations
 
+import functools
 import galois
 import numpy as np
 import numpy.typing as npt
@@ -91,6 +92,15 @@ def test_decoding() -> None:
     ilp_decoder = decoders.ILPDecoder(matrix)
     direct_decoder = decoders.DirectDecoder.from_indirect(ilp_decoder, field(matrix))
     assert np.array_equal(code_word, direct_decoder.decode(corrupted_code_word))
+
+    # the naive GUF decoder can fail sometimes
+    code = functools.reduce(codes.CSSCode.concatenate, [codes.C4Code()] * 3)
+    error = code.field.Zeros(len(code))
+    error[[0, 4]] = 1
+    matrix = code.matrix_z
+    syndrome = matrix @ error
+    assert np.count_nonzero(decoders.decode(matrix, syndrome, with_GUF=True)) > 2
+    assert np.count_nonzero(decoders.decode(matrix, syndrome, with_GUF=True, max_weight=2)) == 2
 
 
 def test_decoding_errors() -> None:
