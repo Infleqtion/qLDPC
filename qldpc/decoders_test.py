@@ -109,18 +109,18 @@ def test_decoding() -> None:
 def test_quantum_decoding(pytestconfig: pytest.Config) -> None:
     """Decode a full quantum code (as opposed to a classical subcode of a CSSCode)."""
     np.random.seed(pytestconfig.getoption("randomly_seed"))
+    paulis = [(0, 0), (1, 0), (0, 1), (1, 1)]
 
     code = codes.SurfaceCode(5)
     qubit_a, qubit_b = np.random.choice(range(len(code)), size=2, replace=False)
-    pauli_a = np.random.choice(range(2), size=2)
-    pauli_b = np.random.choice(range(2), size=2)
+    pauli_a, pauli_b = np.random.choice(range(1, 4), size=2)
     error = code.field.Zeros((2, len(code)))
-    error[:, qubit_a] = pauli_a
-    error[:, qubit_b] = pauli_b
+    error[:, qubit_a] = paulis[pauli_a]
+    error[:, qubit_b] = paulis[pauli_b]
     syndrome = code.matrix @ conjugate_xz(error.ravel())
 
     decoder = decoders.GUFDecoder(code.matrix, symplectic=True)
-    decoded_error = code.field(decoder.decode(syndrome))
+    decoded_error = code.field(decoder.decode(syndrome, max_weight=2))
     assert np.array_equal(syndrome, code.matrix @ conjugate_xz(decoded_error))
 
 
