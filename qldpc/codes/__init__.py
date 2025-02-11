@@ -9,6 +9,7 @@ from .classical import (
     TannerCode,
 )
 from .common import (
+    AbstractCode,
     ClassicalCode,
     CSSCode,
     QuditCode,
@@ -39,6 +40,7 @@ __all__ = [
     "RepetitionCode",
     "RingCode",
     "TannerCode",
+    "AbstractCode",
     "ClassicalCode",
     "CSSCode",
     "QuditCode",

@@ -714,8 +714,7 @@ class QuditCode(AbstractCode):
         """Compute the weight of the largest check."""
         matrix_x = self.matrix[:, : len(self)].view(np.ndarray)
         matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
-        matrix = matrix_x + matrix_z  # nonzero wherever a check addresses a qudit
-        return max(np.count_nonzero(row) for row in matrix)
+        return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))
 
     @staticmethod
     def equiv(code_a: QuditCode, code_b: QuditCode) -> bool:
@@ -917,8 +916,7 @@ class QuditCode(AbstractCode):
                 word = word_l + word_s
                 support_x = word[: len(self)].view(np.ndarray)
                 support_z = word[len(self) :].view(np.ndarray)
-                support = support_x + support_z  # nonzero wherever a word addresses a qudit
-                distance = min(distance, np.count_nonzero(support))
+                distance = min(distance, np.count_nonzero(support_x | support_z))
 
         self._exact_distance = int(distance)
         return distance
