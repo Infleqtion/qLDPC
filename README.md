@@ -1,6 +1,6 @@
 # qLDPC
 
-This package contains tools for constructing and analyzing [quantum low density parity check (qLDPC) codes](https://errorcorrectionzoo.org/c/qldpc).  At least, that was the original motivation for this package.  In practice, the tools here work just as well with more general error-correcting stabilizer codes.
+This package contains tools for constructing and analyzing [quantum low density parity check (qLDPC) codes](https://errorcorrectionzoo.org/c/qldpc).  At least, that was the original motivation for this package.  In practice, the tools here can work just as well for general error-correcting stabilizer codes.
 
 ## 📦 Installation
 
