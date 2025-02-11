@@ -114,10 +114,10 @@ def test_quantum_decoding(pytestconfig: pytest.Config) -> None:
     code = codes.SurfaceCode(5)
     qubit_a, qubit_b = np.random.choice(range(len(code)), size=2, replace=False)
     pauli_a, pauli_b = np.random.choice(range(1, 4), size=2)
-    error = code.field.Zeros((2, len(code)))
-    error[:, qubit_a] = paulis[pauli_a].value
-    error[:, qubit_b] = paulis[pauli_b].value
-    syndrome = code.matrix @ conjugate_xz(error.ravel())
+    error = code.field.Zeros(2 * len(code))
+    error[[qubit_a, qubit_a + len(code)]] = paulis[pauli_a].value
+    error[[qubit_b, qubit_b + len(code)]] = paulis[pauli_b].value
+    syndrome = code.matrix @ conjugate_xz(error)
 
     decoder = decoders.GUFDecoder(code.matrix, symplectic=True)
     decoded_error = code.field(decoder.decode(syndrome, max_weight=2))
