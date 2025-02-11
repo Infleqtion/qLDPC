@@ -120,7 +120,7 @@ def test_quantum_decoding(pytestconfig: pytest.Config) -> None:
     syndrome = code.matrix @ conjugate_xz(error)
 
     decoder = decoders.GUFDecoder(code.matrix, symplectic=True)
-    decoded_error = code.field(decoder.decode(syndrome, max_weight=2))
+    decoded_error = code.field(decoder.decode(syndrome))
     assert np.array_equal(syndrome, code.matrix @ conjugate_xz(decoded_error))
 
 
