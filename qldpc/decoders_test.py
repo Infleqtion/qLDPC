@@ -25,6 +25,7 @@ import numpy.typing as npt
 import pytest
 
 from qldpc import codes, decoders
+from qldpc.objects import conjugate_xz
 
 
 def test_custom_decoder(pytestconfig: pytest.Config) -> None:
@@ -103,6 +104,24 @@ def test_decoding() -> None:
     syndrome = matrix @ error
     assert np.count_nonzero(decoders.decode(matrix, syndrome, with_GUF=True)) > 2
     assert np.count_nonzero(decoders.decode(matrix, syndrome, with_GUF=True, max_weight=2)) == 2
+
+
+def test_quantum_decoding(pytestconfig: pytest.Config) -> None:
+    """Decode a full quantum code (as opposed to a classical subcode of a CSSCode)."""
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
+    code = codes.SurfaceCode(5)
+    qubit_a, qubit_b = np.random.choice(range(len(code)), size=2, replace=False)
+    pauli_a = np.random.choice(range(2), size=2)
+    pauli_b = np.random.choice(range(2), size=2)
+    error = code.field.Zeros((2, len(code)))
+    error[:, qubit_a] = pauli_a
+    error[:, qubit_b] = pauli_b
+    syndrome = code.matrix @ conjugate_xz(error.ravel())
+
+    decoder = decoders.GUFDecoder(code.matrix, symplectic=True)
+    decoded_error = code.field(decoder.decode(syndrome))
+    assert np.array_equal(syndrome, code.matrix @ conjugate_xz(decoded_error))
 
 
 def test_decoding_errors() -> None:
