@@ -28,7 +28,7 @@ import numpy.typing as npt
 import pymatching
 
 from qldpc import codes
-from qldpc.objects import Node
+from qldpc.objects import Node, conjugate_xz
 
 
 class Decoder(Protocol):
@@ -200,13 +200,37 @@ class GUFDecoder(Decoder):
         matrix: npt.NDArray[np.int_],
         *,
         max_weight: int | None = None,
+        symplectic: bool = False,
     ) -> None:
-        self.code = codes.ClassicalCode(matrix)
-        self.graph = self.code.graph.to_undirected()
-        self.max_weight = max_weight
+        self.default_max_weight = max_weight
+        self.symplectic = symplectic
 
-    def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        self.get_weight: Callable[[npt.NDArray[np.int_]], int]
+        self.code: codes.AbstractCode
+        if not symplectic:
+            # "ordinary" decoding of a classical code
+            self.get_weight = np.count_nonzero  # Hamming weight (of an error vector)
+            self.code = codes.ClassicalCode(matrix)
+
+        else:
+            # decoding a quantum code: the "weight" of an error vector is its symplectic weight
+
+            def symplectic_weight(vector: npt.NDArray[np.int_]) -> int:
+                vector = vector.reshape(2, -1)
+                vector_x = np.asarray(vector[0], dtype=int)
+                vector_z = np.asarray(vector[1], dtype=int)
+                return np.count_nonzero(vector_x | vector_z)
+
+            self.get_weight = symplectic_weight
+            self.code = codes.QuditCode(matrix)
+
+        self.graph = self.code.graph.to_undirected()
+
+    def decode(
+        self, syndrome: npt.NDArray[np.int_], *, max_weight: int | None = None
+    ) -> npt.NDArray[np.int_]:
         """Decode an error syndrome and return an inferred error."""
+        max_weight = max_weight if max_weight is not None else self.default_max_weight
         syndrome = self.code.field(syndrome)
         syndrome_bits = np.where(syndrome)[0]
 
@@ -222,7 +246,7 @@ class GUFDecoder(Decoder):
 
             # if the error set has not grown, there is no valid solution, so exit now
             if len(error_set) == last_error_set_size:
-                return np.zeros(len(self.code), dtype=int)
+                return np.zeros(len(self.code) * (2 if self.symplectic else 1), dtype=int)
             last_error_set_size = len(error_set)
 
             # check whether the syndrome can be induced by errors in the interior of the error_set
@@ -245,10 +269,10 @@ class GUFDecoder(Decoder):
             solutions = solutions[:, :-1] / solutions[:, -1][:, None]
 
         # identify the minimum-weight solution found so far
-        min_weight_solution = min(solutions, key=lambda solution: np.count_nonzero(solution))
-        weight = np.count_nonzero(min_weight_solution)
+        min_weight_solution = min(solutions, key=lambda solution: self.get_weight(solution))
+        weight = self.get_weight(min_weight_solution)
 
-        if self.max_weight is not None and weight > self.max_weight:
+        if max_weight is not None and weight > max_weight:
             # identify null-syndrome vectors
             null_vectors = sub_matrix.null_space()
 
@@ -261,16 +285,22 @@ class GUFDecoder(Decoder):
             next(null_vector_coefficients)  # skip the all-0 vector of coefficients
             for coefficients in null_vector_coefficients:
                 solution = one_solution + self.code.field(coefficients) @ null_vectors
-                weight = np.count_nonzero(solution)
+                weight = self.get_weight(solution)
                 if weight < min_weight:
                     min_weight = weight
                     min_weight_solution = solution
-                    if weight <= self.max_weight:
+                    if weight <= max_weight:
                         break
 
-        # construct and return the error in the full code block
-        error = self.code.field.Zeros(len(self.code))
-        error[bits] = min_weight_solution
+        # construct the full error
+        if not self.symplectic:
+            error = self.code.field.Zeros(len(self.code))
+            error[bits] = min_weight_solution
+        else:
+            error = self.code.field.Zeros(2 * len(self.code))
+            error[bits] = min_weight_solution
+            error = conjugate_xz(error)
+
         return error.view(np.ndarray)
 
     def get_sub_problem_indices(
@@ -288,6 +318,10 @@ class GUFDecoder(Decoder):
         )
         checks = [node.index for node in check_nodes]
         bits = [node.index for node in interior_data_nodes]
+
+        if self.symplectic:
+            # add classical bits to account for the support of Z-type operators in the error vector
+            bits += [bit + len(self.code) for bit in bits]
 
         # the order of checks, bits is technically arbitrary, but according to unofficial empirical
         # tests, reverse-sorted order works better for concatenated codes
