@@ -190,6 +190,11 @@ class GUFDecoder(Decoder):
     the minimum-weight error that it found while trying.  Be warned that passing a max_weight makes
     this decoder have worst-case exponential runtime.
 
+    If initialized with symplectic=True, this decoder treats the parity check matrix as that of a
+    QuditCode, with the first and last half of the columns denoting, respectively, the X and Z
+    support of a stabilizer.  Decoded errors likewise vectors that indicate their X and Z support by
+    the first and second half.
+
     Warning: this implementation of the generalized Union-Find decoder is highly unoptimized.  For
     one, it is written entirely in Python.  Moreover, this implementation does not factor an error
     set into connected componenents.
