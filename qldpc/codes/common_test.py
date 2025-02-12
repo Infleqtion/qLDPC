@@ -435,8 +435,8 @@ def test_css_ops() -> None:
 
     # swap around logical operators
     code.set_logical_ops_xz(
-        code.get_logical_ops(Pauli.X)[::-1, : len(code)],
-        code.get_logical_ops(Pauli.Z)[::-1, len(code) :],
+        code.get_logical_ops(Pauli.X)[::-1],
+        code.get_logical_ops(Pauli.Z)[::-1],
     )
 
     # successfully construct and reduce logical operators in a code with "over-complete" checks

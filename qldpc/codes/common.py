@@ -1098,10 +1098,18 @@ class QuditCode(AbstractCode):
         matrix = np.hstack([code_x.matrix, code_z.matrix])
         code = QuditCode(matrix)
         if inherit_logicals:
-            logicals_xx = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in codes]
-            logicals_zx = [code.get_logical_ops(Pauli.Z)[:, : len(code)] for code in codes]
-            logicals_xz = [code.get_logical_ops(Pauli.X)[:, len(code) :] for code in codes]
-            logicals_zz = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in codes]
+            logicals_xx = [
+                QuditCode.get_logical_ops(code, Pauli.X)[:, : len(code)] for code in codes
+            ]
+            logicals_zx = [
+                QuditCode.get_logical_ops(code, Pauli.Z)[:, : len(code)] for code in codes
+            ]
+            logicals_xz = [
+                QuditCode.get_logical_ops(code, Pauli.X)[:, len(code) :] for code in codes
+            ]
+            logicals_zz = [
+                QuditCode.get_logical_ops(code, Pauli.Z)[:, len(code) :] for code in codes
+            ]
             logical_ops = np.block(
                 [
                     [scipy.linalg.block_diag(*logicals_xx), scipy.linalg.block_diag(*logicals_xz)],
@@ -1370,7 +1378,7 @@ class CSSCode(QuditCode):
         if self.field.order == 2:
             code = self.code_x if pauli == Pauli.X else self.code_z
             stabilizers = code.canonicalized().matrix
-            logical_ops = self.get_logical_ops(pauli).reshape(-1, 2, len(self))[:, pauli, :]
+            logical_ops = self.get_logical_ops(pauli)
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
                 stabilizers.view(np.ndarray).astype(np.uint8),
@@ -1380,7 +1388,7 @@ class CSSCode(QuditCode):
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
-            logical_ops = self.get_logical_ops(pauli).reshape(-1, 2, len(self))[:, pauli, :]
+            logical_ops = self.get_logical_ops(pauli)
             matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
             code_stabilizers = ClassicalCode.from_generator(matrix)
@@ -1524,7 +1532,7 @@ class CSSCode(QuditCode):
         operators in all other rows except row j+k.
 
         If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
-        operators of that type.
+        operators of that type, in a matrix with shape (k, n).
 
         Logical X-type operators only address physical qudits by physical X-type operators, and
         logical Z-type operators only address physical qudits by physical Z-type operators.
@@ -1536,8 +1544,9 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
-            return logical_ops[pauli, :, :]  # type:ignore[return-value]
+            shape = (2, self.dimension, 2, -1)
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
+            return logical_ops[pauli, :, pauli, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
         if self._logical_ops is not None and not recompute:
@@ -1601,7 +1610,13 @@ class CSSCode(QuditCode):
         validate: bool = True,
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
-        logical_ops = scipy.linalg.block_diag(self.field(logicals_x), self.field(logicals_z))
+        zero_block = np.zeros((self.dimension, len(self)), dtype=int)
+        logical_ops = np.block(
+            [
+                [self.field(logicals_x), zero_block],
+                [zero_block, self.field(logicals_z)],
+            ]
+        )
         self.set_logical_ops(logical_ops, validate=validate)
 
     def get_random_logical_op(
@@ -1641,18 +1656,10 @@ class CSSCode(QuditCode):
         assert pauli == Pauli.X or pauli == Pauli.Z
         assert 0 <= logical_index < self.dimension
 
-        dual_pauli = ~pauli
-        assert dual_pauli == Pauli.X or dual_pauli == Pauli.Z
-
-        # effective check matrix = syndromes and other logical operators
-        if pauli == Pauli.X:
-            code = self.code_z
-            nonzero_dual_section = slice(self.num_qudits, 2 * self.num_qudits)
-        else:
-            code = self.code_x
-            nonzero_dual_section = slice(self.num_qudits)
-        all_dual_ops = self.get_logical_ops(dual_pauli)[:, nonzero_dual_section]
-        effective_check_matrix = np.vstack([code.matrix, all_dual_ops])
+        # effective check matrix = syndromes and dual-pauli logical operators
+        code = self.code_z if pauli == Pauli.X else self.code_x
+        dual_logical_ops = self.get_logical_ops(~pauli)  # type:ignore[arg-type]
+        effective_check_matrix = np.vstack([code.matrix, dual_logical_ops])
         dual_op_index = code.num_checks + logical_index
 
         # enforce that the new logical operator commutes with everything except its dual
@@ -1702,10 +1709,11 @@ class CSSCode(QuditCode):
             validate=False,
         )
         if inherit_logicals:
-            logicals_x = [code.get_logical_ops(Pauli.X)[:, : len(code)] for code in css_codes]
-            logicals_z = [code.get_logical_ops(Pauli.Z)[:, len(code) :] for code in css_codes]
+            logicals_x = [code.get_logical_ops(Pauli.X) for code in css_codes]
+            logicals_z = [code.get_logical_ops(Pauli.Z) for code in css_codes]
             code.set_logical_ops_xz(
-                scipy.linalg.block_diag(*logicals_x), scipy.linalg.block_diag(*logicals_z)
+                scipy.linalg.block_diag(*logicals_x),
+                scipy.linalg.block_diag(*logicals_z),
             )
         return code
 
@@ -1749,8 +1757,8 @@ class CSSCode(QuditCode):
         on logical operators of the inner code.  Expand these parity checks into their support on
         the physical qudits of the inner code.
         """
-        outer_checks_x = outer.matrix_x @ inner.get_logical_ops(Pauli.X)[:, : len(inner)]
-        outer_checks_z = outer.matrix_z @ inner.get_logical_ops(Pauli.Z)[:, len(inner) :]
+        outer_checks_x = outer.matrix_x @ inner.get_logical_ops(Pauli.X)
+        outer_checks_z = outer.matrix_z @ inner.get_logical_ops(Pauli.Z)
 
         # combine parity checks of the inner and outer codes
         code = CSSCode(
@@ -1807,8 +1815,8 @@ class CSSCode(QuditCode):
             decoder_z = decoders.DirectDecoder.from_indirect(decoder_z, self.matrix_x)
 
         # identify logical operators
-        logicals_x = self.get_logical_ops(Pauli.X)[:, : len(self)]
-        logicals_z = self.get_logical_ops(Pauli.Z)[:, len(self) :]
+        logicals_x = self.get_logical_ops(Pauli.X)
+        logicals_z = self.get_logical_ops(Pauli.Z)
 
         # compute decoding fidelities for each error weight
         sample_allocation = _get_sample_allocation(num_samples, len(self), max_error_rate)

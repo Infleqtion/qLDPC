@@ -49,7 +49,7 @@ def test_state_prep() -> None:
             assert simulator.peek_observable_expectation(string) == 1
 
         # the state of the simulator is a +1 eigenstate of all logical Z operators
-        for op in code.get_logical_ops(Pauli.Z):
+        for op in codes.QuditCode.get_logical_ops(code, Pauli.Z):
             string = circuits.op_to_string(op)
             assert simulator.peek_observable_expectation(string) == 1
 

@@ -52,8 +52,8 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     mapped to destabilizers.
     """
     # identify logical operators
-    logicals_x = [op_to_string(op) for op in code.get_logical_ops(Pauli.X)]
-    logicals_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
+    logicals_x = [op_to_string(op) for op in codes.QuditCode.get_logical_ops(code, Pauli.X)]
+    logicals_z = [op_to_string(op) for op in codes.QuditCode.get_logical_ops(code, Pauli.Z)]
 
     # identify stabilizers
     matrix = codes.ClassicalCode(code.matrix).canonicalized().matrix
@@ -205,7 +205,9 @@ def get_transversal_automorphism_group(
     deformations for which the logical Pauli group of the original QuditCode is a valid choice of
     logical Pauli group for the deformed QuditCode.
     """
-    effective_stabilizers = code.matrix if not deform_code else conjugate_xz(code.get_logical_ops())
+    effective_stabilizers = (
+        code.matrix if not deform_code else conjugate_xz(codes.QuditCode.get_logical_ops(code))
+    )
     matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
     matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
@@ -492,9 +494,9 @@ def get_transversal_circuits(
         *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
         for logical_qubit in range(code.dimension):
             if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
-                correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
+                correction += codes.QuditCode.get_logical_ops(code, Pauli.Z)[logical_qubit]
             if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
-                correction += code.get_logical_ops(Pauli.X)[logical_qubit]
+                correction += codes.QuditCode.get_logical_ops(code, Pauli.X)[logical_qubit]
         correction_circuit = _get_pauli_circuit(op_to_string(correction))
 
         physical_circuits[tt] = correction_circuit + matching_circuit
