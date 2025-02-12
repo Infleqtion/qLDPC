@@ -1636,21 +1636,11 @@ class CSSCode(QuditCode):
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
         if not ensure_nontrivial:
-            return (self.code_z if pauli == Pauli.X else self.code_x).get_random_word(seed=seed)
-
-        # generate random logical ops until we find ones with a nontrivial commutation relation
-        noncommuting_ops_found = False
-        while not noncommuting_ops_found:
-            op_a = self.get_random_logical_op(pauli, ensure_nontrivial=False, seed=seed)
-            op_b = self.get_random_logical_op(
-                ~pauli,  # type:ignore[arg-type]
-                ensure_nontrivial=False,
-                seed=seed + 1 if seed is not None else None,
-            )
-            seed = seed + 2 if seed is not None else None
-            noncommuting_ops_found = bool(np.any(op_a @ op_b))
-
-        return op_a
+            code = self.code_z if pauli == Pauli.X else self.code_x
+            return code.get_random_word(seed=seed)
+        code = self.code_x if pauli == Pauli.X else self.code_z
+        ops = np.vstack([code.matrix, self.get_logical_ops(pauli)])
+        return get_random_array(self.field, len(ops), seed=seed) @ ops
 
     def reduce_logical_op(self, pauli: PauliXZ, logical_index: int, **decoder_args: Any) -> None:
         """Reduce the weight of a logical operator.
