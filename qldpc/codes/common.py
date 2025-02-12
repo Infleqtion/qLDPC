@@ -1635,17 +1635,13 @@ class CSSCode(QuditCode):
         operator we return is nontrivial.
         """
         assert pauli == Pauli.X or pauli == Pauli.Z
-        if not ensure_nontrivial:
-            code = self.code_z if pauli == Pauli.X else self.code_x
-            return code.get_random_word(seed=seed)
-
         code = self.code_x if pauli == Pauli.X else self.code_z
         ops = np.vstack([self.get_logical_ops(pauli), code.matrix])
         random_array = get_random_array(
             self.field,
             len(ops),
             seed=seed,
-            satisfy=lambda array: np.any(array[: self.dimension]),
+            satisfy=lambda array: (np.any(array[: self.dimension]) if ensure_nontrivial else True),
         )
         return random_array @ ops
 
