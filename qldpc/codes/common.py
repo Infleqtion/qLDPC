@@ -1638,9 +1638,16 @@ class CSSCode(QuditCode):
         if not ensure_nontrivial:
             code = self.code_z if pauli == Pauli.X else self.code_x
             return code.get_random_word(seed=seed)
+
         code = self.code_x if pauli == Pauli.X else self.code_z
-        ops = np.vstack([code.matrix, self.get_logical_ops(pauli)])
-        return get_random_array(self.field, len(ops), seed=seed) @ ops
+        ops = np.vstack([self.get_logical_ops(pauli), code.matrix])
+        random_array = get_random_array(
+            self.field,
+            len(ops),
+            seed=seed,
+            satisfy=lambda array: np.any(array[: self.dimension]),
+        )
+        return random_array @ ops
 
     def reduce_logical_op(self, pauli: PauliXZ, logical_index: int, **decoder_args: Any) -> None:
         """Reduce the weight of a logical operator.
