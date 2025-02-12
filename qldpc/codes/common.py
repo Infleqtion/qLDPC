@@ -1294,6 +1294,11 @@ class CSSCode(QuditCode):
         text += f"\nZ-type parity checks:\n{self.matrix_z}"
         return text
 
+    def get_code(self, pauli: PauliXZ) -> ClassicalCode:
+        """Retrieve the classical code of stabilizers of a given type."""
+        assert pauli in PAULIS_XZ
+        return self.code_x if pauli is Pauli.X else self.code_z
+
     @functools.cached_property
     def matrix(self) -> galois.FieldArray:
         """Overall parity check matrix."""
@@ -1376,8 +1381,7 @@ class CSSCode(QuditCode):
 
         # we do not know the exact distance, so compute it
         if self.field.order == 2:
-            code = self.code_x if pauli == Pauli.X else self.code_z
-            stabilizers = code.canonicalized().matrix
+            stabilizers = self.get_code(pauli).canonicalized().matrix
             logical_ops = self.get_logical_ops(pauli)
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
@@ -1389,7 +1393,7 @@ class CSSCode(QuditCode):
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
             logical_ops = self.get_logical_ops(pauli)
-            matrix = self.matrix_x if pauli == Pauli.X else self.matrix_z
+            matrix = self.get_code(pauli).matrix
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
             code_stabilizers = ClassicalCode.from_generator(matrix)
             distance = min(
@@ -1399,9 +1403,9 @@ class CSSCode(QuditCode):
             )
 
         # save the exact distance and return
-        if pauli == Pauli.X or self._balanced_codes:
+        if pauli is Pauli.X or self._balanced_codes:
             self._exact_distance_x = distance
-        if pauli == Pauli.Z or self._balanced_codes:
+        if pauli is Pauli.Z or self._balanced_codes:
             self._exact_distance_z = distance
         return distance
 
@@ -1413,9 +1417,9 @@ class CSSCode(QuditCode):
         if self.dimension == 0:
             self._exact_distance_x = self._exact_distance_z = np.nan
 
-        if pauli == Pauli.X:
+        if pauli is Pauli.X:
             return self._exact_distance_x
-        elif pauli == Pauli.Z:
+        elif pauli is Pauli.Z:
             return self._exact_distance_z
         return (
             min(self._exact_distance_x, self._exact_distance_z)
@@ -1491,9 +1495,9 @@ class CSSCode(QuditCode):
         pauli = pauli or random.choice(PAULIS_XZ)
         assert pauli in PAULIS_XZ
 
-        # define code_z and pauli_z as if we are computing X-distance
-        code_z = self.code_z if pauli == Pauli.X else self.code_x
-        pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli == Pauli.X else Pauli.X
+        # define pauli_z and code_z as if we are computing X-distance
+        pauli_z: Literal[Pauli.Z, Pauli.X] = Pauli.Z if pauli is Pauli.X else Pauli.X
+        code_z = self.get_code(pauli_z)
 
         # construct the effective syndrome
         effective_syndrome = np.zeros(code_z.num_checks + 1, dtype=int)
@@ -1634,9 +1638,8 @@ class CSSCode(QuditCode):
         identity modulo stabilizers.  If `ensure_nontrivial is True`, ensure that the logical
         operator we return is nontrivial.
         """
-        assert pauli == Pauli.X or pauli == Pauli.Z
-        code = self.code_x if pauli == Pauli.X else self.code_z
-        ops = np.vstack([self.get_logical_ops(pauli), code.matrix])
+        assert pauli is Pauli.X or pauli is Pauli.Z
+        ops = np.vstack([self.get_logical_ops(pauli), self.get_code(pauli).matrix])
         random_array = get_random_array(
             self.field,
             len(ops),
@@ -1652,11 +1655,11 @@ class CSSCode(QuditCode):
         that it commutes with all logical operators except its dual.  This is essentially the same
         method as that used in CSSCode.get_one_distance_bound.
         """
-        assert pauli == Pauli.X or pauli == Pauli.Z
+        assert pauli is Pauli.X or pauli is Pauli.Z
         assert 0 <= logical_index < self.dimension
 
         # effective check matrix = syndromes and dual-pauli logical operators
-        code = self.code_z if pauli == Pauli.X else self.code_x
+        code = self.get_code(~pauli)  # type:ignore[arg-type]
         dual_logical_ops = self.get_logical_ops(~pauli)  # type:ignore[arg-type]
         effective_check_matrix = np.vstack([code.matrix, dual_logical_ops])
         dual_op_index = code.num_checks + logical_index
