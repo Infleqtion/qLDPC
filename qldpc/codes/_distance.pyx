@@ -274,8 +274,8 @@ cdef uint64_t get_distance_quantum_64_2(
             min_weight, weight_func(logical_op_0) + weight_func(logical_op_1)
         )
         for ss in gray_code_flips(num_stabilizers):
-            logical_op_0 ^= int_stabilizers_0[ll]
-            logical_op_1 ^= int_stabilizers_1[ll]
+            logical_op_0 ^= int_stabilizers_0[ss]
+            logical_op_1 ^= int_stabilizers_1[ss]
             min_weight = min(
                 min_weight, weight_func(logical_op_0) + weight_func(logical_op_1)
             )
