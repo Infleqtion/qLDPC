@@ -1545,6 +1545,7 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
+            shape: tuple[int, ...]
             if symplectic:
                 shape = (2, self.dimension, 2 * len(self))
                 logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
