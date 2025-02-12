@@ -430,8 +430,9 @@ def test_css_ops() -> None:
     code: codes.CSSCode
 
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
-    code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
-    code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
+    assert len(code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)) == len(code)
+    assert len(code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)) == len(code)
+    assert len(code.get_random_logical_op(Pauli.X, symplectic=True)) == 2 * len(code)
 
     # swap around logical operators
     code.set_logical_ops_xz(

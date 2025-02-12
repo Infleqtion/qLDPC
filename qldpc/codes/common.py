@@ -1518,7 +1518,7 @@ class CSSCode(QuditCode):
         return int(np.count_nonzero(candidate_logical_op))
 
     def get_logical_ops(
-        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
     ) -> galois.FieldArray:
         """Complete basis of nontrivial logical Pauli operators for this code.
 
@@ -1532,7 +1532,8 @@ class CSSCode(QuditCode):
         operators in all other rows except row j+k.
 
         If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
-        operators of that type, in a matrix with shape (k, n).
+        operators of that type.  This matrix has shape (k, n) by default, but is expanded into a
+        matrix with shape (k, 2 * n) if this method is called with symplectic=True.
 
         Logical X-type operators only address physical qudits by physical X-type operators, and
         logical Z-type operators only address physical qudits by physical Z-type operators.
@@ -1544,6 +1545,10 @@ class CSSCode(QuditCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
+            if symplectic:
+                shape = (2, self.dimension, 2, -1)
+                logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
+                return logical_ops[pauli, :, :]  # type:ignore[return-value]
             shape = (2, self.dimension, 2, -1)
             logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
             return logical_ops[pauli, :, pauli, :]  # type:ignore[return-value]
