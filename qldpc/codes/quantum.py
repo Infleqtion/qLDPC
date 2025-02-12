@@ -630,7 +630,8 @@ class BBCode(QCCode):
 class HGPCode(CSSCode):
     """Hypergraph product (HGP) code.
 
-    A hypergraph product code AB is constructed from two classical codes, A and B.
+    A hypergraph product code AB is constructed from the parity check matrices of two classical
+    codes, A and B.
 
     Consider the following:
     - Code A has 3 data and 2 check bits.
@@ -869,6 +870,40 @@ class LPCode(CSSCode):
             field,
             validate=False,
         )
+
+
+class SHPCode(CSSCode):
+    """Subsystem hypergraph product (SHP) code.
+
+    A subsystem hypergraph product code (SHPCode) is constructed from two classical codes.  Unlike
+    the ordinary hypergraph product code, an SHPCode depends only on the actual classical codes it
+    is built from; in particular, an SHPCode does not depend on the particular choice of parity
+    check matrices for the underlying classical codes.
+
+    If the classical generating codes of an SHPCode have code parameters [n1, k1, d1], [n2, k2, d2],
+    the SHPCode has parameters [n1 n2, k1 k2, min(d1, d2)].
+
+    References:
+    - https://arxiv.org/pdf/2002.06257
+    """
+
+    def __init__(
+        self,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        field: int | None = None,
+    ) -> None:
+        """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
+        if code_b is None:
+            code_b = code_a
+        code_a = ClassicalCode(code_a, field)
+        code_b = ClassicalCode(code_b, field)
+        field = code_a.field.order
+
+        matrix_x = np.kron(code_a.matrix, code_a.generator)
+        matrix_z = np.kron(code_a.generator, code_b.matrix)
+
+        CSSCode.__init__(self, matrix_x, matrix_z, field, validate=False)
 
 
 ################################################################################
