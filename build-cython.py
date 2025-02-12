@@ -24,8 +24,10 @@ def build_cython() -> None:
 
     # copy *.so files to their respective *.pyx directories
     for output in cmd.get_outputs():
-        relative_extension = os.path.relpath(output, cmd.build_lib)
-        shutil.copyfile(output, relative_extension)
+        destination = os.path.relpath(output, cmd.build_lib)
+        if os.path.isfile(destination):
+            os.remove(destination)
+        shutil.copyfile(output, destination)
 
 
 if __name__ == "__main__":
