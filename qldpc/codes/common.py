@@ -37,7 +37,7 @@ from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
 
-from ._distance import get_distance_classical, get_distance_quantum
+# from ._distance import get_distance_classical, get_distance_quantum
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -350,8 +350,9 @@ class ClassicalCode(AbstractCode):
             return min(np.count_nonzero(word - vector) for word in self.iter_words())
 
         # we do not know the exact distance, so compute it
-        if self.field.order == 2:
-            distance = get_distance_classical(self.generator.view(np.ndarray).astype(np.uint8))
+        if self.field.order == 2 and False:
+            ...
+        # distance = get_distance_classical(self.generator.view(np.ndarray).astype(np.uint8))
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
@@ -895,13 +896,14 @@ class QuditCode(AbstractCode):
         if (known_distance := self._get_distance_if_known()) is not None:
             return known_distance
 
-        if self.field.order == 2:
-            stabilizers = self.canonicalized().matrix
-            logical_ops = self.get_logical_ops()
-            distance = get_distance_quantum(
-                logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
-            )
+        if self.field.order == 2 and False:
+            ...
+            # stabilizers = self.canonicalized().matrix
+            # logical_ops = self.get_logical_ops()
+            # distance = get_distance_quantum(
+            #     logical_ops.view(np.ndarray).astype(np.uint8),
+            #     stabilizers.view(np.ndarray).astype(np.uint8),
+            # )
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
@@ -1380,14 +1382,15 @@ class CSSCode(QuditCode):
             return min(self.get_distance_exact(Pauli.X), self.get_distance_exact(Pauli.Z))
 
         # we do not know the exact distance, so compute it
-        if self.field.order == 2:
-            stabilizers = self.get_code(pauli).canonicalized().matrix
-            logical_ops = self.get_logical_ops(pauli)
-            distance = get_distance_quantum(
-                logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
-                homogeneous=True,
-            )
+        if self.field.order == 2 and False:
+            ...
+            # stabilizers = self.get_code(pauli).canonicalized().matrix
+            # logical_ops = self.get_logical_ops(pauli)
+            # distance = get_distance_quantum(
+            #     logical_ops.view(np.ndarray).astype(np.uint8),
+            #     stabilizers.view(np.ndarray).astype(np.uint8),
+            #     homogeneous=True,
+            # )
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
