@@ -885,7 +885,8 @@ class SHPCode(CSSCode):
 
     References:
     - https://errorcorrectionzoo.org/c/subsystem_quantum_parity
-    - https://arxiv.org/pdf/2002.06257
+    - https://arxiv.org/abs/2002.06257
+    - https://arxiv.org/abs/2502.07150
     """
 
     def __init__(
