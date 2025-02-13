@@ -220,6 +220,21 @@ def test_hypergraph_products(
     assert np.array_equal(code.matrix_x, matrix_x)
     assert np.array_equal(code.matrix_z, matrix_z)
 
+    # sanity check for generating sets of the logical operators of an HGPCode
+    ops_x = code.get_logical_ops(Pauli.X)
+    ops_z = code.get_logical_ops(Pauli.Z)
+    gens_x, gens_z = codes.HGPCode.get_logical_generators(code_a, code_b)
+    assert not np.any(code.matrix_z @ gens_x.T)
+    assert not np.any(code.matrix_x @ gens_z.T)
+    assert (
+        codes.ClassicalCode(np.vstack([code.matrix_x, ops_x])).rank
+        == codes.ClassicalCode(np.vstack([code.matrix_x, gens_x])).rank
+    )
+    assert (
+        codes.ClassicalCode(np.vstack([code.matrix_z, ops_z])).rank
+        == codes.ClassicalCode(np.vstack([code.matrix_z, gens_z])).rank
+    )
+
 
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (4, 3),
