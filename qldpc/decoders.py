@@ -183,7 +183,7 @@ def get_decoder_GUF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> GUF
 
 
 class GUFDecoder(Decoder):
-    """The generalized Union-Find (GUF) decoder in https://arxiv.org/pdf/2103.08049.
+    """The generalized Union-Find (GUF) decoder in https://arxiv.org/abs/2103.08049.
 
     If passed a max_weight argument, this decoder tries to find an error with weight <= max_weight,
     and returns the first such error that it finds.  If no such error is found, this decoder returns

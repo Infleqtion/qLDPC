@@ -188,7 +188,7 @@ class QCCode(TBCode):
 
     Univariate quasi-cyclic codes are generalized bicycle codes:
     - https://errorcorrectionzoo.org/c/generalized_bicycle
-    - https://arxiv.org/pdf/2203.17216
+    - https://arxiv.org/abs/2203.17216
 
     Bivariate quasi-cyclic codes are bivariate bicycle codes; see BBCode class.
     """
@@ -365,8 +365,8 @@ class BBCode(QCCode):
     References:
     - https://errorcorrectionzoo.org/c/qcga
     - https://arxiv.org/abs/2308.07915
-    - https://arxiv.org/pdf/2408.10001
-    - https://arxiv.org/pdf/2404.18809
+    - https://arxiv.org/abs/2408.10001
+    - https://arxiv.org/abs/2404.18809
     """
 
     def __init__(
