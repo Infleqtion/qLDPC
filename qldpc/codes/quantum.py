@@ -900,7 +900,7 @@ class SHPCode(CSSCode):
         code_b = ClassicalCode(code_b, field)
         field = code_a.field.order
 
-        matrix_x = np.kron(code_a.matrix, code_a.generator)
+        matrix_x = np.kron(code_a.matrix, code_b.generator)
         matrix_z = np.kron(code_a.generator, code_b.matrix)
 
         CSSCode.__init__(self, matrix_x, matrix_z, field, validate=False)
