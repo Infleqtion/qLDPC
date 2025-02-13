@@ -223,7 +223,7 @@ def test_hypergraph_products(
     # sanity check for generating sets of the logical operators of an HGPCode
     gens_x, gens_z = codes.HGPCode.get_logical_generators(code_a, code_b)
     ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
-    ops_z = np.vstack([code.matrix_z, gens_z])  # X-type stabilizers and logicals
+    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
     assert not np.any(code.matrix_z @ gens_x.T)
     assert not np.any(code.matrix_x @ gens_z.T)
     assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
