@@ -884,6 +884,7 @@ class SHPCode(CSSCode):
     the SHPCode has parameters [n1 n2, k1 k2, min(d1, d2)].
 
     References:
+    - https://errorcorrectionzoo.org/c/subsystem_quantum_parity
     - https://arxiv.org/pdf/2002.06257
     """
 
