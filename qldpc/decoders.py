@@ -28,7 +28,7 @@ import numpy.typing as npt
 import pymatching
 
 from qldpc import codes
-from qldpc.objects import Node, conjugate_xz
+from qldpc.objects import Node, symplectic_conjugate
 
 
 class Decoder(Protocol):
@@ -227,7 +227,7 @@ class GUFDecoder(Decoder):
                 return np.count_nonzero(vector_x | vector_z)
 
             self.get_weight = symplectic_weight
-            self.code = codes.QuditCode(matrix)
+            self.code = codes.QuditCode(symplectic_conjugate(matrix))
 
         self.graph = self.code.graph.to_undirected()
 
@@ -298,14 +298,8 @@ class GUFDecoder(Decoder):
                         break
 
         # construct the full error
-        if not self.symplectic:
-            error = self.code.field.Zeros(len(self.code))
-            error[bits] = min_weight_solution
-        else:
-            error = self.code.field.Zeros(2 * len(self.code))
-            error[bits] = min_weight_solution
-            error = conjugate_xz(error)
-
+        error = self.code.field.Zeros(len(self.code) * (2 if self.symplectic else 1))
+        error[bits] = min_weight_solution
         return error.view(np.ndarray)
 
     def get_sub_problem_indices(
