@@ -674,9 +674,8 @@ class QuditCode(AbstractCode):
     for addition and multiplication when q is not a prime number.
 
     The matrix H is a "parity check matrix" in the sense that its null space with respect to the
-    symplectic inner product
-    ⟨P|Q⟩ = ⟨P_x|Q_z⟩ - ⟨P_z|Q_x⟩ = sum_j (P_{x,j} Q_{z,j} - P_{z,j} Q_{x,j})
-    is the space of logical Pauli operators of the QuditCode.
+    symplectic inner product ⟨P,Q⟩_s = P_x @ Q_z - P_z @ Q_x = symplectic_conjugate(P) @ Q is the
+    space of logical Pauli operators of the QuditCode.
 
     References:
     - https://errorcorrectionzoo.org/c/galois_into_galois
