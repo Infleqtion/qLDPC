@@ -221,11 +221,8 @@ def test_code_string() -> None:
 
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
-    """Construct a random (but probably trivial or invalid) QuditCode."""
-    return codes.QuditCode(
-        codes.ClassicalCode.random(2 * qudits, checks, field).matrix,
-        validate=False,
-    )
+    """Construct a random (but probably trivial) QuditCode."""
+    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -325,19 +322,19 @@ def test_conversions_quantum(field: int, bits: int = 5, checks: int = 3) -> None
 def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
     code_a = get_random_qudit_code(bits, checks, field)
-    stabilizers = code_a.get_stabilizers()
-    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field, validate=False)
+    strings = code_a.get_strings()
+    code_b = codes.QuditCode.from_strings(*strings, field=field)
     assert code_a == code_b
-    assert stabilizers == code_b.get_stabilizers()
+    assert strings == code_b.get_strings()
 
     with pytest.raises(ValueError, match="different lengths"):
-        codes.QuditCode.from_stabilizers("I", "I I", field=field)
+        codes.QuditCode.from_strings("I", "I I", field=field)
 
 
 def test_trivial_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Trivial local Clifford deformations do not modify a code."""
     code = get_random_qudit_code(num_qudits, num_checks, field)
-    assert code == code.conjugated(validate=False)
+    assert code == code.conjugated()
 
 
 def test_qudit_ops() -> None:
@@ -351,7 +348,7 @@ def test_qudit_ops() -> None:
     assert np.array_equal(logical_ops[1], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
     assert code.get_logical_ops() is code._logical_ops
 
-    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
+    code = codes.QuditCode.from_strings(*code.get_strings(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
 
@@ -361,9 +358,9 @@ def test_code_deformation() -> None:
 
     code = codes.FiveQubitCode()
     code.get_logical_ops()
-    assert code.get_stabilizers()[0] == "X Z Z X I"
-    assert code.conjugated([0]).get_stabilizers()[0] == "Z Z Z X I"
-    assert code.deformed("H 0").get_stabilizers()[0] == "Z Z Z X I"
+    assert code.get_strings()[0] == "X Z Z X I"
+    assert code.conjugated([0]).get_strings()[0] == "Z Z Z X I"
+    assert code.deformed("H 0").get_strings()[0] == "Z Z Z X I"
     with pytest.raises(ValueError, match="do not commute with stabilizers"):
         code.deformed("H 0", preserve_logicals=True)
 

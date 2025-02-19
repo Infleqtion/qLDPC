@@ -43,14 +43,14 @@ class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
     def __init__(self) -> None:
-        code = QuditCode.from_stabilizers(
+        code = QuditCode.from_strings(
             "X Z Z X I",
             "I X Z Z X",
             "X I X Z Z",
             "Z X I X Z",
             field=2,
         )
-        QuditCode.__init__(self, code, validate=False)
+        QuditCode.__init__(self, code, is_subsystem_code=False)
         self._exact_distance = 3
 
 
@@ -59,7 +59,7 @@ class SteaneCode(CSSCode):
 
     def __init__(self) -> None:
         code = HammingCode(3, field=2)
-        CSSCode.__init__(self, code, code, validate=False)
+        CSSCode.__init__(self, code, code, is_subsystem_code=False)
         self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
         self._exact_distance_x = self._exact_distance_z = 3
 
@@ -78,7 +78,7 @@ class IcebergCode(CSSCode):
 
     def __init__(self, size: int) -> None:
         checks = [[1] * (2 * size)]
-        CSSCode.__init__(self, checks, checks, field=2, validate=False)
+        CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         self._exact_distance_x = self._exact_distance_z = 2
 
         if size == 3:
@@ -111,7 +111,7 @@ class C6Code(CSSCode):
 
     def __init__(self) -> None:
         checks = [[1, 1, 0, 0, 1, 1], [0, 1, 1, 1, 1, 0]]
-        CSSCode.__init__(self, checks, checks, field=2, validate=False)
+        CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
         self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
         self._exact_distance_x = self._exact_distance_z = 2
@@ -159,7 +159,7 @@ class TBCode(CSSCode):
             matrix_z,
             field,
             promise_balanced_codes=promise_balanced_codes,
-            validate=False,
+            is_subsystem_code=False,
         )
 
 
@@ -720,7 +720,9 @@ class HGPCode(CSSCode):
         # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
         self._default_conjugate = slice(self.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x.astype(int), matrix_z.astype(int), field, validate=False)
+        CSSCode.__init__(
+            self, matrix_x.astype(int), matrix_z.astype(int), field, is_subsystem_code=False
+        )
 
     @staticmethod
     def get_matrix_product(
@@ -910,7 +912,7 @@ class LPCode(CSSCode):
             abstract.Protograph(matrix_x.astype(object)).lift(),
             abstract.Protograph(matrix_z.astype(object)).lift(),
             field,
-            validate=False,
+            is_subsystem_code=False,
         )
 
 
@@ -984,7 +986,7 @@ class QTCode(CSSCode):
         self.code_b = code_b
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
-        CSSCode.__init__(self, code_x, code_z, field, validate=False)
+        CSSCode.__init__(self, code_x, code_z, field, is_subsystem_code=False)
 
     def __eq__(self, other: object) -> bool:
         return (

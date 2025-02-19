@@ -30,7 +30,7 @@ def test_pauli_strings() -> None:
     code = codes.FiveQubitCode()
     assert all(
         objects.op_to_string(row) == stim.PauliString(stabilizer.replace(" ", ""))
-        for row, stabilizer in zip(code.matrix, code.get_stabilizers())
+        for row, stabilizer in zip(code.matrix, code.get_strings())
     )
 
 

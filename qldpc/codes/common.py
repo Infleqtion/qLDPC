@@ -73,7 +73,7 @@ def get_random_array(
 class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
-    field: type[galois.FieldArray]
+    _field: type[galois.FieldArray]
 
     def __init__(
         self,
@@ -121,7 +121,7 @@ class AbstractCode(abc.ABC):
         return f"GF({order})"
 
     @abc.abstractmethod
-    def __eq__(self) -> str:
+    def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
 
     @abc.abstractmethod
@@ -540,7 +540,7 @@ class ClassicalCode(AbstractCode):
         (whose rows are code words that form a basis for the code space).
         """
         assert all(0 <= bit < len(self) for bit in bits)
-        bits_to_keep = [bit for bit in len(self) if bit not in bits]
+        bits_to_keep = [bit for bit in range(len(self)) if bit not in bits]
         new_generator = self.generator[:, bits_to_keep]
         return ClassicalCode.from_generator(new_generator, self.field.order)
 
@@ -663,8 +663,7 @@ class QuditCode(AbstractCode):
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
 
-    _matrix: galois.FieldArray
-    _exact_distance: int | float | None = None
+    _is_subsystem_code: bool
     _logical_ops: galois.FieldArray | None = None
 
     def __init__(
@@ -679,7 +678,8 @@ class QuditCode(AbstractCode):
         if is_subsystem_code is not None:
             self._is_subsystem_code = is_subsystem_code
         else:
-            self._is_subsystem_code = np.any(self.matrix @ conjugate_xz(self.matrix).T)
+            self._is_subsystem_code = bool(np.any(self.matrix @ conjugate_xz(self.matrix).T))
+        self._exact_distance: int | float | None = None
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -701,7 +701,7 @@ class QuditCode(AbstractCode):
 
     @property
     def is_subsystem_code(self) -> bool:
-        """Is this a subsystem code?  If not, this is a stabilizer code."""
+        """Is this code a subsystem code?  If not, it is a stabilizer code."""
         return self._is_subsystem_code
 
     def canonicalized(self) -> QuditCode:
@@ -778,6 +778,43 @@ class QuditCode(AbstractCode):
         field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
+    def get_strings(self) -> list[str]:
+        """Stabilizers (checks) of this code, represented by strings."""
+        # TODO: change method in light of subsystem codes
+        matrix = self.matrix.reshape(self.num_checks, 2, self.num_qudits)
+        stabilizers = []
+        for check in range(self.num_checks):
+            ops = []
+            for qudit in range(self.num_qudits):
+                val_x = matrix[check, Pauli.X, qudit]
+                val_z = matrix[check, Pauli.Z, qudit]
+                vals_xz = (val_x, val_z)
+                if self.field.order == 2:
+                    ops.append(str(Pauli(vals_xz)))
+                else:
+                    ops.append(str(QuditOperator(vals_xz)))
+            stabilizers.append(" ".join(ops))
+        return stabilizers
+
+    @staticmethod
+    def from_strings(*stabilizers: str, field: int | None = None) -> QuditCode:
+        """Construct a QuditCode from the provided stabilizers."""
+        # TODO: change method in light of subsystem codes
+        field = field or DEFAULT_FIELD_ORDER
+        check_ops = [stabilizer.split() for stabilizer in stabilizers]
+        num_checks = len(check_ops)
+        num_qudits = len(check_ops[0])
+        operator: type[Pauli] | type[QuditOperator] = Pauli if field == 2 else QuditOperator
+
+        matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
+        for check, check_op in enumerate(check_ops):
+            if len(check_op) != num_qudits:
+                raise ValueError(f"Stabilizers 0 and {check} have different lengths")
+            for qudit, op in enumerate(check_op):
+                matrix[check, :, qudit] = operator.from_string(op).value
+
+        return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
+
     def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
@@ -825,11 +862,9 @@ class QuditCode(AbstractCode):
 
         # preserve or update logical operators, as applicable
         if preserve_logicals:
-            logical_ops = self.get_logical_ops()
-            new_code.set_logical_ops(logical_ops, is_subsystem_code=self.is_subsystem_code)
+            new_code.set_logical_ops(self.get_logical_ops())
         elif self._logical_ops is not None:
-            logical_ops = deform_strings(self.get_logical_ops())
-            new_code.set_logical_ops(logical_ops, is_subsystem_code=self.is_subsystem_code)
+            new_code.set_logical_ops(deform_strings(self.get_logical_ops()))
 
         return new_code
 
@@ -966,20 +1001,20 @@ class QuditCode(AbstractCode):
         if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
-        # gauge_matrix = self.matrix
-        # stabs_and_logs = conjugate_xz(gauge_matrix).null_space()
-        # augmented_matrix = np.vstack([gauge_matrix, stabs_and_logs])
-        # stabs = conjugate_xz(augmented_matrix).null_space()
-        stabs = self.matrix
-        stabs_and_logs = conjugate_xz(stabs).null_space()
-        print(stabs_and_logs)
-        exit()
+        # # gauge_matrix = self.matrix
+        # # stabs_and_logs = conjugate_xz(gauge_matrix).null_space()
+        # # augmented_matrix = np.vstack([gauge_matrix, stabs_and_logs])
+        # # stabs = conjugate_xz(augmented_matrix).null_space()
+        # stabs = self.matrix
+        # stabs_and_logs = conjugate_xz(stabs).null_space()
+        # print(stabs_and_logs)
+        # exit()
 
-        _stabs, pivots_stabs = _row_reduce(stabs)
-        _stabs_and_logs, pivots_stabs_and_logs = _row_reduce(stabs_and_logs)
-        indices = [idx for idx, val in enumerate(pivots_stabs_and_logs) if val not in pivots_stabs]
-        self._logical_ops = _stabs_and_logs[indices]
-        return self._logical_ops
+        # _stabs, pivots_stabs = _row_reduce(stabs)
+        # _stabs_and_logs, pivots_stabs_and_logs = _row_reduce(stabs_and_logs)
+        # indices = [idx for idx, val in enumerate(pivots_stabs_and_logs) if val not in pivots_stabs]
+        # self._logical_ops = _stabs_and_logs[indices]
+        # return self._logical_ops
 
         num_qudits = len(self)
         num_checks = self.num_checks
@@ -1231,10 +1266,6 @@ class CSSCode(QuditCode):
     ⌊ H_x,  0  ⌋.
     """
 
-    _code_x: ClassicalCode  # X-type parity checks, measuring Z-type errors
-    _code_z: ClassicalCode  # Z-type parity checks, measuring X-type errors
-    _exact_distance_x: int | float | None = None
-    _exact_distance_z: int | float | None = None
     _balanced_codes: bool
 
     def __init__(
@@ -1243,29 +1274,23 @@ class CSSCode(QuditCode):
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
-        promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
         is_subsystem_code: bool | None = None,
+        promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks."""
-        self.code_x = ClassicalCode(code_x, field)
-        self.code_z = ClassicalCode(code_z, field)
-
-        if field is None and self.code_x.field is not self.code_z.field:
-            raise ValueError("The sub-codes provided for this CSSCode are over different fields")
-        self.field = self.code_x.field
+        self._code_x = ClassicalCode(code_x, field)  # X-type parity checks, measuring Z-type errors
+        self._code_z = ClassicalCode(code_z, field)  # Z-type parity checks, measuring X-type errors
+        self._field = self.code_x.field
+        if len(self.code_x) != len(self.code_z) or self.code_x.field is not self.code_z.field:
+            raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
         if is_subsystem_code is not None:
             self._is_subsystem_code = is_subsystem_code
         else:
-            self._is_subsystem_code = np.any(self.matrix_x @ self.matrix_z.T)
-
+            self._is_subsystem_code = bool(np.any(self.matrix_x @ self.matrix_z.T))
+        self._exact_distance_x: int | float | None = None
+        self._exact_distance_z: int | float | None = None
         self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
-        self._validate_subcodes()
-
-    def _validate_subcodes(self) -> None:
-        """Is this a valid CSS code?"""
-        if len(self.code_x) != len(self.code_z) or self.code_x.field is not self.code_z.field:
-            raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -1337,11 +1362,13 @@ class CSSCode(QuditCode):
         )
 
     @staticmethod
-    def equiv(code_a: CSSCode, code_b: CSSCode) -> bool:
+    def equiv(code_a: QuditCode, code_b: QuditCode) -> bool:
         """Are two CSS codes equivalent?  That is, do they have the same code space?"""
-        return ClassicalCode.equiv(code_a.code_x, code_b.code_x) and ClassicalCode.equiv(
-            code_a.code_z, code_b.code_z
-        )
+        if isinstance(code_a, CSSCode) and isinstance(code_b, CSSCode):
+            return ClassicalCode.equiv(code_a.code_x, code_b.code_x) and ClassicalCode.equiv(
+                code_a.code_z, code_b.code_z
+            )
+        return QuditCode.equiv(code_a, code_b)
 
     def __len__(self) -> int:
         """Number of data qudits in this code."""
@@ -1726,8 +1753,8 @@ class CSSCode(QuditCode):
         code = CSSCode(
             code_x,
             code_z,
+            is_subsystem_code=any(code.is_subsystem_code for code in codes),
             promise_balanced_codes=all(code._balanced_codes for code in css_codes),
-            validate=False,
         )
         if inherit_logicals:
             logicals_x = [code.get_logical_ops(Pauli.X) for code in css_codes]
