@@ -646,20 +646,29 @@ class ClassicalCode(AbstractCode):
 
 
 class QuditCode(AbstractCode):
-    """Quantum stabilizer code for Galois qudits, with dimension q = p^m for prime p and integer m.
+    """Quantum code for Galois qudits with dimension q = p^m for prime p and integer m.
 
-    The parity check matrix of a QuditCode has dimensions (num_checks, 2 * num_qudits), and can be
-    written as a block matrix in the form H = [H_x|H_z].  Each block has num_qudits columns.
+    A QuditCode is initialized from a matrix whose rows represent Pauli strings.  If all of these
+    Pauli strings commute, the QuditCode is a stabilizer code, and the rows of the matrix are
+    generators of the code's stabilizer group.  Otherwise, the QuditCode is a subsystem code,
+    which is equivalent to a stabilizer code in which some logical qudits are promoted to "gauge
+    qudits".  In this case, the rows of the matrix are generators of the code's gauge group.
 
-    The entries H_x[c, d] = r_x and H_z[c, d] = r_z indicate that check c addresses qudit d with the
-    operator X(r_x) * Z(r_z), where r_x, r_z range over the base field, and X(r), Z(r) are
-    generalized Pauli operators.  Specifically:
-    - X(r) = sum_{j=0}^{q-1} |j+r><j| is a shift operator, and
-    - Z(r) = sum_{j=0}^{q-1} w^{j r} |j><j| is a phase operator, with w = exp(2 pi i / q).
+    More specifically, for a QuditCode with block length num_qudits, each row of the matrix is a
+    symplectic vector P = [P_x|P_z] of length 2 * num_qudits, where each of P_x and P_z are vectors
+    of length num_qudits that indicate the support of X-type and Z-type Pauli operators on the
+    physical qudits of the QuditCode.  If P_x[j] = r_x and P_z[j] = r_z, where r_x and r_z are
+    elements of the the Galois field GF(q) (for example, GF(2) ~ {0, 1} for qubits), then the Pauli
+    string P addresses physical qudit j by the qudit operator X(r_x) Z(r_z), where
+    - X(r) = sum_{k=0}^{q-1} |k+r><k| is a shift operator, and
+    - Z(r) = sum_{k=0}^{q-1} w^{k r} |k><k| is a phase operator, with w = exp(2 pi i / q).
+    Here r and k are not integers, but elements of the Galois field GF(q), which has special rules
+    for addition and multiplication when q is not a prime number.
 
-    Here j and r are not integers, but elements of the Galois field GF(q), which has different
-    rules for addition and multiplication when q is not a prime number.
-
+    References:
+    - https://errorcorrectionzoo.org/c/galois_into_galois
+    - https://errorcorrectionzoo.org/c/galois_stabilizer
+    - https://errorcorrectionzoo.org/c/oecc
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
 
@@ -837,7 +846,9 @@ class QuditCode(AbstractCode):
     ) -> QuditCode:
         """Deform a code by the given circuit.
 
-        If preserve_logicals==True, preserve the logical operators of the original code.
+        If preserve_logicals is True, preserve the logical operators of the original code (or throw
+        an error if the original logical operators are invalid for the deformed code).  Otherwise,
+        transform the logical operators as well.
         """
         if not self.field.order == 2:
             raise ValueError("Code deformation is only supported for qubit codes")
