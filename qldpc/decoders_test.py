@@ -25,7 +25,7 @@ import numpy.typing as npt
 import pytest
 
 from qldpc import codes, decoders
-from qldpc.objects import Pauli, conjugate_xz
+from qldpc.objects import Pauli, symplectic_conjugate
 
 
 def test_custom_decoder(pytestconfig: pytest.Config) -> None:
@@ -117,11 +117,11 @@ def test_quantum_decoding(pytestconfig: pytest.Config) -> None:
     error = code.field.Zeros(2 * len(code))
     error[[qubit_a, qubit_a + len(code)]] = paulis[pauli_a].value
     error[[qubit_b, qubit_b + len(code)]] = paulis[pauli_b].value
-    syndrome = code.matrix @ conjugate_xz(error)
+    syndrome = symplectic_conjugate(code.matrix) @ error
 
     decoder = decoders.GUFDecoder(code.matrix, symplectic=True)
     decoded_error = code.field(decoder.decode(syndrome))
-    assert np.array_equal(syndrome, code.matrix @ conjugate_xz(decoded_error))
+    assert np.array_equal(syndrome, symplectic_conjugate(code.matrix) @ decoded_error)
 
 
 def test_decoding_errors() -> None:

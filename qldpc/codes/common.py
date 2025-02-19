@@ -35,7 +35,15 @@ import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
+from qldpc.objects import (
+    PAULIS_XZ,
+    Node,
+    Pauli,
+    PauliXZ,
+    QuditOperator,
+    op_to_string,
+    symplectic_conjugate,
+)
 
 from ._distance import get_distance_classical, get_distance_quantum
 
@@ -671,7 +679,7 @@ class QuditCode(AbstractCode):
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
         if validate:
-            assert not np.any(self.matrix @ conjugate_xz(self.matrix).T)
+            assert not np.any(symplectic_conjugate(self.matrix) @ self.matrix.T)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -1076,11 +1084,11 @@ class QuditCode(AbstractCode):
 
         logs_x = logical_ops[: self.dimension]
         logs_z = logical_ops[self.dimension :]
-        inner_products = conjugate_xz(logs_x) @ logs_z.T
+        inner_products = symplectic_conjugate(logs_x) @ logs_z.T
         if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
             raise ValueError("The given logical operators have incorrect commutation relations")
 
-        if np.any(self.matrix @ conjugate_xz(logical_ops).T):
+        if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
             raise ValueError("The given logical operators do not commute with stabilizers")
 
     @staticmethod
