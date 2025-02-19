@@ -31,6 +31,8 @@ import pymatching
 from qldpc import codes
 from qldpc.objects import Node, symplectic_conjugate
 
+PLACEHOLDER_ERROR_RATE = 1e-3  # required for some decoding methods
+
 
 class Decoder(Protocol):
     """Template (protocol) for a decoder object."""
@@ -92,11 +94,9 @@ def get_decoder_BP_OSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> 
     - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2005.07016
     """
-    return ldpc.BpOsdDecoder(
-        matrix,
-        error_rate=decoder_args.pop("error_rate", 0.0),
-        **decoder_args,
-    )
+    if "error_channel" not in decoder_args and "error_rate" not in decoder_args:
+        decoder_args["error_rate"] = PLACEHOLDER_ERROR_RATE
+    return ldpc.BpOsdDecoder(matrix, **decoder_args)
 
 
 def get_decoder_BP_LSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
@@ -106,11 +106,9 @@ def get_decoder_BP_LSD(matrix: npt.NDArray[np.int_], **decoder_args: object) -> 
     - Documentation: https://software.roffe.eu/ldpc/quantum_decoder.html
     - Reference: https://arxiv.org/abs/2406.18655
     """
-    return ldpc.bplsd_decoder.BpLsdDecoder(
-        matrix,
-        error_rate=decoder_args.pop("error_rate", 0.0),
-        **decoder_args,
-    )
+    if "error_channel" not in decoder_args and "error_rate" not in decoder_args:
+        decoder_args["error_rate"] = PLACEHOLDER_ERROR_RATE
+    return ldpc.bplsd_decoder.BpLsdDecoder(matrix, **decoder_args)
 
 
 def get_decoder_BF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
@@ -123,11 +121,9 @@ def get_decoder_BF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Deco
       - https://arxiv.org/abs/2103.08049
       - https://arxiv.org/abs/2209.01180
     """
-    return ldpc.BeliefFindDecoder(
-        matrix,
-        error_rate=decoder_args.pop("error_rate", 0.0),
-        **decoder_args,
-    )
+    if "error_channel" not in decoder_args and "error_rate" not in decoder_args:
+        decoder_args["error_rate"] = PLACEHOLDER_ERROR_RATE
+    return ldpc.BeliefFindDecoder(matrix, **decoder_args)
 
 
 def get_decoder_MWPM(matrix: npt.NDArray[np.int_], **decoder_args: object) -> Decoder:
