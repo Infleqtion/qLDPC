@@ -42,7 +42,7 @@ def symplectic_conjugate(vectors: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
     Pauli strings P and Q is ⟨P,Q⟩_s = P_x @ Q_z - P_z @ Q_x = symplectic_conjugate(P) @ Q.
     """
     assert vectors.shape[-1] % 2 == 0
-    conjugated_string = vectors.reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
+    conjugated_string = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
     conjugated_string[:, 0, :] *= -1
     return conjugated_string.reshape(vectors.shape)
 
