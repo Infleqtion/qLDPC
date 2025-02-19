@@ -45,7 +45,7 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
 
     num_bits = 2
     code = codes.RepetitionCode(num_bits, field=3)
-    assert code.num_bits == num_bits
+    assert len(code) == num_bits
     assert code.dimension == 1
     assert code.get_weight() == 2
 
@@ -102,7 +102,7 @@ def test_tensor_product(
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     code_ab = codes.ClassicalCode.tensor_product(code_a, code_b)
-    basis = np.reshape(code_ab.generator, (-1, code_a.num_bits, code_b.num_bits))
+    basis = np.reshape(code_ab.generator, (-1, len(code_a), len(code_b)))
     assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
 
     n_a, k_a, d_a = code_a.get_code_params()
@@ -133,7 +133,7 @@ def test_distance_classical(bits: int = 3) -> None:
         assert dist_exact <= dist_bound
 
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
-    random_vector = np.random.randint(2, size=trivial_code.num_bits)
+    random_vector = np.random.randint(2, size=len(trivial_code))
     assert trivial_code.dimension == 0
     assert trivial_code.get_distance_exact() is np.nan
     assert trivial_code.get_distance_bound() is np.nan
@@ -346,7 +346,7 @@ def test_qudit_ops() -> None:
 
     code = codes.FiveQubitCode()
     logical_ops = code.get_logical_ops()
-    assert logical_ops.shape == (2 * code.dimension, 2 * code.num_qudits)
+    assert logical_ops.shape == (2 * code.dimension, 2 * len(code))
     assert np.array_equal(logical_ops[0], [0, 0, 0, 0, 1, 1, 0, 0, 1, 0])
     assert np.array_equal(logical_ops[1], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
     assert code.get_logical_ops() is code._logical_ops
