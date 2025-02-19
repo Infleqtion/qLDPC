@@ -162,19 +162,26 @@ class LookupDecoder(Decoder):
         max_weight: int | None = None,
         symplectic: bool = False,
     ) -> None:
-        code = codes.ClassicalCode(matrix)
-        field = code.field
-        matrix = code.matrix if not symplectic else symplectic_conjugate(code.matrix)
+        if not symplectic:
+            code = codes.ClassicalCode(matrix)
+            field = code.field
+            matrix = code.matrix
+        else:
+            code = codes.QuditCode(matrix)
+            field = code.field
+            matrix = symplectic_conjugate(code.matrix)
 
         if max_weight is None:
             warnings.warn(
                 "A LookupDecoder has been initialized without specifying a maximum error weight,"
-                " max_weight, so max_weight is being set to (classical_distance - 1) // 2, where"
-                " classical_distance is the distance of the classical code with the parity check"
-                " matrix provided to the LookupDecoder.  This default is reasonable for decoding"
-                " classical codes, but will likely cause the decoder to fail for quantum codes."
+                " max_weight, so max_weight is being set to (code_distance - 1) // 2, where"
+                " code_distance is the distance of the ClassicalCode (if symplectic is False) or"
+                " QuditCode (if symplectic is True) with the parity check matrix provided to the"
+                " LookupDecoder.  This default choice of max_weight is a poor choice for decoding"
+                " in one sector of a qudit CSSCode, for which the LookupDecoder does not have"
+                " enough information to automatically determine a reasonable max_weight."
             )
-            code_distance = codes.ClassicalCode(matrix).get_distance()
+            code_distance = code.get_distance()
             max_weight = (code_distance - 1) // 2 if isinstance(code_distance, int) else 0
 
         # identify the set of local errors that can occur
