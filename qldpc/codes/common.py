@@ -194,7 +194,6 @@ class ClassicalCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _exact_distance: int | float | None = None
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -1274,6 +1273,9 @@ class CSSCode(QuditCode):
 
         self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
 
+        if self._exact_distance_x is not None and self._exact_distance_z is not None:
+            self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
+
     def _validate_subcodes(self) -> None:
         """Is this a valid CSS code?"""
         if not (
@@ -1415,6 +1417,8 @@ class CSSCode(QuditCode):
             self._exact_distance_x = distance
         if pauli is Pauli.Z or self._balanced_codes:
             self._exact_distance_z = distance
+        if self._exact_distance_x is not None and self._exact_distance_z is not None:
+            self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
         return distance
 
     def _get_distance_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
@@ -1423,17 +1427,13 @@ class CSSCode(QuditCode):
 
         # the distances of dimension-0 codes are undefined
         if self.dimension == 0:
-            self._exact_distance_x = self._exact_distance_z = np.nan
+            self._exact_distance = self._exact_distance_x = self._exact_distance_z = np.nan
 
         if pauli is Pauli.X:
             return self._exact_distance_x
         elif pauli is Pauli.Z:
             return self._exact_distance_z
-        return (
-            min(self._exact_distance_x, self._exact_distance_z)
-            if self._exact_distance_x is not None and self._exact_distance_z is not None
-            else None
-        )
+        return self._exact_distance
 
     def get_distance_bound(
         self,
