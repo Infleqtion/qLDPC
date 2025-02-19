@@ -648,22 +648,27 @@ class ClassicalCode(AbstractCode):
 class QuditCode(AbstractCode):
     """Quantum code for Galois qudits with dimension q = p^m for prime p and integer m.
 
-    A QuditCode is initialized from a matrix whose rows represent Pauli strings.  If all of these
-    Pauli strings commute, the QuditCode is a stabilizer code, and the rows of the matrix are
-    generators of the code's stabilizer group.  Otherwise, the QuditCode is a subsystem code,
+    A QuditCode is initialized from a parity check matrix H whose rows represent Pauli strings.  If
+    all of these Pauli strings commute, then the QuditCode is a stabilizer code, and the rows of H
+    are generators of the code's stabilizer group.  Otherwise, the QuditCode is a subsystem code,
     which is equivalent to a stabilizer code in which some logical qudits are promoted to "gauge
-    qudits".  In this case, the rows of the matrix are generators of the code's gauge group.
+    qudits".  In this case, the rows of H are generators of the code's gauge group.
 
-    More specifically, for a QuditCode with block length num_qudits, each row of the matrix is a
-    symplectic vector P = [P_x|P_z] of length 2 * num_qudits, where each of P_x and P_z are vectors
-    of length num_qudits that indicate the support of X-type and Z-type Pauli operators on the
-    physical qudits of the QuditCode.  If P_x[j] = r_x and P_z[j] = r_z, where r_x and r_z are
-    elements of the the Galois field GF(q) (for example, GF(2) ~ {0, 1} for qubits), then the Pauli
-    string P addresses physical qudit j by the qudit operator X(r_x) Z(r_z), where
+    More specifically, for a QuditCode with block length num_qudits, each row of H is a symplectic
+    vector P = [P_x|P_z] of length 2 * num_qudits, where each of P_x and P_z are vectors of length
+    num_qudits that indicate the support of X-type and Z-type Pauli operators on the physical qudits
+    of the QuditCode.  If P_x[j] = r_x and P_z[j] = r_z, where r_x and r_z are elements of the the
+    Galois field GF(q) (for example, GF(2) ~ {0, 1} for qubits), then the Pauli string P addresses
+    physical qudit j by the qudit operator X(r_x) Z(r_z), where
     - X(r) = sum_{k=0}^{q-1} |k+r><k| is a shift operator, and
     - Z(r) = sum_{k=0}^{q-1} w^{k r} |k><k| is a phase operator, with w = exp(2 pi i / q).
     Here r and k are not integers, but elements of the Galois field GF(q), which has special rules
     for addition and multiplication when q is not a prime number.
+
+    The matrix H is a "parity check matrix" in the sense that its null space with respect to the
+    symplectic inner product
+    ⟨P|Q⟩ = ⟨P_x|Q_z⟩ - ⟨P_z|Q_x⟩ = sum_j (P_{x,j} Q_{z,j} - P_{z,j} Q_{x,j})
+    is the space of logical Pauli operators of the QuditCode.
 
     References:
     - https://errorcorrectionzoo.org/c/galois_into_galois
@@ -700,11 +705,11 @@ class QuditCode(AbstractCode):
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
-        text = ""
+        text = "{self.name} on {len(self)}"
         if self.field.order == 2:
-            text += f"{self.name} on {len(self)} qubits"
+            text += " qubits"
         else:
-            text += f"{self.name} on {len(self)} qudits over {self.field_name}"
+            text += f" qudits over {self.field_name}"
         text += f", with parity check matrix\n{self.matrix}"
         return text
 
