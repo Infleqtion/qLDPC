@@ -120,9 +120,12 @@ def test_quantum_decoding(pytestconfig: pytest.Config) -> None:
     error[[qubit_b, qubit_b + len(code)]] = paulis[pauli_b].value
     syndrome = symplectic_conjugate(code.matrix) @ error
 
-    decoder = decoders.GUFDecoder(code.matrix, symplectic=True)
-    decoded_error = code.field(decoder.decode(syndrome))
-    assert np.array_equal(syndrome, symplectic_conjugate(code.matrix) @ decoded_error)
+    for decoder in [
+        decoders.GUFDecoder(code.matrix, symplectic=True),
+        decoders.LookupDecoder(code.matrix, symplectic=True, max_weight=2),
+    ]:
+        decoded_error = code.field(decoder.decode(syndrome))
+        assert np.array_equal(syndrome, symplectic_conjugate(code.matrix) @ decoded_error)
 
 
 def test_decoding_errors() -> None:
