@@ -162,6 +162,7 @@ class LookupDecoder(Decoder):
         max_weight: int | None = None,
         symplectic: bool = False,
     ) -> None:
+        code: codes.ClassicalCode | codes.QuditCode
         if not symplectic:
             code = codes.ClassicalCode(matrix)
             field = code.field
