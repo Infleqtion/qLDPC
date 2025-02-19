@@ -164,7 +164,7 @@ class LookupDecoder(Decoder):
     ) -> None:
         code = codes.ClassicalCode(matrix)
         field = code.field
-        matrix = code.matrix if not symplectic else symplectic_conjugate(matrix)
+        matrix = code.matrix if not symplectic else symplectic_conjugate(code.matrix)
 
         if max_weight is None:
             warnings.warn(
@@ -185,21 +185,19 @@ class LookupDecoder(Decoder):
         block_length = matrix.shape[1] // repeat
         for weight in range(max_weight, 0, -1):
             for error_sites in itertools.combinations(range(block_length), weight):
-                error_site_indices = np.asarray(error_sites, dtype=int)
+                error_site_indices = list(error_sites)
                 for errors in itertools.product(local_errors, repeat=weight):
-                    code_error = field.Zeros((block_length, repeat))
-                    code_error[error_site_indices] = np.asarray(errors)
+                    code_error = field.Zeros((repeat, block_length))
+                    code_error[:, error_site_indices] = np.asarray(errors, dtype=int).T
                     code_error = code_error.ravel()
                     syndrome = matrix @ code_error
-                    syndrome_bits = tuple(np.where(syndrome)[0])
-                    self.table[syndrome_bits] = code_error.view(np.ndarray)
+                    self.table[tuple(syndrome.view(np.ndarray))] = code_error.view(np.ndarray)
 
-        self.null_correction = np.zeros(block_length, dtype=int)
+        self.null_correction = np.zeros(matrix.shape[1], dtype=int)
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode an error syndrome and return an inferred error."""
-        syndrome_bits = tuple(np.where(syndrome)[0])
-        return self.table.get(syndrome_bits, self.null_correction.copy())
+        return self.table.get(tuple(syndrome.view(np.ndarray)), self.null_correction.copy())
 
 
 def get_symplectic_weight(vector: npt.NDArray[np.int_]) -> int:
