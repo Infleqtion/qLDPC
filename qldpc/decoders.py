@@ -148,11 +148,23 @@ class LookupDecoder(Decoder):
     is provided, this code computes the distance of a classical code with the provided parity check
     matrix, and sets max_weight to the highest weight for which an error is guaranteed to be
     correctable, namely (code_distance - 1) // 2.
+
+    If initialized with symplectic=True, this decoder treats the provided parity check matrix as that
+    of a QuditCode, with the first and last half of the columns denoting, respectively, the X and Z
+    support of a stabilizer.  Decoded errors are likewise vectors that indicate their X and Z
+    support by the first and second half of their entries.
     """
 
-    def __init__(self, matrix: npt.NDArray[np.int_], *, max_weight: int | None = None) -> None:
-        field = type(matrix) if isinstance(matrix, galois.FieldArray) else galois.GF(2)
-        matrix = field(matrix)
+    def __init__(
+        self,
+        matrix: npt.NDArray[np.int_],
+        *,
+        max_weight: int | None = None,
+        symplectic: bool = False,
+    ) -> None:
+        code = codes.ClassicalCode(matrix)
+        field = code.field
+        matrix = code.matrix if not symplectic else symplectic_conjugate(matrix)
 
         if max_weight is None:
             warnings.warn(
@@ -165,24 +177,40 @@ class LookupDecoder(Decoder):
             code_distance = codes.ClassicalCode(matrix).get_distance()
             max_weight = (code_distance - 1) // 2 if isinstance(code_distance, int) else 0
 
+        # identify the set of local errors that can occur
+        repeat = 2 if symplectic else 1
+        local_errors = tuple(itertools.product(range(field.order), repeat=repeat))[1:]
+
         self.table: dict[tuple[int, ...], npt.NDArray[np.int_]] = {}
-        num_bits = matrix.shape[1]
+        block_length = matrix.shape[1] // repeat
         for weight in range(max_weight, 0, -1):
-            for error_sites in itertools.combinations(range(num_bits), weight):
+            for error_sites in itertools.combinations(range(block_length), weight):
                 error_site_indices = np.asarray(error_sites, dtype=int)
-                for errors in itertools.product(range(1, field.order), repeat=weight):
-                    code_error = field.Zeros(num_bits)
-                    code_error[error_site_indices] = errors
+                for errors in itertools.product(local_errors, repeat=weight):
+                    code_error = field.Zeros((block_length, repeat))
+                    code_error[error_site_indices] = np.asarray(errors)
+                    code_error = code_error.ravel()
                     syndrome = matrix @ code_error
                     syndrome_bits = tuple(np.where(syndrome)[0])
                     self.table[syndrome_bits] = code_error.view(np.ndarray)
 
-        self.null_correction = np.zeros(num_bits, dtype=int)
+        self.null_correction = np.zeros(block_length, dtype=int)
 
     def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Decode an error syndrome and return an inferred error."""
         syndrome_bits = tuple(np.where(syndrome)[0])
         return self.table.get(syndrome_bits, self.null_correction.copy())
+
+
+def get_symplectic_weight(vector: npt.NDArray[np.int_]) -> int:
+    """Get the symplectic weight of a vector.
+
+    The symplectic weight of a Pauli string is the number of qudits that it addresses nontrivially.
+    """
+    vector = vector.reshape(2, -1)
+    vector_x = np.asarray(vector[0], dtype=int)
+    vector_z = np.asarray(vector[1], dtype=int)
+    return np.count_nonzero(vector_x | vector_z)
 
 
 def get_decoder_GUF(matrix: npt.NDArray[np.int_], **decoder_args: object) -> GUFDecoder:
@@ -198,10 +226,10 @@ class GUFDecoder(Decoder):
     the minimum-weight error that it found while trying.  Be warned that passing a max_weight makes
     this decoder have worst-case exponential runtime.
 
-    If initialized with symplectic=True, this decoder treats the parity check matrix as that of a
-    QuditCode, with the first and last half of the columns denoting, respectively, the X and Z
-    support of a stabilizer.  Decoded errors likewise vectors that indicate their X and Z support by
-    the first and second half.
+    If initialized with symplectic=True, this decoder treats the provided parity check matrix as that
+    of a QuditCode, with the first and last half of the columns denoting, respectively, the X and Z
+    support of a stabilizer.  Decoded errors are likewise vectors that indicate their X and Z
+    support by the first and second half of their entries.
 
     Warning: this implementation of the generalized Union-Find decoder is highly unoptimized.  For
     one, it is written entirely in Python.  Moreover, this implementation does not factor an error
@@ -227,14 +255,7 @@ class GUFDecoder(Decoder):
 
         else:
             # decoding a quantum code: the "weight" of an error vector is its symplectic weight
-
-            def symplectic_weight(vector: npt.NDArray[np.int_]) -> int:
-                vector = vector.reshape(2, -1)
-                vector_x = np.asarray(vector[0], dtype=int)
-                vector_z = np.asarray(vector[1], dtype=int)
-                return np.count_nonzero(vector_x | vector_z)
-
-            self.get_weight = symplectic_weight
+            self.get_weight = get_symplectic_weight
             self.code = codes.QuditCode(symplectic_conjugate(matrix))
 
         self.graph = self.code.graph.to_undirected()
