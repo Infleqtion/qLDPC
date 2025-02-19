@@ -18,6 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import itertools
+import warnings
 from typing import Callable, Protocol
 
 import cvxpy
@@ -154,6 +155,13 @@ class LookupDecoder(Decoder):
         matrix = field(matrix)
 
         if max_weight is None:
+            warnings.warn(
+                "A LookupDecoder has been initialized without specifying a maximum error weight,"
+                " max_weight, so max_weight is being set to (classical_distance - 1) // 2, where"
+                " classical_distance is the distance of the classical code with the parity check"
+                " matrix provided to the LookupDecoder.  This default is reasonable for decoding"
+                " classical codes, but will likely cause the decoder to fail for quantum codes."
+            )
             code_distance = codes.ClassicalCode(matrix).get_distance()
             max_weight = (code_distance - 1) // 2 if isinstance(code_distance, int) else 0
 

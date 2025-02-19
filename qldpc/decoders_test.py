@@ -65,7 +65,8 @@ def test_decoding() -> None:
     )
 
     # the distance of the given code is undefined, so lookup decoding to half the distance fails
-    assert np.array_equal([0, 0], decoders.decode(matrix, syndrome, with_lookup=True))
+    with pytest.warns(UserWarning, match="without specifying a maximum error weight"):
+        assert np.array_equal([0, 0], decoders.decode(matrix, syndrome, with_lookup=True))
 
     # ... but it works if we manually tell it to try and decode errors of weight <= 2
     assert np.array_equal(error, decoders.decode(matrix, syndrome, with_lookup=True, max_weight=2))
