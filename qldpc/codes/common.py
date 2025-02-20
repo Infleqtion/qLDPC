@@ -23,7 +23,7 @@ import itertools
 import random
 import warnings
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, Iterator, Literal, cast
+from typing import Any, Iterator, Literal, TypeVar, cast
 
 import galois
 import networkx as nx
@@ -46,6 +46,8 @@ from qldpc.objects import (
 )
 
 from ._distance import get_distance_classical, get_distance_quantum
+
+IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -838,7 +840,7 @@ class QuditCode(AbstractCode):
         elif self._stabilizer_ops is not None:
             return self._stabilizer_ops
         stabs_and_logs = symplectic_conjugate(self.matrix).null_space()
-        augmented_matrix = np.vstack([self.matrix, stabs_and_logs])
+        augmented_matrix = self.field(np.vstack([self.matrix, stabs_and_logs]))
         self._stabilizer_ops = symplectic_conjugate(augmented_matrix).null_space()
         return self._stabilizer_ops
 
@@ -1135,7 +1137,7 @@ class QuditCode(AbstractCode):
         circuit = stim.Circuit(circuit) if isinstance(circuit, str) else circuit
         tableau = (circuit + identity).to_tableau()
 
-        def deform_strings(strings: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        def deform_strings(strings: IntegerArray) -> IntegerArray:
             """Deform the given Pauli strings."""
             new_strings = []
             for check in strings:

@@ -22,7 +22,7 @@ import enum
 import functools
 import itertools
 from collections.abc import Collection, Iterator
-from typing import Literal
+from typing import Literal, TypeVar
 
 import galois
 import networkx as nx
@@ -33,8 +33,10 @@ import stim
 from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 
+IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
 
-def symplectic_conjugate(vectors: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+
+def symplectic_conjugate(vectors: IntegerArray) -> IntegerArray:
     """Take symplectic vectors to their duals.
 
     The symplectic conjugate of a Pauli string swaps its X and Z support, and multiplies its X
@@ -44,7 +46,7 @@ def symplectic_conjugate(vectors: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
     assert vectors.shape[-1] % 2 == 0
     conjugated_string = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
     conjugated_string[:, 0, :] *= -1
-    return conjugated_string.reshape(vectors.shape)
+    return conjugated_string.reshape(vectors.shape)  # type:ignore[return-value]
 
 
 def op_to_string(op: npt.NDArray[np.int_]) -> stim.PauliString:
