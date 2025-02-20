@@ -475,8 +475,8 @@ class ClassicalCode(AbstractCode):
         return len(self), self.dimension, distance
 
     def get_weight(self) -> int:
-        """Compute the weight of the largest check."""
-        return np.max(np.count_nonzero(self.matrix, axis=1))
+        """Compute the weight of the largest parity check."""
+        return np.max(np.count_nonzero(self.matrix.view(np.ndarray), axis=1))
 
     @staticmethod
     def random(
@@ -756,7 +756,7 @@ class QuditCode(AbstractCode):
         return len(self)
 
     def get_weight(self) -> int:
-        """Compute the weight of the largest check."""
+        """Compute the weight of the largest parity check."""
         matrix_x = self.matrix[:, : len(self)].view(np.ndarray)
         matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
         return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))

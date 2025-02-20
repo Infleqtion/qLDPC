@@ -419,7 +419,7 @@ def test_css_code() -> None:
     with pytest.raises(ValueError, match="incompatible"):
         codes.CSSCode(code_x, code_z)
 
-    with pytest.raises(ValueError, match="different fields"):
+    with pytest.raises(ValueError, match="incompatible"):
         code_z = codes.ClassicalCode.random(3, 2, field=code_x.field.order**2)
         codes.CSSCode(code_x, code_z)
 
