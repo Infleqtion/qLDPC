@@ -728,7 +728,7 @@ class QuditCode(AbstractCode):
 
     @staticmethod
     def equiv(code_a: QuditCode, code_b: QuditCode) -> bool:
-        """Are two quantum codes equivalent?  That is, do they have the same code space?"""
+        """Are two quantum codes equivalent?  That is, do they have the same logical operators?"""
         return code_a.field is code_b.field and np.array_equal(
             code_a.canonicalized().matrix, code_b.canonicalized().matrix
         )
