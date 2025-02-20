@@ -1300,20 +1300,20 @@ class QuditCode(AbstractCode):
 
 
 class CSSCode(QuditCode):
-    """CSS qudit code, with separate X-type and Z-type parity checks.
+    """QuditCode with separate X-type and Z-type parity checks.
 
-    In order for the X-type and Z-type parity checks to be "compatible", the X-type stabilizers must
-    commute with the Z-type stabilizers.  Mathematically, this requirement can be written as
-
-    H_x @ H_z.T == 0,
-
-    where H_x and H_z are, respectively, the parity check matrices of the classical codes that
-    define the X-type and Z-type stabilizers of the CSS code.  Note that H_x witnesses Z-type errors
-    and H_z witnesses X-type errors.
-
-    The full parity check matrix of a CSSCode is
+    A CSSCode is defined from two classical codes with parity check matrices H_x and H_z, whose rows
+    indicate, respectively, the support of X-type Pauli strings that witness Z-type errors, and
+    Z-type Pauli strings that witness X-type errors.  The full parity check matrix of a CSSCode is
     ⌈  0 , H_z ⌉
     ⌊ H_x,  0  ⌋.
+
+    If all parity checks of a CSSCode commute, H_x @ H_z.T == 0, then the CSSCode is a stabilizer
+    code; otherwise, the CSSCode is a subsystem code.
+
+    References:
+    - https://errorcorrectionzoo.org/c/galois_subsystem_css
+    - https://errorcorrectionzoo.org/c/galois_css
     """
 
     _exact_distance_x: int | float | None = None
