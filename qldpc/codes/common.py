@@ -892,14 +892,14 @@ class QuditCode(AbstractCode):
         if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
-        # keep track of current qudit locations
+        # keep track of qudit locations as we swap them around
         qudit_locs = np.arange(len(self), dtype=int)
 
         # row reduce and identify pivots in the X sector
         matrix, pivots_x = _row_reduce(self.matrix)
         pivots_x = pivots_x[pivots_x < len(self)]
 
-        # move the X pivots to the back
+        # move the X pivots (which tag X-type stabilizers and gauge ops) to the back
         other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
         matrix = matrix.reshape(-1, len(self))
         matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
@@ -911,7 +911,7 @@ class QuditCode(AbstractCode):
         sub_matrix, pivots_z = _row_reduce(self.field(sub_matrix))
         matrix[len(pivots_x) :, 1, :] = sub_matrix
 
-        # separate out pivots for stabilizers vs. gauge operators
+        # separate out pivots for Z-type stabilizers vs. gauge operators
         stab_pivots_z, pivots_g = (
             pivots_z[pivots_z < len(other_x)],
             pivots_z[pivots_z >= len(other_x)],
@@ -940,7 +940,7 @@ class QuditCode(AbstractCode):
         matrix = matrix.reshape(-1, 2, len(self))
         identity_k = self.field.Identity(dimension)
 
-        # construct X-pivot logical operators
+        # construct X-type logical operators
         logicals_x = self.field.Zeros((dimension, 2, len(self)))
         logicals_x[:, 0, cols_k] = identity_k
         logicals_x[:, 0, cols_z] = matrix[rows_z, 1, cols_k].T
@@ -948,7 +948,7 @@ class QuditCode(AbstractCode):
             matrix[rows_x, 1, cols_z] @ matrix[rows_z, 1, cols_k] + matrix[rows_x, 1, cols_k]
         ).T
 
-        # construct Z-pivot logical operators
+        # construct Z-type logical operators
         logicals_z = self.field.Zeros((dimension, 2, len(self)))
         logicals_z[:, 1, cols_k] = identity_k
         logicals_z[:, 1, cols_x] = -matrix[rows_x, 0, cols_k].T
