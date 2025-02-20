@@ -355,7 +355,7 @@ class ClassicalCode(AbstractCode):
 
         If passed a vector, compute the minimum Hamming distance between the vector and a code word.
         """
-        if (known_distance := self._get_distance_if_known(vector)) is not None:
+        if (known_distance := self.get_distance_if_known(vector)) is not None:
             return known_distance
 
         if vector is not None:
@@ -373,8 +373,8 @@ class ClassicalCode(AbstractCode):
         self._exact_distance = int(distance)
         return self._exact_distance
 
-    def _get_distance_if_known(
-        self, vector: Sequence[int] | npt.NDArray[np.int_] | None
+    def get_distance_if_known(
+        self, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
     ) -> int | float | None:
         """Retrieve exact distance, if known.  Otherwise return None."""
         if vector is not None:
@@ -402,7 +402,7 @@ class ClassicalCode(AbstractCode):
 
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
-        if (known_distance := self._get_distance_if_known(vector)) is not None:
+        if (known_distance := self.get_distance_if_known(vector)) is not None:
             return known_distance
 
         min_bound = len(self)
@@ -922,7 +922,7 @@ class QuditCode(AbstractCode):
 
     def get_distance_exact(self) -> int | float:
         """Compute the minimum weight of nontrivial logical operators by brute force."""
-        if (known_distance := self._get_distance_if_known()) is not None:
+        if (known_distance := self.get_distance_if_known()) is not None:
             return known_distance
 
         if self.field.order == 2:
@@ -951,7 +951,7 @@ class QuditCode(AbstractCode):
         self._exact_distance = int(distance)
         return distance
 
-    def _get_distance_if_known(self) -> int | float | None:
+    def get_distance_if_known(self) -> int | float | None:
         """Retrieve exact distance, if known.  Otherwise return None."""
         # the distance of dimension-0 codes is undefined
         if self.dimension == 0:
@@ -968,7 +968,7 @@ class QuditCode(AbstractCode):
 
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
-        if (known_distance := self._get_distance_if_known()) is not None:
+        if (known_distance := self.get_distance_if_known()) is not None:
             return known_distance
 
         min_bound = len(self)
@@ -1442,7 +1442,7 @@ class CSSCode(QuditCode):
 
         If `pauli is not None`, consider only `pauli`-type logical operators.
         """
-        if (known_distance := self._get_distance_if_known(pauli)) is not None:
+        if (known_distance := self.get_distance_if_known(pauli)) is not None:
             return known_distance
 
         if pauli is None:
@@ -1480,7 +1480,7 @@ class CSSCode(QuditCode):
             self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
         return distance
 
-    def _get_distance_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
+    def get_distance_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
         """Retrieve exact distance, if known.  Otherwise return None."""
         assert pauli is None or pauli in PAULIS_XZ
 
@@ -1510,7 +1510,7 @@ class CSSCode(QuditCode):
 
         Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
         """
-        if (known_distance := self._get_distance_if_known(pauli)) is not None:
+        if (known_distance := self.get_distance_if_known(pauli)) is not None:
             return known_distance
 
         min_bound = len(self)
