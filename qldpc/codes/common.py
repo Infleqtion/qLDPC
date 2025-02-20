@@ -685,6 +685,8 @@ class QuditCode(AbstractCode):
     """
 
     _is_subsystem_code: bool
+    _stabilizer_ops: galois.FieldArray | None = None
+    _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
 
     def __init__(
@@ -829,112 +831,33 @@ class QuditCode(AbstractCode):
         matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
         return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))
 
-    @functools.cached_property
-    def dimension(self) -> int:
-        """The number of logical qudits encoded by this code."""
-        return len(self) - self.rank
+    def get_stabilizer_ops(self) -> galois.FieldArray:
+        """Basis of stabilizer group generators for this code."""
+        if self.is_subsystem_code:
+            return self.matrix
+        elif self._stabilizer_ops is not None:
+            return self._stabilizer_ops
+        stabs_and_logs = symplectic_conjugate(self.matrix).null_space()
+        augmented_matrix = np.vstack([self.matrix, stabs_and_logs])
+        self._stabilizer_ops = symplectic_conjugate(augmented_matrix).null_space()
+        return self._stabilizer_ops
 
-    def get_code_params(
-        self, *, bound: int | bool | None = None, **decoder_args: Any
-    ) -> tuple[int, int, int | float]:
-        """Compute the parameters of this code: [n,k,d].
+    def get_gauge_ops(self) -> galois.FieldArray:
+        """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
 
-        Here:
-        - n is the number of data qudits
-        - k is the number of encoded ("logical") qudits
-        - d is the code distance
-
-        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
-        upper bound using `bound` trials of a a randomized algorithm.  For a detailed explanation,
-        see the `get_one_distance_bound` method.
-
-        Keyword arguments are passed to the calculation of code distance.
+        Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
+        logical Pauli operators computed by QuditCode.get_logical_ops.
         """
-        distance = self.get_distance(bound=bound, **decoder_args)
-        return len(self), self.dimension, distance
-
-    def get_distance(self, *, bound: int | bool | None = None, **decoder_args: Any) -> int | float:
-        """Compute (or upper bound) the minimum weight of nontrivial logical operators.
-
-        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute
-        upper bounds using a randomized algorithm and minimize over `bound` trials.  For a detailed
-        explanation, see `get_one_distance_bound`.
-
-        Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
-        """
-        if not bound:
-            return self.get_distance_exact()
-        return self.get_distance_bound(num_trials=int(bound), **decoder_args)
-
-    def get_distance_exact(self) -> int | float:
-        """Compute the minimum weight of nontrivial logical operators by brute force."""
-        if (known_distance := self.get_distance_if_known()) is not None:
-            return known_distance
-
-        if self.field.order == 2:
-            stabilizers = self.canonicalized().matrix
-            logical_ops = self.get_logical_ops()
-            distance = get_distance_quantum(
-                logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
-            )
-        else:
-            warnings.warn(
-                "Computing the exact distance of a non-binary code may take a (very) long time"
-            )
-            distance = len(self)
-            code_logical_ops = ClassicalCode.from_generator(self.get_logical_ops())
-            code_stabilizers = ClassicalCode.from_generator(self.matrix)
-            for word_l, word_s in itertools.product(
-                code_logical_ops.iter_words(skip_zero=True),
-                code_stabilizers.iter_words(),
-            ):
-                word = word_l + word_s
-                support_x = word[: len(self)].view(np.ndarray)
-                support_z = word[len(self) :].view(np.ndarray)
-                distance = min(distance, np.count_nonzero(support_x | support_z))
-
-        self._exact_distance = int(distance)
-        return distance
-
-    def get_distance_if_known(self) -> int | float | None:
-        """Retrieve exact distance, if known.  Otherwise return None."""
-        # the distance of dimension-0 codes is undefined
-        if self.dimension == 0:
-            self._exact_distance = np.nan
-
-        return self._exact_distance
-
-    def get_distance_bound(
-        self, num_trials: int = 1, *, cutoff: int | None = None, **decoder_args: Any
-    ) -> int | float:
-        """Compute an upper bound on code distance by minimizing many individual upper bounds.
-
-        If passed a cutoff, don't bother trying to find distances less than the cutoff.
-
-        Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
-        """
-        if (known_distance := self.get_distance_if_known()) is not None:
-            return known_distance
-
-        min_bound = len(self)
-        for _ in range(num_trials):
-            if cutoff and min_bound <= cutoff:
-                break
-            new_bound = self.get_one_distance_bound(**decoder_args)
-            min_bound = int(min(min_bound, new_bound))
-        return min_bound
-
-    def get_one_distance_bound(self, **decoder_args: Any) -> int:
-        """Use a randomized algorithm to compute a single upper bound on code distance."""
-        raise NotImplementedError(
-            "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
-        )
+        if self.is_subsystem_code:
+            return self.field.Zeros((0, 2 * len(self)))
+        elif self._gauge_ops is not None:
+            return self._gauge_ops
+        return NotImplemented
 
     def get_logical_ops(
         self, pauli: PauliXZ | None = None, *, recompute: bool = False
     ) -> galois.FieldArray:
-        """Complete basis of nontrivial logical Pauli operators for this code.
+        """Basis of nontrivial logical Pauli operators for this code.
 
         Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
         k and n are, respectively, the numbers of logical and physical qudits in this code.
@@ -1065,14 +988,118 @@ class QuditCode(AbstractCode):
         """Assert that the given logical operators are valid for this code."""
         logical_ops = self.field(logical_ops)
 
-        logs_x = logical_ops[: self.dimension]
-        logs_z = logical_ops[self.dimension :]
-        inner_products = symplectic_conjugate(logs_x) @ logs_z.T
+        logical_ops_x = logical_ops[: self.dimension]
+        logical_ops_z = logical_ops[self.dimension :]
+        inner_products = symplectic_conjugate(logical_ops_x) @ logical_ops_z.T
         if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
             raise ValueError("The given logical operators have incorrect commutation relations")
 
         if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
             raise ValueError("The given logical operators do not commute with stabilizers")
+
+    @functools.cached_property
+    def dimension(self) -> int:
+        """The number of logical qudits encoded by this code."""
+        if self.is_subsystem_code:
+            return len(self) - self.rank
+        return len(self) - ClassicalCode(self.get_stabilizer_ops()).rank
+
+    def get_code_params(
+        self, *, bound: int | bool | None = None, **decoder_args: Any
+    ) -> tuple[int, int, int | float]:
+        """Compute the parameters of this code: [n,k,d].
+
+        Here:
+        - n is the number of data qudits
+        - k is the number of encoded ("logical") qudits
+        - d is the code distance
+
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute an
+        upper bound using `bound` trials of a a randomized algorithm.  For a detailed explanation,
+        see the `get_one_distance_bound` method.
+
+        Keyword arguments are passed to the calculation of code distance.
+        """
+        distance = self.get_distance(bound=bound, **decoder_args)
+        return len(self), self.dimension, distance
+
+    def get_distance(self, *, bound: int | bool | None = None, **decoder_args: Any) -> int | float:
+        """Compute (or upper bound) the minimum weight of nontrivial logical operators.
+
+        If `bound is None`, compute an exact code distance by brute force.  Otherwise, compute
+        upper bounds using a randomized algorithm and minimize over `bound` trials.  For a detailed
+        explanation, see `get_one_distance_bound`.
+
+        Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
+        """
+        if not bound:
+            return self.get_distance_exact()
+        return self.get_distance_bound(num_trials=int(bound), **decoder_args)
+
+    def get_distance_exact(self) -> int | float:
+        """Compute the minimum weight of nontrivial logical operators by brute force."""
+        if (known_distance := self.get_distance_if_known()) is not None:
+            return known_distance
+
+        if self.field.order == 2:
+            stabilizers = self.canonicalized().matrix
+            logical_ops = self.get_logical_ops()
+            distance = get_distance_quantum(
+                logical_ops.view(np.ndarray).astype(np.uint8),
+                stabilizers.view(np.ndarray).astype(np.uint8),
+            )
+        else:
+            warnings.warn(
+                "Computing the exact distance of a non-binary code may take a (very) long time"
+            )
+            distance = len(self)
+            code_logical_ops = ClassicalCode.from_generator(self.get_logical_ops())
+            code_stabilizers = ClassicalCode.from_generator(self.matrix)
+            for word_l, word_s in itertools.product(
+                code_logical_ops.iter_words(skip_zero=True),
+                code_stabilizers.iter_words(),
+            ):
+                word = word_l + word_s
+                support_x = word[: len(self)].view(np.ndarray)
+                support_z = word[len(self) :].view(np.ndarray)
+                distance = min(distance, np.count_nonzero(support_x | support_z))
+
+        self._exact_distance = int(distance)
+        return distance
+
+    def get_distance_if_known(self) -> int | float | None:
+        """Retrieve exact distance, if known.  Otherwise return None."""
+        # the distance of dimension-0 codes is undefined
+        if self.dimension == 0:
+            self._exact_distance = np.nan
+
+        return self._exact_distance
+
+    def get_distance_bound(
+        self, num_trials: int = 1, *, cutoff: int | None = None, **decoder_args: Any
+    ) -> int | float:
+        """Compute an upper bound on code distance by minimizing many individual upper bounds.
+
+        If passed a cutoff, don't bother trying to find distances less than the cutoff.
+
+        Additional arguments, if applicable, are passed to a decoder in `get_one_distance_bound`.
+        """
+        if (known_distance := self.get_distance_if_known()) is not None:
+            return known_distance
+
+        min_bound = len(self)
+        for _ in range(num_trials):
+            if cutoff and min_bound <= cutoff:
+                break
+            new_bound = self.get_one_distance_bound(**decoder_args)
+            min_bound = int(min(min_bound, new_bound))
+        return min_bound
+
+    def get_one_distance_bound(self, **decoder_args: Any) -> int:
+        """Use a randomized algorithm to compute a single upper bound on code distance."""
+        raise NotImplementedError(
+            "Monte Carlo distance bound calculation is not implemented for a general QuditCode"
+        )
 
     def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
@@ -1421,6 +1448,130 @@ class CSSCode(QuditCode):
         """
         return self.code_x.rank + self.code_z.rank
 
+    def get_stabilizer_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
+    ) -> galois.FieldArray:
+        """Basis of stabilizer group generators for this code."""
+        return NotImplemented
+
+    def get_gauge_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
+    ) -> galois.FieldArray:
+        """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
+
+        Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
+        logical Pauli operators computed by CSSCode.get_logical_ops.
+        """
+        return NotImplemented
+
+    def get_logical_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
+    ) -> galois.FieldArray:
+        """Basis of nontrivial logical Pauli operators for this code.
+
+        Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
+        k and n are, respectively, the numbers of logical and physical qudits in this code.
+        Each row of logical_ops is a vector that represents a logical operator.  The first
+        (respectively, second) n entries of this vector indicate the support of *physical* X-type
+        (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
+        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
+        each other, which is to say that the logical operator at row j commutes with the logical
+        operators in all other rows except row j+k.
+
+        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
+        operators of that type.  This matrix has shape (k, n) by default, but is expanded into a
+        matrix with shape (k, 2 * n) if this method is called with symplectic=True.
+
+        Logical X-type operators only address physical qudits by physical X-type operators, and
+        logical Z-type operators only address physical qudits by physical Z-type operators.
+
+        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
+        thesis (arXiv:9705052), slightly modified for qudits and CSSCodes.
+        """
+        assert pauli is None or pauli in PAULIS_XZ
+
+        # if requested, retrieve logical operators of one type only
+        if pauli is not None:
+            shape: tuple[int, ...]
+            if symplectic:
+                shape = (2, self.dimension, 2 * len(self))
+                logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
+                return logical_ops[pauli, :, :]  # type:ignore[return-value]
+            shape = (2, self.dimension, 2, len(self))
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
+            return logical_ops[pauli, :, pauli, :]  # type:ignore[return-value]
+
+        # memoize manually because other methods may modify the logical operators computed here
+        if self._logical_ops is not None and not recompute:
+            return self._logical_ops
+
+        num_qudits = len(self)
+        dimension = self.dimension
+        identity = self.field.Identity(dimension)
+
+        # identify check matrices for X/Z-type parity checks, and the current qudit locations
+        checks_x: npt.NDArray[np.int_] = self.matrix_x
+        checks_z: npt.NDArray[np.int_] = self.matrix_z
+        qudit_locs = np.arange(num_qudits, dtype=int)
+
+        # row reduce the check matrix for X-type errors and move its pivots to the back
+        checks_x, pivots_x = _row_reduce(self.field(checks_x))
+        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
+        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
+        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
+        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
+
+        # row reduce the check matrix for Z-type errors and move its pivots to the back
+        checks_z, pivots_z = _row_reduce(self.field(checks_z))
+        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
+        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
+        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
+
+        # run some sanity checks
+        assert pivots_z[-1] < num_qudits - len(pivots_x)
+        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
+
+        # identify "sections" of columns / qudits
+        section_k = slice(dimension)
+        section_x = slice(dimension, dimension + len(pivots_x))
+        section_z = slice(dimension + len(pivots_x), num_qudits)
+
+        # construct logical X operators
+        logicals_x = self.field.Zeros((dimension, num_qudits))
+        logicals_x[:, section_k] = identity
+        logicals_x[:, section_z] = -checks_z[: len(pivots_z), :dimension].T
+
+        # construct logical Z operators
+        logicals_z = self.field.Zeros((dimension, num_qudits))
+        logicals_z[:, section_k] = identity
+        logicals_z[:, section_x] = -checks_x[: len(pivots_x), :dimension].T
+
+        # move qudits back to their original locations
+        permutation = np.argsort(qudit_locs)
+        logicals_x = logicals_x[:, permutation]
+        logicals_z = logicals_z[:, permutation]
+
+        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
+        return self._logical_ops
+
+    def set_logical_ops_xz(
+        self,
+        logicals_x: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        logicals_z: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        *,
+        validate: bool = True,
+    ) -> None:
+        """Set the logical operators of this code to the provided logical operators."""
+        zero_block = np.zeros((self.dimension, len(self)), dtype=int)
+        logical_ops = np.block(
+            [
+                [self.field(logicals_x), zero_block],
+                [zero_block, self.field(logicals_z)],
+            ]
+        )
+        self.set_logical_ops(logical_ops, validate=validate)
+
     def get_distance(
         self, pauli: PauliXZ | None = None, *, bound: int | bool | None = None, **decoder_args: Any
     ) -> int | float:
@@ -1588,114 +1739,6 @@ class CSSCode(QuditCode):
 
         # return the Hamming weight of the logical operator
         return int(np.count_nonzero(candidate_logical_op))
-
-    def get_logical_ops(
-        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
-    ) -> galois.FieldArray:
-        """Complete basis of nontrivial logical Pauli operators for this code.
-
-        Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
-        k and n are, respectively, the numbers of logical and physical qudits in this code.
-        Each row of logical_ops is a vector that represents a logical operator.  The first
-        (respectively, second) n entries of this vector indicate the support of *physical* X-type
-        (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
-        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
-        each other, which is to say that the logical operator at row j commutes with the logical
-        operators in all other rows except row j+k.
-
-        If this method is passed a pauli operator (Pauli.X or Pauli.Z), it returns only the logical
-        operators of that type.  This matrix has shape (k, n) by default, but is expanded into a
-        matrix with shape (k, 2 * n) if this method is called with symplectic=True.
-
-        Logical X-type operators only address physical qudits by physical X-type operators, and
-        logical Z-type operators only address physical qudits by physical Z-type operators.
-
-        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified for qudits and CSSCodes.
-        """
-        assert pauli is None or pauli in PAULIS_XZ
-
-        # if requested, retrieve logical operators of one type only
-        if pauli is not None:
-            shape: tuple[int, ...]
-            if symplectic:
-                shape = (2, self.dimension, 2 * len(self))
-                logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
-                return logical_ops[pauli, :, :]  # type:ignore[return-value]
-            shape = (2, self.dimension, 2, len(self))
-            logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
-            return logical_ops[pauli, :, pauli, :]  # type:ignore[return-value]
-
-        # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None and not recompute:
-            return self._logical_ops
-
-        num_qudits = len(self)
-        dimension = self.dimension
-        identity = self.field.Identity(dimension)
-
-        # identify check matrices for X/Z-type parity checks, and the current qudit locations
-        checks_x: npt.NDArray[np.int_] = self.matrix_x
-        checks_z: npt.NDArray[np.int_] = self.matrix_z
-        qudit_locs = np.arange(num_qudits, dtype=int)
-
-        # row reduce the check matrix for X-type errors and move its pivots to the back
-        checks_x, pivots_x = _row_reduce(self.field(checks_x))
-        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
-        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
-        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
-        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
-
-        # row reduce the check matrix for Z-type errors and move its pivots to the back
-        checks_z, pivots_z = _row_reduce(self.field(checks_z))
-        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
-        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
-        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
-
-        # run some sanity checks
-        assert pivots_z[-1] < num_qudits - len(pivots_x)
-        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
-
-        # identify "sections" of columns / qudits
-        section_k = slice(dimension)
-        section_x = slice(dimension, dimension + len(pivots_x))
-        section_z = slice(dimension + len(pivots_x), num_qudits)
-
-        # construct logical X operators
-        logicals_x = self.field.Zeros((dimension, num_qudits))
-        logicals_x[:, section_k] = identity
-        logicals_x[:, section_z] = -checks_z[: len(pivots_z), :dimension].T
-
-        # construct logical Z operators
-        logicals_z = self.field.Zeros((dimension, num_qudits))
-        logicals_z[:, section_k] = identity
-        logicals_z[:, section_x] = -checks_x[: len(pivots_x), :dimension].T
-
-        # move qudits back to their original locations
-        permutation = np.argsort(qudit_locs)
-        logicals_x = logicals_x[:, permutation]
-        logicals_z = logicals_z[:, permutation]
-
-        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
-        return self._logical_ops
-
-    def set_logical_ops_xz(
-        self,
-        logicals_x: npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        logicals_z: npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        *,
-        validate: bool = True,
-    ) -> None:
-        """Set the logical operators of this code to the provided logical operators."""
-        zero_block = np.zeros((self.dimension, len(self)), dtype=int)
-        logical_ops = np.block(
-            [
-                [self.field(logicals_x), zero_block],
-                [zero_block, self.field(logicals_z)],
-            ]
-        )
-        self.set_logical_ops(logical_ops, validate=validate)
 
     def get_random_logical_op(
         self, pauli: PauliXZ, *, ensure_nontrivial: bool = False, seed: int | None = None
