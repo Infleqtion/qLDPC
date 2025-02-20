@@ -308,7 +308,9 @@ def test_distance_qudit() -> None:
 
     # fallback pythonic brute-force distance calculation
     surface_code = codes.SurfaceCode(2, field=3)
-    surface_code._exact_distance_x = surface_code._exact_distance_z = None
+    surface_code._exact_distance = None
+    surface_code._exact_distance_x = None
+    surface_code._exact_distance_z = None
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
         assert codes.QuditCode.get_distance_exact(surface_code) == 2
 
