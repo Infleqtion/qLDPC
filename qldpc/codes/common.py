@@ -864,9 +864,9 @@ class QuditCode(AbstractCode):
         Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
         k and n are, respectively, the numbers of logical and physical qudits in this code.
         Each row of logical_ops is a vector that represents a logical operator.  The first
-        (respectively, second) n entries of this vector indicate the support of *physical* X-type
+        (respectively, second) n entries of this vector indicate the support of _physical_ X-type
         (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
-        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
+        _logical_ X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
         each other, which is to say that the logical operator at row j commutes with the logical
         operators in all other rows except row j+k.
 
@@ -1474,9 +1474,9 @@ class CSSCode(QuditCode):
         Logical operators are represented by a matrix logical_ops with shape (2 * k, 2 * n), where
         k and n are, respectively, the numbers of logical and physical qudits in this code.
         Each row of logical_ops is a vector that represents a logical operator.  The first
-        (respectively, second) n entries of this vector indicate the support of *physical* X-type
+        (respectively, second) n entries of this vector indicate the support of _physical_ X-type
         (respectively, Z-type) operators.  Similarly, the first (second) k rows correspond to
-        *logical* X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
+        _logical_ X-type (Z-type) operators.  The logical operators at rows j and j+k are dual to
         each other, which is to say that the logical operator at row j commutes with the logical
         operators in all other rows except row j+k.
 
