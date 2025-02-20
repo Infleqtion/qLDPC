@@ -1342,11 +1342,6 @@ class CSSCode(QuditCode):
         """The classical code of Z-type parity checks."""
         return self._code_z
 
-    def get_code(self, pauli: PauliXZ) -> ClassicalCode:
-        """Retrieve the classical code of stabilizers of a given type."""
-        assert pauli in PAULIS_XZ
-        return self.code_x if pauli is Pauli.X else self.code_z
-
     @property
     def matrix_x(self) -> galois.FieldArray:
         """X-type parity checks."""
@@ -1356,6 +1351,11 @@ class CSSCode(QuditCode):
     def matrix_z(self) -> galois.FieldArray:
         """Z-type parity checks."""
         return self.code_z.matrix
+
+    def get_code(self, pauli: PauliXZ) -> ClassicalCode:
+        """Retrieve the classical code of stabilizers of a given type."""
+        assert pauli in PAULIS_XZ
+        return self.code_x if pauli is Pauli.X else self.code_z
 
     def get_matrix(self, pauli: PauliXZ) -> galois.FieldArray:
         """Retrieve the classical code of stabilizers of a given type."""
