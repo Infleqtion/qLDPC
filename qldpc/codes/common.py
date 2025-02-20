@@ -166,7 +166,7 @@ class AbstractCode(abc.ABC):
     @functools.cached_property
     def rank(self) -> int:
         """Rank of this code's parity check matrix."""
-        return len(self.canonicalized().matrix)
+        return np.count_nonzero(np.any(self.matrix.row_reduce(), axis=1))
 
     @functools.cached_property
     def graph(self) -> nx.DiGraph:
@@ -280,7 +280,7 @@ class ClassicalCode(AbstractCode):
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical bits encoded by this code."""
-        return len(self) - len(self.canonicalized().matrix)
+        return len(self) - self.rank
 
     @functools.cached_property
     def generator(self) -> galois.FieldArray:
@@ -879,7 +879,7 @@ class QuditCode(AbstractCode):
         additionally address physical qudits with physical Z-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified for qudits.
+        thesis (arXiv:9705052), slightly modified for subsystem qudit codes.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
@@ -892,89 +892,97 @@ class QuditCode(AbstractCode):
         if self._logical_ops is not None and not recompute:
             return self._logical_ops
 
-        # # gauge_matrix = self.matrix
-        # # stabs_and_logs = conjugate_xz(gauge_matrix).null_space()
-        # # augmented_matrix = np.vstack([gauge_matrix, stabs_and_logs])
-        # # stabs = conjugate_xz(augmented_matrix).null_space()
-        # stabs = self.matrix
-        # stabs_and_logs = conjugate_xz(stabs).null_space()
-        # print(stabs_and_logs)
-        # exit()
-
-        # _stabs, pivots_stabs = _row_reduce(stabs)
-        # _stabs_and_logs, pivots_stabs_and_logs = _row_reduce(stabs_and_logs)
-        # indices = [idx for idx, val in enumerate(pivots_stabs_and_logs) if val not in pivots_stabs]
-        # self._logical_ops = _stabs_and_logs[indices]
-        # return self._logical_ops
-
-        num_qudits = len(self)
-        num_checks = self.num_checks
-        dimension = self.dimension
-        identity = self.field.Identity(dimension)
-
         # keep track of current qudit locations
-        qudit_locs = np.arange(num_qudits, dtype=int)
+        qudit_locs = np.arange(len(self), dtype=int)
 
         # row reduce and identify pivots in the X sector
         matrix, pivots_x = _row_reduce(self.matrix)
-        pivots_x = [pivot for pivot in pivots_x if pivot < num_qudits]
-        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
+        pivots_x = pivots_x[pivots_x < len(self)]
 
         # move the X pivots to the back
-        matrix = matrix.reshape(num_checks * 2, num_qudits)
+        other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
+        matrix = matrix.reshape(-1, len(self))
         matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # row reduce and identify pivots in the Z sector
-        matrix = matrix.reshape(num_checks, 2 * num_qudits)
-        sub_matrix = matrix[len(pivots_x) :, num_qudits:]
+        matrix = matrix.reshape(-1, 2, len(self))
+        sub_matrix = matrix[len(pivots_x) :, 1, :]
         sub_matrix, pivots_z = _row_reduce(self.field(sub_matrix))
-        matrix[len(pivots_x) :, num_qudits:] = sub_matrix
-        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
+        matrix[len(pivots_x) :, 1, :] = sub_matrix
 
-        # move the Z pivots to the back
-        matrix = matrix.reshape(num_checks * 2, num_qudits)
-        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
+        # separate out pivots for stabilizers vs. gauge operators
+        stab_pivots_z, pivots_g = (
+            pivots_z[pivots_z < len(other_x)],
+            pivots_z[pivots_z >= len(other_x)],
+        )
 
-        # identify X-pivot and Z-pivot parity checks
-        matrix = matrix.reshape(num_checks, 2 * num_qudits)[: len(pivots_x + pivots_z), :]
-        checks_x = matrix[: len(pivots_x), :].reshape(len(pivots_x), 2, num_qudits)
-        checks_z = matrix[len(pivots_x) :, :].reshape(len(pivots_z), 2, num_qudits)
+        # move the stabilizer Z pivots to the back
+        other_z = [qq for qq in range(len(self)) if qq not in stab_pivots_z]
+        matrix = matrix.reshape(-1, len(self))
+        matrix = np.hstack([matrix[:, other_z], matrix[:, stab_pivots_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[stab_pivots_z]])
 
-        # run some sanity checks
-        assert len(pivots_z) == 0 or pivots_z[-1] < num_qudits - len(pivots_x)
-        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
-        assert not np.any(checks_z[:, 0, :])
+        # identify some helpful numbers
+        num_gauge_qudits = len(pivots_g)
+        num_stabs_x = len(pivots_x) - num_gauge_qudits
+        num_stabs_z = len(stab_pivots_z)
+        dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
 
-        # identify "sections" of columns / qudits
-        section_k = slice(dimension)
-        section_x = slice(dimension, dimension + len(pivots_x))
-        section_z = slice(dimension + len(pivots_x), num_qudits)
+        # identify row/column sectors of the parity check matrix
+        cols_k = slice(dimension)
+        cols_x = slice(dimension, len(self) - num_stabs_z)
+        cols_z = slice(len(self) - num_stabs_z, len(self))
+        rows_x = slice(num_stabs_x + num_gauge_qudits)
+        rows_z = slice(-num_stabs_z - num_gauge_qudits, -num_gauge_qudits)
+
+        # some helpful reshaping and an identity matrix
+        matrix = matrix.reshape(-1, 2, len(self))
+        identity_k = self.field.Identity(dimension)
 
         # construct X-pivot logical operators
-        logicals_x = self.field.Zeros((dimension, 2, num_qudits))
-        logicals_x[:, 0, section_k] = identity
-        logicals_x[:, 0, section_z] = -checks_z[:, 1, :dimension].T
-        logicals_x[:, 1, section_x] = -(
-            checks_x[:, 1, section_z] @ checks_z[:, 1, section_k] + checks_x[:, 1, section_k]
+        logicals_x = self.field.Zeros((dimension, 2, len(self)))
+        logicals_x[:, 0, cols_k] = identity_k
+        logicals_x[:, 0, cols_z] = matrix[rows_z, 1, cols_k].T
+        logicals_x[:, 1, cols_x] = -(
+            matrix[rows_x, 1, cols_z] @ matrix[rows_z, 1, cols_k] + matrix[rows_x, 1, cols_k]
         ).T
 
         # construct Z-pivot logical operators
-        logicals_z = self.field.Zeros((dimension, 2, num_qudits))
-        logicals_z[:, 1, section_k] = identity
-        logicals_z[:, 1, section_x] = -checks_x[:, 0, :dimension].T
+        logicals_z = self.field.Zeros((dimension, 2, len(self)))
+        logicals_z[:, 1, cols_k] = identity_k
+        logicals_z[:, 1, cols_x] = -matrix[rows_x, 0, cols_k].T
 
-        # move qudits back to their original locations
+        # move qudits back to their original locations and reshape
         permutation = np.argsort(qudit_locs)
-        logicals_x = logicals_x[:, :, permutation]
-        logicals_z = logicals_z[:, :, permutation]
+        logicals_x = logicals_x[:, :, permutation].reshape(-1, 2 * len(self))
+        logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
 
-        # reshape and return
-        logicals_x = logicals_x.reshape(dimension, 2 * num_qudits)
-        logicals_z = logicals_z.reshape(dimension, 2 * num_qudits)
+        # save logicals and return
         self._logical_ops = self.field(np.vstack([logicals_x, logicals_z]))
-        return self._logical_ops
+        # return self._logical_ops
+
+        matrix = matrix.reshape(-1, 2, len(self))
+        matrix = matrix[:, :, permutation].reshape(-1, 2 * len(self))
+        print()
+        print(num_gauge_qudits)
+        print(num_stabs_x)
+        print(num_stabs_z)
+        print(dimension)
+        print()
+        print(matrix)
+        print()
+        print(matrix[: len(pivots_x), cols_k])
+        print()
+        print(matrix[: len(pivots_x), cols_x])
+        print()
+        print(matrix[: len(pivots_x), cols_z])
+        print()
+        print(symplectic_conjugate(logicals_x) @ logicals_z.T)
+        print()
+        print(symplectic_conjugate(matrix) @ self._logical_ops.T)
+
+        exit()
 
     def set_logical_ops(
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
@@ -1488,7 +1496,7 @@ class CSSCode(QuditCode):
         logical Z-type operators only address physical qudits by physical Z-type operators.
 
         Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified for qudits and CSSCodes.
+        thesis (arXiv:9705052), slightly modified for subsystem qudit codes.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
@@ -2000,7 +2008,7 @@ class CSSCode(QuditCode):
         return 1 - infidelity, variance
 
 
-def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[int]]:
+def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
     """Perform Gaussian elimination on a matrix.
 
     Returns:
@@ -2013,7 +2021,7 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], list[i
     matrix_rref = matrix.row_reduce()
     matrix_rref = matrix_rref[np.any(matrix_rref, axis=1), :]
     pivots = np.argmax(matrix_rref.view(np.ndarray).astype(bool), axis=1)
-    return matrix_rref, list(pivots)
+    return matrix_rref, pivots
 
 
 def _get_sample_allocation(
