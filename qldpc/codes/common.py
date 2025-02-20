@@ -93,7 +93,6 @@ class AbstractCode(abc.ABC):
 
         The base field is taken to be F_2 by default.
         """
-        # TODO: rewrite docstring
         self._matrix: galois.FieldArray
         if isinstance(matrix, AbstractCode):
             self._field = matrix.field
@@ -140,7 +139,6 @@ class AbstractCode(abc.ABC):
     @property
     def matrix(self) -> galois.FieldArray:
         """Parity check matrix of this code."""
-        # TODO: move method to ClassicalCode
         return self._matrix
 
     @abc.abstractmethod
@@ -801,10 +799,9 @@ class QuditCode(AbstractCode):
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
     def get_strings(self) -> list[str]:
-        """Stabilizers (checks) of this code, represented by strings."""
-        # TODO: change method in light of subsystem codes
+        """Parity checks checks of this code, represented by strings."""
         matrix = self.matrix.reshape(self.num_checks, 2, self.num_qudits)
-        stabilizers = []
+        checks = []
         for check in range(self.num_checks):
             ops = []
             for qudit in range(self.num_qudits):
@@ -815,25 +812,24 @@ class QuditCode(AbstractCode):
                     ops.append(str(Pauli(vals_xz)))
                 else:
                     ops.append(str(QuditOperator(vals_xz)))
-            stabilizers.append(" ".join(ops))
-        return stabilizers
+            checks.append(" ".join(ops))
+        return checks
 
     @staticmethod
-    def from_strings(*stabilizers: str, field: int | None = None) -> QuditCode:
-        """Construct a QuditCode from the provided stabilizers."""
-        # TODO: change method in light of subsystem codes
+    def from_strings(*checks: str, field: int | None = None) -> QuditCode:
+        """Construct a QuditCode from the provided parity checks."""
         field = field or DEFAULT_FIELD_ORDER
-        check_ops = [stabilizer.split() for stabilizer in stabilizers]
+        check_ops = [check.split() for check in checks]
         num_checks = len(check_ops)
         num_qudits = len(check_ops[0])
         operator: type[Pauli] | type[QuditOperator] = Pauli if field == 2 else QuditOperator
 
         matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
-        for check, check_op in enumerate(check_ops):
+        for index, check_op in enumerate(check_ops):
             if len(check_op) != num_qudits:
-                raise ValueError(f"Stabilizers 0 and {check} have different lengths")
+                raise ValueError(f"Parity checks 0 and {index} have different lengths")
             for qudit, op in enumerate(check_op):
-                matrix[check, :, qudit] = operator.from_string(op).value
+                matrix[index, :, qudit] = operator.from_string(op).value
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
