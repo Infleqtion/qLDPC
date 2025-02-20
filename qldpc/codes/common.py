@@ -141,33 +141,6 @@ class AbstractCode(abc.ABC):
         """Parity check matrix of this code."""
         return self._matrix
 
-    @abc.abstractmethod
-    def __len__(self) -> int:
-        """The block length of this code."""
-
-    @property
-    def num_checks(self) -> int:
-        """Number of parity checks in this code."""
-        # TODO: make this method work differently for quantum codes
-        return self.matrix.shape[0]
-
-    @functools.cached_property
-    def rank(self) -> int:
-        """Rank of this code's parity check matrix.
-
-        Equivalently, the number of linearly independent parity checks in this code.
-        """
-        # TODO: rename this method?  change how it behaves?
-        matrix_rref = self.matrix.row_reduce()
-        nonzero_rows = np.any(matrix_rref, axis=1)
-        return np.count_nonzero(nonzero_rows)
-
-    @property
-    def dimension(self) -> int:
-        """The number of logical (qu)dits encoded by this code."""
-        # TODO: change how this method works
-        return len(self) - self.rank
-
     @functools.cached_property
     def graph(self) -> nx.DiGraph:
         """Tanner graph of this code."""
@@ -182,6 +155,30 @@ class AbstractCode(abc.ABC):
     @abc.abstractmethod
     def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
         """Convert a Tanner graph into a parity check matrix."""
+
+    @abc.abstractmethod
+    def __len__(self) -> int:
+        """The block length of this code."""
+
+    @property
+    def num_checks(self) -> int:
+        """Number of parity checks in this code."""
+        return self.matrix.shape[0]
+
+    @functools.cached_property
+    def rank(self) -> int:
+        """Rank of this code's parity check matrix.
+
+        Equivalently, the number of linearly independent parity checks in this code.
+        """
+        matrix_rref = self.matrix.row_reduce()
+        nonzero_rows = np.any(matrix_rref, axis=1)
+        return np.count_nonzero(nonzero_rows)
+
+    @property
+    def dimension(self) -> int:
+        """The number of logical (qu)dits encoded by this code."""
+        return len(self) - self.rank
 
 
 ################################################################################
@@ -267,7 +264,7 @@ class ClassicalCode(AbstractCode):
 
     @functools.cached_property
     def generator(self) -> galois.FieldArray:
-        """Generator of this code: a matrix whose rows for a basis for code words."""
+        """Generator of this code: a matrix whose rows form a basis for all code words."""
         return self.matrix.null_space()
 
     def words(self) -> galois.FieldArray:
@@ -736,31 +733,6 @@ class QuditCode(AbstractCode):
             code_a.canonicalized().matrix, code_b.canonicalized().matrix
         )
 
-    def __len__(self) -> int:
-        """The block length of this code."""
-        return self.matrix.shape[1] // 2
-
-    @property
-    def num_qudits(self) -> int:
-        """Number of data qudits in this code."""
-        return len(self)
-
-    @property
-    def num_qubits(self) -> int:
-        """Number of data qubits in this code."""
-        if not self.field.order == 2:
-            raise ValueError(
-                "You asked for the number of qubits in this code, but this code is built out of "
-                rf"{self.field.order}-dimensional qudits.\nTry calling {type(self)}.num_qudits."
-            )
-        return len(self)
-
-    def get_weight(self) -> int:
-        """Compute the weight of the largest parity check."""
-        matrix_x = self.matrix[:, : len(self)].view(np.ndarray)
-        matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
-        return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))
-
     @staticmethod
     def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
         """Convert a parity check matrix into a Tanner graph."""
@@ -832,6 +804,31 @@ class QuditCode(AbstractCode):
                 matrix[index, :, qudit] = operator.from_string(op).value
 
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
+
+    def __len__(self) -> int:
+        """The block length of this code."""
+        return self.matrix.shape[1] // 2
+
+    @property
+    def num_qudits(self) -> int:
+        """Number of data qudits in this code."""
+        return len(self)
+
+    @property
+    def num_qubits(self) -> int:
+        """Number of data qubits in this code."""
+        if not self.field.order == 2:
+            raise ValueError(
+                "You asked for the number of qubits in this code, but this code is built out of "
+                rf"{self.field.order}-dimensional qudits.\nTry calling {type(self)}.num_qudits."
+            )
+        return len(self)
+
+    def get_weight(self) -> int:
+        """Compute the weight of the largest parity check."""
+        matrix_x = self.matrix[:, : len(self)].view(np.ndarray)
+        matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
+        return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))
 
     def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
