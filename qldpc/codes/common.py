@@ -795,7 +795,7 @@ class QuditCode(AbstractCode):
         for node_check, node_qudit, data in graph.edges(data=True):
             op = data.get(QuditOperator) or data.get(Pauli)
             matrix[node_check.index, :, node_qudit.index] = op.value
-        field = graph.order if hasattr(graph, "order") else DEFAULT_FIELD_ORDER
+        field = getattr(graph, "order", DEFAULT_FIELD_ORDER)
         return galois.GF(field)(matrix.reshape(num_checks, 2 * num_qudits))
 
     def get_strings(self) -> list[str]:
@@ -836,7 +836,7 @@ class QuditCode(AbstractCode):
     def conjugated(self, qudits: slice | Sequence[int] | None = None) -> QuditCode:
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
-            qudits = self._default_conjugate if hasattr(self, "_default_conjugate") else ()
+            qudits = getattr(self, "_default_conjugate", ())
         matrix = self.matrix.copy().reshape(-1, 2, len(self))
         matrix[:, :, qudits] = matrix[:, ::-1, qudits]
         matrix = matrix.reshape(-1, 2 * len(self))
