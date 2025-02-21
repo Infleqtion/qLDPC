@@ -959,13 +959,16 @@ class QuditCode(AbstractCode):
         """Set the logical operators of this code to the provided logical operators."""
         logical_ops = self.field(logical_ops)
         if validate:
-            logical_ops_x = logical_ops[: self.dimension]
-            logical_ops_z = logical_ops[self.dimension :]
+            assert len(logical_ops) % 2 == 0
+            dimension = len(logical_ops) // 2
+            logical_ops_x = logical_ops[:dimension]
+            logical_ops_z = logical_ops[dimension:]
             inner_products = symplectic_conjugate(logical_ops_x) @ logical_ops_z.T
-            if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
-                raise ValueError("The given logical operators have incorrect commutation relations")
             if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
                 raise ValueError("The given logical operators do not commute with stabilizers")
+            if not np.array_equal(inner_products, np.eye(dimension, dtype=int)):
+                raise ValueError("The given logical operators have incorrect commutation relations")
+            assert dimension == self.dimension
         self._logical_ops = logical_ops
 
     def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
