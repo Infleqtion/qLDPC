@@ -862,8 +862,7 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, -1, 2 * len(self))
-            return logical_ops[pauli, :, :]  # type:ignore[return-value]
+            return self.get_logical_ops(recompute=recompute).reshape(2, -1, 2 * len(self))[pauli]
 
         # return logical operators if known and not asked to recompute
         if not (recompute or dry_run):
@@ -903,12 +902,21 @@ class QuditCode(AbstractCode):
         matrix = np.hstack([matrix[:, other_z], matrix[:, stab_pivots_z]])
         qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[stab_pivots_z]])
 
+        # identify the permutation that moves qudits to their original locations
+        permutation = np.argsort(qudit_locs)
+
         # identify some helpful numbers
         num_gauge_qudits = len(pivots_g)
         num_stabs_x = len(pivots_x) - num_gauge_qudits
         num_stabs_z = len(stab_pivots_z)
         dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
         self._dimension = dimension
+
+        if num_gauge_qudits == 0:
+            self._gauge_ops = self.field.Zeros((0, 2 * len(self)))
+            self._stabilizer_ops = matrix[:, permutation].reshape(-1, 2 * len(self))  # type:ignore[assignment]
+        else:
+            ...
 
         # identify row/column sectors of the parity check matrix
         cols_k = slice(dimension)
@@ -935,16 +943,14 @@ class QuditCode(AbstractCode):
         logicals_z[:, 1, cols_x] = -matrix[rows_x, 0, cols_k].T
 
         # move qudits back to their original locations and reshape
-        permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
         logical_ops = np.vstack([logicals_x, logicals_z])
-        assert isinstance(logical_ops, galois.FieldArray)
 
         # save logicals and return
-        self._canonicalized_logical_ops = logical_ops
+        self._canonicalized_logical_ops = logical_ops  # type:ignore[assignment]
         if not dry_run:
-            self._logical_ops = logical_ops
+            self._logical_ops = logical_ops  # type:ignore[assignment]
         # return logical_ops
 
         matrix = matrix.reshape(-1, 2, len(self))
@@ -985,8 +991,7 @@ class QuditCode(AbstractCode):
 
         if self._stabilizer_ops is not None:
             if pauli is not None:
-                stabilizer_ops_xz = self._stabilizer_ops.reshape(2, -1, 2 * len(self))
-                return stabilizer_ops_xz[pauli, :, :]  # type:ignore[return-value]
+                return self._stabilizer_ops.reshape(2, -1, 2 * len(self))[pauli]
             return self._stabilizer_ops
 
         self.get_logical_ops(dry_run=True)
@@ -1005,8 +1010,7 @@ class QuditCode(AbstractCode):
 
         elif self._gauge_ops is not None:
             if pauli is not None:
-                gauge_ops_xz = self._gauge_ops.reshape(2, -1, 2 * len(self))
-                return gauge_ops_xz[pauli, :, :]  # type:ignore[return-value]
+                return self._gauge_ops.reshape(2, -1, 2 * len(self))[pauli]
             return self._gauge_ops
 
         self.get_logical_ops(dry_run=True)
@@ -1514,13 +1518,14 @@ class CSSCode(QuditCode):
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
             shape: tuple[int, ...]
+            index: list[PauliXZ | slice]
             if symplectic:
                 shape = (2, self.dimension, 2 * len(self))
-                logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
-                return logical_ops[pauli, :, :]  # type:ignore[return-value]
-            shape = (2, self.dimension, 2, len(self))
-            logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
-            return logical_ops[pauli, :, pauli, :]  # type:ignore[return-value]
+                index = [pauli, slice(None), slice(None)]
+            else:
+                shape = (2, self.dimension, 2, len(self))
+                index = [pauli, slice(None), pauli, slice(None)]
+            return self.get_logical_ops(recompute=recompute).reshape(shape)[tuple(index)]  # type:ignore[return-value]
 
         # return logical operators if known and not asked to recompute
         if not (recompute or dry_run):
