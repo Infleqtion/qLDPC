@@ -912,16 +912,16 @@ class QuditCode(AbstractCode):
         dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
         self._dimension = dimension
 
+        # some helpful reshaping and an identity matrix
+        matrix = matrix.reshape(-1, 2, len(self))
+        identity_k = self.field.Identity(dimension)
+
         # identify row/column sectors of the parity check matrix
         cols_k = slice(dimension)
         cols_x = slice(dimension, len(self) - num_stabs_z)
         cols_z = slice(len(self) - num_stabs_z, len(self))
         rows_x = slice(num_stabs_x + num_gauge_qudits)
-        rows_z = slice(-num_stabs_z - num_gauge_qudits, -num_gauge_qudits)
-
-        # some helpful reshaping and an identity matrix
-        matrix = matrix.reshape(-1, 2, len(self))
-        identity_k = self.field.Identity(dimension)
+        rows_z = slice(num_stabs_x + num_gauge_qudits, len(matrix) - num_gauge_qudits)
 
         # construct X-type logical operators
         logicals_x = self.field.Zeros((dimension, 2, len(self)))
