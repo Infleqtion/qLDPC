@@ -625,7 +625,7 @@ class ClassicalCode(AbstractCode):
         for _ in range(num_samples):
             # construct an error
             error_locations = random.sample(range(len(self)), error_weight)
-            error = self.field.Zeros(len(self))
+            error = np.zeros(len(self), dtype=int)
             error[error_locations] = np.random.choice(range(1, self.field.order), size=error_weight)
 
             # decode a corrupted all-zero code word
@@ -1801,9 +1801,6 @@ class CSSCode(QuditCode):
 
         See ClassicalCode.get_logical_error_rate_func for more details about how this method works.
         """
-        if self.field.order != 2:
-            raise ValueError("Logical error rate calculations are only supported for binary codes")
-
         # collect relative probabilities of Z, X, and Y errors
         pauli_bias_zxy: npt.NDArray[np.float_] | None
         if pauli_bias is not None:
@@ -1869,20 +1866,26 @@ class CSSCode(QuditCode):
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
-            error_locations = random.sample(range(len(self)), error_weight)
-            pauli_errors = np.random.choice([1, 2, 3], size=error_weight, p=pauli_bias_zxy)
-            error = np.zeros(len(self), dtype=int)
-            error[error_locations] = pauli_errors
+            error_locations = np.random.choice(range(len(self)), size=error_weight, replace=False)
+            error_paulis = np.random.choice([1, 2, 3], size=error_weight, p=pauli_bias_zxy)
 
             # decode Z-type errors
-            error_z = error % 2
+            error_locs_z = error_locations[(error_paulis % 2).astype(bool)]
+            error_z = np.zeros(len(self), dtype=int)
+            error_z[error_locs_z] = np.random.choice(
+                range(1, self.field.order), size=len(error_locs_z)
+            )
             residual_z = self.field(decoder_z.decode(error_z))
             if np.any(logicals_x @ residual_z):
                 num_failures += 1
                 continue
 
             # decode X-type errors
-            error_x = (error > 1).astype(int)
+            error_locs_x = error_locations[error_paulis > 1]
+            error_x = np.zeros(len(self), dtype=int)
+            error_x[error_locs_x] = np.random.choice(
+                range(1, self.field.order), size=len(error_locs_x)
+            )
             residual_x = self.field(decoder_x.decode(error_x))
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
