@@ -912,12 +912,6 @@ class QuditCode(AbstractCode):
         dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
         self._dimension = dimension
 
-        if num_gauge_qudits == 0:
-            self._gauge_ops = self.field.Zeros((0, 2 * len(self)))
-            self._stabilizer_ops = matrix[:, permutation].reshape(-1, 2 * len(self))  # type:ignore[assignment]
-        else:
-            ...
-
         # identify row/column sectors of the parity check matrix
         cols_k = slice(dimension)
         cols_x = slice(dimension, len(self) - num_stabs_z)
@@ -943,29 +937,40 @@ class QuditCode(AbstractCode):
         logicals_z[:, 1, cols_x] = -matrix[rows_x, 0, cols_k].T
 
         # move qudits back to their original locations and reshape
+        matrix = matrix[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_x = logicals_x[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
-        logical_ops = np.vstack([logicals_x, logicals_z])
+
+        # identify gauge logicals and stabilizer generators
+        if num_gauge_qudits == 0:
+            self._gauge_ops = self.field.Zeros((0, 2 * len(self)))
+            self._stabilizer_ops = matrix  # type:ignore[assignment]
+        else:
+            pivot_cols_xg = pivots_g - len(other_x)  # indices of the gauge ops in the X sector
+            other_cols_xg = [qq for qq in range(len(pivots_x)) if qq not in pivot_cols_xg]
+            gauge_ops_x = matrix[pivot_cols_xg]
+            gauge_ops_z = matrix[-num_gauge_qudits:]
+            stabilizer_ops = matrix[other_cols_xg]
+
+            # remove gauge op factors from the stabilizer ops
+            for row, stabilizer_op in enumerate(stabilizer_ops):
+                stabilizer_op_dual = symplectic_conjugate(stabilizer_op)
+                for gauge_x, gauge_z in zip(gauge_ops_x, gauge_ops_z):
+                    overlap_x = stabilizer_op_dual @ gauge_x
+                    overlap_z = stabilizer_op_dual @ gauge_z
+                    stabilizer_op -= overlap_x * gauge_z + overlap_z * gauge_x
+                stabilizer_ops[row] = stabilizer_op
+
+            self._gauge_ops = np.vstack([gauge_ops_x, gauge_ops_z])  # type:ignore[assignment]
+            self._stabilizer_ops = stabilizer_ops  # type:ignore[assignment]
 
         # save logicals and return
-        self._canonicalized_logical_ops = logical_ops  # type:ignore[assignment]
+        logical_ops = np.vstack([logicals_x, logicals_z])
+        assert isinstance(logical_ops, galois.FieldArray)
+        self._canonicalized_logical_ops = logical_ops
         if not dry_run:
-            self._logical_ops = logical_ops  # type:ignore[assignment]
-        # return logical_ops
-
-        matrix = matrix.reshape(-1, 2, len(self))
-        matrix = matrix[:, :, permutation].reshape(-1, 2 * len(self))
-        print()
-        print(num_gauge_qudits)
-        print(num_stabs_x)
-        print(num_stabs_z)
-        print(dimension)
-        print()
-        print(symplectic_conjugate(logicals_x) @ logicals_z.T)
-        print()
-        print(symplectic_conjugate(matrix) @ self._logical_ops.T)
-
-        exit()
+            self._logical_ops = logical_ops
+        return logical_ops
 
     def set_logical_ops(
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
