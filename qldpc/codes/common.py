@@ -945,12 +945,17 @@ class QuditCode(AbstractCode):
         if num_gauge_qudits == 0:
             self._gauge_ops = self.field.Zeros((0, 2 * len(self)))
             self._stabilizer_ops = matrix  # type:ignore[assignment]
+
         else:
-            pivot_cols_xg = pivots_g - len(other_x)  # indices of the gauge ops in the X sector
-            other_cols_xg = [qq for qq in range(len(pivots_x)) if qq not in pivot_cols_xg]
-            gauge_ops_x = matrix[pivot_cols_xg]
+            # identify rows of gauge and stabilizer ops
+            gauge_rows = pivots_g - len(other_x)
+            num_rows_xgz = len(matrix) - num_gauge_qudits
+            stab_rows = [qq for qq in range(num_rows_xgz) if qq not in gauge_rows]
+
+            # collect gauge and stabilizer ops
+            gauge_ops_x = matrix[gauge_rows]
             gauge_ops_z = matrix[-num_gauge_qudits:]
-            stabilizer_ops = matrix[other_cols_xg]
+            stabilizer_ops = matrix[stab_rows]
 
             # remove gauge op factors from the stabilizer ops
             for row, stabilizer_op in enumerate(stabilizer_ops):
