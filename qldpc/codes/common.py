@@ -833,28 +833,43 @@ class QuditCode(AbstractCode):
         matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
         return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))
 
-    def get_stabilizer_ops(self) -> galois.FieldArray:
+    def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
-        if self.is_subsystem_code:
+        assert pauli is None or pauli in PAULIS_XZ
+        if self.is_subsystem_code and pauli is None:
             return self.matrix
-        elif self._stabilizer_ops is not None:
-            return self._stabilizer_ops
-        stabs_and_logs = symplectic_conjugate(self.matrix).null_space()
-        augmented_matrix = self.field(np.vstack([self.matrix, stabs_and_logs]))
-        self._stabilizer_ops = symplectic_conjugate(augmented_matrix).null_space()
-        return self._stabilizer_ops
 
-    def get_gauge_ops(self) -> galois.FieldArray:
+        elif self._stabilizer_ops is not None:
+            if pauli is not None:
+                stabilizer_ops_xz = self._stabilizer_ops.reshape(2, -1, 2 * len(self))
+                return stabilizer_ops_xz[pauli, :, :]  # type:ignore[return-value]
+            return self._stabilizer_ops
+
+        logical_ops = self._logical_ops
+        self.get_logical_ops(recompute=True)
+        self._logical_ops = logical_ops
+        return self.get_stabilizer_ops(pauli)
+
+    def get_gauge_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
 
         Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
         logical Pauli operators computed by QuditCode.get_logical_ops.
         """
-        if self.is_subsystem_code:
+        assert pauli is None or pauli in PAULIS_XZ
+        if self.is_subsystem_code and pauli is None:
             return self.field.Zeros((0, 2 * len(self)))
+
         elif self._gauge_ops is not None:
+            if pauli is not None:
+                gauge_ops_xz = self._gauge_ops.reshape(2, -1, 2 * len(self))
+                return gauge_ops_xz[pauli, :, :]  # type:ignore[return-value]
             return self._gauge_ops
-        return NotImplemented
+
+        logical_ops = self._logical_ops
+        self.get_logical_ops(recompute=True)
+        self._logical_ops = logical_ops
+        return self.get_gauge_ops(pauli)
 
     def get_logical_ops(
         self, pauli: PauliXZ | None = None, *, recompute: bool = False
@@ -885,7 +900,7 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve logical operators of one type only
         if pauli is not None:
-            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, self.dimension, -1)
+            logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, -1, 2 * len(self))
             return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
@@ -908,7 +923,7 @@ class QuditCode(AbstractCode):
         # row reduce and identify pivots in the Z sector
         matrix = matrix.reshape(-1, 2, len(self))
         sub_matrix = matrix[len(pivots_x) :, 1, :]
-        sub_matrix, pivots_z = _row_reduce(self.field(sub_matrix))
+        sub_matrix, pivots_z = _row_reduce(sub_matrix)
         matrix[len(pivots_x) :, 1, :] = sub_matrix
 
         # separate out pivots for Z-type stabilizers vs. gauge operators
@@ -959,7 +974,7 @@ class QuditCode(AbstractCode):
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
 
         # save logicals and return
-        self._logical_ops = self.field(np.vstack([logicals_x, logicals_z]))
+        self._logical_ops = np.vstack([logicals_x, logicals_z])
         # return self._logical_ops
 
         matrix = matrix.reshape(-1, 2, len(self))
@@ -1298,7 +1313,7 @@ class QuditCode(AbstractCode):
             outer = outer.stack(*[outer] * num_outer_blocks)
 
         # permute logical operators of the inner code
-        inner._logical_ops = inner.field(
+        inner._logical_ops = (
             inner.get_logical_ops()
             .reshape(2, inner.dimension, -1)[:, outer_physical_to_inner_logical, :]
             .reshape(2 * inner.dimension, -1)
@@ -1520,19 +1535,19 @@ class CSSCode(QuditCode):
         identity = self.field.Identity(dimension)
 
         # identify check matrices for X/Z-type parity checks, and the current qudit locations
-        checks_x: npt.NDArray[np.int_] = self.matrix_x
-        checks_z: npt.NDArray[np.int_] = self.matrix_z
+        checks_x = self.matrix_x
+        checks_z = self.matrix_z
         qudit_locs = np.arange(num_qudits, dtype=int)
 
         # row reduce the check matrix for X-type errors and move its pivots to the back
-        checks_x, pivots_x = _row_reduce(self.field(checks_x))
+        checks_x, pivots_x = _row_reduce(checks_x)
         other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
         checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
         checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # row reduce the check matrix for Z-type errors and move its pivots to the back
-        checks_z, pivots_z = _row_reduce(self.field(checks_z))
+        checks_z, pivots_z = _row_reduce(checks_z)
         other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
         checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
         checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
