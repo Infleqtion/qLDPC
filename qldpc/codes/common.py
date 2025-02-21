@@ -974,6 +974,7 @@ class QuditCode(AbstractCode):
     def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
         assert pauli is None or pauli in PAULIS_XZ
+
         if self._stabilizer_ops is not None:
             if pauli is not None:
                 stabilizer_ops_xz = self._stabilizer_ops.reshape(2, -1, 2 * len(self))
@@ -990,8 +991,10 @@ class QuditCode(AbstractCode):
         logical Pauli operators computed by QuditCode.get_logical_ops.
         """
         assert pauli is None or pauli in PAULIS_XZ
+
         if not self.is_subsystem_code:
             return self.field.Zeros((0, 2 * len(self)))
+
         elif self._gauge_ops is not None:
             if pauli is not None:
                 gauge_ops_xz = self._gauge_ops.reshape(2, -1, 2 * len(self))
