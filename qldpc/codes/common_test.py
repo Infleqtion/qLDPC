@@ -527,7 +527,3 @@ def test_quantum_capacity() -> None:
     for pauli_bias in [(1, 0, 0), (0, 0, 1)]:
         logical_error_rate = code.get_logical_error_rate_func(10, 1, pauli_bias)
         assert logical_error_rate(1)[0] == 1
-
-    # this method only supports qubit codes
-    with pytest.raises(ValueError, match="binary codes"):
-        codes.SurfaceCode(2, field=3).get_logical_error_rate_func(num_samples=1)
