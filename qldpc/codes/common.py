@@ -863,7 +863,7 @@ class QuditCode(AbstractCode):
             logical_ops = self.get_logical_ops(recompute=recompute).reshape(2, -1, 2 * len(self))
             return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
-        # memoize manually because other methods may modify the logical operators computed here
+        # return logical operators if known and not asked to recompute
         if not (self._logical_ops is None or recompute or dry_run):
             return self._logical_ops
 
@@ -1508,8 +1508,8 @@ class CSSCode(QuditCode):
             logical_ops = self.get_logical_ops(recompute=recompute).reshape(shape)
             return logical_ops[pauli, :, pauli, :]  # type:ignore[return-value]
 
-        # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None and not recompute:
+        # return logical operators if known and not asked to recompute
+        if not (self._logical_ops is None or recompute or dry_run):
             return self._logical_ops
 
         num_qudits = len(self)
@@ -1559,7 +1559,9 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
 
-        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
+        # save logicals and return
+        if self._logical_ops is None or not dry_run:
+            self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
         return self._logical_ops
 
     def set_logical_ops_xz(
