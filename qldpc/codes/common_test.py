@@ -453,7 +453,7 @@ def test_css_ops() -> None:
     # the 2x2 toric code has redundant stabilizers
     code = codes.ToricCode(2)
     assert code.num_checks == 4
-    assert code.canonicalized().num_checks == 2
+    assert code.canonicalized.num_checks == 2
 
 
 def test_distance_css() -> None:

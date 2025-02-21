@@ -143,6 +143,7 @@ class AbstractCode(abc.ABC):
         """Parity check matrix of this code."""
         return self._matrix
 
+    @functools.cached_property
     @abc.abstractmethod
     def canonicalized(self) -> AbstractCode:
         """The same code with its parity matrix in reduced row echelon form."""
@@ -151,7 +152,7 @@ class AbstractCode(abc.ABC):
     def equiv(code_a: AbstractCode, code_b: AbstractCode) -> bool:
         """Are the two codes equivalent?"""
         return code_a.field is code_b.field and np.array_equal(
-            code_a.canonicalized().matrix, code_b.canonicalized().matrix
+            code_a.canonicalized.matrix, code_b.canonicalized.matrix
         )
 
     @abc.abstractmethod
@@ -166,7 +167,7 @@ class AbstractCode(abc.ABC):
     @functools.cached_property
     def rank(self) -> int:
         """Rank of this code's parity check matrix."""
-        return np.count_nonzero(np.any(self.matrix.row_reduce(), axis=1))
+        return np.count_nonzero(np.any(self.canonicalized.matrix, axis=1))
 
     @functools.cached_property
     def graph(self) -> nx.DiGraph:
@@ -230,6 +231,7 @@ class ClassicalCode(AbstractCode):
         """Does this code contain the given word(s)?"""
         return not np.any(self.matrix @ self.field(words).T)
 
+    @functools.cached_property
     def canonicalized(self) -> ClassicalCode:
         """The same code with its parity matrix in reduced row echelon form."""
         matrix_rref = self.matrix.row_reduce()
@@ -522,7 +524,7 @@ class ClassicalCode(AbstractCode):
         The auomorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
         """
-        matrix = self.canonicalized().matrix.view(np.ndarray)
+        matrix = self.canonicalized.matrix.view(np.ndarray)
         checks_str = ["[" + ",".join(map(str, line)) + "]" for line in matrix]
         matrix_str = "[" + ",".join(checks_str) + "]"
         code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"
@@ -689,8 +691,6 @@ class QuditCode(AbstractCode):
     _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
 
-    _canonicalized_logical_ops: galois.FieldArray | None = None
-
     def __init__(
         self,
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
@@ -730,6 +730,7 @@ class QuditCode(AbstractCode):
         """Is this code a subsystem code?  If not, it is a stabilizer code."""
         return self._is_subsystem_code
 
+    @functools.cached_property
     def canonicalized(self) -> QuditCode:
         """The same code with its parity matrix in reduced row echelon form."""
         matrix_rref = self.matrix.row_reduce()
@@ -834,7 +835,7 @@ class QuditCode(AbstractCode):
         return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))
 
     def get_logical_ops(
-        self, pauli: PauliXZ | None = None, *, recompute: bool = False, dry_run: bool = False
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False
     ) -> galois.FieldArray:
         """Basis of nontrivial logical Pauli operators for this code.
 
@@ -865,49 +866,44 @@ class QuditCode(AbstractCode):
             return self.get_logical_ops(recompute=recompute).reshape(2, -1, 2 * len(self))[pauli]
 
         # return logical operators if known and not asked to recompute
-        if not (recompute or dry_run):
-            if self._logical_ops is not None:
-                return self._logical_ops
-            if self._canonicalized_logical_ops is not None:
-                return self._canonicalized_logical_ops
+        if not (self._logical_ops is None or recompute):
+            return self._logical_ops
 
         # keep track of qudit locations as we swap them around
         qudit_locs = np.arange(len(self), dtype=int)
 
         # row reduce and identify pivots in the X sector
-        matrix, pivots_x = _row_reduce(self.matrix)
-        pivots_x = pivots_x[pivots_x < len(self)]
+        matrix: npt.NDArray[np.int_] = self.canonicalized.matrix
+        all_pivots_x = np.argmax(matrix.view(np.ndarray).astype(bool), axis=1)
+        pivots_x = all_pivots_x[all_pivots_x < len(self)]
 
         # move the X pivots (which tag X-type stabilizers and gauge ops) to the back
         other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
-        matrix = matrix.reshape(-1, len(self))
-        matrix = np.hstack([matrix[:, other_x], matrix[:, pivots_x]])
-        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
+        permutation_x = other_x + list(pivots_x)
+        matrix = matrix.reshape(-1, len(self))[:, permutation_x]
+        qudit_locs = qudit_locs[permutation_x]
 
         # row reduce and identify pivots in the Z sector
         matrix = matrix.reshape(2, -1, 2, len(self))
-        sub_matrix = matrix[1, :, 1, :]
-        sub_matrix, pivots_z = _row_reduce(sub_matrix)
+        sub_matrix = ClassicalCode(matrix[1, :, 1, :]).canonicalized.matrix
         matrix[1, :, 1, :] = sub_matrix
-
-        # remove and separately track Z pivots in the X sector
-        pivots_z, pivots_zx = pivots_z[pivots_z < len(other_x)], pivots_z[pivots_z >= len(other_x)]
+        all_pivots_z = np.argmax(sub_matrix.view(np.ndarray).astype(bool), axis=1)
+        pivots_z = all_pivots_z[all_pivots_z < len(other_x)]
 
         # move the stabilizer Z pivots to the back
         other_z = [qq for qq in range(len(self)) if qq not in pivots_z]
-        matrix = matrix.reshape(-1, len(self))
-        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
+        permutation_z = other_z + list(pivots_z)
+        matrix = matrix.reshape(-1, len(self))[:, permutation_z]
+        qudit_locs = qudit_locs[permutation_z]
 
         # identify the permutation that moves qudits to their original locations
         permutation = np.argsort(qudit_locs)
 
         # identify some helpful numbers
-        num_gauge_qudits = len(pivots_zx)
+        num_gauge_qudits = (len(all_pivots_x) - len(self.get_stabilizer_ops())) // 2
         num_stabs_x = len(pivots_x) - num_gauge_qudits
-        num_stabs_z = len(pivots_z)
+        num_stabs_z = len(all_pivots_z) - num_gauge_qudits
         dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
-        self._dimension = dimension
 
         # some helpful reshaping and an identity matrix
         matrix = matrix.reshape(-1, 2, len(self))
@@ -938,41 +934,43 @@ class QuditCode(AbstractCode):
         logicals_x = logicals_x[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
 
-        # identify gauge logicals and stabilizer generators
-        if num_gauge_qudits == 0:
-            self._gauge_ops = self.field.Zeros((0, 2 * len(self)))
-            self._stabilizer_ops = matrix  # type:ignore[assignment]
+        if self.is_subsystem_code:
+            print()
+            print(symplectic_conjugate(matrix) @ logicals_x.T)
+            print(symplectic_conjugate(matrix) @ logicals_z.T)
+            exit()
 
-        else:
-            # identify rows of gauge and stabilizer ops
-            gauge_rows = pivots_zx - len(other_x)
-            num_rows_xgz = len(matrix) - num_gauge_qudits
-            stab_rows = [qq for qq in range(num_rows_xgz) if qq not in gauge_rows]
+        # # identify gauge logicals and stabilizer generators
+        # if num_gauge_qudits == 0:
+        #     self._gauge_ops = self.field.Zeros((0, 2 * len(self)))
+        #     self._stabilizer_ops = matrix  # type:ignore[assignment]
 
-            # collect gauge and stabilizer ops
-            gauge_ops_x = matrix[gauge_rows]
-            gauge_ops_z = matrix[-num_gauge_qudits:]
-            stabilizer_ops = matrix[stab_rows]
+        # else:
+        #     # identify rows of gauge and stabilizer ops
+        #     gauge_rows = all_pivots_z - len(other_x)
+        #     num_rows_xgz = len(matrix) - num_gauge_qudits
+        #     stab_rows = [qq for qq in range(num_rows_xgz) if qq not in gauge_rows]
 
-            # remove gauge op factors from the stabilizer ops
-            for row, stabilizer_op in enumerate(stabilizer_ops):
-                stabilizer_op_dual = symplectic_conjugate(stabilizer_op)
-                for gauge_x, gauge_z in zip(gauge_ops_x, gauge_ops_z):
-                    overlap_x = stabilizer_op_dual @ gauge_x
-                    overlap_z = stabilizer_op_dual @ gauge_z
-                    stabilizer_op -= overlap_x * gauge_z + overlap_z * gauge_x
-                stabilizer_ops[row] = stabilizer_op
+        #     # collect gauge and stabilizer ops
+        #     gauge_ops_x = matrix[gauge_rows]
+        #     gauge_ops_z = matrix[-num_gauge_qudits:]
+        #     stabilizer_ops = matrix[stab_rows]
 
-            self._gauge_ops = np.vstack([gauge_ops_x, gauge_ops_z])  # type:ignore[assignment]
-            self._stabilizer_ops = stabilizer_ops  # type:ignore[assignment]
+        #     # remove gauge op factors from the stabilizer ops
+        #     for row, stabilizer_op in enumerate(stabilizer_ops):
+        #         stabilizer_op_dual = symplectic_conjugate(stabilizer_op)
+        #         for gauge_x, gauge_z in zip(gauge_ops_x, gauge_ops_z):
+        #             overlap_x = stabilizer_op_dual @ gauge_x
+        #             overlap_z = stabilizer_op_dual @ gauge_z
+        #             stabilizer_op -= overlap_x * gauge_z + overlap_z * gauge_x
+        #         stabilizer_ops[row] = stabilizer_op
+
+        #     self._gauge_ops = np.vstack([gauge_ops_x, gauge_ops_z])  # type:ignore[assignment]
+        #     self._stabilizer_ops = stabilizer_ops  # type:ignore[assignment]
 
         # save logicals and return
-        logical_ops = np.vstack([logicals_x, logicals_z])
-        assert isinstance(logical_ops, galois.FieldArray)
-        self._canonicalized_logical_ops = logical_ops
-        if not dry_run:
-            self._logical_ops = logical_ops
-        return logical_ops
+        self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
+        return self._logical_ops  # type:ignore[return-value]
 
     def set_logical_ops(
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
@@ -992,17 +990,18 @@ class QuditCode(AbstractCode):
                 raise ValueError("An incorrect number of logical operators was provided")
         self._logical_ops = logical_ops
 
-    def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+    def get_stabilizer_ops(self) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
-        assert pauli is None or pauli in PAULIS_XZ
+        stabs_and_gauges = self.canonicalized.matrix
+        if not self.is_subsystem_code:
+            return stabs_and_gauges
 
-        if self._stabilizer_ops is not None:
-            if pauli is not None:
-                return self._stabilizer_ops.reshape(2, -1, 2 * len(self))[pauli]
-            return self._stabilizer_ops
+        stabs_and_logs = symplectic_conjugate(stabs_and_gauges).null_space()
+        stabs_and_gauges_and_logs = np.vstack([stabs_and_gauges, stabs_and_logs])
+        assert isinstance(stabs_and_gauges_and_logs, galois.FieldArray)
 
-        self.get_logical_ops(dry_run=True)
-        return self.get_stabilizer_ops(pauli)
+        self._stabilizer_ops = symplectic_conjugate(stabs_and_gauges_and_logs).null_space()
+        return self._stabilizer_ops
 
     def get_gauge_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
@@ -1020,16 +1019,25 @@ class QuditCode(AbstractCode):
                 return self._gauge_ops.reshape(2, -1, 2 * len(self))[pauli]
             return self._gauge_ops
 
-        self.get_logical_ops(dry_run=True)
-        return self.get_gauge_ops(pauli)
+        matrix = np.vstack([self.get_stabilizer_ops(), self.get_logical_ops()])
+        self._gauge_ops = QuditCode(matrix).get_logical_ops()
+        return self._gauge_ops
 
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
         if not self.is_subsystem_code:
             return len(self) - self.rank
-        self.get_logical_ops(dry_run=True)
-        return self._dimension
+        num_stabs = len(self.get_stabilizer_ops())
+        return len(self) - (self.canonicalized.rank + num_stabs) // 2
+
+    @functools.cached_property
+    def gauge_dimension(self) -> int:
+        """The number of gauge qudits in this code."""
+        if not self.is_subsystem_code:
+            return 0
+        num_stabs = len(self.get_stabilizer_ops())
+        return (self.canonicalized.rank - num_stabs) // 2
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
@@ -1069,7 +1077,7 @@ class QuditCode(AbstractCode):
             return known_distance
 
         if self.field.order == 2:
-            stabilizers = self.canonicalized().matrix
+            stabilizers = self.canonicalized.matrix
             logical_ops = self.get_logical_ops()
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
@@ -1431,11 +1439,12 @@ class CSSCode(QuditCode):
         )
         return self.field(matrix)
 
+    @functools.cached_property
     def canonicalized(self) -> CSSCode:
         """The same code with its parity matrix in reduced row echelon form."""
         return CSSCode(
-            self.code_x.canonicalized(),
-            self.code_z.canonicalized(),
+            self.code_x.canonicalized,
+            self.code_z.canonicalized,
             is_subsystem_code=self.is_subsystem_code,
         )
 
@@ -1492,12 +1501,7 @@ class CSSCode(QuditCode):
         return NotImplemented
 
     def get_logical_ops(
-        self,
-        pauli: PauliXZ | None = None,
-        *,
-        symplectic: bool = False,
-        recompute: bool = False,
-        dry_run: bool = False,
+        self, pauli: PauliXZ | None = None, *, symplectic: bool = False, recompute: bool = False
     ) -> galois.FieldArray:
         """Basis of nontrivial logical Pauli operators for this code.
 
@@ -1535,11 +1539,8 @@ class CSSCode(QuditCode):
             return self.get_logical_ops(recompute=recompute).reshape(shape)[tuple(index)]  # type:ignore[return-value]
 
         # return logical operators if known and not asked to recompute
-        if not (recompute or dry_run):
-            if self._logical_ops is not None:
-                return self._logical_ops
-            if self._canonicalized_logical_ops is not None:
-                return self._canonicalized_logical_ops
+        if not (self._logical_ops is None or recompute):
+            return self._logical_ops
 
         num_qudits = len(self)
         dimension = self.dimension
@@ -1590,10 +1591,8 @@ class CSSCode(QuditCode):
         logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
 
         # save logicals and return
-        self._canonicalized_logical_ops = logical_ops
-        if not dry_run:
-            self._logical_ops = logical_ops
-        return logical_ops
+        self._logical_ops = np.vstack([logicals_x, logicals_z])
+        return self._logical_ops
 
     def set_logical_ops_xz(
         self,
@@ -1642,7 +1641,7 @@ class CSSCode(QuditCode):
 
         # we do not know the exact distance, so compute it
         if self.field.order == 2:
-            stabilizers = self.get_code(pauli).canonicalized().matrix
+            stabilizers = self.get_code(pauli).canonicalized.matrix
             logical_ops = self.get_logical_ops(pauli)
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
