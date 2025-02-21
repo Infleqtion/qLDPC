@@ -264,13 +264,13 @@ def test_qudit_code() -> None:
     logical_ops = two_codes.get_logical_ops().copy()
     logical_ops[0], logical_ops[1] = logical_ops[1], logical_ops[0]
     with pytest.raises(ValueError, match="incorrect commutation relations"):
-        two_codes.validate_candidate_logical_ops(logical_ops)
+        two_codes.set_logical_ops(logical_ops, validate=True)
 
     # invalid modifications of logical operators break commutation relations
     logical_ops = two_codes.get_logical_ops().copy()
     logical_ops[0, -1] += two_codes.field(1)
     with pytest.raises(ValueError, match="do not commute with stabilizers"):
-        two_codes.validate_candidate_logical_ops(logical_ops)
+        two_codes.set_logical_ops(logical_ops, validate=True)
 
     # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):

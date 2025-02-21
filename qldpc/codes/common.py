@@ -959,18 +959,14 @@ class QuditCode(AbstractCode):
         """Set the logical operators of this code to the provided logical operators."""
         logical_ops = self.field(logical_ops)
         if validate:
-            self.validate_candidate_logical_ops(logical_ops)
+            logical_ops_x = logical_ops[: self.dimension]
+            logical_ops_z = logical_ops[self.dimension :]
+            inner_products = symplectic_conjugate(logical_ops_x) @ logical_ops_z.T
+            if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
+                raise ValueError("The given logical operators have incorrect commutation relations")
+            if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
+                raise ValueError("The given logical operators do not commute with stabilizers")
         self._logical_ops = logical_ops
-
-    def validate_candidate_logical_ops(self, logical_ops: galois.FieldArray) -> None:
-        """Assert that the given logical operators are valid for this code."""
-        logical_ops_x = logical_ops[: self.dimension]
-        logical_ops_z = logical_ops[self.dimension :]
-        inner_products = symplectic_conjugate(logical_ops_x) @ logical_ops_z.T
-        if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
-            raise ValueError("The given logical operators have incorrect commutation relations")
-        if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
-            raise ValueError("The given logical operators do not commute with stabilizers")
 
     def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
