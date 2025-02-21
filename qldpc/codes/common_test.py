@@ -197,9 +197,6 @@ def test_classical_capacity() -> None:
     with pytest.raises(ValueError, match="error rates greater than"):
         logical_error_rate(1)
 
-    with pytest.raises(ValueError, match="binary codes"):
-        codes.RepetitionCode(2, field=3).get_logical_error_rate_func(num_samples=10)
-
 
 ####################################################################################################
 # quantum code tests

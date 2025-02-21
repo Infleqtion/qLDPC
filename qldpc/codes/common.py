@@ -589,9 +589,6 @@ class ClassicalCode(AbstractCode):
             F(p) = q_0(p) + sum_(k>0) q_k(p) F_k.
         We thereby only need to sample errors of weight k > 0.
         """
-        if self.field.order != 2:
-            raise ValueError("Logical error rate calculations are only supported for binary codes")
-
         decoder = decoders.get_decoder(self.matrix, **decoder_args)
         if not isinstance(decoder, decoders.DirectDecoder):
             decoder = decoders.DirectDecoder.from_indirect(decoder, self.matrix)
@@ -629,7 +626,7 @@ class ClassicalCode(AbstractCode):
             # construct an error
             error_locations = random.sample(range(len(self)), error_weight)
             error = self.field.Zeros(len(self))
-            error[error_locations] = self.field(1)
+            error[error_locations] = np.random.choice(range(1, self.field.order), size=error_weight)
 
             # decode a corrupted all-zero code word
             decoded_word = decoder.decode(error.view(np.ndarray))
