@@ -957,22 +957,18 @@ class QuditCode(AbstractCode):
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
+        logical_ops = self.field(logical_ops)
         if validate:
             self.validate_candidate_logical_ops(logical_ops)
-        self._logical_ops = self.field(logical_ops)
+        self._logical_ops = logical_ops
 
-    def validate_candidate_logical_ops(
-        self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]]
-    ) -> None:
+    def validate_candidate_logical_ops(self, logical_ops: galois.FieldArray) -> None:
         """Assert that the given logical operators are valid for this code."""
-        logical_ops = self.field(logical_ops)
-
         logical_ops_x = logical_ops[: self.dimension]
         logical_ops_z = logical_ops[self.dimension :]
         inner_products = symplectic_conjugate(logical_ops_x) @ logical_ops_z.T
         if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
             raise ValueError("The given logical operators have incorrect commutation relations")
-
         if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
             raise ValueError("The given logical operators do not commute with stabilizers")
 
@@ -1475,7 +1471,12 @@ class CSSCode(QuditCode):
         return NotImplemented
 
     def get_logical_ops(
-        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
+        self,
+        pauli: PauliXZ | None = None,
+        *,
+        symplectic: bool = False,
+        recompute: bool = False,
+        dry_run: bool = False,
     ) -> galois.FieldArray:
         """Basis of nontrivial logical Pauli operators for this code.
 
