@@ -689,6 +689,8 @@ class QuditCode(AbstractCode):
     _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
 
+    _canonicalized_logical_ops: galois.FieldArray | None = None
+
     def __init__(
         self,
         matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
@@ -864,8 +866,11 @@ class QuditCode(AbstractCode):
             return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # return logical operators if known and not asked to recompute
-        if not (self._logical_ops is None or recompute or dry_run):
-            return self._logical_ops
+        if not (recompute or dry_run):
+            if self._logical_ops is not None:
+                return self._logical_ops
+            if self._canonicalized_logical_ops is not None:
+                return self._canonicalized_logical_ops
 
         # keep track of qudit locations as we swap them around
         qudit_locs = np.arange(len(self), dtype=int)
@@ -933,11 +938,13 @@ class QuditCode(AbstractCode):
         permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
+        logical_ops = np.vstack([logicals_x, logicals_z])
 
         # save logicals and return
-        if self._logical_ops is None or not dry_run:
-            self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
-        # return self._logical_ops
+        self._canonicalized_logical_ops = logical_ops  # type:ignore[assignment]
+        if not dry_run:
+            self._logical_ops = logical_ops  # type:ignore[assignment]
+        # return logical_ops
 
         matrix = matrix.reshape(-1, 2, len(self))
         matrix = matrix[:, :, permutation].reshape(-1, 2 * len(self))
@@ -1515,8 +1522,11 @@ class CSSCode(QuditCode):
             return logical_ops[pauli, :, pauli, :]  # type:ignore[return-value]
 
         # return logical operators if known and not asked to recompute
-        if not (self._logical_ops is None or recompute or dry_run):
-            return self._logical_ops
+        if not (recompute or dry_run):
+            if self._logical_ops is not None:
+                return self._logical_ops
+            if self._canonicalized_logical_ops is not None:
+                return self._canonicalized_logical_ops
 
         num_qudits = len(self)
         dimension = self.dimension
@@ -1564,11 +1574,13 @@ class CSSCode(QuditCode):
         permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x[:, permutation]
         logicals_z = logicals_z[:, permutation]
+        logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
 
         # save logicals and return
-        if self._logical_ops is None or not dry_run:
-            self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
-        return self._logical_ops
+        self._canonicalized_logical_ops = logical_ops
+        if not dry_run:
+            self._logical_ops = logical_ops
+        return logical_ops
 
     def set_logical_ops_xz(
         self,
