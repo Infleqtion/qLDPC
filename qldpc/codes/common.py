@@ -939,11 +939,12 @@ class QuditCode(AbstractCode):
         logicals_x = logicals_x[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
         logical_ops = np.vstack([logicals_x, logicals_z])
+        assert isinstance(logical_ops, galois.FieldArray)
 
         # save logicals and return
-        self._canonicalized_logical_ops = logical_ops  # type:ignore[assignment]
+        self._canonicalized_logical_ops = logical_ops
         if not dry_run:
-            self._logical_ops = logical_ops  # type:ignore[assignment]
+            self._logical_ops = logical_ops
         # return logical_ops
 
         matrix = matrix.reshape(-1, 2, len(self))
