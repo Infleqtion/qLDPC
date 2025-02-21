@@ -831,46 +831,8 @@ class QuditCode(AbstractCode):
         matrix_z = self.matrix[:, len(self) :].view(np.ndarray)
         return np.max(np.count_nonzero(matrix_x | matrix_z, axis=1))
 
-    def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Basis of stabilizer group generators for this code."""
-        assert pauli is None or pauli in PAULIS_XZ
-        if self.is_subsystem_code and pauli is None:
-            return self.matrix
-
-        elif self._stabilizer_ops is not None:
-            if pauli is not None:
-                stabilizer_ops_xz = self._stabilizer_ops.reshape(2, -1, 2 * len(self))
-                return stabilizer_ops_xz[pauli, :, :]  # type:ignore[return-value]
-            return self._stabilizer_ops
-
-        logical_ops = self._logical_ops
-        self.get_logical_ops(recompute=True)
-        self._logical_ops = logical_ops
-        return self.get_stabilizer_ops(pauli)
-
-    def get_gauge_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
-
-        Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
-        logical Pauli operators computed by QuditCode.get_logical_ops.
-        """
-        assert pauli is None or pauli in PAULIS_XZ
-        if self.is_subsystem_code and pauli is None:
-            return self.field.Zeros((0, 2 * len(self)))
-
-        elif self._gauge_ops is not None:
-            if pauli is not None:
-                gauge_ops_xz = self._gauge_ops.reshape(2, -1, 2 * len(self))
-                return gauge_ops_xz[pauli, :, :]  # type:ignore[return-value]
-            return self._gauge_ops
-
-        logical_ops = self._logical_ops
-        self.get_logical_ops(recompute=True)
-        self._logical_ops = logical_ops
-        return self.get_gauge_ops(pauli)
-
     def get_logical_ops(
-        self, pauli: PauliXZ | None = None, *, recompute: bool = False
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, dry_run: bool = False
     ) -> galois.FieldArray:
         """Basis of nontrivial logical Pauli operators for this code.
 
@@ -902,7 +864,7 @@ class QuditCode(AbstractCode):
             return logical_ops[pauli, :, :]  # type:ignore[return-value]
 
         # memoize manually because other methods may modify the logical operators computed here
-        if self._logical_ops is not None and not recompute:
+        if not (self._logical_ops is None or recompute or dry_run):
             return self._logical_ops
 
         # keep track of qudit locations as we swap them around
@@ -973,7 +935,8 @@ class QuditCode(AbstractCode):
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
 
         # save logicals and return
-        self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
+        if self._logical_ops is None or not dry_run:
+            self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
         # return self._logical_ops
 
         matrix = matrix.reshape(-1, 2, len(self))
@@ -1013,14 +976,42 @@ class QuditCode(AbstractCode):
         if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
             raise ValueError("The given logical operators do not commute with stabilizers")
 
+    def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+        """Basis of stabilizer group generators for this code."""
+        assert pauli is None or pauli in PAULIS_XZ
+        if self._stabilizer_ops is not None:
+            if pauli is not None:
+                stabilizer_ops_xz = self._stabilizer_ops.reshape(2, -1, 2 * len(self))
+                return stabilizer_ops_xz[pauli, :, :]  # type:ignore[return-value]
+            return self._stabilizer_ops
+
+        self.get_logical_ops(dry_run=True)
+        return self.get_stabilizer_ops(pauli)
+
+    def get_gauge_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
+        """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
+
+        Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
+        logical Pauli operators computed by QuditCode.get_logical_ops.
+        """
+        assert pauli is None or pauli in PAULIS_XZ
+        if not self.is_subsystem_code:
+            return self.field.Zeros((0, 2 * len(self)))
+        elif self._gauge_ops is not None:
+            if pauli is not None:
+                gauge_ops_xz = self._gauge_ops.reshape(2, -1, 2 * len(self))
+                return gauge_ops_xz[pauli, :, :]  # type:ignore[return-value]
+            return self._gauge_ops
+
+        self.get_logical_ops(dry_run=True)
+        return self.get_gauge_ops(pauli)
+
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
         if self.is_subsystem_code:
             return len(self) - self.rank
-        logical_ops = self._logical_ops
-        self.get_logical_ops(recompute=True)
-        self._logical_ops = logical_ops
+        self.get_logical_ops(dry_run=True)
         return self._dimension
 
     def get_code_params(
