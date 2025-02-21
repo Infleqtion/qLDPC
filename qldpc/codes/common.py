@@ -684,6 +684,7 @@ class QuditCode(AbstractCode):
     """
 
     _is_subsystem_code: bool
+    _dimension: int
     _stabilizer_ops: galois.FieldArray | None = None
     _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
@@ -940,6 +941,7 @@ class QuditCode(AbstractCode):
         num_stabs_x = len(pivots_x) - num_gauge_qudits
         num_stabs_z = len(stab_pivots_z)
         dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
+        self._dimension = dimension
 
         # identify row/column sectors of the parity check matrix
         cols_k = slice(dimension)
@@ -971,7 +973,7 @@ class QuditCode(AbstractCode):
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
 
         # save logicals and return
-        self._logical_ops = np.vstack([logicals_x, logicals_z])
+        self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
         # return self._logical_ops
 
         matrix = matrix.reshape(-1, 2, len(self))
@@ -981,14 +983,6 @@ class QuditCode(AbstractCode):
         print(num_stabs_x)
         print(num_stabs_z)
         print(dimension)
-        print()
-        print(matrix)
-        print()
-        print(matrix[: len(pivots_x), cols_k])
-        print()
-        print(matrix[: len(pivots_x), cols_x])
-        print()
-        print(matrix[: len(pivots_x), cols_z])
         print()
         print(symplectic_conjugate(logicals_x) @ logicals_z.T)
         print()
@@ -1024,7 +1018,10 @@ class QuditCode(AbstractCode):
         """The number of logical qudits encoded by this code."""
         if self.is_subsystem_code:
             return len(self) - self.rank
-        return len(self) - ClassicalCode(self.get_stabilizer_ops()).rank
+        logical_ops = self._logical_ops
+        self.get_logical_ops(recompute=True)
+        self._logical_ops = logical_ops
+        return self._dimension
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
@@ -1311,7 +1308,7 @@ class QuditCode(AbstractCode):
 
         # permute logical operators of the inner code
         inner._logical_ops = (
-            inner.get_logical_ops()
+            inner.get_logical_ops()  # type:ignore[assignment]
             .reshape(2, inner.dimension, -1)[:, outer_physical_to_inner_logical, :]
             .reshape(2 * inner.dimension, -1)
         )
@@ -2023,7 +2020,9 @@ class CSSCode(QuditCode):
         return 1 - infidelity, variance
 
 
-def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+def _row_reduce(
+    matrix: galois.FieldArray | npt.NDArray[np.int_],
+) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
     """Perform Gaussian elimination on a matrix.
 
     Returns:
@@ -2033,6 +2032,8 @@ def _row_reduce(matrix: galois.FieldArray) -> tuple[npt.NDArray[np.int_], npt.ND
     In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
     occur at a unique columns for each row; these columns are the "pivots" of matrix_rref.
     """
+    if not isinstance(matrix, galois.FieldArray):
+        matrix = galois.GF(DEFAULT_FIELD_ORDER)(matrix)
     matrix_rref = matrix.row_reduce()
     matrix_rref = matrix_rref[np.any(matrix_rref, axis=1), :]
     pivots = np.argmax(matrix_rref.view(np.ndarray).astype(bool), axis=1)
