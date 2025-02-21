@@ -269,7 +269,12 @@ def test_qudit_code() -> None:
     # invalid modifications of logical operators break commutation relations
     logical_ops = two_codes.get_logical_ops().copy()
     logical_ops[0, -1] += two_codes.field(1)
-    with pytest.raises(ValueError, match="do not commute with stabilizers"):
+    with pytest.raises(ValueError, match="violate parity checks"):
+        two_codes.set_logical_ops(logical_ops, validate=True)
+
+    # providing an incorrect number of logical operators throws an error
+    logical_ops = two_codes.get_logical_ops().copy()[[0, two_codes.dimension], :]
+    with pytest.raises(ValueError, match="incorrect number"):
         two_codes.set_logical_ops(logical_ops, validate=True)
 
     # stacking codes over different fields is not supported
@@ -360,7 +365,7 @@ def test_code_deformation() -> None:
     assert code.get_strings()[0] == "X Z Z X I"
     assert code.conjugated([0]).get_strings()[0] == "Z Z Z X I"
     assert code.deformed("H 0").get_strings()[0] == "Z Z Z X I"
-    with pytest.raises(ValueError, match="do not commute with stabilizers"):
+    with pytest.raises(ValueError, match="violate parity checks"):
         code.deformed("H 0", preserve_logicals=True)
 
     code = codes.SteaneCode()

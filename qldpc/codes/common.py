@@ -959,16 +959,16 @@ class QuditCode(AbstractCode):
         """Set the logical operators of this code to the provided logical operators."""
         logical_ops = self.field(logical_ops)
         if validate:
-            assert len(logical_ops) % 2 == 0
             dimension = len(logical_ops) // 2
             logical_ops_x = logical_ops[:dimension]
             logical_ops_z = logical_ops[dimension:]
             inner_products = symplectic_conjugate(logical_ops_x) @ logical_ops_z.T
-            if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
-                raise ValueError("The given logical operators do not commute with stabilizers")
             if not np.array_equal(inner_products, np.eye(dimension, dtype=int)):
                 raise ValueError("The given logical operators have incorrect commutation relations")
-            assert dimension == self.dimension
+            if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
+                raise ValueError("The given logical operators violate parity checks")
+            if dimension != self.dimension:
+                raise ValueError("An incorrect number of logical operators was provided")
         self._logical_ops = logical_ops
 
     def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
@@ -1004,7 +1004,7 @@ class QuditCode(AbstractCode):
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
-        if self.is_subsystem_code:
+        if not self.is_subsystem_code:
             return len(self) - self.rank
         self.get_logical_ops(dry_run=True)
         return self._dimension
