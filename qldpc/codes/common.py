@@ -885,30 +885,27 @@ class QuditCode(AbstractCode):
         qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
 
         # row reduce and identify pivots in the Z sector
-        matrix = matrix.reshape(-1, 2, len(self))
-        sub_matrix = matrix[len(pivots_x) :, 1, :]
+        matrix = matrix.reshape(2, -1, 2, len(self))
+        sub_matrix = matrix[1, :, 1, :]
         sub_matrix, pivots_z = _row_reduce(sub_matrix)
-        matrix[len(pivots_x) :, 1, :] = sub_matrix
+        matrix[1, :, 1, :] = sub_matrix
 
-        # separate out pivots for Z-type stabilizers vs. gauge operators
-        stab_pivots_z, pivots_g = (
-            pivots_z[pivots_z < len(other_x)],
-            pivots_z[pivots_z >= len(other_x)],
-        )
+        # remove and separately track Z pivots in the X sector
+        pivots_z, pivots_zx = pivots_z[pivots_z < len(other_x)], pivots_z[pivots_z >= len(other_x)]
 
         # move the stabilizer Z pivots to the back
-        other_z = [qq for qq in range(len(self)) if qq not in stab_pivots_z]
+        other_z = [qq for qq in range(len(self)) if qq not in pivots_z]
         matrix = matrix.reshape(-1, len(self))
-        matrix = np.hstack([matrix[:, other_z], matrix[:, stab_pivots_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[stab_pivots_z]])
+        matrix = np.hstack([matrix[:, other_z], matrix[:, pivots_z]])
+        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
 
         # identify the permutation that moves qudits to their original locations
         permutation = np.argsort(qudit_locs)
 
         # identify some helpful numbers
-        num_gauge_qudits = len(pivots_g)
+        num_gauge_qudits = len(pivots_zx)
         num_stabs_x = len(pivots_x) - num_gauge_qudits
-        num_stabs_z = len(stab_pivots_z)
+        num_stabs_z = len(pivots_z)
         dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
         self._dimension = dimension
 
@@ -948,7 +945,7 @@ class QuditCode(AbstractCode):
 
         else:
             # identify rows of gauge and stabilizer ops
-            gauge_rows = pivots_g - len(other_x)
+            gauge_rows = pivots_zx - len(other_x)
             num_rows_xgz = len(matrix) - num_gauge_qudits
             stab_rows = [qq for qq in range(num_rows_xgz) if qq not in gauge_rows]
 
