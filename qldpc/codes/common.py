@@ -896,28 +896,19 @@ class QuditCode(AbstractCode):
         matrix = matrix.reshape(-1, len(self))[:, permutation_z]
         qudit_locs = qudit_locs[permutation_z]
 
-        # identify the permutation that moves qudits to their original locations
-        permutation = np.argsort(qudit_locs)
-
-        # identify some helpful numbers
-        num_gauge_qudits = (len(all_pivots_x) - len(self.get_stabilizer_ops())) // 2
-        num_stabs_x = len(pivots_x) - num_gauge_qudits
-        num_stabs_z = len(all_pivots_z) - num_gauge_qudits
-        dimension = len(self) - num_stabs_x - num_stabs_z - num_gauge_qudits
-
         # some helpful reshaping and an identity matrix
         matrix = matrix.reshape(-1, 2, len(self))
-        identity_k = self.field.Identity(dimension)
+        identity_k = self.field.Identity(self.dimension)
 
         # identify row/column sectors of the parity check matrix
-        cols_k = slice(dimension)
-        cols_x = slice(dimension, len(self) - num_stabs_z)
-        cols_z = slice(len(self) - num_stabs_z, len(self))
-        rows_x = slice(num_stabs_x + num_gauge_qudits)
-        rows_z = slice(num_stabs_x + num_gauge_qudits, len(matrix) - num_gauge_qudits)
+        cols_k = slice(self.dimension)
+        cols_x = slice(self.dimension, self.dimension + len(pivots_x))
+        cols_z = slice(len(self) - len(pivots_z), len(self))
+        rows_x = slice(len(pivots_x))
+        rows_z = slice(len(pivots_x), len(pivots_x) + len(pivots_z))
 
         # construct X-type logical operators
-        logicals_x = self.field.Zeros((dimension, 2, len(self)))
+        logicals_x = self.field.Zeros((self.dimension, 2, len(self)))
         logicals_x[:, 0, cols_k] = identity_k
         logicals_x[:, 0, cols_z] = matrix[rows_z, 1, cols_k].T
         logicals_x[:, 1, cols_x] = -(
@@ -925,51 +916,24 @@ class QuditCode(AbstractCode):
         ).T
 
         # construct Z-type logical operators
-        logicals_z = self.field.Zeros((dimension, 2, len(self)))
+        logicals_z = self.field.Zeros((self.dimension, 2, len(self)))
         logicals_z[:, 1, cols_k] = identity_k
         logicals_z[:, 1, cols_x] = -matrix[rows_x, 0, cols_k].T
 
         # move qudits back to their original locations and reshape
+        permutation = np.argsort(qudit_locs)
         matrix = matrix[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_x = logicals_x[:, :, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z[:, :, permutation].reshape(-1, 2 * len(self))
 
-        if self.is_subsystem_code:
-            print()
-            print(symplectic_conjugate(matrix) @ logicals_x.T)
-            print(symplectic_conjugate(matrix) @ logicals_z.T)
-            exit()
-
-        # # identify gauge logicals and stabilizer generators
-        # if num_gauge_qudits == 0:
-        #     self._gauge_ops = self.field.Zeros((0, 2 * len(self)))
-        #     self._stabilizer_ops = matrix  # type:ignore[assignment]
-
-        # else:
-        #     # identify rows of gauge and stabilizer ops
-        #     gauge_rows = all_pivots_z - len(other_x)
-        #     num_rows_xgz = len(matrix) - num_gauge_qudits
-        #     stab_rows = [qq for qq in range(num_rows_xgz) if qq not in gauge_rows]
-
-        #     # collect gauge and stabilizer ops
-        #     gauge_ops_x = matrix[gauge_rows]
-        #     gauge_ops_z = matrix[-num_gauge_qudits:]
-        #     stabilizer_ops = matrix[stab_rows]
-
-        #     # remove gauge op factors from the stabilizer ops
-        #     for row, stabilizer_op in enumerate(stabilizer_ops):
-        #         stabilizer_op_dual = symplectic_conjugate(stabilizer_op)
-        #         for gauge_x, gauge_z in zip(gauge_ops_x, gauge_ops_z):
-        #             overlap_x = stabilizer_op_dual @ gauge_x
-        #             overlap_z = stabilizer_op_dual @ gauge_z
-        #             stabilizer_op -= overlap_x * gauge_z + overlap_z * gauge_x
-        #         stabilizer_ops[row] = stabilizer_op
-
-        #     self._gauge_ops = np.vstack([gauge_ops_x, gauge_ops_z])  # type:ignore[assignment]
-        #     self._stabilizer_ops = stabilizer_ops  # type:ignore[assignment]
-
         # save logicals and return
         self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
+        if self.is_subsystem_code:
+            print()
+            print(symplectic_conjugate(logicals_x) @ logicals_z.T)
+            print()
+            print((symplectic_conjugate(matrix) @ self._logical_ops.T).T)
+            exit()
         return self._logical_ops  # type:ignore[return-value]
 
     def set_logical_ops(
