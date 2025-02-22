@@ -880,45 +880,52 @@ class QuditCode(AbstractCode):
         # move the X pivots (which tag X-type stabilizers and gauge ops) to the back
         other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
         permutation_x = other_x + list(pivots_x)
-        matrix = matrix.reshape(-1, len(self))[:, permutation_x]
+        matrix = matrix.reshape(-1, len(self))[:, permutation_x].reshape(-1, 2 * len(self))
         qudit_locs = qudit_locs[permutation_x]
 
         # row reduce and identify pivots in the Z sector
-        matrix = matrix.reshape(2, -1, 2, len(self))
-        sub_matrix = ClassicalCode(matrix[1, :, 1, :]).canonicalized.matrix
-        matrix[1, :, 1, :] = sub_matrix
+        sub_matrix = ClassicalCode(matrix[len(pivots_x) :, len(self) :]).canonicalized.matrix
+        matrix[len(pivots_x) :, len(self) :] = sub_matrix
         all_pivots_z = np.argmax(sub_matrix.view(np.ndarray).astype(bool), axis=1)
-        pivots_z = all_pivots_z[all_pivots_z < len(other_x)]
+        pivots_z = all_pivots_z[all_pivots_z < len(self) - len(pivots_x)]
 
         # move the stabilizer Z pivots to the back
         other_z = [qq for qq in range(len(self)) if qq not in pivots_z]
         permutation_z = other_z + list(pivots_z)
-        matrix = matrix.reshape(-1, len(self))[:, permutation_z]
+        matrix = matrix.reshape(-1, 2, len(self))[:, :, permutation_z]
         qudit_locs = qudit_locs[permutation_z]
 
-        # some helpful reshaping and an identity matrix
-        matrix = matrix.reshape(-1, 2, len(self))
-        identity_k = self.field.Identity(self.dimension)
-
-        # identify row/column sectors of the parity check matrix
+        # identify row/column sectors of the parity check matrix, and construct an identity matrix
         cols_k = slice(self.dimension)
         cols_x = slice(self.dimension, self.dimension + len(pivots_x))
         cols_z = slice(len(self) - len(pivots_z), len(self))
         rows_x = slice(len(pivots_x))
         rows_z = slice(len(pivots_x), len(pivots_x) + len(pivots_z))
+        identity_k = self.field.Identity(self.dimension)
 
         # construct X-type logical operators
         logicals_x = self.field.Zeros((self.dimension, 2, len(self)))
         logicals_x[:, 0, cols_k] = identity_k
-        logicals_x[:, 0, cols_z] = matrix[rows_z, 1, cols_k].T
-        logicals_x[:, 1, cols_x] = -(
-            matrix[rows_x, 1, cols_z] @ matrix[rows_z, 1, cols_k] + matrix[rows_x, 1, cols_k]
+        logicals_x[:, 0, cols_z] = -matrix[rows_z, 1, cols_k].T
+        logicals_x[:, 1, cols_x] = (
+            matrix[rows_x, 1, cols_z] @ matrix[rows_z, 1, cols_k] - matrix[rows_x, 1, cols_k]
         ).T
 
         # construct Z-type logical operators
         logicals_z = self.field.Zeros((self.dimension, 2, len(self)))
         logicals_z[:, 1, cols_k] = identity_k
         logicals_z[:, 1, cols_x] = -matrix[rows_x, 0, cols_k].T
+
+        if self.is_subsystem_code:
+            matrix = matrix.reshape(-1, 2 * len(self))
+            logicals_x = logicals_x.reshape(-1, 2 * len(self))
+            logicals_z = logicals_z.reshape(-1, 2 * len(self))
+            print()
+            print(symplectic_conjugate(logicals_x) @ logicals_z.T)
+            print()
+            print((symplectic_conjugate(matrix) @ logicals_x.T).T)
+            print((symplectic_conjugate(matrix) @ logicals_z.T).T)
+            exit()
 
         # move qudits back to their original locations and reshape
         permutation = np.argsort(qudit_locs)
@@ -928,12 +935,6 @@ class QuditCode(AbstractCode):
 
         # save logicals and return
         self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
-        if self.is_subsystem_code:
-            print()
-            print(symplectic_conjugate(logicals_x) @ logicals_z.T)
-            print()
-            print((symplectic_conjugate(matrix) @ self._logical_ops.T).T)
-            exit()
         return self._logical_ops  # type:ignore[return-value]
 
     def set_logical_ops(
