@@ -885,36 +885,30 @@ class QuditCode(AbstractCode):
         logicals_xx[cols_g] = -matrix_z[rows_zg] @ logicals_xx
         logicals_xx[cols_z] = -matrix_z[rows_z] @ logicals_xx
 
-        print("---------------------")
-        rows = rows_z
-        # print()
-        # print(matrix_z[rows])
-        # print()
-        # print(matrix_z[rows, cols_x])
-        # print()
-        # print(matrix_z[rows, cols_z])
-        # print()
-        # print(matrix_z[rows, cols_g])
-        # print()
-        # print(matrix_z[rows, cols_k])
-
-        print()
-        print(cols_x, cols_g, cols_z, cols_k)
-        print()
-        print(matrix_z[rows])
-        print()
-        print(logicals_xx.T)
-        print()
-        print((matrix_z[rows] @ logicals_xx).T)
-        print("---------------------")
-        if self.is_subsystem_code:
-            exit()
-
         # Z sector of X-type logical operators as column vectors
         logicals_xz = self.field.Zeros((len(self), self.dimension))
         logicals_xz[cols_k] = self.field.Identity(self.dimension)
-        logicals_xz[cols_g] = -(matrix_x[rows_xg] @ logicals_xz + matrix_z[rows_xg] @ logicals_xx)
-        logicals_xz[cols_x] = -(matrix_x[rows_x] @ logicals_xz + matrix_z[rows_x] @ logicals_xx)
+        logicals_xz[cols_g] = -matrix_x[rows_xg] @ logicals_xz + matrix_z[rows_xg] @ logicals_xx
+        logicals_xz[cols_x] = -matrix_x[rows_x] @ logicals_xz + matrix_z[rows_x] @ logicals_xx
+
+        if self.is_subsystem_code:
+            logicals_x = np.hstack([logicals_xx.T, logicals_xz.T])
+            print("---------------------")
+            rows = rows_xg
+            print()
+            print(matrix_x[rows_x, cols_x])
+            print()
+            print(matrix_x[rows_xg, cols_g])  # should be the identity matrix
+            print()
+            print("------------")
+            print()
+            print(matrix[rows])
+            print()
+            print(logicals_x)
+            print()
+            print((symplectic_conjugate(matrix[rows]) @ logicals_x.T).T)
+            print("---------------------")
+            exit()
 
         # Z sector of Z-type logical operators as column vectors
         logicals_z = self.field.Zeros((len(self), self.dimension))
@@ -932,11 +926,10 @@ class QuditCode(AbstractCode):
         logicals_z = logicals_z.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
 
         print("============================")
+        logical_ops = np.vstack([logicals_x, logicals_z])
         print(symplectic_conjugate(logicals_x) @ logicals_z.T)
         print()
-        print((symplectic_conjugate(self.matrix) @ logicals_x.T).T)
-        print()
-        print((symplectic_conjugate(self.matrix) @ logicals_z.T).T)
+        print((symplectic_conjugate(self.matrix) @ logical_ops.T).T)
         print("============================")
 
         # save logicals and return
