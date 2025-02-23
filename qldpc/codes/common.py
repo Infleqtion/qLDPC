@@ -869,18 +869,35 @@ class QuditCode(AbstractCode):
         if not (self._logical_ops is None or recompute):
             return self._logical_ops
 
-        # construct the standard-form parity check matrix and reshape for convenience
+        # construct the standard-form parity check matrix
         (
             matrix,
             qudit_locs,
             (rows_x, rows_xg, rows_z, rows_zg),
             (cols_x, cols_g, cols_z, cols_k),
         ) = self.get_standard_form_data()
-        matrix = matrix.reshape(-1, 2, len(self))
+        matrix_x = matrix[:, : len(self)]
+        matrix_z = matrix[:, len(self) :]
 
         # construct X-type logical operators
-        logicals_x = self.field.Zeros((self.dimension, 2, len(self)))
-        logicals_x[:, 0, cols_k] = self.field.Identity(self.dimension)
+        logicals_xx = self.field.Zeros((self.dimension, len(self)))
+        logicals_xz = self.field.Zeros((self.dimension, len(self)))
+        logicals_xx[:, cols_k] = self.field.Identity(self.dimension)
+        print()
+        print()
+        print(rows_zg, cols_k)
+        print(matrix_z[rows_zg, cols_k].shape)
+        print()
+        print(cols_g)
+        print()
+        logicals_xx[:, cols_g] = -matrix_z[rows_zg, cols_k].T
+        logicals_xx[:, cols_z] = -(
+            matrix_z[rows_z, cols_g] @ logicals_xx[:, cols_g].T + matrix_z[rows_z, cols_k]
+        ).T
+
+        logicals_x = np.hstack([logicals_xx, logicals_xx]).reshape(-1, 2, len(self))
+        matrix = matrix.reshape(-1, 2, len(self))
+
         logicals_x[:, 0, cols_z] = -matrix[rows_z, 1, cols_k].T
         logicals_x[:, 1, cols_x] = (
             matrix[rows_x, 1, cols_z] @ matrix[rows_z, 1, cols_k] - matrix[rows_x, 1, cols_k]
@@ -994,13 +1011,13 @@ class QuditCode(AbstractCode):
             cols_z = slice(num_logicals + num_stabs_x, len(self))
             rows_xg = rows_zg = cols_g = slice(0)  # there are no gauge qudits
 
-            # rearrange column sectors into XG, Z, K order
-            permutation = _permutation_from_slices(cols_x, cols_z, cols_k)
-            matrix = _with_permuted_qudits(matrix, permutation)
-            qudit_locs = _with_permuted_qudits(qudit_locs, permutation)
-            cols_x = slice(len(pivots_x))
-            cols_z = slice(len(pivots_x), len(pivots_x) + len(pivots_z))
-            cols_k = slice(len(self) - self.dimension, len(self))
+            # # rearrange column sectors into XG, Z, K order
+            # permutation = _permutation_from_slices(cols_x, cols_z, cols_k)
+            # matrix = _with_permuted_qudits(matrix, permutation)
+            # qudit_locs = _with_permuted_qudits(qudit_locs, permutation)
+            # cols_x = slice(len(pivots_x))
+            # cols_z = slice(len(pivots_x), len(pivots_x) + len(pivots_z))
+            # cols_k = slice(len(self) - self.dimension, len(self))
 
         else:
             # X-type and Z-type stabilizers in standard form
@@ -1069,11 +1086,7 @@ class QuditCode(AbstractCode):
             cols_x = rows_x
             cols_g = rows_xg
             cols_z = slice(num_stabs_x + num_gauges, num_stabs_x + num_gauges + num_stabs_z)
-            cols_k = slice(len(self) - num_logicals)
-
-            print()
-            print(np.array_equal(matrix.row_reduce(), self.canonicalized.matrix))
-            exit()
+            cols_k = slice(len(self) - num_logicals, len(self))
 
         return (
             matrix,
