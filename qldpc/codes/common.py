@@ -48,6 +48,7 @@ from qldpc.objects import (
 from ._distance import get_distance_classical, get_distance_quantum
 
 IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
+Slice = slice | range | npt.NDArray[np.int_] | list[int]
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -893,7 +894,7 @@ class QuditCode(AbstractCode):
             cols_xgk = np.concatenate([cols_xg, cols_xk])
             cols_zgk = np.concatenate([cols_zg, cols_zk])
             """
-            Focusing on the XG and ZG rows of the parity check matrix, define the submatrices
+            Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
                 A = matrix_x[rows_xg, cols_xgk],
                 B = matrix_z[rows_zg, cols_zgk],
             and the logical operator components in the GK sector,
@@ -952,8 +953,8 @@ class QuditCode(AbstractCode):
     ) -> tuple[
         npt.NDArray[np.int_],  # standard-form matrix
         npt.NDArray[np.int_],  # locations of qudits
-        tuple[slice, slice, slice, slice],  # row sectors
-        tuple[slice, slice, slice, slice],  # column sectors
+        tuple[Slice, Slice, Slice, Slice],  # row sectors
+        tuple[Slice, Slice, Slice, Slice, Slice, Slice],  # column sectors
     ]:
         """Construct the standard form of the parity check matrix with Gaussian elimination.
 
@@ -983,16 +984,31 @@ class QuditCode(AbstractCode):
         Finally, this method also returns slices or index sets for all row/column sectors.
         """
         matrix: npt.NDArray[np.int_]
-        permutation: Sequence[int] | npt.NDArray[np.int_]
+        rows_xs: Slice
+        rows_xg: Slice
+        rows_zs: Slice
+        rows_zg: Slice
+        cols_xs: Slice
+        cols_xg: Slice
+        cols_xk: Slice
+        cols_zs: Slice
+        cols_zg: Slice
+        cols_zk: Slice
+        permutation: npt.NDArray[np.int_] | list[int]
 
-        def _permutation_from_slices(*slices: slice) -> npt.NDArray[np.int_]:
+        def _stack_from_sectors(*sectors: Slice) -> npt.NDArray[np.int_]:
             """Convert a series of slices into a permutation."""
             return np.hstack(
-                [np.arange(slice.start or 0, slice.stop, slice.step) for slice in slices]
+                [
+                    np.arange(sector.start or 0, sector.stop, sector.step)
+                    if isinstance(sector, slice)
+                    else sector
+                    for sector in sectors
+                ]
             )
 
         def _with_permuted_qudits(
-            matrix: npt.NDArray[np.int_], permutation: Sequence[int] | npt.NDArray[np.int_]
+            matrix: npt.NDArray[np.int_], permutation: Slice
         ) -> npt.NDArray[np.int_]:
             """Permute the qudits of a parity check matrix."""
             return matrix.reshape(-1, len(self))[:, permutation].reshape(matrix.shape)
@@ -1065,7 +1081,7 @@ class QuditCode(AbstractCode):
             checks_z = self_matrix[num_stabs_x + num_gauges :, len(self) :]
 
             # standard-form X-type stabilizers and gauge ops
-            permutation_x = _permutation_from_slices(cols_xs, cols_gk, cols_zs)
+            permutation_x = _stack_from_sectors(cols_xs, cols_gk, cols_zs)
             stabilizer_ops_x = _with_permuted_qudits(stabilizer_ops_x, permutation_x)
             checks_x = _with_permuted_qudits(checks_x, permutation_x)
             stabs_gauges_x = np.vstack([stabilizer_ops_x, checks_x])
@@ -1077,7 +1093,7 @@ class QuditCode(AbstractCode):
             stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
 
             # standard-form Z-type stabilizers and gauge ops
-            permutation_z = _permutation_from_slices(cols_zs, cols_gk, cols_xs)
+            permutation_z = _stack_from_sectors(cols_zs, cols_gk, cols_xs)
             stabilizer_ops_z = _with_permuted_qudits(stabilizer_ops_z, permutation_z)
             checks_z = _with_permuted_qudits(checks_z, permutation_z)
             stabs_gauges_z = np.vstack([stabilizer_ops_z, checks_z])
@@ -1092,7 +1108,7 @@ class QuditCode(AbstractCode):
             matrix = np.vstack(
                 [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
             )
-            permutation = _permutation_from_slices(cols_xs, cols_zs, cols_gk)
+            permutation = _stack_from_sectors(cols_xs, cols_zs, cols_gk)
             matrix = _with_permuted_qudits(matrix, permutation)
             qudit_locs = _with_permuted_qudits(qudit_locs, permutation)
 
