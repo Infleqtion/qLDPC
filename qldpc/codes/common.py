@@ -883,45 +883,35 @@ class QuditCode(AbstractCode):
         logicals_xx = self.field.Zeros((len(self), self.dimension))
         logicals_zz = self.field.Zeros((len(self), self.dimension))
 
-        # "initialize" the logicals in the GK sector
+        # "seed" the logicals in the GK sector
         if not self.is_subsystem_code:
             logicals_xx[cols_zk] = self.field.Identity(self.dimension)
             logicals_zz[cols_xk] = self.field.Identity(self.dimension)
 
         else:
-            cols_gk = range(len(self) - self.gauge_dimension - self.dimension, len(self))
-
-            # mat = -logicals_zz[cols_zg].T @ matrix_z[rows_zg, cols_zk] + logicals_zz[cols_zk].T
-            # print()
-            # print(np.linalg.inv(mat))
-
-            w_gk = self.field.Zeros((self.dimension, len(self)))
-            w_gk[:, cols_gk] = logicals_xx[cols_gk].T
-
-            mat = -logicals_xx[cols_zg].T @ matrix_z[rows_zg, cols_zk] + logicals_xx[cols_zk].T
+            cols_xgk = np.concatenate([cols_xg, cols_xk])
+            cols_zgk = np.concatenate([cols_zg, cols_zk])
             print()
-            print(np.linalg.inv(mat))
+            print(cols_xgk)
+            print(matrix_x[rows_xg])
+            print()
+            print(cols_zgk)
+            print(matrix_z[rows_zg])
+            print()
+            mat_A = matrix_x[rows_xg, cols_xgk]
+            mat_E = matrix_z[rows_zg, cols_zgk]
             print()
             print()
-            exit()
-
-            # group together columns in the GK sectors
-            cols_gk = range(len(self) - self.gauge_dimension - self.dimension, len(self))
-
-            # find solutions to logicals_zz[cols_gk].T @ block = I
-            one_solution = np.hstack(
-                [logicals_zz[cols_gk].T, self.field.Identity(self.dimension)]
-            ).row_reduce()[:, -self.dimension :]
-            homogeneous_solutions = logicals_zz[cols_gk].T.null_space()
+            print("mat_A")
+            print(mat_A)
             print()
-            print(homogeneous_solutions)
+            print(mat_A.null_space())
             print()
-            print(logicals_xx[cols_gk])
-            logicals_xx[cols_gk] = one_solution
+            print("mat_E")
+            print(mat_E)
             print()
-            print(matrix_z[rows_zg, cols_gk])
+            print(mat_E.null_space())
             print()
-            print(matrix_z[rows_zg] @ logicals_xx)
             exit()
 
         # fill in remaining entries by enforcing parity check constraints
