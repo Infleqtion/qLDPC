@@ -884,15 +884,13 @@ class QuditCode(AbstractCode):
         logicals_xx = self.field.Zeros((len(self), self.dimension))
         logicals_zz = self.field.Zeros((len(self), self.dimension))
 
-        # "seed" the logicals in the GK sector
+        # "seed" the logical operators in the GK sector
         if not self.is_subsystem_code:
             logicals_xx[cols_zk] = self.field.Identity(self.dimension)
             logicals_zz[cols_xk] = self.field.Identity(self.dimension)
 
         else:
-            # arrays to index the combined GK sector
-            cols_xgk = np.concatenate([cols_xg, cols_xk])
-            cols_zgk = np.concatenate([cols_zg, cols_zk])
+            cols_gk = _join_slices(cols_xg, cols_xk)  # index for the entire GK sector of columns
             """
             Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
                 A = matrix_z[rows_zg, cols_zgk],
@@ -906,8 +904,8 @@ class QuditCode(AbstractCode):
                 U.T @ V = I.
             We start by constructing the null spaces of A and B.
             """
-            null_A = matrix_z[rows_zg, cols_zgk].null_space()
-            null_B = matrix_x[rows_xg, cols_xgk].null_space()
+            null_A = matrix_z[rows_zg, cols_gk].null_space()
+            null_B = matrix_x[rows_xg, cols_gk].null_space()
             print()
             print("null_A")
             print(null_A)
@@ -916,14 +914,14 @@ class QuditCode(AbstractCode):
             print(null_B)
             print()
             print(null_A @ null_B.T)
-            logicals_xx[cols_zgk] = null_A.T
-            logicals_zz[cols_xgk] = null_B.T
+            logicals_xx[cols_gk] = null_A.T
+            logicals_zz[cols_gk] = null_B.T
             print()
             print("-------------------")
             print("ZERO ZERO ONE")
-            print((matrix_z[rows_zg, cols_zgk] @ logicals_xx[cols_zgk]).T)
-            print((matrix_x[rows_xg, cols_xgk] @ logicals_zz[cols_xgk]).T)
-            print(logicals_xx[cols_zgk].T @ logicals_zz[cols_xgk])
+            print((matrix_z[rows_zg, cols_gk] @ logicals_xx[cols_gk]).T)
+            print((matrix_x[rows_xg, cols_gk] @ logicals_zz[cols_gk]).T)
+            print(logicals_xx[cols_gk].T @ logicals_zz[cols_gk])
             print("-------------------")
             # exit()
 
@@ -1012,17 +1010,6 @@ class QuditCode(AbstractCode):
         cols_zk: Slice
         permutation: npt.NDArray[np.int_] | list[int]
 
-        def _stack_from_sectors(*sectors: Slice) -> npt.NDArray[np.int_]:
-            """Convert a series of slices into a permutation."""
-            return np.hstack(
-                [
-                    np.arange(sector.start or 0, sector.stop, sector.step)
-                    if isinstance(sector, slice)
-                    else sector
-                    for sector in sectors
-                ]
-            )
-
         def _with_permuted_qudits(
             matrix: npt.NDArray[np.int_], permutation: Slice
         ) -> npt.NDArray[np.int_]:
@@ -1097,7 +1084,7 @@ class QuditCode(AbstractCode):
             checks_z = self_matrix[num_stabs_x + num_gauges :, len(self) :]
 
             # standard-form X-type stabilizers and gauge ops
-            permutation_x = _stack_from_sectors(cols_xs, cols_gk, cols_zs)
+            permutation_x = _join_slices(cols_xs, cols_gk, cols_zs)
             stabilizer_ops_x = _with_permuted_qudits(stabilizer_ops_x, permutation_x)
             checks_x = _with_permuted_qudits(checks_x, permutation_x)
             stabs_gauges_x = np.vstack([stabilizer_ops_x, checks_x])
@@ -1109,7 +1096,7 @@ class QuditCode(AbstractCode):
             stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
 
             # standard-form Z-type stabilizers and gauge ops
-            permutation_z = _stack_from_sectors(cols_zs, cols_gk, cols_xs)
+            permutation_z = _join_slices(cols_zs, cols_gk, cols_xs)
             stabilizer_ops_z = _with_permuted_qudits(stabilizer_ops_z, permutation_z)
             checks_z = _with_permuted_qudits(checks_z, permutation_z)
             stabs_gauges_z = np.vstack([stabilizer_ops_z, checks_z])
@@ -1124,7 +1111,7 @@ class QuditCode(AbstractCode):
             matrix = np.vstack(
                 [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
             )
-            permutation = _stack_from_sectors(cols_xs, cols_zs, cols_gk)
+            permutation = _join_slices(cols_xs, cols_zs, cols_gk)
             matrix = _with_permuted_qudits(matrix, permutation)
             qudit_locs = _with_permuted_qudits(qudit_locs, permutation)
 
@@ -2215,6 +2202,18 @@ class CSSCode(QuditCode):
         infidelity = num_failures / num_samples
         variance = infidelity * (1 - infidelity) / num_samples
         return 1 - infidelity, variance
+
+
+def _join_slices(*sectors: Slice) -> npt.NDArray[np.int_]:
+    """Join index slices together into one slice."""
+    return np.concatenate(
+        [
+            np.arange(sector.start or 0, sector.stop, sector.step)
+            if isinstance(sector, slice)
+            else sector
+            for sector in sectors
+        ]
+    )
 
 
 def _row_reduce(
