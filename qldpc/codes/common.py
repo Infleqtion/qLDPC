@@ -1058,8 +1058,8 @@ class QuditCode(AbstractCode):
             stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
             rows_s = slice(len(stabilizer_ops_x))
             rows_g = slice(len(stabilizer_ops_x), len(stabs_gauges_x))
-            cols_g = _first_nonzero_cols(stabs_gauges_x)[len(stabilizer_ops_x) :]
-            stabs_gauges_x[rows_s] += stabilizer_ops_x[rows_s, cols_g] @ stabs_gauges_x[rows_g]
+            pivots_g = _first_nonzero_cols(stabs_gauges_x)[len(stabilizer_ops_x) :]
+            stabs_gauges_x[rows_s] += stabilizer_ops_x[rows_s, pivots_g] @ stabs_gauges_x[rows_g]
             stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
 
             # standard-form Z-type stabilizers and gauge ops
@@ -1070,8 +1070,8 @@ class QuditCode(AbstractCode):
             stabs_gauges_z = ClassicalCode(stabs_gauges_z).canonicalized.matrix
             rows_s = slice(len(stabilizer_ops_z))
             rows_g = slice(len(stabilizer_ops_z), len(stabs_gauges_z))
-            cols_g = _first_nonzero_cols(stabs_gauges_z)[len(stabilizer_ops_z) :]
-            stabs_gauges_z[rows_s] += stabilizer_ops_z[rows_s, cols_g] @ stabs_gauges_z[rows_g]
+            pivots_g = _first_nonzero_cols(stabs_gauges_z)[len(stabilizer_ops_z) :]
+            stabs_gauges_z[rows_s] += stabilizer_ops_z[rows_s, pivots_g] @ stabs_gauges_z[rows_g]
             stabs_gauges_z = _with_permuted_qudits(stabs_gauges_z, np.argsort(permutation_z))
 
             # full parity check matrix in standard form
