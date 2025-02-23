@@ -879,24 +879,56 @@ class QuditCode(AbstractCode):
         matrix_x = matrix[:, : len(self)]
         matrix_z = matrix[:, len(self) :]
 
-        # Z sector of Z-type logical operators as column vectors
-        logicals_zz = self.field.Zeros((len(self), self.dimension))
-        logicals_zz[cols_xk] = self.field.Identity(self.dimension)
-        logicals_zz[cols_xg] = -matrix_x[rows_xg] @ logicals_zz
-        logicals_zz[cols_x] = -matrix_x[rows_x] @ logicals_zz
-
-        # X sector of X-type logical operators as column vectors
+        # X/Z support of X/Z logical operators, as column vectors
         logicals_xx = self.field.Zeros((len(self), self.dimension))
+        logicals_zz = self.field.Zeros((len(self), self.dimension))
+
+        # "initialize" the logicals in the GK sector
         if not self.is_subsystem_code:
             logicals_xx[cols_zk] = self.field.Identity(self.dimension)
+            logicals_zz[cols_xk] = self.field.Identity(self.dimension)
+
         else:
             cols_gk = range(len(self) - self.gauge_dimension - self.dimension, len(self))
-            logicals_xx[cols_gk] = np.hstack(
+
+            # mat = -logicals_zz[cols_zg].T @ matrix_z[rows_zg, cols_zk] + logicals_zz[cols_zk].T
+            # print()
+            # print(np.linalg.inv(mat))
+
+            w_gk = self.field.Zeros((self.dimension, len(self)))
+            w_gk[:, cols_gk] = logicals_xx[cols_gk].T
+
+            mat = -logicals_xx[cols_zg].T @ matrix_z[rows_zg, cols_zk] + logicals_xx[cols_zk].T
+            print()
+            print(np.linalg.inv(mat))
+            print()
+            print()
+            exit()
+
+            # group together columns in the GK sectors
+            cols_gk = range(len(self) - self.gauge_dimension - self.dimension, len(self))
+
+            # find solutions to logicals_zz[cols_gk].T @ block = I
+            one_solution = np.hstack(
                 [logicals_zz[cols_gk].T, self.field.Identity(self.dimension)]
             ).row_reduce()[:, -self.dimension :]
-        logicals_xx[cols_z] = -matrix_z[rows_z] @ logicals_xx
+            homogeneous_solutions = logicals_zz[cols_gk].T.null_space()
+            print()
+            print(homogeneous_solutions)
+            print()
+            print(logicals_xx[cols_gk])
+            logicals_xx[cols_gk] = one_solution
+            print()
+            print(matrix_z[rows_zg, cols_gk])
+            print()
+            print(matrix_z[rows_zg] @ logicals_xx)
+            exit()
 
-        # Z sector of X-type logical operators as column vectors
+        # fill in remaining entries by enforcing parity check constraints
+        logicals_xx[cols_z] = -matrix_z[rows_z] @ logicals_xx
+        logicals_zz[cols_x] = -matrix_x[rows_x] @ logicals_zz
+
+        # Z support of X-type logicals, as column vectors
         logicals_xz = self.field.Zeros((len(self), self.dimension))
         logicals_xz[cols_xk] = self.field.Identity(self.dimension)
         logicals_xz[cols_xg] = -matrix_x[rows_xg] @ logicals_xz + matrix_z[rows_xg] @ logicals_xx
