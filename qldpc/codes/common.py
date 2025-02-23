@@ -891,25 +891,6 @@ class QuditCode(AbstractCode):
         logicals_xz[cols_xg] = -matrix_x[rows_xg] @ logicals_xz + matrix_z[rows_xg] @ logicals_xx
         logicals_xz[cols_x] = -matrix_x[rows_x] @ logicals_xz + matrix_z[rows_x] @ logicals_xx
 
-        # if self.is_subsystem_code:
-        #     logicals_x = np.hstack([logicals_xx.T, logicals_xz.T])
-        #     print("---------------------")
-        #     rows = rows_zg
-        #     print()
-        #     print(matrix_x[rows_x, cols_x])
-        #     print()
-        #     print(matrix_x[rows_xg, cols_xg])  # should be the identity matrix
-        #     print()
-        #     print("------------")
-        #     print()
-        #     print(matrix[rows])
-        #     print()
-        #     print(logicals_x)
-        #     print()
-        #     print((symplectic_conjugate(matrix) @ logicals_x.T).T)
-        #     print("---------------------")
-        #     exit()
-
         # Z sector of Z-type logical operators as column vectors
         logicals_z = self.field.Zeros((len(self), self.dimension))
         if not self.is_subsystem_code:
