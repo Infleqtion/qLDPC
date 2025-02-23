@@ -885,13 +885,6 @@ class QuditCode(AbstractCode):
             ) -> npt.NDArray[np.int_]:
                 return matrix.reshape(-1, len(self))[:, permutation].reshape(matrix.shape)
 
-            def _permuted_slices(
-                matrix: npt.NDArray[np.int_], *qudit_slices: slice
-            ) -> npt.NDArray[np.int_]:
-                shape = matrix.shape
-                matrix = matrix.reshape(-1, len(self))
-                return np.hstack([matrix[:, qudits] for qudits in qudit_slices]).reshape(shape)
-
             stabilizer_ops = self.get_stabilizer_ops()
             code = QuditCode(stabilizer_ops, is_subsystem_code=False)
             (
@@ -911,31 +904,37 @@ class QuditCode(AbstractCode):
             self_matrix_x = self_matrix[:num_rows_xg]
             self_matrix_z = self_matrix[num_rows_xg:, len(self) :]
 
-            stabs_gauges_x = ClassicalCode(
-                np.vstack([stabilizer_ops_x, self_matrix_x])
-            ).canonicalized.matrix
+            stabs_gauges_x = np.vstack([stabilizer_ops_x, self_matrix_x])
+            stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
             rows_s = slice(len(stabilizer_ops_x))
             rows_g = slice(len(stabilizer_ops_x), len(stabs_gauges_x))
             cols_g = _first_nonzero_cols(stabs_gauges_x)[len(stabilizer_ops_x) :]
             stabs_gauges_x[rows_s] += stabilizer_ops_x[rows_s, cols_g] @ stabs_gauges_x[rows_g]
 
-            print()
-            print(np.array_equal(stabilizer_ops_x, stabs_gauges_x[rows_s]))
-
-            stabilizer_ops_z = _permuted_slices(stabilizer_ops_z, cols_z, cols_x, cols_gk)
-            self_matrix_z = _permuted_slices(self_matrix_z, cols_z, cols_x, cols_gk)
-            stabs_gauges_z = ClassicalCode(
-                np.vstack([stabilizer_ops_z, self_matrix_z])
-            ).canonicalized.matrix
+            locs_zx = np.hstack(
+                [np.arange(cols.start or 0, cols.stop) for cols in [cols_z, cols_x, cols_gk]]
+            )
+            stabilizer_ops_z = _permuted_perm(stabilizer_ops_z, locs_zx)
+            self_matrix_z = _permuted_perm(self_matrix_z, locs_zx)
+            stabs_gauges_z = np.vstack([stabilizer_ops_z, self_matrix_z])
+            stabs_gauges_z = ClassicalCode(stabs_gauges_z).canonicalized.matrix
             rows_s = slice(len(stabilizer_ops_z))
             rows_g = slice(len(stabilizer_ops_z), len(stabs_gauges_z))
             cols_g = _first_nonzero_cols(stabs_gauges_z)[len(stabilizer_ops_z) :]
             stabs_gauges_z[rows_s] += stabilizer_ops_z[rows_s, cols_g] @ stabs_gauges_z[rows_g]
-            stabs_gauges_z = _permuted_slices(stabs_gauges_z, cols_x, cols_z, cols_gk)
 
+            inv_locs_zx = np.argsort(locs_zx)
+            stabs_gauges_z = _permuted_perm(stabs_gauges_z, inv_locs_zx)
+            stabilizer_ops_z = _permuted_perm(stabilizer_ops_z, inv_locs_zx)
+            self_matrix_z = _permuted_perm(self_matrix_z, inv_locs_zx)
+
+            matrix = np.vstack(
+                [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
+            )
+            permutation = np.argsort(locs)
+            matrix = _permuted_perm(matrix, permutation)
             print()
-            print(np.array_equal(stabilizer_ops_z, stabs_gauges_z[rows_s]))
-            exit()
+            print(np.array_equal(matrix.row_reduce(), self.canonicalized.matrix))
 
             print()
             print(symplectic_conjugate(matrix) @ matrix.T)
