@@ -897,8 +897,8 @@ class QuditCode(AbstractCode):
             (
                 standard_stabilizer_ops,
                 locs,
-                (rows_x, rows_z, rows_g),
-                (cols_x, cols_z, cols_k),
+                (rows_x, rows_z, _),
+                (cols_x, cols_z, cols_gk),
             ) = code.get_standard_form_data()
             stabilizer_ops_x = standard_stabilizer_ops[rows_x]
             stabilizer_ops_z = standard_stabilizer_ops[rows_z, len(self) :]
@@ -907,9 +907,9 @@ class QuditCode(AbstractCode):
             self_matrix = _permuted_perm(self.canonicalized.matrix, locs)
 
             first_col_in_row = _first_nonzero_cols(self_matrix)
-            num_stabs_x = np.sum(first_col_in_row < len(self))
-            self_matrix_x = self_matrix[:num_stabs_x]
-            self_matrix_z = self_matrix[num_stabs_x:, len(self) :]
+            num_rows_xg = np.sum(first_col_in_row < len(self))
+            self_matrix_x = self_matrix[:num_rows_xg]
+            self_matrix_z = self_matrix[num_rows_xg:, len(self) :]
 
             stabs_gauges_x = ClassicalCode(
                 np.vstack([stabilizer_ops_x, self_matrix_x])
@@ -922,8 +922,8 @@ class QuditCode(AbstractCode):
             print()
             print(np.array_equal(stabilizer_ops_x, stabs_gauges_x[rows_s]))
 
-            stabilizer_ops_z = _permuted_slices(stabilizer_ops_z, cols_z, cols_x, cols_k)
-            self_matrix_z = _permuted_slices(self_matrix_z, cols_z, cols_x, cols_k)
+            stabilizer_ops_z = _permuted_slices(stabilizer_ops_z, cols_z, cols_x, cols_gk)
+            self_matrix_z = _permuted_slices(self_matrix_z, cols_z, cols_x, cols_gk)
             stabs_gauges_z = ClassicalCode(
                 np.vstack([stabilizer_ops_z, self_matrix_z])
             ).canonicalized.matrix
@@ -931,7 +931,7 @@ class QuditCode(AbstractCode):
             rows_g = slice(len(stabilizer_ops_z), len(stabs_gauges_z))
             cols_g = _first_nonzero_cols(stabs_gauges_z)[len(stabilizer_ops_z) :]
             stabs_gauges_z[rows_s] += stabilizer_ops_z[rows_s, cols_g] @ stabs_gauges_z[rows_g]
-            stabs_gauges_z = _permuted_slices(stabs_gauges_z, cols_x, cols_z, cols_k)
+            stabs_gauges_z = _permuted_slices(stabs_gauges_z, cols_x, cols_z, cols_gk)
 
             print()
             print(np.array_equal(stabilizer_ops_z, stabs_gauges_z[rows_s]))
@@ -1031,7 +1031,7 @@ class QuditCode(AbstractCode):
         # move the stabilizer Z pivots to the back
         other_z = [qq for qq in range(len(self)) if qq not in pivots_z]
         permutation = other_z + list(pivots_z)
-        matrix = matrix.reshape(-1, len(self))[:, permutation]
+        matrix = matrix.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
         qudit_locs = qudit_locs[permutation]
 
         # identify row/column sectors of the parity check matrix
@@ -1043,6 +1043,7 @@ class QuditCode(AbstractCode):
         cols_z = slice(self.dimension + len(pivots_xg), len(self))
 
         # rearrange column sectors into XG, Z, K order
+        matrix = matrix.reshape(-1, len(self))
         matrix = np.hstack([matrix[:, cols_xg], matrix[:, cols_z], matrix[:, cols_k]])
         qudit_locs = np.hstack([qudit_locs[cols_xg], qudit_locs[cols_z], qudit_locs[cols_k]])
         cols_xg = slice(len(pivots_xg))
