@@ -879,10 +879,21 @@ class QuditCode(AbstractCode):
         matrix_x = matrix[:, : len(self)]
         matrix_z = matrix[:, len(self) :]
 
+        # Z sector of Z-type logical operators as column vectors
+        logicals_zz = self.field.Zeros((len(self), self.dimension))
+        logicals_zz[cols_xk] = self.field.Identity(self.dimension)
+        logicals_zz[cols_xg] = -matrix_x[rows_xg] @ logicals_zz
+        logicals_zz[cols_x] = -matrix_x[rows_x] @ logicals_zz
+
         # X sector of X-type logical operators as column vectors
         logicals_xx = self.field.Zeros((len(self), self.dimension))
-        logicals_xx[cols_zk] = self.field.Identity(self.dimension)
-        logicals_xx[cols_zg] = -matrix_z[rows_zg] @ logicals_xx
+        if not self.is_subsystem_code:
+            logicals_xx[cols_zk] = self.field.Identity(self.dimension)
+        else:
+            cols_gk = range(len(self) - self.gauge_dimension - self.dimension, len(self))
+            logicals_xx[cols_gk] = np.hstack(
+                [logicals_zz[cols_gk].T, self.field.Identity(self.dimension)]
+            ).row_reduce()[:, -self.dimension :]
         logicals_xx[cols_z] = -matrix_z[rows_z] @ logicals_xx
 
         # Z sector of X-type logical operators as column vectors
@@ -890,25 +901,6 @@ class QuditCode(AbstractCode):
         logicals_xz[cols_xk] = self.field.Identity(self.dimension)
         logicals_xz[cols_xg] = -matrix_x[rows_xg] @ logicals_xz + matrix_z[rows_xg] @ logicals_xx
         logicals_xz[cols_x] = -matrix_x[rows_x] @ logicals_xz + matrix_z[rows_x] @ logicals_xx
-
-        # Z sector of Z-type logical operators as column vectors
-        logicals_zz = self.field.Zeros((len(self), self.dimension))
-        if not self.is_subsystem_code:
-            logicals_zz[cols_zk] = self.field.Identity(self.dimension)
-        else:
-            cols_gk = range(len(self) - self.gauge_dimension - self.dimension, len(self))
-            logicals_zz[cols_gk] = np.hstack(
-                [logicals_xx[cols_gk].T, self.field.Identity(self.dimension)]
-            ).row_reduce()[:, -self.dimension :]
-        print()
-        print(logicals_zz[cols_x].shape)
-        print(matrix_x[rows_x].shape, logicals_zz.shape)
-        # logicals_zz[cols_xg] = -matrix_x[rows_xg] @ logicals_zz
-        logicals_zz[cols_x] = -matrix_x[rows_x] @ logicals_zz
-        print()
-        print(matrix_x[rows_x] @ logicals_zz)
-        print()
-        print(matrix_x[rows_xg] @ logicals_zz)
 
         # full X and Z logicals as row vectors
         logicals_x = np.vstack([logicals_xx, logicals_xz]).T
