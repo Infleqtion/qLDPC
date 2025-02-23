@@ -879,20 +879,49 @@ class QuditCode(AbstractCode):
         matrix_x = matrix[:, : len(self)]
         matrix_z = matrix[:, len(self) :]
 
-        # construct X-type logical operators
+        # X sector of X-type logical operators as column vectors
         logicals_xx = self.field.Zeros((len(self), self.dimension))
-        logicals_xz = self.field.Zeros((len(self), self.dimension))
         logicals_xx[cols_k] = self.field.Identity(self.dimension)
-        logicals_xx[cols_z] = -matrix_z[rows_z, cols_k]
-        logicals_xz[cols_x] = (
-            matrix_z[rows_x, cols_z] @ matrix_z[rows_z, cols_k] - matrix_z[rows_x, cols_k]
-        )
-        logicals_x = np.hstack([logicals_xx.T, logicals_xz.T])
+        logicals_xx[cols_g] = -matrix_z[rows_zg] @ logicals_xx
+        logicals_xx[cols_z] = -matrix_z[rows_z] @ logicals_xx
 
-        # construct Z-type logical operators
+        print("---------------------")
+        rows = rows_z
+        print()
+        print(matrix_z[rows, cols_x])
+        print()
+        print(matrix_z[rows, cols_g])
+        print()
+        print(matrix_z[rows, cols_z])
+        print()
+        print(matrix_z[rows, cols_k])
+
+        print()
+        print(cols_x, cols_g, cols_z, cols_k)
+        print()
+        print(matrix_z[rows])
+        print()
+        print(logicals_xx.T)
+        print()
+        print((matrix_z[rows] @ logicals_xx).T)
+        print("---------------------")
+        if self.is_subsystem_code:
+            exit()
+
+        # Z sector of X-type logical operators as column vectors
+        logicals_xz = self.field.Zeros((len(self), self.dimension))
+        logicals_xz[cols_k] = self.field.Identity(self.dimension)
+        logicals_xz[cols_g] = -(matrix_x[rows_xg] @ logicals_xz + matrix_z[rows_xg] @ logicals_xx)
+        logicals_xz[cols_x] = -(matrix_x[rows_x] @ logicals_xz + matrix_z[rows_x] @ logicals_xx)
+
+        # Z sector of Z-type logical operators as column vectors
         logicals_z = self.field.Zeros((len(self), self.dimension))
         logicals_z[cols_k] = self.field.Identity(self.dimension)
-        logicals_z[cols_x] = -matrix_x[rows_x, cols_k]
+        logicals_z[cols_g] = -matrix_x[rows_xg] @ logicals_z
+        logicals_z[cols_x] = -matrix_x[rows_x] @ logicals_z
+
+        # full X and Z logicals as row vectors
+        logicals_x = np.hstack([logicals_xx.T, logicals_xz.T])
         logicals_z = np.hstack([np.zeros_like(logicals_z.T), logicals_z.T])
 
         # move qudits back to their original locations and reshape
@@ -1031,14 +1060,6 @@ class QuditCode(AbstractCode):
             stabs_gauges_x[rows_s] += stabilizer_ops_x[rows_s, cols_g] @ stabs_gauges_x[rows_g]
             stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(locs_xg))
 
-            # print()
-            # print(np.array_equal(stabilizer_ops_x, stabs_gauges_x[rows_s]))
-
-            # print()
-            # print(len(stabilizer_ops_x))
-            # print(len(stabs_gauges_x))
-            # exit()
-
             # standard-form Z-type stabilizers and gauge ops
             locs_zg = _permutation_from_slices(cols_z, cols_gk, cols_x)
             stabilizer_ops_z = _with_permuted_qudits(stabilizer_ops_z, locs_zg)
@@ -1055,8 +1076,6 @@ class QuditCode(AbstractCode):
             matrix = np.vstack(
                 [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
             )
-            permutation = np.argsort(qudit_locs)
-            matrix = _with_permuted_qudits(matrix, permutation)
 
             # identify some helpful numbers
             num_stabs_x = len(stabilizer_ops_x)
@@ -1064,17 +1083,10 @@ class QuditCode(AbstractCode):
             num_gauges = len(stabs_gauges_x) - num_stabs_x
             num_logicals = len(self) - num_stabs_x - num_stabs_z - num_gauges
 
-            print()
-            print(num_stabs_x)
-            print(num_stabs_z)
-            print(num_gauges)
-            print(num_logicals)
-            print()
-
             # identify row/column sectors of the parity check matrix
             rows_x = slice(num_stabs_x)
             rows_xg = slice(num_stabs_x, num_stabs_x + num_gauges)
-            rows_z = slice(num_stabs_x + num_gauges, num_stabs_x + num_gauges + num_stabs_z)
+            rows_z = slice(num_stabs_x + num_gauges, len(matrix) - num_gauges)
             rows_zg = slice(len(matrix) - num_gauges, len(matrix))
             cols_x = rows_x
             cols_g = rows_xg
