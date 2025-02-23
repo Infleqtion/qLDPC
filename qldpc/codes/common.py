@@ -889,30 +889,33 @@ class QuditCode(AbstractCode):
             logicals_zz[cols_xk] = self.field.Identity(self.dimension)
 
         else:
+            # arrays to index the combined GK sector
             cols_xgk = np.concatenate([cols_xg, cols_xk])
             cols_zgk = np.concatenate([cols_zg, cols_zk])
+            """
+            Focusing on the XG and ZG rows of the parity check matrix, define the submatrices
+                A = matrix_x[rows_xg, cols_xgk],
+                B = matrix_z[rows_zg, cols_zgk],
+            and the logical operator components in the GK sector,
+                U = logicals_xx[cols_xgk],
+                V = logicals_zz[cols_zgk].
+            These components need to satisfy the system of matrix equations
+                A @ U = 0,
+                B @ V = 0,
+                U.T @ V = I.
+            We start by constructing the null spaces of A and B.
+            """
+            null_A = matrix_x[rows_xg, cols_xgk].null_space()
+            null_B = matrix_z[rows_zg, cols_zgk].null_space()
             print()
-            print(cols_xgk)
-            print(matrix_x[rows_xg])
+            print("null_A")
+            print(null_A)
             print()
-            print(cols_zgk)
-            print(matrix_z[rows_zg])
-            print()
-            mat_A = matrix_x[rows_xg, cols_xgk]
-            mat_E = matrix_z[rows_zg, cols_zgk]
-            print()
-            print()
-            print("mat_A")
-            print(mat_A)
-            print()
-            print(mat_A.null_space())
-            print()
-            print("mat_E")
-            print(mat_E)
-            print()
-            print(mat_E.null_space())
-            print()
+            print("null_B")
+            print(null_B)
             exit()
+            logicals_xx[cols_zk] = self.field.Identity(self.dimension)
+            logicals_zz[cols_xk] = self.field.Identity(self.dimension)
 
         # fill in remaining entries by enforcing parity check constraints
         logicals_xx[cols_z] = -matrix_z[rows_z] @ logicals_xx
@@ -1099,9 +1102,9 @@ class QuditCode(AbstractCode):
             cols_x = slice(num_stabs_x)
             cols_z = slice(num_stabs_x, num_stabs_x + num_stabs_z)
             cols_gk = range(len(self) - num_logicals - num_gauges, len(self))
-            cols_xg = num_stabs_z + pivots_xg
+            cols_xg = pivots_xg + num_stabs_z
             cols_xk = [qq for qq in cols_gk if qq not in cols_xg]
-            cols_zg = num_stabs_x + pivots_zg
+            cols_zg = pivots_zg + num_stabs_x
             cols_zk = [qq for qq in cols_gk if qq not in cols_zg]
 
         return (
