@@ -903,6 +903,7 @@ class QuditCode(AbstractCode):
         print()
         print(logicals_zz[cols_x].shape)
         print(matrix_x[rows_x].shape, logicals_zz.shape)
+        # logicals_zz[cols_xg] = -matrix_x[rows_xg] @ logicals_zz
         logicals_zz[cols_x] = -matrix_x[rows_x] @ logicals_zz
         print()
         print(matrix_x[rows_x] @ logicals_zz)
