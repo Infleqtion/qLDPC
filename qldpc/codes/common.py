@@ -895,8 +895,8 @@ class QuditCode(AbstractCode):
             cols_zgk = np.concatenate([cols_zg, cols_zk])
             """
             Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
-                A = matrix_x[rows_xg, cols_xgk],
-                B = matrix_z[rows_zg, cols_zgk],
+                A = matrix_z[rows_zg, cols_zgk],
+                B = matrix_x[rows_xg, cols_xgk],
             and the logical operator components in the GK sector,
                 U = logicals_xx[cols_xgk],
                 V = logicals_zz[cols_zgk].
@@ -906,21 +906,37 @@ class QuditCode(AbstractCode):
                 U.T @ V = I.
             We start by constructing the null spaces of A and B.
             """
-            null_A = matrix_x[rows_xg, cols_xgk].null_space()
-            null_B = matrix_z[rows_zg, cols_zgk].null_space()
+            null_A = matrix_z[rows_zg, cols_zgk].null_space()
+            null_B = matrix_x[rows_xg, cols_xgk].null_space()
             print()
             print("null_A")
             print(null_A)
             print()
             print("null_B")
             print(null_B)
-            exit()
-            logicals_xx[cols_zk] = self.field.Identity(self.dimension)
-            logicals_zz[cols_xk] = self.field.Identity(self.dimension)
+            print()
+            print(null_A @ null_B.T)
+            logicals_xx[cols_zgk] = null_A.T
+            logicals_zz[cols_xgk] = null_B.T
+            print()
+            print("-------------------")
+            print("ZERO ZERO ONE")
+            print((matrix_z[rows_zg, cols_zgk] @ logicals_xx[cols_zgk]).T)
+            print((matrix_x[rows_xg, cols_xgk] @ logicals_zz[cols_xgk]).T)
+            print(logicals_xx[cols_zgk].T @ logicals_zz[cols_xgk])
+            print("-------------------")
+            # exit()
 
         # fill in remaining entries by enforcing parity check constraints
         logicals_xx[cols_zs] = -matrix_z[rows_zs] @ logicals_xx
         logicals_zz[cols_xs] = -matrix_x[rows_xs] @ logicals_zz
+        if self.is_subsystem_code:
+            print()
+            print("ALL ZERO")
+            print((matrix_z[rows_zs] @ logicals_xx).T)
+            print((matrix_z[rows_zg] @ logicals_xx).T)
+            print((matrix_z @ logicals_xx).T)
+            print()
 
         # Z support of X-type logicals, as column vectors
         logicals_xz = self.field.Zeros((len(self), self.dimension))
