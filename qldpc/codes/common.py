@@ -874,7 +874,7 @@ class QuditCode(AbstractCode):
             matrix,
             qudit_locs,
             (rows_x, rows_xg, rows_z, rows_zg),
-            (cols_x, cols_g, cols_z, cols_k),
+            (cols_x, cols_z, cols_g, cols_k),
         ) = self.get_standard_form_data()
         matrix_x = matrix[:, : len(self)]
         matrix_z = matrix[:, len(self) :]
@@ -894,7 +894,7 @@ class QuditCode(AbstractCode):
         if self.is_subsystem_code:
             logicals_x = np.hstack([logicals_xx.T, logicals_xz.T])
             print("---------------------")
-            rows = rows_xg
+            rows = rows_zg
             print()
             print(matrix_x[rows_x, cols_x])
             print()
@@ -906,7 +906,7 @@ class QuditCode(AbstractCode):
             print()
             print(logicals_x)
             print()
-            print((symplectic_conjugate(matrix[rows]) @ logicals_x.T).T)
+            print((symplectic_conjugate(matrix) @ logicals_x.T).T)
             print("---------------------")
             exit()
 
@@ -1029,7 +1029,7 @@ class QuditCode(AbstractCode):
                 standard_stabilizer_ops,
                 qudit_locs,
                 (rows_x, _, rows_z, _),
-                (cols_x, _, cols_z, cols_gk),
+                (cols_x, cols_z, _, cols_gk),
             ) = code.get_standard_form_data()
             stabilizer_ops_x = standard_stabilizer_ops[rows_x]
             stabilizer_ops_z = standard_stabilizer_ops[rows_z, len(self) :]
@@ -1088,11 +1088,20 @@ class QuditCode(AbstractCode):
             cols_x = slice(num_gauges + num_logicals, num_gauges + num_logicals + num_stabs_x)
             cols_z = slice(len(self) - num_stabs_z, len(self))
 
+            # reorder column sectors into X, Z, GK order
+            permutation = _permutation_from_slices(cols_x, cols_z, cols_gk)
+            matrix = _with_permuted_qudits(matrix, permutation)
+            qudit_locs = _with_permuted_qudits(qudit_locs, permutation)
+            cols_x = slice(num_stabs_x)
+            cols_z = slice(num_stabs_x, num_stabs_x + num_stabs_z)
+            cols_g = slice(num_stabs_x + num_stabs_z, num_stabs_x + num_stabs_z + num_gauges)
+            cols_k = slice(len(self) - num_logicals, len(self))
+
         return (
             matrix,
             qudit_locs,
             (rows_x, rows_xg, rows_z, rows_zg),
-            (cols_x, cols_g, cols_z, cols_k),
+            (cols_x, cols_z, cols_g, cols_k),
         )
 
     def set_logical_ops(
@@ -1152,7 +1161,7 @@ class QuditCode(AbstractCode):
         if not self.is_subsystem_code:
             return len(self) - self.rank
         num_stabs = len(self.get_stabilizer_ops())
-        return len(self) - (self.canonicalized.rank + num_stabs) // 2
+        return len(self) - (self.rank + num_stabs) // 2
 
     @functools.cached_property
     def gauge_dimension(self) -> int:
@@ -1160,7 +1169,7 @@ class QuditCode(AbstractCode):
         if not self.is_subsystem_code:
             return 0
         num_stabs = len(self.get_stabilizer_ops())
-        return (self.canonicalized.rank - num_stabs) // 2
+        return (self.rank - num_stabs) // 2
 
     def get_code_params(
         self, *, bound: int | bool | None = None, **decoder_args: Any
