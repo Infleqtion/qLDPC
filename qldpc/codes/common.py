@@ -887,14 +887,16 @@ class QuditCode(AbstractCode):
 
         print("---------------------")
         rows = rows_z
-        print()
-        print(matrix_z[rows, cols_x])
-        print()
-        print(matrix_z[rows, cols_g])
-        print()
-        print(matrix_z[rows, cols_z])
-        print()
-        print(matrix_z[rows, cols_k])
+        # print()
+        # print(matrix_z[rows])
+        # print()
+        # print(matrix_z[rows, cols_x])
+        # print()
+        # print(matrix_z[rows, cols_z])
+        # print()
+        # print(matrix_z[rows, cols_g])
+        # print()
+        # print(matrix_z[rows, cols_k])
 
         print()
         print(cols_x, cols_g, cols_z, cols_k)
@@ -1049,28 +1051,28 @@ class QuditCode(AbstractCode):
             checks_z = self_matrix[num_rows_xg:, len(self) :]
 
             # standard-form X-type stabilizers and gauge ops
-            locs_xg = _permutation_from_slices(cols_x, cols_gk, cols_z)
-            stabilizer_ops_x = _with_permuted_qudits(stabilizer_ops_x, locs_xg)
-            checks_x = _with_permuted_qudits(checks_x, locs_xg)
+            permutation_x = _permutation_from_slices(cols_x, cols_gk, cols_z)
+            stabilizer_ops_x = _with_permuted_qudits(stabilizer_ops_x, permutation_x)
+            checks_x = _with_permuted_qudits(checks_x, permutation_x)
             stabs_gauges_x = np.vstack([stabilizer_ops_x, checks_x])
             stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
             rows_s = slice(len(stabilizer_ops_x))
             rows_g = slice(len(stabilizer_ops_x), len(stabs_gauges_x))
             cols_g = _first_nonzero_cols(stabs_gauges_x)[len(stabilizer_ops_x) :]
             stabs_gauges_x[rows_s] += stabilizer_ops_x[rows_s, cols_g] @ stabs_gauges_x[rows_g]
-            stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(locs_xg))
+            stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
 
             # standard-form Z-type stabilizers and gauge ops
-            locs_zg = _permutation_from_slices(cols_z, cols_gk, cols_x)
-            stabilizer_ops_z = _with_permuted_qudits(stabilizer_ops_z, locs_zg)
-            checks_z = _with_permuted_qudits(checks_z, locs_zg)
+            permutation_z = _permutation_from_slices(cols_z, cols_gk, cols_x)
+            stabilizer_ops_z = _with_permuted_qudits(stabilizer_ops_z, permutation_z)
+            checks_z = _with_permuted_qudits(checks_z, permutation_z)
             stabs_gauges_z = np.vstack([stabilizer_ops_z, checks_z])
             stabs_gauges_z = ClassicalCode(stabs_gauges_z).canonicalized.matrix
             rows_s = slice(len(stabilizer_ops_z))
             rows_g = slice(len(stabilizer_ops_z), len(stabs_gauges_z))
             cols_g = _first_nonzero_cols(stabs_gauges_z)[len(stabilizer_ops_z) :]
             stabs_gauges_z[rows_s] += stabilizer_ops_z[rows_s, cols_g] @ stabs_gauges_z[rows_g]
-            stabs_gauges_z = _with_permuted_qudits(stabs_gauges_z, np.argsort(locs_zg))
+            stabs_gauges_z = _with_permuted_qudits(stabs_gauges_z, np.argsort(permutation_z))
 
             # full parity check matrix in standard form
             matrix = np.vstack(
@@ -1086,12 +1088,12 @@ class QuditCode(AbstractCode):
             # identify row/column sectors of the parity check matrix
             rows_x = slice(num_stabs_x)
             rows_xg = slice(num_stabs_x, num_stabs_x + num_gauges)
-            rows_z = slice(num_stabs_x + num_gauges, len(matrix) - num_gauges)
+            rows_z = slice(num_stabs_x + num_gauges, num_stabs_x + num_gauges + num_stabs_z)
             rows_zg = slice(len(matrix) - num_gauges, len(matrix))
-            cols_x = rows_x
-            cols_g = rows_xg
-            cols_z = slice(num_stabs_x + num_gauges, num_stabs_x + num_gauges + num_stabs_z)
-            cols_k = slice(len(self) - num_logicals, len(self))
+            cols_g = slice(num_gauges)
+            cols_k = slice(num_gauges, num_gauges + num_logicals)
+            cols_x = slice(num_gauges + num_logicals, num_gauges + num_logicals + num_stabs_x)
+            cols_z = slice(len(self) - num_stabs_z, len(self))
 
         return (
             matrix,
