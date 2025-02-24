@@ -1190,6 +1190,11 @@ class QuditCode(AbstractCode):
         self._gauge_ops = QuditCode(matrix).get_logical_ops()
         return self._gauge_ops
 
+    def get_dual_subsystem_code(self) -> QuditCode:
+        """Get the subsystem code that swaps gauge and logical qudits of this code."""
+        matrix = np.vstack([self.get_stabilizer_ops(), self.get_logical_ops()])
+        return QuditCode(matrix, is_subsystem_code=self.dimension != 0)
+
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
@@ -1919,6 +1924,12 @@ class CSSCode(QuditCode):
         """
         gauge_ops = QuditCode.get_gauge_ops(self, pauli)
         return gauge_ops if symplectic else gauge_ops.reshape(-1, 2, len(self))[:, pauli, :]
+
+    def get_dual_subsystem_code(self) -> CSSCode:
+        """Get the subsystem code that swaps gauge and logical qudits of this code."""
+        matrix_x = np.vstack([self.get_stabilizer_ops(Pauli.X), self.get_logical_ops(Pauli.X)])
+        matrix_z = np.vstack([self.get_stabilizer_ops(Pauli.Z), self.get_logical_ops(Pauli.Z)])
+        return CSSCode(matrix_x, matrix_z, is_subsystem_code=self.dimension != 0)
 
     def get_distance(
         self, pauli: PauliXZ | None = None, *, bound: int | bool | None = None, **decoder_args: Any
