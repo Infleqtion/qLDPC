@@ -918,37 +918,10 @@ class QuditCode(AbstractCode):
                 mat_M = np.linalg.inv(mat_U_W)
                 logicals_zz[cols_gk] = mat_W @ mat_M
             logicals_xx[cols_gk] = mat_U
-            print()
-            print("mat_U")
-            print(mat_U)
-            print()
-            print("mat_W")
-            print(mat_W)
-            print()
-            print("mat_U_W_T")
-            print(mat_U_W)
-            print()
-            # logicals_xx[cols_gk] = mat_U.T
-            # logicals_zz[cols_gk] = mat_W.T
-            print()
-            print("-------------------")
-            print("ZERO ZERO ONE")
-            print((matrix_z[rows_zg, cols_gk] @ logicals_xx[cols_gk]).T)
-            print((matrix_x[rows_xg, cols_gk] @ logicals_zz[cols_gk]).T)
-            print(logicals_xx[cols_gk].T @ logicals_zz[cols_gk])
-            print("-------------------")
-            # exit()
 
         # fill in remaining entries by enforcing parity check constraints
         logicals_xx[cols_zs] = -matrix_z[rows_zs] @ logicals_xx
         logicals_zz[cols_xs] = -matrix_x[rows_xs] @ logicals_zz
-        if self.is_subsystem_code:
-            print()
-            print("ALL ZERO")
-            print((matrix_z[rows_zs] @ logicals_xx).T)
-            print((matrix_z[rows_zg] @ logicals_xx).T)
-            print((matrix_z @ logicals_xx).T)
-            print()
 
         # Z support of X-type logicals, as column vectors
         logicals_xz = self.field.Zeros((len(self), self.dimension))
@@ -959,13 +932,6 @@ class QuditCode(AbstractCode):
         # full X and Z logicals as row vectors
         logicals_x = np.vstack([logicals_xx, logicals_xz]).T
         logicals_z = np.vstack([np.zeros_like(logicals_zz), logicals_zz]).T
-
-        print("============================")
-        logical_ops = np.vstack([logicals_x, logicals_z])
-        print(symplectic_conjugate(logicals_x) @ logicals_z.T)
-        print()
-        print((symplectic_conjugate(matrix) @ logical_ops.T).T)
-        print("============================")
 
         # move qudits back to their original locations and reshape
         permutation = np.argsort(qudit_locs)
