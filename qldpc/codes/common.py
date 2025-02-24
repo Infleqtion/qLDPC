@@ -1068,7 +1068,7 @@ class QuditCode(AbstractCode):
             num_logicals = len(self) - num_stabs_x - num_stabs_z - num_gauges
 
             # canonicalized parity check matrix with qudits in the same order as above
-            self_matrix = _with_permuted_qudits(QuditCode.canonicalized(self).matrix, qudit_locs)
+            self_matrix = _with_permuted_qudits(self.canonicalized.matrix, qudit_locs)
             checks_x = self_matrix[: num_stabs_x + num_gauges]
             checks_z = self_matrix[num_stabs_x + num_gauges :, len(self) :]
 
