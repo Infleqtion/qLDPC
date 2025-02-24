@@ -197,9 +197,6 @@ def test_classical_capacity() -> None:
     with pytest.raises(ValueError, match="error rates greater than"):
         logical_error_rate(1)
 
-    with pytest.raises(ValueError, match="binary codes"):
-        codes.RepetitionCode(2, field=3).get_logical_error_rate_func(num_samples=10)
-
 
 ####################################################################################################
 # quantum code tests
@@ -308,7 +305,9 @@ def test_distance_qudit() -> None:
 
     # fallback pythonic brute-force distance calculation
     surface_code = codes.SurfaceCode(2, field=3)
-    surface_code._exact_distance_x = surface_code._exact_distance_z = None
+    surface_code._exact_distance = None
+    surface_code._exact_distance_x = None
+    surface_code._exact_distance_z = None
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
         assert codes.QuditCode.get_distance_exact(surface_code) == 2
 
@@ -531,7 +530,3 @@ def test_quantum_capacity() -> None:
     for pauli_bias in [(1, 0, 0), (0, 0, 1)]:
         logical_error_rate = code.get_logical_error_rate_func(10, 1, pauli_bias)
         assert logical_error_rate(1)[0] == 1
-
-    # this method only supports qubit codes
-    with pytest.raises(ValueError, match="binary codes"):
-        codes.SurfaceCode(2, field=3).get_logical_error_rate_func(num_samples=1)

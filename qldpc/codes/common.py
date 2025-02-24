@@ -35,7 +35,15 @@ import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, conjugate_xz, op_to_string
+from qldpc.objects import (
+    PAULIS_XZ,
+    Node,
+    Pauli,
+    PauliXZ,
+    QuditOperator,
+    op_to_string,
+    symplectic_conjugate,
+)
 
 # from ._distance import get_distance_classical, get_distance_quantum
 
@@ -186,7 +194,6 @@ class ClassicalCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
-    _exact_distance: int | float | None = None
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -583,9 +590,6 @@ class ClassicalCode(AbstractCode):
             F(p) = q_0(p) + sum_(k>0) q_k(p) F_k.
         We thereby only need to sample errors of weight k > 0.
         """
-        if self.field.order != 2:
-            raise ValueError("Logical error rate calculations are only supported for binary codes")
-
         decoder = decoders.get_decoder(self.matrix, **decoder_args)
         if not isinstance(decoder, decoders.DirectDecoder):
             decoder = decoders.DirectDecoder.from_indirect(decoder, self.matrix)
@@ -622,8 +626,8 @@ class ClassicalCode(AbstractCode):
         for _ in range(num_samples):
             # construct an error
             error_locations = random.sample(range(len(self)), error_weight)
-            error = self.field.Zeros(len(self))
-            error[error_locations] = self.field(1)
+            error = np.zeros(len(self), dtype=int)
+            error[error_locations] = np.random.choice(range(1, self.field.order), size=error_weight)
 
             # decode a corrupted all-zero code word
             decoded_word = decoder.decode(error.view(np.ndarray))
@@ -672,7 +676,7 @@ class QuditCode(AbstractCode):
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
         if validate:
-            assert not np.any(self.matrix @ conjugate_xz(self.matrix).T)
+            assert not np.any(symplectic_conjugate(self.matrix) @ self.matrix.T)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -1078,11 +1082,11 @@ class QuditCode(AbstractCode):
 
         logs_x = logical_ops[: self.dimension]
         logs_z = logical_ops[self.dimension :]
-        inner_products = conjugate_xz(logs_x) @ logs_z.T
+        inner_products = symplectic_conjugate(logs_x) @ logs_z.T
         if not np.array_equal(inner_products, np.eye(self.dimension, dtype=int)):
             raise ValueError("The given logical operators have incorrect commutation relations")
 
-        if np.any(self.matrix @ conjugate_xz(logical_ops).T):
+        if np.any(symplectic_conjugate(self.matrix) @ logical_ops.T):
             raise ValueError("The given logical operators do not commute with stabilizers")
 
     @staticmethod
@@ -1268,6 +1272,9 @@ class CSSCode(QuditCode):
 
         self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
 
+        if self._exact_distance_x is not None and self._exact_distance_z is not None:
+            self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
+
     def _validate_subcodes(self) -> None:
         """Is this a valid CSS code?"""
         if not (
@@ -1410,6 +1417,8 @@ class CSSCode(QuditCode):
             self._exact_distance_x = distance
         if pauli is Pauli.Z or self._balanced_codes:
             self._exact_distance_z = distance
+        if self._exact_distance_x is not None and self._exact_distance_z is not None:
+            self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
         return distance
 
     def _get_distance_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
@@ -1418,17 +1427,13 @@ class CSSCode(QuditCode):
 
         # the distances of dimension-0 codes are undefined
         if self.dimension == 0:
-            self._exact_distance_x = self._exact_distance_z = np.nan
+            self._exact_distance = self._exact_distance_x = self._exact_distance_z = np.nan
 
         if pauli is Pauli.X:
             return self._exact_distance_x
         elif pauli is Pauli.Z:
             return self._exact_distance_z
-        return (
-            min(self._exact_distance_x, self._exact_distance_z)
-            if self._exact_distance_x is not None and self._exact_distance_z is not None
-            else None
-        )
+        return self._exact_distance
 
     def get_distance_bound(
         self,
@@ -1799,9 +1804,6 @@ class CSSCode(QuditCode):
 
         See ClassicalCode.get_logical_error_rate_func for more details about how this method works.
         """
-        if self.field.order != 2:
-            raise ValueError("Logical error rate calculations are only supported for binary codes")
-
         # collect relative probabilities of Z, X, and Y errors
         pauli_bias_zxy: npt.NDArray[np.float_] | None
         if pauli_bias is not None:
@@ -1867,20 +1869,26 @@ class CSSCode(QuditCode):
         num_failures = 0
         for _ in range(num_samples):
             # construct an error
-            error_locations = random.sample(range(len(self)), error_weight)
-            pauli_errors = np.random.choice([1, 2, 3], size=error_weight, p=pauli_bias_zxy)
-            error = np.zeros(len(self), dtype=int)
-            error[error_locations] = pauli_errors
+            error_locations = np.random.choice(range(len(self)), size=error_weight, replace=False)
+            error_paulis = np.random.choice([1, 2, 3], size=error_weight, p=pauli_bias_zxy)
 
             # decode Z-type errors
-            error_z = error % 2
+            error_locs_z = error_locations[(error_paulis % 2).astype(bool)]
+            error_z = np.zeros(len(self), dtype=int)
+            error_z[error_locs_z] = np.random.choice(
+                range(1, self.field.order), size=len(error_locs_z)
+            )
             residual_z = self.field(decoder_z.decode(error_z))
             if np.any(logicals_x @ residual_z):
                 num_failures += 1
                 continue
 
             # decode X-type errors
-            error_x = (error > 1).astype(int)
+            error_locs_x = error_locations[error_paulis > 1]
+            error_x = np.zeros(len(self), dtype=int)
+            error_x[error_locs_x] = np.random.choice(
+                range(1, self.field.order), size=len(error_locs_x)
+            )
             residual_x = self.field(decoder_x.decode(error_x))
             if np.any(logicals_z @ residual_x):
                 num_failures += 1

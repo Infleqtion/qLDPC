@@ -188,7 +188,7 @@ class QCCode(TBCode):
 
     Univariate quasi-cyclic codes are generalized bicycle codes:
     - https://errorcorrectionzoo.org/c/generalized_bicycle
-    - https://arxiv.org/pdf/2203.17216
+    - https://arxiv.org/abs/2203.17216
 
     Bivariate quasi-cyclic codes are bivariate bicycle codes; see BBCode class.
     """
@@ -365,8 +365,8 @@ class BBCode(QCCode):
     References:
     - https://errorcorrectionzoo.org/c/qcga
     - https://arxiv.org/abs/2308.07915
-    - https://arxiv.org/pdf/2408.10001
-    - https://arxiv.org/pdf/2404.18809
+    - https://arxiv.org/abs/2408.10001
+    - https://arxiv.org/abs/2404.18809
     """
 
     def __init__(
@@ -731,12 +731,12 @@ class HGPCode(CSSCode):
         # construct the nontrivial blocks of the final parity check matrices
         mat_H1_In2 = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
         mat_In1_H2 = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
-        mat_H1_Im2_T = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
+        mat_H1_T_Im2 = np.kron(matrix_a.T, np.eye(matrix_b.shape[0], dtype=int))
         mat_Im1_H2_T = np.kron(np.eye(matrix_a.shape[0], dtype=int), matrix_b.T)
 
         # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
-        matrix_z = np.block([-mat_In1_H2, mat_H1_Im2_T])
+        matrix_z = np.block([-mat_In1_H2, mat_H1_T_Im2])
         return matrix_x, matrix_z
 
     @staticmethod
@@ -810,6 +810,49 @@ class HGPCode(CSSCode):
                 index_check += 1
             node_map[node_a, node_b] = node
         return node_map
+
+    @staticmethod
+    def get_logical_generators(
+        code_a: ClassicalCode, code_b: ClassicalCode
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Generating sets for the logical operators of a hypergraph product code.
+
+        Taken from Eqs. (28) and (29) of arXiv:2002.06257.
+        """
+        assert code_a.field is code_b.field
+
+        mat_H1, mat_G1 = code_a.matrix, code_a.generator
+        mat_H2, mat_G2 = code_b.matrix, code_b.generator
+        mat_F1 = ClassicalCode(code_a.matrix.T).generator
+        mat_F2 = ClassicalCode(code_b.matrix.T).generator
+        mat_Im1, mat_In1 = np.eye(code_a.num_checks, dtype=int), np.eye(len(code_a), dtype=int)
+        mat_Im2, mat_In2 = np.eye(code_b.num_checks, dtype=int), np.eye(len(code_b), dtype=int)
+
+        mat_H1_In2 = np.kron(mat_H1, mat_In2)
+        mat_Im1_H2_T = np.kron(mat_Im1, mat_H2.T)
+        mat_In1_G2 = np.kron(mat_In1, mat_G2)
+        mat_F1_Im2 = np.kron(mat_F1, mat_Im2)
+
+        mat_In1_H2 = np.kron(mat_In1, mat_H2)
+        mat_H1_T_Im2 = np.kron(mat_H1.T, mat_Im2)
+        mat_G1_In2 = np.kron(mat_G1, mat_In2)
+        mat_Im1_F2 = np.kron(mat_Im1, mat_F2)
+
+        gen_ops_x = np.block(
+            [
+                [mat_H1_In2, mat_Im1_H2_T],
+                [mat_In1_G2, np.zeros((mat_In1_G2.shape[0], mat_F1_Im2.shape[1]), dtype=int)],
+                [np.zeros((mat_F1_Im2.shape[0], mat_In1_G2.shape[1]), dtype=int), mat_F1_Im2],
+            ]
+        )
+        gen_ops_z = np.block(
+            [
+                [-mat_In1_H2, mat_H1_T_Im2],
+                [-mat_G1_In2, np.zeros((mat_G1_In2.shape[0], mat_Im1_F2.shape[1]), dtype=int)],
+                [np.zeros((mat_Im1_F2.shape[0], mat_G1_In2.shape[1]), dtype=int), mat_Im1_F2],
+            ]
+        )
+        return code_a.field(gen_ops_x), code_a.field(gen_ops_z)
 
 
 class LPCode(CSSCode):
