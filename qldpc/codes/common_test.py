@@ -64,7 +64,7 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     num_bits = 3
     code = codes.RepetitionCode(num_bits)
     words = [[0] * (num_bits - 1)]
-    assert np.array_equal(code.shorten(0).words(), words)
+    assert list(code.shorten(0).iter_words()) == words
 
     # stack two codes
     code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
@@ -91,7 +91,9 @@ def test_named_codes(order: int = 2) -> None:
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
     code = codes.ClassicalCode.random(bits, checks, field)
-    assert all(word_a @ word_b == 0 for word_a in code.words() for word_b in (~code).words())
+    assert all(
+        word_a @ word_b == 0 for word_a in code.iter_words() for word_b in (~code).iter_words()
+    )
 
 
 def test_tensor_product(

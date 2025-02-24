@@ -290,11 +290,6 @@ class ClassicalCode(AbstractCode):
         """Generator of this code: a matrix whose rows form a basis for all code words."""
         return self.matrix.null_space()
 
-    def words(self) -> galois.FieldArray:
-        """Code words of this code."""
-        vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
-        return self.field(list(vectors)) @ self.generator
-
     def iter_words(self, skip_zero: bool = False) -> Iterator[galois.FieldArray]:
         """Iterate over the code words of this code."""
         vectors = itertools.product(self.field.elements, repeat=self.generator.shape[0])
@@ -2136,9 +2131,13 @@ class CSSCode(QuditCode):
         decoder_x = decoders.get_decoder(self.get_stabilizer_ops(Pauli.Z), **decoder_args)
         decoder_z = decoders.get_decoder(self.get_stabilizer_ops(Pauli.X), **decoder_args)
         if not isinstance(decoder_x, decoders.DirectDecoder):
-            decoder_x = decoders.DirectDecoder.from_indirect(decoder_x, self.get_stabilizer_ops(Pauli.Z))
+            decoder_x = decoders.DirectDecoder.from_indirect(
+                decoder_x, self.get_stabilizer_ops(Pauli.Z)
+            )
         if not isinstance(decoder_z, decoders.DirectDecoder):
-            decoder_z = decoders.DirectDecoder.from_indirect(decoder_z, self.get_stabilizer_ops(Pauli.X))
+            decoder_z = decoders.DirectDecoder.from_indirect(
+                decoder_z, self.get_stabilizer_ops(Pauli.X)
+            )
 
         # identify logical operators
         logicals_x = self.get_logical_ops(Pauli.X)

@@ -1421,8 +1421,6 @@ class BaconShorCode(QuditCode):
                     stab_z = np.zeros((rows, cols), dtype=int)
                     stab_z[row, col] = stab_z[row, col + 1] = 1
                     generators_z.append(stab_z.ravel())
-        generators_x = np.asarray(generators_x, dtype=int)
-        generators_z = np.asarray(generators_z, dtype=int)
 
         matrix = scipy.linalg.block_diag(generators_x, generators_z)
         QuditCode.__init__(self, matrix, field, is_subsystem_code=True)
