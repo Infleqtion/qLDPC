@@ -955,6 +955,7 @@ class QuditCode(AbstractCode):
         |   · I · | · · · · | --> rows_gx (X-type gauge ops)
         |         | · I · · | --> rows_sz (Z-type stabilizers)
         ⌊         | ·   I · ⌋ --> rows_gz (Z-type gauge ops)
+          X Z G K   X Z G K   --> guidelines (not part of the matrix)
           | | | |   | | | |
           | | | |   | | | └-----> cols_kz (associated with logical qudits)
           | | | |   | | └-------> cols_gz (Z-type gauge pivots)
@@ -981,7 +982,7 @@ class QuditCode(AbstractCode):
 
         Finally, this method also returns slices (index sets) for all row/column sectors, which
         allow selecting blocks of the parity check matrix with, say, matrix[rows_sx, cols_kz].  One
-        subtlety to note is that cols_gx and cols_kx may not be contiguos as suggested in the
+        subtlety to note is that cols_gx and cols_kx may not be contiguous, as suggested in the
         visualization above (similarly with cols_gz and cols_kz).  As a sanity check, all of
             matrix[rows_sx, cols_xp]
             matrix[rows_gx, cols_gx]
