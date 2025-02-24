@@ -1161,10 +1161,10 @@ class QuditCode(AbstractCode):
             rows = slice(num_stabs_x, None if pauli is Pauli.X else len(stabilizer_ops))
             return stabilizer_ops[rows]
 
-        stabs_and_gauges = self.canonicalized.matrix
         if not self.is_subsystem_code:
-            return stabs_and_gauges
+            return self.canonicalized.matrix
 
+        stabs_and_gauges = self.canonicalized.matrix
         stabs_and_logs = symplectic_conjugate(stabs_and_gauges).null_space()
         stabs_and_gauges_and_logs = np.vstack([stabs_and_gauges, stabs_and_logs])
         assert isinstance(stabs_and_gauges_and_logs, galois.FieldArray)
