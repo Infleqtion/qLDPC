@@ -64,7 +64,7 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     num_bits = 3
     code = codes.RepetitionCode(num_bits)
     words = [[0] * (num_bits - 1)]
-    assert list(code.shorten(0).iter_words()) == words
+    assert np.array_equal(list(code.shorten(0).iter_words()), words)
 
     # stack two codes
     code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
