@@ -1510,8 +1510,8 @@ class CSSCode(QuditCode):
     A CSSCode is defined from two classical codes with parity check matrices H_x and H_z, whose rows
     indicate, respectively, the support of X-type Pauli strings that witness Z-type errors, and
     Z-type Pauli strings that witness X-type errors.  The full parity check matrix of a CSSCode is
-    ⌈  0 , H_z ⌉
-    ⌊ H_x,  0  ⌋.
+    ⌈ H_x  0  ⌉
+    ⌊  0  H_z ⌋.
 
     If all parity checks of a CSSCode commute, H_x @ H_z.T == 0, then the CSSCode is a stabilizer
     code; otherwise, the CSSCode is a subsystem code.
@@ -1607,8 +1607,8 @@ class CSSCode(QuditCode):
         """Overall parity check matrix."""
         matrix = np.block(
             [
-                [np.zeros_like(self.matrix_z), self.matrix_z],
                 [self.matrix_x, np.zeros_like(self.matrix_x)],
+                [np.zeros_like(self.matrix_z), self.matrix_z],
             ]
         )
         return self.field(matrix)

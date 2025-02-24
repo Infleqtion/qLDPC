@@ -287,9 +287,10 @@ def test_qudit_code() -> None:
 
 def test_distance_qudit() -> None:
     """Distance calculations."""
-    code = codes.FiveQubitCode()
+    code: codes.QuditCode
 
     # cover calls to the known code exact distance
+    code = codes.FiveQubitCode()
     assert code.get_code_params() == (5, 1, 3)
     assert code.get_distance(bound=True) == 3
 
@@ -308,12 +309,12 @@ def test_distance_qudit() -> None:
     assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
 
     # fallback pythonic brute-force distance calculation
-    surface_code = codes.SurfaceCode(2, field=3)
-    surface_code._exact_distance = None
-    surface_code._exact_distance_x = None
-    surface_code._exact_distance_z = None
+    code = codes.SurfaceCode(2, field=3)
+    code._exact_distance = None
+    code._exact_distance_x = None
+    code._exact_distance_z = None
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
-        assert codes.QuditCode.get_distance_exact(surface_code) == 2
+        assert codes.QuditCode.get_distance_exact(code) == 2
 
 
 @pytest.mark.parametrize("field", [2, 3])
