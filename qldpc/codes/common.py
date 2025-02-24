@@ -1699,56 +1699,43 @@ class CSSCode(QuditCode):
         if not (self._logical_ops is None or recompute):
             return self._logical_ops
 
-        num_qudits = len(self)
-        dimension = self.dimension
-        identity = self.field.Identity(dimension)
+        # construct the standard-form parity check matrix
+        (
+            matrix,
+            qudit_locs,
+            (rows_sx, rows_gx, rows_sz, rows_gz),
+            (cols_sx, cols_gx, cols_lx, cols_sz, cols_gz, cols_lz),
+        ) = self.get_standard_form_data()
+        matrix_x = matrix[:, 0, :]
+        matrix_z = matrix[:, 1, :]
 
-        # identify check matrices for X/Z-type parity checks, and the current qudit locations
-        checks_x = self.matrix_x
-        checks_z = self.matrix_z
-        qudit_locs = np.arange(num_qudits, dtype=int)
+        # X/Z support of X/Z logical operators, as column vectors
+        logicals_x = self.field.Zeros((len(self), self.dimension))
+        logicals_z = self.field.Zeros((len(self), self.dimension))
 
-        # row reduce the check matrix for X-type errors and move its pivots to the back
-        checks_x, pivots_x = _row_reduce(checks_x)
-        other_x = [qq for qq in range(num_qudits) if qq not in pivots_x]
-        checks_x = np.hstack([checks_x[:, other_x], checks_x[:, pivots_x]])
-        checks_z = np.hstack([checks_z[:, other_x], checks_z[:, pivots_x]])
-        qudit_locs = np.hstack([qudit_locs[other_x], qudit_locs[pivots_x]])
+        # "seed" the logical operators in the GK sector
+        if not self.is_subsystem_code:
+            logicals_x[cols_lz] = self.field.Identity(self.dimension)
+            logicals_z[cols_lx] = self.field.Identity(self.dimension)
 
-        # row reduce the check matrix for Z-type errors and move its pivots to the back
-        checks_z, pivots_z = _row_reduce(checks_z)
-        other_z = [qq for qq in range(num_qudits) if qq not in pivots_z]
-        checks_x = np.hstack([checks_x[:, other_z], checks_x[:, pivots_z]])
-        checks_z = np.hstack([checks_z[:, other_z], checks_z[:, pivots_z]])
-        qudit_locs = np.hstack([qudit_locs[other_z], qudit_locs[pivots_z]])
+        else:
+            cols_gk = sorted(_join_slices(cols_gx, cols_lx))  # indices for all GK columns
+            mat_U = matrix_z[rows_gz, cols_gk].null_space().T  # type:ignore[attr-defined]
+            mat_W = matrix_x[rows_gx, cols_gk].null_space().T  # type:ignore[attr-defined]
+            mat_M = np.linalg.inv(mat_U.T @ mat_W)
+            logicals_x[cols_gk] = mat_U
+            logicals_z[cols_gk] = mat_W @ mat_M
 
-        # run some sanity checks
-        assert pivots_z[-1] < num_qudits - len(pivots_x)
-        assert dimension + len(pivots_x) + len(pivots_z) == num_qudits
+        # fill in remaining entries by enforcing parity check constraints
+        logicals_x[cols_sz] = -matrix_z[rows_sz] @ logicals_x
+        logicals_z[cols_sx] = -matrix_x[rows_sx] @ logicals_z
 
-        # identify "sections" of columns / qudits
-        section_k = slice(dimension)
-        section_x = slice(dimension, dimension + len(pivots_x))
-        section_z = slice(dimension + len(pivots_x), num_qudits)
-
-        # construct logical X operators
-        logicals_x = self.field.Zeros((dimension, num_qudits))
-        logicals_x[:, section_k] = identity
-        logicals_x[:, section_z] = -checks_z[: len(pivots_z), :dimension].T
-
-        # construct logical Z operators
-        logicals_z = self.field.Zeros((dimension, num_qudits))
-        logicals_z[:, section_k] = identity
-        logicals_z[:, section_x] = -checks_x[: len(pivots_x), :dimension].T
-
-        # move qudits back to their original locations
+        # move qudits back to their original locations, save logicals, and return
         permutation = np.argsort(qudit_locs)
-        logicals_x = logicals_x[:, permutation]
-        logicals_z = logicals_z[:, permutation]
-
-        # save logicals and return
-        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x, logicals_z))
-        return self._logical_ops
+        logicals_x = logicals_x[permutation]
+        logicals_z = logicals_z[permutation]
+        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x.T, logicals_z.T))
+        return self._logical_ops  # type:ignore[return-value]
 
     def set_logical_ops_xz(
         self,
