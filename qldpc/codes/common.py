@@ -877,8 +877,8 @@ class QuditCode(AbstractCode):
             (rows_xs, rows_xg, rows_zs, rows_zg),
             (cols_xs, cols_xg, cols_xk, cols_zs, cols_zg, cols_zk),
         ) = self.get_standard_form_data()
-        matrix_x = matrix[:, : len(self)]
-        matrix_z = matrix[:, len(self) :]
+        matrix_x = matrix[:, 0, :]
+        matrix_z = matrix[:, 1, :]
 
         # X/Z support of X/Z logical operators, as column vectors
         logicals_xx = self.field.Zeros((len(self), self.dimension))
@@ -943,8 +943,8 @@ class QuditCode(AbstractCode):
     def get_standard_form_data(
         self,
     ) -> tuple[
-        npt.NDArray[np.int_],  # standard-form matrix
-        npt.NDArray[np.int_],  # locations of qudits
+        npt.NDArray[np.int_],  # standard-form matrix, with shape (-1, 2, len(self))
+        npt.NDArray[np.int_],  # qudit locations
         tuple[Slice, Slice, Slice, Slice],  # row sectors
         tuple[Slice, Slice, Slice, Slice, Slice, Slice],  # column sectors
     ]:
@@ -964,16 +964,30 @@ class QuditCode(AbstractCode):
           | | └-----------------> cols_xg (X-type gauge pivots)
           | └-------------------> cols_zs (Z-type stabilizer pivots)
           └---------------------> cols_xs (X-type stabilizer pivots)
-        Here I is an identity matrix of an appropriate shape and dots (·) indicate nonzero blocks of
-        the matrix.  Each row sector is associated with stabilizers or gauge operators, though the
-        gauge operators are not necessarily sorted into anti-commuting pairs.
+        Here I is an identity matrix of an appropriate shape, and dots (·) indicate nonzero blocks
+        of the matrix.  Each row sector is associated with sets of linearly independent stabilizers
+        or gauge operators, though the gauge operators are generally not necessarily sorted into
+        dual pairs (as with self.get_gauge_ops() and self.get_logical_ops()).
 
-        In addition to the standard-form matrix, this method returns a 1-D array qudit_locs for
+        For convenience, the standard-form matrix is returned with shape (-1, 2, len(self)), such
+        that, for example, matrix[r, 1, :] indicates the Pauli-Z support of parity check r.
+
+        In addition to the standard-form matrix, this method returns a 1-D array qudit_locs, for
         which qudit_locs[j] is the location of qudit j in the standard-form matrix.  The original
-        parity check matrix (modulo elementary row operations) can be recovered by
-            permutation = np.argsort(qudit_locs)
-            matrix = matrix.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
-        Finally, this method also returns slices or index sets for all row/column sectors.
+        parity check matrix (modulo elementary row operations and array reshaping) is
+        matrix[:, :, np.argsort(qudit_locs)].  As a sanity check, the following test should pass:
+            matrix_2d = matrix[:, :, np.argsort(qudit_locs)].reshape(-1, 2 * len(self))
+            assert np.array_equal(matrix_2d.row_reduce(), self.canonicalized.matrix)
+
+        Finally, this method also returns slices (index sets) for all row/column sectors, which
+        allow selecting blocks of the parity check matrix with, say, matrix[rows_xs, cols_zk].  One
+        subtlety to note is that cols_xg and cols_xk may not be contiguos as suggested in the
+        visualization above (similarly with cols_zg and cols_zk).  As a sanity check, all of
+            matrix[rows_xs, cols_xp]
+            matrix[rows_xg, cols_xg]
+            matrix[rows_zs, cols_zp]
+            matrix[rows_zg, cols_zg]
+        should be identity matrices.
         """
         matrix: npt.NDArray[np.int_]
         rows_xs: Slice
@@ -1047,8 +1061,8 @@ class QuditCode(AbstractCode):
                 (rows_xs, _, rows_zs, _),
                 (cols_xs, _, _, cols_zs, _, cols_gk),
             ) = code.get_standard_form_data()
-            stabilizer_ops_x = standard_stabilizer_ops[rows_xs]
-            stabilizer_ops_z = standard_stabilizer_ops[rows_zs, len(self) :]
+            stabilizer_ops_x = standard_stabilizer_ops[rows_xs].reshape(-1, 2 * len(self))
+            stabilizer_ops_z = standard_stabilizer_ops[rows_zs, 1, :]
 
             # some helpful numbers
             num_stabs_x = len(stabilizer_ops_x)
@@ -1108,6 +1122,7 @@ class QuditCode(AbstractCode):
             cols_zg = pivots_zg + num_stabs_x
             cols_zk = [qq for qq in cols_gk if qq not in cols_zg]
 
+        matrix = matrix.reshape(-1, 2, len(self))
         return (
             matrix,
             qudit_locs,
