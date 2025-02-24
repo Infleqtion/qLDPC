@@ -893,29 +893,43 @@ class QuditCode(AbstractCode):
             cols_gk = _join_slices(cols_xg, cols_xk)  # index for the entire GK sector of columns
             """
             Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
-                A = matrix_z[rows_zg, cols_zgk],
-                B = matrix_x[rows_xg, cols_xgk],
-            and the logical operator components in the GK sector,
-                U = logicals_xx[cols_xgk],
-                V = logicals_zz[cols_zgk].
+                A = matrix_z[rows_zg, cols_gk],
+                B = matrix_x[rows_xg, cols_gk],
+            and the logical operator components (as column vectors) in the GK sector,
+                U = logicals_xx[cols_gk],
+                V = logicals_zz[cols_gk].
             These components need to satisfy the system of matrix equations
-                A @ U = 0,
-                B @ V = 0,
+                A @ U.T = 0,
+                B @ V.T = 0,
                 U.T @ V = I.
-            We start by constructing the null spaces of A and B.
+            We start by constructing the null spaces of A and B.  Without loss of generality, we can
+            set U = null(A).T, and let W = null(B).T.
             """
-            null_A = matrix_z[rows_zg, cols_gk].null_space()
-            null_B = matrix_x[rows_xg, cols_gk].null_space()
+            mat_U = matrix_z[rows_zg, cols_gk].null_space().T
+            mat_W = matrix_x[rows_xg, cols_gk].null_space().T
+            """
+            If U.T @ W = I, then we are done with V = W.
+            Otherwise, we set V = W M, expand U.T @ V = U.T @ W @ M = I, and solve for M.
+            """
+            mat_U_W = mat_U.T @ mat_W
+            if np.array_equal(mat_U_W, self.field.Identity(self.dimension)):
+                logicals_zz[cols_gk] = mat_W
+            else:
+                mat_M = np.linalg.inv(mat_U_W)
+                logicals_zz[cols_gk] = mat_W @ mat_M
+            logicals_xx[cols_gk] = mat_U
             print()
-            print("null_A")
-            print(null_A)
+            print("mat_U")
+            print(mat_U)
             print()
-            print("null_B")
-            print(null_B)
+            print("mat_W")
+            print(mat_W)
             print()
-            print(null_A @ null_B.T)
-            logicals_xx[cols_gk] = null_A.T
-            logicals_zz[cols_gk] = null_B.T
+            print("mat_U_W_T")
+            print(mat_U_W)
+            print()
+            # logicals_xx[cols_gk] = mat_U.T
+            # logicals_zz[cols_gk] = mat_W.T
             print()
             print("-------------------")
             print("ZERO ZERO ONE")
