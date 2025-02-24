@@ -894,7 +894,7 @@ class QuditCode(AbstractCode):
             logicals_zz[cols_kx] = self.field.Identity(self.dimension)
 
         else:
-            cols_gk = _join_slices(cols_gx, cols_kx)  # indices for all GK columns
+            cols_gk = sorted(_join_slices(cols_gx, cols_kx))  # indices for all GK columns
             """
             Focusing on the gauge-qudit rows (i.e., constraints) of the parity check matrix, define
                 A = matrix_z[rows_gz, cols_gk],
