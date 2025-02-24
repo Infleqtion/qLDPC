@@ -1150,8 +1150,17 @@ class QuditCode(AbstractCode):
                 raise ValueError("An incorrect number of logical operators was provided")
         self._logical_ops = logical_ops
 
-    def get_stabilizer_ops(self) -> galois.FieldArray:
+    def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
+        assert pauli is None or pauli in PAULIS_XZ
+
+        # if requested, retrieve stabilizer operators of one type only
+        if pauli is not None:
+            stabilizer_ops = self.get_stabilizer_ops()
+            num_stabs_x = _first_nonzero_cols(stabilizer_ops) < len(self)
+            rows = slice(num_stabs_x, None if pauli is Pauli.X else len(stabilizer_ops))
+            return stabilizer_ops[rows]
+
         stabs_and_gauges = self.canonicalized.matrix
         if not self.is_subsystem_code:
             return stabs_and_gauges
