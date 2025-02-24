@@ -969,7 +969,7 @@ class QuditCode(AbstractCode):
         Here I is an identity matrix of an appropriate size, and dots (·) indicate nonzero blocks
         of the matrix.  Each row sector is associated with sets of linearly independent stabilizers
         or gauge operators, though the gauge operators are generally not necessarily sorted into
-        dual pairs (as with self.get_gauge_ops() and self.get_logical_ops()).
+        conjugate pairs (as in self.get_gauge_ops() and self.get_logical_ops()).
 
         For convenience, the standard-form matrix is returned with shape (-1, 2, len(self)), such
         that, for example, matrix[r, 1, :] indicates the Pauli-Z support of parity check r.
