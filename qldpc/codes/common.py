@@ -1811,8 +1811,8 @@ class CSSCode(QuditCode):
 
         else:
             # X-type and Z-type stabilizers in standard form
-            stabilizers_x = self.get_stabilizer_ops(Pauli.X)
-            stabilizers_z = self.get_stabilizer_ops(Pauli.Z)
+            stabilizers_x: npt.NDArray[np.int_] = self.get_stabilizer_ops(Pauli.X)
+            stabilizers_z: npt.NDArray[np.int_] = self.get_stabilizer_ops(Pauli.Z)
             code = CSSCode(stabilizers_x, stabilizers_z, is_subsystem_code=False)
             (
                 stabilizers_x,
