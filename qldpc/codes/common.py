@@ -1085,7 +1085,7 @@ class QuditCode(AbstractCode):
             stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
             pivots_xg = _first_nonzero_cols(stabs_gauges_x)[num_stabs_x:]
             stabs_gauges_x[:num_stabs_x] += (
-                stabilizer_ops_z[:num_stabs_x, pivots_xg] @ stabs_gauges_x[num_stabs_x:]
+                stabilizer_ops_x[:num_stabs_x, pivots_xg] @ stabs_gauges_x[num_stabs_x:]
             )
             stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
 
