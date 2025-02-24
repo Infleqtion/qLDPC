@@ -1238,7 +1238,7 @@ class QuditCode(AbstractCode):
             return known_distance
 
         if self.field.order == 2:
-            stabilizers = self.canonicalized.matrix
+            stabilizers = self.get_stabilizer_ops()
             logical_ops = self.get_logical_ops()
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
@@ -1250,7 +1250,7 @@ class QuditCode(AbstractCode):
             )
             distance = len(self)
             code_logical_ops = ClassicalCode.from_generator(self.get_logical_ops())
-            code_stabilizers = ClassicalCode.from_generator(self.matrix)
+            code_stabilizers = ClassicalCode.from_generator(self.get_stabilizer_ops())
             for word_l, word_s in itertools.product(
                 code_logical_ops.iter_words(skip_zero=True),
                 code_stabilizers.iter_words(),

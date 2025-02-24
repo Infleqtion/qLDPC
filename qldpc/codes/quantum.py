@@ -1165,8 +1165,9 @@ class SurfaceCode(CSSCode):
         self,
         rows: int,
         cols: int | None = None,
-        rotated: bool = True,
         field: int | None = None,
+        *,
+        rotated: bool = True,
     ) -> None:
         if cols is None:
             cols = rows
@@ -1230,7 +1231,8 @@ class SurfaceCode(CSSCode):
         - Tiles with a cross (×) denote X-type parity checks (12 total).
         - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
 
-        Reference: https://errorcorrectionzoo.org/c/rotated_surface
+        References:
+        - https://errorcorrectionzoo.org/c/rotated_surface
         """
 
         def get_check(
@@ -1269,15 +1271,17 @@ class SurfaceCode(CSSCode):
 class ToricCode(CSSCode):
     """Surface code with periodic boundary conditions, encoding two logical qudits.
 
-    Reference: https://errorcorrectionzoo.org/c/surface
+    References:
+    - https://errorcorrectionzoo.org/c/surface
     """
 
     def __init__(
         self,
         rows: int,
         cols: int | None = None,
-        rotated: bool = True,
         field: int | None = None,
+        *,
+        rotated: bool = True,
     ) -> None:
         if cols is None:
             cols = rows
@@ -1354,15 +1358,17 @@ class ToricCode(CSSCode):
 class GeneralizedSurfaceCode(CSSCode):
     """Surface or toric code defined on a multi-dimensional hypercubic lattice.
 
-    Reference: https://errorcorrectionzoo.org/c/higher_dimensional_surface
+    References:
+    - https://errorcorrectionzoo.org/c/higher_dimensional_surface
     """
 
     def __init__(
         self,
         size: int,
         dim: int,
-        periodic: bool = False,
         field: int | None = None,
+        *,
+        periodic: bool = False,
     ) -> None:
         if dim < 2:
             raise ValueError(
@@ -1389,3 +1395,33 @@ class GeneralizedSurfaceCode(CSSCode):
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
         CSSCode.__init__(self, matrix_x, matrix_z, field)
+
+
+class BaconShorCode(QuditCode):
+    """Bacon-Shor code on a square grid.
+
+    References:
+    - https://errorcorrectionzoo.org/c/bacon_shor
+    """
+
+    def __init__(self, rows: int, cols: int | None = None, field: int | None = None) -> None:
+        cols = cols or rows
+        self._exact_distance_x = cols
+        self._exact_distance_z = rows
+
+        generators_x = []  # X_{i,j} X_{i+1,j} for grid coordinates i,j
+        generators_z = []  # Z_{i,j} Z_{i,j+1} for grid coordinates i,j
+        for row in range(rows):
+            for col in range(cols):
+                if row < rows - 1:
+                    stab_x = np.zeros((rows, cols), dtype=int)
+                    stab_x[row, col] = stab_x[row + 1, col] = 1
+                    generators_x.append(stab_x.ravel())
+                if col < cols - 1:
+                    stab_z = np.zeros((rows, cols), dtype=int)
+                    stab_z[row, col] = stab_z[row, col + 1] = 1
+                    generators_z.append(stab_z.ravel())
+        generators_x = np.asarray(generators_x, dtype=int)
+        generators_z = np.asarray(generators_z, dtype=int)
+        matrix = scipy.linalg.block_diag(generators_x, generators_z)
+        QuditCode.__init__(self, matrix, field, is_subsystem_code=True)
