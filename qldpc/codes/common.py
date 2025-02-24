@@ -964,7 +964,7 @@ class QuditCode(AbstractCode):
            |   |   |   └----------------------------> cols_lx (associated with logical qudits)
            |   |   └--------------------------------> cols_gx (X-type gauge pivots)
            |   └------------------------------------> cols_sz (Z-type stabilizer pivots)
-           └-----------------------------------------> cols_sx (X-type stabilizer pivots)
+           └----------------------------------------> cols_sx (X-type stabilizer pivots)
 
         Here I is an identity matrix of an appropriate size, and dots (·) indicate nonzero blocks
         of the matrix.  Each row sector is associated with sets of linearly independent stabilizers
