@@ -951,11 +951,11 @@ class QuditCode(AbstractCode):
 
         The standard form of the parity check is the block matrix
 
-        ⌈ I · · · | · · · · ⌉ --> rows_sx (X-type stabilizers)
-        |   · I · | · · · · | --> rows_gx (X-type gauge ops)
-        |         | · I · · | --> rows_sz (Z-type stabilizers)
-        ⌊         | ·   I · ⌋ --> rows_gz (Z-type gauge ops)
-          X Z G K   X Z G K   --> guidelines (not part of the matrix)
+        ⌈ I · · · | · · · · ⌉ S_X --> rows_sx (X-type stabilizers)
+        |   · I · | · · · · | G_X --> rows_gx (X-type gauge ops)
+        |         | · I · · | S_Z --> rows_sz (Z-type stabilizers)
+        ⌊         | ·   I · ⌋ G_Z --> rows_gz (Z-type gauge ops)
+          X Z G K   X Z G K
           | | | |   | | | |
           | | | |   | | | └-----> cols_kz (associated with logical qudits)
           | | | |   | | └-------> cols_gz (Z-type gauge pivots)
