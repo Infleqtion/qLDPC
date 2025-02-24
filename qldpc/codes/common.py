@@ -907,8 +907,8 @@ class QuditCode(AbstractCode):
                 U.T @ V = U.T @ W @ M = I
             and solve for M.
             """
-            mat_U = matrix_z[rows_gz, cols_gk].null_space().T
-            mat_W = matrix_x[rows_gx, cols_gk].null_space().T
+            mat_U = matrix_z[rows_gz, cols_gk].null_space().T  # type:ignore[attr-defined]
+            mat_W = matrix_x[rows_gx, cols_gk].null_space().T  # type:ignore[attr-defined]
             mat_U_W = mat_U.T @ mat_W
             if np.array_equal(mat_U_W, self.field.Identity(self.dimension)):
                 logicals_zz[cols_gk] = mat_W
