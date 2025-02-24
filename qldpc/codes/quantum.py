@@ -1406,8 +1406,8 @@ class BaconShorCode(QuditCode):
 
     def __init__(self, rows: int, cols: int | None = None, field: int | None = None) -> None:
         cols = cols or rows
-        self._exact_distance_x = cols
-        self._exact_distance_z = rows
+        # self._exact_distance_x = cols
+        # self._exact_distance_z = rows
 
         generators_x = []  # X_{i,j} X_{i+1,j} for grid coordinates i,j
         generators_z = []  # Z_{i,j} Z_{i,j+1} for grid coordinates i,j

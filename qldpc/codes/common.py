@@ -1187,7 +1187,7 @@ class QuditCode(AbstractCode):
         if pauli is not None:
             return self.get_gauge_ops().reshape(2, -1, 2 * len(self))[pauli]
 
-        # return logical operators if known and not asked to recompute
+        # return gauge operators if known
         if self._gauge_ops is not None:
             return self._gauge_ops
 
