@@ -890,7 +890,7 @@ class QuditCode(AbstractCode):
             logicals_zz[cols_xk] = self.field.Identity(self.dimension)
 
         else:
-            cols_gk = _join_slices(cols_xg, cols_xk)  # index for the entire GK sector of columns
+            cols_gk = _join_slices(cols_xg, cols_xk)  # indices for the entire GK sector of columns
             """
             Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
                 A = matrix_z[rows_zg, cols_gk],
@@ -902,15 +902,13 @@ class QuditCode(AbstractCode):
                 A @ U.T = 0,
                 B @ V.T = 0,
                 U.T @ V = I.
-            We start by constructing the null spaces of A and B.  Without loss of generality, we can
-            set U = null(A).T, and let W = null(B).T.
+            Without loss of generality, we can set U = null_space(A).T, and let W = null_space(B).T.
+            If U.T @ W = I, then we have a solution with V = W.  Otherwise, we set V = M W, expand
+                U.T @ V = U.T @ W @ M = I
+            and solve for M.
             """
             mat_U = matrix_z[rows_zg, cols_gk].null_space().T
             mat_W = matrix_x[rows_xg, cols_gk].null_space().T
-            """
-            If U.T @ W = I, then we are done with V = W.
-            Otherwise, we set V = W M, expand U.T @ V = U.T @ W @ M = I, and solve for M.
-            """
             mat_U_W = mat_U.T @ mat_W
             if np.array_equal(mat_U_W, self.field.Identity(self.dimension)):
                 logicals_zz[cols_gk] = mat_W
