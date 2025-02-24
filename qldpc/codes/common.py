@@ -1710,7 +1710,7 @@ class CSSCode(QuditCode):
             qudit_locs,
             (rows_sx, rows_gx, rows_sz, rows_gz),
             (cols_sx, cols_gx, cols_lx, cols_sz, cols_gz, cols_lz),
-        ) = self.get_standard_form_data()
+        ) = self.get_standard_form_data_xz()
 
         # X/Z support of X/Z logical operators, as column vectors
         logicals_x = self.field.Zeros((len(self), self.dimension))
@@ -1738,9 +1738,9 @@ class CSSCode(QuditCode):
         logicals_x = logicals_x[permutation]
         logicals_z = logicals_z[permutation]
         self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x.T, logicals_z.T))
-        return self._logical_ops  # type:ignore[return-value]
+        return self._logical_ops
 
-    def get_standard_form_data(
+    def get_standard_form_data_xz(
         self,
     ) -> tuple[
         npt.NDArray[np.int_],  # standard-form matrix_x, with shape (self.dimension, len(self))
@@ -1911,7 +1911,7 @@ class CSSCode(QuditCode):
     ) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
         stab_ops = QuditCode.get_stabilizer_ops(self, pauli)
-        return stab_ops if symplectic else stab_ops.reshape(-1, 2, len(self))[:, pauli, :]
+        return stab_ops if symplectic else stab_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
 
     def get_gauge_ops(
         self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
@@ -1922,7 +1922,7 @@ class CSSCode(QuditCode):
         logical Pauli operators computed by CSSCode.get_logical_ops.
         """
         gauge_ops = QuditCode.get_gauge_ops(self, pauli)
-        return gauge_ops if symplectic else gauge_ops.reshape(-1, 2, len(self))[:, pauli, :]
+        return gauge_ops if symplectic else gauge_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
 
     def get_dual_subsystem_code(self) -> CSSCode:
         """Get the subsystem code that swaps gauge and logical qudits of this code."""
