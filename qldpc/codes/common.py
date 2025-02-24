@@ -874,8 +874,8 @@ class QuditCode(AbstractCode):
         (
             matrix,
             qudit_locs,
-            (rows_xs, rows_xg, rows_zs, rows_zg),
-            (cols_xs, cols_xg, cols_xk, cols_zs, cols_zg, cols_zk),
+            (rows_sx, rows_gx, rows_sz, rows_gz),
+            (cols_sx, cols_gx, cols_kx, cols_sz, cols_gz, cols_kz),
         ) = self.get_standard_form_data()
         matrix_x = matrix[:, 0, :]
         matrix_z = matrix[:, 1, :]
@@ -886,15 +886,15 @@ class QuditCode(AbstractCode):
 
         # "seed" the logical operators in the GK sector
         if not self.is_subsystem_code:
-            logicals_xx[cols_zk] = self.field.Identity(self.dimension)
-            logicals_zz[cols_xk] = self.field.Identity(self.dimension)
+            logicals_xx[cols_kz] = self.field.Identity(self.dimension)
+            logicals_zz[cols_kx] = self.field.Identity(self.dimension)
 
         else:
-            cols_gk = _join_slices(cols_xg, cols_xk)  # indices for the entire GK sector of columns
+            cols_gk = _join_slices(cols_gx, cols_kx)  # indices for the entire GK sector of columns
             """
             Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
-                A = matrix_z[rows_zg, cols_gk],
-                B = matrix_x[rows_xg, cols_gk],
+                A = matrix_z[rows_gz, cols_gk],
+                B = matrix_x[rows_gx, cols_gk],
             and the logical operator components (as column vectors) in the GK sector,
                 U = logicals_xx[cols_gk],
                 V = logicals_zz[cols_gk].
@@ -907,8 +907,8 @@ class QuditCode(AbstractCode):
                 U.T @ V = U.T @ W @ M = I
             and solve for M.
             """
-            mat_U = matrix_z[rows_zg, cols_gk].null_space().T
-            mat_W = matrix_x[rows_xg, cols_gk].null_space().T
+            mat_U = matrix_z[rows_gz, cols_gk].null_space().T
+            mat_W = matrix_x[rows_gx, cols_gk].null_space().T
             mat_U_W = mat_U.T @ mat_W
             if np.array_equal(mat_U_W, self.field.Identity(self.dimension)):
                 logicals_zz[cols_gk] = mat_W
@@ -918,14 +918,14 @@ class QuditCode(AbstractCode):
             logicals_xx[cols_gk] = mat_U
 
         # fill in remaining entries by enforcing parity check constraints
-        logicals_xx[cols_zs] = -matrix_z[rows_zs] @ logicals_xx
-        logicals_zz[cols_xs] = -matrix_x[rows_xs] @ logicals_zz
+        logicals_xx[cols_sz] = -matrix_z[rows_sz] @ logicals_xx
+        logicals_zz[cols_sx] = -matrix_x[rows_sx] @ logicals_zz
 
         # Z support of X-type logicals, as column vectors
         logicals_xz = self.field.Zeros((len(self), self.dimension))
-        logicals_xz[cols_xk] = self.field.Identity(self.dimension)
-        logicals_xz[cols_xg] = -matrix_x[rows_xg] @ logicals_xz + matrix_z[rows_xg] @ logicals_xx
-        logicals_xz[cols_xs] = -matrix_x[rows_xs] @ logicals_xz + matrix_z[rows_xs] @ logicals_xx
+        logicals_xz[cols_kx] = self.field.Identity(self.dimension)
+        logicals_xz[cols_gx] = -matrix_x[rows_gx] @ logicals_xz + matrix_z[rows_gx] @ logicals_xx
+        logicals_xz[cols_sx] = -matrix_x[rows_sx] @ logicals_xz + matrix_z[rows_sx] @ logicals_xx
 
         # full X and Z logicals as row vectors
         logicals_x = np.vstack([logicals_xx, logicals_xz]).T
@@ -951,19 +951,19 @@ class QuditCode(AbstractCode):
         """Construct the standard form of the parity check matrix with Gaussian elimination.
 
         The parity check matrix in standard block form
-        ⌈ I · · · | · · · · ⌉ --> rows_xs (X-type stabilizers)
-        |   · I · | · · · · | --> rows_xg (X-type gauge ops)
-        |         | · I · · | --> rows_zs (Z-type stabilizers)
-        ⌊         | ·   I · ⌋ --> rows_zg (Z-type gauge ops)
+        ⌈ I · · · | · · · · ⌉ --> rows_sx (X-type stabilizers)
+        |   · I · | · · · · | --> rows_gx (X-type gauge ops)
+        |         | · I · · | --> rows_sz (Z-type stabilizers)
+        ⌊         | ·   I · ⌋ --> rows_gz (Z-type gauge ops)
           | | | |   | | | |
-          | | | |   | | | └-----> cols_zk (associated with logical qudits)
-          | | | |   | | └-------> cols_zg (Z-type gauge pivots)
-          | | | |   | └---------> cols_zs (Z-type stabilizer pivots)
-          | | | |   └-----------> cols_xs (X-type stabilizer pivots)
-          | | | └---------------> cols_xk (associated with logical qudits)
-          | | └-----------------> cols_xg (X-type gauge pivots)
-          | └-------------------> cols_zs (Z-type stabilizer pivots)
-          └---------------------> cols_xs (X-type stabilizer pivots)
+          | | | |   | | | └-----> cols_kz (associated with logical qudits)
+          | | | |   | | └-------> cols_gz (Z-type gauge pivots)
+          | | | |   | └---------> cols_sz (Z-type stabilizer pivots)
+          | | | |   └-----------> cols_sx (X-type stabilizer pivots)
+          | | | └---------------> cols_kx (associated with logical qudits)
+          | | └-----------------> cols_gx (X-type gauge pivots)
+          | └-------------------> cols_sz (Z-type stabilizer pivots)
+          └---------------------> cols_sx (X-type stabilizer pivots)
         Here I is an identity matrix of an appropriate shape, and dots (·) indicate nonzero blocks
         of the matrix.  Each row sector is associated with sets of linearly independent stabilizers
         or gauge operators, though the gauge operators are generally not necessarily sorted into
@@ -980,26 +980,26 @@ class QuditCode(AbstractCode):
             assert np.array_equal(matrix_2d.row_reduce(), self.canonicalized.matrix)
 
         Finally, this method also returns slices (index sets) for all row/column sectors, which
-        allow selecting blocks of the parity check matrix with, say, matrix[rows_xs, cols_zk].  One
-        subtlety to note is that cols_xg and cols_xk may not be contiguos as suggested in the
-        visualization above (similarly with cols_zg and cols_zk).  As a sanity check, all of
-            matrix[rows_xs, cols_xp]
-            matrix[rows_xg, cols_xg]
-            matrix[rows_zs, cols_zp]
-            matrix[rows_zg, cols_zg]
+        allow selecting blocks of the parity check matrix with, say, matrix[rows_sx, cols_kz].  One
+        subtlety to note is that cols_gx and cols_kx may not be contiguos as suggested in the
+        visualization above (similarly with cols_gz and cols_kz).  As a sanity check, all of
+            matrix[rows_sx, cols_xp]
+            matrix[rows_gx, cols_gx]
+            matrix[rows_sz, cols_zp]
+            matrix[rows_gz, cols_gz]
         should be identity matrices.
         """
         matrix: npt.NDArray[np.int_]
-        rows_xs: Slice
-        rows_xg: Slice
-        rows_zs: Slice
-        rows_zg: Slice
-        cols_xs: Slice
-        cols_xg: Slice
-        cols_xk: Slice
-        cols_zs: Slice
-        cols_zg: Slice
-        cols_zk: Slice
+        rows_sx: Slice
+        rows_gx: Slice
+        rows_sz: Slice
+        rows_gz: Slice
+        cols_sx: Slice
+        cols_gx: Slice
+        cols_kx: Slice
+        cols_sz: Slice
+        cols_gz: Slice
+        cols_kz: Slice
         permutation: npt.NDArray[np.int_] | list[int]
 
         def _with_permuted_qudits(
@@ -1042,14 +1042,14 @@ class QuditCode(AbstractCode):
             num_logicals = len(self) - num_stabs_x - num_stabs_z
 
             # row/column sectors of the parity check matrix
-            rows_xs = slice(num_stabs_x)
-            rows_zs = slice(num_stabs_x, num_stabs_x + num_stabs_z)
-            cols_xk = cols_zk = slice(num_logicals)
-            cols_xs = slice(num_logicals, num_logicals + num_stabs_x)
-            cols_zs = slice(num_logicals + num_stabs_x, len(self))
+            rows_sx = slice(num_stabs_x)
+            rows_sz = slice(num_stabs_x, num_stabs_x + num_stabs_z)
+            cols_kx = cols_kz = slice(num_logicals)
+            cols_sx = slice(num_logicals, num_logicals + num_stabs_x)
+            cols_sz = slice(num_logicals + num_stabs_x, len(self))
 
             # fill in empty gauge sectors
-            rows_xg = rows_zg = cols_xg = cols_zg = slice(0)
+            rows_gx = rows_gz = cols_gx = cols_gz = slice(0)
 
         else:
             # X-type and Z-type stabilizers in standard form
@@ -1058,11 +1058,11 @@ class QuditCode(AbstractCode):
             (
                 standard_stabilizer_ops,
                 qudit_locs,
-                (rows_xs, _, rows_zs, _),
-                (cols_xs, _, _, cols_zs, _, cols_gk),
+                (rows_sx, _, rows_sz, _),
+                (cols_sx, _, _, cols_sz, _, cols_gk),
             ) = code.get_standard_form_data()
-            stabilizer_ops_x = standard_stabilizer_ops[rows_xs].reshape(-1, 2 * len(self))
-            stabilizer_ops_z = standard_stabilizer_ops[rows_zs, 1, :]
+            stabilizer_ops_x = standard_stabilizer_ops[rows_sx].reshape(-1, 2 * len(self))
+            stabilizer_ops_z = standard_stabilizer_ops[rows_sz, 1, :]
 
             # some helpful numbers
             num_stabs_x = len(stabilizer_ops_x)
@@ -1076,7 +1076,7 @@ class QuditCode(AbstractCode):
             checks_z = self_matrix[num_stabs_x + num_gauges :, len(self) :]
 
             # standard-form X-type stabilizers and gauge ops
-            permutation_x = _join_slices(cols_xs, cols_gk, cols_zs)
+            permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
             stabilizer_ops_x = _with_permuted_qudits(stabilizer_ops_x, permutation_x)
             checks_x = _with_permuted_qudits(checks_x, permutation_x)
             stabs_gauges_x = np.vstack([stabilizer_ops_x, checks_x])
@@ -1088,7 +1088,7 @@ class QuditCode(AbstractCode):
             stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
 
             # standard-form Z-type stabilizers and gauge ops
-            permutation_z = _join_slices(cols_zs, cols_gk, cols_xs)
+            permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
             stabilizer_ops_z = _with_permuted_qudits(stabilizer_ops_z, permutation_z)
             checks_z = _with_permuted_qudits(checks_z, permutation_z)
             stabs_gauges_z = np.vstack([stabilizer_ops_z, checks_z])
@@ -1103,31 +1103,31 @@ class QuditCode(AbstractCode):
             matrix = np.vstack(
                 [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
             )
-            permutation = _join_slices(cols_xs, cols_zs, cols_gk)
+            permutation = _join_slices(cols_sx, cols_sz, cols_gk)
             matrix = _with_permuted_qudits(matrix, permutation)
             qudit_locs = _with_permuted_qudits(qudit_locs, permutation)
 
             # row sectors of the parity check matrix
-            rows_xs = slice(num_stabs_x)
-            rows_xg = slice(num_stabs_x, num_stabs_x + num_gauges)
-            rows_zs = slice(num_stabs_x + num_gauges, num_stabs_x + num_gauges + num_stabs_z)
-            rows_zg = slice(len(matrix) - num_gauges, len(matrix))
+            rows_sx = slice(num_stabs_x)
+            rows_gx = slice(num_stabs_x, num_stabs_x + num_gauges)
+            rows_sz = slice(num_stabs_x + num_gauges, num_stabs_x + num_gauges + num_stabs_z)
+            rows_gz = slice(len(matrix) - num_gauges, len(matrix))
 
             # column sectors of the parity check matrix
-            cols_xs = slice(num_stabs_x)
-            cols_zs = slice(num_stabs_x, num_stabs_x + num_stabs_z)
+            cols_sx = slice(num_stabs_x)
+            cols_sz = slice(num_stabs_x, num_stabs_x + num_stabs_z)
             cols_gk = range(len(self) - num_logicals - num_gauges, len(self))
-            cols_xg = pivots_xg + num_stabs_z
-            cols_xk = [qq for qq in cols_gk if qq not in cols_xg]
-            cols_zg = pivots_zg + num_stabs_x
-            cols_zk = [qq for qq in cols_gk if qq not in cols_zg]
+            cols_gx = pivots_xg + num_stabs_z
+            cols_kx = [qq for qq in cols_gk if qq not in cols_gx]
+            cols_gz = pivots_zg + num_stabs_x
+            cols_kz = [qq for qq in cols_gk if qq not in cols_gz]
 
         matrix = matrix.reshape(-1, 2, len(self))
         return (
             matrix,
             qudit_locs,
-            (rows_xs, rows_xg, rows_zs, rows_zg),
-            (cols_xs, cols_xg, cols_xk, cols_zs, cols_zg, cols_zk),
+            (rows_sx, rows_gx, rows_sz, rows_gz),
+            (cols_sx, cols_gx, cols_kx, cols_sz, cols_gz, cols_kz),
         )
 
     def set_logical_ops(
