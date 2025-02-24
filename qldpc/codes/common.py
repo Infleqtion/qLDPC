@@ -2133,12 +2133,12 @@ class CSSCode(QuditCode):
             pauli_bias_zxy = None
 
         # construct decoders
-        decoder_x = decoders.get_decoder(self.matrix_z, **decoder_args)
-        decoder_z = decoders.get_decoder(self.matrix_x, **decoder_args)
+        decoder_x = decoders.get_decoder(self.get_stabilizer_ops(Pauli.Z), **decoder_args)
+        decoder_z = decoders.get_decoder(self.get_stabilizer_ops(Pauli.X), **decoder_args)
         if not isinstance(decoder_x, decoders.DirectDecoder):
-            decoder_x = decoders.DirectDecoder.from_indirect(decoder_x, self.matrix_z)
+            decoder_x = decoders.DirectDecoder.from_indirect(decoder_x, self.get_stabilizer_ops(Pauli.Z))
         if not isinstance(decoder_z, decoders.DirectDecoder):
-            decoder_z = decoders.DirectDecoder.from_indirect(decoder_z, self.matrix_x)
+            decoder_z = decoders.DirectDecoder.from_indirect(decoder_z, self.get_stabilizer_ops(Pauli.X))
 
         # identify logical operators
         logicals_x = self.get_logical_ops(Pauli.X)
