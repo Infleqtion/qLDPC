@@ -949,7 +949,8 @@ class QuditCode(AbstractCode):
     ]:
         """Construct the standard form of the parity check matrix with Gaussian elimination.
 
-        The parity check matrix in standard block form
+        The standard form of the parity check is the block matrix
+
         ⌈ I · · · | · · · · ⌉ --> rows_sx (X-type stabilizers)
         |   · I · | · · · · | --> rows_gx (X-type gauge ops)
         |         | · I · · | --> rows_sz (Z-type stabilizers)
@@ -964,6 +965,7 @@ class QuditCode(AbstractCode):
           | | └-----------------> cols_gx (X-type gauge pivots)
           | └-------------------> cols_sz (Z-type stabilizer pivots)
           └---------------------> cols_sx (X-type stabilizer pivots)
+
         Here I is an identity matrix of an appropriate shape, and dots (·) indicate nonzero blocks
         of the matrix.  Each row sector is associated with sets of linearly independent stabilizers
         or gauge operators, though the gauge operators are generally not necessarily sorted into
