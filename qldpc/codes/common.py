@@ -1514,6 +1514,8 @@ class CSSCode(QuditCode):
     - https://errorcorrectionzoo.org/c/galois_css
     """
 
+    _code_x: ClassicalCode
+    _code_z: ClassicalCode
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
     _balanced_codes: bool
@@ -1649,22 +1651,6 @@ class CSSCode(QuditCode):
         """
         return self.code_x.rank + self.code_z.rank
 
-    def get_stabilizer_ops(
-        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
-    ) -> galois.FieldArray:
-        """Basis of stabilizer group generators for this code."""
-        return NotImplemented
-
-    def get_gauge_ops(
-        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
-    ) -> galois.FieldArray:
-        """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
-
-        Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
-        logical Pauli operators computed by CSSCode.get_logical_ops.
-        """
-        return NotImplemented
-
     def get_logical_ops(
         self, pauli: PauliXZ | None = None, *, symplectic: bool = False, recompute: bool = False
     ) -> galois.FieldArray:
@@ -1774,6 +1760,22 @@ class CSSCode(QuditCode):
             ]
         )
         self.set_logical_ops(logical_ops, validate=validate)
+
+    def get_stabilizer_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
+    ) -> galois.FieldArray:
+        """Basis of stabilizer group generators for this code."""
+        return NotImplemented
+
+    def get_gauge_ops(
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
+    ) -> galois.FieldArray:
+        """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
+
+        Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
+        logical Pauli operators computed by CSSCode.get_logical_ops.
+        """
+        return NotImplemented
 
     def get_distance(
         self, pauli: PauliXZ | None = None, *, bound: int | bool | None = None, **decoder_args: Any
@@ -2208,7 +2210,7 @@ def _join_slices(*sectors: Slice) -> npt.NDArray[np.int_]:
     """Join index slices together into one slice."""
     return np.concatenate(
         [
-            np.arange(sector.start or 0, sector.stop, sector.step)
+            range(sector.start or 0, sector.stop, sector.step or 1)
             if isinstance(sector, slice)
             else sector
             for sector in sectors
