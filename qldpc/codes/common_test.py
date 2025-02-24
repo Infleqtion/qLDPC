@@ -287,25 +287,25 @@ def test_qudit_code() -> None:
 
 def test_distance_qudit() -> None:
     """Distance calculations."""
-    # code = codes.FiveQubitCode()
+    code = codes.FiveQubitCode()
 
-    # # cover calls to the known code exact distance
-    # assert code.get_code_params() == (5, 1, 3)
-    # assert code.get_distance(bound=True) == 3
+    # cover calls to the known code exact distance
+    assert code.get_code_params() == (5, 1, 3)
+    assert code.get_distance(bound=True) == 3
 
-    # # "forget" the code distance and recompute
-    # code._exact_distance = None
-    # assert code.get_distance_bound(cutoff=5) == 5
-    # assert code.get_distance_exact() == 3
+    # "forget" the code distance and recompute
+    code._exact_distance = None
+    assert code.get_distance_bound(cutoff=5) == 5
+    assert code.get_distance_exact() == 3
 
-    # code._exact_distance = None
-    # with pytest.raises(NotImplementedError, match="not implemented"):
-    #     code.get_distance(bound=True)
-    # with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
-    #     code.get_distance(bound=True)
+    code._exact_distance = None
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        code.get_distance(bound=True)
+    with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
+        code.get_distance(bound=True)
 
-    # # the distance of dimension-0 codes is undefined
-    # assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
+    # the distance of dimension-0 codes is undefined
+    assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
 
     # fallback pythonic brute-force distance calculation
     surface_code = codes.SurfaceCode(2, field=3)
