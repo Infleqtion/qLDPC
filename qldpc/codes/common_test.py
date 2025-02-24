@@ -350,7 +350,7 @@ def test_qudit_ops() -> None:
     code = codes.FiveQubitCode()
     logical_ops = code.get_logical_ops()
     assert logical_ops.shape == (2 * code.dimension, 2 * len(code))
-    assert np.array_equal(logical_ops[0], [0, 0, 0, 0, 1, 1, 0, 0, 1, 0])
+    assert np.array_equal(logical_ops[0], [0, 0, 0, 0, 1, 0, 1, 1, 0, 1])
     assert np.array_equal(logical_ops[1], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
     assert code.get_logical_ops() is code._logical_ops
 

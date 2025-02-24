@@ -2250,6 +2250,8 @@ def _row_reduce(
 
 def _first_nonzero_cols(matrix: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
     """Get the first nonzero column for every row in a matrix."""
+    if matrix.size == 0:
+        return np.array([], dtype=int)
     boolean_matrix = matrix.reshape(matrix.shape[0], -1).view(np.ndarray).astype(bool)
     return np.argmax(boolean_matrix, axis=1)
 
