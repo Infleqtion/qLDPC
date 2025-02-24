@@ -896,30 +896,27 @@ class QuditCode(AbstractCode):
         else:
             cols_gk = _join_slices(cols_gx, cols_kx)  # indices for the entire GK sector of columns
             """
-            Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
+            Focusing on the gauge-qudit rows (i.e., constraints) of the parity check matrix, define
                 A = matrix_z[rows_gz, cols_gk],
                 B = matrix_x[rows_gx, cols_gk],
             and denode the logical operator components in the GK sector by
                 U = logicals_xx[cols_gk],
                 V = logicals_zz[cols_gk].
             These components need to satisfy the system of matrix equations
-                A @ U.T = 0,
-                B @ V.T = 0,
-                U.T @ V = I.
-            Without loss of generality, we can set U = null_space(A).T, and let W = null_space(B).T.
-            If U.T @ W = I, then we have a solution with V = W.  Otherwise, we set V = M W, expand
-                U.T @ V = U.T @ W @ M = I
-            and solve for M.
+                (1) A @ U.T = 0,
+                (2) B @ V.T = 0,
+                (3) U.T @ V = I.
+            Without loss of generality, we can satisfy (1) and (2) by setting
+                U = null_space(A).T
+                V = null_space(B).T @ M,
+            where the matrix M is determined by subsituting U and V back into (3),
+                U.T @ W @ M = I.
             """
             mat_U = matrix_z[rows_gz, cols_gk].null_space().T  # type:ignore[attr-defined]
             mat_W = matrix_x[rows_gx, cols_gk].null_space().T  # type:ignore[attr-defined]
-            mat_U_W = mat_U.T @ mat_W
-            if np.array_equal(mat_U_W, self.field.Identity(self.dimension)):
-                logicals_zz[cols_gk] = mat_W
-            else:
-                mat_M = np.linalg.inv(mat_U_W)
-                logicals_zz[cols_gk] = mat_W @ mat_M
+            mat_M = np.linalg.inv(mat_U.T @ mat_W)
             logicals_xx[cols_gk] = mat_U
+            logicals_zz[cols_gk] = mat_W @ mat_M
 
         # fill in remaining entries by enforcing parity check constraints
         logicals_xx[cols_sz] = -matrix_z[rows_sz] @ logicals_xx
