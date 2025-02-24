@@ -40,7 +40,7 @@ def test_small_codes() -> None:
     code = codes.FiveQubitCode()
     assert code.num_qubits == 5
     assert code.dimension == 1
-    assert code.get_stabilizers()[0] == "X Z Z X I"
+    assert code.get_strings()[0] == "X Z Z X I"
 
     for size in range(2, 6):
         assert codes.IcebergCode(size).get_code_params() == (2 * size, 2 * size - 2, 2)

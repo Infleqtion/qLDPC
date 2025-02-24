@@ -28,7 +28,7 @@ from qldpc.objects import Pauli
 def test_restriction() -> None:
     """Raise an error for non-qubit codes."""
     code = codes.SurfaceCode(2, field=3)
-    with pytest.raises(ValueError, match="only supported for qubit codes"):
+    with pytest.raises(ValueError, match="only supported for qubit stabilizer codes"):
         circuits.get_encoding_circuit(code)
 
 

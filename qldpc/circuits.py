@@ -31,12 +31,15 @@ CACHE_NAME = "qldpc_automorphisms"
 
 
 def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.Circuit]:
-    """Restrict a circuit constructor to qubit-based codes."""
+    """Restrict a circuit constructor to qubit-based stabilizer codes."""
 
     @functools.wraps(func)
     def qubit_func(*args: object, **kwargs: object) -> stim.Circuit:
-        if any(isinstance(arg, codes.QuditCode) and arg.field.order != 2 for arg in args):
-            raise ValueError("Circuit methods are only supported for qubit codes.")
+        if any(
+            isinstance(arg, codes.QuditCode) and (arg.is_subsystem_code or arg.field.order != 2)
+            for arg in args
+        ):
+            raise ValueError("Circuit methods are only supported for qubit stabilizer codes")
         return func(*args, **kwargs)
 
     return qubit_func
@@ -56,8 +59,8 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     logicals_z = [op_to_string(op) for op in codes.QuditCode.get_logical_ops(code, Pauli.Z)]
 
     # identify stabilizers
-    matrix = codes.ClassicalCode(code.matrix).canonicalized().matrix
-    pivots = [int(np.argmax(row != 0)) for row in matrix if np.any(row)]
+    matrix = code.canonicalized.matrix
+    pivots = np.argmax(matrix.view(np.ndarray).astype(bool), axis=1)
     stabilizers = [op_to_string(row) for row in matrix]
 
     # construct destabilizers

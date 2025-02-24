@@ -43,14 +43,14 @@ class FiveQubitCode(QuditCode):
     """Smallest quantum error-correcting code."""
 
     def __init__(self) -> None:
-        code = QuditCode.from_stabilizers(
+        code = QuditCode.from_strings(
             "X Z Z X I",
             "I X Z Z X",
             "X I X Z Z",
             "Z X I X Z",
             field=2,
         )
-        QuditCode.__init__(self, code, validate=False)
+        QuditCode.__init__(self, code, is_subsystem_code=False)
         self._exact_distance = 3
 
 
@@ -59,7 +59,7 @@ class SteaneCode(CSSCode):
 
     def __init__(self) -> None:
         code = HammingCode(3, field=2)
-        CSSCode.__init__(self, code, code, validate=False)
+        CSSCode.__init__(self, code, code, is_subsystem_code=False)
         self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
         self._exact_distance_x = self._exact_distance_z = 3
 
@@ -78,7 +78,7 @@ class IcebergCode(CSSCode):
 
     def __init__(self, size: int) -> None:
         checks = [[1] * (2 * size)]
-        CSSCode.__init__(self, checks, checks, field=2, validate=False)
+        CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         self._exact_distance_x = self._exact_distance_z = 2
 
         if size == 3:
@@ -111,7 +111,7 @@ class C6Code(CSSCode):
 
     def __init__(self) -> None:
         checks = [[1, 1, 0, 0, 1, 1], [0, 1, 1, 1, 1, 0]]
-        CSSCode.__init__(self, checks, checks, field=2, validate=False)
+        CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
         self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
         self._exact_distance_x = self._exact_distance_z = 2
@@ -159,7 +159,7 @@ class TBCode(CSSCode):
             matrix_z,
             field,
             promise_balanced_codes=promise_balanced_codes,
-            validate=False,
+            is_subsystem_code=False,
         )
 
 
@@ -720,7 +720,9 @@ class HGPCode(CSSCode):
         # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
         self._default_conjugate = slice(self.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x.astype(int), matrix_z.astype(int), field, validate=False)
+        CSSCode.__init__(
+            self, matrix_x.astype(int), matrix_z.astype(int), field, is_subsystem_code=False
+        )
 
     @staticmethod
     def get_matrix_product(
@@ -910,7 +912,7 @@ class LPCode(CSSCode):
             abstract.Protograph(matrix_x.astype(object)).lift(),
             abstract.Protograph(matrix_z.astype(object)).lift(),
             field,
-            validate=False,
+            is_subsystem_code=False,
         )
 
 
@@ -984,7 +986,7 @@ class QTCode(CSSCode):
         self.code_b = code_b
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
-        CSSCode.__init__(self, code_x, code_z, field, validate=False)
+        CSSCode.__init__(self, code_x, code_z, field, is_subsystem_code=False)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -1163,8 +1165,9 @@ class SurfaceCode(CSSCode):
         self,
         rows: int,
         cols: int | None = None,
-        rotated: bool = True,
         field: int | None = None,
+        *,
+        rotated: bool = True,
     ) -> None:
         if cols is None:
             cols = rows
@@ -1228,7 +1231,8 @@ class SurfaceCode(CSSCode):
         - Tiles with a cross (×) denote X-type parity checks (12 total).
         - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
 
-        Reference: https://errorcorrectionzoo.org/c/rotated_surface
+        References:
+        - https://errorcorrectionzoo.org/c/rotated_surface
         """
 
         def get_check(
@@ -1267,15 +1271,17 @@ class SurfaceCode(CSSCode):
 class ToricCode(CSSCode):
     """Surface code with periodic boundary conditions, encoding two logical qudits.
 
-    Reference: https://errorcorrectionzoo.org/c/surface
+    References:
+    - https://errorcorrectionzoo.org/c/surface
     """
 
     def __init__(
         self,
         rows: int,
         cols: int | None = None,
-        rotated: bool = True,
         field: int | None = None,
+        *,
+        rotated: bool = True,
     ) -> None:
         if cols is None:
             cols = rows
@@ -1352,15 +1358,17 @@ class ToricCode(CSSCode):
 class GeneralizedSurfaceCode(CSSCode):
     """Surface or toric code defined on a multi-dimensional hypercubic lattice.
 
-    Reference: https://errorcorrectionzoo.org/c/higher_dimensional_surface
+    References:
+    - https://errorcorrectionzoo.org/c/higher_dimensional_surface
     """
 
     def __init__(
         self,
         size: int,
         dim: int,
-        periodic: bool = False,
         field: int | None = None,
+        *,
+        periodic: bool = False,
     ) -> None:
         if dim < 2:
             raise ValueError(
@@ -1387,3 +1395,34 @@ class GeneralizedSurfaceCode(CSSCode):
         assert not isinstance(matrix_x, abstract.Protograph)
         assert not isinstance(matrix_z, abstract.Protograph)
         CSSCode.__init__(self, matrix_x, matrix_z, field)
+
+
+class BaconShorCode(QuditCode):
+    """Bacon-Shor code on a square grid.
+
+    References:
+    - https://errorcorrectionzoo.org/c/bacon_shor
+    """
+
+    def __init__(self, rows: int, cols: int | None = None, field: int | None = None) -> None:
+        cols = cols or rows
+        # self._exact_distance_x = cols
+        # self._exact_distance_z = rows
+
+        generators_x = []  # X_{i,j} X_{i+1,j} for grid coordinates i,j
+        generators_z = []  # Z_{i,j} Z_{i,j+1} for grid coordinates i,j
+        for row in range(rows):
+            for col in range(cols):
+                if row < rows - 1:
+                    stab_x = np.zeros((rows, cols), dtype=int)
+                    stab_x[row, col] = stab_x[row + 1, col] = 1
+                    generators_x.append(stab_x.ravel())
+                if col < cols - 1:
+                    stab_z = np.zeros((rows, cols), dtype=int)
+                    stab_z[row, col] = stab_z[row, col + 1] = 1
+                    generators_z.append(stab_z.ravel())
+        generators_x = np.asarray(generators_x, dtype=int)
+        generators_z = np.asarray(generators_z, dtype=int)
+
+        matrix = scipy.linalg.block_diag(generators_x, generators_z)
+        QuditCode.__init__(self, matrix, field, is_subsystem_code=True)

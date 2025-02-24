@@ -45,7 +45,7 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
 
     num_bits = 2
     code = codes.RepetitionCode(num_bits, field=3)
-    assert code.num_bits == num_bits
+    assert len(code) == num_bits
     assert code.dimension == 1
     assert code.get_weight() == 2
 
@@ -102,7 +102,7 @@ def test_tensor_product(
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     code_ab = codes.ClassicalCode.tensor_product(code_a, code_b)
-    basis = np.reshape(code_ab.generator, (-1, code_a.num_bits, code_b.num_bits))
+    basis = np.reshape(code_ab.generator, (-1, len(code_a), len(code_b)))
     assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
 
     n_a, k_a, d_a = code_a.get_code_params()
@@ -133,7 +133,7 @@ def test_distance_classical(bits: int = 3) -> None:
         assert dist_exact <= dist_bound
 
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
-    random_vector = np.random.randint(2, size=trivial_code.num_bits)
+    random_vector = np.random.randint(2, size=len(trivial_code))
     assert trivial_code.dimension == 0
     assert trivial_code.get_distance_exact() is np.nan
     assert trivial_code.get_distance_bound() is np.nan
@@ -218,11 +218,8 @@ def test_code_string() -> None:
 
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
-    """Construct a random (but probably trivial or invalid) QuditCode."""
-    return codes.QuditCode(
-        codes.ClassicalCode.random(2 * qudits, checks, field).matrix,
-        validate=False,
-    )
+    """Construct a random (but probably trivial) QuditCode."""
+    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -267,13 +264,18 @@ def test_qudit_code() -> None:
     logical_ops = two_codes.get_logical_ops().copy()
     logical_ops[0], logical_ops[1] = logical_ops[1], logical_ops[0]
     with pytest.raises(ValueError, match="incorrect commutation relations"):
-        two_codes.validate_candidate_logical_ops(logical_ops)
+        two_codes.set_logical_ops(logical_ops, validate=True)
 
     # invalid modifications of logical operators break commutation relations
     logical_ops = two_codes.get_logical_ops().copy()
     logical_ops[0, -1] += two_codes.field(1)
-    with pytest.raises(ValueError, match="do not commute with stabilizers"):
-        two_codes.validate_candidate_logical_ops(logical_ops)
+    with pytest.raises(ValueError, match="violate parity checks"):
+        two_codes.set_logical_ops(logical_ops, validate=True)
+
+    # providing an incorrect number of logical operators throws an error
+    logical_ops = two_codes.get_logical_ops().copy()[[0, two_codes.dimension], :]
+    with pytest.raises(ValueError, match="incorrect number"):
+        two_codes.set_logical_ops(logical_ops, validate=True)
 
     # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
@@ -324,19 +326,19 @@ def test_conversions_quantum(field: int, bits: int = 5, checks: int = 3) -> None
 def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
     code_a = get_random_qudit_code(bits, checks, field)
-    stabilizers = code_a.get_stabilizers()
-    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field, validate=False)
+    strings = code_a.get_strings()
+    code_b = codes.QuditCode.from_strings(*strings, field=field)
     assert code_a == code_b
-    assert stabilizers == code_b.get_stabilizers()
+    assert strings == code_b.get_strings()
 
     with pytest.raises(ValueError, match="different lengths"):
-        codes.QuditCode.from_stabilizers("I", "I I", field=field)
+        codes.QuditCode.from_strings("I", "I I", field=field)
 
 
 def test_trivial_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Trivial local Clifford deformations do not modify a code."""
     code = get_random_qudit_code(num_qudits, num_checks, field)
-    assert code == code.conjugated(validate=False)
+    assert code == code.conjugated()
 
 
 def test_qudit_ops() -> None:
@@ -345,12 +347,12 @@ def test_qudit_ops() -> None:
 
     code = codes.FiveQubitCode()
     logical_ops = code.get_logical_ops()
-    assert logical_ops.shape == (2 * code.dimension, 2 * code.num_qudits)
+    assert logical_ops.shape == (2 * code.dimension, 2 * len(code))
     assert np.array_equal(logical_ops[0], [0, 0, 0, 0, 1, 1, 0, 0, 1, 0])
     assert np.array_equal(logical_ops[1], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
     assert code.get_logical_ops() is code._logical_ops
 
-    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
+    code = codes.QuditCode.from_strings(*code.get_strings(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
 
@@ -360,10 +362,10 @@ def test_code_deformation() -> None:
 
     code = codes.FiveQubitCode()
     code.get_logical_ops()
-    assert code.get_stabilizers()[0] == "X Z Z X I"
-    assert code.conjugated([0]).get_stabilizers()[0] == "Z Z Z X I"
-    assert code.deformed("H 0").get_stabilizers()[0] == "Z Z Z X I"
-    with pytest.raises(ValueError, match="do not commute with stabilizers"):
+    assert code.get_strings()[0] == "X Z Z X I"
+    assert code.conjugated([0]).get_strings()[0] == "Z Z Z X I"
+    assert code.deformed("H 0").get_strings()[0] == "Z Z Z X I"
+    with pytest.raises(ValueError, match="violate parity checks"):
         code.deformed("H 0", preserve_logicals=True)
 
     code = codes.SteaneCode()
@@ -419,7 +421,7 @@ def test_css_code() -> None:
     with pytest.raises(ValueError, match="incompatible"):
         codes.CSSCode(code_x, code_z)
 
-    with pytest.raises(ValueError, match="different fields"):
+    with pytest.raises(ValueError, match="incompatible"):
         code_z = codes.ClassicalCode.random(3, 2, field=code_x.field.order**2)
         codes.CSSCode(code_x, code_z)
 
@@ -451,7 +453,7 @@ def test_css_ops() -> None:
     # the 2x2 toric code has redundant stabilizers
     code = codes.ToricCode(2)
     assert code.num_checks == 4
-    assert code.canonicalized().num_checks == 2
+    assert code.canonicalized.num_checks == 2
 
 
 def test_distance_css() -> None:
