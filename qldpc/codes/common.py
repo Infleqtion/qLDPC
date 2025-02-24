@@ -1966,7 +1966,7 @@ class CSSCode(QuditCode):
         operator we return is nontrivial.
         """
         assert pauli is Pauli.X or pauli is Pauli.Z
-        ops = np.vstack([self.get_logical_ops(pauli), self.get_code(pauli).matrix])
+        ops = np.vstack([self.get_logical_ops(pauli), self.get_stabilizer_ops(pauli)])
         random_array = get_random_array(
             self.field,
             len(ops),
