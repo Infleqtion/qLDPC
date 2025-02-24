@@ -966,7 +966,7 @@ class QuditCode(AbstractCode):
            |   └------------------------------------> cols_sz (Z-type stabilizer pivots)
            └-----------------------------------------> cols_sx (X-type stabilizer pivots)
 
-        Here I is an identity matrix of an appropriate shape, and dots (·) indicate nonzero blocks
+        Here I is an identity matrix of an appropriate size, and dots (·) indicate nonzero blocks
         of the matrix.  Each row sector is associated with sets of linearly independent stabilizers
         or gauge operators, though the gauge operators are generally not necessarily sorted into
         dual pairs (as with self.get_gauge_ops() and self.get_logical_ops()).
