@@ -1157,7 +1157,7 @@ class QuditCode(AbstractCode):
         # if requested, retrieve stabilizer operators of one type only
         if pauli is not None:
             stabilizer_ops = self.get_stabilizer_ops()
-            num_stabs_x = _first_nonzero_cols(stabilizer_ops) < len(self)
+            num_stabs_x = sum(_first_nonzero_cols(stabilizer_ops) < len(self))
             rows = slice(num_stabs_x, None if pauli is Pauli.X else len(stabilizer_ops))
             return stabilizer_ops[rows]
 
