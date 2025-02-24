@@ -1173,9 +1173,12 @@ class QuditCode(AbstractCode):
         if not self.is_subsystem_code:
             return self.field.Zeros((0, 2 * len(self)))
 
-        elif self._gauge_ops is not None:
-            if pauli is not None:
-                return self._gauge_ops.reshape(2, -1, 2 * len(self))[pauli]
+        # if requested, retrieve gauge operators of one type only
+        if pauli is not None:
+            return self.get_gauge_ops().reshape(2, -1, 2 * len(self))[pauli]
+
+        # return logical operators if known and not asked to recompute
+        if self._gauge_ops is not None:
             return self._gauge_ops
 
         matrix = np.vstack([self.get_stabilizer_ops(), self.get_logical_ops()])
