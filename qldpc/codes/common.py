@@ -1152,12 +1152,11 @@ class QuditCode(AbstractCode):
         # if requested, retrieve stabilizer operators of one type only
         if pauli is not None:
             stabilizer_ops = self.get_stabilizer_ops()
-            num_stabs_x = sum(_first_nonzero_cols(stabilizer_ops) < len(self))
-            rows = slice(num_stabs_x, None if pauli is Pauli.X else len(stabilizer_ops))
-            return stabilizer_ops[rows]
+            pivots_x = _first_nonzero_cols(stabilizer_ops) < len(self)
+            return stabilizer_ops[pivots_x if pauli is Pauli.X else ~pivots_x]
 
         if not self.is_subsystem_code:
-            return self.canonicalized.matrix
+            return self.matrix
 
         stabs_and_gauges = self.canonicalized.matrix
         stabs_and_logs = symplectic_conjugate(stabs_and_gauges).null_space()
