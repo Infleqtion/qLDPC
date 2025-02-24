@@ -857,8 +857,12 @@ class QuditCode(AbstractCode):
         operators address at least one physical qudits a physical X-type operator, but may
         additionally address physical qudits with physical Z-type operators.
 
-        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified for subsystem qudit codes.
+        Logical operators are constructed with the method similar to that in Section 4.1 of
+        Gottesman's thesis (arXiv:9705052), generalized for subsystem qudit codes.  The basic
+        strategy is to fix the values of the logical operator matrix in the GK sector of the parity
+        check matrix when written in standard form (see QuditCode.get_standard_form_data), and then
+        fill in the remaining entries of the logical operator matrix as required by parity check
+        constraints.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
@@ -895,7 +899,7 @@ class QuditCode(AbstractCode):
             Focusing on the gauge-qudit rows of the parity check matrix, define the submatrices
                 A = matrix_z[rows_gz, cols_gk],
                 B = matrix_x[rows_gx, cols_gk],
-            and the logical operator components (as column vectors) in the GK sector,
+            and denode the logical operator components in the GK sector by
                 U = logicals_xx[cols_gk],
                 V = logicals_zz[cols_gk].
             These components need to satisfy the system of matrix equations
@@ -931,12 +935,10 @@ class QuditCode(AbstractCode):
         logicals_x = np.vstack([logicals_xx, logicals_xz]).T
         logicals_z = np.vstack([np.zeros_like(logicals_zz), logicals_zz]).T
 
-        # move qudits back to their original locations and reshape
+        # move qudits back to their original locations, save logicals, and return
         permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
-
-        # save logicals and return
         self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
         return self._logical_ops  # type:ignore[return-value]
 
@@ -981,13 +983,13 @@ class QuditCode(AbstractCode):
             assert np.array_equal(matrix_2d.row_reduce(), self.canonicalized.matrix)
 
         Finally, this method also returns slices (index sets) for all row/column sectors, which
-        allow selecting blocks of the parity check matrix with, say, matrix[rows_sx, cols_kz].  One
-        subtlety to note is that cols_gx and cols_kx may not be contiguous, as suggested in the
+        allow selecting blocks of the parity check matrix with, say, matrix[rows_sx, 1, cols_kz].
+        One subtlety to note is that cols_gx and cols_kx may not be contiguous, as suggested in the
         visualization above (similarly with cols_gz and cols_kz).  As a sanity check, all of
-            matrix[rows_sx, cols_xp]
-            matrix[rows_gx, cols_gx]
-            matrix[rows_sz, cols_zp]
-            matrix[rows_gz, cols_gz]
+            matrix[rows_sx, 0, cols_sx]
+            matrix[rows_gx, 0, cols_gx]
+            matrix[rows_sz, 1, cols_sz]
+            matrix[rows_gz, 1, cols_gz]
         should be identity matrices.
         """
         matrix: npt.NDArray[np.int_]
@@ -1669,8 +1671,12 @@ class CSSCode(QuditCode):
         Logical X-type operators only address physical qudits by physical X-type operators, and
         logical Z-type operators only address physical qudits by physical Z-type operators.
 
-        Logical operators are constructed using the method described in Section 4.1 of Gottesman's
-        thesis (arXiv:9705052), slightly modified for subsystem qudit codes.
+        Logical operators are constructed with the method similar to that in Section 4.1 of
+        Gottesman's thesis (arXiv:9705052), generalized for subsystem qudit codes.  The basic
+        strategy is to fix the values of the logical operator matrix in the GK sector of the parity
+        check matrix when written in standard form (see QuditCode.get_standard_form_data), and then
+        fill in the remaining entries of the logical operator matrix as required by parity check
+        constraints.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
