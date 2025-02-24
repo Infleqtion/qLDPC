@@ -875,7 +875,7 @@ class QuditCode(AbstractCode):
             qudit_locs,
             (rows_sx, rows_gx, rows_sz, rows_gz),
             (cols_sx, cols_gx, cols_lx, cols_sz, cols_gz, cols_lz),
-        ) = self.get_standard_form_data()
+        ) = QuditCode.get_standard_form_data(self)
         matrix_x = matrix[:, 0, :]
         matrix_z = matrix[:, 1, :]
 
@@ -1050,7 +1050,7 @@ class QuditCode(AbstractCode):
 
         else:
             # X-type and Z-type stabilizers in standard form
-            stabilizer_ops = self.get_stabilizer_ops()
+            stabilizer_ops = QuditCode.get_stabilizer_ops(self)
             code = QuditCode(stabilizer_ops, is_subsystem_code=False)
             (
                 standard_stabilizer_ops,
@@ -1244,8 +1244,8 @@ class QuditCode(AbstractCode):
             return known_distance
 
         if self.field.order == 2:
-            stabilizers = self.get_stabilizer_ops()
-            logical_ops = self.get_logical_ops()
+            stabilizers = QuditCode.get_stabilizer_ops(self)
+            logical_ops = QuditCode.get_logical_ops(self)
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
                 stabilizers.view(np.ndarray).astype(np.uint8),
@@ -1255,8 +1255,8 @@ class QuditCode(AbstractCode):
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
             distance = len(self)
-            code_logical_ops = ClassicalCode.from_generator(self.get_logical_ops())
-            code_stabilizers = ClassicalCode.from_generator(self.get_stabilizer_ops())
+            code_logical_ops = ClassicalCode.from_generator(QuditCode.get_logical_ops(self))
+            code_stabilizers = ClassicalCode.from_generator(QuditCode.get_stabilizer_ops(self))
             for word_l, word_s in itertools.product(
                 code_logical_ops.iter_words(skip_zero=True),
                 code_stabilizers.iter_words(),
@@ -2363,26 +2363,6 @@ def _join_slices(*sectors: Slice) -> npt.NDArray[np.int_]:
             for sector in sectors
         ]
     )
-
-
-def _row_reduce(
-    matrix: galois.FieldArray | npt.NDArray[np.int_],
-) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-    """Perform Gaussian elimination on a matrix.
-
-    Returns:
-        matrix_rref: the reduced row echelon form of the matrix.
-        pivot: the "pivot" columns of the reduced matrix.
-
-    In reduced row echelon form, the first nonzero entry of each row is a 1, and these 1s
-    occur at a unique columns for each row; these columns are the "pivots" of matrix_rref.
-    """
-    if not isinstance(matrix, galois.FieldArray):
-        matrix = galois.GF(DEFAULT_FIELD_ORDER)(matrix)
-    matrix_rref = matrix.row_reduce()
-    matrix_rref = matrix_rref[np.any(matrix_rref, axis=1), :]
-    pivots = _first_nonzero_cols(matrix_rref)
-    return matrix_rref, pivots
 
 
 def _first_nonzero_cols(matrix: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
