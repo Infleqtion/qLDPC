@@ -1728,7 +1728,8 @@ class CSSCode(QuditCode):
             logicals_z[cols_lx] = self.field.Identity(self.dimension)
 
         else:
-            cols_gk = sorted(_join_slices(cols_gx, cols_lx))  # indices for all GK columns
+            # see QuditCode.get_logical_ops for an explanation of what's happening here
+            cols_gk = sorted(_join_slices(cols_gx, cols_lx))
             mat_U = matrix_z[rows_gz, cols_gk].null_space().T  # type:ignore[attr-defined]
             mat_W = matrix_x[rows_gx, cols_gk].null_space().T  # type:ignore[attr-defined]
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
