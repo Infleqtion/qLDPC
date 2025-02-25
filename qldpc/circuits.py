@@ -346,7 +346,7 @@ def _get_pauli_permutation_circuit(
 
     if len(local_gates) == 1:
         # there is only one local gate, and all it can do is permute two parity check sectors
-        gate = local_gates[0]
+        gate = next(iter(local_gates))  # extract the only gate
         for qubit in range(len(code)):
             if automorphism(qubit) >= len(code):
                 circuit.append(gate, qubit)
