@@ -151,7 +151,7 @@ class AbstractCode(abc.ABC):
 
     @staticmethod
     def equiv(code_a: AbstractCode, code_b: AbstractCode) -> bool:
-        """Are the two codes equivalent?"""
+        """Do the two codes have the same parity checks?"""
         return code_a.field is code_b.field and np.array_equal(
             code_a.canonicalized.matrix, code_b.canonicalized.matrix
         )
@@ -1603,7 +1603,7 @@ class CSSCode(QuditCode):
 
     @functools.cached_property
     def canonicalized(self) -> CSSCode:
-        """The same code with its parity matrix in reduced row echelon form."""
+        """The same code with its parity matrices in reduced row echelon form."""
         return CSSCode(
             self.code_x.canonicalized,
             self.code_z.canonicalized,
@@ -1612,7 +1612,7 @@ class CSSCode(QuditCode):
 
     @staticmethod
     def equiv(code_a: AbstractCode, code_b: AbstractCode) -> bool:
-        """Are the two codes equivalent?"""
+        """Do the two codes have the same parity checks?"""
         if isinstance(code_a, CSSCode) and isinstance(code_b, CSSCode):
             return ClassicalCode.equiv(code_a.code_x, code_b.code_x) and ClassicalCode.equiv(
                 code_a.code_z, code_b.code_z
@@ -1630,7 +1630,7 @@ class CSSCode(QuditCode):
 
     @property
     def num_checks_z(self) -> int:
-        """Number of X-type parity checks in this code."""
+        """Number of Z-type parity checks in this code."""
         return self.matrix_z.shape[0]
 
     @property
@@ -1742,7 +1742,7 @@ class CSSCode(QuditCode):
         """Construct the standard form X/Z parity check matrices with Gaussian elimination.
 
         See QuditCode.get_standard_form_data for additional information.  The primary difference
-        here is that this method returns the standard forms of matrix_x and matrix_z independently.
+        here is that this method returns the standard forms of matrix_x and matrix_z separately.
         """
         cols_lx: Slice
         cols_lz: Slice
