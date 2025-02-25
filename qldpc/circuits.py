@@ -66,7 +66,6 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     pivots = np.argmax(stabilizer_ops.view(np.ndarray).astype(bool), axis=1)
     stabilizer_strings_z = [op_to_string(row) for row in stabilizer_ops]
 
-    # TODO: maybe add nicer construction of destabilizers
     # construct destabilizers
     stabilizer_strings_x: list[stim.PauliString] = []
     for pivot in pivots:
