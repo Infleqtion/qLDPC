@@ -305,7 +305,7 @@ def _get_transversal_automorphism_data(
 
     # identify the logical tableau implemented by the physical circuit
     logical_tableau = _get_logical_tableau_from_code_data(
-        code.dimension, encoder, decoder, physical_circuit
+        code.dimension, code.gauge_dimension, encoder, decoder, physical_circuit
     )
 
     return logical_tableau, physical_circuit
@@ -395,7 +395,9 @@ def get_logical_tableau(
         code.deform(physical_circuit, preserve_logicals=True)
     """
     encoder, decoder = get_encoder_and_decoder(code, physical_circuit if deform_code else None)
-    return _get_logical_tableau_from_code_data(code.dimension, encoder, decoder, physical_circuit)
+    return _get_logical_tableau_from_code_data(
+        code.dimension, code.gauge_dimension, encoder, decoder, physical_circuit
+    )
 
 
 @restrict_to_qubits
@@ -412,7 +414,11 @@ def get_encoder_and_decoder(
 
 
 def _get_logical_tableau_from_code_data(
-    dimension: int, encoder: stim.Tableau, decoder: stim.Tableau, physical_circuit: stim.Circuit
+    dimension: int,  # number of logical qubits of a QuditCode
+    gauge_dimension: int,  # number of gauge qubits of a QuditCode
+    encoder: stim.Tableau,
+    decoder: stim.Tableau,
+    physical_circuit: stim.Circuit,
 ) -> stim.Tableau:
     """Identify the logical tableau implemented by the physical circuit."""
     assert len(encoder) == len(decoder) >= dimension
@@ -431,9 +437,21 @@ def _get_logical_tableau_from_code_data(
         z_signs=z_signs[:dimension],
     )
 
-    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
-    assert not z2x[:, dimension:].any()  # stabilizers and Z-type logicals
-    assert not x2x[:dimension, dimension:].any()  # X-type logicals
+    # identify sectors that address logical, gauge, and stabilizer qubits
+    sector_l = slice(dimension)
+    sector_g = slice(dimension, dimension + gauge_dimension)
+    sector_s = slice(dimension + gauge_dimension, len(encoder))
+
+    # sanity check: stabilizers, logicals, and gauge operators should not pick up destabilizers
+    assert not z2x[:, sector_s].any()
+    assert not x2x[sector_l, sector_s].any()
+    assert not x2x[sector_g, sector_s].any()
+
+    # sanity check: gauge operators should not pick up logical factors
+    assert not x2x[sector_g, sector_l].any()
+    assert not x2z[sector_g, sector_l].any()
+    assert not z2x[sector_g, sector_l].any()
+    assert not z2z[sector_g, sector_l].any()
 
     return logical_tableau
 
