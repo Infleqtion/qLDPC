@@ -1054,6 +1054,7 @@ class QuditCode(AbstractCode):
             ) = code.get_standard_form_data()
             stabilizers_x = standard_stabilizer_ops[rows_sx].reshape(-1, 2 * len(self))
             stabilizers_z = standard_stabilizer_ops[rows_sz, 1, :]
+            cols_gk = _join_slices(cols_gk)  # convert into indexable array
 
             # some helpful numbers
             num_stabs_x = len(stabilizers_x)
@@ -1066,43 +1067,43 @@ class QuditCode(AbstractCode):
             checks_x = self_matrix[: num_stabs_x + num_gauges]
             checks_z = self_matrix[num_stabs_x + num_gauges :, len(self) :]
 
-            # standard-form X-type stabilizers and gauge ops
+            # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
-            stabilizers_x = _with_permuted_qudits(stabilizers_x, permutation_x)
-            checks_x = _with_permuted_qudits(checks_x, permutation_x)
-            matrix_x = np.vstack([stabilizers_x, checks_x])
+            matrix_x = _with_permuted_qudits(np.vstack([stabilizers_x, checks_x]), permutation_x)
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
-            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:]
-            matrix_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
-                stabilizers_x[:num_stabs_x, pivots_gx] @ matrix_x[num_stabs_x:]
-            )
+            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = _with_permuted_qudits(matrix_x, np.argsort(permutation_x))
 
-            # standard-form Z-type stabilizers and gauge ops
+            # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
-            stabilizers_z = _with_permuted_qudits(stabilizers_z, permutation_z)
-            checks_z = _with_permuted_qudits(checks_z, permutation_z)
-            matrix_z = np.vstack([stabilizers_z, checks_z])
+            matrix_z = _with_permuted_qudits(np.vstack([stabilizers_z, checks_z]), permutation_z)
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
-            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:]
-            matrix_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
+            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
+            matrix_z = _with_permuted_qudits(matrix_z, np.argsort(permutation_z))
+
+            """
+            Row reducing the combiner stabilizer + gauge matrices added gauge ops to stabilizers to
+            zero out entries above the gauge-pivot columns.  Remove the added gauge operators.
+            """
+            matrix_x[:num_stabs_x] += (
+                stabilizers_x[:num_stabs_x, pivots_gx] @ matrix_x[num_stabs_x:]
+            )
+            matrix_z[:num_stabs_z] += (
                 stabilizers_z[:num_stabs_z, pivots_gz] @ matrix_z[num_stabs_z:]
             )
-            matrix_z = _with_permuted_qudits(matrix_z, np.argsort(permutation_z))
 
             # full parity check matrix in standard form
             matrix = np.vstack([matrix_x, np.hstack([np.zeros_like(matrix_z), matrix_z])])
 
-            # identify row sectors
+            # identify row sectors for the standard-form matrix
             rows_sx = slice(num_stabs_x)
             rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
             rows_sz = slice(rows_gx.stop, rows_gx.stop + num_stabs_z)
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
             # split logical vs. gauge column sectors
-            cols_gk = _join_slices(cols_gk)
-            cols_gx = cols_gk[pivots_gx - num_stabs_x]
-            cols_gz = cols_gk[pivots_gz - num_stabs_z]
+            cols_gx = cols_gk[pivots_gx]
+            cols_gz = cols_gk[pivots_gz]
             cols_lx = [qq for qq in cols_gk if qq not in cols_gx]  # type:ignore[operator]
             cols_lz = [qq for qq in cols_gk if qq not in cols_gz]  # type:ignore[operator]
 
@@ -1799,6 +1800,7 @@ class CSSCode(QuditCode):
                 (rows_sx, _, rows_sz, _),
                 (cols_sx, _, _, cols_sz, _, cols_gk),
             ) = code.get_standard_form_data_xz()
+            cols_gk = _join_slices(cols_gk)  # convert into indexable array
 
             # some helpful numbers
             num_stabs_x = len(stabilizers_x)
@@ -1809,38 +1811,38 @@ class CSSCode(QuditCode):
             checks_x = self.matrix_x[:, qudit_locs]
             checks_z = self.matrix_z[:, qudit_locs]
 
-            # standard-form X-type stabilizers and gauge ops
+            # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
-            stabilizers_x = stabilizers_x[:, permutation_x]
-            checks_x = checks_x[:, permutation_x]
-            matrix_x = np.vstack([stabilizers_x, checks_x])  # type:ignore[assignment]
+            matrix_x = np.vstack([stabilizers_x, checks_x])[:, permutation_x]  # type:ignore[assignment]
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
-            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:]
-            matrix_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
-                stabilizers_x[:num_stabs_x, pivots_gx] @ matrix_x[num_stabs_x:]
-            )
+            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = matrix_x[:, np.argsort(permutation_x)]
 
-            # standard-form Z-type stabilizers and gauge ops
+            # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
-            stabilizers_z = stabilizers_z[:, permutation_z]
-            checks_z = checks_z[:, permutation_z]
-            matrix_z = np.vstack([stabilizers_z, checks_z])  # type:ignore[assignment]
+            matrix_z = np.vstack([stabilizers_z, checks_z])[:, permutation_z]  # type:ignore[assignment]
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
-            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:]
-            matrix_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
+            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
+            matrix_z = matrix_z[:, np.argsort(permutation_z)]
+
+            """
+            Row reducing the combiner stabilizer + gauge matrices added gauge ops to stabilizers to
+            zero out entries above the gauge-pivot columns.  Remove the added gauge operators.
+            """
+            matrix_x[:num_stabs_x] += (
+                stabilizers_x[:num_stabs_x, pivots_gx] @ matrix_x[num_stabs_x:]
+            )
+            matrix_z[:num_stabs_z] += (
                 stabilizers_z[:num_stabs_z, pivots_gz] @ matrix_z[num_stabs_z:]
             )
-            matrix_z = matrix_z[:, np.argsort(permutation_z)]
 
             # identify row sectors for gauge ops
             rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
             # split logical vs. gauge column sectors
-            cols_gk = _join_slices(cols_gk)
-            cols_gx = cols_gk[pivots_gx - num_stabs_x]
-            cols_gz = cols_gk[pivots_gz - num_stabs_z]
+            cols_gx = cols_gk[pivots_gx]
+            cols_gz = cols_gk[pivots_gz]
             cols_lx = [qq for qq in cols_gk if qq not in cols_gx]  # type:ignore[operator]
             cols_lz = [qq for qq in cols_gk if qq not in cols_gz]  # type:ignore[operator]
 
