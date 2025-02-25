@@ -133,7 +133,7 @@ def get_max_qubit_distance(code: qldpc.codes.BBCode) -> float:
 def get_check_supports(code: qldpc.codes.BBCode) -> npt.NDArray[np.int_]:
     """Identify the support of the parity checks of the given code."""
     return np.vstack(
-        [np.where(stabilizer) for stabilizer in itertools.chain(code.matrix_z, code.matrix_x)]
+        [np.where(stabilizer) for stabilizer in itertools.chain(code.matrix_x, code.matrix_z)]
     )
 
 
@@ -306,9 +306,9 @@ def get_layout_sector_qubit_locs(
     # assign qubit locations identically to qldpc.codes.BBCode.get_qubit_pos
     qubit_locs = plaquette_map.reshape(-1, 2)
     qubit_locs = 2 * qubit_locs
-    if sector == "R" or sector == "Z":
+    if sector == "R" or sector == "X":
         qubit_locs[:, 0] += 1
-    if sector == "L" or sector == "Z":
+    if sector == "L" or sector == "X":
         qubit_locs[:, 1] += 1
     if folded_layout:
         for axis in range(2):
