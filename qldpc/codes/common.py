@@ -1070,30 +1070,28 @@ class QuditCode(AbstractCode):
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
             stabilizers_x = _with_permuted_qudits(stabilizers_x, permutation_x)
             checks_x = _with_permuted_qudits(checks_x, permutation_x)
-            stabs_gauges_x = np.vstack([stabilizers_x, checks_x])
-            stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
-            pivots_gx = _first_nonzero_cols(stabs_gauges_x)[num_stabs_x:]
-            stabs_gauges_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
-                stabilizers_x[:num_stabs_x, pivots_gx] @ stabs_gauges_x[num_stabs_x:]
+            matrix_x = np.vstack([stabilizers_x, checks_x])
+            matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
+            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:]
+            matrix_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_x[:num_stabs_x, pivots_gx] @ matrix_x[num_stabs_x:]
             )
-            stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
+            matrix_x = _with_permuted_qudits(matrix_x, np.argsort(permutation_x))
 
             # standard-form Z-type stabilizers and gauge ops
             permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
             stabilizers_z = _with_permuted_qudits(stabilizers_z, permutation_z)
             checks_z = _with_permuted_qudits(checks_z, permutation_z)
-            stabs_gauges_z = np.vstack([stabilizers_z, checks_z])
-            stabs_gauges_z = ClassicalCode(stabs_gauges_z).canonicalized.matrix
-            pivots_gz = _first_nonzero_cols(stabs_gauges_z)[num_stabs_z:]
-            stabs_gauges_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
-                stabilizers_z[:num_stabs_z, pivots_gz] @ stabs_gauges_z[num_stabs_z:]
+            matrix_z = np.vstack([stabilizers_z, checks_z])
+            matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
+            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:]
+            matrix_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_z[:num_stabs_z, pivots_gz] @ matrix_z[num_stabs_z:]
             )
-            stabs_gauges_z = _with_permuted_qudits(stabs_gauges_z, np.argsort(permutation_z))
+            matrix_z = _with_permuted_qudits(matrix_z, np.argsort(permutation_z))
 
             # full parity check matrix in standard form
-            matrix = np.vstack(
-                [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
-            )
+            matrix = np.vstack([matrix_x, np.hstack([np.zeros_like(matrix_z), matrix_z])])
 
             # identify row sectors
             rows_sx = slice(num_stabs_x)
@@ -1816,25 +1814,25 @@ class CSSCode(QuditCode):
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
             stabilizers_x = stabilizers_x[:, permutation_x]
             checks_x = checks_x[:, permutation_x]
-            stabs_gauges_x = np.vstack([stabilizers_x, checks_x])
-            stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
-            pivots_gx = _first_nonzero_cols(stabs_gauges_x)[num_stabs_x:]
-            stabs_gauges_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
-                stabilizers_x[:num_stabs_x, pivots_gx] @ stabs_gauges_x[num_stabs_x:]
+            matrix_x = np.vstack([stabilizers_x, checks_x])
+            matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
+            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:]
+            matrix_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_x[:num_stabs_x, pivots_gx] @ matrix_x[num_stabs_x:]
             )
-            stabs_gauges_x = stabs_gauges_x[:, np.argsort(permutation_x)]
+            matrix_x = matrix_x[:, np.argsort(permutation_x)]
 
             # standard-form Z-type stabilizers and gauge ops
             permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
             stabilizers_z = stabilizers_z[:, permutation_z]
             checks_z = checks_z[:, permutation_z]
-            stabs_gauges_z = np.vstack([stabilizers_z, checks_z])
-            stabs_gauges_z = ClassicalCode(stabs_gauges_z).canonicalized.matrix
-            pivots_gz = _first_nonzero_cols(stabs_gauges_z)[num_stabs_z:]
-            stabs_gauges_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
-                stabilizers_z[:num_stabs_z, pivots_gz] @ stabs_gauges_z[num_stabs_z:]
+            matrix_z = np.vstack([stabilizers_z, checks_z])
+            matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
+            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:]
+            matrix_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_z[:num_stabs_z, pivots_gz] @ matrix_z[num_stabs_z:]
             )
-            stabs_gauges_z = stabs_gauges_z[:, np.argsort(permutation_z)]
+            matrix_z = matrix_z[:, np.argsort(permutation_z)]
 
             # identify row sectors for gauge ops
             rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
@@ -2351,7 +2349,7 @@ def _join_slices(*sectors: Slice) -> npt.NDArray[np.int_]:
     """Join index slices together into one slice."""
     return np.concatenate(
         [
-            range(sector.start or 0, sector.stop, sector.step or 1)
+            np.arange(sector.start or 0, sector.stop, sector.step or 1, dtype=int)
             if isinstance(sector, slice)
             else sector
             for sector in sectors
