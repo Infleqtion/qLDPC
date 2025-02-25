@@ -40,7 +40,7 @@ def test_small_codes() -> None:
     code = codes.FiveQubitCode()
     assert code.num_qubits == 5
     assert code.dimension == 1
-    assert code.get_stabilizers()[0] == "X Z Z X I"
+    assert code.get_strings()[0] == "X Z Z X I"
 
     for size in range(2, 6):
         assert codes.IcebergCode(size).get_code_params() == (2 * size, 2 * size - 2, 2)
@@ -301,8 +301,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = np.block(
         [
-            [zero_1, mat_1.T, -mat_2, zero_4],
             [mat_1, zero_2, zero_3, mat_2.T],
+            [zero_1, mat_1.T, -mat_2, zero_4],
         ]
     )
 
@@ -502,3 +502,11 @@ def test_generalized_surface_codes(size: int = 3) -> None:
 
     with pytest.raises(ValueError, match=">= 2"):
         codes.GeneralizedSurfaceCode(size, dim=1)
+
+
+def test_bacon_shor_code() -> None:
+    """Bacon-Shor code."""
+    code = codes.BaconShorCode(3)
+    code._exact_distance_x = code._exact_distance_z = None
+    assert all(np.count_nonzero(row) == 2 for row in code.matrix)
+    assert code.get_distance() == 3
