@@ -1956,26 +1956,24 @@ class CSSCode(QuditCode):
             return min(self.get_distance_exact(Pauli.X), self.get_distance_exact(Pauli.Z))
 
         # we do not know the exact distance, so compute it
+        logical_ops = self.get_logical_ops(pauli)
+        stabilizer_ops = self.get_stabilizer_ops(pauli, canonicalized=True)
         if self.field.order == 2:
-            stabilizers = self.canonicalized.get_matrix(pauli)
-            logical_ops = self.get_logical_ops(pauli)
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
+                stabilizer_ops.view(np.ndarray).astype(np.uint8),
                 homogeneous=True,
             )
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
-            logical_ops = self.get_logical_ops(pauli)
-            matrix = self.get_code(pauli).matrix
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
-            code_stabilizers = ClassicalCode.from_generator(matrix)
+            code_stabilizer_ops = ClassicalCode.from_generator(stabilizer_ops)
             distance = min(
                 np.count_nonzero(word_l + word_s)
                 for word_l in code_logical_ops.iter_words(skip_zero=True)
-                for word_s in code_stabilizers.iter_words()
+                for word_s in code_stabilizer_ops.iter_words()
             )
 
         # save the exact distance and return
