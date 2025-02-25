@@ -1138,8 +1138,8 @@ class QuditCode(AbstractCode):
     ) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code.
 
-        If canonicalized is True, canonicalize (row reduce) the stabilizer matrix to identify a
-        minimal generating set for the stabilizer group.
+        If canonicalized is True, guarantee that the stabilizer matrix is canonicalized (i.e., row
+        reduced) such that its rows are a minimal generating set for the stabilizer group.
         """
         assert pauli is None or pauli in PAULIS_XZ
 
@@ -1884,7 +1884,11 @@ class CSSCode(QuditCode):
         canonicalized: bool = False,
         symplectic: bool = False,
     ) -> galois.FieldArray:
-        """Basis of stabilizer group generators for this code."""
+        """Basis of stabilizer group generators for this code.
+
+        If canonicalized is True, guarantee that the stabilizer matrix is canonicalized (i.e., row
+        reduced) such that its rows are a minimal generating set for the stabilizer group.
+        """
         if self._stabilizer_ops is None and self.is_subsystem_code:
             stabs_and_gauges_x = self.canonicalized.get_matrix(Pauli.X)
             stabs_and_gauges_z = self.canonicalized.get_matrix(Pauli.Z)
