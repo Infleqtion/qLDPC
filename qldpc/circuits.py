@@ -52,12 +52,12 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     mapped to destabilizers.
     """
     # identify logical operators
-    logical_ops = codes.get_logical_ops()
+    logical_ops = code.get_logical_ops()
     logical_ops_x = [op_to_string(op) for op in logical_ops[: code.dimension]]
     logical_ops_z = [op_to_string(op) for op in logical_ops[code.dimension :]]
 
     # identify gauge operators
-    gauge_ops = codes.get_gauge_ops()
+    gauge_ops = code.get_gauge_ops()
     gauge_ops_x = [op_to_string(op) for op in gauge_ops[: code.gauge_dimension]]
     gauge_ops_z = [op_to_string(op) for op in gauge_ops[code.gauge_dimension :]]
 
@@ -197,17 +197,17 @@ def get_transversal_automorphism_group(
     local_gates.discard("SWAP")
 
     """
-    Construct the parity check matrix of an instrumental classical code whose code words represent
-    Pauli strings that commute with some "effective" stabilizers.
+    Construct an instrumental classical code whose code words represent Pauli strings that satisfy
+    some "effective" parity checks (i.e., commutation requirements).
 
     If computing the "ordinary" transversal automorphism group of a QuditCode (i.e., if deform_code
-    is False), these effective stabilizers are just the actual stabilizers of the QuditCode, so the
+    is False), these effective parity checks are just the parity checks of the QuditCode, so the
     automorphism group of the instrumental classical code is the group of transversal physical
     operations that
-    (a) preserve commutation with stabilizers, or equivalently
+    (a) preserve commutation with stabilizers (and gauge operators, if applicable), or equivalently
     (b) stabilize the logical Pauli group, thereby implementing logical Clifford operations.
 
-    If deform_code is True, the effective stabilizers are the logical Pauli operators of the
+    If deform_code is True, the effective parity checks are the logical Pauli operators of the
     QuditCode, so the automorphism group of the instrumental code represents the group of code
     deformations for which the logical Pauli group of the original QuditCode is a valid choice of
     logical Pauli group for the deformed QuditCode.
