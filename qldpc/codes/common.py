@@ -1095,10 +1095,10 @@ class QuditCode(AbstractCode):
                 [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
             )
 
-            # split stabilizer vs. gauge row sectors
-            rows_sx = slice(rows_sx.start, rows_sx.stop - num_gauges)
-            rows_sz = slice(rows_sz.start, rows_sz.stop - num_gauges)
+            # identify row sectors
+            rows_sx = slice(num_stabs_x)
             rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
+            rows_sz = slice(rows_gx.stop, rows_gx.stop + num_stabs_z)
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
             # split logical vs. gauge column sectors
@@ -1836,10 +1836,10 @@ class CSSCode(QuditCode):
             )
             stabs_gauges_z = stabs_gauges_z[:, np.argsort(permutation_z)]
 
-            # split stabilizer vs. gauge row sectors
-            rows_sx = slice(rows_sx.start, rows_sx.stop - num_gauges)
-            rows_sz = slice(rows_sz.start, rows_sz.stop - num_gauges)
+            # identify row sectors
+            rows_sx = slice(num_stabs_x)
             rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
+            rows_sz = slice(rows_gx.stop, rows_gx.stop + num_stabs_z)
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
             # split logical vs. gauge column sectors
