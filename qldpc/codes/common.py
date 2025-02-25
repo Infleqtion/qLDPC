@@ -952,11 +952,11 @@ class QuditCode(AbstractCode):
         ⌊                 |  ·       I   ·  ⌋ G_Z --> rows_gz (Z-type gauge ops)
           S_X S_Z G_X L_X   S_X S_Z G_Z L_Z
            |   |   |   |     |   |   |   |
-           |   |   |   |     |   |   |   └----------> cols_lz (number of columns = number of logical qudits)
+           |   |   |   |     |   |   |   └----------> cols_lz (# of columns = # of logical qudits)
            |   |   |   |     |   |   └--------------> cols_gz (Z-type gauge pivots)
            |   |   |   |     |   └------------------> cols_sz (Z-type stabilizer pivots)
            |   |   |   |     └----------------------> cols_sx (X-type stabilizer pivots)
-           |   |   |   └----------------------------> cols_lx (number of columns = number of logical qudits)
+           |   |   |   └----------------------------> cols_lx (# of columns = # of logical qudits)
            |   |   └--------------------------------> cols_gx (X-type gauge pivots)
            |   └------------------------------------> cols_sz (Z-type stabilizer pivots)
            └----------------------------------------> cols_sx (X-type stabilizer pivots)
@@ -976,15 +976,18 @@ class QuditCode(AbstractCode):
             matrix_2d = matrix[:, :, np.argsort(qudit_locs)].reshape(-1, 2 * len(self))
             assert np.array_equal(matrix_2d.row_reduce(), self.canonicalized.matrix)
 
-        Finally, this method also returns slices (index sets) for all row/column sectors, which
-        allow selecting blocks of the parity check matrix with, say, matrix[rows_sx, 1, cols_lz].
-        One subtlety to note is that cols_gx and cols_lx may not be contiguous, as suggested in the
-        visualization above (similarly with cols_gz and cols_lz).  As a sanity check, all of
+        Finally, this method also returns slices (index sets) for all row and column sectors, which
+        enables selecting blocks of the parity check matrix with, say, matrix[rows_sx, 1, cols_lz].
+
+        One subtlety to note is that columns of the standard-form matrix may not be in the same
+        order as that suggested by the visualization above, but blocks retrieved by the index sets
+        are guaranteed to be consistent with the placement of identity matrices, which is to say
+        that each of
             matrix[rows_sx, 0, cols_sx]
             matrix[rows_gx, 0, cols_gx]
             matrix[rows_sz, 1, cols_sz]
             matrix[rows_gz, 1, cols_gz]
-        should be identity matrices.
+        is guaranteed to be an identity matrix.
         """
         matrix: npt.NDArray[np.int_]
         rows_sx: Slice
@@ -1792,8 +1795,8 @@ class CSSCode(QuditCode):
             pivots_z = _first_nonzero_cols(matrix_z)
             other_z = [qq for qq in range(len(self)) if qq not in pivots_z]
             permutation = other_z + list(pivots_z)
-            matrix_z = matrix_z[:, permutation]
             matrix_x = matrix_x[:, permutation]
+            matrix_z = matrix_z[:, permutation]
             qudit_locs = qudit_locs[permutation]
 
             # some helpful numbers
