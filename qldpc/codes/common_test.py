@@ -240,18 +240,6 @@ def test_qudit_code() -> None:
     assert code.get_weight() == 4
     assert code.get_logical_ops(Pauli.X).shape == code.get_logical_ops(Pauli.Z).shape
 
-    # initialize from stabilizers that are represented by their [X|Z] support
-    equiv_code = codes.QuditCode(
-        [
-            [1, 0, 0, 1, 0, 0, 1, 1, 0, 0],
-            [0, 1, 0, 0, 1, 0, 0, 1, 1, 0],
-            [1, 0, 1, 0, 0, 0, 0, 0, 1, 1],
-            [0, 1, 0, 1, 0, 1, 0, 0, 0, 1],
-        ],
-        field=2,
-    )
-    assert np.array_equal(code.matrix, equiv_code.matrix)
-
     # equivlence to code with redundant stabilizers
     redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
     assert codes.QuditCode.equiv(code, redundant_code)
@@ -464,6 +452,14 @@ def test_css_code() -> None:
     assert code.num_checks_z == code_z.num_checks
     assert code.num_checks == code.num_checks_x + code.num_checks_z
     assert code == codes.CSSCode(code.code_x, code.code_z)
+
+    # equivlence to QuditCode with the parity check matrix
+    equiv_code = codes.QuditCode(code.matrix)
+    assert codes.CSSCode.equiv(code, equiv_code)
+
+    # equivlence to code with redundant stabilizers
+    redundant_code = codes.CSSCode(np.vstack([code.matrix_x, code.matrix_x]), code.matrix_z)
+    assert codes.CSSCode.equiv(code, redundant_code)
 
     code_z = codes.ClassicalCode.random(4, 2)
     with pytest.raises(ValueError, match="incompatible"):
