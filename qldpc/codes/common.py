@@ -48,7 +48,7 @@ from qldpc.objects import (
 from ._distance import get_distance_classical, get_distance_quantum
 
 IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
-Slice = slice | range | npt.NDArray[np.int_] | list[int]
+Slice = slice | npt.NDArray[np.int_] | list[int]
 
 
 def get_scrambled_seed(seed: int) -> int:
@@ -939,8 +939,8 @@ class QuditCode(AbstractCode):
     ) -> tuple[
         npt.NDArray[np.int_],  # standard-form matrix, with shape (-1, 2, len(self))
         npt.NDArray[np.int_],  # qudit locations
-        tuple[Slice, Slice, Slice, Slice],  # row sectors
-        tuple[Slice, Slice, Slice, Slice, Slice, Slice],  # column sectors
+        tuple[slice, slice, slice, slice],  # row sectors
+        tuple[slice, Slice, Slice, slice, Slice, Slice],  # column sectors
     ]:
         """Construct the standard form of the parity check matrix with Gaussian elimination.
 
@@ -990,17 +990,8 @@ class QuditCode(AbstractCode):
         is guaranteed to be an identity matrix.
         """
         matrix: npt.NDArray[np.int_]
-        rows_sx: Slice
-        rows_gx: Slice
-        rows_sz: Slice
-        rows_gz: Slice
-        cols_sx: Slice
-        cols_gx: Slice
         cols_lx: Slice
-        cols_sz: Slice
-        cols_gz: Slice
         cols_lz: Slice
-        permutation: npt.NDArray[np.int_] | list[int]
 
         def _with_permuted_qudits(
             matrix: npt.NDArray[np.int_], permutation: Slice
@@ -1105,8 +1096,8 @@ class QuditCode(AbstractCode):
             )
 
             # split stabilizer vs. gauge row sectors
-            rows_sx = slice(rows_sx.start + num_stabs_x)
-            rows_sz = slice(rows_sz.start + num_stabs_z)
+            rows_sx = slice(rows_sx.start, rows_sx.stop - num_gauges)
+            rows_sz = slice(rows_sz.start, rows_sz.stop - num_gauges)
             rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
@@ -1114,8 +1105,8 @@ class QuditCode(AbstractCode):
             cols_gk = _join_slices(cols_gk)
             cols_gx = cols_gk[pivots_gx - num_stabs_x]
             cols_gz = cols_gk[pivots_gz - num_stabs_z]
-            cols_lx = [qq for qq in cols_gk if qq not in cols_gx]
-            cols_lz = [qq for qq in cols_gk if qq not in cols_gz]
+            cols_lx = [qq for qq in cols_gk if qq not in cols_gx]  # type:ignore[operator]
+            cols_lz = [qq for qq in cols_gk if qq not in cols_gz]  # type:ignore[operator]
 
         matrix = matrix.reshape(-1, 2, len(self))
         return (
@@ -1748,27 +1739,16 @@ class CSSCode(QuditCode):
         npt.NDArray[np.int_],  # standard-form matrix_x, with shape (self.dimension, len(self))
         npt.NDArray[np.int_],  # standard-form matrix_z, with shape (self.dimension, len(self))
         npt.NDArray[np.int_],  # qudit locations
-        tuple[Slice, Slice, Slice, Slice],  # row sectors
-        tuple[Slice, Slice, Slice, Slice, Slice, Slice],  # column sectors
+        tuple[slice, slice, slice, slice],  # row sectors
+        tuple[slice, Slice, Slice, slice, Slice, Slice],  # column sectors
     ]:
         """Construct the standard form X/Z parity check matrices with Gaussian elimination.
 
         See QuditCode.get_standard_form_data for additional information.  The primary difference
         here is that this method returns the standard forms of matrix_x and matrix_z independently.
         """
-        matrix_x: npt.NDArray[np.int_]
-        matrix_z: npt.NDArray[np.int_]
-        rows_sx: Slice
-        rows_gx: Slice
-        rows_sz: Slice
-        rows_gz: Slice
-        cols_sx: Slice
-        cols_gx: Slice
         cols_lx: Slice
-        cols_sz: Slice
-        cols_gz: Slice
         cols_lz: Slice
-        permutation: npt.NDArray[np.int_] | list[int]
 
         if not self.is_subsystem_code:
             # keep track of qudit locations as we swap them around
@@ -1857,8 +1837,8 @@ class CSSCode(QuditCode):
             stabs_gauges_z = stabs_gauges_z[:, np.argsort(permutation_z)]
 
             # split stabilizer vs. gauge row sectors
-            rows_sx = slice(rows_sx.start + num_stabs_x)
-            rows_sz = slice(rows_sz.start + num_stabs_z)
+            rows_sx = slice(rows_sx.start, rows_sx.stop - num_gauges)
+            rows_sz = slice(rows_sz.start, rows_sz.stop - num_gauges)
             rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
@@ -1866,8 +1846,8 @@ class CSSCode(QuditCode):
             cols_gk = _join_slices(cols_gk)
             cols_gx = cols_gk[pivots_gx - num_stabs_x]
             cols_gz = cols_gk[pivots_gz - num_stabs_z]
-            cols_lx = [qq for qq in cols_gk if qq not in cols_gx]
-            cols_lz = [qq for qq in cols_gk if qq not in cols_gz]
+            cols_lx = [qq for qq in cols_gk if qq not in cols_gx]  # type:ignore[operator]
+            cols_lz = [qq for qq in cols_gk if qq not in cols_gz]  # type:ignore[operator]
 
         return (
             matrix_x,
