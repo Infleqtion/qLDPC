@@ -801,6 +801,15 @@ class HGPCode(CSSCode):
         nodes_a: Collection[Node], nodes_b: Collection[Node]
     ) -> dict[tuple[Node, Node], Node]:
         """Map (dictionary) that re-labels nodes in the hypergraph product of two codes."""
+        # identify the number of data/check nodes, and the total numer of X/Z checks
+        num_data_a = sum(node.is_data for node in nodes_a)
+        num_data_b = sum(node.is_data for node in nodes_b)
+        num_checks_a = len(nodes_a) - num_data_a
+        num_checks_b = len(nodes_b) - num_data_b
+        num_checks_x = num_checks_a * num_data_b
+        num_checks_z = num_checks_b * num_data_a
+        num_checks = num_checks_x + num_checks_z
+
         node_map = {}
         index_data, index_check = 0, 0
         for node_a, node_b in itertools.product(sorted(nodes_a), sorted(nodes_b)):
@@ -808,7 +817,9 @@ class HGPCode(CSSCode):
                 node = Node(index=index_data, is_data=True)
                 index_data += 1
             else:
-                node = Node(index=index_check, is_data=False)
+                # shift check node indices for consistency with the CSSCode parity check matrix
+                index = (index_check + num_checks_x) % num_checks
+                node = Node(index=index, is_data=False)
                 index_check += 1
             node_map[node_a, node_b] = node
         return node_map
