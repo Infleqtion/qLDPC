@@ -1813,7 +1813,7 @@ class CSSCode(QuditCode):
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
             stabilizers_x = stabilizers_x[:, permutation_x]
             checks_x = checks_x[:, permutation_x]
-            matrix_x = np.vstack([stabilizers_x, checks_x])
+            matrix_x = np.vstack([stabilizers_x, checks_x])  # type:ignore[assignment]
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
             pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:]
             matrix_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
@@ -1825,7 +1825,7 @@ class CSSCode(QuditCode):
             permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
             stabilizers_z = stabilizers_z[:, permutation_z]
             checks_z = checks_z[:, permutation_z]
-            matrix_z = np.vstack([stabilizers_z, checks_z])
+            matrix_z = np.vstack([stabilizers_z, checks_z])  # type:ignore[assignment]
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
             pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:]
             matrix_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers

@@ -1437,4 +1437,6 @@ class BaconShorCode(CSSCode):
                     stab_z[row, col] = stab_z[row, col + 1] = 1
                     generators_z.append(stab_z.ravel())
 
-        CSSCode.__init__(self, generators_x, generators_z, field, is_subsystem_code=True)
+        matrix_x = np.array(generators_x, dtype=int)
+        matrix_z = np.array(generators_z, dtype=int)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)

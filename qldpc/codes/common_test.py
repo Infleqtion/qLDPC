@@ -345,31 +345,21 @@ def test_trivial_deformations(num_qudits: int = 5, num_checks: int = 3, field: i
     assert code == code.conjugated()
 
 
-def get_codes_for_testing_ops() -> Iterator[codes.QuditCode]:
+def get_codes_for_testing_ops() -> Iterator[codes.CSSCode]:
     """Iterate over some codes for testing operator constructions."""
     # Bacon-Shor code and toric codes
     code_a = codes.BaconShorCode(3, field=3)
     code_b = codes.ToricCode(4, field=4)
 
     # promote some gauge qudits of the Bacon-Shor code to logicals
-    matrix = np.vstack(
-        [
-            code_a.get_gauge_ops(Pauli.X, symplectic=True)[:2],
-            code_a.get_stabilizer_ops(),
-            code_a.get_gauge_ops(Pauli.Z, symplectic=True)[:2],
-        ]
-    )
-    code_c = codes.QuditCode(matrix)
+    matrix_x = np.vstack([code_a.get_gauge_ops(Pauli.X)[:2], code_a.get_stabilizer_ops(Pauli.X)])
+    matrix_z = np.vstack([code_a.get_gauge_ops(Pauli.Z)[:2], code_a.get_stabilizer_ops(Pauli.Z)])
+    code_c = codes.CSSCode(matrix_x, matrix_z)
 
     # gauge out a logical qudit of the surface code
-    matrix = np.vstack(
-        [
-            code_b.get_logical_ops(Pauli.X, symplectic=True)[:1],
-            code_b.get_stabilizer_ops(),
-            code_b.get_logical_ops(Pauli.Z, symplectic=True)[:1],
-        ]
-    )
-    code_d = codes.QuditCode(matrix)
+    matrix_x = np.vstack([code_b.get_logical_ops(Pauli.X)[:1], code_b.get_stabilizer_ops(Pauli.X)])
+    matrix_z = np.vstack([code_b.get_logical_ops(Pauli.Z)[:1], code_b.get_stabilizer_ops(Pauli.Z)])
+    code_d = codes.CSSCode(matrix_x, matrix_z)
 
     yield code_a
     yield code_b
@@ -399,6 +389,7 @@ def test_qudit_ops() -> None:
     assert np.array_equal(logical_ops, code.get_logical_ops())
 
     for code in get_codes_for_testing_ops():
+        code = codes.QuditCode(code.matrix)
         stabilizer_ops = code.get_stabilizer_ops()
         logical_ops = code.get_logical_ops()
         gauge_ops = code.get_gauge_ops()
