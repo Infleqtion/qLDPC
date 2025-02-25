@@ -1043,10 +1043,10 @@ class QuditCode(AbstractCode):
 
             # row/column sectors of the parity check matrix
             rows_sx = slice(num_stabs_x)
-            rows_sz = slice(num_stabs_x, num_stabs_x + num_stabs_z)
+            rows_sz = slice(rows_sx.stop, rows_sx.stop + num_stabs_z)
             cols_lx = cols_lz = slice(num_logicals)
-            cols_sx = slice(num_logicals, num_logicals + num_stabs_x)
-            cols_sz = slice(num_logicals + num_stabs_x, len(self))
+            cols_sx = slice(cols_lx.stop, cols_lx.stop + num_stabs_x)
+            cols_sz = slice(cols_sx.stop, cols_sx.stop + num_stabs_z)
 
             # fill in empty gauge sectors
             rows_gx = rows_gz = cols_gx = cols_gz = slice(0)
@@ -1070,7 +1070,7 @@ class QuditCode(AbstractCode):
             num_gauges = self.gauge_dimension
             num_logicals = len(self) - num_stabs_x - num_stabs_z - num_gauges
 
-            # canonicalized parity check matrix with qudits in the same order as above
+            # canonicalized parity check matrices with qudits in the same order as above
             self_matrix = _with_permuted_qudits(self.canonicalized.matrix, qudit_locs)
             checks_x = self_matrix[: num_stabs_x + num_gauges]
             checks_z = self_matrix[num_stabs_x + num_gauges :, len(self) :]
@@ -1081,9 +1081,9 @@ class QuditCode(AbstractCode):
             checks_x = _with_permuted_qudits(checks_x, permutation_x)
             stabs_gauges_x = np.vstack([stabilizers_x, checks_x])
             stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
-            pivots_xg = _first_nonzero_cols(stabs_gauges_x)[num_stabs_x:]
-            stabs_gauges_x[:num_stabs_x] += (
-                stabilizers_x[:num_stabs_x, pivots_xg] @ stabs_gauges_x[num_stabs_x:]
+            pivots_gx = _first_nonzero_cols(stabs_gauges_x)[num_stabs_x:]
+            stabs_gauges_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_x[:num_stabs_x, pivots_gx] @ stabs_gauges_x[num_stabs_x:]
             )
             stabs_gauges_x = _with_permuted_qudits(stabs_gauges_x, np.argsort(permutation_x))
 
@@ -1093,9 +1093,9 @@ class QuditCode(AbstractCode):
             checks_z = _with_permuted_qudits(checks_z, permutation_z)
             stabs_gauges_z = np.vstack([stabilizers_z, checks_z])
             stabs_gauges_z = ClassicalCode(stabs_gauges_z).canonicalized.matrix
-            pivots_zg = _first_nonzero_cols(stabs_gauges_z)[num_stabs_z:]
-            stabs_gauges_z[:num_stabs_z] += (
-                stabilizers_z[:num_stabs_z, pivots_zg] @ stabs_gauges_z[num_stabs_z:]
+            pivots_gz = _first_nonzero_cols(stabs_gauges_z)[num_stabs_z:]
+            stabs_gauges_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_z[:num_stabs_z, pivots_gz] @ stabs_gauges_z[num_stabs_z:]
             )
             stabs_gauges_z = _with_permuted_qudits(stabs_gauges_z, np.argsort(permutation_z))
 
@@ -1103,23 +1103,18 @@ class QuditCode(AbstractCode):
             matrix = np.vstack(
                 [stabs_gauges_x, np.hstack([np.zeros_like(stabs_gauges_z), stabs_gauges_z])]
             )
-            permutation = _join_slices(cols_sx, cols_sz, cols_gk)
-            matrix = _with_permuted_qudits(matrix, permutation)
-            qudit_locs = _with_permuted_qudits(qudit_locs, permutation)
 
-            # row sectors of the parity check matrix
-            rows_sx = slice(num_stabs_x)
-            rows_gx = slice(num_stabs_x, num_stabs_x + num_gauges)
-            rows_sz = slice(num_stabs_x + num_gauges, num_stabs_x + num_gauges + num_stabs_z)
-            rows_gz = slice(len(matrix) - num_gauges, len(matrix))
+            # split stabilizer vs. gauge row sectors
+            rows_sx = slice(rows_sx.start + num_stabs_x)
+            rows_sz = slice(rows_sz.start + num_stabs_z)
+            rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
+            rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
-            # column sectors of the parity check matrix
-            cols_sx = slice(num_stabs_x)
-            cols_sz = slice(num_stabs_x, num_stabs_x + num_stabs_z)
-            cols_gk = range(len(self) - num_logicals - num_gauges, len(self))
-            cols_gx = pivots_xg + num_stabs_z
+            # split logical vs. gauge column sectors
+            cols_gk = _join_slices(cols_gk)
+            cols_gx = cols_gk[pivots_gx - num_stabs_x]
+            cols_gz = cols_gk[pivots_gz - num_stabs_z]
             cols_lx = [qq for qq in cols_gk if qq not in cols_gx]
-            cols_gz = pivots_zg + num_stabs_x
             cols_lz = [qq for qq in cols_gk if qq not in cols_gz]
 
         matrix = matrix.reshape(-1, 2, len(self))
@@ -1806,11 +1801,11 @@ class CSSCode(QuditCode):
             num_logicals = len(self) - num_stabs_x - num_stabs_z
 
             # row/column sectors of the parity check matrix
-            rows_sx = slice(len(matrix_x))
-            rows_sz = slice(len(matrix_z))
+            rows_sx = slice(num_stabs_x)
+            rows_sz = slice(num_stabs_z)
             cols_lx = cols_lz = slice(num_logicals)
-            cols_sx = slice(num_logicals, num_logicals + len(pivots_x))
-            cols_sz = slice(len(self) - len(pivots_z), len(self))
+            cols_sx = slice(cols_lx.stop, cols_lx.stop + num_stabs_x)
+            cols_sz = slice(cols_sx.stop, cols_sx.stop + num_stabs_z)
 
             # fill in empty gauge sectors
             rows_gx = rows_gz = cols_gx = cols_gz = slice(0)
@@ -1832,7 +1827,6 @@ class CSSCode(QuditCode):
             num_stabs_x = len(stabilizers_x)
             num_stabs_z = len(stabilizers_z)
             num_gauges = self.gauge_dimension
-            num_logicals = len(self) - num_stabs_x - num_stabs_z - num_gauges
 
             # canonicalized parity check matrices with qudits in the same order as above
             checks_x = self.matrix_x[:, qudit_locs]
@@ -1844,9 +1838,9 @@ class CSSCode(QuditCode):
             checks_x = checks_x[:, permutation_x]
             stabs_gauges_x = np.vstack([stabilizers_x, checks_x])
             stabs_gauges_x = ClassicalCode(stabs_gauges_x).canonicalized.matrix
-            pivots_xg = _first_nonzero_cols(stabs_gauges_x)[num_stabs_x:]
-            stabs_gauges_x[:num_stabs_x] += (
-                stabilizers_x[:num_stabs_x, pivots_xg] @ stabs_gauges_x[num_stabs_x:]
+            pivots_gx = _first_nonzero_cols(stabs_gauges_x)[num_stabs_x:]
+            stabs_gauges_x[:num_stabs_x] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_x[:num_stabs_x, pivots_gx] @ stabs_gauges_x[num_stabs_x:]
             )
             stabs_gauges_x = stabs_gauges_x[:, np.argsort(permutation_x)]
 
@@ -1856,31 +1850,23 @@ class CSSCode(QuditCode):
             checks_z = checks_z[:, permutation_z]
             stabs_gauges_z = np.vstack([stabilizers_z, checks_z])
             stabs_gauges_z = ClassicalCode(stabs_gauges_z).canonicalized.matrix
-            pivots_zg = _first_nonzero_cols(stabs_gauges_z)[num_stabs_z:]
-            stabs_gauges_z[:num_stabs_z] += (
-                stabilizers_z[:num_stabs_z, pivots_zg] @ stabs_gauges_z[num_stabs_z:]
+            pivots_gz = _first_nonzero_cols(stabs_gauges_z)[num_stabs_z:]
+            stabs_gauges_z[:num_stabs_z] += (  # undo the addition of gauge ops to stabilizers
+                stabilizers_z[:num_stabs_z, pivots_gz] @ stabs_gauges_z[num_stabs_z:]
             )
             stabs_gauges_z = stabs_gauges_z[:, np.argsort(permutation_z)]
 
-            # full parity check matrices in standard form
-            permutation = _join_slices(cols_sx, cols_sz, cols_gk)
-            matrix_x = matrix_x[:, permutation]
-            matrix_z = matrix_z[:, permutation]
-            qudit_locs = qudit_locs[:, permutation]
+            # split stabilizer vs. gauge row sectors
+            rows_sx = slice(rows_sx.start + num_stabs_x)
+            rows_sz = slice(rows_sz.start + num_stabs_z)
+            rows_gx = slice(rows_sx.stop, rows_sx.stop + num_gauges)
+            rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
-            # row sectors of the parity check matrix
-            rows_sx = slice(num_stabs_x)
-            rows_gx = slice(num_stabs_x, num_stabs_x + num_gauges)
-            rows_sz = slice(num_stabs_z)
-            rows_gz = slice(num_stabs_z, num_stabs_z + num_gauges)
-
-            # column sectors of the parity check matrix
-            cols_sx = slice(num_stabs_x)
-            cols_sz = slice(num_stabs_x, num_stabs_x + num_stabs_z)
-            cols_gk = range(len(self) - num_logicals - num_gauges, len(self))
-            cols_gx = pivots_xg + num_stabs_z
+            # split logical vs. gauge column sectors
+            cols_gk = _join_slices(cols_gk)
+            cols_gx = cols_gk[pivots_gx - num_stabs_x]
+            cols_gz = cols_gk[pivots_gz - num_stabs_z]
             cols_lx = [qq for qq in cols_gk if qq not in cols_gx]
-            cols_gz = pivots_zg + num_stabs_x
             cols_lz = [qq for qq in cols_gk if qq not in cols_gz]
 
         return (
