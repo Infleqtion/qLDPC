@@ -1527,7 +1527,7 @@ class CSSCode(QuditCode):
     _code_z: ClassicalCode
     _exact_distance_x: int | float | None = None
     _exact_distance_z: int | float | None = None
-    _balanced_codes: bool
+    _equal_distance_xz: bool
 
     def __init__(
         self,
