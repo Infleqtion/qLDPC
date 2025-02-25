@@ -1776,11 +1776,10 @@ class CSSCode(QuditCode):
             qudit_locs = np.arange(len(self), dtype=int)
 
             # initialize matrix_x and matrix_z
-            matrix_x = self.matrix_x
-            matrix_z = self.matrix_z
+            matrix_x = self.canonicalized.matrix_x
+            matrix_z = self.canonicalized.matrix_z
 
-            # row reduce and identify pivots in the X sector, and move X pivots to the back
-            matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
+            # identify pivots in the X sector, and move X pivots to the back
             pivots_x = _first_nonzero_cols(matrix_x)
             other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
             permutation = other_x + list(pivots_x)
@@ -1788,8 +1787,8 @@ class CSSCode(QuditCode):
             matrix_z = matrix_z[:, permutation]
             qudit_locs = qudit_locs[permutation]
 
-            # row reduce and identify pivots in the X sector, and move X pivots to the back
-            matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
+            # row reduce and identify pivots in the Z sector, and move Z pivots to the back
+            matrix_z = matrix_z.row_reduce()
             pivots_z = _first_nonzero_cols(matrix_z)
             other_z = [qq for qq in range(len(self)) if qq not in pivots_z]
             permutation = other_z + list(pivots_z)
@@ -1910,8 +1909,8 @@ class CSSCode(QuditCode):
     ) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
         if self._stabilizer_ops is None and self.is_subsystem_code:
-            stabs_and_gauges_x = self.code_x.canonicalized.matrix
-            stabs_and_gauges_z = self.code_z.canonicalized.matrix
+            stabs_and_gauges_x = self.canonicalized.get_matrix(Pauli.X)
+            stabs_and_gauges_z = self.canonicalized.get_matrix(Pauli.X)
             stabs_and_logs_x = stabs_and_gauges_z.null_space()
             stabs_and_logs_z = stabs_and_gauges_x.null_space()
             stabs_and_gauges_and_logs_x = np.vstack([stabs_and_gauges_x, stabs_and_logs_x])
@@ -1977,7 +1976,7 @@ class CSSCode(QuditCode):
 
         # we do not know the exact distance, so compute it
         if self.field.order == 2:
-            stabilizers = self.get_code(pauli).canonicalized.matrix
+            stabilizers = self.canonicalized.get_matrix(pauli)
             logical_ops = self.get_logical_ops(pauli)
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
