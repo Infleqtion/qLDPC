@@ -31,15 +31,12 @@ CACHE_NAME = "qldpc_automorphisms"
 
 
 def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.Circuit]:
-    """Restrict a circuit constructor to qubit-based stabilizer codes."""
+    """Restrict a circuit constructor to qubit-based codes."""
 
     @functools.wraps(func)
     def qubit_func(*args: object, **kwargs: object) -> stim.Circuit:
-        if any(
-            isinstance(arg, codes.QuditCode) and (arg.is_subsystem_code or arg.field.order != 2)
-            for arg in args
-        ):
-            raise ValueError("Circuit methods are only supported for qubit stabilizer codes")
+        if any(isinstance(arg, codes.QuditCode) and arg.field.order != 2 for arg in args):
+            raise ValueError("Circuit methods are only supported for qubit codes")
         return func(*args, **kwargs)
 
     return qubit_func
@@ -55,14 +52,21 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     mapped to destabilizers.
     """
     # identify logical operators
-    logicals_x = [op_to_string(op) for op in codes.QuditCode.get_logical_ops(code, Pauli.X)]
-    logicals_z = [op_to_string(op) for op in codes.QuditCode.get_logical_ops(code, Pauli.Z)]
+    logical_ops = codes.get_logical_ops()
+    logical_ops_x = [op_to_string(op) for op in logical_ops[: code.dimension]]
+    logical_ops_z = [op_to_string(op) for op in logical_ops[code.dimension :]]
+
+    # identify gauge operators
+    gauge_ops = codes.get_gauge_ops()
+    gauge_ops_x = [op_to_string(op) for op in gauge_ops[: code.gauge_dimension]]
+    gauge_ops_z = [op_to_string(op) for op in gauge_ops[code.gauge_dimension :]]
 
     # identify stabilizers
-    matrix = code.canonicalized.matrix
-    pivots = np.argmax(matrix.view(np.ndarray).astype(bool), axis=1)
-    stabilizers = [op_to_string(row) for row in matrix]
+    stabilizer_ops = code.get_stabilizer_ops()
+    pivots = np.argmax(stabilizer_ops.view(np.ndarray).astype(bool), axis=1)
+    stabilizers = [op_to_string(row) for row in stabilizer_ops]
 
+    # TODO: maybe add nicer construction of destabilizers
     # construct destabilizers
     destabilizers: list[stim.PauliString] = []
     for pivot in pivots:
@@ -72,7 +76,7 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
         candidate_destabilizer = op_to_string(vector)
 
         # enforce that the candidate destabilizer commutes with all logical operators
-        for log_x, log_z in zip(logicals_x, logicals_z):
+        for log_x, log_z in zip(logical_ops_x, logical_ops_z):
             if not candidate_destabilizer.commutes(log_x):  # pragma: no cover
                 candidate_destabilizer *= log_z
             if not candidate_destabilizer.commutes(log_z):  # pragma: no cover
@@ -85,7 +89,7 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
         destabilizers.append(candidate_destabilizer)
 
     return stim.Tableau.from_conjugated_generators(
-        xs=logicals_x + destabilizers, zs=logicals_z + stabilizers
+        xs=logical_ops_x + gauge_ops_x + destabilizers, zs=logical_ops_z + gauge_ops_z + stabilizers
     )
 
 
@@ -208,11 +212,9 @@ def get_transversal_automorphism_group(
     deformations for which the logical Pauli group of the original QuditCode is a valid choice of
     logical Pauli group for the deformed QuditCode.
     """
-    effective_stabilizers = (
-        code.matrix if not deform_code else symplectic_conjugate(code.get_logical_ops())
-    )
-    matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
-    matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
+    parity_checks = code.matrix if not deform_code else symplectic_conjugate(code.get_logical_ops())
+    matrix_x = parity_checks.reshape(-1, 2, len(code))[:, 0, :]
+    matrix_z = parity_checks.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping X <--> Z
         matrix = np.hstack([matrix_x, matrix_z])
@@ -344,7 +346,7 @@ def _get_pauli_permutation_circuit(
 
     if len(local_gates) == 1:
         # there is only one local gate, and all it can do is permute two parity check sectors
-        gate = next(iter(local_gates))
+        gate = local_gates[0]
         for qubit in range(len(code)):
             if automorphism(qubit) >= len(code):
                 circuit.append(gate, qubit)
