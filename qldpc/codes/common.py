@@ -1808,8 +1808,8 @@ class CSSCode(QuditCode):
             num_gauges = self.gauge_dimension
 
             # canonicalized parity check matrices with qudits in the same order as above
-            checks_x = self.matrix_x[:, qudit_locs]
-            checks_z = self.matrix_z[:, qudit_locs]
+            checks_x = self.canonicalized.matrix_x[:, qudit_locs]
+            checks_z = self.canonicalized.matrix_z[:, qudit_locs]
 
             # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
