@@ -62,7 +62,7 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     gauge_ops_z = [op_to_string(op) for op in gauge_ops[code.gauge_dimension :]]
 
     # identify stabilizers
-    stabilizer_ops = code.get_stabilizer_ops()
+    stabilizer_ops = code.get_stabilizer_ops().row_reduce()
     pivots = np.argmax(stabilizer_ops.view(np.ndarray).astype(bool), axis=1)
     stabilizers = [op_to_string(row) for row in stabilizer_ops]
 
