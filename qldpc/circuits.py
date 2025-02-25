@@ -53,22 +53,22 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     """
     # identify logical operators
     logical_ops = code.get_logical_ops()
-    logical_ops_x = [op_to_string(op) for op in logical_ops[: code.dimension]]
-    logical_ops_z = [op_to_string(op) for op in logical_ops[code.dimension :]]
+    logical_strings_x = [op_to_string(op) for op in logical_ops[: code.dimension]]
+    logical_strings_z = [op_to_string(op) for op in logical_ops[code.dimension :]]
 
     # identify gauge operators
     gauge_ops = code.get_gauge_ops()
-    gauge_ops_x = [op_to_string(op) for op in gauge_ops[: code.gauge_dimension]]
-    gauge_ops_z = [op_to_string(op) for op in gauge_ops[code.gauge_dimension :]]
+    gauge_strings_x = [op_to_string(op) for op in gauge_ops[: code.gauge_dimension]]
+    gauge_strings_z = [op_to_string(op) for op in gauge_ops[code.gauge_dimension :]]
 
     # identify stabilizers
-    stabilizer_ops = code.get_stabilizer_ops().row_reduce()
+    stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
     pivots = np.argmax(stabilizer_ops.view(np.ndarray).astype(bool), axis=1)
-    stabilizers = [op_to_string(row) for row in stabilizer_ops]
+    stabilizer_strings_z = [op_to_string(row) for row in stabilizer_ops]
 
     # TODO: maybe add nicer construction of destabilizers
     # construct destabilizers
-    destabilizers: list[stim.PauliString] = []
+    stabilizer_strings_x: list[stim.PauliString] = []
     for pivot in pivots:
         # construct a candidate destabilizer that only anti-commutes with one stabilizer
         vector = code.field.Zeros(2 * len(code))
@@ -76,20 +76,28 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
         candidate_destabilizer = op_to_string(vector)
 
         # enforce that the candidate destabilizer commutes with all logical and gauge operators
-        for op_x, op_z in zip(logical_ops_x + gauge_ops_x, logical_ops_z + gauge_ops_z):
-            if not candidate_destabilizer.commutes(op_x):  # pragma: no cover
-                candidate_destabilizer *= op_z
-            if not candidate_destabilizer.commutes(op_z):  # pragma: no cover
-                candidate_destabilizer *= op_x
+        for string_x, string_z in zip(
+            logical_strings_x + gauge_strings_x, logical_strings_z + gauge_strings_z
+        ):
+            if not candidate_destabilizer.commutes(string_x):  # pragma: no cover
+                candidate_destabilizer *= string_z
+            if not candidate_destabilizer.commutes(string_z):  # pragma: no cover
+                candidate_destabilizer *= string_x
 
         # enforce that the candidate destabilizer commutes with other destabilizers
-        for old_destabilizer, stabilizer in zip(destabilizers, stabilizers):
+        for old_destabilizer, stabilizer in zip(stabilizer_strings_x, stabilizer_strings_z):
             if not candidate_destabilizer.commutes(old_destabilizer):
                 candidate_destabilizer *= stabilizer
-        destabilizers.append(candidate_destabilizer)
+        stabilizer_strings_x.append(candidate_destabilizer)
 
+    print()
+    arst = len(logical_strings_x + gauge_strings_x + stabilizer_strings_x)
+    neio = len(logical_strings_x + gauge_strings_z + stabilizer_strings_z)
+    print([len(x) for x in logical_strings_x + gauge_strings_x + stabilizer_strings_x], arst)
+    print([len(z) for z in logical_strings_z + gauge_strings_z + stabilizer_strings_z], neio)
     return stim.Tableau.from_conjugated_generators(
-        xs=logical_ops_x + gauge_ops_x + destabilizers, zs=logical_ops_z + gauge_ops_z + stabilizers
+        xs=logical_strings_x + gauge_strings_x + stabilizer_strings_x,
+        zs=logical_strings_z + gauge_strings_z + stabilizer_strings_z,
     )
 
 

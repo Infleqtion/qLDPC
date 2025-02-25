@@ -1133,8 +1133,14 @@ class QuditCode(AbstractCode):
                 raise ValueError("An incorrect number of logical operators was provided")
         self._logical_ops = logical_ops
 
-    def get_stabilizer_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
-        """Basis of stabilizer group generators for this code."""
+    def get_stabilizer_ops(
+        self, pauli: PauliXZ | None = None, *, canonicalized: bool = False
+    ) -> galois.FieldArray:
+        """Basis of stabilizer group generators for this code.
+
+        If canonicalized is True, canonicalize (row reduce) the stabilizer matrix to identify a
+        minimal generating set for the stabilizer group.
+        """
         assert pauli is None or pauli in PAULIS_XZ
 
         # if requested, retrieve stabilizer operators of one type only
@@ -1145,7 +1151,7 @@ class QuditCode(AbstractCode):
 
         # return stabilizers if known
         if not self.is_subsystem_code:
-            return self.matrix
+            return self.matrix if not canonicalized else self.canonicalized.matrix
         if self._stabilizer_ops is not None:
             return self._stabilizer_ops
 
@@ -1189,7 +1195,7 @@ class QuditCode(AbstractCode):
         """The number of logical qudits encoded by this code."""
         if not self.is_subsystem_code:
             return len(self) - self.rank
-        num_stabs = len(self.get_stabilizer_ops())
+        num_stabs = len(self.get_stabilizer_ops(canonicalized=True))
         return len(self) - (self.rank + num_stabs) // 2
 
     @functools.cached_property
@@ -1197,7 +1203,7 @@ class QuditCode(AbstractCode):
         """The number of gauge qudits in this code."""
         if not self.is_subsystem_code:
             return 0
-        num_stabs = len(self.get_stabilizer_ops())
+        num_stabs = len(self.get_stabilizer_ops(canonicalized=True))
         return (self.rank - num_stabs) // 2
 
     def get_code_params(
@@ -1237,23 +1243,23 @@ class QuditCode(AbstractCode):
         if (known_distance := self.get_distance_if_known()) is not None:
             return known_distance
 
+        logical_ops = self.get_logical_ops()
+        stabilizer_ops = self.get_stabilizer_ops(canonicalized=True)
         if self.field.order == 2:
-            stabilizers = self.get_stabilizer_ops()
-            logical_ops = self.get_logical_ops()
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
+                stabilizer_ops.view(np.ndarray).astype(np.uint8),
             )
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
             distance = len(self)
-            code_logical_ops = ClassicalCode.from_generator(self.get_logical_ops())
-            code_stabilizers = ClassicalCode.from_generator(self.get_stabilizer_ops())
+            code_logical_ops = ClassicalCode.from_generator(logical_ops)
+            code_stabilizer_ops = ClassicalCode.from_generator(stabilizer_ops)
             for word_l, word_s in itertools.product(
                 code_logical_ops.iter_words(skip_zero=True),
-                code_stabilizers.iter_words(),
+                code_stabilizer_ops.iter_words(),
             ):
                 word = word_l + word_s
                 support_x = word[: len(self)].view(np.ndarray)
@@ -1872,7 +1878,11 @@ class CSSCode(QuditCode):
         self.set_logical_ops(logical_ops, validate=validate)
 
     def get_stabilizer_ops(
-        self, pauli: PauliXZ | None = None, *, symplectic: bool = False
+        self,
+        pauli: PauliXZ | None = None,
+        *,
+        canonicalized: bool = False,
+        symplectic: bool = False,
     ) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
         if self._stabilizer_ops is None and self.is_subsystem_code:
@@ -1889,7 +1899,7 @@ class CSSCode(QuditCode):
             stabs_z = stabs_and_gauges_and_logs_x.null_space()
             self._stabilizer_ops = self.field(scipy.linalg.block_diag(stabs_x, stabs_z))
 
-        stabilizer_ops = QuditCode.get_stabilizer_ops(self, pauli)
+        stabilizer_ops = QuditCode.get_stabilizer_ops(self, pauli, canonicalized=canonicalized)
         if symplectic or pauli is None:
             return stabilizer_ops
         return stabilizer_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
@@ -2091,7 +2101,9 @@ class CSSCode(QuditCode):
         operator we return is nontrivial.
         """
         assert pauli is Pauli.X or pauli is Pauli.Z
-        ops = np.vstack([self.get_logical_ops(pauli), self.get_stabilizer_ops(pauli)])
+        logical_ops = self.get_logical_ops(pauli)
+        stabilizer_ops = self.get_stabilizer_ops(pauli, canonicalized=True)
+        ops = np.vstack([logical_ops, stabilizer_ops])
         random_array = get_random_array(
             self.field,
             len(ops),
@@ -2257,17 +2269,16 @@ class CSSCode(QuditCode):
         else:
             pauli_bias_zxy = None
 
+        stabilizer_ops_x = self.get_stabilizer_ops(Pauli.X, canonicalized=False)
+        stabilizer_ops_z = self.get_stabilizer_ops(Pauli.Z, canonicalized=False)
+
         # construct decoders
-        decoder_x = decoders.get_decoder(self.get_stabilizer_ops(Pauli.Z), **decoder_args)
-        decoder_z = decoders.get_decoder(self.get_stabilizer_ops(Pauli.X), **decoder_args)
+        decoder_x = decoders.get_decoder(stabilizer_ops_z, **decoder_args)
+        decoder_z = decoders.get_decoder(stabilizer_ops_x, **decoder_args)
         if not isinstance(decoder_x, decoders.DirectDecoder):
-            decoder_x = decoders.DirectDecoder.from_indirect(
-                decoder_x, self.get_stabilizer_ops(Pauli.Z)
-            )
+            decoder_x = decoders.DirectDecoder.from_indirect(decoder_x, stabilizer_ops_z)
         if not isinstance(decoder_z, decoders.DirectDecoder):
-            decoder_z = decoders.DirectDecoder.from_indirect(
-                decoder_z, self.get_stabilizer_ops(Pauli.X)
-            )
+            decoder_z = decoders.DirectDecoder.from_indirect(decoder_z, stabilizer_ops_x)
 
         # identify logical operators
         logicals_x = self.get_logical_ops(Pauli.X)
