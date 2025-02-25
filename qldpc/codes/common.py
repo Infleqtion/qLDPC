@@ -1536,7 +1536,7 @@ class CSSCode(QuditCode):
         field: int | None = None,
         *,
         is_subsystem_code: bool | None = None,
-        promise_balanced_codes: bool = False,  # do the subcodes have the same parameters [n, k, d]?
+        promise_equal_distance_xz: bool = False,  # do X and Z logicals have equal minimum weight?
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks."""
         self._code_x = ClassicalCode(code_x, field)  # X-type parity checks, measuring Z-type errors
@@ -1549,7 +1549,7 @@ class CSSCode(QuditCode):
             self._is_subsystem_code = is_subsystem_code
         else:
             self._is_subsystem_code = bool(np.any(self.matrix_x @ self.matrix_z.T))
-        self._balanced_codes = promise_balanced_codes or self.code_x == self.code_z
+        self._equal_distance_xz = promise_equal_distance_xz or self.code_x == self.code_z
 
         if self._exact_distance_x is not None and self._exact_distance_z is not None:
             self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
@@ -1999,9 +1999,9 @@ class CSSCode(QuditCode):
             )
 
         # save the exact distance and return
-        if pauli is Pauli.X or self._balanced_codes:
+        if pauli is Pauli.X or self._equal_distance_xz:
             self._exact_distance_x = distance
-        if pauli is Pauli.Z or self._balanced_codes:
+        if pauli is Pauli.Z or self._equal_distance_xz:
             self._exact_distance_z = distance
         if self._exact_distance_x is not None and self._exact_distance_z is not None:
             self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
@@ -2194,7 +2194,7 @@ class CSSCode(QuditCode):
             code_x,
             code_z,
             is_subsystem_code=any(code.is_subsystem_code for code in codes),
-            promise_balanced_codes=all(code._balanced_codes for code in css_codes),
+            promise_equal_distance_xz=all(code._equal_distance_xz for code in css_codes),
         )
         if inherit_logicals:
             logicals_x = [code.get_logical_ops(Pauli.X) for code in css_codes]

@@ -142,7 +142,7 @@ class TBCode(CSSCode):
         matrix_b: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         *,
-        promise_balanced_codes: bool = False,
+        promise_equal_distance_xz: bool = False,
         validate: bool = True,
     ) -> None:
         """Construct a two-block quantum code."""
@@ -158,7 +158,7 @@ class TBCode(CSSCode):
             matrix_x,
             matrix_z,
             field,
-            promise_balanced_codes=promise_balanced_codes,
+            promise_equal_distance_xz=promise_equal_distance_xz,
             is_subsystem_code=False,
         )
 
@@ -235,7 +235,7 @@ class QCCode(TBCode):
         matrix_a = self.eval(self.poly_a).lift()
         matrix_b = self.eval(self.poly_b).lift()
         TBCode.__init__(
-            self, matrix_a, matrix_b, field, promise_balanced_codes=True, validate=False
+            self, matrix_a, matrix_b, field, promise_equal_distance_xz=True, validate=False
         )
 
     def eval(
@@ -1213,7 +1213,9 @@ class SurfaceCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, promise_balanced_codes=rows == cols)
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field=field, promise_equal_distance_xz=rows == cols
+        )
 
     @staticmethod
     def get_rotated_checks(
@@ -1331,7 +1333,9 @@ class ToricCode(CSSCode):
             matrix_z = code_ab.matrix_z
             self._default_conjugate = slice(code_ab.sector_size[0, 0], None)
 
-        CSSCode.__init__(self, matrix_x, matrix_z, field=field, promise_balanced_codes=rows == cols)
+        CSSCode.__init__(
+            self, matrix_x, matrix_z, field=field, promise_equal_distance_xz=rows == cols
+        )
 
     @staticmethod
     def get_rotated_checks(
