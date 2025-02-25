@@ -1876,7 +1876,7 @@ class CSSCode(QuditCode):
         """Basis of stabilizer group generators for this code."""
         if self._stabilizer_ops is None and self.is_subsystem_code:
             stabs_and_gauges_x = self.canonicalized.get_matrix(Pauli.X)
-            stabs_and_gauges_z = self.canonicalized.get_matrix(Pauli.X)
+            stabs_and_gauges_z = self.canonicalized.get_matrix(Pauli.Z)
             stabs_and_logs_x = stabs_and_gauges_z.null_space()
             stabs_and_logs_z = stabs_and_gauges_x.null_space()
             stabs_and_gauges_and_logs_x = np.vstack([stabs_and_gauges_x, stabs_and_logs_x])
@@ -1884,8 +1884,8 @@ class CSSCode(QuditCode):
             assert isinstance(stabs_and_gauges_and_logs_x, galois.FieldArray)
             assert isinstance(stabs_and_gauges_and_logs_z, galois.FieldArray)
 
-            stabs_x = stabs_and_gauges_and_logs_z.null_space().T
-            stabs_z = stabs_and_gauges_and_logs_x.null_space().T
+            stabs_x = stabs_and_gauges_and_logs_z.null_space()
+            stabs_z = stabs_and_gauges_and_logs_x.null_space()
             self._stabilizer_ops = self.field(scipy.linalg.block_diag(stabs_x, stabs_z))
 
         stabilizer_ops = QuditCode.get_stabilizer_ops(self, pauli)

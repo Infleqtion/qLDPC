@@ -1412,7 +1412,7 @@ class GeneralizedSurfaceCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field)
 
 
-class BaconShorCode(QuditCode):
+class BaconShorCode(CSSCode):
     """Bacon-Shor code on a square grid.
 
     References:
@@ -1437,5 +1437,4 @@ class BaconShorCode(QuditCode):
                     stab_z[row, col] = stab_z[row, col + 1] = 1
                     generators_z.append(stab_z.ravel())
 
-        matrix = scipy.linalg.block_diag(generators_x, generators_z)
-        QuditCode.__init__(self, matrix, field, is_subsystem_code=True)
+        CSSCode.__init__(self, generators_x, generators_z, field, is_subsystem_code=True)
