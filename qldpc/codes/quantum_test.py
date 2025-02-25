@@ -502,3 +502,11 @@ def test_generalized_surface_codes(size: int = 3) -> None:
 
     with pytest.raises(ValueError, match=">= 2"):
         codes.GeneralizedSurfaceCode(size, dim=1)
+
+
+def test_bacon_shor_code() -> None:
+    """Bacon-Shor code."""
+    code = codes.BaconShorCode(3)
+    code._exact_distance_x = code._exact_distance_z = None
+    assert all(np.count_nonzero(row) == 2 for row in code.matrix)
+    assert code.get_distance() == 3
