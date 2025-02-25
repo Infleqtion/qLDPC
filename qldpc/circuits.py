@@ -75,8 +75,8 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
         vector[(pivot + len(code)) % (2 * len(code))] = 1
         candidate_destabilizer = op_to_string(vector)
 
-        # enforce that the candidate destabilizer commutes with all logical operators
-        for log_x, log_z in zip(logical_ops_x, logical_ops_z):
+        # enforce that the candidate destabilizer commutes with all logical and gauge operators
+        for log_x, log_z in zip(logical_ops_x + gauge_ops_x, logical_ops_z + gauge_ops_z):
             if not candidate_destabilizer.commutes(log_x):  # pragma: no cover
                 candidate_destabilizer *= log_z
             if not candidate_destabilizer.commutes(log_z):  # pragma: no cover
