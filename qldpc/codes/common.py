@@ -1175,8 +1175,7 @@ class QuditCode(AbstractCode):
         if self._gauge_ops is not None:
             return self._gauge_ops
 
-        matrix = np.vstack([self.get_stabilizer_ops(), self.get_logical_ops()])
-        self._gauge_ops = QuditCode(matrix).get_logical_ops()
+        self._gauge_ops = self.get_dual_subsystem_code().get_logical_ops()
         return self._gauge_ops
 
     def get_dual_subsystem_code(self) -> QuditCode:

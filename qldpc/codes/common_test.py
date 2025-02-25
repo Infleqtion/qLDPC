@@ -20,12 +20,14 @@ from __future__ import annotations
 import itertools
 import subprocess
 import unittest.mock
+from typing import Iterator
 
+import galois
 import numpy as np
 import pytest
 
 from qldpc import codes
-from qldpc.objects import Pauli
+from qldpc.objects import Pauli, symplectic_conjugate
 
 ####################################################################################################
 # classical code tests
@@ -343,8 +345,47 @@ def test_trivial_deformations(num_qudits: int = 5, num_checks: int = 3, field: i
     assert code == code.conjugated()
 
 
+def get_codes_for_testing_ops() -> Iterator[codes.QuditCode]:
+    """Iterate over some codes for testing operator constructions."""
+    # Bacon-Shor code and toric codes
+    code_a = codes.BaconShorCode(3, field=3)
+    code_b = codes.ToricCode(4, field=4)
+
+    # promote some gauge qudits of the Bacon-Shor code to logicals
+    matrix = np.vstack(
+        [
+            code_a.get_gauge_ops(Pauli.X, symplectic=True)[:2],
+            code_a.get_stabilizer_ops(),
+            code_a.get_gauge_ops(Pauli.Z, symplectic=True)[:2],
+        ]
+    )
+    code_c = codes.QuditCode(matrix)
+
+    # gauge out a logical qudit of the surface code
+    matrix = np.vstack(
+        [
+            code_b.get_logical_ops(Pauli.X, symplectic=True)[:1],
+            code_b.get_stabilizer_ops(),
+            code_b.get_logical_ops(Pauli.Z, symplectic=True)[:1],
+        ]
+    )
+    code_d = codes.QuditCode(matrix)
+
+    yield code_a
+    yield code_b
+    yield code_c
+    yield code_d
+
+
+def get_symplectic_form(half_dimension: int, field: type[galois.FieldArray]) -> galois.FieldArray:
+    """Get the symplectic form over a given field."""
+    identity = field.Identity(half_dimension)
+    zeros = field.Zeros((half_dimension, half_dimension))
+    return field(np.block([[zeros, identity], [-identity, zeros]]))
+
+
 def test_qudit_ops() -> None:
-    """Logical operator construction for Galois qudit codes."""
+    """Logical and gauge operator construction for Galois qudit codes."""
     code: codes.QuditCode
 
     code = codes.FiveQubitCode()
@@ -356,6 +397,20 @@ def test_qudit_ops() -> None:
 
     code = codes.QuditCode.from_strings(*code.get_strings(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
+
+    for code in get_codes_for_testing_ops():
+        stabilizer_ops = code.get_stabilizer_ops()
+        logical_ops = code.get_logical_ops()
+        gauge_ops = code.get_gauge_ops()
+        assert not np.any(symplectic_conjugate(stabilizer_ops) @ stabilizer_ops.T)
+        assert np.array_equal(
+            symplectic_conjugate(gauge_ops) @ gauge_ops.T,
+            get_symplectic_form(code.gauge_dimension, code.field),
+        )
+        assert np.array_equal(
+            symplectic_conjugate(logical_ops) @ logical_ops.T,
+            get_symplectic_form(code.dimension, code.field),
+        )
 
 
 def test_code_deformation() -> None:
