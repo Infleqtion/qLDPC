@@ -1063,9 +1063,9 @@ class QuditCode(AbstractCode):
             num_logicals = len(self) - num_stabs_x - num_stabs_z - num_gauges
 
             # canonicalized parity check matrices with qudits in the same order as above
-            self_matrix = _with_permuted_qudits(self.canonicalized.matrix, qudit_locs)
-            checks_x = self_matrix[: num_stabs_x + num_gauges]
-            checks_z = self_matrix[num_stabs_x + num_gauges :, len(self) :]
+            checks = _with_permuted_qudits(self.canonicalized.matrix, qudit_locs)
+            checks_x = checks[: num_stabs_x + num_gauges]
+            checks_z = checks[num_stabs_x + num_gauges :, len(self) :]
 
             # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
