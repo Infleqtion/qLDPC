@@ -89,11 +89,6 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
                 candidate_destabilizer *= stabilizer
         stabilizer_strings_x.append(candidate_destabilizer)
 
-    print()
-    arst = len(logical_strings_x + gauge_strings_x + stabilizer_strings_x)
-    neio = len(logical_strings_x + gauge_strings_z + stabilizer_strings_z)
-    print([len(x) for x in logical_strings_x + gauge_strings_x + stabilizer_strings_x], arst)
-    print([len(z) for z in logical_strings_z + gauge_strings_z + stabilizer_strings_z], neio)
     return stim.Tableau.from_conjugated_generators(
         xs=logical_strings_x + gauge_strings_x + stabilizer_strings_x,
         zs=logical_strings_z + gauge_strings_z + stabilizer_strings_z,
