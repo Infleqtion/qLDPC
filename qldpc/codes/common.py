@@ -1155,8 +1155,11 @@ class QuditCode(AbstractCode):
             pivots_x = _first_nonzero_cols(stabilizer_ops) < len(self)
             return stabilizer_ops[pivots_x if pauli is Pauli.X else ~pivots_x]
 
+        # return stabilizers if known
         if not self.is_subsystem_code:
             return self.matrix
+        if self._stabilizer_ops is not None:
+            return self._stabilizer_ops
 
         stabs_and_gauges = self.canonicalized.matrix
         stabs_and_logs = symplectic_conjugate(stabs_and_gauges).null_space()
@@ -1906,6 +1909,20 @@ class CSSCode(QuditCode):
         self, pauli: PauliXZ | None = None, *, symplectic: bool = False
     ) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code."""
+        if self._stabilizer_ops is None and self.is_subsystem_code:
+            stabs_and_gauges_x = self.code_x.canonicalized.matrix
+            stabs_and_gauges_z = self.code_z.canonicalized.matrix
+            stabs_and_logs_x = stabs_and_gauges_z.null_space()
+            stabs_and_logs_z = stabs_and_gauges_x.null_space()
+            stabs_and_gauges_and_logs_x = np.vstack([stabs_and_gauges_x, stabs_and_logs_x])
+            stabs_and_gauges_and_logs_z = np.vstack([stabs_and_gauges_z, stabs_and_logs_z])
+            assert isinstance(stabs_and_gauges_and_logs_x, galois.FieldArray)
+            assert isinstance(stabs_and_gauges_and_logs_z, galois.FieldArray)
+
+            stabs_x = stabs_and_gauges_and_logs_z.null_space().T
+            stabs_z = stabs_and_gauges_and_logs_x.null_space().T
+            self._stabilizer_ops = self.field(scipy.linalg.block_diag(stabs_x, stabs_z))
+
         stabilizer_ops = QuditCode.get_stabilizer_ops(self, pauli)
         if symplectic or pauli is None:
             return stabilizer_ops
