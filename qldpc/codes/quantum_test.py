@@ -237,11 +237,10 @@ def test_subsystem_hypergraph_product(
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Validity of the subsystem hypergraph product code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
-    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
-    code = codes.SHPCode(code_a, code_b)
+    subcode = codes.ClassicalCode.random(*bits_checks_a, field=field)
+    code = codes.SHPCode(subcode)
 
-    # assert validity of the the "natural" stabilizers that are set at initialization
+    # assert validity of the the "natural" stabilizers that are set at initialization time
     stabilizer_ops = code.get_stabilizer_ops()
     assert np.array_equal(
         stabilizer_ops.row_reduce(),
@@ -249,7 +248,7 @@ def test_subsystem_hypergraph_product(
     )
 
     # sanity check for generating sets of the logical operators of an SHPCode
-    gens_x, gens_z = codes.SHPCode.get_logical_generators(code_a, code_b)
+    gens_x, gens_z = codes.SHPCode.get_logical_generators(subcode, subcode)
     ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
     ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
     assert not np.any(code.matrix_z @ gens_x.T)

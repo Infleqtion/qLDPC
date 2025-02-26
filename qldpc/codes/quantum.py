@@ -918,7 +918,6 @@ class SHPCode(CSSCode):
         """
         assert code_a.field is code_b.field
         code_field = code_a.field
-
         gen_ops_x = np.kron(code_field.Identity(len(code_a)), code_b.generator)
         gen_ops_z = np.kron(code_a.generator, code_field.Identity(len(code_b)))
         return code_field(gen_ops_x), code_field(gen_ops_z)
