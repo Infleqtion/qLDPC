@@ -3,6 +3,7 @@ import os
 import shutil
 import sys
 
+import distutils.ccompiler
 import numpy
 from Cython.Build import cythonize
 from setuptools import Distribution, Extension
@@ -41,5 +42,11 @@ if __name__ == "__main__":
     if rebuild:
         extra_compile_args.remove("--rebuild")
 
-    extra_compile_args = extra_compile_args or ["-O3", "-march=native", "-Wall"]
+    # if no compiler arguments are provided, set some defaults
+    if not extra_compile_args:
+        if distutils.ccompiler.get_default_compiler() == "msvc":
+            extra_compile_args == ["/O2"]
+        else:
+            extra_compile_args = ["-O3", "-march=native", "-Wall"]
+
     build_cython(*extra_compile_args, rebuild=rebuild)
