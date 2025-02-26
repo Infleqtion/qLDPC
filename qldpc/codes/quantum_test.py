@@ -241,7 +241,7 @@ def test_subsystem_hypergraph_product(
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
     code = codes.SHPCode(code_a, code_b)
 
-    # assert validityp of the the "natural" stabilizers that are set at initialization
+    # assert validity of the the "natural" stabilizers that are set at initialization
     stabilizer_ops = code.get_stabilizer_ops()
     assert np.array_equal(
         stabilizer_ops.row_reduce(),
