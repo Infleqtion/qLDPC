@@ -29,7 +29,7 @@ cdef extern from *:
             return __popcnt64(num);
         }
         uint64_t count_trailing_zeros(uint64_t num) {
-            uint64_t index;
+            unsigned long index;
             _BitScanForward64(&index, num);
             return index;
         }
