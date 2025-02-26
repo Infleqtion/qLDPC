@@ -6,6 +6,9 @@ from typing import Iterator
 import numpy as np
 cimport numpy as cnp
 
+####################################################################################################
+# built-in functions
+
 
 cdef extern from *:
     """
