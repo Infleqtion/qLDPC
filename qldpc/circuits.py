@@ -60,13 +60,10 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     Construct "candidate" destabilizers that have correct pair-wise (anti-)commutation relations
     with the stabilizers, but may contain extra stabilizer, logical, or gauge operator components.
     """
-    destab_ops_list = []
+    destab_ops = code.field.Zeros((len(stab_ops), 2 * len(code)), dtype=int)
     pivots = np.argmax(stab_ops.view(np.ndarray).astype(bool), axis=1)
-    for pivot in pivots:
-        vector = np.zeros(2 * len(code), dtype=int)
-        vector[(pivot + len(code)) % (2 * len(code))] = 1
-        destab_ops_list.append(vector)
-    destab_ops = code.field(destab_ops_list)
+    for row, pivot in enumerate(pivots):
+        destab_ops[row, (pivot + len(code)) % (2 * len(code))] = 1
 
     """
     Remove stabilizer factors to enforce that destabilizers commute with each other.  This process
