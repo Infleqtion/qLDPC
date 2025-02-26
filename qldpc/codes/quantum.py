@@ -933,8 +933,8 @@ class SHPCode(CSSCode):
 
     A subsystem hypergraph product code (SHPCode) is constructed from two classical codes.  Unlike
     the ordinary hypergraph product code, an SHPCode depends only on the actual classical codes it
-    is built from; in particular, an SHPCode does not depend on the particular choice of parity
-    check matrices for the underlying classical codes.
+    is built from; in particular, an SHPCode does not depend on the choice of parity check matrices
+    for the underlying classical codes.
 
     If the classical generating codes of an SHPCode have code parameters [n1, k1, d1], [n2, k2, d2],
     the SHPCode has parameters [n1 n2, k1 k2, min(d1, d2)].
