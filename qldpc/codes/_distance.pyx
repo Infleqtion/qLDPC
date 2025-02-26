@@ -7,7 +7,7 @@ import numpy as np
 cimport numpy as cnp
 
 ####################################################################################################
-# built-in functions
+# C code injection and built-in function declaration
 
 
 cdef extern from *:
