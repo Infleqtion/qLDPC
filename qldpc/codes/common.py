@@ -494,7 +494,7 @@ class ClassicalCode(AbstractCode):
 
         def nontrivial(matrix: galois.FieldArray) -> bool:
             """Return True iff all rows and columns are nonzero."""
-            return all(row.any() for row in matrix) and all(col.any() for col in matrix.T)
+            return all(np.any(row) for row in matrix) and all(np.any(col) for col in matrix.T)
 
         matrix = get_random_array(code_field, (checks, bits), satisfy=nontrivial, seed=seed)
         return ClassicalCode(matrix)
@@ -1135,7 +1135,7 @@ class QuditCode(AbstractCode):
         self._logical_ops = logical_ops
 
     def get_stabilizer_ops(
-        self, pauli: PauliXZ | None = None, *, canonicalized: bool = False
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, canonicalized: bool = False
     ) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code.
 
@@ -1150,18 +1150,19 @@ class QuditCode(AbstractCode):
             pivots_x = _first_nonzero_cols(stabilizer_ops) < len(self)
             return stabilizer_ops[pivots_x if pauli is Pauli.X else ~pivots_x]
 
-        # return stabilizers if known
         if not self.is_subsystem_code:
             return self.matrix if not canonicalized else self.canonicalized.matrix
-        if self._stabilizer_ops is not None:
-            return self._stabilizer_ops
 
-        stabs_and_gauges = self.canonicalized.matrix
-        stabs_and_logs = symplectic_conjugate(stabs_and_gauges).null_space()
-        stabs_and_gauges_and_logs = np.vstack([stabs_and_gauges, stabs_and_logs])
-        assert isinstance(stabs_and_gauges_and_logs, galois.FieldArray)
+        if self._stabilizer_ops is None or recompute:
+            stabs_and_gauges = self.canonicalized.matrix
+            stabs_and_logs = symplectic_conjugate(stabs_and_gauges).null_space()
+            stabs_and_gauges_and_logs = np.vstack([stabs_and_gauges, stabs_and_logs])
+            assert isinstance(stabs_and_gauges_and_logs, galois.FieldArray)
+            self._stabilizer_ops = symplectic_conjugate(stabs_and_gauges_and_logs).null_space()
 
-        self._stabilizer_ops = symplectic_conjugate(stabs_and_gauges_and_logs).null_space()
+        if canonicalized and not np.any(self._stabilizer_ops.row_reduce()[-1]):
+            self._stabilizer_ops = self.get_stabilizer_ops(recompute=True)
+
         return self._stabilizer_ops
 
     def get_gauge_ops(self, pauli: PauliXZ | None = None) -> galois.FieldArray:
@@ -1194,6 +1195,8 @@ class QuditCode(AbstractCode):
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
+        if self._logical_ops is not None:
+            return len(self._logical_ops) // 2
         if not self.is_subsystem_code:
             return len(self) - self.rank
         num_stabs = len(self.get_stabilizer_ops(canonicalized=True))
@@ -1883,6 +1886,7 @@ class CSSCode(QuditCode):
         self,
         pauli: PauliXZ | None = None,
         *,
+        recompute: bool = False,
         canonicalized: bool = False,
         symplectic: bool = False,
     ) -> galois.FieldArray:
@@ -1905,7 +1909,9 @@ class CSSCode(QuditCode):
             stabs_z = stabs_and_gauges_and_logs_x.null_space()
             self._stabilizer_ops = self.field(scipy.linalg.block_diag(stabs_x, stabs_z))
 
-        stabilizer_ops = QuditCode.get_stabilizer_ops(self, pauli, canonicalized=canonicalized)
+        stabilizer_ops = QuditCode.get_stabilizer_ops(
+            self, pauli, recompute=recompute, canonicalized=canonicalized
+        )
         if symplectic or pauli is None:
             return stabilizer_ops
         return stabilizer_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
