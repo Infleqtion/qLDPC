@@ -630,7 +630,8 @@ class BBCode(QCCode):
 class HGPCode(CSSCode):
     """Hypergraph product (HGP) code.
 
-    A hypergraph product code AB is constructed from two classical codes, A and B.
+    A hypergraph product code AB is constructed from the parity check matrices of two classical
+    codes, A and B.
 
     Consider the following:
     - Code A has 3 data and 2 check bits.
@@ -830,9 +831,10 @@ class HGPCode(CSSCode):
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Generating sets for the logical operators of a hypergraph product code.
 
-        Taken from Eqs. (28) and (29) of arXiv:2002.06257.
+        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
         """
         assert code_a.field is code_b.field
+        code_field = code_a.field
 
         mat_H1, mat_G1 = code_a.matrix, code_a.generator
         mat_H2, mat_G2 = code_b.matrix, code_b.generator
@@ -865,7 +867,60 @@ class HGPCode(CSSCode):
                 [np.zeros((mat_Im1_F2.shape[0], mat_G1_In2.shape[1]), dtype=int), mat_Im1_F2],
             ]
         )
-        return code_a.field(gen_ops_x), code_a.field(gen_ops_z)
+        return code_field(gen_ops_x), code_field(gen_ops_z)
+
+
+class SHPCode(CSSCode):
+    """Subsystem hypergraph product (SHP) code.
+
+    A subsystem hypergraph product code (SHPCode) is constructed from two classical codes.  Unlike
+    the ordinary hypergraph product code, an SHPCode depends only on the actual classical codes it
+    is built from; in particular, an SHPCode does not depend on the choice of parity check matrices
+    for the underlying classical codes.
+
+    If the classical generating codes of an SHPCode have code parameters [n1, k1, d1], [n2, k2, d2],
+    the SHPCode has parameters [n1 n2, k1 k2, min(d1, d2)].
+
+    References:
+    - https://errorcorrectionzoo.org/c/subsystem_quantum_parity
+    - https://arxiv.org/abs/2002.06257
+    - https://arxiv.org/abs/2502.07150
+    """
+
+    def __init__(
+        self,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        field: int | None = None,
+    ) -> None:
+        """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
+        if code_b is None:
+            code_b = code_a
+        code_a = ClassicalCode(code_a, field)
+        code_b = ClassicalCode(code_b, field)
+        code_field = code_a.field
+
+        matrix_x = np.kron(code_a.matrix, code_field.Identity(len(code_b)))
+        matrix_z = np.kron(code_field.Identity(len(code_a)), code_b.matrix)
+        CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
+
+        stab_ops_x = np.kron(code_a.matrix, code_b.generator)
+        stab_ops_z = np.kron(-code_a.generator, code_b.matrix)
+        self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
+
+    @staticmethod
+    def get_logical_generators(
+        code_a: ClassicalCode, code_b: ClassicalCode
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Generating sets for the logical operators of a hypergraph product code.
+
+        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
+        """
+        assert code_a.field is code_b.field
+        code_field = code_a.field
+        gen_ops_x = np.kron(code_field.Identity(len(code_a)), code_b.generator)
+        gen_ops_z = np.kron(code_a.generator, code_field.Identity(len(code_b)))
+        return code_field(gen_ops_x), code_field(gen_ops_z)
 
 
 class LPCode(CSSCode):
