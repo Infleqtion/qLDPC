@@ -23,18 +23,7 @@ cdef extern from *:
         uint64_t count_trailing_zeros(uint64_t num) {
             return __builtin_ctzll(num);
         }
-    #elif defined(_MSC_VER) && defined(__POPCNT__)
-        #include <intrin.h>
-        uint64_t hamming_weight(uint64_t num) {
-            return __popcnt64(num);
-        }
-        uint64_t count_trailing_zeros(uint64_t num) {
-            uint64_t index;
-            _BitScanForward64(&index, num);
-            return index;
-        }
     #else
-    #if defined(__GNUC__) || defined(__clang__)
         uint64_t hamming_weight(uint64_t num) {
             uint64_t count = 0;
             while (num) {
