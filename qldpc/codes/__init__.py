@@ -15,6 +15,7 @@ from .common import (
     QuditCode,
 )
 from .quantum import (
+    BaconShorCode,
     BBCode,
     C4Code,
     C6Code,
@@ -25,6 +26,7 @@ from .quantum import (
     LPCode,
     QCCode,
     QTCode,
+    SHPCode,
     SteaneCode,
     SurfaceCode,
     TBCode,
@@ -32,6 +34,7 @@ from .quantum import (
 )
 
 __all__ = [
+    "BaconShorCode",
     "BCHCode",
     "ExtendedHammingCode",
     "HammingCode",
@@ -54,6 +57,7 @@ __all__ = [
     "LPCode",
     "QCCode",
     "QTCode",
+    "SHPCode",
     "SteaneCode",
     "SurfaceCode",
     "TBCode",

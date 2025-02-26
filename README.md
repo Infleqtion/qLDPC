@@ -1,6 +1,6 @@
 # qLDPC
 
-This package contains tools for constructing and analyzing [quantum low density parity check (qLDPC) codes](https://errorcorrectionzoo.org/c/qldpc).  At least, that was the original motivation for this package.  In practice, the tools here can work just as well for general error-correcting stabilizer codes.
+This package contains tools for constructing and analyzing [quantum low density parity check (qLDPC) codes](https://errorcorrectionzoo.org/c/qldpc).  At least, that was the original motivation for this package.  In practice, the tools here can work just as well for more general error-correcting stabilizer and subsystem codes.
 
 ## 📦 Installation
 
@@ -23,13 +23,12 @@ Notable features include:
 - `ClassicalCode`: class for representing classical linear error-correcting codes over finite fields.
   - Various pre-defined classical code families.
   - Communication with the [GAP](https://www.gap-system.org/)/[GUAVA](https://www.gap-system.org/Packages/guava.html) package for [even more codes](https://docs.gap-system.org/pkg/guava/doc/chap5.html).
-- `QuditCode`: general class for constructing [Galois-qudit codes](https://errorcorrectionzoo.org/c/galois_into_galois).
+- `QuditCode`: general class for constructing [Galois-qudit codes](https://errorcorrectionzoo.org/c/galois_into_galois), including both [stabilizer](https://errorcorrectionzoo.org/c/galois_stabilizer) and [subsystem](https://errorcorrectionzoo.org/c/oecc) codes.
   - Automatic construction of all SWAP-transversal logical Clifford gates in one code block of a qubit code, with `qldpc.circuits.get_transversal_ops` (see [arXiv:2409.18175](https://arxiv.org/abs/2409.18175); requires [GAP](https://www.gap-system.org/) and [GUAVA](https://www.gap-system.org/Packages/guava.html)).
   - `QuditCode.get_logical_ops`: method to construct a complete basis of nontrivial logical Pauli operators for a `QuditCode`.
   - `QuditCode.concatenate`: method to [concatenate](https://errorcorrectionzoo.org/c/quantum_concatenated) `QuditCode`s in various ways.
 - `CSSCode`: subclass of `QuditCode` for the special case of constructing a [quantum CSS code](https://errorcorrectionzoo.org/c/css) out of two mutually compatible `ClassicalCode`s.
   - `CSSCode.get_distance`: method to compute the code distance (i.e., the minimum weight of a nontrivial logical operator) of a `CSSCode`.  Includes options for computing the exact code distance by brute force, as well as an estimate (or upper bound) with the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
-  - Includes options for applying local Hadamard transformations, which is useful for tailoring a `CSSCode` to biased noise (see [arXiv:2202.01702](https://arxiv.org/abs/2202.01702)).
 - `TBCode`: class for constructing [two-block quantum codes](https://errorcorrectionzoo.org/c/two_block_quantum).
 - `BBCode`: class for constructing the [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic) in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).
   - Includes methods to identify "toric layouts" of a `BBCode`, in which the code looks like a toric code augmented by some long-distance checks, as in discussed in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).

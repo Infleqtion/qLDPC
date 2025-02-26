@@ -18,6 +18,8 @@ limitations under the License.
 from __future__ import annotations
 
 import functools
+import itertools
+import random
 
 import galois
 import numpy as np
@@ -25,7 +27,7 @@ import numpy.typing as npt
 import pytest
 
 from qldpc import codes, decoders
-from qldpc.objects import Pauli, conjugate_xz
+from qldpc.objects import symplectic_conjugate
 
 
 def test_custom_decoder(pytestconfig: pytest.Config) -> None:
@@ -65,7 +67,8 @@ def test_decoding() -> None:
     )
 
     # the distance of the given code is undefined, so lookup decoding to half the distance fails
-    assert np.array_equal([0, 0], decoders.decode(matrix, syndrome, with_lookup=True))
+    with pytest.warns(UserWarning, match="without specifying a maximum error weight"):
+        assert np.array_equal([0, 0], decoders.decode(matrix, syndrome, with_lookup=True))
 
     # ... but it works if we manually tell it to try and decode errors of weight <= 2
     assert np.array_equal(error, decoders.decode(matrix, syndrome, with_lookup=True, max_weight=2))
@@ -109,19 +112,24 @@ def test_decoding() -> None:
 def test_quantum_decoding(pytestconfig: pytest.Config) -> None:
     """Decode a full quantum code (as opposed to a classical subcode of a CSSCode)."""
     np.random.seed(pytestconfig.getoption("randomly_seed"))
-    paulis = [Pauli.I, Pauli.X, Pauli.Y, Pauli.Z]
 
-    code = codes.SurfaceCode(5)
+    code = codes.SurfaceCode(5, field=3)
+    local_errors = tuple(itertools.product(range(code.field.order), repeat=2))[1:]
     qubit_a, qubit_b = np.random.choice(range(len(code)), size=2, replace=False)
-    pauli_a, pauli_b = np.random.choice(range(1, 4), size=2)
+    pauli_a, pauli_b = random.choices(local_errors, k=2)
     error = code.field.Zeros(2 * len(code))
-    error[[qubit_a, qubit_a + len(code)]] = paulis[pauli_a].value
-    error[[qubit_b, qubit_b + len(code)]] = paulis[pauli_b].value
-    syndrome = code.matrix @ conjugate_xz(error)
+    error[[qubit_a, qubit_a + len(code)]] = pauli_a
+    error[[qubit_b, qubit_b + len(code)]] = pauli_b
+    syndrome = symplectic_conjugate(code.matrix) @ error
 
+    decoder: decoders.Decoder
     decoder = decoders.GUFDecoder(code.matrix, symplectic=True)
     decoded_error = code.field(decoder.decode(syndrome))
-    assert np.array_equal(syndrome, code.matrix @ conjugate_xz(decoded_error))
+    assert np.array_equal(syndrome, symplectic_conjugate(code.matrix) @ decoded_error)
+
+    decoder = decoders.LookupDecoder(code.matrix, symplectic=True, max_weight=2)
+    decoded_error = code.field(decoder.decode(syndrome))
+    assert np.array_equal(syndrome, symplectic_conjugate(code.matrix) @ decoded_error)
 
 
 def test_decoding_errors() -> None:
@@ -132,8 +140,5 @@ def test_decoding_errors() -> None:
     with pytest.raises(ValueError, match="ILP decoding only supports prime number fields"):
         decoders.decode(galois.GF(4)(matrix), syndrome, with_ILP=True)
 
-    with (
-        pytest.raises(ValueError, match="could not be found"),
-        pytest.warns(UserWarning, match="infeasible or unbounded"),
-    ):
+    with pytest.raises(ValueError, match="could not be found"):
         decoders.decode(matrix, syndrome, with_ILP=True)

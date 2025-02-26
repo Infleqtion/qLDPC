@@ -40,7 +40,7 @@ def test_small_codes() -> None:
     code = codes.FiveQubitCode()
     assert code.num_qubits == 5
     assert code.dimension == 1
-    assert code.get_stabilizers()[0] == "X Z Z X I"
+    assert code.get_strings()[0] == "X Z Z X I"
 
     for size in range(2, 6):
         assert codes.IcebergCode(size).get_code_params() == (2 * size, 2 * size - 2, 2)
@@ -230,6 +230,33 @@ def test_hypergraph_products(
     assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
 
 
+@pytest.mark.parametrize("field", [2, 3])
+def test_subsystem_hypergraph_product(
+    field: int,
+    bits_checks_a: tuple[int, int] = (5, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
+) -> None:
+    """Validity of the subsystem hypergraph product code."""
+    subcode = codes.ClassicalCode.random(*bits_checks_a, field=field)
+    code = codes.SHPCode(subcode)
+
+    # assert validity of the the "natural" stabilizers that are set at initialization time
+    stabilizer_ops = code.get_stabilizer_ops()
+    assert np.array_equal(
+        stabilizer_ops.row_reduce(),
+        code.get_stabilizer_ops(recompute=True, canonicalized=True),
+    )
+
+    # sanity check for generating sets of the logical operators of an SHPCode
+    gens_x, gens_z = codes.SHPCode.get_logical_generators(subcode, subcode)
+    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
+    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
+    assert not np.any(code.matrix_z @ gens_x.T)
+    assert not np.any(code.matrix_x @ gens_z.T)
+    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
+    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+
+
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (4, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
@@ -301,8 +328,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = np.block(
         [
-            [zero_1, mat_1.T, -mat_2, zero_4],
             [mat_1, zero_2, zero_3, mat_2.T],
+            [zero_1, mat_1.T, -mat_2, zero_4],
         ]
     )
 
@@ -502,3 +529,11 @@ def test_generalized_surface_codes(size: int = 3) -> None:
 
     with pytest.raises(ValueError, match=">= 2"):
         codes.GeneralizedSurfaceCode(size, dim=1)
+
+
+def test_bacon_shor_code() -> None:
+    """Bacon-Shor code."""
+    code = codes.BaconShorCode(3)
+    code._exact_distance_x = code._exact_distance_z = None
+    assert all(np.count_nonzero(row) == 2 for row in code.matrix)
+    assert code.get_distance() == 3

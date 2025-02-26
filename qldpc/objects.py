@@ -22,7 +22,7 @@ import enum
 import functools
 import itertools
 from collections.abc import Collection, Iterator
-from typing import Literal
+from typing import Literal, TypeVar
 
 import galois
 import networkx as nx
@@ -33,15 +33,20 @@ import stim
 from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 
+IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
 
-def conjugate_xz(strings: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-    """Flip the X and Z sectors of the given Pauli strings.
 
-    This operation converts between vectors and dual vectors of the symplectic inner product space of
-    bitstrings that represent Pauli strings by their [X|Z] support.
+def symplectic_conjugate(vectors: IntegerArray) -> IntegerArray:
+    """Take symplectic vectors to their duals.
+
+    The symplectic conjugate of a Pauli string swaps its X and Z support, and multiplies its X
+    sector by -1, taking P = [P_x|P_z] -> [-P_z|P_x], such that the symplectic inner product between
+    Pauli strings P and Q is ⟨P,Q⟩_s = P_x @ Q_z - P_z @ Q_x = symplectic_conjugate(P) @ Q.
     """
-    assert strings.shape[-1] % 2 == 0
-    return strings.reshape(-1, 2, strings.shape[-1] // 2)[:, ::-1, :].reshape(strings.shape)
+    assert vectors.shape[-1] % 2 == 0
+    conjugated_string = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
+    conjugated_string[:, 0, :] *= -1
+    return conjugated_string.reshape(vectors.shape)  # type:ignore[return-value]
 
 
 def op_to_string(op: npt.NDArray[np.int_]) -> stim.PauliString:
