@@ -1193,6 +1193,8 @@ class QuditCode(AbstractCode):
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
+        if self._logical_ops is not None:
+            return len(self._logical_ops) // 2
         if not self.is_subsystem_code:
             return len(self) - self.rank
         num_stabs = len(self.get_stabilizer_ops(canonicalized=True))
@@ -1203,6 +1205,8 @@ class QuditCode(AbstractCode):
         """The number of gauge qudits in this code."""
         if not self.is_subsystem_code:
             return 0
+        if self._gauge_ops is not None:
+            return len(self._gauge_ops) // 2
         num_stabs = len(self.get_stabilizer_ops(canonicalized=True))
         return (self.rank - num_stabs) // 2
 
