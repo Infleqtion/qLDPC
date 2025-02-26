@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
+import distutils.ccompiler
 import os
 import shutil
 import sys
 
-import distutils.ccompiler
 import numpy
 from Cython.Build import cythonize
 from setuptools import Distribution, Extension
