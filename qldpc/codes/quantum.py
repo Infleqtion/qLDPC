@@ -960,7 +960,6 @@ class SHPCode(CSSCode):
 
         matrix_x = np.kron(code_a.matrix, code_b.generator)
         matrix_z = np.kron(code_a.generator, code_b.matrix)
-
         CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
 
 
