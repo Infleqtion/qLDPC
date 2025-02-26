@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
 import os
 import shutil
+import sysconfig
 
 import numpy
 from Cython.Build import cythonize
 from setuptools import Distribution, Extension
 from setuptools.command.build_ext import build_ext
+
+if sysconfig.get_config_var("CC") == "cl":
+    compile_args = ["/O2"]
+else:
+    compile_args = ["-O3", "-march=native", "-Wall"]
 
 
 def build_cython() -> None:
@@ -13,7 +19,7 @@ def build_cython() -> None:
         "*",
         ["*/**/*.pyx"],
         include_dirs=[numpy.get_include()],
-        extra_compile_args=["-O3", "-march=native", "-Wall"],
+        extra_compile_args=compile_args,
     )
     ext_modules = cythonize(extension, compiler_directives={"language_level": "3"})
     distribution = Distribution(dict(ext_modules=ext_modules))
