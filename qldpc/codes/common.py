@@ -1134,7 +1134,7 @@ class QuditCode(AbstractCode):
         self._logical_ops = logical_ops
 
     def get_stabilizer_ops(
-        self, pauli: PauliXZ | None = None, *, canonicalized: bool = False
+        self, pauli: PauliXZ | None = None, *, recompute: bool = False, canonicalized: bool = False
     ) -> galois.FieldArray:
         """Basis of stabilizer group generators for this code.
 
@@ -1149,10 +1149,11 @@ class QuditCode(AbstractCode):
             pivots_x = _first_nonzero_cols(stabilizer_ops) < len(self)
             return stabilizer_ops[pivots_x if pauli is Pauli.X else ~pivots_x]
 
-        # return stabilizers if known
         if not self.is_subsystem_code:
             return self.matrix if not canonicalized else self.canonicalized.matrix
-        if self._stabilizer_ops is not None:
+
+        # return stabilizers if known
+        if not (self._stabilizer_ops is None or recompute):
             return self._stabilizer_ops
 
         stabs_and_gauges = self.canonicalized.matrix
@@ -1885,6 +1886,7 @@ class CSSCode(QuditCode):
         self,
         pauli: PauliXZ | None = None,
         *,
+        recompute: bool = False,
         canonicalized: bool = False,
         symplectic: bool = False,
     ) -> galois.FieldArray:
@@ -1907,7 +1909,9 @@ class CSSCode(QuditCode):
             stabs_z = stabs_and_gauges_and_logs_x.null_space()
             self._stabilizer_ops = self.field(scipy.linalg.block_diag(stabs_x, stabs_z))
 
-        stabilizer_ops = QuditCode.get_stabilizer_ops(self, pauli, canonicalized=canonicalized)
+        stabilizer_ops = QuditCode.get_stabilizer_ops(
+            self, pauli, recompute=recompute, canonicalized=canonicalized
+        )
         if symplectic or pauli is None:
             return stabilizer_ops
         return stabilizer_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]

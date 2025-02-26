@@ -26,7 +26,7 @@ import pytest
 import sympy
 
 from qldpc import abstract, codes
-from qldpc.objects import ChainComplex, Node, Pauli
+from qldpc.objects import ChainComplex, Node, Pauli, symplectic_conjugate
 
 
 def test_small_codes() -> None:
@@ -228,6 +228,29 @@ def test_hypergraph_products(
     assert not np.any(code.matrix_x @ gens_z.T)
     assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
     assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+
+
+@pytest.mark.parametrize("field", [2, 3])
+def test_subsystem_hypergraph_product(
+    field: int,
+    bits_checks_a: tuple[int, int] = (5, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
+) -> None:
+    """Validity of the subsystem hypergraph product code."""
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
+    code = codes.SHPCode(code_a, code_b)
+
+    stabilizer_ops = code.get_stabilizer_ops()
+    assert np.array_equal(
+        stabilizer_ops.row_reduce(),
+        code.get_stabilizer_ops(recompute=True).row_reduce(),
+    )
+
+    # gauge_ops = code.get_gauge_ops()
+    # logical_ops = code.get_logical_ops()
+
+    # assert not (symplectic_conjugate(code.matrix) @ logical_ops.T).any()
 
 
 def test_trivial_lift(
