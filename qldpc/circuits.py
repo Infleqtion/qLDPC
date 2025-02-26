@@ -67,8 +67,8 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
 
     """
     Remove stabilizer factors to enforce that destabilizers commute with each other.  This process
-    requires updating one destabilizer at a time, since each time we modify a destabilizer, that
-    changes its commutation with other destabilizers.
+    requires updating one destabilizer at a time, since each time we modify a destabilizer by
+    stabilizer factors, that changes its commutation relations with other destabilizers.
     """
     for row, destab_op in enumerate(destab_ops[1:], start=1):
         destab_op -= destab_op @ symplectic_conjugate(destab_ops[:row]).T @ stab_ops[:row]
