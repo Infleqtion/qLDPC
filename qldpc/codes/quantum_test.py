@@ -26,7 +26,7 @@ import pytest
 import sympy
 
 from qldpc import abstract, codes
-from qldpc.objects import ChainComplex, Node, Pauli, symplectic_conjugate
+from qldpc.objects import ChainComplex, Node, Pauli
 
 
 def test_small_codes() -> None:
