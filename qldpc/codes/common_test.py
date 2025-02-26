@@ -395,7 +395,7 @@ def test_qudit_ops() -> None:
     code = codes.FiveQubitCode()
     code._is_subsystem_code = True
     stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
-    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]])
+    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]])  # type:ignore[assignment]
     code._stabilizer_ops = stabilizer_ops
     assert np.array_equal(code.get_stabilizer_ops(), stabilizer_ops)
     assert np.array_equal(code.get_stabilizer_ops(canonicalized=True), stabilizer_ops[:-1])
