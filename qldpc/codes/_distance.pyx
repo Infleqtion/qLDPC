@@ -6,15 +6,53 @@ from typing import Iterator
 import numpy as np
 cimport numpy as cnp
 
-# disable deprecated numpy API
+
 cdef extern from *:
     """
     #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+
+    #include <stdint.h>
+
+    #if defined(__GNUC__) || defined(__clang__)
+        uint64_t hamming_weight(uint64_t num) {
+            return __builtin_popcountll(num);
+        }
+        uint64_t count_trailing_zeros(uint64_t num) {
+            return __builtin_ctzll(num);
+        }
+    #elif defined(_MSC_VER) && defined(__POPCNT__)
+        #include <intrin.h>
+        uint64_t hamming_weight(uint64_t num) {
+            return __popcnt64(num);
+        }
+        uint64_t count_trailing_zeros(uint64_t num) {
+            uint64_t index;
+            _BitScanForward64(&index, num);
+            return index;
+        }
+    #else
+    #if defined(__GNUC__) || defined(__clang__)
+        uint64_t hamming_weight(uint64_t num) {
+            uint64_t count = 0;
+            while (num) {
+                count += num & 1;
+                num >>= 1;
+            }
+            return count;
+        }
+        uint64_t count_trailing_zeros(uint64_t num) {
+            uint64_t count = 0;
+            while ((num & 1) == 0) {
+                num >>= 1;
+                count += 1;
+            }
+            return count;
+        }
+    #endif
     """
 
-cdef extern from "stdint.h":
-    uint64_t __builtin_popcountl(uint64_t nn)  # hamming weight of a unit64
-    uint64_t __builtin_ctzll(uint64_t nn)  # count trailing zeroes in a unit64
+cdef uint64_t (*hamming_weight)(uint64_t)
+cdef uint64_t (*count_trailing_zeros)(uint64_t)
 
 
 ####################################################################################################
@@ -25,11 +63,6 @@ cdef uint64_t ODD_BITS_MASK = 0x5555555555555555  # 1 on the odd bits of a 64-bi
 cdef uint64_t EVEN_BITS_MASK = 0xAAAAAAAAAAAAAAAA  # 1 on the even bits of a 64-bit integer
 
 
-cdef uint64_t hamming_weight(uint64_t num):
-    """Hamming weight of an integer."""
-    return __builtin_popcountl(num)
-
-
 cdef uint64_t symplectic_weight(uint64_t num):
     """Symplectic weight of an integer."""
     return hamming_weight((num & ODD_BITS_MASK) | (num & EVEN_BITS_MASK))
@@ -38,7 +71,7 @@ cdef uint64_t symplectic_weight(uint64_t num):
 def gray_code_flips(uint64_t num) -> Iterator[uint64_t]:
     """Iterate over the bits to flip in a Gray code for bitstrings of the given length."""
     for counter in range(<uint64_t>1, <uint64_t>1 << num):
-        yield __builtin_ctzll(counter)
+        yield count_trailing_zeros(counter)
 
 
 cdef cnp.ndarray[cnp.uint64_t, ndim=2] rows_to_uint64(
