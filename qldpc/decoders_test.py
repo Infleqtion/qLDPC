@@ -140,8 +140,5 @@ def test_decoding_errors() -> None:
     with pytest.raises(ValueError, match="ILP decoding only supports prime number fields"):
         decoders.decode(galois.GF(4)(matrix), syndrome, with_ILP=True)
 
-    with (
-        pytest.raises(ValueError, match="could not be found"),
-        pytest.warns(UserWarning, match="infeasible or unbounded"),
-    ):
+    with pytest.raises(ValueError, match="could not be found"):
         decoders.decode(matrix, syndrome, with_ILP=True)

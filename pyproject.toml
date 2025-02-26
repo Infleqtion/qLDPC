@@ -71,6 +71,9 @@ plugins = ["numpy.typing.mypy_plugin"]
 
 [tool.pytest.ini_options]
 addopts = "--disable-socket"
+filterwarnings = [
+  'ignore:(?s).*The problem is either infeasible or unbounded.*:UserWarning', # from cvxpy
+]
 
 [tool.coverage.report]
 fail_under = 100
