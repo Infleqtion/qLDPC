@@ -493,7 +493,7 @@ class ClassicalCode(AbstractCode):
 
         def nontrivial(matrix: galois.FieldArray) -> bool:
             """Return True iff all rows and columns are nonzero."""
-            return all(row.any() for row in matrix) and all(col.any() for col in matrix.T)
+            return all(np.any(row) for row in matrix) and all(np.any(col) for col in matrix.T)
 
         matrix = get_random_array(code_field, (checks, bits), satisfy=nontrivial, seed=seed)
         return ClassicalCode(matrix)

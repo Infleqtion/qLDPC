@@ -107,7 +107,7 @@ def test_tensor_product(
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     code_ab = codes.ClassicalCode.tensor_product(code_a, code_b)
     basis = np.reshape(code_ab.generator, (-1, len(code_a), len(code_b)))
-    assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
+    assert all(not np.any(code_a.matrix @ word @ code_b.matrix.T) for word in basis)
 
     n_a, k_a, d_a = code_a.get_code_params()
     n_b, k_b, d_b = code_b.get_code_params()
