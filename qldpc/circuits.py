@@ -437,15 +437,15 @@ def _get_logical_tableau_from_code_data(
     sector_s = slice(dimension + gauge_dimension, len(encoder))
 
     # sanity check: stabilizers, logicals, and gauge operators should not pick up destabilizers
-    assert not z2x[:, sector_s].any()
-    assert not x2x[sector_l, sector_s].any()
-    assert not x2x[sector_g, sector_s].any()
+    assert not np.any(z2x[:, sector_s])
+    assert not np.any(x2x[sector_l, sector_s])
+    assert not np.any(x2x[sector_g, sector_s])
 
     # sanity check: gauge operators should not pick up logical factors
-    assert not x2x[sector_g, sector_l].any()
-    assert not x2z[sector_g, sector_l].any()
-    assert not z2x[sector_g, sector_l].any()
-    assert not z2z[sector_g, sector_l].any()
+    assert not np.any(x2x[sector_g, sector_l])
+    assert not np.any(x2z[sector_g, sector_l])
+    assert not np.any(z2x[sector_g, sector_l])
+    assert not np.any(z2z[sector_g, sector_l])
 
     return logical_tableau
 
