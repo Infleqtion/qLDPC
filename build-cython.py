@@ -12,9 +12,10 @@ from setuptools.command.build_ext import build_ext
 
 
 def build_cython(*extra_compile_args: str, rebuild: bool = False) -> None:
+    pyx_files = glob.glob(os.path.join(os.path.dirname(__file__), "**", "*.pyx"), recursive=True)
     extension = Extension(
         "*",
-        glob.glob("**/*.pyx", recursive=True),
+        pyx_files,
         include_dirs=[numpy.get_include()],
         define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")],
         extra_compile_args=list(extra_compile_args),
