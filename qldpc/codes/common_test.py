@@ -391,6 +391,15 @@ def test_qudit_ops() -> None:
             get_symplectic_form(code.dimension, code.field),
         )
 
+    # test the guarantee of stabilizer canonicalization
+    code = codes.FiveQubitCode()
+    code._is_subsystem_code = True
+    stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
+    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]])
+    code._stabilizer_ops = stabilizer_ops
+    assert np.array_equal(code.get_stabilizer_ops(), stabilizer_ops)
+    assert np.array_equal(code.get_stabilizer_ops(canonicalized=True), stabilizer_ops[:-1])
+
 
 def test_code_deformation() -> None:
     """Deform a code by a physical Clifford transformation."""
