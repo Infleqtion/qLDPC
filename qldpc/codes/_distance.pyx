@@ -43,8 +43,8 @@ cdef extern from *:
     #endif
     """
 
-cdef uint64_t (*hamming_weight)(uint64_t)
-cdef uint64_t (*count_trailing_zeros)(uint64_t)
+cdef extern uint64_t hamming_weight(uint64_t)
+cdef extern uint64_t count_trailing_zeros(uint64_t)
 
 
 ####################################################################################################
