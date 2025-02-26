@@ -958,9 +958,17 @@ class SHPCode(CSSCode):
         code_b = ClassicalCode(code_b, field)
         field = code_a.field.order
 
-        matrix_x = np.kron(code_a.matrix, code_b.generator)
-        matrix_z = np.kron(code_a.generator, code_b.matrix)
+        matrix_x = np.kron(code_a.matrix, field.Identity(len(code_b)))
+        matrix_z = np.kron(field.Identity(len(code_a)), code_b.matrix)
         CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
+
+        stabilizer_ops_x = np.kron(code_a.matrix, code_b.generator)
+        stabilizer_ops_z = np.kron(code_a.generator, code_b.matrix)
+        self._stabilizer_ops = scipy.linalg.block_diag([stabilizer_ops_x, stabilizer_ops_z])
+
+        logical_ops_x = np.kron(field.Identity(len(code_a)), code_b.generator)
+        logical_ops_z = np.kron(code_a.generator, field.Identity(len(code_b)))
+        self._logical_ops = scipy.linalg.block_diag([logical_ops_x, logical_ops_z])
 
 
 ################################################################################
