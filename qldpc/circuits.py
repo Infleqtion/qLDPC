@@ -48,61 +48,58 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
 
     For all j in {0, 1, ..., code.dimension - 1}, this tableau maps weight-one X_j and Z_j operators
     at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
-    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
-    mapped to destabilizers.
+    Z_j operators for j >= code.dimension get mapped to "Z-type" gauge operators and stabilizers,
+    and their conjugate X_j get mapped to "X-type" gauge operators and destabilizers.
     """
-    # identify logical operators
+    # identify stabilizers, logical operators, and gauge operators
+    stab_ops = code.get_stabilizer_ops(canonicalized=True)
     logical_ops = code.get_logical_ops()
-    logical_strings_x = [op_to_string(op) for op in logical_ops[: code.dimension]]
-    logical_strings_z = [op_to_string(op) for op in logical_ops[code.dimension :]]
-
-    # identify gauge operators
     gauge_ops = code.get_gauge_ops()
-    gauge_strings_x = [op_to_string(op) for op in gauge_ops[: code.gauge_dimension]]
-    gauge_strings_z = [op_to_string(op) for op in gauge_ops[code.gauge_dimension :]]
 
-    # identify stabilizers
-    stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
-    stabilizer_strings_z = [op_to_string(row) for row in stabilizer_ops]
-    pivots = np.argmax(stabilizer_ops.view(np.ndarray).astype(bool), axis=1)
-
-    # construct destabilizers
-    stabilizer_strings_x: list[stim.PauliString] = []
+    """
+    Construct "candidate" destabilizers that have correct pair-wise (anti-)commutation relations
+    with the stabilizers, but may contain extra stabilizer, logical, or gauge operator components.
+    """
+    destab_ops_list = []
+    pivots = np.argmax(stab_ops.view(np.ndarray).astype(bool), axis=1)
     for pivot in pivots:
-        # construct a candidate destabilizer that only anti-commutes with one stabilizer
-        vector = code.field.Zeros(2 * len(code))
+        vector = np.zeros(2 * len(code), dtype=int)
         vector[(pivot + len(code)) % (2 * len(code))] = 1
-        candidate_destabilizer = op_to_string(vector)
+        destab_ops_list.append(vector)
+    destab_ops = code.field(destab_ops_list)
 
-        # enforce that the candidate destabilizer commutes with all logical and gauge operators
-        for string_x, string_z in zip(
-            logical_strings_x + gauge_strings_x, logical_strings_z + gauge_strings_z
-        ):
-            if not candidate_destabilizer.commutes(string_x):  # pragma: no cover
-                candidate_destabilizer *= string_z
-            if not candidate_destabilizer.commutes(string_z):  # pragma: no cover
-                candidate_destabilizer *= string_x
+    """
+    Remove stabilizer factors to enforce that destabilizers commute with each other.  This process
+    requires updating one destabilizer at a time, since each time we modify a destabilizer, that
+    changes its commutation with other destabilizers.
+    """
+    for row in range(1, len(destab_ops)):
+        destab_ops[row] -= (
+            destab_ops[row] @ symplectic_conjugate(destab_ops[:row]).T @ stab_ops[:row]
+        )
 
-        # enforce that the candidate destabilizer commutes with other destabilizers
-        for old_destabilizer, stabilizer in zip(stabilizer_strings_x, stabilizer_strings_z):
-            if not candidate_destabilizer.commutes(old_destabilizer):
-                candidate_destabilizer *= stabilizer
-        stabilizer_strings_x.append(candidate_destabilizer)
+    # remove logical and gauge operator factors
+    dual_logical_ops = logical_ops.reshape(2, -1)[::-1, :].reshape(logical_ops.shape)
+    dual_gauge_ops = gauge_ops.reshape(2, -1)[::-1, :].reshape(gauge_ops.shape)
+    destab_ops -= destab_ops @ symplectic_conjugate(dual_logical_ops).T @ logical_ops
+    destab_ops -= destab_ops @ symplectic_conjugate(dual_gauge_ops).T @ gauge_ops
 
-    return stim.Tableau.from_conjugated_generators(
-        xs=logical_strings_x + gauge_strings_x + stabilizer_strings_x,
-        zs=logical_strings_z + gauge_strings_z + stabilizer_strings_z,
-    )
+    # construct Pauli strings to hand over to Stim
+    matrices_x = [logical_ops[: code.dimension], gauge_ops[: code.gauge_dimension], destab_ops]
+    matrices_z = [logical_ops[code.dimension :], gauge_ops[code.gauge_dimension :], stab_ops]
+    strings_x = [op_to_string(op) for matrix in matrices_x for op in matrix]
+    strings_z = [op_to_string(op) for matrix in matrices_z for op in matrix]
+    return stim.Tableau.from_conjugated_generators(xs=strings_x, zs=strings_z)
 
 
 @restrict_to_qubits
 def get_encoding_circuit(code: codes.QuditCode) -> stim.Circuit:
     """Circuit to encode physical states at its input into logical states of the given code.
 
-    For all j in {0, 1, ..., code.dimension - 1}, this circuit maps weight-one X_j and Z_j operators
+    For all j in {0, 1, ..., code.dimension - 1}, this tableau maps weight-one X_j and Z_j operators
     at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
-    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
-    mapped to destabilizers.
+    Z_j operators for j >= code.dimension get mapped to "Z-type" gauge operators and stabilizers,
+    and their conjugate X_j get mapped to "X-type" gauge operators and destabilizers.
     """
     return get_encoding_tableau(code).to_circuit()
 
