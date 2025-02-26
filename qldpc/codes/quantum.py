@@ -831,9 +831,10 @@ class HGPCode(CSSCode):
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Generating sets for the logical operators of a hypergraph product code.
 
-        Taken from Eqs. (28) and (29) of arXiv:2002.06257.
+        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
         """
         assert code_a.field is code_b.field
+        code_field = code_a.field
 
         mat_H1, mat_G1 = code_a.matrix, code_a.generator
         mat_H2, mat_G2 = code_b.matrix, code_b.generator
@@ -866,7 +867,7 @@ class HGPCode(CSSCode):
                 [np.zeros((mat_Im1_F2.shape[0], mat_G1_In2.shape[1]), dtype=int), mat_Im1_F2],
             ]
         )
-        return code_a.field(gen_ops_x), code_a.field(gen_ops_z)
+        return code_field(gen_ops_x), code_field(gen_ops_z)
 
 
 class SHPCode(CSSCode):
@@ -904,22 +905,23 @@ class SHPCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
 
         stab_ops_x = np.kron(code_a.matrix, code_b.generator)
-        stab_ops_z = np.kron(code_a.generator, code_b.matrix)
+        stab_ops_z = np.kron(-code_a.generator, code_b.matrix)
         self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
-        # logical_ops_x = np.kron(field.Identity(len(code_a)), code_b.generator)
-        # logical_ops_z = np.kron(code_a.generator, field.Identity(len(code_b)))
-        # print()
-        # print()
-        # print()
-        # print()
-        # print(logical_ops_x.shape)
-        # print(logical_ops_z.shape)
-        # print()
-        # print()
-        # print()
-        # exit()
-        # self._logical_ops = field(scipy.linalg.block_diag(logical_ops_x, logical_ops_z))
+    @staticmethod
+    def get_logical_generators(
+        code_a: ClassicalCode, code_b: ClassicalCode
+    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+        """Generating sets for the logical operators of a hypergraph product code.
+
+        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
+        """
+        assert code_a.field is code_b.field
+        code_field = code_a.field
+
+        gen_ops_x = np.kron(code_field.Identity(len(code_a)), code_b.generator)
+        gen_ops_z = np.kron(code_a.generator, code_field.Identity(len(code_b)))
+        return code_field(gen_ops_x), code_field(gen_ops_z)
 
 
 class LPCode(CSSCode):

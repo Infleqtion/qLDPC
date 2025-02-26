@@ -241,16 +241,21 @@ def test_subsystem_hypergraph_product(
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
     code = codes.SHPCode(code_a, code_b)
 
+    # test that the "natural" stabilizers are equivalent to the "canonical" ones
     stabilizer_ops = code.get_stabilizer_ops()
     assert np.array_equal(
         stabilizer_ops.row_reduce(),
-        code.get_stabilizer_ops(recompute=True).row_reduce(),
+        code.get_stabilizer_ops(recompute=True, canonicalized=True),
     )
 
-    # gauge_ops = code.get_gauge_ops()
-    # logical_ops = code.get_logical_ops()
-
-    # assert not (symplectic_conjugate(code.matrix) @ logical_ops.T).any()
+    # sanity check for generating sets of the logical operators of an SHPCode
+    gens_x, gens_z = codes.SHPCode.get_logical_generators(code_a, code_b)
+    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
+    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
+    assert not np.any(code.matrix_z @ gens_x.T)
+    assert not np.any(code.matrix_x @ gens_z.T)
+    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
+    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
 
 
 def test_trivial_lift(
