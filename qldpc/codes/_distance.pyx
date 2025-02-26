@@ -36,7 +36,7 @@ cdef extern from *:
             uint64_t count = 0;
             while ((num & 1) == 0) {
                 num >>= 1;
-                count += 1;
+                count++;
             }
             return count;
         }
