@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
+import distutils.ccompiler
 import os
 import shutil
-import sysconfig
 
 import numpy
 from Cython.Build import cythonize
 from setuptools import Distribution, Extension
 from setuptools.command.build_ext import build_ext
 
-if sysconfig.get_config_var("CC") == "cl":
+if distutils.ccompiler.get_default_compiler() == "msvc":
     compile_args = ["/O2"]
 else:
     compile_args = ["-O3", "-march=native", "-Wall"]
