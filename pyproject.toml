@@ -8,7 +8,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 name = "qLDPC"
-version = "0.0.27"
+version = "0.0.28"
 description = "Tools for constructing and analyzing quantum low density parity check (qLDPC) codes."
 license = "Apache-2.0"
 authors = ["Michael A. Perlin <mika.perlin@gmail.com>"]
@@ -70,7 +70,10 @@ no_implicit_optional = true
 plugins = ["numpy.typing.mypy_plugin"]
 
 [tool.pytest.ini_options]
-addopts = "--disable-socket"
+addopts = "--disable-socket" # forbid tests from making network calls
+filterwarnings = [
+  'ignore:(?s).*The problem is either infeasible or unbounded.*:UserWarning', # from cvxpy
+]
 
 [tool.coverage.report]
 fail_under = 100
