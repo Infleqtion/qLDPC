@@ -1,0 +1,34 @@
+name: Conditional tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'pyproject.toml'
+      - '**/*.pyx'
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened, ready_for_review ]  # defaults plus ready_for_review
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  windows:
+    name: Windows check
+    if: github.event.pull_request.draft == false
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Set up MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install package and dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install '.[dev]'
+      - name: Run checks
+        run: checks/all_.py
+
