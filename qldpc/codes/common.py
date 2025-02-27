@@ -1159,7 +1159,7 @@ class QuditCode(AbstractCode):
             assert isinstance(stabs_and_gauges_and_logs, galois.FieldArray)
             self._stabilizer_ops = symplectic_conjugate(stabs_and_gauges_and_logs).null_space()
 
-        if canonicalized and not np.any(self._stabilizer_ops.row_reduce()[-1]):
+        if canonicalized and not _is_canonicalized(self._stabilizer_ops):
             self._stabilizer_ops = self.get_stabilizer_ops(recompute=True)
 
         return self._stabilizer_ops
@@ -2383,6 +2383,14 @@ def _first_nonzero_cols(matrix: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         return np.array([], dtype=int)
     boolean_matrix = matrix.reshape(matrix.shape[0], -1).view(np.ndarray).astype(bool)
     return np.argmax(boolean_matrix, axis=1)
+
+
+def _is_canonicalized(matrix: npt.NDArray[np.int_]) -> bool:
+    """Is the given matrix in canonical (row-reduced) form?"""
+    return all(
+        matrix[row, pivot] and not np.any(matrix[:row, pivot])
+        for row, pivot in enumerate(_first_nonzero_cols(matrix))
+    )
 
 
 def _get_sample_allocation(
