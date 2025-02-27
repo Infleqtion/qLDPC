@@ -11,7 +11,7 @@ pip install qldpc
 
 To install a local version of qLDPC from source:
 ```
-git clone git@github.com:Infleqtion/qLDPC.git
+git clone https://github.com/Infleqtion/qLDPC.git
 pip install -e qLDPC
 ```
 You can also `pip install -e 'qLDPC[dev]'` to additionally install some development tools.
