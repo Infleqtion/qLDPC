@@ -243,7 +243,7 @@ def test_subsystem_hypergraph_product(
     # assert validity of the the "natural" stabilizers that are set at initialization time
     stabilizer_ops = code.get_stabilizer_ops()
     assert np.array_equal(
-        stabilizer_ops.row_reduce(),
+        codes.ClassicalCode(stabilizer_ops).canonicalized.matrix,
         code.get_stabilizer_ops(recompute=True, canonicalized=True),
     )
 
