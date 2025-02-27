@@ -29,6 +29,6 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           python3 -m pip install '.[dev]'
-      - name: Run checks
+      - name: Run all checks
         run: checks/all_.py
 
