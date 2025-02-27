@@ -8,7 +8,6 @@ This package requires Python>=3.10, and can be installed from the Python Package
 ```
 pip install qldpc
 ```
-If you use macOS, you may need to install `cvxpy` manually by following the instructions [here](https://www.cvxpy.org/install/) before installing qLDPC.
 
 To install a local version of qLDPC from source:
 ```
@@ -16,6 +15,14 @@ git clone git@github.com:Infleqtion/qLDPC.git
 pip install -e qLDPC
 ```
 You can also `pip install -e 'qLDPC[dev]'` to additionally install some development tools.
+
+### Windows
+
+If you use Windows, you will need to have a C compiler installed, as discussed [here](https://wiki.python.org/moin/WindowsCompilers).  One option is to install [Visual Studio](https://visualstudio.microsoft.com/downloads/) (2022 or later).
+
+### macOS
+
+If you use macOS, you may need to install `cvxpy` manually by following the instructions [here](https://www.cvxpy.org/install/) before installing qLDPC.
 
 ## 🚀 Features
 
