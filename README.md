@@ -22,7 +22,7 @@ If you use Windows you will need to have a C compiler installed, as discussed [h
 
 ### macOS
 
-If you use macOS you may need to install `cvxpy` manually by following the instructions [here](https://www.cvxpy.org/install/) before installing `qLDPC`.
+If you use macOS you may need to install `cvxpy` manually by following the instructions [here](https://www.cvxpy.org/install/) before installing `qLDPC`.  If you use `conda` to manage your python environment, you can obtain `cvxpy` simply by running `conda install -c conda-forge cvxpy`.
 
 ## 🚀 Features
 
