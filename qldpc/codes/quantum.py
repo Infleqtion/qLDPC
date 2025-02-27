@@ -889,37 +889,37 @@ class SHPCode(CSSCode):
 
     def __init__(
         self,
-        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        code_x: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
-        if code_b is None:
-            code_b = code_a
-        code_a = ClassicalCode(code_a, field)
-        code_b = ClassicalCode(code_b, field)
-        code_field = code_a.field
+        if code_z is None:
+            code_z = code_x
+        code_x = ClassicalCode(code_x, field)
+        code_z = ClassicalCode(code_z, field)
+        code_field = code_x.field
 
-        matrix_x = np.kron(code_a.matrix, code_field.Identity(len(code_b)))
-        matrix_z = np.kron(code_field.Identity(len(code_a)), code_b.matrix)
+        matrix_x = np.kron(code_x.matrix, code_field.Identity(len(code_z)))
+        matrix_z = np.kron(code_field.Identity(len(code_x)), code_z.matrix)
         CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
 
-        stab_ops_x = np.kron(code_a.matrix, code_b.generator)
-        stab_ops_z = np.kron(-code_a.generator, code_b.matrix)
+        stab_ops_x = np.kron(code_x.matrix, code_z.generator)
+        stab_ops_z = np.kron(-code_x.generator, code_z.matrix)
         self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
     @staticmethod
     def get_logical_generators(
-        code_a: ClassicalCode, code_b: ClassicalCode
+        code_x: ClassicalCode, code_z: ClassicalCode
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Generating sets for the logical operators of a hypergraph product code.
 
         Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
         """
-        assert code_a.field is code_b.field
-        code_field = code_a.field
-        gen_ops_x = np.kron(code_field.Identity(len(code_a)), code_b.generator)
-        gen_ops_z = np.kron(code_a.generator, code_field.Identity(len(code_b)))
+        assert code_x.field is code_z.field
+        code_field = code_x.field
+        gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
+        gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
         return code_field(gen_ops_x), code_field(gen_ops_z)
 
 
@@ -1467,31 +1467,14 @@ class GeneralizedSurfaceCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field)
 
 
-class BaconShorCode(CSSCode):
-    """Bacon-Shor code on a square grid.
+class BaconShorCode(SHPCode):
+    """Bacon-Shor code on a square grid, implemented as a subsystem hypergraph product code.
 
     References:
     - https://errorcorrectionzoo.org/c/bacon_shor
     """
 
     def __init__(self, rows: int, cols: int | None = None, field: int | None = None) -> None:
-        cols = cols or rows
-        self._exact_distance_x = cols
-        self._exact_distance_z = rows
-
-        generators_x = []  # X_{i,j} X_{i+1,j} for grid coordinates i,j
-        generators_z = []  # Z_{i,j} Z_{i,j+1} for grid coordinates i,j
-        for row in range(rows):
-            for col in range(cols):
-                if row < rows - 1:
-                    stab_x = np.zeros((rows, cols), dtype=int)
-                    stab_x[row, col] = stab_x[row + 1, col] = 1
-                    generators_x.append(stab_x.ravel())
-                if col < cols - 1:
-                    stab_z = np.zeros((rows, cols), dtype=int)
-                    stab_z[row, col] = stab_z[row, col + 1] = 1
-                    generators_z.append(stab_z.ravel())
-
-        matrix_x = np.array(generators_x, dtype=int)
-        matrix_z = np.array(generators_z, dtype=int)
-        CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
+        code_x = RepetitionCode(rows, field)
+        code_z = RepetitionCode(cols or rows, field)
+        SHPCode.__init__(self, code_x, code_z, field)
