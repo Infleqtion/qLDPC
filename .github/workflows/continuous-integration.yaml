@@ -52,11 +52,13 @@ jobs:
           uv venv
           uv pip install '.[dev]'
       - name: Run ruff format
+        id: ruff-format
         run: |
           source .venv/bin/activate
           checks/format_.py
         continue-on-error: true
       - name: Run ruff check
+        id: ruff-check
         run: |
           source .venv/bin/activate
           checks/lint_.py
