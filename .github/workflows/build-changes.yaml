@@ -17,10 +17,11 @@ jobs:
     name: Windows check
     if: github.event.pull_request.draft == false
     runs-on: windows-latest
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           cache-dependency-glob: |
