@@ -25,8 +25,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: |
-            "**/pyproject.toml"
-            "build-cython.py"
+            **/pyproject.toml
+            **/*.pyx
+            build-cython.py
       - name: Install package and dependencies
         run: |
           uv venv
@@ -45,8 +46,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: |
-            "**/pyproject.toml"
-            "build-cython.py"
+            **/pyproject.toml
+            **/*.pyx
+            build-cython.py
       - name: Install package and dependencies
         run: |
           uv venv
@@ -99,8 +101,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: |
-            "**/pyproject.toml"
-            "build-cython.py"
+            **/pyproject.toml
+            **/*.pyx
+            build-cython.py
       - name: Install package and dependencies
         run: |
           uv venv

@@ -24,8 +24,9 @@ jobs:
         with:
           enable-cache: true
           cache-dependency-glob: |
-            "**/pyproject.toml"
-            "build-cython.py"
+            **/pyproject.toml
+            **/*.pyx
+            build-cython.py
       - name: Set up Microsoft Visual Studio
         uses: ilammy/msvc-dev-cmd@v1
       - name: Install package and dependencies
