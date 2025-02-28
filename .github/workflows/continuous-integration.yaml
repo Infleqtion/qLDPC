@@ -55,36 +55,11 @@ jobs:
         run: |
           source .venv/bin/activate
           checks/format_.py
+        continue-on-error: true
       - name: Run ruff check
         run: |
           source .venv/bin/activate
           checks/lint_.py
-
-  mypy:
-    name: Type check
-    if: github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
-    timeout-minutes: 2
-    needs: install
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: |
-            "**/pyproject.toml"
-            "build-cython.py"
-      - name: Install package and dependencies
-        run: |
-          uv venv
-          uv pip install '.[dev]'
-        id: ruff-format
-        run: checks/format_.py
-        continue-on-error: true
-      - name: Run ruff check
-        id: ruff-check
-        run: checks/lint_.py
         continue-on-error: true
       - name: Run mypy
         id: mypy
