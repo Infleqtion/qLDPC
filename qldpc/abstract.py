@@ -49,6 +49,7 @@ from collections.abc import Callable, Iterator, Sequence
 import galois
 import numpy as np
 import numpy.typing as npt
+import scipy.linalg
 import sympy.combinatorics as comb
 import sympy.core
 
@@ -724,18 +725,12 @@ class AbelianGroup(Group):
         vals = [sum(orders[:idx]) for idx in range(len(orders))]
 
         # identify method to "combine" two cyclic matrices
-        _combine: Callable[[npt.NDArray[np.int_], npt.NDArray[np.int_]], npt.NDArray[np.int_]]
-        if product_lift:
-            _combine = np.kron
-
+        if not product_lift:
+            _combine = scipy.linalg.block_diag
         else:
 
-            def _combine(
-                mat_a: npt.NDArray[np.int_], mat_b: npt.NDArray[np.int_]
-            ) -> npt.NDArray[np.int_]:
-                zero_ab = np.zeros((mat_a.shape[0], mat_b.shape[1]), dtype=int)
-                zero_ba = np.zeros((mat_b.shape[0], mat_a.shape[1]), dtype=int)
-                return np.block([[mat_a, zero_ab], [zero_ba, mat_b]])
+            def _combine(*mats: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+                return functools.reduce(np.kron, mats)
 
         # build lift manually, which is faster than the default_lift
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
@@ -744,8 +739,7 @@ class AbelianGroup(Group):
                 np.roll(identity_mat, shift, axis=1)
                 for identity_mat, shift in zip(identity_mats, shifts)
             ]
-            mat = functools.reduce(_combine, mats)
-            return galois.GF(field)(mat)
+            return galois.GF(field)(_combine(*mats))
 
         group = comb.named_groups.AbelianGroup(*orders)
         order_text = ",".join(map(str, orders))
