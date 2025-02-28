@@ -53,11 +53,9 @@ jobs:
             build-cython.py
       - name: Set up Microsoft Visual Studio
         uses: ilammy/msvc-dev-cmd@v1
-      - name: List directory contents
-        run: Get-ChildItem -Recurse
       - name: Install package and dependencies
         run: |
           uv venv
           uv pip install '.[dev]'
       - name: Run all checks
-        run: .venv\Scripts\python checks/all_.p
+        run: .venv\Scripts\python checks/all_.py
