@@ -42,6 +42,8 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
+      - name: List directory contents
+        run: Get-ChildItem -Recurse
       - name: Set up Python 3.12
         uses: astral-sh/setup-uv@v5
         with:
@@ -57,7 +59,5 @@ jobs:
         run: |
           uv venv
           uv pip install '.[dev]'
-      - name: List directory contents
-        run: dir /s
       - name: Run all checks
         run: .venv\Scripts\python checks/all_.p
