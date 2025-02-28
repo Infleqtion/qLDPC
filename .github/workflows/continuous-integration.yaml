@@ -20,9 +20,10 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: astral-sh/setup-uv@v5
         with:
+          python-version: 3.12
           enable-cache: true
           cache-dependency-glob: |
             **/pyproject.toml
@@ -41,9 +42,10 @@ jobs:
     needs: install
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: astral-sh/setup-uv@v5
         with:
+          python-version: 3.12
           enable-cache: true
           cache-dependency-glob: |
             **/pyproject.toml
@@ -96,9 +98,10 @@ jobs:
     needs: install
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python
+      - name: Set up Python 3.12
         uses: astral-sh/setup-uv@v5
         with:
+          python-version: 3.12
           enable-cache: true
           cache-dependency-glob: |
             **/pyproject.toml
