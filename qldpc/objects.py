@@ -22,7 +22,7 @@ import enum
 import functools
 import itertools
 from collections.abc import Collection, Iterator
-from typing import Literal
+from typing import Literal, TypeVar
 
 import galois
 import networkx as nx
@@ -33,16 +33,28 @@ import stim
 from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 
+IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
 
-def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliString:
+
+def symplectic_conjugate(vectors: IntegerArray) -> IntegerArray:
+    """Take symplectic vectors to their duals.
+
+    The symplectic conjugate of a Pauli string swaps its X and Z support, and multiplies its X
+    sector by -1, taking P = [P_x|P_z] -> [-P_z|P_x], such that the symplectic inner product between
+    Pauli strings P and Q is ⟨P,Q⟩_s = P_x @ Q_z - P_z @ Q_x = symplectic_conjugate(P) @ Q.
+    """
+    assert vectors.shape[-1] % 2 == 0
+    conjugated_string = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
+    conjugated_string[:, 0, :] *= -1
+    return conjugated_string.reshape(vectors.shape)  # type:ignore[return-value]
+
+
+def op_to_string(op: npt.NDArray[np.int_]) -> stim.PauliString:
     """Convert an integer array that represents a Pauli string into a stim.PauliString.
 
-    The (first, second) half the array indicates the support of (X, Z) Paulis, unless flip_xz==True.
+    The (first, second) half the array indicates the support of (X, Z) Paulis.
     """
-    assert len(op) % 2 == 0
     support_xz = np.array(op, dtype=int).reshape(2, -1)
-    if flip_xz:
-        support_xz = support_xz[::-1, :]
     paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
     return stim.PauliString(map(str, paulis))
 
@@ -51,8 +63,7 @@ def op_to_string(op: npt.NDArray[np.int_], flip_xz: bool = False) -> stim.PauliS
     for qubit in range(num_qubits):
         val_x = int(op[qubit])
         val_z = int(op[qubit + num_qubits])
-        pauli = Pauli((val_x, val_z))
-        paulis += str(pauli if not flip_xz else ~pauli)
+        paulis = str(Pauli((val_x, val_z)))
     return stim.PauliString(paulis)
 
 
@@ -83,8 +94,8 @@ class Pauli(enum.Enum):
             return "X"
         return "Y"
 
-    @classmethod
-    def from_string(cls, string: str) -> Pauli:
+    @staticmethod
+    def from_string(string: str) -> Pauli:
         """Build a Pauli operator from a string."""
         if string == "I":
             return Pauli.I
@@ -144,8 +155,8 @@ class QuditOperator:
             ops.append(f"Z({val_z})")
         return "*".join(ops)
 
-    @classmethod
-    def from_string(cls, string: str) -> QuditOperator:
+    @staticmethod
+    def from_string(string: str) -> QuditOperator:
         """Build a qudit operator from its string representation."""
         if string == "I":
             return QuditOperator((0, 0))
@@ -323,9 +334,8 @@ class CayleyComplex:
             shift = identity @ shift
         return set(bb @ shift for bb in self.subset_b)
 
-    @classmethod
+    @staticmethod
     def build_cayley_graph(
-        cls,
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember] = (),
     ) -> None:
@@ -360,9 +370,8 @@ class CayleyComplex:
 
         return graph
 
-    @classmethod
+    @staticmethod
     def satisfies_total_no_conjugacy(
-        cls,
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember],
     ) -> bool:
@@ -485,9 +494,8 @@ class ChainComplex:
             return self.field.Zeros((self.ops[-1].shape[1], 0))
         return self.ops[degree - 1]
 
-    @classmethod
+    @staticmethod
     def tensor_product(  # noqa: C901 ignore complexity check
-        cls,
         chain_a: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.Protograph,
         chain_b: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.Protograph,
         field: int | None = None,

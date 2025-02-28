@@ -1,0 +1,34 @@
+name: Conditional tests
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'pyproject.toml'
+      - '**/*.pyx'
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, reopened, ready_for_review ]  # defaults plus ready_for_review
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  windows:
+    name: Windows check
+    if: github.event.pull_request.draft == false
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            "**/pyproject.toml"
+            "build-cython.py"
+      - name: Set up Microsoft Visual Studio
+        uses: ilammy/msvc-dev-cmd@v1
+      - name: Install package and dependencies
+        run: |
+          uv venv
+          uv pip install '.[dev]'

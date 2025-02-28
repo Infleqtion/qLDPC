@@ -15,8 +15,14 @@ __pycache__
 # pytest/coverage
 .coverage
 
-# macOS
+# macOS clutter
 .DS_Store
 
 # sphinx documentation
 docs/build
+
+# cython build artifacts
+build
+*.c
+*.so
+*.pyd

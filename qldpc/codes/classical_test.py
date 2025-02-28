@@ -18,6 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import networkx as nx
+import numpy as np
 import pytest
 
 from qldpc import codes
@@ -37,7 +38,7 @@ def test_basic(field: int) -> None:
 
 
 def test_special_codes() -> None:
-    """Reed-Solomon, BCH, and Reed-Muller codes."""
+    """More complicated classical codes."""
     bits, dimension = 3, 2
     assert codes.ReedSolomonCode(bits, dimension).dimension == dimension
 
@@ -52,6 +53,12 @@ def test_special_codes() -> None:
 
     with pytest.raises(ValueError, match="0 <= r <= m"):
         codes.ReedMullerCode(-1, 0)
+
+    # the extended Hamming code's parity check matrix is a super set of the ordinary Hamming code
+    assert np.array_equal(
+        codes.ExtendedHammingCode(4).matrix[1:, 1:],
+        codes.HammingCode(4, field=2).matrix,
+    )
 
 
 def test_tanner_code() -> None:

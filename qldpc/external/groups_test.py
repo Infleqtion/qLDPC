@@ -44,7 +44,7 @@ def get_mock_page(text: str) -> unittest.mock.MagicMock:
 
 
 def test_get_group_url() -> None:
-    """Retrive url for group webpage on GroupNames.org."""
+    """Retrieve url for group webpage on GroupNames.org."""
 
     # cannot connect to general webpage
     with unittest.mock.patch(
@@ -75,7 +75,7 @@ def test_get_group_url() -> None:
 
 
 def test_get_generators_from_groupnames() -> None:
-    """Retrive generators from group webpage on GroupNames.org."""
+    """Retrieve generators from group webpage on GroupNames.org."""
 
     # group not indexed
     assert external.groups.get_generators_from_groupnames("") is None
@@ -108,7 +108,7 @@ def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_get_generators_with_gap() -> None:
-    """Retrive generators from GAP 4."""
+    """Retrieve generators from GAP 4."""
 
     # GAP is not installed
     with unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False):

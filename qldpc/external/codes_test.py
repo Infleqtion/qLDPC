@@ -31,7 +31,7 @@ def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_get_code() -> None:
-    """Retrive parity check matrix from GAP 4."""
+    """Retrieve parity check matrix from GAP 4."""
 
     # GAP is not installed
     with (

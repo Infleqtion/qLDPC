@@ -1,14 +1,14 @@
 # This workflow will install Python dependencies, run tests and lint with a single version of Python
 # For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
 
-name: Python application
+name: Continuous integration
 
 on:
   push:
     branches: [ main ]
   pull_request:
-    types: [ opened, synchronize, reopened, ready_for_review ]  # these are the defaults, plus ready_for_review
     branches: [ main ]
+    types: [ opened, synchronize, reopened, ready_for_review ]  # defaults plus ready_for_review
   workflow_dispatch:
   workflow_call:
 
@@ -17,21 +17,23 @@ jobs:
     name: Installation check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          cache-dependency-glob: "**/pyproject.toml"
+          cache-dependency-glob: |
+            "**/pyproject.toml"
+            "build-cython.py"
       - name: Install package and dependencies
         run: |
           uv venv
           uv pip install '.[dev]'
 
   format:
-    name: Linting check
+    name: Lint and type check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -42,7 +44,9 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          cache-dependency-glob: "**/pyproject.toml"
+          cache-dependency-glob: |
+            "**/pyproject.toml"
+            "build-cython.py"
       - name: Install package and dependencies
         run: |
           uv venv
@@ -68,21 +72,46 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          cache-dependency-glob: "**/pyproject.toml"
+          cache-dependency-glob: |
+            "**/pyproject.toml"
+            "build-cython.py"
       - name: Install package and dependencies
         run: |
           uv venv
           uv pip install '.[dev]'
+        id: ruff-format
+        run: checks/format_.py
+        continue-on-error: true
+      - name: Run ruff check
+        id: ruff-check
+        run: checks/lint_.py
+        continue-on-error: true
       - name: Run mypy
+        id: mypy
+        run: checks/mypy_.py
+        continue-on-error: true
+      - name: Check for failures
         run: |
-          source .venv/bin/activate
-          checks/mypy_.py
+          FAILED=0
+          if [ ${{ steps.ruff-format.outcome }} != 'success' ]; then
+            echo "ruff format failed"
+            FAILED=1
+          fi
+          if [ ${{ steps.ruff-check.outcome }} != 'success' ]; then
+            echo "ruff check failed"
+            FAILED=1
+          fi
+          if [ ${{ steps.mypy.outcome }} != 'success' ]; then
+            echo "mypy failed"
+            FAILED=1
+          fi
+          exit $FAILED
 
   coverage:
     name: Pytest and coverage check
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    timeout-minutes: 4
+    timeout-minutes: 3
     needs: install
     steps:
       - uses: actions/checkout@v4
@@ -90,7 +119,9 @@ jobs:
         uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
-          cache-dependency-glob: "**/pyproject.toml"
+          cache-dependency-glob: |
+            "**/pyproject.toml"
+            "build-cython.py"
       - name: Install package and dependencies
         run: |
           uv venv

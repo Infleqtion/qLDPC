@@ -26,11 +26,11 @@ import pytest
 import sympy
 
 from qldpc import abstract, codes
-from qldpc.objects import ChainComplex, Pauli
+from qldpc.objects import ChainComplex, Node, Pauli
 
 
 def test_small_codes() -> None:
-    """Five-qubit and Steane codes."""
+    """Small named codes."""
     assert codes.SteaneCode().num_qubits == 7
     assert codes.SteaneCode().dimension == 1
 
@@ -40,7 +40,13 @@ def test_small_codes() -> None:
     code = codes.FiveQubitCode()
     assert code.num_qubits == 5
     assert code.dimension == 1
-    assert code.get_stabilizers()[0] == "X Z Z X I"
+    assert code.get_strings()[0] == "X Z Z X I"
+
+    for size in range(2, 6):
+        assert codes.IcebergCode(size).get_code_params() == (2 * size, 2 * size - 2, 2)
+
+    assert codes.CSSCode.equiv(codes.C4Code(), codes.IcebergCode(2))
+    assert codes.C6Code().get_code_params() == (6, 2, 2)
 
 
 def test_two_block_code_error() -> None:
@@ -55,28 +61,35 @@ def test_bivariate_bicycle_codes() -> None:
     """Bivariate bicycle codes from arXiv:2308.07915 and arXiv:2311.16980."""
     from sympy.abc import x, y, z
 
-    dims: tuple[int, int] | dict[sympy.Symbol, int]
+    orders: tuple[int, int] | dict[sympy.Symbol, int]
 
     # last code in Table II of arXiv:2311.16980
-    dims = (12, 4)
+    orders = {x: 12, y: 4}
     poly_a = 1 + y + x * y + x**9
     poly_b = 1 + x**2 + x**7 + x**9 * y**2
-    code = codes.BBCode(dims, poly_a, poly_b, field=2)
+    code = codes.BBCode(orders, poly_a, poly_b, field=2)
     assert code.num_qudits == 96
     assert code.dimension == 10
     assert code.get_weight() == 8
 
+    # print the generating data of the code in human-readable form
+    code_string = str(code)
+    assert str(orders) in code_string
+    assert str(poly_a.as_expr()) in code_string
+    assert str(poly_a.as_expr()) in code_string
+
     # [[144, 12, 12]] code in Table 3 and Figure 2 of arXiv:2308.07915
-    dims = {x: 12, y: 6}
+    orders = (12, 6)
     poly_a = x**3 + y + y**2
     poly_b = y**3 + x + x**2
-    code = codes.BBCode(dims, poly_a, poly_b, field=2)
+    code = codes.BBCode(orders, poly_a, poly_b, field=2)
     assert code.num_qudits == 144
     assert code.dimension == 12
     assert code.get_weight() == 6
 
     # toric layouts of a qutrit BBCode
-    code = codes.BBCode(dims, poly_a, poly_b, field=3)
+    code = codes.BBCode(orders, poly_a, poly_b, field=3)
+    assert "GF(3)" in str(code)
     assert code.dimension == 8
     for orders, poly_a, poly_b in code.get_equivalent_toric_layout_code_data():
         # assert that the polynomials look like 1 + x + ... and 1 + y + ...
@@ -91,15 +104,30 @@ def test_bivariate_bicycle_codes() -> None:
         assert equiv_code.dimension == code.dimension
 
     # check a code with no toric layouts
-    dims = (6, 6)
+    orders = (6, 6)
     poly_a = 1 + y + y**2
     poly_b = y**3 + x**2 + x**4
-    code = codes.BBCode(dims, poly_a, poly_b)
+    code = codes.BBCode(orders, poly_a, poly_b)
     assert not code.get_equivalent_toric_layout_code_data()
+
+    # retrieve node labels
+    assert code.get_node_label(Node(0, is_data=True)) == ("L", 0, 0)
+    assert code.get_node_label(Node(len(code) // 2, is_data=True)) == ("R", 0, 0)
+    assert code.get_node_label(Node(0, is_data=False)) == ("X", 0, 0)
+    assert code.get_node_label(Node(len(code) // 2, is_data=False)) == ("Z", 0, 0)
 
     # codes with more than 2 symbols are unsupported
     with pytest.raises(ValueError, match="should have exactly two"):
         codes.BBCode({}, x, y + z)
+
+    # fail to invert a system of equations
+    orders = (3, 3)
+    poly_a = 1 + x + x * y
+    poly_b = 1 + y + x * y
+    code = codes.BBCode(orders, poly_a, poly_b)
+    with pytest.raises(ValueError, match="Uninvertible system of equations"):
+        basis = (1, 0), (0, 0)
+        code.modular_inverse(basis, 0, 1)
 
 
 def test_bivariate_bicycle_neighbors() -> None:
@@ -192,6 +220,41 @@ def test_hypergraph_products(
     assert np.array_equal(code.matrix_x, matrix_x)
     assert np.array_equal(code.matrix_z, matrix_z)
 
+    # sanity check for generating sets of the logical operators of an HGPCode
+    gens_x, gens_z = codes.HGPCode.get_logical_generators(code_a, code_b)
+    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
+    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
+    assert not np.any(code.matrix_z @ gens_x.T)
+    assert not np.any(code.matrix_x @ gens_z.T)
+    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
+    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+
+
+@pytest.mark.parametrize("field", [2, 3])
+def test_subsystem_hypergraph_product(
+    field: int,
+    bits_checks_a: tuple[int, int] = (5, 3),
+    bits_checks_b: tuple[int, int] = (3, 2),
+) -> None:
+    """Validity of the subsystem hypergraph product code."""
+    subcode = codes.ClassicalCode.random(*bits_checks_a, field=field)
+    code = codes.SHPCode(subcode)
+
+    # assert validity of the the "natural" stabilizers that are set at initialization time
+    assert np.array_equal(
+        codes.ClassicalCode(code.get_stabilizer_ops()).canonicalized.matrix,
+        code.get_stabilizer_ops(recompute=True, canonicalized=True),
+    )
+
+    # sanity check for generating sets of the logical operators of an SHPCode
+    gens_x, gens_z = codes.SHPCode.get_logical_generators(subcode, subcode)
+    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
+    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
+    assert not np.any(code.matrix_z @ gens_x.T)
+    assert not np.any(code.matrix_x @ gens_z.T)
+    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
+    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+
 
 def test_trivial_lift(
     bits_checks_a: tuple[int, int] = (4, 3),
@@ -264,8 +327,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     zero_4 = np.zeros((mat_2.shape[0],) * 2, dtype=int)
     matrix = np.block(
         [
-            [zero_3, mat_2.T, mat_1, zero_2],
-            [-mat_2, zero_4, zero_1, mat_1.T],
+            [mat_1, zero_2, zero_3, mat_2.T],
+            [zero_1, mat_1.T, -mat_2, zero_4],
         ]
     )
 
@@ -388,14 +451,14 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
     assert code.conjugated() == codes.HGPCode(*rep_codes).conjugated()
 
     # rotated surface code
-    code = codes.SurfaceCode(rows, cols, rotated=True)
+    code = codes.SurfaceCode(rows, cols, rotated=True, field=3)
     assert code.dimension == 1
     assert code.num_qudits == rows * cols
     assert codes.CSSCode.get_distance(code, Pauli.X) == cols
     assert codes.CSSCode.get_distance(code, Pauli.Z) == rows
 
     # test that the conjugated rotated surface code is an XZZX code
-    code = codes.SurfaceCode(max(rows, cols), rotated=True, field=2)
+    code = codes.SurfaceCode(max(rows, cols), rotated=True)
     for row in code.conjugated().matrix:
         row_x, row_z = row[: code.num_qudits], row[-code.num_qudits :]
         assert np.count_nonzero(row_x) == np.count_nonzero(row_z)
@@ -420,7 +483,7 @@ def test_toric_codes() -> None:
 
     # rotated toric code
     distance = 4
-    code = codes.ToricCode(distance, rotated=True)
+    code = codes.ToricCode(distance, rotated=True, field=3)
     assert code.dimension == 2
     assert code.num_qudits == distance**2
     assert codes.CSSCode.get_distance(code) == distance
@@ -465,3 +528,11 @@ def test_generalized_surface_codes(size: int = 3) -> None:
 
     with pytest.raises(ValueError, match=">= 2"):
         codes.GeneralizedSurfaceCode(size, dim=1)
+
+
+def test_bacon_shor_code() -> None:
+    """Bacon-Shor code."""
+    code = codes.BaconShorCode(3)
+    code._exact_distance_x = code._exact_distance_z = None
+    assert all(np.count_nonzero(row) == 2 for row in code.matrix)
+    assert code.get_distance() == 3

@@ -36,7 +36,7 @@ def test_state_prep() -> None:
     """Prepare all-0 logical states of qubit codes."""
     for code in [
         codes.FiveQubitCode(),
-        codes.HGPCode(codes.HammingCode(3, field=2)),
+        codes.BaconShorCode(3, field=2),
         codes.HGPCode(codes.ClassicalCode.random(5, 3, field=2)),
     ]:
         encoder = circuits.get_encoding_circuit(code)
@@ -44,12 +44,17 @@ def test_state_prep() -> None:
         simulator.do(encoder)
 
         # the state of the simulator is a +1 eigenstate of code stabilizers
-        for row in code.matrix:
-            string = circuits.op_to_string(row, flip_xz=True)
+        for row in code.get_stabilizer_ops():
+            string = circuits.op_to_string(row)
             assert simulator.peek_observable_expectation(string) == 1
 
         # the state of the simulator is a +1 eigenstate of all logical Z operators
-        for op in code.get_logical_ops(Pauli.Z):
+        for op in codes.QuditCode.get_logical_ops(code, Pauli.Z):
+            string = circuits.op_to_string(op)
+            assert simulator.peek_observable_expectation(string) == 1
+
+        # the state of the simulator is a +1 eigenstate of all gauge Z operators
+        for op in codes.QuditCode.get_gauge_ops(code, Pauli.Z):
             string = circuits.op_to_string(op)
             assert simulator.peek_observable_expectation(string) == 1
 
@@ -111,3 +116,28 @@ def test_finding_circuit(pytestconfig: pytest.Config) -> None:
 
     # there are no logical two-qubit gates in this code
     circuits.get_transversal_circuit(code, stim.Circuit("CX 0 1")) is None
+
+
+def test_deformed_decoder() -> None:
+    """Deform a code in such a way as to preserve its logicals, but change its stabilizers."""
+    code = codes.CSSCode([[1] * 6], [[1] * 6], field=2)
+    code.set_logical_ops_xz(
+        [
+            [1, 1, 0, 0, 0, 0],
+            [0, 1, 1, 0, 0, 0],
+            [0, 0, 0, 1, 1, 0],
+            [0, 0, 0, 0, 1, 1],
+        ],
+        [
+            [0, 1, 1, 0, 0, 0],
+            [1, 1, 0, 0, 0, 0],
+            [0, 0, 0, 0, 1, 1],
+            [0, 0, 0, 1, 1, 0],
+        ],
+    )
+    deformation = stim.Circuit("H 0 1 2")
+    encoder, decoder = circuits.get_encoder_and_decoder(code)
+    deformation_encoder, deformation_decoder = circuits.get_encoder_and_decoder(code, deformation)
+    assert encoder == deformation_encoder
+    assert decoder == encoder.inverse()
+    assert decoder != deformation_decoder
