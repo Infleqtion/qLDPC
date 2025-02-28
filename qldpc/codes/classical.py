@@ -240,35 +240,49 @@ class TannerCode(ClassicalCode):
         return directed_subgraph
 
 class SimplexCodes(ClassicalCode):
-    """Classical Simplex codes: used to generate the SHYPS (type of Subsystem
-        Hypergraph product code) codes described in https://arxiv.org/pdf/2502.07150"""
+    """Classical Simplex codes.
 
-    def __init__(self, r:int)->None:
-        self._exact_distance = 2**(r-1)
-        self._num_bits = 2**r-1
+    Paramaterized by dimension r: [n = 2**r-1, k = r, d = 2**(r-1)]
+    
+    Used to generate the SHYPS (type of Subsystem
+    Hypergraph product code) codes described in https://arxiv.org/pdf/2502.07150
+    """
+
+    def __init__(self, dimension:int)->None:
+        self._exact_distance = 2**(dimension-1)
         self._field = galois.GF(2)
 
-        self.generating_poly = SimplexCodes.get_generating_poly(r)
+        self.get_generating_vector = SimplexCodes.get_generating_poly(dimension)
         
         ## define parity check matrix using generating polynomial
-        matrix = self.field.Zeros((self._num_bits, self._num_bits))
-        for i in range(self._num_bits):
-            for j in self.generating_poly:
-                matrix[i,(j+i)%self._num_bits] = 1
+        identity = np.identity(2**dimension-1, dtype=int)
+        matrix = sum(
+            np.roll(identity, shift, axis=1)
+            for shift in SimplexCodes.get_generating_poly(dimension)
+        )
 
         ClassicalCode.__init__(self, matrix)
+        
+        
+
 
     @staticmethod
-    def get_generating_poly(r:int) -> npt.NDArray[np.int_]: 
-        if r>7:
-            raise ValueError("Can't handle r > 7. Will add generating polynomial for larger r in future.")
-        if r<3:
-            raise ValueError("Don't consider r<3. Not interesting.")
+    def get_generating_vector(r:int) -> npt.NDArray[np.int_]: 
+        if r>7 or r<3:
+            raise ValueError("Outside of range of valid r." 
+                             " Will add generating polynomial for larger r in future." 
+                             "r < 3 is not interesting. ")
         
-        polynomial_seed_dic = {3: np.array([0, 2, 3]),
-                                4: np.array([0, 3, 4]),
-                                5: np.array([0, 3, 5]),
-                                6: np.array([0, 5, 6]),
-                                7: np.array([0, 6, 7])}
+        if r == 3:
+            return 0, 2, 3
+        if r == 4:
+            return 0, 3, 4
+        if r == 5:
+            return 0, 3, 5
+        if r == 6:
+            return 0, 5, 6
+        if r == 7:
+            return 0, 6, 7
+            
+        return None 
         
-        return polynomial_seed_dic[r]

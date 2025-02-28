@@ -35,7 +35,7 @@ from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
-from .classical import HammingCode, RepetitionCode, RingCode, TannerCode
+from .classical import HammingCode, RepetitionCode, RingCode, TannerCode, SimplexCodes
 from .common import ClassicalCode, CSSCode, QuditCode
 
 
@@ -902,6 +902,7 @@ class SHPCode(CSSCode):
 
         matrix_x = np.kron(code_a.matrix, code_field.Identity(len(code_b)))
         matrix_z = np.kron(code_field.Identity(len(code_a)), code_b.matrix)
+
         CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
 
         stab_ops_x = np.kron(code_a.matrix, code_b.generator)
@@ -1495,3 +1496,27 @@ class BaconShorCode(CSSCode):
         matrix_x = np.array(generators_x, dtype=int)
         matrix_z = np.array(generators_z, dtype=int)
         CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
+
+
+class SHYPSCode(CSSCode):
+    """Construct SHYPS (subsystem hypergraph product code)
+    
+    
+    Introduced in https://arxiv.org/pdf/2502.07150
+    
+    """
+    def __init__(self,
+                dimension:int,
+                dimension2:int | None = None,
+                field: int = 2
+                   ) -> None:
+        
+
+        code_a = SimplexCodes(dimension)
+        if dimension2 is not None:
+            code_b = SimplexCodes(dimension2)
+        else:
+            code_b = code_a
+        
+        SHPCode.__init__(code_a, code_b)
+
