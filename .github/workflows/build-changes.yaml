@@ -32,3 +32,5 @@ jobs:
         run: |
           uv venv
           uv pip install '.[dev]'
+      - name: Run all checks
+        run: checks/all_.py
