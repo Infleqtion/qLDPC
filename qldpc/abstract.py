@@ -27,7 +27,7 @@ SymPy permutations are "right-acting", which is to say that the action of two pe
 on an integer i compose as (p*q)(i) = q(p(i)) = i^p^q.  To preserve the order of products before and
 after lifting permutations to matrices, which ensures that the lift L(p*q) = L(p) @ L(q), we
 therefore make representations likewise right-acting, which is to say that a permutation matrix M
-transposes a vector v as v --> v @ M.  In practice, this simply means that matrices are the
+transforms a vector v as v --> v @ M.  In practice, this simply means that matrices are the
 transpose of what one might expect.
 
 This module only supports representations of group members by orthogonal matrices over finite
