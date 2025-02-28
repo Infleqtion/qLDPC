@@ -24,11 +24,11 @@ jobs:
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: 3.12
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('**/pyproject.toml', '**/*.pyx', 'build-cython.py') }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml', 'build-cython.py') }}
       - name: Install package and dependencies
         run: |
           python -m pip install --upgrade pip
