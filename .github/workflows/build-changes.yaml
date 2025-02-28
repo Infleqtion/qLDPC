@@ -42,8 +42,6 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: List directory contents
-        run: Get-ChildItem -Recurse
       - name: Set up Python 3.12
         uses: astral-sh/setup-uv@v5
         with:
@@ -55,6 +53,8 @@ jobs:
             build-cython.py
       - name: Set up Microsoft Visual Studio
         uses: ilammy/msvc-dev-cmd@v1
+      - name: List directory contents
+        run: Get-ChildItem -Recurse
       - name: Install package and dependencies
         run: |
           uv venv
