@@ -63,7 +63,9 @@ jobs:
         continue-on-error: true
       - name: Run mypy
         id: mypy
-        run: checks/mypy_.py
+        run: |
+          source .venv/bin/activate
+          checks/mypy_.py
         continue-on-error: true
       - name: Check for failures
         run: |
