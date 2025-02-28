@@ -238,3 +238,37 @@ class TannerCode(ClassicalCode):
                 directed_subgraph[node_a][edge]["sort"] = sort_data[node_a]
                 directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
         return directed_subgraph
+
+class SimplexCodes(ClassicalCode):
+    """Classical Simplex codes: used to generate the SHYPS (type of Subsystem
+        Hypergraph product code) codes described in https://arxiv.org/pdf/2502.07150"""
+
+    def __init__(self, r:int)->None:
+        self._exact_distance = 2**(r-1)
+        self._num_bits = 2**r-1
+        self._field = galois.GF(2)
+
+        self.generating_poly = SimplexCodes.get_generating_poly(r)
+        
+        ## define parity check matrix using generating polynomial
+        matrix = self.field.Zeros((self._num_bits, self._num_bits))
+        for i in range(self._num_bits):
+            for j in self.generating_poly:
+                matrix[i,(j+i)%self._num_bits] = 1
+
+        ClassicalCode.__init__(self, matrix)
+
+    @staticmethod
+    def get_generating_poly(r:int) -> npt.NDArray[np.int_]: 
+        if r>7:
+            raise ValueError("Can't handle r > 7. Will add generating polynomial for larger r in future.")
+        if r<3:
+            raise ValueError("Don't consider r<3. Not interesting.")
+        
+        polynomial_seed_dic = {3: np.array([0, 2, 3]),
+                                4: np.array([0, 3, 4]),
+                                5: np.array([0, 3, 5]),
+                                6: np.array([0, 5, 6]),
+                                7: np.array([0, 6, 7])}
+        
+        return polynomial_seed_dic[r]
