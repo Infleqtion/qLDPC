@@ -58,6 +58,7 @@ jobs:
           uv venv
           uv pip install '.[dev]'
       - name: Run all checks
+        shell: cmd
         run: |
-          .venv\Scripts\python -m pip list
-          .venv\Scripts\python checks/all_.py
+          .venv\Scripts\activate
+          python checks/all_.py
