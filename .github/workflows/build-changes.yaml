@@ -27,7 +27,7 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml', 'build-cython.py') }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('**/pyproject.toml', '**/*.pyx', 'build-cython.py') }}
       - name: Install package and dependencies
         run: |
           python -m pip install --upgrade pip
