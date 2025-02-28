@@ -60,4 +60,5 @@ jobs:
       - name: Run all checks
         run: |
           .venv\Scripts\activate
+          python -m pip list
           python checks/all_.py
