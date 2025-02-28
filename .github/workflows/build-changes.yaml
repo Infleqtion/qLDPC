@@ -31,4 +31,3 @@ jobs:
           python3 -m pip install '.[dev]'
       - name: Run all checks
         run: checks/all_.py
-
