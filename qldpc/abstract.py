@@ -724,7 +724,7 @@ class AbelianGroup(Group):
         identity_mats = [np.eye(order, dtype=int) for order in orders]
         vals = [sum(orders[:idx]) for idx in range(len(orders))]
 
-        # identify method to "combine" two cyclic matrices
+        # identify method to "combine" cyclic matrices
         if not product_lift:
             _combine = scipy.linalg.block_diag
         else:
