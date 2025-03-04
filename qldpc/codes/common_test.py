@@ -107,7 +107,7 @@ def test_tensor_product(
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     code_ab = codes.ClassicalCode.tensor_product(code_a, code_b)
     basis = np.reshape(code_ab.generator, (-1, len(code_a), len(code_b)))
-    assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
+    assert all(not np.any(code_a.matrix @ word @ code_b.matrix.T) for word in basis)
 
     n_a, k_a, d_a = code_a.get_code_params()
     n_b, k_b, d_b = code_b.get_code_params()
@@ -390,6 +390,15 @@ def test_qudit_ops() -> None:
             symplectic_conjugate(logical_ops) @ logical_ops.T,
             get_symplectic_form(code.dimension, code.field),
         )
+
+    # test the guarantee of stabilizer canonicalization
+    code = codes.FiveQubitCode()
+    code._is_subsystem_code = True
+    stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
+    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]])  # type:ignore[assignment]
+    code._stabilizer_ops = stabilizer_ops
+    assert np.array_equal(code.get_stabilizer_ops(), stabilizer_ops)
+    assert np.array_equal(code.get_stabilizer_ops(canonicalized=True), stabilizer_ops[:-1])
 
 
 def test_code_deformation() -> None:

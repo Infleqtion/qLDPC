@@ -630,7 +630,8 @@ class BBCode(QCCode):
 class HGPCode(CSSCode):
     """Hypergraph product (HGP) code.
 
-    A hypergraph product code AB is constructed from two classical codes, A and B.
+    A hypergraph product code AB is constructed from the parity check matrices of two classical
+    codes, A and B.
 
     Consider the following:
     - Code A has 3 data and 2 check bits.
@@ -830,7 +831,7 @@ class HGPCode(CSSCode):
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Generating sets for the logical operators of a hypergraph product code.
 
-        Taken from Eqs. (28) and (29) of arXiv:2002.06257.
+        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
         """
         assert code_a.field is code_b.field
         code_field = code_a.field
@@ -888,38 +889,37 @@ class SHPCode(CSSCode):
 
     def __init__(
         self,
-        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
+        code_x: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
-        if code_b is None:
-            code_b = code_a
-        code_a = ClassicalCode(code_a, field)
-        code_b = ClassicalCode(code_b, field)
-        code_field = code_a.field
+        if code_z is None:
+            code_z = code_x
+        code_x = ClassicalCode(code_x, field)
+        code_z = ClassicalCode(code_z, field)
+        code_field = code_x.field
 
-        matrix_x = np.kron(code_a.matrix, code_field.Identity(len(code_b)))
-        matrix_z = np.kron(code_field.Identity(len(code_a)), code_b.matrix)
-
+        matrix_x = np.kron(code_x.matrix, code_field.Identity(len(code_z)))
+        matrix_z = np.kron(code_field.Identity(len(code_x)), code_z.matrix)
         CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
 
-        stab_ops_x = np.kron(code_a.matrix, code_b.generator)
-        stab_ops_z = np.kron(-code_a.generator, code_b.matrix)
+        stab_ops_x = np.kron(code_x.matrix, code_z.generator)
+        stab_ops_z = np.kron(-code_x.generator, code_z.matrix)
         self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
     @staticmethod
     def get_logical_generators(
-        code_a: ClassicalCode, code_b: ClassicalCode
+        code_x: ClassicalCode, code_z: ClassicalCode
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Generating sets for the logical operators of a hypergraph product code.
 
         Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
         """
-        assert code_a.field is code_b.field
-        code_field = code_a.field
-        gen_ops_x = np.kron(code_field.Identity(len(code_a)), code_b.generator)
-        gen_ops_z = np.kron(code_a.generator, code_field.Identity(len(code_b)))
+        assert code_x.field is code_z.field
+        code_field = code_x.field
+        gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
+        gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
         return code_field(gen_ops_x), code_field(gen_ops_z)
 
 
@@ -1467,8 +1467,8 @@ class GeneralizedSurfaceCode(CSSCode):
         CSSCode.__init__(self, matrix_x, matrix_z, field)
 
 
-class BaconShorCode(CSSCode):
-    """Bacon-Shor code on a square grid.
+class BaconShorCode(SHPCode):
+    """Bacon-Shor code on a square grid, implemented as a subsystem hypergraph product code.
 
     References:
     - https://errorcorrectionzoo.org/c/bacon_shor
@@ -1499,23 +1499,17 @@ class BaconShorCode(CSSCode):
 
 class SHYPSCode(CSSCode):
     """Construct SHYPS (subsystem hypergraph product code)
-    
-    
+
+
     Introduced in https://arxiv.org/pdf/2502.07150
-    
+
     """
-    def __init__(self,
-                dimension:int,
-                dimension2:int | None = None,
-                field: int = 2
-                   ) -> None:
-        
 
-        code_a = SimplexCodes(dimension)
+    def __init__(self, dimension: int, dimension2: int | None = None) -> None:
+        code_x = SimplexCodes(dimension)
         if dimension2 is not None:
-            code_b = SimplexCodes(dimension2)
+            code_z = SimplexCodes(dimension2)
         else:
-            code_b = code_a
-        
-        SHPCode.__init__(code_a, code_b)
+            code_z = code_x
 
+        SHPCode.__init__(code_x, code_z)
