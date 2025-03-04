@@ -35,7 +35,7 @@ from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
-from .classical import HammingCode, RepetitionCode, RingCode, TannerCode, SimplexCodes
+from .classical import HammingCode, RepetitionCode, RingCode, SimplexCodes, TannerCode
 from .common import ClassicalCode, CSSCode, QuditCode
 
 

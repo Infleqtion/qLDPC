@@ -239,38 +239,38 @@ class TannerCode(ClassicalCode):
                 directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
         return directed_subgraph
 
+
 class SimplexCodes(ClassicalCode):
     """Classical Simplex codes.
 
     Paramaterized by dimension r: [n = 2**r-1, k = r, d = 2**(r-1)]
-    
+
     Used to generate the SHYPS (type of Subsystem
     Hypergraph product code) codes described in https://arxiv.org/pdf/2502.07150
     """
 
-    def __init__(self, dimension:int)->None:
-        self._exact_distance = 2**(dimension-1)
+    def __init__(self, dimension: int) -> None:
+        self._exact_distance = 2 ** (dimension - 1)
         self._field = galois.GF(2)
-        
+
         ## define parity check matrix using generating polynomial
-        identity = np.identity(2**dimension-1, dtype=int)
+        identity = np.identity(2**dimension - 1, dtype=int)
         matrix = sum(
             np.roll(identity, shift, axis=1)
             for shift in SimplexCodes.get_generating_vector(dimension)
         )
 
         ClassicalCode.__init__(self, matrix)
-        
-        
-
 
     @staticmethod
-    def get_generating_vector(r:int) -> npt.NDArray[np.int_]: 
-        if r>7 or r<3:
-            raise ValueError("Outside of range of valid r." 
-                             " Will add generating polynomial for larger r in future." 
-                             "r < 3 is not interesting. ")
-        
+    def get_generating_vector(r: int) -> npt.NDArray[np.int_]:
+        if r > 7 or r < 3:
+            raise ValueError(
+                "Outside of range of valid r."
+                " Will add generating polynomial for larger r in future."
+                "r < 3 is not interesting. "
+            )
+
         if r == 3:
             return 0, 2, 3
         if r == 4:
@@ -281,6 +281,5 @@ class SimplexCodes(ClassicalCode):
             return 0, 5, 6
         if r == 7:
             return 0, 6, 7
-            
-        return None 
-        
+
+        return None
