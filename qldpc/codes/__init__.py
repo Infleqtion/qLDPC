@@ -6,6 +6,7 @@ from .classical import (
     ReedSolomonCode,
     RepetitionCode,
     RingCode,
+    SimplexCodes,
     TannerCode,
 )
 from .common import (
@@ -27,6 +28,7 @@ from .quantum import (
     QCCode,
     QTCode,
     SHPCode,
+    SHYPSCode,
     SteaneCode,
     SurfaceCode,
     TBCode,
@@ -58,8 +60,11 @@ __all__ = [
     "QCCode",
     "QTCode",
     "SHPCode",
+    "SHYPSCode",
+    "SimplexCodes",
     "SteaneCode",
     "SurfaceCode",
     "TBCode",
     "ToricCode",
+    
 ]

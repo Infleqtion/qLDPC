@@ -536,3 +536,11 @@ def test_bacon_shor_code() -> None:
     code._exact_distance_x = code._exact_distance_z = None
     assert all(np.count_nonzero(row) == 2 for row in code.matrix)
     assert code.get_distance() == 3
+
+
+def test_shyps_code() -> None:
+    "SHYPS code constructed by taking SHP of classical simplex code"
+    for dimension in [3, 4, 5, 6, 7]:
+        code = codes.SHYPSCode(dimension)
+        assert len(code) == (2**dimension - 1) ** 2
+        assert all([np.count_nonzero(row) == 3 for row in code.matrix])

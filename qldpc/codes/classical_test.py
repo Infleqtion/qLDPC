@@ -60,6 +60,12 @@ def test_special_codes() -> None:
         codes.HammingCode(4, field=2).matrix,
     )
 
+    ### tests for simplex codes
+    for dimension in [3, 4, 5, 6, 7]:
+        code = codes.SimplexCodes(dimension)
+        assert code.num_bits == 2**dimension - 1
+        assert code.rank == 2**dimension - 1 - dimension
+
 
 def test_tanner_code() -> None:
     """Classical Tanner codes on random regular graphs."""
