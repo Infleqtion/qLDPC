@@ -286,7 +286,7 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return len(self) - self.rank
 
-    @functools.property
+    @property
     def generator(self) -> galois.FieldArray:
         """Generator of this code: a matrix whose rows form a basis for all code words."""
         if self._generator is None:

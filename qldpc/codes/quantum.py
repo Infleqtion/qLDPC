@@ -1495,4 +1495,4 @@ class SHYPSCode(CSSCode):
         else:
             code_z = code_x
 
-        SHPCode.__init__(code_x, code_z)
+        SHPCode.__init__(self, code_x, code_z)

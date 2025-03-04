@@ -251,14 +251,12 @@ class SimplexCodes(ClassicalCode):
     def __init__(self, dimension:int)->None:
         self._exact_distance = 2**(dimension-1)
         self._field = galois.GF(2)
-
-        self.get_generating_vector = SimplexCodes.get_generating_poly(dimension)
         
         ## define parity check matrix using generating polynomial
         identity = np.identity(2**dimension-1, dtype=int)
         matrix = sum(
             np.roll(identity, shift, axis=1)
-            for shift in SimplexCodes.get_generating_poly(dimension)
+            for shift in SimplexCodes.get_generating_vector(dimension)
         )
 
         ClassicalCode.__init__(self, matrix)
