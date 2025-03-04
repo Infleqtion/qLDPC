@@ -1475,26 +1475,9 @@ class BaconShorCode(SHPCode):
     """
 
     def __init__(self, rows: int, cols: int | None = None, field: int | None = None) -> None:
-        cols = cols or rows
-        self._exact_distance_x = cols
-        self._exact_distance_z = rows
-
-        generators_x = []  # X_{i,j} X_{i+1,j} for grid coordinates i,j
-        generators_z = []  # Z_{i,j} Z_{i,j+1} for grid coordinates i,j
-        for row in range(rows):
-            for col in range(cols):
-                if row < rows - 1:
-                    stab_x = np.zeros((rows, cols), dtype=int)
-                    stab_x[row, col] = stab_x[row + 1, col] = 1
-                    generators_x.append(stab_x.ravel())
-                if col < cols - 1:
-                    stab_z = np.zeros((rows, cols), dtype=int)
-                    stab_z[row, col] = stab_z[row, col + 1] = 1
-                    generators_z.append(stab_z.ravel())
-
-        matrix_x = np.array(generators_x, dtype=int)
-        matrix_z = np.array(generators_z, dtype=int)
-        CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
+        code_x = RepetitionCode(rows, field)
+        code_z = RepetitionCode(cols or rows, field)
+        SHPCode.__init__(self, code_x, code_z, field)
 
 
 class SHYPSCode(CSSCode):
