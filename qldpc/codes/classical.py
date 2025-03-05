@@ -254,13 +254,16 @@ class SimplexCodes(ClassicalCode):
 
         identity = np.identity(2**dimension - 1, dtype=int)
         matrix = sum(
-            np.roll(identity, shift, axis=1)
-            for shift in SimplexCodes.get_generating_vector(dimension)
+            (
+                np.roll(identity, shift, axis=1)
+                for shift in SimplexCodes.get_polynomial_exponents(dimension)
+            ),
+            start=np.array(0),
         )
         ClassicalCode.__init__(self, matrix)
 
     @staticmethod
-    def get_generating_vector(dim: int) -> npt.NDArray[np.int_]:
+    def get_polynomial_exponents(dim: int) -> tuple[int, ...]:
         if dim == 3:
             return 0, 2, 3
         if dim == 4:

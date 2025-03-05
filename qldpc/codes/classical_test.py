@@ -67,6 +67,10 @@ def test_special_codes() -> None:
         code = codes.SimplexCodes(dimension)
         assert len(code) == 2**dimension - 1
         assert code.rank == 2**dimension - 1 - dimension
+        assert code.dimension == dimension
+
+    with pytest.raises(ValueError, match="dimensions >=3, <=7"):
+        codes.SimplexCodes(8)
 
 
 def test_tanner_code() -> None:
