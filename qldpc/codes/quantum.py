@@ -1480,7 +1480,7 @@ class BaconShorCode(SHPCode):
         SHPCode.__init__(self, code_x, code_z, field)
 
 
-class SHYPSCode(CSSCode):
+class SHYPSCode(SHPCode):
     """Construct SHYPS (subsystem hypergraph product code)
 
 
