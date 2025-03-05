@@ -1483,6 +1483,11 @@ class BaconShorCode(SHPCode):
 class SHYPSCode(SHPCode):
     """Subsystem hypergraph product simplex (SHYPS) code.
 
+    Subsystem hypergraph product codes naturally inherit the automorphisms (symmetries) of the
+    classical codes that they are built from.  The SHYPSCode is built from classical SimplexCodes
+    that have a very large automorphism group, which gives SHYPSCodes a large set of
+    SWAP-transversal Clifford operations.
+
     References:
     - https://arxiv.org/abs/2502.07150
     """
