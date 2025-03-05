@@ -299,7 +299,7 @@ class ClassicalCode(AbstractCode):
         if np.any(self.matrix @ generator.T):
             raise ValueError("Provided generator matrix has nontrivial syndromes")
 
-        required_rank = self.rank
+        required_rank = len(self) - self.rank
         generator_rank = np.linalg.matrix_rank(generator)
         if generator_rank != required_rank:
             raise ValueError(

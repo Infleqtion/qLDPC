@@ -45,6 +45,9 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
     assert "GF(3)" in str(code)
 
+    # reordering the rows of the generator matrix results in a valid generator matrix
+    code.set_generator(np.roll(code.generator, shift=1, axis=0))
+
     num_bits = 2
     code = codes.RepetitionCode(num_bits, field=3)
     assert len(code) == num_bits
