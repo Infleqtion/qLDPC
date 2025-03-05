@@ -42,11 +42,11 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
 
-    code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
-    assert "GF(3)" in str(code)
-
     # reordering the rows of the generator matrix results in a valid generator matrix
     code.set_generator(np.roll(code.generator, shift=1, axis=0))
+
+    code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
+    assert "GF(3)" in str(code)
 
     num_bits = 2
     code = codes.RepetitionCode(num_bits, field=3)

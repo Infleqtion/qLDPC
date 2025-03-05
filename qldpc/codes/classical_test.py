@@ -65,10 +65,8 @@ def test_special_codes() -> None:
     # classical simplex codes
     for dimension in range(3, 8):
         code = codes.SimplexCodes(dimension)
-        assert len(code) == 2**dimension - 1
+        assert code.get_code_params() == (2**dimension - 1, dimension, 2 ** (dimension - 1))
         assert code.rank == 2**dimension - 1 - dimension
-        assert code.dimension == dimension
-
     with pytest.raises(ValueError, match="dimensions >=3, <=7"):
         codes.SimplexCodes(8)
 

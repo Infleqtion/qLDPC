@@ -251,7 +251,6 @@ class SimplexCodes(ClassicalCode):
 
     def __init__(self, dim: int) -> None:
         self._exact_distance = 2 ** (dim - 1)
-
         identity = np.identity(2**dim - 1, dtype=int)
         matrix = sum(
             (
@@ -260,7 +259,7 @@ class SimplexCodes(ClassicalCode):
             ),
             start=np.array(0),
         )
-        ClassicalCode.__init__(self, matrix)
+        ClassicalCode.__init__(self, matrix, field=2)
 
     @staticmethod
     def get_polynomial_exponents(dim: int) -> tuple[int, ...]:
