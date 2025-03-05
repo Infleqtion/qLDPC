@@ -1481,11 +1481,10 @@ class BaconShorCode(SHPCode):
 
 
 class SHYPSCode(SHPCode):
-    """Construct SHYPS (subsystem hypergraph product code)
+    """Subsystem hypergraph product simplex (SHYPS) code.
 
-
-    Introduced in https://arxiv.org/pdf/2502.07150
-
+    References:
+    - https://arxiv.org/abs/2502.07150
     """
 
     def __init__(self, dim_x: int, dim_z: int | None = None) -> None:
