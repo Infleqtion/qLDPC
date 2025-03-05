@@ -241,22 +241,22 @@ class TannerCode(ClassicalCode):
 
 
 class SimplexCodes(ClassicalCode):
-    """Classical Simplex codes.
+    """Classical simplex codes, with code parameters [2**k - 1, k, 2 ** (k - 1)].
 
-    Paramaterized by dimension r: [n = 2**r-1, k = r, d = 2**(r-1)]
+    The automorphism group of SimplexCode(k) is the general linear group GL(k).
 
-    Used to generate the SHYPS (type of Subsystem
-    Hypergraph product code) codes described in https://arxiv.org/pdf/2502.07150
+    References:
+    - https://arxiv.org/abs/2502.07150
     """
 
-    def __init__(self, dimension: int) -> None:
-        self._exact_distance = 2 ** (dimension - 1)
+    def __init__(self, dim: int) -> None:
+        self._exact_distance = 2 ** (dim - 1)
 
-        identity = np.identity(2**dimension - 1, dtype=int)
+        identity = np.identity(2**dim - 1, dtype=int)
         matrix = sum(
             (
                 np.roll(identity, shift, axis=1)
-                for shift in SimplexCodes.get_polynomial_exponents(dimension)
+                for shift in SimplexCodes.get_polynomial_exponents(dim)
             ),
             start=np.array(0),
         )
