@@ -1488,11 +1488,7 @@ class SHYPSCode(SHPCode):
 
     """
 
-    def __init__(self, dimension: int, dimension2: int | None = None) -> None:
-        code_x = SimplexCodes(dimension)
-        if dimension2 is not None:
-            code_z = SimplexCodes(dimension2)
-        else:
-            code_z = code_x
-
+    def __init__(self, dim_x: int, dim_z: int | None = None) -> None:
+        code_x = SimplexCodes(dim_x)
+        code_z = SimplexCodes(dim_z) if dim_z else code_x
         SHPCode.__init__(self, code_x, code_z)

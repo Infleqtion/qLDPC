@@ -539,8 +539,8 @@ def test_bacon_shor_code() -> None:
 
 
 def test_shyps_code() -> None:
-    "SHYPS code constructed by taking SHP of classical simplex code"
-    for dimension in [3, 4, 5, 6, 7]:
+    """Sanity checks for the SHYPS code."""
+    for dimension in range(3, 8):
         code = codes.SHYPSCode(dimension)
         assert len(code) == (2**dimension - 1) ** 2
-        assert all([np.count_nonzero(row) == 3 for row in code.matrix])
+        assert np.all(np.count_nonzero(code.matrix.view(np.ndarray), axis=1) == 3)

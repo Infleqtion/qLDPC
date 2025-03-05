@@ -39,6 +39,8 @@ def test_basic(field: int) -> None:
 
 def test_special_codes() -> None:
     """More complicated classical codes."""
+    code: codes.ClassicalCode
+
     bits, dimension = 3, 2
     assert codes.ReedSolomonCode(bits, dimension).dimension == dimension
 
@@ -60,10 +62,11 @@ def test_special_codes() -> None:
         codes.HammingCode(4, field=2).matrix,
     )
 
-    ### tests for simplex codes
-    for dimension in [3, 4, 5, 6, 7]:
+    # classical simplex codes
+    for dimension in range(3, 8):
         code = codes.SimplexCodes(dimension)
-        assert code.num_bits == 2**dimension - 1
+        assert len(code) == 2**dimension - 1
+        assert code.dimension == 
         assert code.rank == 2**dimension - 1 - dimension
 
 

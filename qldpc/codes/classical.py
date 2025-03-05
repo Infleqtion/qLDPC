@@ -251,35 +251,26 @@ class SimplexCodes(ClassicalCode):
 
     def __init__(self, dimension: int) -> None:
         self._exact_distance = 2 ** (dimension - 1)
-        self._field = galois.GF(2)
 
-        ## define parity check matrix using generating polynomial
         identity = np.identity(2**dimension - 1, dtype=int)
         matrix = sum(
             np.roll(identity, shift, axis=1)
             for shift in SimplexCodes.get_generating_vector(dimension)
         )
-
         ClassicalCode.__init__(self, matrix)
 
     @staticmethod
-    def get_generating_vector(r: int) -> npt.NDArray[np.int_]:
-        if r > 7 or r < 3:
-            raise ValueError(
-                "Outside of range of valid r."
-                " Will add generating polynomial for larger r in future."
-                "r < 3 is not interesting. "
-            )
-
-        if r == 3:
+    def get_generating_vector(dim: int) -> npt.NDArray[np.int_]:
+        if dim == 3:
             return 0, 2, 3
-        if r == 4:
+        if dim == 4:
             return 0, 3, 4
-        if r == 5:
+        if dim == 5:
             return 0, 3, 5
-        if r == 6:
+        if dim == 6:
             return 0, 5, 6
-        if r == 7:
+        if dim == 7:
             return 0, 6, 7
-
-        return None
+        raise ValueError(
+            f"Classical simplex codes are only supported for dimensions >=3, <=7 (provided: {dim})"
+        )
