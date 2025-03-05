@@ -66,7 +66,6 @@ def test_special_codes() -> None:
     for dimension in range(3, 8):
         code = codes.SimplexCodes(dimension)
         assert len(code) == 2**dimension - 1
-        assert code.dimension == 
         assert code.rank == 2**dimension - 1 - dimension
 
 
