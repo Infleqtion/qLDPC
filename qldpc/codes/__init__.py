@@ -66,5 +66,4 @@ __all__ = [
     "SurfaceCode",
     "TBCode",
     "ToricCode",
-    
 ]
