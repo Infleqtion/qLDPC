@@ -48,11 +48,16 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
     assert "GF(3)" in str(code)
 
-    num_bits = 2
-    code = codes.RepetitionCode(num_bits, field=3)
-    assert len(code) == num_bits
+    code = codes.RepetitionCode(2, field=3)
+    assert len(code) == 2
     assert code.dimension == 1
     assert code.get_weight() == 2
+
+    # cover invalid generator matrices for the repetition code
+    with pytest.raises(ValueError, match="nontrivial syndromes"):
+        code.set_generator([[0, 1]])
+    with pytest.raises(ValueError, match="incorrect rank"):
+        code.set_generator([[0, 0]])
 
     # invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
@@ -66,10 +71,8 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
 
     # shortening a repetition code yields a trivial code
-    num_bits = 3
-    code = codes.RepetitionCode(num_bits)
-    words = [[0] * (num_bits - 1)]
-    assert np.array_equal(list(code.shorten(0).iter_words()), words)
+    code = codes.RepetitionCode(3)
+    assert np.array_equal(list(code.shorten(0).iter_words()), [[0, 0]])
 
     # stack two codes
     code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
