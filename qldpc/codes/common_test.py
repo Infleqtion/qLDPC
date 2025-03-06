@@ -43,6 +43,9 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
 
+    # reordering the rows of the generator matrix results in a valid generator matrix
+    code.set_generator(np.roll(code.generator, shift=1, axis=0))
+
     code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
     assert "GF(3)" in str(code)
 
@@ -50,6 +53,12 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert len(code) == 2
     assert code.dimension == 1
     assert code.get_weight() == 2
+
+    # cover invalid generator matrices for the repetition code
+    with pytest.raises(ValueError, match="nontrivial syndromes"):
+        code.set_generator([[0, 1]])
+    with pytest.raises(ValueError, match="incorrect rank"):
+        code.set_generator([[0, 0]])
 
     # invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):

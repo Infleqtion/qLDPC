@@ -36,7 +36,7 @@ from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.math import first_nonzero_cols
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
-from .classical import HammingCode, RepetitionCode, RingCode, TannerCode
+from .classical import HammingCode, RepetitionCode, RingCode, SimplexCodes, TannerCode
 from .common import ClassicalCode, CSSCode, QuditCode
 
 
@@ -52,6 +52,7 @@ class FiveQubitCode(QuditCode):
             field=2,
         )
         QuditCode.__init__(self, code, is_subsystem_code=False)
+        self._dimension = 1
         self._exact_distance = 3
 
 
@@ -62,6 +63,7 @@ class SteaneCode(CSSCode):
         code = HammingCode(3, field=2)
         CSSCode.__init__(self, code, code, is_subsystem_code=False)
         self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
+        self._dimension = 1
         self._exact_distance_x = self._exact_distance_z = 3
 
 
@@ -80,6 +82,7 @@ class IcebergCode(CSSCode):
     def __init__(self, size: int) -> None:
         checks = [[1] * (2 * size)]
         CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
+        self._dimension = 2 * size - 2
         self._exact_distance_x = self._exact_distance_z = 2
 
         if size == 3:
@@ -115,6 +118,7 @@ class C6Code(CSSCode):
         CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
         self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
+        self._dimension = 2
         self._exact_distance_x = self._exact_distance_z = 2
 
 
@@ -1291,6 +1295,7 @@ class SurfaceCode(CSSCode):
         CSSCode.__init__(
             self, matrix_x, matrix_z, field=field, promise_equal_distance_xz=rows == cols
         )
+        self._dimension = 1
 
     @staticmethod
     def get_rotated_checks(
@@ -1411,6 +1416,7 @@ class ToricCode(CSSCode):
         CSSCode.__init__(
             self, matrix_x, matrix_z, field=field, promise_equal_distance_xz=rows == cols
         )
+        self._dimension = 2
 
     @staticmethod
     def get_rotated_checks(
@@ -1498,3 +1504,27 @@ class BaconShorCode(SHPCode):
         code_x = RepetitionCode(rows, field)
         code_z = RepetitionCode(cols or rows, field)
         SHPCode.__init__(self, code_x, code_z, field)
+
+
+class SHYPSCode(SHPCode):
+    """Subsystem hypergraph product simplex (SHYPS) code.
+
+    Subsystem hypergraph product codes naturally inherit the automorphisms (symmetries) of the
+    classical codes that they are built from.  The SHYPSCode is built from classical SimplexCodes
+    that have a very large automorphism group, which gives SHYPSCodes a large set of
+    SWAP-transversal Clifford operations.
+
+    References:
+    - https://arxiv.org/abs/2502.07150
+    """
+
+    def __init__(self, dim_x: int, dim_z: int | None = None) -> None:
+        dim_z = dim_z if dim_z is not None else dim_x
+
+        code_x = SimplexCodes(dim_x)
+        code_z = SimplexCodes(dim_z)
+        SHPCode.__init__(self, code_x, code_z)
+
+        self._dimension = dim_x * dim_z
+        self._exact_distance_x = code_z.get_distance()  # X errors are witnessed by the Z code
+        self._exact_distance_z = code_x.get_distance()  # Z errors are witnessed by the X code

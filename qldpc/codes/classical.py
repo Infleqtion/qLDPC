@@ -238,3 +238,42 @@ class TannerCode(ClassicalCode):
                 directed_subgraph[node_a][edge]["sort"] = sort_data[node_a]
                 directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
         return directed_subgraph
+
+
+class SimplexCodes(ClassicalCode):
+    """Classical simplex codes, with code parameters [2**k - 1, k, 2 ** (k - 1)].
+
+    The automorphism group of SimplexCode(k) is the general linear group GL(k).
+
+    References:
+    - https://arxiv.org/abs/2502.07150
+    """
+
+    def __init__(self, dim: int) -> None:
+        identity = np.identity(2**dim - 1, dtype=int)
+        matrix = sum(
+            (
+                np.roll(identity, shift, axis=1)
+                for shift in SimplexCodes.get_polynomial_exponents(dim)
+            ),
+            start=np.array(0),
+        )
+        ClassicalCode.__init__(self, matrix, field=2)
+        self._dimension = dim
+        self._exact_distance = 2 ** (dim - 1)
+
+    @staticmethod
+    def get_polynomial_exponents(dim: int) -> tuple[int, ...]:
+        if dim == 3:
+            return 0, 2, 3
+        if dim == 4:
+            return 0, 3, 4
+        if dim == 5:
+            return 0, 3, 5
+        if dim == 6:
+            return 0, 5, 6
+        if dim == 7:
+            return 0, 6, 7
+        raise ValueError(
+            f"Classical simplex codes are only supported for dimensions >=3, <=7 (provided: {dim})"
+        )
