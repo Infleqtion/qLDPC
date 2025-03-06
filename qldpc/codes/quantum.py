@@ -910,7 +910,10 @@ class SHPCode(CSSCode):
 
     @staticmethod
     def get_logical_generators(
-        code_x: ClassicalCode, code_z: ClassicalCode
+        code_x: ClassicalCode,
+        code_z: ClassicalCode,
+        *,
+        minimal: bool = True,
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Generating sets for the logical operators of a hypergraph product code.
 
@@ -918,8 +921,13 @@ class SHPCode(CSSCode):
         """
         assert code_x.field is code_z.field
         code_field = code_x.field
-        gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
-        gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
+        if minimal:
+            gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
+            gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
+        else:
+            generator_x = code_x.matrix.null_space()
+            generator_z = code_z.matrix.null_space()
+            # pivots_x = 
         return code_field(gen_ops_x), code_field(gen_ops_z)
 
 
