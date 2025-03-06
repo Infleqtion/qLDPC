@@ -542,5 +542,5 @@ def test_shyps_code() -> None:
     """Sanity checks for the SHYPS code."""
     for dimension in range(3, 8):
         code = codes.SHYPSCode(dimension)
-        assert len(code) == (2**dimension - 1) ** 2
+        assert code.get_code_params() == ((2**dimension - 1) ** 2, dimension**2, dimension)
         assert np.all(np.count_nonzero(code.matrix.view(np.ndarray), axis=1) == 3)

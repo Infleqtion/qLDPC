@@ -700,7 +700,7 @@ class QuditCode(AbstractCode):
     """
 
     _is_subsystem_code: bool
-    _dimension: int
+    _dimension: int | None = None
     _stabilizer_ops: galois.FieldArray | None = None
     _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
@@ -1212,6 +1212,8 @@ class QuditCode(AbstractCode):
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
+        if self._dimension is not None:
+            return self._dimension
         if self._logical_ops is not None:
             return len(self._logical_ops) // 2
         if not self.is_subsystem_code:

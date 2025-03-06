@@ -51,6 +51,7 @@ class FiveQubitCode(QuditCode):
             field=2,
         )
         QuditCode.__init__(self, code, is_subsystem_code=False)
+        self._dimension = 1
         self._exact_distance = 3
 
 
@@ -61,6 +62,7 @@ class SteaneCode(CSSCode):
         code = HammingCode(3, field=2)
         CSSCode.__init__(self, code, code, is_subsystem_code=False)
         self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
+        self._dimension = 1
         self._exact_distance_x = self._exact_distance_z = 3
 
 
@@ -79,6 +81,7 @@ class IcebergCode(CSSCode):
     def __init__(self, size: int) -> None:
         checks = [[1] * (2 * size)]
         CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
+        self._dimension = 2 * size - 2
         self._exact_distance_x = self._exact_distance_z = 2
 
         if size == 3:
@@ -114,6 +117,7 @@ class C6Code(CSSCode):
         CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
         self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
+        self._dimension = 2
         self._exact_distance_x = self._exact_distance_z = 2
 
 
@@ -1271,6 +1275,7 @@ class SurfaceCode(CSSCode):
         CSSCode.__init__(
             self, matrix_x, matrix_z, field=field, promise_equal_distance_xz=rows == cols
         )
+        self._dimension = 1
 
     @staticmethod
     def get_rotated_checks(
@@ -1391,6 +1396,7 @@ class ToricCode(CSSCode):
         CSSCode.__init__(
             self, matrix_x, matrix_z, field=field, promise_equal_distance_xz=rows == cols
         )
+        self._dimension = 2
 
     @staticmethod
     def get_rotated_checks(
@@ -1493,6 +1499,12 @@ class SHYPSCode(SHPCode):
     """
 
     def __init__(self, dim_x: int, dim_z: int | None = None) -> None:
+        dim_z = dim_z if dim_z is not None else dim_x
+
         code_x = SimplexCodes(dim_x)
-        code_z = SimplexCodes(dim_z) if dim_z else code_x
+        code_z = SimplexCodes(dim_z)
         SHPCode.__init__(self, code_x, code_z)
+
+        self._dimension = dim_x * dim_z
+        self._exact_distance_x = dim_x
+        self._exact_distance_z = dim_z
