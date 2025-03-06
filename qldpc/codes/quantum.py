@@ -920,13 +920,11 @@ class SHPCode(CSSCode):
         *,
         minimal: bool = True,
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Generating sets for the logical operators of a hypergraph product code.
-
-        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
-        """
+        """Generating sets for the logical operators of a hypergraph product code."""
         assert code_x.field is code_z.field
         code_field = code_x.field
         if not minimal:
+            # generating sets for logical operators, from Eqs. (36) and (37) of arXiv:2002.06257v1
             gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
             gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
 
