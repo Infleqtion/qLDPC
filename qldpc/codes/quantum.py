@@ -1506,5 +1506,5 @@ class SHYPSCode(SHPCode):
         SHPCode.__init__(self, code_x, code_z)
 
         self._dimension = dim_x * dim_z
-        self._exact_distance_x = dim_x
-        self._exact_distance_z = dim_z
+        self._exact_distance_x = code_z.get_distance()  # X errors are witnessed by the Z code
+        self._exact_distance_z = code_x.get_distance()  # Z errors are witnessed by the X code
