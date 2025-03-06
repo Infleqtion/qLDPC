@@ -207,6 +207,7 @@ class ClassicalCode(AbstractCode):
     """
 
     _matrix: galois.FieldArray
+    _generator: galois.FieldArray | None = None
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -285,10 +286,27 @@ class ClassicalCode(AbstractCode):
         """The number of logical bits encoded by this code."""
         return len(self) - self.rank
 
-    @functools.cached_property
+    @property
     def generator(self) -> galois.FieldArray:
         """Generator of this code: a matrix whose rows form a basis for all code words."""
-        return self.matrix.null_space()
+        if self._generator is None:
+            self._generator = self.matrix.null_space()
+        return self._generator
+
+    def set_generator(self, generator: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> None:
+        """Set the generator matrix of this code."""
+        generator = self.field(generator)
+        if np.any(self.matrix @ generator.T):
+            raise ValueError("Provided generator matrix has nontrivial syndromes")
+
+        required_rank = len(self) - self.rank
+        generator_rank = np.linalg.matrix_rank(generator)
+        if generator_rank != required_rank:
+            raise ValueError(
+                f"Provided generator matrix has incorrect rank ({generator_rank} instead of"
+                f" {required_rank})"
+            )
+        self._generator = generator
 
     def iter_words(self, skip_zero: bool = False) -> Iterator[galois.FieldArray]:
         """Iterate over the code words of this code."""
@@ -682,7 +700,7 @@ class QuditCode(AbstractCode):
     """
 
     _is_subsystem_code: bool
-    _dimension: int
+    _dimension: int | None = None
     _stabilizer_ops: galois.FieldArray | None = None
     _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
@@ -1194,6 +1212,8 @@ class QuditCode(AbstractCode):
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
+        if self._dimension is not None:
+            return self._dimension
         if self._logical_ops is not None:
             return len(self._logical_ops) // 2
         if not self.is_subsystem_code:

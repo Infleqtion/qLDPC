@@ -536,3 +536,12 @@ def test_bacon_shor_code() -> None:
     code._exact_distance_x = code._exact_distance_z = None
     assert all(np.count_nonzero(row) == 2 for row in code.matrix)
     assert code.get_distance() == 3
+
+
+def test_shyps_code() -> None:
+    """Sanity checks for the SHYPS code."""
+    for dimension in range(3, 8):
+        code = codes.SHYPSCode(dimension)
+        params = ((2**dimension - 1) ** 2, dimension**2, 2 ** (dimension - 1))
+        assert code.get_code_params() == params
+        assert np.all(np.count_nonzero(code.matrix.view(np.ndarray), axis=1) == 3)
