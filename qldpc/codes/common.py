@@ -293,7 +293,7 @@ class ClassicalCode(AbstractCode):
             self._generator = self.matrix.null_space()
         return self._generator
 
-    def set_generator(self, generator: npt.NDArray[np.int_]) -> None:
+    def set_generator(self, generator: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> None:
         """Set the generator matrix of this code."""
         generator = self.field(generator)
         if np.any(self.matrix @ generator.T):
