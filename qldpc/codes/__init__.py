@@ -36,7 +36,6 @@ from .quantum import (
 )
 
 __all__ = [
-    "BaconShorCode",
     "BCHCode",
     "ExtendedHammingCode",
     "HammingCode",
@@ -44,11 +43,13 @@ __all__ = [
     "ReedSolomonCode",
     "RepetitionCode",
     "RingCode",
+    "SimplexCodes",
     "TannerCode",
     "AbstractCode",
     "ClassicalCode",
     "CSSCode",
     "QuditCode",
+    "BaconShorCode",
     "BBCode",
     "C4Code",
     "C6Code",
@@ -61,7 +62,6 @@ __all__ = [
     "QTCode",
     "SHPCode",
     "SHYPSCode",
-    "SimplexCodes",
     "SteaneCode",
     "SurfaceCode",
     "TBCode",
