@@ -27,7 +27,8 @@ import numpy as np
 import pytest
 
 from qldpc import codes
-from qldpc.objects import Pauli, symplectic_conjugate
+from qldpc.math import symplectic_conjugate
+from qldpc.objects import Pauli
 
 ####################################################################################################
 # classical code tests

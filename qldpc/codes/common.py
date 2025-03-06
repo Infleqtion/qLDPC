@@ -35,15 +35,8 @@ import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.objects import (
-    PAULIS_XZ,
-    Node,
-    Pauli,
-    PauliXZ,
-    QuditOperator,
-    op_to_string,
-    symplectic_conjugate,
-)
+from qldpc.math import first_nonzero_cols, log_choose, symplectic_conjugate
+from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, op_to_string
 
 from ._distance import get_distance_classical, get_distance_quantum
 
@@ -1005,7 +998,7 @@ class QuditCode(AbstractCode):
 
             # row reduce and identify pivots in the X sector
             matrix = self.canonicalized.matrix
-            all_pivots_x = _first_nonzero_cols(matrix)
+            all_pivots_x = first_nonzero_cols(matrix)
             pivots_x = all_pivots_x[all_pivots_x < len(self)]
 
             # move the X pivots to the back
@@ -1018,7 +1011,7 @@ class QuditCode(AbstractCode):
             sub_matrix = matrix[len(pivots_x) :, len(self) :]
             sub_matrix = ClassicalCode(sub_matrix).canonicalized.matrix
             matrix[len(pivots_x) :, len(self) :] = sub_matrix
-            all_pivots_z = _first_nonzero_cols(sub_matrix)
+            all_pivots_z = first_nonzero_cols(sub_matrix)
             pivots_z = all_pivots_z[: len(self) - len(pivots_x) - self.dimension]
 
             # move the stabilizer Z pivots to the back
@@ -1071,14 +1064,14 @@ class QuditCode(AbstractCode):
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
             matrix_x = _with_permuted_qudits(np.vstack([stabilizers_x, checks_x]), permutation_x)
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
-            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
+            pivots_gx = first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = _with_permuted_qudits(matrix_x, np.argsort(permutation_x))
 
             # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
             matrix_z = _with_permuted_qudits(np.vstack([stabilizers_z, checks_z]), permutation_z)
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
-            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
+            pivots_gz = first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
             matrix_z = _with_permuted_qudits(matrix_z, np.argsort(permutation_z))
 
             """
@@ -1146,7 +1139,7 @@ class QuditCode(AbstractCode):
         # if requested, retrieve stabilizer operators of one type only
         if pauli is not None:
             stabilizer_ops = self.get_stabilizer_ops()
-            pivots_x = _first_nonzero_cols(stabilizer_ops) < len(self)
+            pivots_x = first_nonzero_cols(stabilizer_ops) < len(self)
             return stabilizer_ops[pivots_x if pauli is Pauli.X else ~pivots_x]
 
         if not self.is_subsystem_code:
@@ -1766,7 +1759,7 @@ class CSSCode(QuditCode):
             matrix_z = self.canonicalized.matrix_z
 
             # identify pivots in the X sector, and move X pivots to the back
-            pivots_x = _first_nonzero_cols(matrix_x)
+            pivots_x = first_nonzero_cols(matrix_x)
             other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
             permutation = other_x + list(pivots_x)
             matrix_x = matrix_x[:, permutation]
@@ -1775,7 +1768,7 @@ class CSSCode(QuditCode):
 
             # row reduce and identify pivots in the Z sector, and move Z pivots to the back
             matrix_z = matrix_z.row_reduce()
-            pivots_z = _first_nonzero_cols(matrix_z)
+            pivots_z = first_nonzero_cols(matrix_z)
             other_z = [qq for qq in range(len(self)) if qq not in pivots_z]
             permutation = other_z + list(pivots_z)
             matrix_x = matrix_x[:, permutation]
@@ -1824,14 +1817,14 @@ class CSSCode(QuditCode):
             permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
             matrix_x = np.vstack([stabilizers_x, checks_x])[:, permutation_x]  # type:ignore[assignment]
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
-            pivots_gx = _first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
+            pivots_gx = first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = matrix_x[:, np.argsort(permutation_x)]
 
             # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
             matrix_z = np.vstack([stabilizers_z, checks_z])[:, permutation_z]  # type:ignore[assignment]
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
-            pivots_gz = _first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
+            pivots_gz = first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
             matrix_z = matrix_z[:, np.argsort(permutation_z)]
 
             """
@@ -2377,19 +2370,11 @@ def _join_slices(*sectors: Slice) -> npt.NDArray[np.int_]:
     )
 
 
-def _first_nonzero_cols(matrix: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-    """Get the first nonzero column for every row in a matrix."""
-    if matrix.size == 0:
-        return np.array([], dtype=int)
-    boolean_matrix = matrix.reshape(matrix.shape[0], -1).view(np.ndarray).astype(bool)
-    return np.argmax(boolean_matrix, axis=1)
-
-
 def _is_canonicalized(matrix: npt.NDArray[np.int_]) -> bool:
     """Is the given matrix in canonical (row-reduced) form?"""
     return all(
         matrix[row, pivot] and not np.any(matrix[:row, pivot])
-        for row, pivot in enumerate(_first_nonzero_cols(matrix))
+        for row, pivot in enumerate(first_nonzero_cols(matrix))
     )
 
 
@@ -2444,19 +2429,9 @@ def _get_error_probs_by_weight(
     log_error_rate = np.log(error_rate)
     log_one_minus_error_rate = np.log(1 - error_rate)
     log_probs = [
-        _log_choose(block_length, kk)
+        log_choose(block_length, kk)
         + kk * log_error_rate
         + (block_length - kk) * log_one_minus_error_rate
         for kk in range(max_weight + 1)
     ]
     return np.exp(log_probs)
-
-
-@functools.cache
-def _log_choose(n: int, k: int) -> float:
-    """Natural logarithm of (n choose k) = Gamma(n+1) / ( Gamma(k+1) * Gamma(n-k+1) )."""
-    return (
-        scipy.special.gammaln(n + 1)
-        - scipy.special.gammaln(k + 1)
-        - scipy.special.gammaln(n - k + 1)
-    )

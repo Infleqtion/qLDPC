@@ -29,7 +29,8 @@ import numpy.typing as npt
 import pymatching
 
 from qldpc import codes
-from qldpc.objects import Node, symplectic_conjugate
+from qldpc.math import symplectic_conjugate
+from qldpc.objects import Node
 
 PLACEHOLDER_ERROR_RATE = 1e-3  # required for some decoding methods
 
