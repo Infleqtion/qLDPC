@@ -931,8 +931,8 @@ class SHPCode(CSSCode):
             gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
 
         else:
-            generator_x = code_x.matrix.null_space()
-            generator_z = code_z.matrix.null_space()
+            generator_x = code_x.generator.row_reduce()
+            generator_z = code_z.generator.row_reduce()
 
             mat_x = code_field.Zeros(generator_x.shape)
             mat_z = code_field.Zeros(generator_z.shape)
