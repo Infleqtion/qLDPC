@@ -96,18 +96,20 @@ class AbstractCode(abc.ABC):
             self._field = matrix._field
             self._dimension = matrix._dimension
             self._distance = matrix._distance
+
+            if field is not None and field == matrix._field.order:
+                raise ValueError(
+                    f"Field argument {field} is inconsistent with the given code, which is defined"
+                    f" over F_{self._field.order}"
+                )
+
         elif isinstance(matrix, galois.FieldArray):
             self._matrix = matrix
             self._field = type(matrix)
+
         else:
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
             self._matrix = self._field(matrix)
-
-        if field is not None and field != self._field.order:
-            raise ValueError(
-                f"Field argument {field} is inconsistent with the given code, which is defined"
-                f" over F_{self._field.order}"
-            )
 
     @property
     def name(self) -> str:
