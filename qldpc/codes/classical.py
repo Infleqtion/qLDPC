@@ -281,6 +281,7 @@ class SimplexCodes(ClassicalCode):
             h(x) = 1 + x**c + x**dim,
         where x is the generator of a cyclic group of order 2**dim - 1, and c is an integer.
         """
+        # QUESTION: would any polynomial in galois.primitive_polys(2, dim, terms=3) suffice here?
         if dim == 3:
             return 0, 2, 3
         if dim == 4:
