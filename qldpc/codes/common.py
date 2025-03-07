@@ -1172,6 +1172,7 @@ class QuditCode(AbstractCode):
             if dimension != self.dimension:
                 raise ValueError("An incorrect number of logical operators was provided")
         self._logical_ops = logical_ops
+        self._dimension = len(logical_ops) // 2
 
     def get_stabilizer_ops(
         self, pauli: PauliXZ | None = None, *, recompute: bool = False, canonicalized: bool = False
@@ -1913,13 +1914,8 @@ class CSSCode(QuditCode):
         validate: bool = True,
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
-        zero_block = np.zeros((self.dimension, len(self)), dtype=int)
-        logical_ops = np.block(
-            [
-                [self.field(logicals_x), zero_block],
-                [zero_block, self.field(logicals_z)],
-            ]
-        )
+        zero_block = np.zeros((len(logicals_x), len(self)), dtype=int)
+        logical_ops = np.block([[logicals_x, zero_block], [zero_block, logicals_z]])
         self.set_logical_ops(logical_ops, validate=validate)
 
     def get_stabilizer_ops(

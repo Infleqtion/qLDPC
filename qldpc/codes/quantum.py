@@ -898,7 +898,7 @@ class SHPCode(CSSCode):
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        set_logicals: bool = False,
+        set_logicals: bool = True,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
         if code_z is None:
@@ -1508,7 +1508,7 @@ class SHYPSCode(SHPCode):
     - https://arxiv.org/abs/2502.07150
     """
 
-    def __init__(self, dim_x: int, dim_z: int | None = None, *, set_logicals: bool = False) -> None:
+    def __init__(self, dim_x: int, dim_z: int | None = None, *, set_logicals: bool = True) -> None:
         dim_z = dim_z if dim_z is not None else dim_x
 
         code_x = SimplexCodes(dim_x)
