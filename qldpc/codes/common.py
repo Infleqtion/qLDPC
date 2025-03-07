@@ -887,7 +887,7 @@ class QuditCode(AbstractCode):
 
         Due to the way that logical operators are constructed in this method, logical Z-type
         operators only address physical qudits by physical Z-type operators, while logical X-type
-        operators address at least one physical qudits a physical X-type operator, but may
+        operators address at least one physical qudit with a physical X-type operator, and may
         additionally address physical qudits with physical Z-type operators.
 
         Logical operators are constructed with the method similar to that in Section 4.1 of
