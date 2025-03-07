@@ -18,6 +18,7 @@ limitations under the License.
 from __future__ import annotations
 
 import itertools
+import math
 from collections.abc import Sequence
 
 import galois
@@ -39,6 +40,8 @@ class RepetitionCode(ClassicalCode):
         for row in range(bits - 1):
             self._matrix[row, row] = 1
             self._matrix[row, row + 1] = -self.field(1)
+
+        self._dimension = 1
         self._distance = bits
 
 
@@ -51,6 +54,8 @@ class RingCode(ClassicalCode):
         for row in range(bits):
             self._matrix[row, row] = 1
             self._matrix[row, (row + 1) % bits] = -self.field(1)
+
+        self._dimension = 1
         self._distance = bits
 
 
@@ -75,6 +80,8 @@ class HammingCode(ClassicalCode):
                 for rest in itertools.product(range(self.field.order), repeat=rank - top_row - 1)
             ]
             self._matrix = self.field(strings).T
+
+        self._dimension = 2**rank - rank - 1
         self._distance = 3
 
 
@@ -91,6 +98,8 @@ class ExtendedHammingCode(ClassicalCode):
         matrix = np.row_stack([np.ones(matrix.shape[1], dtype=int), matrix])
         matrix[0] += matrix[1]
         ClassicalCode.__init__(self, matrix)
+
+        self._dimension = 2**rank - rank - 1
         self._distance = 4
 
 
@@ -137,13 +146,15 @@ class ReedMullerCode(ClassicalCode):
 
     def __init__(self, order: int, size: int, field: int | None = None) -> None:
         self._assert_valid_params(order, size)
-        self._distance = 2 ** (size - order)
         self._order = order
         self._size = size
 
         generator = ReedMullerCode.get_generator(order, size)
         self._matrix = ClassicalCode(generator, field).generator
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+
+        self._dimension = sum(math.comb(size, ii) for ii in range(order + 1))
+        self._distance = 2 ** (size - order)
 
     @staticmethod
     def get_generator(order: int, size: int) -> npt.NDArray[np.int_]:
