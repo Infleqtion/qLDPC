@@ -97,7 +97,7 @@ class AbstractCode(abc.ABC):
             self._dimension = matrix._dimension
             self._distance = matrix._distance
 
-            if field is not None and field == matrix._field.order:
+            if field is not None and field != matrix._field.order:
                 raise ValueError(
                     f"Field argument {field} is inconsistent with the given code, which is defined"
                     f" over F_{self._field.order}"
