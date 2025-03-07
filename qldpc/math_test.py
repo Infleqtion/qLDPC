@@ -28,7 +28,7 @@ def test_vectors() -> None:
     vectors_conj = np.array([[-1, 0], [-2, 1]], dtype=int)
     assert np.array_equal(qldpc.math.symplectic_conjugate(vectors), vectors_conj)
 
-    assert np.array_equal(qldpc.math.first_nonzero_cols(np.empty(0)), [])
+    assert np.array_equal(qldpc.math.first_nonzero_cols(np.empty(0, dtype=int)), [])
     assert np.array_equal(qldpc.math.first_nonzero_cols(vectors), [1, 0])
     assert np.array_equal(qldpc.math.first_nonzero_cols(vectors_conj), [0, 0])
 
