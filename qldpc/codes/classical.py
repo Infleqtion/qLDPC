@@ -113,6 +113,7 @@ class ReedSolomonCode(ClassicalCode):
 
     def __init__(self, bits: int, dimension: int) -> None:
         ClassicalCode.__init__(self, galois.ReedSolomon(bits, dimension).H)
+        self._dimension = dimension
 
 
 class BCHCode(ClassicalCode):
@@ -133,6 +134,7 @@ class BCHCode(ClassicalCode):
                 " integer m."
             )
         ClassicalCode.__init__(self, galois.BCH(length, dimension, field=galois.GF(field)).H)
+        self._dimension = dimension
 
 
 class ReedMullerCode(ClassicalCode):
