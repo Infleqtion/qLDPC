@@ -897,6 +897,8 @@ class SHPCode(CSSCode):
         code_x: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
+        *,
+        set_logicals: bool = False,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
         if code_z is None:
@@ -913,11 +915,14 @@ class SHPCode(CSSCode):
         stab_ops_z = np.kron(-code_x.generator, code_z.matrix)
         self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
+        if set_logicals:
+            self.set_logical_ops_xz(*self.get_logical_generators(code_x, code_z), validate=False)
+
     @staticmethod
     def get_logical_generators(
         code_x: ClassicalCode, code_z: ClassicalCode
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Generating sets for the logical operators of a subsystem hypergraph product code."""
+        """Canonical logical operators for the subsystem hypergraph product code."""
         assert code_x.field is code_z.field
         code_field = code_x.field
 
@@ -1503,12 +1508,12 @@ class SHYPSCode(SHPCode):
     - https://arxiv.org/abs/2502.07150
     """
 
-    def __init__(self, dim_x: int, dim_z: int | None = None) -> None:
+    def __init__(self, dim_x: int, dim_z: int | None = None, *, set_logicals: bool = False) -> None:
         dim_z = dim_z if dim_z is not None else dim_x
 
         code_x = SimplexCodes(dim_x)
         code_z = SimplexCodes(dim_z)
-        SHPCode.__init__(self, code_x, code_z)
+        SHPCode.__init__(self, code_x, code_z, set_logicals=set_logicals)
 
         self._dimension = dim_x * dim_z
         self._distance_x = code_z.get_distance()  # X errors are witnessed by the Z code

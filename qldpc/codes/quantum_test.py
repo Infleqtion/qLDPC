@@ -238,7 +238,10 @@ def test_subsystem_hypergraph_product(
 ) -> None:
     """Validity of the subsystem hypergraph product code."""
     subcode = codes.ClassicalCode.random(*bits_checks_a, field=field)
-    code = codes.SHPCode(subcode)
+    code = codes.SHPCode(subcode, set_logicals=True)
+
+    # assert that the logicals are valid
+    code.set_logical_ops(code.get_logical_ops(), validate=True)
 
     # assert validity of the the "natural" stabilizers that are set at initialization time
     assert np.array_equal(
