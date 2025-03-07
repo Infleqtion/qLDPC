@@ -262,20 +262,25 @@ class SimplexCodes(ClassicalCode):
     """
 
     def __init__(self, dim: int) -> None:
-        identity = np.identity(2**dim - 1, dtype=int)
-        matrix = sum(
-            (
-                np.roll(identity, shift, axis=1)
-                for shift in SimplexCodes.get_polynomial_exponents(dim)
-            ),
-            start=np.array(0),
-        )
+        block_length = 2**dim - 1
+
+        matrix = np.zeros([block_length] * 2, dtype=int)
+        rows = np.arange(block_length, dtype=int)
+        for shift in SimplexCodes.get_polynomial_exponents(dim):
+            matrix[rows, (rows + shift) % block_length] = 1
         ClassicalCode.__init__(self, matrix, field=2)
+
         self._dimension = dim
         self._distance = 2 ** (dim - 1)
 
     @staticmethod
     def get_polynomial_exponents(dim: int) -> tuple[int, ...]:
+        """Exponents of the polynomial that defines a SimplexCode of a given dimension.
+
+        The polynomial is a primitive polynomial (i.e., "prime", with no factors) of the form
+            h(x) = 1 + x**c + x**dim,
+        where x is the generator of a cyclic group of order 2**dim - 1, and c is an integer.
+        """
         if dim == 3:
             return 0, 2, 3
         if dim == 4:
