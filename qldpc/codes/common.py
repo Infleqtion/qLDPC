@@ -78,6 +78,7 @@ class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
     _field: type[galois.FieldArray]
+    _dimension: int | None = None
     _exact_distance: int | float | None = None
 
     def __init__(
@@ -89,10 +90,10 @@ class AbstractCode(abc.ABC):
 
         The base field is taken to be F_2 by default.
         """
-        self._matrix: galois.FieldArray
         if isinstance(matrix, AbstractCode):
-            self._field = matrix.field
-            self._matrix = matrix.matrix
+            self._field = matrix._field
+            self._dimension = matrix._dimension
+            self._exact_distance = matrix._exact_distance
         elif isinstance(matrix, galois.FieldArray):
             self._field = type(matrix)
             self._matrix = matrix
@@ -103,7 +104,7 @@ class AbstractCode(abc.ABC):
         if field is not None and field != self._field.order:
             raise ValueError(
                 f"Field argument {field} is inconsistent with the given code, which is defined"
-                f" over F_{self.field.order}"
+                f" over F_{self._field.order}"
             )
 
     @property
@@ -202,6 +203,18 @@ class ClassicalCode(AbstractCode):
     _matrix: galois.FieldArray
     _generator: galois.FieldArray | None = None
 
+    def __init__(
+        self,
+        matrix: AbstractCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        field: int | None = None,
+    ) -> None:
+        """Construct a classical code from a parity check matrix over a finite field."""
+        AbstractCode.__init__(self, matrix, field)
+
+        if isinstance(matrix, ClassicalCode):
+            self._matrix = matrix._matrix
+            self._generator = matrix._generator
+
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
         return (
@@ -277,6 +290,8 @@ class ClassicalCode(AbstractCode):
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical bits encoded by this code."""
+        if self._dimension is not None:
+            return self._dimension
         return len(self) - self.rank
 
     @property
@@ -693,7 +708,6 @@ class QuditCode(AbstractCode):
     """
 
     _is_subsystem_code: bool
-    _dimension: int | None = None
     _stabilizer_ops: galois.FieldArray | None = None
     _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
@@ -707,12 +721,18 @@ class QuditCode(AbstractCode):
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field."""
         AbstractCode.__init__(self, matrix, field)
-        if is_subsystem_code is not None:
-            self._is_subsystem_code = is_subsystem_code
+
+        if isinstance(matrix, QuditCode):
+            self._stabilizer_ops = matrix._stabilizer_ops
+            self._gauge_ops = matrix._gauge_ops
+            self._logical_ops = matrix._logical_ops
+            self._is_subsystem_code = matrix.is_subsystem_code
+            assert is_subsystem_code is None or is_subsystem_code == matrix.is_subsystem_code
+
         else:
-            self._is_subsystem_code = bool(
-                np.any(symplectic_conjugate(self.matrix) @ self.matrix.T)
-            )
+            if is_subsystem_code is None:
+                is_subsystem_code = bool(np.any(symplectic_conjugate(self.matrix) @ self.matrix.T))
+            self._is_subsystem_code = is_subsystem_code
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
