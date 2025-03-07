@@ -164,7 +164,7 @@ class AbstractCode(abc.ABC):
     @functools.cached_property
     def rank(self) -> int:
         """Rank of this code's parity check matrix."""
-        return np.count_nonzero(np.any(self.canonicalized.matrix, axis=1))
+        return len(self.canonicalized.matrix)
 
     @functools.cached_property
     def graph(self) -> nx.DiGraph:
@@ -254,6 +254,13 @@ class ClassicalCode(AbstractCode):
     def num_bits(self) -> int:
         """Number of data bits in this code."""
         return len(self)
+
+    @functools.cached_property
+    def rank(self) -> int:
+        """Rank of this code's parity check matrix."""
+        if self._dimension is not None:
+            return len(self) - self._dimension
+        return super().rank
 
     @staticmethod
     def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:

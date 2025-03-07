@@ -18,7 +18,6 @@ limitations under the License.
 from __future__ import annotations
 
 import itertools
-import math
 from collections.abc import Sequence
 
 import galois
@@ -81,7 +80,7 @@ class HammingCode(ClassicalCode):
             ]
             self._matrix = self.field(strings).T
 
-        self._dimension = 2**rank - rank - 1
+        self._dimension = len(self) - len(self._matrix)
         self._distance = 3
 
 
@@ -99,7 +98,7 @@ class ExtendedHammingCode(ClassicalCode):
         matrix[0] += matrix[1]
         ClassicalCode.__init__(self, matrix)
 
-        self._dimension = 2**rank - rank - 1
+        self._dimension = len(self) - len(self._matrix)
         self._distance = 4
 
 
@@ -153,7 +152,7 @@ class ReedMullerCode(ClassicalCode):
         self._matrix = ClassicalCode(generator, field).generator
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
-        self._dimension = sum(math.comb(size, ii) for ii in range(order + 1))
+        self._dimension = len(generator)
         self._distance = 2 ** (size - order)
 
     @staticmethod
