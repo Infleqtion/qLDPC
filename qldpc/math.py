@@ -15,6 +15,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+from __future__ import annotations
+
 import functools
 from typing import TypeVar
 
@@ -34,9 +36,9 @@ def symplectic_conjugate(vectors: IntegerArray) -> IntegerArray:
     Pauli strings P and Q is ⟨P,Q⟩_s = P_x @ Q_z - P_z @ Q_x = symplectic_conjugate(P) @ Q.
     """
     assert vectors.shape[-1] % 2 == 0
-    conjugated_string = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
-    conjugated_string[:, 0, :] *= -1
-    return conjugated_string.reshape(vectors.shape)  # type:ignore[return-value]
+    conjugated_vectors = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
+    conjugated_vectors[:, 0, :] *= -1
+    return conjugated_vectors.reshape(vectors.shape)  # type:ignore[return-value]
 
 
 def first_nonzero_cols(matrix: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
