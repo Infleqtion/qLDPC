@@ -33,7 +33,6 @@ import sympy
 
 from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.math import first_nonzero_cols
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
 from .classical import HammingCode, RepetitionCode, RingCode, SimplexCodes, TannerCode
