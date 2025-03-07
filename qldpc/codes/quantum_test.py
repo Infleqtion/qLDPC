@@ -440,7 +440,7 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
 
     # "ordinary"/original surface code
     code = codes.SurfaceCode(rows, cols, rotated=False)
-    code._exact_distance_x = code._exact_distance_z = None  # "forget" the code distances
+    code._distance_x = code._distance_z = None  # "forget" the code distances
     assert code.dimension == 1
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
     assert code.get_distance(Pauli.X, bound=True) >= cols
@@ -533,7 +533,7 @@ def test_generalized_surface_codes(size: int = 3) -> None:
 def test_bacon_shor_code() -> None:
     """Bacon-Shor code."""
     code = codes.BaconShorCode(3)
-    code._exact_distance_x = code._exact_distance_z = None
+    code._distance_x = code._distance_z = None
     assert all(np.count_nonzero(row) == 2 for row in code.matrix)
     assert code.get_distance() == 3
 

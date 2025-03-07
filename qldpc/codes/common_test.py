@@ -131,7 +131,7 @@ def test_distance_classical(bits: int = 3) -> None:
     rep_code = codes.RepetitionCode(bits, field=2)
 
     # "forget" the exact code distance
-    rep_code._exact_distance = None
+    rep_code._distance = None
 
     assert rep_code.get_distance_bound(cutoff=bits) == bits
     assert rep_code.get_distance(bound=True) == bits
@@ -157,7 +157,7 @@ def test_distance_classical(bits: int = 3) -> None:
 
     # compute distance of a trinary repetition code
     rep_code = codes.RepetitionCode(bits, field=3)
-    rep_code._exact_distance = None
+    rep_code._distance = None
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
         assert rep_code.get_distance_exact() == 3
 
@@ -291,11 +291,11 @@ def test_distance_qudit() -> None:
     assert code.get_distance(bound=True) == 3
 
     # "forget" the code distance and recompute
-    code._exact_distance = None
+    code._distance = None
     assert code.get_distance_bound(cutoff=5) == 5
     assert code.get_distance_exact() == 3
 
-    code._exact_distance = None
+    code._distance = None
     with pytest.raises(NotImplementedError, match="not implemented"):
         code.get_distance(bound=True)
     with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
@@ -306,9 +306,9 @@ def test_distance_qudit() -> None:
 
     # fallback pythonic brute-force distance calculation
     surface_code = codes.SurfaceCode(2, field=3)
-    surface_code._exact_distance = None
-    surface_code._exact_distance_x = None
-    surface_code._exact_distance_z = None
+    surface_code._distance = None
+    surface_code._distance_x = None
+    surface_code._distance_z = None
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
         assert codes.QuditCode.get_distance_exact(surface_code) == 2
 

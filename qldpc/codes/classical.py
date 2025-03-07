@@ -39,7 +39,7 @@ class RepetitionCode(ClassicalCode):
         for row in range(bits - 1):
             self._matrix[row, row] = 1
             self._matrix[row, row + 1] = -self.field(1)
-        self._exact_distance = bits
+        self._distance = bits
 
 
 class RingCode(ClassicalCode):
@@ -51,7 +51,7 @@ class RingCode(ClassicalCode):
         for row in range(bits):
             self._matrix[row, row] = 1
             self._matrix[row, (row + 1) % bits] = -self.field(1)
-        self._exact_distance = bits
+        self._distance = bits
 
 
 class HammingCode(ClassicalCode):
@@ -59,7 +59,7 @@ class HammingCode(ClassicalCode):
 
     def __init__(self, rank: int, field: int | None = None) -> None:
         """Construct a Hamming code of a given rank."""
-        self._exact_distance = 3
+        self._distance = 3
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         if self.field.order == 2:
             # parity check matrix: columns = all nonzero bitstrings
@@ -75,7 +75,7 @@ class HammingCode(ClassicalCode):
                 for rest in itertools.product(range(self.field.order), repeat=rank - top_row - 1)
             ]
             self._matrix = self.field(strings).T
-        self._exact_distance = 3
+        self._distance = 3
 
 
 class ExtendedHammingCode(ClassicalCode):
@@ -91,7 +91,7 @@ class ExtendedHammingCode(ClassicalCode):
         matrix = np.row_stack([np.ones(matrix.shape[1], dtype=int), matrix])
         matrix[0] += matrix[1]
         ClassicalCode.__init__(self, matrix)
-        self._exact_distance = 4
+        self._distance = 4
 
 
 class ReedSolomonCode(ClassicalCode):
@@ -137,7 +137,7 @@ class ReedMullerCode(ClassicalCode):
 
     def __init__(self, order: int, size: int, field: int | None = None) -> None:
         self._assert_valid_params(order, size)
-        self._exact_distance = 2 ** (size - order)
+        self._distance = 2 ** (size - order)
         self._order = order
         self._size = size
 
@@ -260,7 +260,7 @@ class SimplexCodes(ClassicalCode):
         )
         ClassicalCode.__init__(self, matrix, field=2)
         self._dimension = dim
-        self._exact_distance = 2 ** (dim - 1)
+        self._distance = 2 ** (dim - 1)
 
     @staticmethod
     def get_polynomial_exponents(dim: int) -> tuple[int, ...]:

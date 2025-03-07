@@ -77,9 +77,10 @@ def get_random_array(
 class AbstractCode(abc.ABC):
     """Template class for error-correcting codes."""
 
+    _matrix: galois.FieldArray
     _field: type[galois.FieldArray]
     _dimension: int | None = None
-    _exact_distance: int | float | None = None
+    _distance: int | float | None = None
 
     def __init__(
         self,
@@ -91,12 +92,13 @@ class AbstractCode(abc.ABC):
         The base field is taken to be F_2 by default.
         """
         if isinstance(matrix, AbstractCode):
+            self._matrix = matrix._matrix
             self._field = matrix._field
             self._dimension = matrix._dimension
-            self._exact_distance = matrix._exact_distance
+            self._distance = matrix._distance
         elif isinstance(matrix, galois.FieldArray):
-            self._field = type(matrix)
             self._matrix = matrix
+            self._field = type(matrix)
         else:
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
             self._matrix = self._field(matrix)
@@ -200,7 +202,6 @@ class ClassicalCode(AbstractCode):
     words must satisfy.  A vector x is a code word iff H @ x = 0.
     """
 
-    _matrix: galois.FieldArray
     _generator: galois.FieldArray | None = None
 
     def __init__(
@@ -212,7 +213,6 @@ class ClassicalCode(AbstractCode):
         AbstractCode.__init__(self, matrix, field)
 
         if isinstance(matrix, ClassicalCode):
-            self._matrix = matrix._matrix
             self._generator = matrix._generator
 
     def __eq__(self, other: object) -> bool:
@@ -402,8 +402,8 @@ class ClassicalCode(AbstractCode):
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
             distance = min(np.count_nonzero(word) for word in self.iter_words(skip_zero=True))
-        self._exact_distance = int(distance)
-        return self._exact_distance
+        self._distance = int(distance)
+        return self._distance
 
     def get_distance_if_known(
         self, vector: Sequence[int] | npt.NDArray[np.int_] | None = None
@@ -414,9 +414,9 @@ class ClassicalCode(AbstractCode):
 
         # the distance of dimension-0 codes is undefined
         if self.dimension == 0:
-            self._exact_distance = np.nan
+            self._distance = np.nan
 
-        return self._exact_distance
+        return self._distance
 
     def get_distance_bound(
         self,
@@ -707,10 +707,10 @@ class QuditCode(AbstractCode):
     Helpful lecture by Gottesman: https://www.youtube.com/watch?v=JWg4zrNAF-g
     """
 
-    _is_subsystem_code: bool
     _stabilizer_ops: galois.FieldArray | None = None
     _gauge_ops: galois.FieldArray | None = None
     _logical_ops: galois.FieldArray | None = None
+    _is_subsystem_code: bool
 
     def __init__(
         self,
@@ -1302,16 +1302,16 @@ class QuditCode(AbstractCode):
                 support_z = word[len(self) :].view(np.ndarray)
                 distance = min(distance, np.count_nonzero(support_x | support_z))
 
-        self._exact_distance = int(distance)
+        self._distance = int(distance)
         return distance
 
     def get_distance_if_known(self) -> int | float | None:
         """Retrieve exact distance, if known.  Otherwise return None."""
         # the distance of dimension-0 codes is undefined
         if self.dimension == 0:
-            self._exact_distance = np.nan
+            self._distance = np.nan
 
-        return self._exact_distance
+        return self._distance
 
     def get_distance_bound(
         self, num_trials: int = 1, *, cutoff: int | None = None, **decoder_args: Any
@@ -1554,8 +1554,8 @@ class CSSCode(QuditCode):
 
     _code_x: ClassicalCode
     _code_z: ClassicalCode
-    _exact_distance_x: int | float | None = None
-    _exact_distance_z: int | float | None = None
+    _distance_x: int | float | None = None
+    _distance_z: int | float | None = None
     _equal_distance_xz: bool
 
     def __init__(
@@ -1580,8 +1580,8 @@ class CSSCode(QuditCode):
             self._is_subsystem_code = bool(np.any(self.matrix_x @ self.matrix_z.T))
         self._equal_distance_xz = promise_equal_distance_xz or self.code_x == self.code_z
 
-        if self._exact_distance_x is not None and self._exact_distance_z is not None:
-            self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
+        if self._distance_x is not None and self._distance_z is not None:
+            self._distance = min(self._distance_x, self._distance_z)
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -2017,11 +2017,11 @@ class CSSCode(QuditCode):
 
         # save the exact distance and return
         if pauli is Pauli.X or self._equal_distance_xz:
-            self._exact_distance_x = distance
+            self._distance_x = distance
         if pauli is Pauli.Z or self._equal_distance_xz:
-            self._exact_distance_z = distance
-        if self._exact_distance_x is not None and self._exact_distance_z is not None:
-            self._exact_distance = min(self._exact_distance_x, self._exact_distance_z)
+            self._distance_z = distance
+        if self._distance_x is not None and self._distance_z is not None:
+            self._distance = min(self._distance_x, self._distance_z)
         return distance
 
     def get_distance_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
@@ -2030,13 +2030,13 @@ class CSSCode(QuditCode):
 
         # the distances of dimension-0 codes are undefined
         if self.dimension == 0:
-            self._exact_distance = self._exact_distance_x = self._exact_distance_z = np.nan
+            self._distance = self._distance_x = self._distance_z = np.nan
 
         if pauli is Pauli.X:
-            return self._exact_distance_x
+            return self._distance_x
         elif pauli is Pauli.Z:
-            return self._exact_distance_z
-        return self._exact_distance
+            return self._distance_z
+        return self._distance
 
     def get_distance_bound(
         self,

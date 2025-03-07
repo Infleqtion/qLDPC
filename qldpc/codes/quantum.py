@@ -53,7 +53,7 @@ class FiveQubitCode(QuditCode):
         )
         QuditCode.__init__(self, code, is_subsystem_code=False)
         self._dimension = 1
-        self._exact_distance = 3
+        self._distance = 3
 
 
 class SteaneCode(CSSCode):
@@ -64,7 +64,7 @@ class SteaneCode(CSSCode):
         CSSCode.__init__(self, code, code, is_subsystem_code=False)
         self.set_logical_ops_xz([[1] * 7], [[1] * 7], validate=False)
         self._dimension = 1
-        self._exact_distance_x = self._exact_distance_z = 3
+        self._distance_x = self._distance_z = 3
 
 
 class IcebergCode(CSSCode):
@@ -83,7 +83,7 @@ class IcebergCode(CSSCode):
         checks = [[1] * (2 * size)]
         CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         self._dimension = 2 * size - 2
-        self._exact_distance_x = self._exact_distance_z = 2
+        self._distance_x = self._distance_z = 2
 
         if size == 3:
             # make a specific choice of logical operators for the [6, 4, 2] code, splitting the
@@ -119,7 +119,7 @@ class C6Code(CSSCode):
         logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
         self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
         self._dimension = 2
-        self._exact_distance_x = self._exact_distance_z = 2
+        self._distance_x = self._distance_z = 2
 
 
 ################################################################################
@@ -915,33 +915,16 @@ class SHPCode(CSSCode):
 
     @staticmethod
     def get_logical_generators(
-        code_x: ClassicalCode,
-        code_z: ClassicalCode,
-        *,
-        minimal: bool = True,
+        code_x: ClassicalCode, code_z: ClassicalCode
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Generating sets for the logical operators of a hypergraph product code."""
+        """Generating sets for the logical operators of a hypergraph product code.
+
+        Taken from Eqs. (36) and (37) of arXiv:2002.06257v1.
+        """
         assert code_x.field is code_z.field
         code_field = code_x.field
-        if not minimal:
-            # generating sets for logical operators, from Eqs. (36) and (37) of arXiv:2002.06257v1
-            gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
-            gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
-
-        else:
-            generator_x = code_x.generator.row_reduce()
-            generator_z = code_z.generator.row_reduce()
-
-            mat_x = code_field.Zeros(generator_x.shape)
-            mat_z = code_field.Zeros(generator_z.shape)
-            pivots_x = first_nonzero_cols(generator_x)
-            pivots_z = first_nonzero_cols(generator_z)
-            mat_x[range(len(pivots_x)), pivots_x] = 1
-            mat_z[range(len(pivots_z)), pivots_z] = 1
-
-            gen_ops_x = np.kron(mat_z, generator_z)
-            gen_ops_z = np.kron(generator_x, mat_x)
-
+        gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
+        gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
         return code_field(gen_ops_x), code_field(gen_ops_z)
 
 
@@ -1263,8 +1246,8 @@ class SurfaceCode(CSSCode):
         self.cols = cols
 
         # save known distances
-        self._exact_distance_x = cols
-        self._exact_distance_z = rows
+        self._distance_x = cols
+        self._distance_z = rows
 
         if rotated:
             # rotated surface code
@@ -1380,7 +1363,7 @@ class ToricCode(CSSCode):
         self.cols = cols
 
         # save known distances
-        self._exact_distance_x = self._exact_distance_z = min(rows, cols)
+        self._distance_x = self._distance_z = min(rows, cols)
 
         if rotated:
             if rows % 2 or cols % 2:
@@ -1471,8 +1454,8 @@ class GeneralizedSurfaceCode(CSSCode):
 
         # save known distances
         # TODO: find and link source for these
-        self._exact_distance_x = size ** (dim - 1)
-        self._exact_distance_z = size
+        self._distance_x = size ** (dim - 1)
+        self._distance_z = size
 
         base_code = RingCode(size, field) if periodic else RepetitionCode(size, field)
 
@@ -1524,5 +1507,5 @@ class SHYPSCode(SHPCode):
         SHPCode.__init__(self, code_x, code_z)
 
         self._dimension = dim_x * dim_z
-        self._exact_distance_x = code_z.get_distance()  # X errors are witnessed by the Z code
-        self._exact_distance_z = code_x.get_distance()  # Z errors are witnessed by the X code
+        self._distance_x = code_z.get_distance()  # X errors are witnessed by the Z code
+        self._distance_z = code_x.get_distance()  # Z errors are witnessed by the X code
