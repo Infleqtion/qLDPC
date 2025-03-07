@@ -929,12 +929,12 @@ class SHPCode(CSSCode):
         generator_x = code_x.generator.row_reduce()
         generator_z = code_z.generator.row_reduce()
 
-        mat_x = code_field.Zeros(generator_x.shape)
-        mat_z = code_field.Zeros(generator_z.shape)
-        mat_x[range(len(mat_x)), first_nonzero_cols(generator_x)] = 1
-        mat_z[range(len(mat_z)), first_nonzero_cols(generator_z)] = 1
+        pivots_x = code_field.Zeros(generator_x.shape)
+        pivots_z = code_field.Zeros(generator_z.shape)
+        pivots_x[range(len(pivots_x)), first_nonzero_cols(generator_x)] = 1
+        pivots_z[range(len(pivots_z)), first_nonzero_cols(generator_z)] = 1
 
-        return np.kron(mat_z, generator_z), np.kron(generator_x, mat_x)
+        return np.kron(pivots_z, generator_z), np.kron(generator_x, pivots_x)
 
 
 class LPCode(CSSCode):
