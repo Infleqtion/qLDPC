@@ -33,6 +33,7 @@ import sympy
 
 from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
+from qldpc.math import first_nonzero_cols
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
 from .classical import HammingCode, RepetitionCode, RingCode, SimplexCodes, TannerCode
@@ -916,15 +917,19 @@ class SHPCode(CSSCode):
     def get_logical_generators(
         code_x: ClassicalCode, code_z: ClassicalCode
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Generating sets for the logical operators of a hypergraph product code.
-
-        Taken from Eqs. (36) and (37) of arXiv:2002.06257v1.
-        """
+        """Generating sets for the logical operators of a subsystem hypergraph product code."""
         assert code_x.field is code_z.field
         code_field = code_x.field
-        gen_ops_x = np.kron(code_field.Identity(len(code_x)), code_z.generator)
-        gen_ops_z = np.kron(code_x.generator, code_field.Identity(len(code_z)))
-        return code_field(gen_ops_x), code_field(gen_ops_z)
+
+        generator_x = code_x.generator.row_reduce()
+        generator_z = code_z.generator.row_reduce()
+
+        mat_x = code_field.Zeros(generator_x.shape)
+        mat_z = code_field.Zeros(generator_z.shape)
+        mat_x[range(len(mat_x)), first_nonzero_cols(generator_x)] = 1
+        mat_z[range(len(mat_z)), first_nonzero_cols(generator_z)] = 1
+
+        return np.kron(mat_z, generator_z), np.kron(generator_x, mat_x)
 
 
 class LPCode(CSSCode):
