@@ -1504,7 +1504,7 @@ class BaconShorCode(SHPCode):
         set_logicals: bool = True,
     ) -> None:
         code_x = RepetitionCode(rows, field)
-        code_z = RepetitionCode(cols or rows, field)
+        code_z = RepetitionCode(cols, field) if cols is not None else None
         SHPCode.__init__(self, code_x, code_z, field, set_logicals=set_logicals)
 
 
