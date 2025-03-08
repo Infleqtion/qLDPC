@@ -1485,10 +1485,17 @@ class BaconShorCode(SHPCode):
     - https://errorcorrectionzoo.org/c/bacon_shor
     """
 
-    def __init__(self, rows: int, cols: int | None = None, field: int | None = None) -> None:
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        field: int | None = None,
+        *,
+        set_logicals: bool = True,
+    ) -> None:
         code_x = RepetitionCode(rows, field)
         code_z = RepetitionCode(cols or rows, field)
-        SHPCode.__init__(self, code_x, code_z, field)
+        SHPCode.__init__(self, code_x, code_z, field, set_logicals=set_logicals)
 
 
 class SHYPSCode(SHPCode):
