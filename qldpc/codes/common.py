@@ -1914,8 +1914,7 @@ class CSSCode(QuditCode):
         validate: bool = True,
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
-        zero_block = np.zeros((len(logicals_x), len(self)), dtype=int)
-        logical_ops = np.block([[logicals_x, zero_block], [zero_block, logicals_z]])
+        logical_ops = scipy.linalg.block_diag(logicals_x, logicals_z)
         self.set_logical_ops(logical_ops, validate=validate)
 
     def get_stabilizer_ops(
