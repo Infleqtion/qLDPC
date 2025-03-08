@@ -843,7 +843,7 @@ class HGPCode(CSSCode):
         matrix_a = code_a.matrix
         matrix_b = code_b.matrix
 
-        def complement(matrix_rref: npt.NDArray[np.int]) -> npt.NDArray[np.int]:
+        def complement(matrix_rref: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
             """For a matrix in reduced row Echelon form, find the complement of its row space.
 
             The complement of the row space of a matrix A is a matrix B for which the direct sum
