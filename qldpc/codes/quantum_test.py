@@ -210,8 +210,8 @@ def test_hypergraph_product(
     """Equivalency of matrix-based, graph-based, and chain-based hypergraph products."""
     np.random.seed(pytestconfig.getoption("randomly_seed"))
 
-    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
-    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field, seed=np.random.randint(2**32))
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field, seed=np.random.randint(2**32))
 
     code = codes.HGPCode(code_a, code_b, set_logicals=True)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph)
@@ -237,8 +237,8 @@ def test_subsystem_hypergraph_product(
     """Validity of the subsystem hypergraph product code."""
     np.random.seed(pytestconfig.getoption("randomly_seed"))
 
-    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
-    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field, seed=np.random.randint(2**32))
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field, seed=np.random.randint(2**32))
     code = codes.SHPCode(code_a, code_b, set_logicals=True)
 
     # assert validity of the the "natural" stabilizers that are set at initialization time
@@ -260,8 +260,8 @@ def test_trivial_lift(
     """The lifted product code with a trivial lift reduces to the HGP code."""
     np.random.seed(pytestconfig.getoption("randomly_seed"))
 
-    code_a = codes.ClassicalCode.random(*bits_checks_a, field)
-    code_b = codes.ClassicalCode.random(*bits_checks_b, field)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field, seed=np.random.randint(2**32))
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field, seed=np.random.randint(2**32))
     code_HGP = codes.HGPCode(code_a, code_b, field)
 
     protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix, field)
@@ -366,12 +366,14 @@ def test_lifted_product_codes() -> None:
         assert rate >= 2 / 17
 
 
-def test_quantum_tanner() -> None:
+def test_quantum_tanner(pytestconfig: pytest.Config) -> None:
     """Quantum Tanner code."""
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
     # random quantum Tanner code
     group = abstract.CyclicGroup(12)
     subcode = codes.RepetitionCode(4, field=3)
-    code = codes.QTCode.random(group, subcode)
+    code = codes.QTCode.random(group, subcode, seed=np.random.randint(2**32))
 
     # assert that subgraphs have the right number of nodes, edges, and node degrees
     subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(code.complex)
