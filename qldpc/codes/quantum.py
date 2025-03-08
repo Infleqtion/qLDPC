@@ -893,7 +893,7 @@ class SHPCode(CSSCode):
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        set_logicals: bool = False,
+        set_logicals: bool = True,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
         if code_z is None:
@@ -929,8 +929,8 @@ class SHPCode(CSSCode):
         pivots_x[range(len(pivots_x)), first_nonzero_cols(generator_x)] = 1
         pivots_z[range(len(pivots_z)), first_nonzero_cols(generator_z)] = 1
 
-        logical_ops_x = code_field(np.kron(pivots_z, generator_z))
-        logical_ops_z = code_field(np.kron(generator_x, pivots_x))
+        logical_ops_x = code_field(np.kron(pivots_x, generator_z))
+        logical_ops_z = code_field(np.kron(generator_x, pivots_z))
         return logical_ops_x, logical_ops_z
 
 

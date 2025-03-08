@@ -234,8 +234,9 @@ def test_subsystem_hypergraph_product(
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Validity of the subsystem hypergraph product code."""
-    subcode = codes.ClassicalCode.random(*bits_checks_a, field=field)
-    code = codes.SHPCode(subcode, set_logicals=True)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
+    code = codes.SHPCode(code_a, code_b, set_logicals=True)
 
     # assert that the logicals are valid
     code.set_logical_ops(code.get_logical_ops(), validate=True)
@@ -247,7 +248,7 @@ def test_subsystem_hypergraph_product(
     )
 
     # assert validity canonical logical operators of an SHPCode
-    logical_ops_x, logical_ops_z = codes.SHPCode.get_canonical_logical_ops(subcode, subcode)
+    logical_ops_x, logical_ops_z = codes.SHPCode.get_canonical_logical_ops(code_a, code_b)
     assert not np.any(code.matrix_z @ logical_ops_x.T)
     assert not np.any(code.matrix_x @ logical_ops_z.T)
     assert len(logical_ops_x) == len(logical_ops_x) == code.dimension
