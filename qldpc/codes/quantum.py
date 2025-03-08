@@ -857,17 +857,17 @@ class HGPCode(CSSCode):
             complement[range(len(non_pivots)), non_pivots] = 1
             return complement
 
-        # X-type logical operators
+        # X-type logical operators in the left/right sectors
         logical_ops_x_l = np.kron(complement(matrix_a.T.column_space()), code_b.generator)
         logical_ops_x_r = np.kron(matrix_a.T.null_space(), complement(matrix_b.column_space()))
-        logical_ops_x = scipy.linalg.block_diag(logical_ops_x_l, logical_ops_x_r)
 
-        # Z-type logical operators
+        # Z-type logical operators in the left/right sectors
         logical_ops_z_l = np.kron(code_a.generator, complement(matrix_b.T.column_space()))
         logical_ops_z_r = np.kron(complement(matrix_a.column_space()), matrix_b.T.null_space())
-        logical_ops_z = scipy.linalg.block_diag(logical_ops_z_l, logical_ops_z_r)
 
-        return code_field(logical_ops_x), code_field(logical_ops_z)
+        logical_ops_x = code_field(scipy.linalg.block_diag(logical_ops_x_l, logical_ops_x_r))
+        logical_ops_z = code_field(scipy.linalg.block_diag(logical_ops_z_l, logical_ops_z_r))
+        return logical_ops_x, logical_ops_z
 
 
 class SHPCode(CSSCode):
@@ -893,7 +893,7 @@ class SHPCode(CSSCode):
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        set_logicals: bool = True,
+        set_logicals: bool = False,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
         if code_z is None:
@@ -929,9 +929,9 @@ class SHPCode(CSSCode):
         pivots_x[range(len(pivots_x)), first_nonzero_cols(generator_x)] = 1
         pivots_z[range(len(pivots_z)), first_nonzero_cols(generator_z)] = 1
 
-        logical_ops_x = np.kron(pivots_z, generator_z)
-        logical_ops_z = np.kron(pivots_x, generator_x)
-        return code_field(logical_ops_x), code_field(logical_ops_z)
+        logical_ops_x = code_field(np.kron(pivots_z, generator_z))
+        logical_ops_z = code_field(np.kron(generator_x, pivots_x))
+        return logical_ops_x, logical_ops_z
 
 
 class LPCode(CSSCode):
@@ -1493,7 +1493,7 @@ class BaconShorCode(SHPCode):
         cols: int | None = None,
         field: int | None = None,
         *,
-        set_logicals: bool = False,
+        set_logicals: bool = True,
     ) -> None:
         code_x = RepetitionCode(rows, field)
         code_z = RepetitionCode(cols or rows, field)
