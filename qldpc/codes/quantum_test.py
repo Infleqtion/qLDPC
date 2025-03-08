@@ -201,7 +201,7 @@ def test_quasi_cyclic_codes() -> None:
 
 
 @pytest.mark.parametrize("field", [2, 3])
-def test_hypergraph_products(
+def test_hypergraph_product(
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
