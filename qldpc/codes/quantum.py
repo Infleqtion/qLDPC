@@ -836,43 +836,38 @@ class HGPCode(CSSCode):
     ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
         """Generating sets for the logical operators of a hypergraph product code.
 
-        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
+        Taken from Lemma 1 of arXiv:2204.10812v3.
         """
         assert code_a.field is code_b.field
         code_field = code_a.field
+        matrix_a = code_a.matrix
+        matrix_b = code_b.matrix
 
-        mat_H1, mat_G1 = code_a.matrix, code_a.generator
-        mat_H2, mat_G2 = code_b.matrix, code_b.generator
-        mat_F1 = ClassicalCode(code_a.matrix.T).generator
-        mat_F2 = ClassicalCode(code_b.matrix.T).generator
-        mat_Im1, mat_In1 = np.eye(code_a.num_checks, dtype=int), np.eye(len(code_a), dtype=int)
-        mat_Im2, mat_In2 = np.eye(code_b.num_checks, dtype=int), np.eye(len(code_b), dtype=int)
+        def complement(matrix_rref: npt.NDArray[np.int]) -> npt.NDArray[np.int]:
+            """For a matrix in reduced row Echelon form, find the complement of its row space.
 
-        mat_H1_In2 = np.kron(mat_H1, mat_In2)
-        mat_Im1_H2_T = np.kron(mat_Im1, mat_H2.T)
-        mat_In1_G2 = np.kron(mat_In1, mat_G2)
-        mat_F1_Im2 = np.kron(mat_F1, mat_Im2)
+            The complement of the row space of a matrix A is a matrix B for which the direct sum
+            rowspace(A) ⨁ rowspace(B) spans the space of all row vectors.  That is, the rows of A
+            and B together span the space of all row vectors.
+            """
+            _, num_cols = matrix_rref.shape
+            pivots = first_nonzero_cols(matrix_rref)
+            non_pivots = [cc for cc in range(num_cols) if cc not in pivots]
+            complement = np.zeros((num_cols - len(pivots), num_cols), dtype=int)
+            complement[range(len(non_pivots)), non_pivots] = 1
+            return complement
 
-        mat_In1_H2 = np.kron(mat_In1, mat_H2)
-        mat_H1_T_Im2 = np.kron(mat_H1.T, mat_Im2)
-        mat_G1_In2 = np.kron(mat_G1, mat_In2)
-        mat_Im1_F2 = np.kron(mat_Im1, mat_F2)
+        # X-type logical operators
+        logical_ops_x_l = np.kron(complement(matrix_a.T.column_space()), code_b.generator)
+        logical_ops_x_r = np.kron(matrix_a.T.null_space(), complement(matrix_b.column_space()))
+        logical_ops_x = scipy.linalg.block_diag(logical_ops_x_l, logical_ops_x_r)
 
-        gen_ops_x = np.block(
-            [
-                [mat_H1_In2, mat_Im1_H2_T],
-                [mat_In1_G2, np.zeros((mat_In1_G2.shape[0], mat_F1_Im2.shape[1]), dtype=int)],
-                [np.zeros((mat_F1_Im2.shape[0], mat_In1_G2.shape[1]), dtype=int), mat_F1_Im2],
-            ]
-        )
-        gen_ops_z = np.block(
-            [
-                [-mat_In1_H2, mat_H1_T_Im2],
-                [-mat_G1_In2, np.zeros((mat_G1_In2.shape[0], mat_Im1_F2.shape[1]), dtype=int)],
-                [np.zeros((mat_Im1_F2.shape[0], mat_G1_In2.shape[1]), dtype=int), mat_Im1_F2],
-            ]
-        )
-        return code_field(gen_ops_x), code_field(gen_ops_z)
+        # Z-type logical operators
+        logical_ops_z_l = np.kron(code_a.generator, complement(matrix_b.T.column_space()))
+        logical_ops_z_r = np.kron(complement(matrix_a.column_space()), matrix_b.T.null_space())
+        logical_ops_z = scipy.linalg.block_diag(logical_ops_z_l, logical_ops_z_r)
+
+        return code_field(logical_ops_x), code_field(logical_ops_z)
 
 
 class SHPCode(CSSCode):

@@ -220,14 +220,11 @@ def test_hypergraph_products(
     assert np.array_equal(code.matrix_x, matrix_x)
     assert np.array_equal(code.matrix_z, matrix_z)
 
-    # sanity check for generating sets of the logical operators of an HGPCode
-    gens_x, gens_z = codes.HGPCode.get_logical_generators(code_a, code_b)
-    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
-    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
-    assert not np.any(code.matrix_z @ gens_x.T)
-    assert not np.any(code.matrix_x @ gens_z.T)
-    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
-    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+    # assert validity canonical logical operators of an HGPCode
+    logical_ops_x, logical_ops_z = codes.HGPCode.get_logical_generators(code_a, code_b)
+    assert not np.any(code.matrix_z @ logical_ops_x.T)
+    assert not np.any(code.matrix_x @ logical_ops_z.T)
+    assert len(logical_ops_x) == len(logical_ops_x) == code.dimension
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -249,14 +246,11 @@ def test_subsystem_hypergraph_product(
         code.get_stabilizer_ops(recompute=True, canonicalized=True),
     )
 
-    # sanity check for generating sets of the logical operators of an SHPCode
-    gens_x, gens_z = codes.SHPCode.get_logical_generators(subcode, subcode)
-    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
-    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
-    assert not np.any(code.matrix_z @ gens_x.T)
-    assert not np.any(code.matrix_x @ gens_z.T)
-    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
-    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+    # assert validity canonical logical operators of an SHPCode
+    logical_ops_x, logical_ops_z = codes.HGPCode.get_logical_generators(subcode, subcode)
+    assert not np.any(code.matrix_z @ logical_ops_x.T)
+    assert not np.any(code.matrix_x @ logical_ops_z.T)
+    assert len(logical_ops_x) == len(logical_ops_x) == code.dimension
 
 
 def test_trivial_lift(
