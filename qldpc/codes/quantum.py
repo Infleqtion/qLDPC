@@ -693,6 +693,8 @@ class HGPCode(CSSCode):
         code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
+        *,
+        set_logicals: bool = True,
     ) -> None:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
@@ -729,6 +731,9 @@ class HGPCode(CSSCode):
         CSSCode.__init__(
             self, matrix_x.astype(int), matrix_z.astype(int), field, is_subsystem_code=False
         )
+
+        if set_logicals:
+            self.set_logical_ops_xz(*self.get_canonical_logical_ops(code_a, code_b), validate=False)
 
     @staticmethod
     def get_matrix_product(
@@ -831,48 +836,42 @@ class HGPCode(CSSCode):
         return node_map
 
     @staticmethod
-    def get_logical_generators(
+    def get_canonical_logical_ops(
         code_a: ClassicalCode, code_b: ClassicalCode
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Generating sets for the logical operators of a hypergraph product code.
+    ) -> tuple[galois.FieldArray, galois.FieldArray]:
+        """Canonical logical operators for the hypergraph product code.
 
-        Taken from Eqs. (28) and (29) of arXiv:2002.06257v1.
+        These operators are essentially those in Lemma 1 of arXiv:2204.10812v3, modified using pivot
+        matrices similarly to Theorem VIII.10 of arXiv:2502.07150v1 to ensure pair-wise
+        anti-commutation relations.
         """
         assert code_a.field is code_b.field
         code_field = code_a.field
 
-        mat_H1, mat_G1 = code_a.matrix, code_a.generator
-        mat_H2, mat_G2 = code_b.matrix, code_b.generator
-        mat_F1 = ClassicalCode(code_a.matrix.T).generator
-        mat_F2 = ClassicalCode(code_b.matrix.T).generator
-        mat_Im1, mat_In1 = np.eye(code_a.num_checks, dtype=int), np.eye(len(code_a), dtype=int)
-        mat_Im2, mat_In2 = np.eye(code_b.num_checks, dtype=int), np.eye(len(code_b), dtype=int)
+        generator_a = code_a.generator.row_reduce()
+        generator_b = code_b.generator.row_reduce()
+        generator_a_T = code_a.matrix.T.null_space()
+        generator_b_T = code_b.matrix.T.null_space()
 
-        mat_H1_In2 = np.kron(mat_H1, mat_In2)
-        mat_Im1_H2_T = np.kron(mat_Im1, mat_H2.T)
-        mat_In1_G2 = np.kron(mat_In1, mat_G2)
-        mat_F1_Im2 = np.kron(mat_F1, mat_Im2)
+        pivots_a = code_field.Zeros(generator_a.shape)
+        pivots_b = code_field.Zeros(generator_b.shape)
+        pivots_a[range(len(pivots_a)), first_nonzero_cols(generator_a)] = 1
+        pivots_b[range(len(pivots_b)), first_nonzero_cols(generator_b)] = 1
 
-        mat_In1_H2 = np.kron(mat_In1, mat_H2)
-        mat_H1_T_Im2 = np.kron(mat_H1.T, mat_Im2)
-        mat_G1_In2 = np.kron(mat_G1, mat_In2)
-        mat_Im1_F2 = np.kron(mat_Im1, mat_F2)
+        pivots_a_T = code_field.Zeros(generator_a_T.shape)
+        pivots_b_T = code_field.Zeros(generator_b_T.shape)
+        pivots_a_T[range(len(pivots_a_T)), first_nonzero_cols(generator_a_T)] = 1
+        pivots_b_T[range(len(pivots_b_T)), first_nonzero_cols(generator_b_T)] = 1
 
-        gen_ops_x = np.block(
-            [
-                [mat_H1_In2, mat_Im1_H2_T],
-                [mat_In1_G2, np.zeros((mat_In1_G2.shape[0], mat_F1_Im2.shape[1]), dtype=int)],
-                [np.zeros((mat_F1_Im2.shape[0], mat_In1_G2.shape[1]), dtype=int), mat_F1_Im2],
-            ]
-        )
-        gen_ops_z = np.block(
-            [
-                [-mat_In1_H2, mat_H1_T_Im2],
-                [-mat_G1_In2, np.zeros((mat_G1_In2.shape[0], mat_Im1_F2.shape[1]), dtype=int)],
-                [np.zeros((mat_Im1_F2.shape[0], mat_G1_In2.shape[1]), dtype=int), mat_Im1_F2],
-            ]
-        )
-        return code_field(gen_ops_x), code_field(gen_ops_z)
+        logical_ops_x_l = np.kron(pivots_a, generator_b)
+        logical_ops_x_r = np.kron(generator_a_T, pivots_b_T)
+
+        logical_ops_z_l = np.kron(generator_a, pivots_b)
+        logical_ops_z_r = np.kron(pivots_a_T, generator_b_T)
+
+        logical_ops_x = code_field(scipy.linalg.block_diag(logical_ops_x_l, logical_ops_x_r))
+        logical_ops_z = code_field(scipy.linalg.block_diag(logical_ops_z_l, logical_ops_z_r))
+        return logical_ops_x, logical_ops_z
 
 
 class SHPCode(CSSCode):
@@ -898,7 +897,7 @@ class SHPCode(CSSCode):
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        set_logicals: bool = False,
+        set_logicals: bool = True,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
         if code_z is None:
@@ -916,13 +915,17 @@ class SHPCode(CSSCode):
         self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
         if set_logicals:
-            self.set_logical_ops_xz(*self.get_logical_generators(code_x, code_z), validate=False)
+            self.set_logical_ops_xz(*self.get_canonical_logical_ops(code_x, code_z), validate=False)
 
     @staticmethod
-    def get_logical_generators(
+    def get_canonical_logical_ops(
         code_x: ClassicalCode, code_z: ClassicalCode
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
-        """Canonical logical operators for the subsystem hypergraph product code."""
+    ) -> tuple[galois.FieldArray, galois.FieldArray]:
+        """Canonical logical operators for the subsystem hypergraph product code.
+
+        These operators are essentially those in Theorem VIII.10 of arXiv:2502.07150v1, generalized
+        slightly to account for the possibility that code_x != code_z.
+        """
         assert code_x.field is code_z.field
         code_field = code_x.field
 
@@ -934,7 +937,9 @@ class SHPCode(CSSCode):
         pivots_x[range(len(pivots_x)), first_nonzero_cols(generator_x)] = 1
         pivots_z[range(len(pivots_z)), first_nonzero_cols(generator_z)] = 1
 
-        return np.kron(pivots_z, generator_z), np.kron(generator_x, pivots_x)
+        logical_ops_x = code_field(np.kron(pivots_x, generator_z))
+        logical_ops_z = code_field(np.kron(generator_x, pivots_z))
+        return logical_ops_x, logical_ops_z
 
 
 class LPCode(CSSCode):
@@ -1490,10 +1495,17 @@ class BaconShorCode(SHPCode):
     - https://errorcorrectionzoo.org/c/bacon_shor
     """
 
-    def __init__(self, rows: int, cols: int | None = None, field: int | None = None) -> None:
+    def __init__(
+        self,
+        rows: int,
+        cols: int | None = None,
+        field: int | None = None,
+        *,
+        set_logicals: bool = True,
+    ) -> None:
         code_x = RepetitionCode(rows, field)
-        code_z = RepetitionCode(cols or rows, field)
-        SHPCode.__init__(self, code_x, code_z, field)
+        code_z = RepetitionCode(cols, field) if cols is not None else None
+        SHPCode.__init__(self, code_x, code_z, field, set_logicals=set_logicals)
 
 
 class SHYPSCode(SHPCode):
