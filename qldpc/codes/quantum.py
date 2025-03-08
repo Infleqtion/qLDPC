@@ -839,36 +839,35 @@ class HGPCode(CSSCode):
     def get_canonical_logical_ops(
         code_a: ClassicalCode, code_b: ClassicalCode
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
-        """Generating sets for the logical operators of a hypergraph product code.
+        """Canonical logical operators for the hypergraph product code.
 
-        Taken from Lemma 1 of arXiv:2204.10812v3.
+        These operators are essentially those in Lemma 1 of arXiv:2204.10812v3, modified using pivot
+        matrices similarly to Theorem VIII.10 of arXiv:2502.07150v1 to ensure pair-wise
+        anti-commutation relations.
         """
         assert code_a.field is code_b.field
         code_field = code_a.field
-        matrix_a = code_a.matrix
-        matrix_b = code_b.matrix
 
-        def complement(matrix_rref: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-            """For a matrix in reduced row Echelon form, find the complement of its row space.
+        generator_a = code_a.generator.row_reduce()
+        generator_b = code_b.generator.row_reduce()
+        generator_a_T = code_a.matrix.T.null_space()
+        generator_b_T = code_b.matrix.T.null_space()
 
-            The complement of the row space of a matrix A is a matrix B for which the direct sum
-            rowspace(A) ⨁ rowspace(B) spans the space of all row vectors.  That is, the rows of A
-            and B together span the space of all row vectors.
-            """
-            _, num_cols = matrix_rref.shape
-            pivots = first_nonzero_cols(matrix_rref)
-            non_pivots = [cc for cc in range(num_cols) if cc not in pivots]
-            complement = np.zeros((num_cols - len(pivots), num_cols), dtype=int)
-            complement[range(len(non_pivots)), non_pivots] = 1
-            return complement
+        pivots_a = code_field.Zeros(generator_a.shape)
+        pivots_b = code_field.Zeros(generator_b.shape)
+        pivots_a[range(len(pivots_a)), first_nonzero_cols(generator_a)] = 1
+        pivots_b[range(len(pivots_b)), first_nonzero_cols(generator_b)] = 1
 
-        # X-type logical operators in the left/right sectors
-        logical_ops_x_l = np.kron(complement(matrix_a.T.column_space()), code_b.generator)
-        logical_ops_x_r = np.kron(matrix_a.T.null_space(), complement(matrix_b.column_space()))
+        pivots_a_T = code_field.Zeros(generator_a_T.shape)
+        pivots_b_T = code_field.Zeros(generator_b_T.shape)
+        pivots_a_T[range(len(pivots_a_T)), first_nonzero_cols(generator_a_T)] = 1
+        pivots_b_T[range(len(pivots_b_T)), first_nonzero_cols(generator_b_T)] = 1
 
-        # Z-type logical operators in the left/right sectors
-        logical_ops_z_l = np.kron(code_a.generator, complement(matrix_b.T.column_space()))
-        logical_ops_z_r = np.kron(complement(matrix_a.column_space()), matrix_b.T.null_space())
+        logical_ops_x_l = np.kron(pivots_a, generator_b)
+        logical_ops_x_r = np.kron(generator_a_T, pivots_b_T)
+
+        logical_ops_z_l = np.kron(generator_a, pivots_b)
+        logical_ops_z_r = np.kron(pivots_a_T, generator_b_T)
 
         logical_ops_x = code_field(scipy.linalg.block_diag(logical_ops_x_l, logical_ops_x_r))
         logical_ops_z = code_field(scipy.linalg.block_diag(logical_ops_z_l, logical_ops_z_r))
@@ -922,7 +921,11 @@ class SHPCode(CSSCode):
     def get_canonical_logical_ops(
         code_x: ClassicalCode, code_z: ClassicalCode
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
-        """Canonical logical operators for the subsystem hypergraph product code."""
+        """Canonical logical operators for the subsystem hypergraph product code.
+
+        These operators are essentially those in Theorem VIII.10 of arXiv:2502.07150v1, generalized
+        slightly to account for the possibility that code_x != code_z.
+        """
         assert code_x.field is code_z.field
         code_field = code_x.field
 
