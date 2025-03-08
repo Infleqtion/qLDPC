@@ -202,15 +202,18 @@ def test_quasi_cyclic_codes() -> None:
 
 @pytest.mark.parametrize("field", [2, 3])
 def test_hypergraph_product(
+    pytestconfig: pytest.Config,
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Equivalency of matrix-based, graph-based, and chain-based hypergraph products."""
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
     code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
 
-    code = codes.HGPCode(code_a, code_b)
+    code = codes.HGPCode(code_a, code_b, set_logicals=True)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph)
     chain = ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
@@ -220,26 +223,23 @@ def test_hypergraph_product(
     assert np.array_equal(code.matrix_x, matrix_x)
     assert np.array_equal(code.matrix_z, matrix_z)
 
-    # assert validity canonical logical operators of an HGPCode
-    logical_ops_x, logical_ops_z = codes.HGPCode.get_canonical_logical_ops(code_a, code_b)
-    assert not np.any(code.matrix_z @ logical_ops_x.T)
-    assert not np.any(code.matrix_x @ logical_ops_z.T)
-    assert len(logical_ops_x) == len(logical_ops_x) == code.dimension
+    # verify that the canonical logicals are valid
+    code.set_logical_ops(code.get_logical_ops())
 
 
 @pytest.mark.parametrize("field", [2, 3])
 def test_subsystem_hypergraph_product(
+    pytestconfig: pytest.Config,
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Validity of the subsystem hypergraph product code."""
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
     code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
     code = codes.SHPCode(code_a, code_b, set_logicals=True)
-
-    # assert that the logicals are valid
-    code.set_logical_ops(code.get_logical_ops(), validate=True)
 
     # assert validity of the the "natural" stabilizers that are set at initialization time
     assert np.array_equal(
@@ -247,19 +247,19 @@ def test_subsystem_hypergraph_product(
         code.get_stabilizer_ops(recompute=True, canonicalized=True),
     )
 
-    # assert validity canonical logical operators of an SHPCode
-    logical_ops_x, logical_ops_z = codes.SHPCode.get_canonical_logical_ops(code_a, code_b)
-    assert not np.any(code.matrix_z @ logical_ops_x.T)
-    assert not np.any(code.matrix_x @ logical_ops_z.T)
-    assert len(logical_ops_x) == len(logical_ops_x) == code.dimension
+    # verify that the canonical logicals are valid
+    code.set_logical_ops(code.get_logical_ops())
 
 
 def test_trivial_lift(
+    pytestconfig: pytest.Config,
     bits_checks_a: tuple[int, int] = (4, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
     field: int = 3,
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
     code_a = codes.ClassicalCode.random(*bits_checks_a, field)
     code_b = codes.ClassicalCode.random(*bits_checks_b, field)
     code_HGP = codes.HGPCode(code_a, code_b, field)

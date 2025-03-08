@@ -693,6 +693,8 @@ class HGPCode(CSSCode):
         code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
         code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
+        *,
+        set_logicals: bool = True,
     ) -> None:
         """Hypergraph product of two classical codes, as in arXiv:2202.01702.
 
@@ -729,6 +731,9 @@ class HGPCode(CSSCode):
         CSSCode.__init__(
             self, matrix_x.astype(int), matrix_z.astype(int), field, is_subsystem_code=False
         )
+
+        if set_logicals:
+            self.set_logical_ops_xz(*self.get_canonical_logical_ops(code_a, code_b), validate=False)
 
     @staticmethod
     def get_matrix_product(
