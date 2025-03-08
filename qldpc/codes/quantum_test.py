@@ -247,7 +247,7 @@ def test_subsystem_hypergraph_product(
     )
 
     # assert validity canonical logical operators of an SHPCode
-    logical_ops_x, logical_ops_z = codes.HGPCode.get_logical_generators(subcode, subcode)
+    logical_ops_x, logical_ops_z = codes.SHPCode.get_logical_generators(subcode, subcode)
     assert not np.any(code.matrix_z @ logical_ops_x.T)
     assert not np.any(code.matrix_x @ logical_ops_z.T)
     assert len(logical_ops_x) == len(logical_ops_x) == code.dimension
