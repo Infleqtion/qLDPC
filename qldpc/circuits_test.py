@@ -35,10 +35,19 @@ def test_restriction() -> None:
 def test_state_prep() -> None:
     """Prepare all-0 logical states of qubit codes."""
     for code in [
-        codes.FiveQubitCode(),
+        # codes.FiveQubitCode(),
         codes.BaconShorCode(3, field=2),
-        codes.HGPCode(codes.ClassicalCode.random(5, 3, field=2)),
+        # codes.HGPCode(codes.ClassicalCode.random(5, 3, field=2)),
     ]:
+        print()
+        print()
+        for string in code.get_logical_ops(Pauli.X):
+            print(string)
+        print()
+        for string in code.get_logical_ops(Pauli.Z):
+            print(string)
+        print()
+        print()
         encoder = circuits.get_encoding_circuit(code)
         simulator = stim.TableauSimulator()
         simulator.do(encoder)

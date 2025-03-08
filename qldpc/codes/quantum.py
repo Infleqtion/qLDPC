@@ -831,9 +831,9 @@ class HGPCode(CSSCode):
         return node_map
 
     @staticmethod
-    def get_logical_generators(
+    def get_canonical_logical_ops(
         code_a: ClassicalCode, code_b: ClassicalCode
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+    ) -> tuple[galois.FieldArray, galois.FieldArray]:
         """Generating sets for the logical operators of a hypergraph product code.
 
         Taken from Lemma 1 of arXiv:2204.10812v3.
@@ -911,12 +911,12 @@ class SHPCode(CSSCode):
         self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
         if set_logicals:
-            self.set_logical_ops_xz(*self.get_logical_generators(code_x, code_z), validate=False)
+            self.set_logical_ops_xz(*self.get_canonical_logical_ops(code_x, code_z), validate=False)
 
     @staticmethod
-    def get_logical_generators(
+    def get_canonical_logical_ops(
         code_x: ClassicalCode, code_z: ClassicalCode
-    ) -> tuple[npt.NDArray[np.int_], npt.NDArray[np.int_]]:
+    ) -> tuple[galois.FieldArray, galois.FieldArray]:
         """Canonical logical operators for the subsystem hypergraph product code."""
         assert code_x.field is code_z.field
         code_field = code_x.field
@@ -929,7 +929,9 @@ class SHPCode(CSSCode):
         pivots_x[range(len(pivots_x)), first_nonzero_cols(generator_x)] = 1
         pivots_z[range(len(pivots_z)), first_nonzero_cols(generator_z)] = 1
 
-        return np.kron(pivots_z, generator_z), np.kron(generator_x, pivots_x)
+        logical_ops_x = np.kron(pivots_z, generator_z)
+        logical_ops_z = np.kron(pivots_x, generator_x)
+        return code_field(logical_ops_x), code_field(logical_ops_z)
 
 
 class LPCode(CSSCode):
@@ -1491,7 +1493,7 @@ class BaconShorCode(SHPCode):
         cols: int | None = None,
         field: int | None = None,
         *,
-        set_logicals: bool = True,
+        set_logicals: bool = False,
     ) -> None:
         code_x = RepetitionCode(rows, field)
         code_z = RepetitionCode(cols or rows, field)

@@ -85,6 +85,16 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     matrices_z = [logical_ops[code.dimension :], gauge_ops[code.gauge_dimension :], stab_ops]
     strings_x = [op_to_string(op) for matrix in matrices_x for op in matrix]
     strings_z = [op_to_string(op) for matrix in matrices_z for op in matrix]
+    print()
+    print()
+    print()
+    print()
+    print(strings_x)
+    print()
+    print()
+    print(strings_z)
+    print()
+    print()
     return stim.Tableau.from_conjugated_generators(xs=strings_x, zs=strings_z)
 
 
