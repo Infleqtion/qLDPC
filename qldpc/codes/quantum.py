@@ -893,7 +893,7 @@ class SHPCode(CSSCode):
         code_z: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]] | None = None,
         field: int | None = None,
         *,
-        set_logicals: bool = True,
+        set_logicals: bool = False,
     ) -> None:
         """Subsystem hypergraph product of two classical codes, as in arXiv:2002.06257."""
         if code_z is None:
