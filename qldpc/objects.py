@@ -34,16 +34,6 @@ from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
 
 
-def conjugate_xz(strings: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-    """Flip the X and Z sectors of the given Pauli strings.
-
-    This operation converts between vectors and dual vectors of the symplectic inner product space of
-    bitstrings that represent Pauli strings by their [X|Z] support.
-    """
-    assert strings.shape[-1] % 2 == 0
-    return strings.reshape(-1, 2, strings.shape[-1] // 2)[:, ::-1, :].reshape(strings.shape)
-
-
 def op_to_string(op: npt.NDArray[np.int_]) -> stim.PauliString:
     """Convert an integer array that represents a Pauli string into a stim.PauliString.
 

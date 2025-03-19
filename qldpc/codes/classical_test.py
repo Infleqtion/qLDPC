@@ -24,13 +24,11 @@ import pytest
 from qldpc import codes
 
 
-@pytest.mark.parametrize("field", [2, 3])
-def test_basic(field: int) -> None:
+def test_basic() -> None:
     """Repetition, ring, and Hamming codes."""
     num_bits = 4
-    for code in [codes.RepetitionCode(num_bits, field), codes.RingCode(num_bits, field)]:
-        assert code.num_bits == num_bits
-        assert code.dimension == 1
+    assert codes.RepetitionCode(num_bits).get_code_params() == (num_bits, 1, num_bits)
+    assert codes.RingCode(num_bits).get_code_params() == (num_bits, 1, num_bits)
 
     # the rank of repetition and Hamming codes is independent of the field
     assert codes.RepetitionCode(3, 2).rank == codes.RepetitionCode(3, 3).rank
@@ -39,6 +37,8 @@ def test_basic(field: int) -> None:
 
 def test_special_codes() -> None:
     """More complicated classical codes."""
+    code: codes.ClassicalCode
+
     bits, dimension = 3, 2
     assert codes.ReedSolomonCode(bits, dimension).dimension == dimension
 
@@ -50,12 +50,23 @@ def test_special_codes() -> None:
     order, size, field = 1, 3, 2
     code = codes.ReedMullerCode(order, size, field)
     assert ~code == codes.ReedMullerCode(size - order - 1, size, field)
+    assert code.dimension == len(code) - np.linalg.matrix_rank(code.matrix)
 
     with pytest.raises(ValueError, match="0 <= r <= m"):
         codes.ReedMullerCode(-1, 0)
 
     # the extended Hamming code's parity check matrix is a super set of the ordinary Hamming code
-    assert np.array_equal(codes.ExtendedHammingCode(4).matrix[1:, 1:], codes.HammingCode(4).matrix)
+    assert np.array_equal(
+        codes.ExtendedHammingCode(4).matrix[1:, 1:],
+        codes.HammingCode(4, field=2).matrix,
+    )
+
+    # classical simplex codes
+    for dimension in range(3, 8):
+        code = codes.SimplexCodes(dimension)
+        assert code.get_code_params() == (2**dimension - 1, dimension, 2 ** (dimension - 1))
+    with pytest.raises(ValueError, match="dimensions >=3, <=7"):
+        codes.SimplexCodes(8)
 
 
 def test_tanner_code() -> None:

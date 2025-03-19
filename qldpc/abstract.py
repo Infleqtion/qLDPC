@@ -27,7 +27,7 @@ SymPy permutations are "right-acting", which is to say that the action of two pe
 on an integer i compose as (p*q)(i) = q(p(i)) = i^p^q.  To preserve the order of products before and
 after lifting permutations to matrices, which ensures that the lift L(p*q) = L(p) @ L(q), we
 therefore make representations likewise right-acting, which is to say that a permutation matrix M
-transposes a vector v as v --> v @ M.  In practice, this simply means that matrices are the
+transforms a vector v as v --> v @ M.  In practice, this simply means that matrices are the
 transpose of what one might expect.
 
 This module only supports representations of group members by orthogonal matrices over finite
@@ -49,6 +49,7 @@ from collections.abc import Callable, Iterator, Sequence
 import galois
 import numpy as np
 import numpy.typing as npt
+import scipy.linalg
 import sympy.combinatorics as comb
 import sympy.core
 
@@ -412,6 +413,10 @@ class Group:
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
         return Group(*generators, name=standardized_name, field=field)
 
+    def hashable_generators(self) -> tuple[tuple[int, ...], ...]:
+        """Generators of this group in a hashable form."""
+        return tuple(tuple(generator) for generator in self.generators)
+
 
 ################################################################################
 # elements of a group algebra
@@ -719,19 +724,13 @@ class AbelianGroup(Group):
         identity_mats = [np.eye(order, dtype=int) for order in orders]
         vals = [sum(orders[:idx]) for idx in range(len(orders))]
 
-        # identify method to "combine" two cyclic matrices
-        _combine: Callable[[npt.NDArray[np.int_], npt.NDArray[np.int_]], npt.NDArray[np.int_]]
-        if product_lift:
-            _combine = np.kron
-
+        # identify method to "combine" cyclic matrices
+        if not product_lift:
+            _combine = scipy.linalg.block_diag
         else:
 
-            def _combine(
-                mat_a: npt.NDArray[np.int_], mat_b: npt.NDArray[np.int_]
-            ) -> npt.NDArray[np.int_]:
-                zero_ab = np.zeros((mat_a.shape[0], mat_b.shape[1]), dtype=int)
-                zero_ba = np.zeros((mat_b.shape[0], mat_a.shape[1]), dtype=int)
-                return np.block([[mat_a, zero_ab], [zero_ba, mat_b]])
+            def _combine(*mats: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+                return functools.reduce(np.kron, mats)
 
         # build lift manually, which is faster than the default_lift
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
@@ -740,8 +739,7 @@ class AbelianGroup(Group):
                 np.roll(identity_mat, shift, axis=1)
                 for identity_mat, shift in zip(identity_mats, shifts)
             ]
-            mat = functools.reduce(_combine, mats)
-            return galois.GF(field)(mat)
+            return galois.GF(field)(_combine(*mats))
 
         group = comb.named_groups.AbelianGroup(*orders)
         order_text = ",".join(map(str, orders))

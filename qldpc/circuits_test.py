@@ -36,7 +36,7 @@ def test_state_prep() -> None:
     """Prepare all-0 logical states of qubit codes."""
     for code in [
         codes.FiveQubitCode(),
-        codes.HGPCode(codes.HammingCode(3, field=2)),
+        codes.BaconShorCode(3, field=2),
         codes.HGPCode(codes.ClassicalCode.random(5, 3, field=2)),
     ]:
         encoder = circuits.get_encoding_circuit(code)
@@ -44,12 +44,17 @@ def test_state_prep() -> None:
         simulator.do(encoder)
 
         # the state of the simulator is a +1 eigenstate of code stabilizers
-        for row in code.matrix:
+        for row in code.get_stabilizer_ops():
             string = circuits.op_to_string(row)
             assert simulator.peek_observable_expectation(string) == 1
 
         # the state of the simulator is a +1 eigenstate of all logical Z operators
-        for op in code.get_logical_ops(Pauli.Z):
+        for op in codes.QuditCode.get_logical_ops(code, Pauli.Z):
+            string = circuits.op_to_string(op)
+            assert simulator.peek_observable_expectation(string) == 1
+
+        # the state of the simulator is a +1 eigenstate of all gauge Z operators
+        for op in codes.QuditCode.get_gauge_ops(code, Pauli.Z):
             string = circuits.op_to_string(op)
             assert simulator.peek_observable_expectation(string) == 1
 

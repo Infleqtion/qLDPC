@@ -39,7 +39,9 @@ class RepetitionCode(ClassicalCode):
         for row in range(bits - 1):
             self._matrix[row, row] = 1
             self._matrix[row, row + 1] = -self.field(1)
-        self._exact_distance = bits
+
+        self._dimension = 1
+        self._distance = bits
 
 
 class RingCode(ClassicalCode):
@@ -51,7 +53,9 @@ class RingCode(ClassicalCode):
         for row in range(bits):
             self._matrix[row, row] = 1
             self._matrix[row, (row + 1) % bits] = -self.field(1)
-        self._exact_distance = bits
+
+        self._dimension = 1
+        self._distance = bits
 
 
 class HammingCode(ClassicalCode):
@@ -59,7 +63,7 @@ class HammingCode(ClassicalCode):
 
     def __init__(self, rank: int, field: int | None = None) -> None:
         """Construct a Hamming code of a given rank."""
-        self._exact_distance = 3
+        self._distance = 3
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
         if self.field.order == 2:
             # parity check matrix: columns = all nonzero bitstrings
@@ -75,7 +79,9 @@ class HammingCode(ClassicalCode):
                 for rest in itertools.product(range(self.field.order), repeat=rank - top_row - 1)
             ]
             self._matrix = self.field(strings).T
-        self._exact_distance = 3
+
+        self._dimension = len(self) - len(self._matrix)
+        self._distance = 3
 
 
 class ExtendedHammingCode(ClassicalCode):
@@ -91,7 +97,9 @@ class ExtendedHammingCode(ClassicalCode):
         matrix = np.row_stack([np.ones(matrix.shape[1], dtype=int), matrix])
         matrix[0] += matrix[1]
         ClassicalCode.__init__(self, matrix)
-        self._exact_distance = 4
+
+        self._dimension = len(self) - len(self._matrix)
+        self._distance = 4
 
 
 class ReedSolomonCode(ClassicalCode):
@@ -105,6 +113,7 @@ class ReedSolomonCode(ClassicalCode):
 
     def __init__(self, bits: int, dimension: int) -> None:
         ClassicalCode.__init__(self, galois.ReedSolomon(bits, dimension).H)
+        self._dimension = dimension
 
 
 class BCHCode(ClassicalCode):
@@ -125,6 +134,7 @@ class BCHCode(ClassicalCode):
                 " integer m."
             )
         ClassicalCode.__init__(self, galois.BCH(length, dimension, field=galois.GF(field)).H)
+        self._dimension = dimension
 
 
 class ReedMullerCode(ClassicalCode):
@@ -137,13 +147,15 @@ class ReedMullerCode(ClassicalCode):
 
     def __init__(self, order: int, size: int, field: int | None = None) -> None:
         self._assert_valid_params(order, size)
-        self._exact_distance = 2 ** (size - order)
         self._order = order
         self._size = size
 
         generator = ReedMullerCode.get_generator(order, size)
         self._matrix = ClassicalCode(generator, field).generator
         self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+
+        self._dimension = len(generator)
+        self._distance = 2 ** (size - order)
 
     @staticmethod
     def get_generator(order: int, size: int) -> npt.NDArray[np.int_]:
@@ -238,3 +250,48 @@ class TannerCode(ClassicalCode):
                 directed_subgraph[node_a][edge]["sort"] = sort_data[node_a]
                 directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
         return directed_subgraph
+
+
+class SimplexCodes(ClassicalCode):
+    """Classical simplex codes, with code parameters [2**k - 1, k, 2 ** (k - 1)].
+
+    The automorphism group of SimplexCode(k) is the general linear group GL(k).
+
+    References:
+    - https://arxiv.org/abs/2502.07150
+    """
+
+    def __init__(self, dim: int) -> None:
+        block_length = 2**dim - 1
+
+        matrix = np.zeros([block_length] * 2, dtype=int)
+        rows = np.arange(block_length, dtype=int)
+        for shift in SimplexCodes.get_polynomial_exponents(dim):
+            matrix[rows, (rows + shift) % block_length] = 1
+        ClassicalCode.__init__(self, matrix, field=2)
+
+        self._dimension = dim
+        self._distance = 2 ** (dim - 1)
+
+    @staticmethod
+    def get_polynomial_exponents(dim: int) -> tuple[int, ...]:
+        """Exponents of the polynomial that defines a SimplexCode of a given dimension.
+
+        The polynomial is a primitive polynomial (i.e., "prime", with no factors) of the form
+            h(x) = 1 + x**c + x**dim,
+        where x is the generator of a cyclic group of order 2**dim - 1, and c is an integer.
+        """
+        # QUESTION: would any polynomial in galois.primitive_polys(2, dim, terms=3) suffice here?
+        if dim == 3:
+            return 0, 2, 3
+        if dim == 4:
+            return 0, 3, 4
+        if dim == 5:
+            return 0, 3, 5
+        if dim == 6:
+            return 0, 5, 6
+        if dim == 7:
+            return 0, 6, 7
+        raise ValueError(
+            f"Classical simplex codes are only supported for dimensions >=3, <=7 (provided: {dim})"
+        )

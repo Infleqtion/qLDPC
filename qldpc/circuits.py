@@ -24,8 +24,11 @@ from collections.abc import Callable, Collection, Sequence
 import numpy as np
 import stim
 
-from qldpc import abstract, codes
-from qldpc.objects import Pauli, conjugate_xz, op_to_string
+from qldpc import abstract, cache, codes
+from qldpc.math import symplectic_conjugate
+from qldpc.objects import Pauli, op_to_string
+
+CACHE_NAME = "qldpc_automorphisms"
 
 
 def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.Circuit]:
@@ -34,64 +37,65 @@ def restrict_to_qubits(func: Callable[..., stim.Circuit]) -> Callable[..., stim.
     @functools.wraps(func)
     def qubit_func(*args: object, **kwargs: object) -> stim.Circuit:
         if any(isinstance(arg, codes.QuditCode) and arg.field.order != 2 for arg in args):
-            raise ValueError("Circuit methods are only supported for qubit codes.")
+            raise ValueError("Circuit methods are only supported for qubit codes")
         return func(*args, **kwargs)
 
     return qubit_func
 
 
 @restrict_to_qubits
-def get_encoding_tableau(code: codes.QuditCode) -> stim.Circuit:
+def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     """Tableau to encode physical states at its input into logical states of the given code.
 
     For all j in {0, 1, ..., code.dimension - 1}, this tableau maps weight-one X_j and Z_j operators
     at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
-    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
-    mapped to destabilizers.
+    Z_j operators for j >= code.dimension get mapped to "Z-type" gauge operators and stabilizers,
+    and their conjugate X_j get mapped to "X-type" gauge operators and destabilizers.
     """
-    # identify logical operators
-    logicals_x = [op_to_string(op) for op in code.get_logical_ops(Pauli.X)]
-    logicals_z = [op_to_string(op) for op in code.get_logical_ops(Pauli.Z)]
+    # identify stabilizers, logical operators, and gauge operators
+    stab_ops = code.get_stabilizer_ops(canonicalized=True)
+    logical_ops = code.get_logical_ops()
+    gauge_ops = code.get_gauge_ops()
 
-    # identify stabilizers
-    matrix = codes.ClassicalCode(code.matrix).canonicalized().matrix
-    pivots = [int(np.argmax(row != 0)) for row in matrix if np.any(row)]
-    stabilizers = [op_to_string(row) for row in matrix]
+    """
+    Construct "candidate" destabilizers that have correct pair-wise (anti-)commutation relations
+    with the stabilizers, but may contain extra stabilizer, logical, or gauge operator components.
+    """
+    destab_ops = code.field.Zeros((len(stab_ops), 2 * len(code)), dtype=int)
+    pivots = np.argmax(stab_ops.view(np.ndarray).astype(bool), axis=1)
+    for destab_op, pivot in zip(destab_ops, pivots):
+        destab_op[(pivot + len(code)) % (2 * len(code))] = 1
 
-    # construct destabilizers
-    destabilizers: list[stim.PauliString] = []
-    for pivot in pivots:
-        # construct a candidate destabilizer that only anti-commutes with one stabilizer
-        vector = code.field.Zeros(2 * len(code))
-        vector[(pivot + len(code)) % (2 * len(code))] = 1
-        candidate_destabilizer = op_to_string(vector)
+    # remove logical and gauge operator components
+    dual_logical_ops = logical_ops.reshape(2, -1)[::-1, :].reshape(logical_ops.shape)
+    dual_gauge_ops = gauge_ops.reshape(2, -1)[::-1, :].reshape(gauge_ops.shape)
+    destab_ops -= destab_ops @ symplectic_conjugate(dual_logical_ops).T @ logical_ops
+    destab_ops -= destab_ops @ symplectic_conjugate(dual_gauge_ops).T @ gauge_ops
 
-        # enforce that the candidate destabilizer commutes with all logical operators
-        for log_x, log_z in zip(logicals_x, logicals_z):
-            if not candidate_destabilizer.commutes(log_x):  # pragma: no cover
-                candidate_destabilizer *= log_z
-            if not candidate_destabilizer.commutes(log_z):  # pragma: no cover
-                candidate_destabilizer *= log_x
+    """
+    Remove stabilizer factors to enforce that destabilizers commute with each other.  This process
+    requires updating one destabilizer at a time, since each time we modify a destabilizer by
+    stabilizer factors, that changes its commutation relations with other destabilizers.
+    """
+    for row, destab_op in enumerate(destab_ops[1:], start=1):
+        destab_op -= destab_op @ symplectic_conjugate(destab_ops[:row]).T @ stab_ops[:row]
 
-        # enforce that the candidate destabilizer commutes with other destabilizers
-        for old_destabilizer, stabilizer in zip(destabilizers, stabilizers):
-            if not candidate_destabilizer.commutes(old_destabilizer):
-                candidate_destabilizer *= stabilizer
-        destabilizers.append(candidate_destabilizer)
-
-    return stim.Tableau.from_conjugated_generators(
-        xs=logicals_x + destabilizers, zs=logicals_z + stabilizers
-    )
+    # construct Pauli strings to hand over to Stim
+    matrices_x = [logical_ops[: code.dimension], gauge_ops[: code.gauge_dimension], destab_ops]
+    matrices_z = [logical_ops[code.dimension :], gauge_ops[code.gauge_dimension :], stab_ops]
+    strings_x = [op_to_string(op) for matrix in matrices_x for op in matrix]
+    strings_z = [op_to_string(op) for matrix in matrices_z for op in matrix]
+    return stim.Tableau.from_conjugated_generators(xs=strings_x, zs=strings_z)
 
 
 @restrict_to_qubits
-def get_encoding_circuit(code: codes.QuditCode) -> stim.Tableau:
+def get_encoding_circuit(code: codes.QuditCode) -> stim.Circuit:
     """Circuit to encode physical states at its input into logical states of the given code.
 
-    For all j in {0, 1, ..., code.dimension - 1}, this circuit maps weight-one X_j and Z_j operators
+    For all j in {0, 1, ..., code.dimension - 1}, this tableau maps weight-one X_j and Z_j operators
     at its input to the logical X and Z operators of the j-th logical qubit of the code.  Weight-one
-    Z_j operators for j >= code.dimension get mapped to stabilizers, and their conjugate X_j get
-    mapped to destabilizers.
+    Z_j operators for j >= code.dimension get mapped to "Z-type" gauge operators and stabilizers,
+    and their conjugate X_j get mapped to "X-type" gauge operators and destabilizers.
     """
     return get_encoding_tableau(code).to_circuit()
 
@@ -188,24 +192,24 @@ def get_transversal_automorphism_group(
     local_gates.discard("SWAP")
 
     """
-    Construct the parity check matrix of an instrumental classical code whose code words represent
-    Pauli strings that commute with some "effective" stabilizers.
+    Construct an instrumental classical code whose code words represent Pauli strings that satisfy
+    some "effective" parity checks (i.e., commutation requirements).
 
     If computing the "ordinary" transversal automorphism group of a QuditCode (i.e., if deform_code
-    is False), these effective stabilizers are just the actual stabilizers of the QuditCode, so the
+    is False), these effective parity checks are just the parity checks of the QuditCode, so the
     automorphism group of the instrumental classical code is the group of transversal physical
     operations that
-    (a) preserve commutation with stabilizers, or equivalently
+    (a) preserve commutation with stabilizers (and gauge operators, if applicable), or equivalently
     (b) stabilize the logical Pauli group, thereby implementing logical Clifford operations.
 
-    If deform_code is True, the effective stabilizers are the logical Pauli operators of the
+    If deform_code is True, the effective parity checks are the logical Pauli operators of the
     QuditCode, so the automorphism group of the instrumental code represents the group of code
     deformations for which the logical Pauli group of the original QuditCode is a valid choice of
     logical Pauli group for the deformed QuditCode.
     """
-    effective_stabilizers = code.matrix if not deform_code else conjugate_xz(code.get_logical_ops())
-    matrix_x = effective_stabilizers.reshape(-1, 2, len(code))[:, 0, :]
-    matrix_z = effective_stabilizers.reshape(-1, 2, len(code))[:, 1, :]
+    parity_checks = code.matrix if not deform_code else symplectic_conjugate(code.get_logical_ops())
+    matrix_x = parity_checks.reshape(-1, 2, len(code))[:, 0, :]
+    matrix_z = parity_checks.reshape(-1, 2, len(code))[:, 1, :]
     if not local_gates or local_gates == {"H"}:
         # swapping sectors = swapping X <--> Z
         matrix = np.hstack([matrix_x, matrix_z])
@@ -242,8 +246,20 @@ def get_transversal_automorphism_group(
     group_gates = abstract.Group(*map(abstract.GroupMember, column_perms))
 
     # intersect the groups above to find the group generated by a transversal gate set
-    group_aut_sympy = group_code.to_sympy().subgroup_search(group_gates.to_sympy().contains)
-    return abstract.Group.from_sympy(group_aut_sympy, field=code.field.order)
+    group_aut_gens = _sympy_group_intersection_generators(group_code, group_gates)
+    return abstract.Group(*map(abstract.GroupMember, group_aut_gens))
+
+
+@cache.use_disk_cache(
+    CACHE_NAME,
+    key_func=lambda xx, yy: (xx.hashable_generators(), yy.hashable_generators()),
+)
+def _sympy_group_intersection_generators(
+    group_a: abstract.Group, group_b: abstract.Group
+) -> tuple[tuple[int, ...], ...]:
+    """Get the generators of the intersection of two Sympy permutation groups."""
+    group_sympy = group_a.to_sympy().subgroup_search(group_b.to_sympy().contains)
+    return abstract.Group(group_sympy).hashable_generators()
 
 
 @restrict_to_qubits
@@ -284,7 +300,7 @@ def _get_transversal_automorphism_data(
 
     # identify the logical tableau implemented by the physical circuit
     logical_tableau = _get_logical_tableau_from_code_data(
-        code.dimension, encoder, decoder, physical_circuit
+        code.dimension, code.gauge_dimension, encoder, decoder, physical_circuit
     )
 
     return logical_tableau, physical_circuit
@@ -325,7 +341,7 @@ def _get_pauli_permutation_circuit(
 
     if len(local_gates) == 1:
         # there is only one local gate, and all it can do is permute two parity check sectors
-        gate = next(iter(local_gates))
+        gate = next(iter(local_gates))  # extract the only gate
         for qubit in range(len(code)):
             if automorphism(qubit) >= len(code):
                 circuit.append(gate, qubit)
@@ -374,7 +390,9 @@ def get_logical_tableau(
         code.deform(physical_circuit, preserve_logicals=True)
     """
     encoder, decoder = get_encoder_and_decoder(code, physical_circuit if deform_code else None)
-    return _get_logical_tableau_from_code_data(code.dimension, encoder, decoder, physical_circuit)
+    return _get_logical_tableau_from_code_data(
+        code.dimension, code.gauge_dimension, encoder, decoder, physical_circuit
+    )
 
 
 @restrict_to_qubits
@@ -391,7 +409,11 @@ def get_encoder_and_decoder(
 
 
 def _get_logical_tableau_from_code_data(
-    dimension: int, encoder: stim.Tableau, decoder: stim.Tableau, physical_circuit: stim.Circuit
+    dimension: int,  # number of logical qubits of a QuditCode
+    gauge_dimension: int,  # number of gauge qubits of a QuditCode
+    encoder: stim.Tableau,
+    decoder: stim.Tableau,
+    physical_circuit: stim.Circuit,
 ) -> stim.Tableau:
     """Identify the logical tableau implemented by the physical circuit."""
     assert len(encoder) == len(decoder) >= dimension
@@ -410,9 +432,21 @@ def _get_logical_tableau_from_code_data(
         z_signs=z_signs[:dimension],
     )
 
-    # sanity checks: the images of stabilizers and logicals do not contain destabilizers
-    assert not z2x[:, dimension:].any()  # stabilizers and Z-type logicals
-    assert not x2x[:dimension, dimension:].any()  # X-type logicals
+    # identify sectors that address logical, gauge, and stabilizer qubits
+    sector_l = slice(dimension)
+    sector_g = slice(dimension, dimension + gauge_dimension)
+    sector_s = slice(dimension + gauge_dimension, len(encoder))
+
+    # sanity check: stabilizers, logicals, and gauge operators should not pick up destabilizers
+    assert not np.any(z2x[:, sector_s])
+    assert not np.any(x2x[sector_l, sector_s])
+    assert not np.any(x2x[sector_g, sector_s])
+
+    # sanity check: gauge operators should not pick up logical factors
+    assert not np.any(x2x[sector_g, sector_l])
+    assert not np.any(x2z[sector_g, sector_l])
+    assert not np.any(z2x[sector_g, sector_l])
+    assert not np.any(z2z[sector_g, sector_l])
 
     return logical_tableau
 
@@ -478,9 +512,9 @@ def get_transversal_circuits(
         *_, x_signs_m, z_signs_m = matching_tableau.to_numpy()
         for logical_qubit in range(code.dimension):
             if x_signs_l[logical_qubit] != x_signs_m[logical_qubit]:  # pragma: no cover
-                correction = correction + code.get_logical_ops(Pauli.Z)[logical_qubit]
+                correction += codes.QuditCode.get_logical_ops(code, Pauli.Z)[logical_qubit]
             if z_signs_l[logical_qubit] != z_signs_m[logical_qubit]:  # pragma: no cover
-                correction += code.get_logical_ops(Pauli.X)[logical_qubit]
+                correction += codes.QuditCode.get_logical_ops(code, Pauli.X)[logical_qubit]
         correction_circuit = _get_pauli_circuit(op_to_string(correction))
 
         physical_circuits[tt] = correction_circuit + matching_circuit
