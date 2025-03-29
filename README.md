@@ -31,9 +31,9 @@ Notable features include:
   - Various pre-defined classical code families.
   - Communication with the [GAP](https://www.gap-system.org/)/[GUAVA](https://www.gap-system.org/Packages/guava.html) package for [even more codes](https://docs.gap-system.org/pkg/guava/doc/chap5.html).
 - `QuditCode`: general class for constructing [Galois-qudit codes](https://errorcorrectionzoo.org/c/galois_into_galois), including both [stabilizer](https://errorcorrectionzoo.org/c/galois_stabilizer) and [subsystem](https://errorcorrectionzoo.org/c/oecc) codes.
-  - Automatic construction of all SWAP-transversal logical Clifford gates in one code block of a qubit code, with `qldpc.circuits.get_transversal_ops` (see [arXiv:2409.18175](https://arxiv.org/abs/2409.18175); requires [GAP](https://www.gap-system.org/) and [GUAVA](https://www.gap-system.org/Packages/guava.html)).
   - `QuditCode.get_logical_ops`: method to construct a complete basis of nontrivial logical Pauli operators for a `QuditCode`.
   - `QuditCode.concatenate`: method to [concatenate](https://errorcorrectionzoo.org/c/quantum_concatenated) `QuditCode`s in various ways.
+  - Automatic construction of all SWAP-transversal logical Clifford gates in one code block of a qubit code, with `qldpc.circuits.get_transversal_ops` (see [arXiv:2409.18175](https://arxiv.org/abs/2409.18175); requires [GAP](https://www.gap-system.org/) and [GUAVA](https://www.gap-system.org/Packages/guava.html)).
 - `CSSCode`: subclass of `QuditCode` for the special case of constructing a [quantum CSS code](https://errorcorrectionzoo.org/c/css) out of two mutually compatible `ClassicalCode`s.
   - `CSSCode.get_distance`: method to compute the code distance (i.e., the minimum weight of a nontrivial logical operator) of a `CSSCode`.  Includes options for computing the exact code distance by brute force, as well as an estimate (or upper bound) with the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
 - `TBCode`: class for constructing [two-block quantum codes](https://errorcorrectionzoo.org/c/two_block_quantum).
@@ -42,7 +42,6 @@ Notable features include:
 - `HGPCode`: class for constructing [hypergraph product codes](https://errorcorrectionzoo.org/c/hypergraph_product) out of two `ClassicalCode`s.
 - `LPCode`: class for constructing [lifted product codes](https://errorcorrectionzoo.org/c/lifted_product) out of two protographs (i.e., matrices whose entries are elements of a group algebra).  See [arXiv:2012.04068](https://arxiv.org/abs/2012.04068) and [arXiv:2202.01702](https://arxiv.org/abs/2202.01702).
 - `QTCode`: class for constructing [quantum Tanner codes](https://errorcorrectionzoo.org/c/quantum_tanner) out of (a) two symmetric subsets `A` and `B` of a group `G`, and (b) two `ClassicalCode`s with block lengths `|A|` and `|B|`.  See [arXiv:2202.13641](https://arxiv.org/abs/2202.13641) and [arXiv:2206.07571](https://arxiv.org/abs/2206.07571).
-  - Random `QTCode`s can be constructed out of a choice of group `G` and one `ClassicalCode` only.
 - `abstract.py`: module for basic abstract algebra (groups, algebras, and representations thereof).
   - Various pre-defined groups (mostly borrowed from [SymPy](https://docs.sympy.org/latest/modules/combinatorics/named_groups.html)).
   - Communication with the [GAP](https://www.gap-system.org/) computer algebra system and [GroupNames.org](https://people.maths.bris.ac.uk/~matyd/GroupNames/) for constructing [even more groups](https://docs.gap-system.org/doc/ref/chap50.html).
