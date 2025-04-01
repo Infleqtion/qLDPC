@@ -258,6 +258,7 @@ class SimplexCode(ClassicalCode):
     The automorphism group of SimplexCode(k) is the general linear group GL(k).
 
     References:
+    - https://errorcorrectionzoo.org/c/simplex
     - https://arxiv.org/abs/2502.07150
     """
 

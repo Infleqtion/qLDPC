@@ -1517,6 +1517,7 @@ class SHYPSCode(SHPCode):
     SWAP-transversal Clifford operations.
 
     References:
+    - https://errorcorrectionzoo.org/c/shyps
     - https://arxiv.org/abs/2502.07150
     """
 
