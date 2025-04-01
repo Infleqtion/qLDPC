@@ -38,13 +38,14 @@ Notable features include:
   - `CSSCode.get_distance_bound`: method to estimate an upper bound on code distance using the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
 - Classes for special code constructions and families, such as:
   - `TBCode`: [two-block quantum codes](https://errorcorrectionzoo.org/c/two_block_quantum).
-  - `BBCode`: [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic), as in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).
-    - See [`examples/bivariate_bicycle_codes.ipynb`](https://github.com/Infleqtion/qLDPC/blob/main/examples/bivariate_bicycle_codes.ipynb) for methods to identify "toric layouts" of a `BBCode`, in which the code looks like a toric code augmented by some long-distance checks, as in discussed in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915), as well as methods to identify qubit layouts that minimize the communication distance for neutral atoms, as discussed in [arXiv:2404.18809](https://arxiv.org/abs/2404.18809).
+  - `BBCode`: [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic), as in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).  See [`examples/bivariate_bicycle_codes.ipynb`](https://github.com/Infleqtion/qLDPC/blob/main/examples/bivariate_bicycle_codes.ipynb) for methods to identify...
+    - toric layouts of a `BBCode`, in which the code looks like a toric code augmented by some long-distance checks, as in discussed in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915), and
+    - qubit layouts that minimize the communication distance for neutral atoms, as discussed in [arXiv:2404.18809](https://arxiv.org/abs/2404.18809).
   - `HGPCode`: [hypergraph product codes](https://errorcorrectionzoo.org/c/hypergraph_product).
-  - `SHPCode`: [subsystem hypergraph product codes](https://errorcorrectionzoo.org/c/subsystem_quantum_parity); see [arXiv:2002.06257](https://arxiv.org/abs/2002.06257).
-  - `SHYPSCode`: [subsystem hypergraph product codes simplex](https://errorcorrectionzoo.org/c/shyps); see [arXiv:2502.07150](https://arxiv.org/abs/2502.07150).
-  - `LPCode`: [lifted product codes](https://errorcorrectionzoo.org/c/lifted_product); see [arXiv:2012.04068](https://arxiv.org/abs/2012.04068) and [arXiv:2202.01702](https://arxiv.org/abs/2202.01702).
-  - `QTCode`: [quantum Tanner codes](https://errorcorrectionzoo.org/c/quantum_tanner); see [arXiv:2202.13641](https://arxiv.org/abs/2202.13641) and [arXiv:2206.07571](https://arxiv.org/abs/2206.07571).
+  - `SHPCode`: [subsystem hypergraph product codes](https://errorcorrectionzoo.org/c/subsystem_quantum_parity), as in [arXiv:2002.06257](https://arxiv.org/abs/2002.06257).
+  - `SHYPSCode`: [subsystem hypergraph product codes simplex](https://errorcorrectionzoo.org/c/shyps), as in [arXiv:2502.07150](https://arxiv.org/abs/2502.07150).
+  - `LPCode`: [lifted product codes](https://errorcorrectionzoo.org/c/lifted_product), as in [arXiv:2012.04068](https://arxiv.org/abs/2012.04068) and [arXiv:2202.01702](https://arxiv.org/abs/2202.01702).
+  - `QTCode`: [quantum Tanner codes](https://errorcorrectionzoo.org/c/quantum_tanner), as in [arXiv:2202.13641](https://arxiv.org/abs/2202.13641) and [arXiv:2206.07571](https://arxiv.org/abs/2206.07571).
 - `decoders.py`: module for decoding errors with various methods, including BP-OSD, BP-LSD, and belief-field (via [`ldpc`](https://github.com/quantumgizmos/ldpc)), minimum-weight perfect matching (via [`pymatching`](https://github.com/oscarhiggott/PyMatching)), and others.  Includes an interface for using custom decoders. 
 - `abstract.py`: module for basic abstract algebra (groups, algebras, and representations thereof).
   - Various pre-defined groups (mostly borrowed from [SymPy](https://docs.sympy.org/latest/modules/combinatorics/named_groups.html)).
