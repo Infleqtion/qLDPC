@@ -36,7 +36,7 @@ Notable features include:
   - `QuditCode.get_distance`: method to compute the code distance (i.e., the minimum weight of a nontrivial logical operator) of a `QuditCode`.
 - `CSSCode`: subclass of `QuditCode` for the special case of constructing a [quantum CSS code](https://errorcorrectionzoo.org/c/css) out of two mutually compatible `ClassicalCode`s.
   - `CSSCode.get_distance_bound`: method to estimate an upper bound on code distance using the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
-- Classes for special code constructions and families, such as:
+- Classes for special quantum code constructions and code families, such as:
   - `TBCode`: [two-block quantum codes](https://errorcorrectionzoo.org/c/two_block_quantum).
   - `BBCode`: [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic), as in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).  See [`examples/bivariate_bicycle_codes.ipynb`](https://github.com/Infleqtion/qLDPC/blob/main/examples/bivariate_bicycle_codes.ipynb) for methods to identify...
     - toric layouts of a `BBCode`, in which the code looks like a toric code augmented by some long-distance checks, as in discussed in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915), and
