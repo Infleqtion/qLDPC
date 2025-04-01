@@ -18,8 +18,18 @@ limitations under the License.
 from __future__ import annotations
 
 import numpy as np
+import stim
 
 import qldpc
+
+
+def test_pauli_strings() -> None:
+    """Stabilizers correctly converted into stim.PauliString objects."""
+    code = qldpc.codes.FiveQubitCode()
+    assert all(
+        qldpc.math.op_to_string(row) == stim.PauliString(stabilizer.replace(" ", ""))
+        for row, stabilizer in zip(code.matrix, code.get_strings())
+    )
 
 
 def test_vectors() -> None:

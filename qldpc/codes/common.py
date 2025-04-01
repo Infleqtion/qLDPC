@@ -35,8 +35,8 @@ import stim
 
 from qldpc import abstract, decoders, external
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-from qldpc.math import first_nonzero_cols, log_choose, symplectic_conjugate
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator, op_to_string
+from qldpc.math import first_nonzero_cols, log_choose, op_to_string, symplectic_conjugate
+from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
 
 from ._distance import get_distance_classical, get_distance_quantum
 
