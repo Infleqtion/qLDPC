@@ -55,7 +55,7 @@ Notable features include:
 
 ## 🤔 Questions and issues
 
-This project technically has a [documentation page](https://qldpc.readthedocs.io/en/latest/), but at the moment the documentation is largely auto-generated from source code and comments that were written to be readable in a text editor.  For now, I recommend looking at the source code (and comments therein) directly, as well as the `examples` directory.  Test files (such as `qldpc/codes/quantum_test.py`) also contain some examples of using the classes and methods in this library.
+This project aspires to have a [documentation page](https://qldpc.readthedocs.io/en/latest/), but at the moment the documentation is out of date and auto-generated from source code that was written to be human-readable in a plain text editor.  For now, I recommend looking at the source code (and comments therein) directly, as well as the `examples` directory.  Test files (such as `qldpc/codes/quantum_test.py`) also contain some examples of using the classes and methods in this library.
 
 If you have any questions, feedback, or requests, please [open an issue on GitHub](https://github.com/Infleqtion/qLDPC/issues/new) or email me at [mika.perlin@gmail.com](mailto:mika.perlin@gmail.com)!
 
