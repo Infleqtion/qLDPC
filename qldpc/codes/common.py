@@ -1293,7 +1293,7 @@ class QuditCode(AbstractCode):
         logical_ops = self.get_logical_ops()
         stabilizers = self.get_stabilizer_ops(canonicalized=True)
         if self.is_subsystem_code:
-            stabilizers = np.vstack([stabilizers, self.get_gauge_ops()])
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops()])  # type:ignore[assignment]
 
         if self.field.order == 2:
             distance = get_distance_quantum(
@@ -2006,7 +2006,7 @@ class CSSCode(QuditCode):
         logical_ops = self.get_logical_ops(pauli)
         stabilizers = self.get_stabilizer_ops(pauli, canonicalized=True)
         if self.is_subsystem_code:
-            stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)])
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)])  # type:ignore[assignment]
 
         if self.field.order == 2:
             distance = get_distance_quantum(
