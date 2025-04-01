@@ -1289,12 +1289,16 @@ class QuditCode(AbstractCode):
         if (known_distance := self.get_distance_if_known()) is not None:
             return known_distance
 
+        # we do not know the exact distance, so compute it
         logical_ops = self.get_logical_ops()
-        stabilizer_ops = self.get_stabilizer_ops(canonicalized=True)
+        stabilizers = self.get_stabilizer_ops(canonicalized=True)
+        if self.is_subsystem_code:
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops()])
+
         if self.field.order == 2:
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizer_ops.view(np.ndarray).astype(np.uint8),
+                stabilizers.view(np.ndarray).astype(np.uint8),
             )
         else:
             warnings.warn(
@@ -1302,10 +1306,10 @@ class QuditCode(AbstractCode):
             )
             distance = len(self)
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
-            code_stabilizer_ops = ClassicalCode.from_generator(stabilizer_ops)
+            code_stabilizers = ClassicalCode.from_generator(stabilizers)
             for word_l, word_s in itertools.product(
                 code_logical_ops.iter_words(skip_zero=True),
-                code_stabilizer_ops.iter_words(),
+                code_stabilizers.iter_words(),
             ):
                 word = word_l + word_s
                 support_x = word[: len(self)].view(np.ndarray)
@@ -2000,11 +2004,14 @@ class CSSCode(QuditCode):
 
         # we do not know the exact distance, so compute it
         logical_ops = self.get_logical_ops(pauli)
-        stabilizer_ops = self.get_stabilizer_ops(pauli, canonicalized=True)
+        stabilizers = self.get_stabilizer_ops(pauli, canonicalized=True)
+        if self.is_subsystem_code:
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)])
+
         if self.field.order == 2:
             distance = get_distance_quantum(
                 logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizer_ops.view(np.ndarray).astype(np.uint8),
+                stabilizers.view(np.ndarray).astype(np.uint8),
                 homogeneous=True,
             )
         else:
@@ -2012,11 +2019,11 @@ class CSSCode(QuditCode):
                 "Computing the exact distance of a non-binary code may take a (very) long time"
             )
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
-            code_stabilizer_ops = ClassicalCode.from_generator(stabilizer_ops)
+            code_stabilizers = ClassicalCode.from_generator(stabilizers)
             distance = min(
                 np.count_nonzero(word_l + word_s)
                 for word_l in code_logical_ops.iter_words(skip_zero=True)
-                for word_s in code_stabilizer_ops.iter_words()
+                for word_s in code_stabilizers.iter_words()
             )
 
         # save the exact distance and return
