@@ -285,6 +285,7 @@ def test_qudit_code() -> None:
 def test_distance_qudit() -> None:
     """Distance calculations."""
     code = codes.FiveQubitCode()
+    code._is_subsystem_code = True  # test that this does not break anything
 
     # cover calls to the known code exact distance
     assert code.get_code_params() == (5, 1, 3)
@@ -527,6 +528,7 @@ def test_distance_css() -> None:
 
     # qubit code distance
     code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    code._is_subsystem_code = True  # test that this does not break anything
     assert code.get_distance_exact() == 2
 
     # an empty quantum code has distance infinity

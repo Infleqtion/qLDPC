@@ -894,7 +894,7 @@ class QuditCode(AbstractCode):
 
         Logical operators are constructed with the method similar to that in Section 4.1 of
         Gottesman's thesis (arXiv:9705052), generalized for subsystem qudit codes.  The basic
-        strategy is to fix the values of the logical operator matrix in the GK sector of the parity
+        strategy is to fix the values of the logical operator matrix in the GL sector of the parity
         check matrix when written in standard form (see QuditCode.get_standard_form_data), and then
         fill in the remaining entries of the logical operator matrix as required by parity check
         constraints.
@@ -923,20 +923,20 @@ class QuditCode(AbstractCode):
         logicals_xx = self.field.Zeros((len(self), self.dimension))
         logicals_zz = self.field.Zeros((len(self), self.dimension))
 
-        # "seed" the logical operators in the GK sector
+        # "seed" the logical operators in the GL sector
         if not self.is_subsystem_code:
             logicals_xx[cols_lz] = self.field.Identity(self.dimension)
             logicals_zz[cols_lx] = self.field.Identity(self.dimension)
 
         else:
-            cols_gk = sorted(_join_slices(cols_gx, cols_lx))  # indices for all GK columns
+            cols_gl = sorted(_join_slices(cols_gx, cols_lx))  # indices for all GL columns
             """
             Focusing on the gauge-qudit rows (i.e., constraints) of the parity check matrix, define
-                A = matrix_z[rows_gz, cols_gk],
-                B = matrix_x[rows_gx, cols_gk],
-            and denode the logical operator components in the GK sector by
-                U = logicals_xx[cols_gk],
-                V = logicals_zz[cols_gk].
+                A = matrix_z[rows_gz, cols_gl],
+                B = matrix_x[rows_gx, cols_gl],
+            and denode the logical operator components in the GL sector by
+                U = logicals_xx[cols_gl],
+                V = logicals_zz[cols_gl].
             These components need to satisfy the system of matrix equations
                 (1) A @ U.T = 0,
                 (2) B @ V.T = 0,
@@ -947,11 +947,11 @@ class QuditCode(AbstractCode):
             where the matrix M is determined by subsituting U and V back into (3),
                 U.T @ W @ M = I.
             """
-            mat_U = matrix_z[rows_gz, cols_gk].null_space().T  # type:ignore[attr-defined]
-            mat_W = matrix_x[rows_gx, cols_gk].null_space().T  # type:ignore[attr-defined]
+            mat_U = matrix_z[rows_gz, cols_gl].null_space().T  # type:ignore[attr-defined]
+            mat_W = matrix_x[rows_gx, cols_gl].null_space().T  # type:ignore[attr-defined]
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
-            logicals_xx[cols_gk] = mat_U
-            logicals_zz[cols_gk] = mat_W @ mat_M
+            logicals_xx[cols_gl] = mat_U
+            logicals_zz[cols_gl] = mat_W @ mat_M
 
         # fill in remaining entries by enforcing parity check constraints
         logicals_xx[cols_sz] = -matrix_z[rows_sz] @ logicals_xx
@@ -1090,11 +1090,11 @@ class QuditCode(AbstractCode):
                 standard_stabilizer_ops,
                 qudit_locs,
                 (rows_sx, _, rows_sz, _),
-                (cols_sx, _, _, cols_sz, _, cols_gk),
+                (cols_sx, _, _, cols_sz, _, cols_gl),
             ) = code.get_standard_form_data()
             stabilizers_x = standard_stabilizer_ops[rows_sx].reshape(-1, 2 * len(self))
             stabilizers_z = standard_stabilizer_ops[rows_sz, 1, :]
-            cols_gk = _join_slices(cols_gk)  # convert into indexable array
+            cols_gl = _join_slices(cols_gl)  # convert into an indexable array
 
             # some helpful numbers
             num_stabs_x = len(stabilizers_x)
@@ -1107,15 +1107,15 @@ class QuditCode(AbstractCode):
             checks_x = checks[: num_stabs_x + num_gauges]
             checks_z = checks[num_stabs_x + num_gauges :, len(self) :]
 
-            # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
-            permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
+            # row reduce X-type stabilizers + parity checks to place gauge ops at the bottom
+            permutation_x = _join_slices(cols_sx, cols_gl, cols_sz)
             matrix_x = _with_permuted_qudits(np.vstack([stabilizers_x, checks_x]), permutation_x)
-            matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
+            matrix_x = ClassicalCode(matrix_x).canonicalized.matrix[: num_stabs_x + num_gauges]
             pivots_gx = first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = _with_permuted_qudits(matrix_x, np.argsort(permutation_x))
 
-            # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
-            permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
+            # row reduce Z-type stabilizers + parity checks to place gauge ops at the bottom
+            permutation_z = _join_slices(cols_sz, cols_gl, cols_sx)
             matrix_z = _with_permuted_qudits(np.vstack([stabilizers_z, checks_z]), permutation_z)
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
             pivots_gz = first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
@@ -1142,10 +1142,10 @@ class QuditCode(AbstractCode):
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
             # split logical vs. gauge column sectors
-            cols_gx = cols_gk[pivots_gx]
-            cols_gz = cols_gk[pivots_gz]
-            cols_lx = [qq for qq in cols_gk if qq not in cols_gx]  # type:ignore[operator]
-            cols_lz = [qq for qq in cols_gk if qq not in cols_gz]  # type:ignore[operator]
+            cols_gx = cols_gl[pivots_gx]
+            cols_gz = cols_gl[pivots_gz]
+            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]  # type:ignore[operator]
+            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]  # type:ignore[operator]
 
         matrix = matrix.reshape(-1, 2, len(self))
         return (
@@ -1726,7 +1726,7 @@ class CSSCode(QuditCode):
 
         Logical operators are constructed with the method similar to that in Section 4.1 of
         Gottesman's thesis (arXiv:9705052), generalized for subsystem qudit codes.  The basic
-        strategy is to fix the values of the logical operator matrix in the GK sector of the parity
+        strategy is to fix the values of the logical operator matrix in the GL sector of the parity
         check matrix when written in standard form (see QuditCode.get_standard_form_data), and then
         fill in the remaining entries of the logical operator matrix as required by parity check
         constraints.
@@ -1762,19 +1762,19 @@ class CSSCode(QuditCode):
         logicals_x = self.field.Zeros((len(self), self.dimension))
         logicals_z = self.field.Zeros((len(self), self.dimension))
 
-        # "seed" the logical operators in the GK sector
+        # "seed" the logical operators in the GL sector
         if not self.is_subsystem_code:
             logicals_x[cols_lz] = self.field.Identity(self.dimension)
             logicals_z[cols_lx] = self.field.Identity(self.dimension)
 
         else:
             # see QuditCode.get_logical_ops for an explanation of what's happening here
-            cols_gk = sorted(_join_slices(cols_gx, cols_lx))
-            mat_U = matrix_z[rows_gz, cols_gk].null_space().T  # type:ignore[attr-defined]
-            mat_W = matrix_x[rows_gx, cols_gk].null_space().T  # type:ignore[attr-defined]
+            cols_gl = sorted(_join_slices(cols_gx, cols_lx))
+            mat_U = matrix_z[rows_gz, cols_gl].null_space().T  # type:ignore[attr-defined]
+            mat_W = matrix_x[rows_gx, cols_gl].null_space().T  # type:ignore[attr-defined]
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
-            logicals_x[cols_gk] = mat_U
-            logicals_z[cols_gk] = mat_W @ mat_M
+            logicals_x[cols_gl] = mat_U
+            logicals_z[cols_gl] = mat_W @ mat_M
 
         # fill in remaining entries by enforcing parity check constraints
         logicals_x[cols_sz] = -matrix_z[rows_sz] @ logicals_x
@@ -1854,9 +1854,9 @@ class CSSCode(QuditCode):
                 stabilizers_z,
                 qudit_locs,
                 (rows_sx, _, rows_sz, _),
-                (cols_sx, _, _, cols_sz, _, cols_gk),
+                (cols_sx, _, _, cols_sz, _, cols_gl),
             ) = code.get_standard_form_data_xz()
-            cols_gk = _join_slices(cols_gk)  # convert into indexable array
+            cols_gl = _join_slices(cols_gl)  # convert into indexable array
 
             # some helpful numbers
             num_stabs_x = len(stabilizers_x)
@@ -1868,14 +1868,14 @@ class CSSCode(QuditCode):
             checks_z = self.canonicalized.matrix_z[:, qudit_locs]
 
             # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
-            permutation_x = _join_slices(cols_sx, cols_gk, cols_sz)
+            permutation_x = _join_slices(cols_sx, cols_gl, cols_sz)
             matrix_x = np.vstack([stabilizers_x, checks_x])[:, permutation_x]  # type:ignore[assignment]
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
             pivots_gx = first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = matrix_x[:, np.argsort(permutation_x)]
 
             # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
-            permutation_z = _join_slices(cols_sz, cols_gk, cols_sx)
+            permutation_z = _join_slices(cols_sz, cols_gl, cols_sx)
             matrix_z = np.vstack([stabilizers_z, checks_z])[:, permutation_z]  # type:ignore[assignment]
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
             pivots_gz = first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
@@ -1897,10 +1897,10 @@ class CSSCode(QuditCode):
             rows_gz = slice(rows_sz.stop, rows_sz.stop + num_gauges)
 
             # split logical vs. gauge column sectors
-            cols_gx = cols_gk[pivots_gx]
-            cols_gz = cols_gk[pivots_gz]
-            cols_lx = [qq for qq in cols_gk if qq not in cols_gx]  # type:ignore[operator]
-            cols_lz = [qq for qq in cols_gk if qq not in cols_gz]  # type:ignore[operator]
+            cols_gx = cols_gl[pivots_gx]
+            cols_gz = cols_gl[pivots_gz]
+            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]  # type:ignore[operator]
+            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]  # type:ignore[operator]
 
         return (
             matrix_x,
@@ -2418,7 +2418,7 @@ def _join_slices(*sectors: Slice) -> npt.NDArray[np.int_]:
             else sector
             for sector in sectors
         ]
-    )
+    ).astype(int)
 
 
 def _is_canonicalized(matrix: npt.NDArray[np.int_]) -> bool:
