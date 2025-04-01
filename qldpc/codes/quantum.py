@@ -36,7 +36,7 @@ from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.math import first_nonzero_cols
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
-from .classical import HammingCode, RepetitionCode, RingCode, SimplexCodes, TannerCode
+from .classical import HammingCode, RepetitionCode, RingCode, SimplexCode, TannerCode
 from .common import ClassicalCode, CSSCode, QuditCode
 
 
@@ -1523,8 +1523,8 @@ class SHYPSCode(SHPCode):
     def __init__(self, dim_x: int, dim_z: int | None = None, *, set_logicals: bool = True) -> None:
         dim_z = dim_z if dim_z is not None else dim_x
 
-        code_x = SimplexCodes(dim_x)
-        code_z = SimplexCodes(dim_z)
+        code_x = SimplexCode(dim_x)
+        code_z = SimplexCode(dim_z)
         SHPCode.__init__(self, code_x, code_z, set_logicals=set_logicals)
 
         self._dimension = dim_x * dim_z
