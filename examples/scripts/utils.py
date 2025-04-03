@@ -21,7 +21,7 @@ def make_error_rate_figure(
     codes: Sequence[qldpc.codes.ClassicalCode | qldpc.codes.CSSCode],
     num_samples: int = 10**4,
     physical_rates: Sequence[float] = list(np.logspace(-2, -0.1, 100)),
-    figsize: tuple[int, int] = (4, 3),
+    figsize: tuple[int, int] = (5, 4),
     estimate_distance: bool | int = False,
     **decoding_args: object,
 ) -> tuple[plt.Figure, plt.Axes]:
