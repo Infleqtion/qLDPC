@@ -27,7 +27,8 @@ import numpy as np
 import pytest
 
 from qldpc import codes
-from qldpc.objects import Pauli, symplectic_conjugate
+from qldpc.math import symplectic_conjugate
+from qldpc.objects import Pauli
 
 ####################################################################################################
 # classical code tests
@@ -42,14 +43,22 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
 
+    # reordering the rows of the generator matrix results in a valid generator matrix
+    code.set_generator(np.roll(code.generator, shift=1, axis=0))
+
     code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
     assert "GF(3)" in str(code)
 
-    num_bits = 2
-    code = codes.RepetitionCode(num_bits, field=3)
-    assert len(code) == num_bits
+    code = codes.RepetitionCode(2, field=3)
+    assert len(code) == 2
     assert code.dimension == 1
     assert code.get_weight() == 2
+
+    # cover invalid generator matrices for the repetition code
+    with pytest.raises(ValueError, match="nontrivial syndromes"):
+        code.set_generator([[0, 1]])
+    with pytest.raises(ValueError, match="incorrect rank"):
+        code.set_generator([[0, 0]])
 
     # invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
@@ -63,10 +72,8 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
 
     # shortening a repetition code yields a trivial code
-    num_bits = 3
-    code = codes.RepetitionCode(num_bits)
-    words = [[0] * (num_bits - 1)]
-    assert np.array_equal(list(code.shorten(0).iter_words()), words)
+    code = codes.RepetitionCode(3)
+    assert np.array_equal(list(code.shorten(0).iter_words()), [[0, 0]])
 
     # stack two codes
     code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
@@ -124,7 +131,7 @@ def test_distance_classical(bits: int = 3) -> None:
     rep_code = codes.RepetitionCode(bits, field=2)
 
     # "forget" the exact code distance
-    rep_code._exact_distance = None
+    rep_code._distance = None
 
     assert rep_code.get_distance_bound(cutoff=bits) == bits
     assert rep_code.get_distance(bound=True) == bits
@@ -150,7 +157,7 @@ def test_distance_classical(bits: int = 3) -> None:
 
     # compute distance of a trinary repetition code
     rep_code = codes.RepetitionCode(bits, field=3)
-    rep_code._exact_distance = None
+    rep_code._distance = None
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
         assert rep_code.get_distance_exact() == 3
 
@@ -278,17 +285,18 @@ def test_qudit_code() -> None:
 def test_distance_qudit() -> None:
     """Distance calculations."""
     code = codes.FiveQubitCode()
+    code._is_subsystem_code = True  # test that this does not break anything
 
     # cover calls to the known code exact distance
     assert code.get_code_params() == (5, 1, 3)
     assert code.get_distance(bound=True) == 3
 
     # "forget" the code distance and recompute
-    code._exact_distance = None
+    code._distance = None
     assert code.get_distance_bound(cutoff=5) == 5
     assert code.get_distance_exact() == 3
 
-    code._exact_distance = None
+    code._distance = None
     with pytest.raises(NotImplementedError, match="not implemented"):
         code.get_distance(bound=True)
     with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
@@ -299,9 +307,9 @@ def test_distance_qudit() -> None:
 
     # fallback pythonic brute-force distance calculation
     surface_code = codes.SurfaceCode(2, field=3)
-    surface_code._exact_distance = None
-    surface_code._exact_distance_x = None
-    surface_code._exact_distance_z = None
+    surface_code._distance = None
+    surface_code._distance_x = None
+    surface_code._distance_z = None
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
         assert codes.QuditCode.get_distance_exact(surface_code) == 2
 
@@ -520,6 +528,7 @@ def test_distance_css() -> None:
 
     # qubit code distance
     code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    code._is_subsystem_code = True  # test that this does not break anything
     assert code.get_distance_exact() == 2
 
     # an empty quantum code has distance infinity
