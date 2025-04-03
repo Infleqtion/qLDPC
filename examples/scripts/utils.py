@@ -7,7 +7,8 @@ import qldpc
 
 
 def get_label(
-    code: qldpc.codes.AbstractCode, distance_estimation_trials: bool | int = False
+    code: qldpc.codes.ClassicalCode | qldpc.codes.QuditCode,
+    distance_estimation_trials: bool | int = False,
 ) -> str:
     """Get a label for a code in a figure."""
     known_distance = code.get_distance_if_known()
@@ -32,7 +33,9 @@ def make_error_rate_figure(
 
     for code in codes:
         get_logical_error_rate = code.get_logical_error_rate_func(
-            num_samples, max(physical_rates), **decoding_args
+            num_samples,
+            max(physical_rates),
+            **decoding_args,  # type:ignore[arg-type]
         )
         logical_rates, stderrs = get_logical_error_rate(physical_rates)
         label = get_label(code, distance_estimation_trials)
@@ -46,7 +49,7 @@ def make_error_rate_figure(
         )
 
     axis.axline(
-        [0, 0],
+        (0, 0),
         slope=1,
         color="k",
         linestyle=":",
