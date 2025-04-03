@@ -12,9 +12,9 @@ def get_label(code: qldpc.codes.AbstractCode, estimate_distance: bool | int = Fa
     if isinstance(known_distance, int):
         return f"$d={known_distance}$"
     if not estimate_distance:
-        return f"[{len(code)}, {code.dimension}]"
+        return f"$[{len(code)}, {code.dimension}]$"
     distance_estimate = code.get_distance_bound(num_trials=int(estimate_distance))
-    return f"[{len(code)}, {code.dimension}, <={distance_estimate}]"
+    return rf"$[{len(code)}, {code.dimension}, \le {distance_estimate}]$"
 
 
 def make_error_rate_figure(
