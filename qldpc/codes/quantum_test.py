@@ -201,16 +201,19 @@ def test_quasi_cyclic_codes() -> None:
 
 
 @pytest.mark.parametrize("field", [2, 3])
-def test_hypergraph_products(
+def test_hypergraph_product(
+    pytestconfig: pytest.Config,
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Equivalency of matrix-based, graph-based, and chain-based hypergraph products."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field)
-    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field)
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
 
-    code = codes.HGPCode(code_a, code_b)
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field, seed=np.random.randint(2**32))
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field, seed=np.random.randint(2**32))
+
+    code = codes.HGPCode(code_a, code_b, set_logicals=True)
     graph = codes.HGPCode.get_graph_product(code_a.graph, code_b.graph)
     chain = ChainComplex.tensor_product(code_a.matrix, code_b.matrix.T)
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
@@ -220,51 +223,45 @@ def test_hypergraph_products(
     assert np.array_equal(code.matrix_x, matrix_x)
     assert np.array_equal(code.matrix_z, matrix_z)
 
-    # sanity check for generating sets of the logical operators of an HGPCode
-    gens_x, gens_z = codes.HGPCode.get_logical_generators(code_a, code_b)
-    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
-    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
-    assert not np.any(code.matrix_z @ gens_x.T)
-    assert not np.any(code.matrix_x @ gens_z.T)
-    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
-    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+    # verify that the canonical logicals are valid
+    code.set_logical_ops(code.get_logical_ops())
 
 
 @pytest.mark.parametrize("field", [2, 3])
 def test_subsystem_hypergraph_product(
+    pytestconfig: pytest.Config,
     field: int,
     bits_checks_a: tuple[int, int] = (5, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
 ) -> None:
     """Validity of the subsystem hypergraph product code."""
-    subcode = codes.ClassicalCode.random(*bits_checks_a, field=field)
-    code = codes.SHPCode(subcode)
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field, seed=np.random.randint(2**32))
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field, seed=np.random.randint(2**32))
+    code = codes.SHPCode(code_a, code_b, set_logicals=True)
 
     # assert validity of the the "natural" stabilizers that are set at initialization time
-    stabilizer_ops = code.get_stabilizer_ops()
     assert np.array_equal(
-        stabilizer_ops.row_reduce(),
+        codes.ClassicalCode(code.get_stabilizer_ops()).canonicalized.matrix,
         code.get_stabilizer_ops(recompute=True, canonicalized=True),
     )
 
-    # sanity check for generating sets of the logical operators of an SHPCode
-    gens_x, gens_z = codes.SHPCode.get_logical_generators(subcode, subcode)
-    ops_x = np.vstack([code.matrix_x, gens_x])  # X-type stabilizers and logicals
-    ops_z = np.vstack([code.matrix_z, gens_z])  # Z-type stabilizers and logicals
-    assert not np.any(code.matrix_z @ gens_x.T)
-    assert not np.any(code.matrix_x @ gens_z.T)
-    assert codes.ClassicalCode(ops_x).rank == code.code_x.rank + code.dimension
-    assert codes.ClassicalCode(ops_z).rank == code.code_z.rank + code.dimension
+    # verify that the canonical logicals are valid
+    code.set_logical_ops(code.get_logical_ops())
 
 
 def test_trivial_lift(
+    pytestconfig: pytest.Config,
     bits_checks_a: tuple[int, int] = (4, 3),
     bits_checks_b: tuple[int, int] = (3, 2),
     field: int = 3,
 ) -> None:
     """The lifted product code with a trivial lift reduces to the HGP code."""
-    code_a = codes.ClassicalCode.random(*bits_checks_a, field)
-    code_b = codes.ClassicalCode.random(*bits_checks_b, field)
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
+    code_a = codes.ClassicalCode.random(*bits_checks_a, field=field, seed=np.random.randint(2**32))
+    code_b = codes.ClassicalCode.random(*bits_checks_b, field=field, seed=np.random.randint(2**32))
     code_HGP = codes.HGPCode(code_a, code_b, field)
 
     protograph_a = abstract.TrivialGroup.to_protograph(code_a.matrix, field)
@@ -369,12 +366,14 @@ def test_lifted_product_codes() -> None:
         assert rate >= 2 / 17
 
 
-def test_quantum_tanner() -> None:
+def test_quantum_tanner(pytestconfig: pytest.Config) -> None:
     """Quantum Tanner code."""
+    np.random.seed(pytestconfig.getoption("randomly_seed"))
+
     # random quantum Tanner code
     group = abstract.CyclicGroup(12)
     subcode = codes.RepetitionCode(4, field=3)
-    code = codes.QTCode.random(group, subcode)
+    code = codes.QTCode.random(group, subcode, seed=np.random.randint(2**32))
 
     # assert that subgraphs have the right number of nodes, edges, and node degrees
     subgraph_x, subgraph_z = codes.QTCode.get_subgraphs(code.complex)
@@ -441,7 +440,7 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
 
     # "ordinary"/original surface code
     code = codes.SurfaceCode(rows, cols, rotated=False)
-    code._exact_distance_x = code._exact_distance_z = None  # "forget" the code distances
+    code._distance_x = code._distance_z = None  # "forget" the code distances
     assert code.dimension == 1
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
     assert code.get_distance(Pauli.X, bound=True) >= cols
@@ -534,6 +533,15 @@ def test_generalized_surface_codes(size: int = 3) -> None:
 def test_bacon_shor_code() -> None:
     """Bacon-Shor code."""
     code = codes.BaconShorCode(3)
-    code._exact_distance_x = code._exact_distance_z = None
+    code._distance_x = code._distance_z = None
     assert all(np.count_nonzero(row) == 2 for row in code.matrix)
     assert code.get_distance() == 3
+
+
+def test_shyps_code() -> None:
+    """Sanity checks for the SHYPS code."""
+    for dimension in range(3, 8):
+        code = codes.SHYPSCode(dimension)
+        params = ((2**dimension - 1) ** 2, dimension**2, 2 ** (dimension - 1))
+        assert code.get_code_params() == params
+        assert np.all(np.count_nonzero(code.matrix.view(np.ndarray), axis=1) == 3)

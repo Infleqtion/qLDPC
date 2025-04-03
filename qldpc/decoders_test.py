@@ -27,7 +27,7 @@ import numpy.typing as npt
 import pytest
 
 from qldpc import codes, decoders
-from qldpc.objects import symplectic_conjugate
+from qldpc.math import symplectic_conjugate
 
 
 def test_custom_decoder(pytestconfig: pytest.Config) -> None:
