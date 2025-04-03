@@ -79,13 +79,13 @@ class IcebergCode(CSSCode):
     - https://arxiv.org/abs/2403.16054
     """
 
-    def __init__(self, size: int) -> None:
+    def __init__(self, size: int, *, alternative_logicals: bool = False) -> None:
         checks = [[1] * (2 * size)]
         CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         self._dimension = 2 * size - 2
         self._distance_x = self._distance_z = 2
 
-        if size == 3:
+        if alternative_logicals and size == 3:
             # make a specific choice of logical operators for the [6, 4, 2] code, splitting the
             # four logical qubits into pairs with disjoint support on the physical qubits
             sector_ops_x = [[1, 1, 0], [0, 1, 1]]
