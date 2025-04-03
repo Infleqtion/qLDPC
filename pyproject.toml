@@ -1,10 +1,14 @@
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=1.0.0", "cython", "setuptools", "numpy"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.build]
+generate-setup-file = false
+script = "build-cython.py"
 
 [tool.poetry]
 name = "qLDPC"
-version = "0.0.20"
+version = "0.0.29"
 description = "Tools for constructing and analyzing quantum low density parity check (qLDPC) codes."
 license = "Apache-2.0"
 authors = ["Michael A. Perlin <mika.perlin@gmail.com>"]
@@ -23,71 +27,36 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Mathematics",
   "Topic :: Scientific/Engineering :: Physics",
 ]
-include = ["qldpc/py.typed"]
+include = ["qldpc/py.typed", { path = "qldpc/**/*.so", format = "wheel" }]
 
 [tool.poetry.dependencies]
 python = "^3.10"
 cvxpy = ">=1.3.2"
 diskcache = ">=5.0.0"
 galois = ">=0.4.2"
-gurobipy = { version = ">=10.0.0", optional = true }
 ldpc = ">=2.1.8"
 networkx = ">=2.6.2"
 numpy = ">=1.24.0"
 platformdirs = ">=4.0.0"
 pymatching = ">=2.1.0"
+scipy = ">=1.14.1"
 stim = ">=1.14.0"
 sympy = ">=1.12"
 
-checks-superstaq = { version = ">=0.5.31", optional = true }
+checks-superstaq = { version = ">=0.5.34", optional = true }
+cython = { version = ">=3.0.11", optional = true }
+cython-lint = { version = ">=0.16.6", optional = true }
+gurobipy = { version = ">=10.0.0", optional = true }
 
 [tool.poetry.extras]
-dev = ["checks-superstaq"]
+dev = ["checks-superstaq", "cython", "cython-lint"]
+gurobi = ["gurobipy"]
 
 # Check script configuration:
-
-[tool.pytest.ini_options]
-addopts = "--disable-socket"
-filterwarnings = [
-  "ignore::UserWarning:qtrl.*",
-  "ignore::PendingDeprecationWarning:qtrl.utils.config",
-  "ignore::PendingDeprecationWarning:ruamel.yaml.main",
-]
 
 [tool.ruff]
 line-length = 100
 lint.extend-select = ["I"]
-
-[tool.black]
-color = true
-line_length = 100
-
-[tool.isort]
-profile = "black"
-line_length = 100
-color_output = true
-known_first_party = "qldpc" # REPO-SPECIFIC CONFIG
-
-[tool.flake8]
-max-line-length = 100
-max-complexity = 10
-show_source = true
-statistics = true
-count = true
-enable-extensions = ["TC", "TC1"]
-extend-ignore = [
-  "E203",
-  "I100",
-  "I101",
-  "I201",
-  "I202",
-] # these errors conflict with black and/or isort
-type_checking_exempt_modules = ["collections.abc"]
-# Configuration for flake8-modern-annotations
-modern-annotations-postponed = "always"
-modern-annotations-deprecated = "always"
-modern-annotations-union = "always"
-modern-annotations-optional = "always"
 
 [tool.mypy]
 pretty = true
@@ -100,99 +69,22 @@ warn_unused_ignores = true
 install_types = true
 non_interactive = true
 no_implicit_optional = true
-plugins = ["numpy.typing.mypy_plugin", "pydantic.mypy"]
+plugins = ["numpy.typing.mypy_plugin"]
+
+[tool.pytest.ini_options]
+addopts = "--disable-socket" # forbid tests from making network calls
+filterwarnings = [
+  'ignore:(?s).*The problem is either infeasible or unbounded.*:UserWarning', # from cvxpy
+]
 
 [tool.coverage.report]
 fail_under = 100
 show_missing = true
 skip_covered = true
-exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:", "@overload"]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]
 
 [tool.coverage.run]
 include = ["./*"]
 
-[tool.pylint.main]
+[tool.cython-lint]
 max-line-length = 100
-disable = "all"
-load-plugins = [
-  "pylint.extensions.docparams",
-  "pylint.extensions.docstyle",
-  "checks_superstaq.pylint_init_return",
-  "checks_superstaq.pylint_import_annotations",
-]
-output-format = "colorized"
-score = false
-reports = false
-enable = [
-  "anomalous-backslash-in-string",
-  "assert-on-tuple",
-  "bad-indentation",
-  "bad-option-value",
-  "bad-reversed-sequence",
-  "bad-super-call",
-  "consider-merging-isinstance",
-  "continue-in-finally",
-  "dangerous-default-value",
-  "docstyle",
-  "duplicate-argument-name",
-  "expression-not-assigned",
-  "function-redefined",
-  "import-future-annotations",
-  "inconsistent-mro",
-  "init-return-check",
-  "init-is-generator",
-  "line-too-long",
-  "lost-exception",
-  "missing-class-docstring",
-  "missing-function-docstring",
-  "missing-kwoa",
-  "mixed-line-endings",
-  "not-callable",
-  "no-value-for-parameter",
-  "nonexistent-operator",
-  "not-in-loop",
-  "parameter_documentation",
-  "pointless-statement",
-  "redefined-builtin",
-  "relative-beyond-top-level",
-  "return-arg-in-generator",
-  "return-in-init",
-  "return-outside-function",
-  "simplifiable-if-statement",
-  "syntax-error",
-  "too-many-function-args",
-  "trailing-whitespace",
-  "undefined-variable",
-  "unexpected-keyword-arg",
-  "unhashable-dict-key",
-  "unnecessary-pass",
-  "unreachable",
-  "unrecognized-inline-option",
-  "unused-argument",
-  "unused-import",
-  "unnecessary-semicolon",
-  "unused-variable",
-  "unused-wildcard-import",
-  "wildcard-import",
-  "wrong-import-order",
-  "wrong-import-position",
-  "yield-outside-function",
-]
-
-# Enable the optional checks by parameter_documentation
-[tool.pylint.parameter_documentation]
-accept-no-param-doc=false # Do not accept totally missing parameter documentation.
-accept-no-raise-doc=false # Do not accept totally missing raises documentation.
-accept-no-return-doc=false # Do not accept totally missing return documentation.
-accept-no-yields-doc=false # Do not accept missing yields annotations.
-default-docstring-type = "google"
-
-# Ignore long lines containing urls or pylint directives.
-[tool.pylint.format]
-ignore-long-lines = '^(.*#\w*pylint: disable.*|\s*(# )?<?https?://\S+>?)$'
-
-# List of members which are set dynamically and missed by pylint inference
-# system, and so shouldn't trigger E1101 when accessed. Python regular
-# expressions are accepted.
-[tool.pylint.typecheck]
-generated-members = "numpy.*"

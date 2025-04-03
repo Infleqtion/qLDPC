@@ -20,11 +20,14 @@ from __future__ import annotations
 import itertools
 import subprocess
 import unittest.mock
+from typing import Iterator
 
+import galois
 import numpy as np
 import pytest
 
 from qldpc import codes
+from qldpc.math import symplectic_conjugate
 from qldpc.objects import Pauli
 
 ####################################################################################################
@@ -40,14 +43,22 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert "ClassicalCode" in str(code)
     assert code.get_random_word() in code
 
+    # reordering the rows of the generator matrix results in a valid generator matrix
+    code.set_generator(np.roll(code.generator, shift=1, axis=0))
+
     code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
     assert "GF(3)" in str(code)
 
-    num_bits = 2
-    code = codes.RepetitionCode(num_bits, field=3)
-    assert code.num_bits == num_bits
+    code = codes.RepetitionCode(2, field=3)
+    assert len(code) == 2
     assert code.dimension == 1
     assert code.get_weight() == 2
+
+    # cover invalid generator matrices for the repetition code
+    with pytest.raises(ValueError, match="nontrivial syndromes"):
+        code.set_generator([[0, 1]])
+    with pytest.raises(ValueError, match="incorrect rank"):
+        code.set_generator([[0, 0]])
 
     # invalid classical code construction
     with pytest.raises(ValueError, match="inconsistent"):
@@ -61,10 +72,8 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     assert codes.ClassicalCode.from_generator(code.generator[:, 1:]) == code.puncture(0)
 
     # shortening a repetition code yields a trivial code
-    num_bits = 3
-    code = codes.RepetitionCode(num_bits)
-    words = [[0] * (num_bits - 1)]
-    assert np.array_equal(code.shorten(0).words(), words)
+    code = codes.RepetitionCode(3)
+    assert np.array_equal(list(code.shorten(0).iter_words()), [[0, 0]])
 
     # stack two codes
     code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**32))
@@ -91,7 +100,9 @@ def test_named_codes(order: int = 2) -> None:
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
     code = codes.ClassicalCode.random(bits, checks, field)
-    assert all(word_a @ word_b == 0 for word_a in code.words() for word_b in (~code).words())
+    assert all(
+        word_a @ word_b == 0 for word_a in code.iter_words() for word_b in (~code).iter_words()
+    )
 
 
 def test_tensor_product(
@@ -102,8 +113,8 @@ def test_tensor_product(
     code_a = codes.ClassicalCode.random(*bits_checks_a)
     code_b = codes.ClassicalCode.random(*bits_checks_b)
     code_ab = codes.ClassicalCode.tensor_product(code_a, code_b)
-    basis = np.reshape(code_ab.generator, (-1, code_a.num_bits, code_b.num_bits))
-    assert all(not (code_a.matrix @ word @ code_b.matrix.T).any() for word in basis)
+    basis = np.reshape(code_ab.generator, (-1, len(code_a), len(code_b)))
+    assert all(not np.any(code_a.matrix @ word @ code_b.matrix.T) for word in basis)
 
     n_a, k_a, d_a = code_a.get_code_params()
     n_b, k_b, d_b = code_b.get_code_params()
@@ -120,7 +131,7 @@ def test_distance_classical(bits: int = 3) -> None:
     rep_code = codes.RepetitionCode(bits, field=2)
 
     # "forget" the exact code distance
-    rep_code._exact_distance = None
+    rep_code._distance = None
 
     assert rep_code.get_distance_bound(cutoff=bits) == bits
     assert rep_code.get_distance(bound=True) == bits
@@ -133,7 +144,7 @@ def test_distance_classical(bits: int = 3) -> None:
         assert dist_exact <= dist_bound
 
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
-    random_vector = np.random.randint(2, size=trivial_code.num_bits)
+    random_vector = np.random.randint(2, size=len(trivial_code))
     assert trivial_code.dimension == 0
     assert trivial_code.get_distance_exact() is np.nan
     assert trivial_code.get_distance_bound() is np.nan
@@ -143,6 +154,12 @@ def test_distance_classical(bits: int = 3) -> None:
         == trivial_code.get_distance_bound(vector=random_vector)
         == trivial_code.get_one_distance_bound(vector=random_vector)
     )
+
+    # compute distance of a trinary repetition code
+    rep_code = codes.RepetitionCode(bits, field=3)
+    rep_code._distance = None
+    with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
+        assert rep_code.get_distance_exact() == 3
 
 
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
@@ -180,6 +197,18 @@ def test_automorphism() -> None:
             assert not np.any(code.matrix @ group.lift(member) @ code.generator.T)
 
 
+def test_classical_capacity() -> None:
+    """Logical error rates in a code capacity model."""
+    code = codes.RepetitionCode(2, field=2)
+    logical_error_rate = code.get_logical_error_rate_func(num_samples=1, max_error_rate=1)
+    assert logical_error_rate(0) == (0, 0)  # no logical error with zero uncertainty
+    assert logical_error_rate(1)[0] == 1  # guaranteed logical error
+
+    logical_error_rate = code.get_logical_error_rate_func(num_samples=10, max_error_rate=0.5)
+    with pytest.raises(ValueError, match="error rates greater than"):
+        logical_error_rate(1)
+
+
 ####################################################################################################
 # quantum code tests
 
@@ -200,11 +229,8 @@ def test_code_string() -> None:
 
 
 def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.QuditCode:
-    """Construct a random (but probably trivial or invalid) QuditCode."""
-    return codes.QuditCode(
-        codes.ClassicalCode.random(2 * qudits, checks, field).matrix,
-        skip_validation=True,
-    )
+    """Construct a random (but probably trivial) QuditCode."""
+    return codes.QuditCode(codes.ClassicalCode.random(2 * qudits, checks, field).matrix)
 
 
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
@@ -225,25 +251,30 @@ def test_qudit_code() -> None:
     redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
     assert codes.QuditCode.equiv(code, redundant_code)
 
-    # cover calls to the known code exact distance
-    assert code.get_code_params() == (5, 1, 3)
-    assert code.get_distance(bound=True) == 3
-
-    # "forget" the code distance and recompute
-    code._exact_distance = None
-    assert code.get_distance_bound(cutoff=5) == 5
-    assert code.get_distance_exact() == 3
-
-    code._exact_distance = None
-    with pytest.raises(NotImplementedError, match="not implemented"):
-        code.get_distance(bound=True)
-    with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
-        code.get_distance(bound=True) == 3
+    # the logical ops of the redundant code are valid ops of the original code
+    code.set_logical_ops(redundant_code.get_logical_ops())  # also validates the logical ops
 
     # stacking two codes
     two_codes = codes.QuditCode.stack(code, code)
     assert len(two_codes) == len(code) * 2
     assert two_codes.dimension == code.dimension * 2
+
+    # swapping logical X ops on the two encoded qubits breaks commutation relations
+    logical_ops = two_codes.get_logical_ops().copy()
+    logical_ops[0], logical_ops[1] = logical_ops[1], logical_ops[0]
+    with pytest.raises(ValueError, match="incorrect commutation relations"):
+        two_codes.set_logical_ops(logical_ops, validate=True)
+
+    # invalid modifications of logical operators break commutation relations
+    logical_ops = two_codes.get_logical_ops().copy()
+    logical_ops[0, -1] += two_codes.field(1)
+    with pytest.raises(ValueError, match="violate parity checks"):
+        two_codes.set_logical_ops(logical_ops, validate=True)
+
+    # providing an incorrect number of logical operators throws an error
+    logical_ops = two_codes.get_logical_ops().copy()[[0, two_codes.dimension], :]
+    with pytest.raises(ValueError, match="incorrect number"):
+        two_codes.set_logical_ops(logical_ops, validate=True)
 
     # stacking codes over different fields is not supported
     with pytest.raises(ValueError, match="different fields"):
@@ -251,9 +282,36 @@ def test_qudit_code() -> None:
         codes.QuditCode.stack(code, second_code)
 
 
-def test_undefined_distance() -> None:
-    """The distance of dimension-0 codes is undefined."""
+def test_distance_qudit() -> None:
+    """Distance calculations."""
+    code = codes.FiveQubitCode()
+    code._is_subsystem_code = True  # test that this does not break anything
+
+    # cover calls to the known code exact distance
+    assert code.get_code_params() == (5, 1, 3)
+    assert code.get_distance(bound=True) == 3
+
+    # "forget" the code distance and recompute
+    code._distance = None
+    assert code.get_distance_bound(cutoff=5) == 5
+    assert code.get_distance_exact() == 3
+
+    code._distance = None
+    with pytest.raises(NotImplementedError, match="not implemented"):
+        code.get_distance(bound=True)
+    with unittest.mock.patch("qldpc.codes.QuditCode.get_one_distance_bound", return_value=3):
+        code.get_distance(bound=True)
+
+    # the distance of dimension-0 codes is undefined
     assert codes.QuditCode([[0, 1]]).get_distance() is np.nan
+
+    # fallback pythonic brute-force distance calculation
+    surface_code = codes.SurfaceCode(2, field=3)
+    surface_code._distance = None
+    surface_code._distance_x = None
+    surface_code._distance_z = None
+    with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
+        assert codes.QuditCode.get_distance_exact(surface_code) == 2
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -268,34 +326,132 @@ def test_conversions_quantum(field: int, bits: int = 5, checks: int = 3) -> None
 def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
     """Stabilizers of a QuditCode."""
     code_a = get_random_qudit_code(bits, checks, field)
-    stabilizers = code_a.get_stabilizers()
-    code_b = codes.QuditCode.from_stabilizers(*stabilizers, field=field, skip_validation=True)
+    strings = code_a.get_strings()
+    code_b = codes.QuditCode.from_strings(*strings, field=field)
     assert code_a == code_b
-    assert stabilizers == code_b.get_stabilizers()
+    assert strings == code_b.get_strings()
 
     with pytest.raises(ValueError, match="different lengths"):
-        codes.QuditCode.from_stabilizers("I", "I I", field=field)
+        codes.QuditCode.from_strings("I", "I I", field=field)
 
 
 def test_trivial_deformations(num_qudits: int = 5, num_checks: int = 3, field: int = 3) -> None:
     """Trivial local Clifford deformations do not modify a code."""
     code = get_random_qudit_code(num_qudits, num_checks, field)
-    assert code == code.conjugated(skip_validation=True)
+    assert code == code.conjugated()
+
+
+def get_codes_for_testing_ops() -> Iterator[codes.CSSCode]:
+    """Iterate over some codes for testing operator constructions."""
+    # Bacon-Shor code and toric codes
+    code_a = codes.BaconShorCode(3, field=3)
+    code_b = codes.ToricCode(4, field=4)
+
+    # promote some gauge qudits of the Bacon-Shor code to logicals
+    matrix_x = np.vstack([code_a.get_gauge_ops(Pauli.X)[:2], code_a.get_stabilizer_ops(Pauli.X)])
+    matrix_z = np.vstack([code_a.get_gauge_ops(Pauli.Z)[:2], code_a.get_stabilizer_ops(Pauli.Z)])
+    code_c = codes.CSSCode(matrix_x, matrix_z)
+
+    # gauge out a logical qudit of the surface code
+    matrix_x = np.vstack([code_b.get_logical_ops(Pauli.X)[:1], code_b.get_stabilizer_ops(Pauli.X)])
+    matrix_z = np.vstack([code_b.get_logical_ops(Pauli.Z)[:1], code_b.get_stabilizer_ops(Pauli.Z)])
+    code_d = codes.CSSCode(matrix_x, matrix_z)
+
+    yield code_a
+    yield code_b
+    yield code_c
+    yield code_d
+
+
+def get_symplectic_form(half_dimension: int, field: type[galois.FieldArray]) -> galois.FieldArray:
+    """Get the symplectic form over a given field."""
+    identity = field.Identity(half_dimension)
+    zeros = field.Zeros((half_dimension, half_dimension))
+    return field(np.block([[zeros, identity], [-identity, zeros]]))
 
 
 def test_qudit_ops() -> None:
-    """Logical operator construction for Galois qudit codes."""
+    """Logical and gauge operator construction for Galois qudit codes."""
     code: codes.QuditCode
 
     code = codes.FiveQubitCode()
     logical_ops = code.get_logical_ops()
-    assert logical_ops.shape == (2, code.dimension, 2 * code.num_qudits)
-    assert np.array_equal(logical_ops[0], [[1, 1, 1, 1, 1, 0, 0, 0, 0, 0]])
-    assert np.array_equal(logical_ops[1], [[0, 1, 1, 0, 0, 0, 0, 0, 0, 1]])
+    assert logical_ops.shape == (2 * code.dimension, 2 * len(code))
+    assert np.array_equal(logical_ops[0], [0, 0, 0, 0, 1, 0, 1, 1, 0, 1])
+    assert np.array_equal(logical_ops[1], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
     assert code.get_logical_ops() is code._logical_ops
 
-    code = codes.QuditCode.from_stabilizers(*code.get_stabilizers(), "I I I I I", field=2)
+    code = codes.QuditCode.from_strings(*code.get_strings(), "I I I I I", field=2)
     assert np.array_equal(logical_ops, code.get_logical_ops())
+
+    for code in get_codes_for_testing_ops():
+        code = codes.QuditCode(code.matrix)
+        stabilizer_ops = code.get_stabilizer_ops()
+        logical_ops = code.get_logical_ops()
+        gauge_ops = code.get_gauge_ops()
+        assert not np.any(symplectic_conjugate(stabilizer_ops) @ stabilizer_ops.T)
+        assert np.array_equal(
+            symplectic_conjugate(gauge_ops) @ gauge_ops.T,
+            get_symplectic_form(code.gauge_dimension, code.field),
+        )
+        assert np.array_equal(
+            symplectic_conjugate(logical_ops) @ logical_ops.T,
+            get_symplectic_form(code.dimension, code.field),
+        )
+
+    # test the guarantee of stabilizer canonicalization
+    code = codes.FiveQubitCode()
+    code._is_subsystem_code = True
+    stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
+    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]])  # type:ignore[assignment]
+    code._stabilizer_ops = stabilizer_ops
+    assert np.array_equal(code.get_stabilizer_ops(), stabilizer_ops)
+    assert np.array_equal(code.get_stabilizer_ops(canonicalized=True), stabilizer_ops[:-1])
+
+
+def test_code_deformation() -> None:
+    """Deform a code by a physical Clifford transformation."""
+    code: codes.QuditCode
+
+    code = codes.FiveQubitCode()
+    code.get_logical_ops()
+    assert code.get_strings()[0] == "X Z Z X I"
+    assert code.conjugated([0]).get_strings()[0] == "Z Z Z X I"
+    assert code.deformed("H 0").get_strings()[0] == "Z Z Z X I"
+    with pytest.raises(ValueError, match="violate parity checks"):
+        code.deformed("H 0", preserve_logicals=True)
+
+    code = codes.SteaneCode()
+    assert np.array_equal(
+        code.deformed("H 0 1 2 3 4 5 6", preserve_logicals=True).get_logical_ops(),
+        code.get_logical_ops(),
+    )
+
+    code = codes.ToricCode(2, field=3)
+    with pytest.raises(ValueError, match="only supported for qubit codes"):
+        code.deformed("H 0")
+
+
+def test_qudit_concatenation() -> None:
+    """Concatenate qudit codes."""
+    code_5q = codes.FiveQubitCode()
+
+    # determine the number of copies of the inner code automatically
+    code = codes.QuditCode.concatenate(code_5q, code_5q)
+    assert len(code) == 5 * len(code_5q)
+    assert code.dimension == code_5q.dimension
+
+    # determine the number of copies of the inner and outer codes from wiring data
+    wiring = [0, 2, 4, 6, 8, 1, 3, 5, 7, 9]
+    code = codes.QuditCode.concatenate(code_5q, code_5q, wiring)
+    assert len(code) == 10 * len(code_5q)
+    assert code.dimension == 2 * code_5q.dimension
+
+    # cover some errors
+    with pytest.raises(ValueError, match="different fields"):
+        codes.QuditCode.concatenate(code_5q, codes.ToricCode(2, field=3))
+    with pytest.raises(ValueError, match="divisible"):
+        codes.QuditCode.concatenate(code_5q, code_5q, [0, 1, 2])
 
 
 ####################################################################################################
@@ -314,11 +470,19 @@ def test_css_code() -> None:
     assert code.num_checks == code.num_checks_x + code.num_checks_z
     assert code == codes.CSSCode(code.code_x, code.code_z)
 
+    # equivlence to QuditCode with the parity check matrix
+    equiv_code = codes.QuditCode(code.matrix)
+    assert codes.CSSCode.equiv(code, equiv_code)
+
+    # equivlence to code with redundant stabilizers
+    redundant_code = codes.CSSCode(np.vstack([code.matrix_x, code.matrix_x]), code.matrix_z)
+    assert codes.CSSCode.equiv(code, redundant_code)
+
     code_z = codes.ClassicalCode.random(4, 2)
     with pytest.raises(ValueError, match="incompatible"):
         codes.CSSCode(code_x, code_z)
 
-    with pytest.raises(ValueError, match="different fields"):
+    with pytest.raises(ValueError, match="incompatible"):
         code_z = codes.ClassicalCode.random(3, 2, field=code_x.field.order**2)
         codes.CSSCode(code_x, code_z)
 
@@ -328,48 +492,44 @@ def test_css_ops() -> None:
     code: codes.CSSCode
 
     code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=3))
-    code.get_random_logical_op(Pauli.X, ensure_nontrivial=False)
-    code.get_random_logical_op(Pauli.X, ensure_nontrivial=True)
+    assert not np.any(code.matrix_z @ code.get_random_logical_op(Pauli.X, ensure_nontrivial=False))
+    assert not np.any(code.matrix_z @ code.get_random_logical_op(Pauli.X, ensure_nontrivial=True))
 
-    # test that logical operators have trivial syndromes
-    logicals_x = code.get_logical_ops(Pauli.X)
-    logicals_z = code.get_logical_ops(Pauli.Z)
-    assert not np.any(logicals_x[:, len(code) :])
-    assert not np.any(logicals_z[:, : len(code)])
-    assert not np.any(code.matrix @ logicals_x.T)
-    assert not np.any(code.matrix @ logicals_z.T)
-    assert code.get_logical_ops() is code._logical_ops
+    # swap around logical operators
+    code.set_logical_ops_xz(
+        code.get_logical_ops(Pauli.X)[::-1],
+        code.get_logical_ops(Pauli.Z)[::-1],
+    )
 
-    # test that logical operators are dual to each other
-    logicals_x = logicals_x[:, : len(code)]
-    logicals_z = logicals_z[:, len(code) :]
-    assert np.array_equal(logicals_x @ logicals_z.T, np.eye(code.dimension, dtype=int))
-
-    # successfullly construct and reduce logical operators in a code with "over-complete" checks
+    # successfully construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
     code = codes.ToricCode(dist, rotated=True, field=2)
-    code.reduce_logical_ops()
     assert code.get_code_params() == (dist**2, 2, dist)
-    assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.X))
-    assert not any(np.count_nonzero(op) < dist for op in code.get_logical_ops(Pauli.Z))
-
-    # reducing logical operator weight only supported for prime number fields
-    code = codes.HGPCode(codes.ClassicalCode.random(4, 2, field=4))
-    with pytest.raises(ValueError, match="prime number fields"):
-        code.reduce_logical_op(Pauli.X, 0)
+    code.reduce_logical_ops()
+    logical_ops_x = code.get_logical_ops(Pauli.X)
+    logical_ops_z = code.get_logical_ops(Pauli.Z, symplectic=True)
+    assert not np.any(np.count_nonzero(logical_ops_x.view(np.ndarray), axis=1) < dist)
+    assert not np.any(np.count_nonzero(logical_ops_z.view(np.ndarray), axis=1) < dist)
 
     # the 2x2 toric code has redundant stabilizers
     code = codes.ToricCode(2)
     assert code.num_checks == 4
-    assert codes.CSSCode.equiv(code, codes.CSSCode([[1, 1, 1, 1]], [[1, 1, 1, 1]]))
+    assert code.canonicalized.num_checks == 2
 
 
 def test_distance_css() -> None:
     """Distance calculations for CSS codes."""
+    # qutrit code distance
     code = codes.HGPCode(codes.RepetitionCode(2, field=3))
     assert code.get_distance_bound(cutoff=len(code)) == len(code)
     assert code.get_distance(bound=True) <= len(code)
-    assert code.get_distance(bound=False) == 2
+    with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
+        assert code.get_distance(bound=False) == 2
+
+    # qubit code distance
+    code = codes.HGPCode(codes.RepetitionCode(2, field=2))
+    code._is_subsystem_code = True  # test that this does not break anything
+    assert code.get_distance_exact() == 2
 
     # an empty quantum code has distance infinity
     trivial_code = codes.ClassicalCode([[1, 0], [1, 1]])
@@ -391,6 +551,46 @@ def test_stacking_css_codes() -> None:
         qudit_code = codes.SurfaceCode(2, field=3)
         code = codes.CSSCode.stack(steane_code, qudit_code)
 
-    # stacking a CSSCode with a QuditCode yields a QuditCode
-    code = codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
-    assert not isinstance(code, codes.CSSCode)
+    # stacking a CSSCode with a QuditCode requires using QuditCode.stack
+    codes.QuditCode.stack(steane_code, codes.FiveQubitCode())
+    with pytest.raises(TypeError, match="requires CSSCode inputs"):
+        codes.CSSCode.stack(steane_code, codes.FiveQubitCode())
+
+
+def test_css_concatenation() -> None:
+    """Concatenate CSS codes."""
+    code_c4 = codes.ToricCode(2)
+
+    # determine the number of copies of the inner code automatically
+    code = codes.CSSCode.concatenate(code_c4, code_c4)
+    assert len(code) == len(code_c4) ** 2
+    assert code.dimension == code_c4.dimension**2
+
+    # determine the number of copies of the inner and outer codes from wiring data
+    wiring = [0, 2, 4, 6, 1, 3, 5, 7]
+    code = codes.CSSCode.concatenate(code_c4, code_c4, wiring)
+    assert len(code) == 4 * len(code_c4)
+    assert code.dimension == 2 * code_c4.dimension
+
+    # inheriting logical operators yields different logical operators!
+    code_alt = codes.CSSCode.concatenate(code_c4, code_c4, wiring, inherit_logicals=False)
+    assert not np.array_equal(code.get_logical_ops(), code_alt.get_logical_ops())
+
+    # cover some errors
+    with pytest.raises(TypeError, match="CSSCode inputs"):
+        codes.CSSCode.concatenate(code_c4, codes.FiveQubitCode())
+
+
+def test_quantum_capacity() -> None:
+    """Logical error rates in a code capacity model."""
+    code = codes.SurfaceCode(3, field=2)
+    logical_error_rate = code.get_logical_error_rate_func(num_samples=10)
+    assert logical_error_rate(0) == (0, 0)  # no logical error with zero uncertainty
+
+    with pytest.raises(ValueError, match="error rates greater than"):
+        logical_error_rate(1)
+
+    # guaranteed logical X and Z errors
+    for pauli_bias in [(1, 0, 0), (0, 0, 1)]:
+        logical_error_rate = code.get_logical_error_rate_func(10, 1, pauli_bias)
+        assert logical_error_rate(1)[0] == 1

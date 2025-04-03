@@ -46,6 +46,8 @@ def test_permutation_group() -> None:
         gen = galois.GF(2)([[1]])
         abstract.Group.from_generating_mats(gen, field=3)
 
+    assert isinstance(hash(group.hashable_generators()), int)
+
 
 def test_trivial_group() -> None:
     """Trivial group tests."""

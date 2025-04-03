@@ -44,7 +44,7 @@ def get_mock_page(text: str) -> unittest.mock.MagicMock:
 
 
 def test_get_group_url() -> None:
-    """Retrive url for group webpage on GroupNames.org."""
+    """Retrieve url for group webpage on GroupNames.org."""
 
     # cannot connect to general webpage
     with unittest.mock.patch(
@@ -75,7 +75,7 @@ def test_get_group_url() -> None:
 
 
 def test_get_generators_from_groupnames() -> None:
-    """Retrive generators from group webpage on GroupNames.org."""
+    """Retrieve generators from group webpage on GroupNames.org."""
 
     # group not indexed
     assert external.groups.get_generators_from_groupnames("") is None
@@ -108,7 +108,7 @@ def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_get_generators_with_gap() -> None:
-    """Retrive generators from GAP 4."""
+    """Retrieve generators from GAP 4."""
 
     # GAP is not installed
     with unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False):
@@ -217,7 +217,6 @@ def test_get_small_group_structure() -> None:
     # fail to retrieve structure from GAP
     process = get_mock_process("")
     with (
-        unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_result", return_value=process),
         pytest.raises(ValueError, match="Group not recognized"),
@@ -227,7 +226,6 @@ def test_get_small_group_structure() -> None:
     # retrieve structure from GAP
     process = get_mock_process(structure)
     with (
-        unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_result", return_value=process),
     ):
@@ -235,8 +233,16 @@ def test_get_small_group_structure() -> None:
 
     # GAP is not installed
     with (
-        unittest.mock.patch("qldpc.cache.get_disk_cache", return_value={}),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
     ):
         structure = f"SmallGroup({order},{index})"
         assert external.groups.get_small_group_structure(order, index) == structure
+
+
+def test_known_groups() -> None:
+    """Retrieve known groups."""
+    for group, generators in external.groups.KNOWN_GROUPS.items():
+        assert external.groups.get_generators(group) == generators
+
+        gap_generators = external.groups.get_generators_with_gap(group)
+        assert gap_generators is None or gap_generators == generators

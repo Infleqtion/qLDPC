@@ -27,7 +27,7 @@ SymPy permutations are "right-acting", which is to say that the action of two pe
 on an integer i compose as (p*q)(i) = q(p(i)) = i^p^q.  To preserve the order of products before and
 after lifting permutations to matrices, which ensures that the lift L(p*q) = L(p) @ L(q), we
 therefore make representations likewise right-acting, which is to say that a permutation matrix M
-transposes a vector v as v --> v @ M.  In practice, this simply means that matrices are the
+transforms a vector v as v --> v @ M.  In practice, this simply means that matrices are the
 transpose of what one might expect.
 
 This module only supports representations of group members by orthogonal matrices over finite
@@ -49,6 +49,7 @@ from collections.abc import Callable, Iterator, Sequence
 import galois
 import numpy as np
 import numpy.typing as npt
+import scipy.linalg
 import sympy.combinatorics as comb
 import sympy.core
 
@@ -67,8 +68,8 @@ class GroupMember(comb.Permutation):
     Supports sorting permutations (by their rank), and taking their tensor product.
     """
 
-    @classmethod
-    def from_sympy(cls, other: comb.Permutation) -> GroupMember:
+    @staticmethod
+    def from_sympy(other: comb.Permutation) -> GroupMember:
         """Convert a SymPy Permutation into a GroupMember."""
         if isinstance(other, GroupMember):
             return other
@@ -171,9 +172,9 @@ class Group:
         """The underlying SymPy permutation group of this Group."""
         return self._group
 
-    @classmethod
+    @staticmethod
     def from_sympy(
-        cls, group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
+        group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
     ) -> Group:
         """Instantiate a Group from a SymPy permutation group."""
         new_group = Group(field=field, lift=lift)
@@ -215,8 +216,8 @@ class Group:
         assert power > 0
         return functools.reduce(Group.__mul__, [self] * power)
 
-    @classmethod
-    def product(cls, *groups: Group, repeat: int = 1) -> Group:
+    @staticmethod
+    def product(*groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
         return functools.reduce(Group.__mul__, groups * repeat)
 
@@ -256,7 +257,7 @@ class Group:
 
     @functools.cached_property
     def lift_dim(self) -> int:
-        """Dimension of the repesentation for this group."""
+        """Dimension of the representation for this group."""
         return self._lift(next(iter(self._group.generators))).shape[0]
 
     @functools.cached_property
@@ -268,9 +269,8 @@ class Group:
             dtype=int,
         ).reshape(self.order, self.order)
 
-    @classmethod
+    @staticmethod
     def from_table(
-        cls,
         table: npt.NDArray[np.int_] | Sequence[Sequence[int]],
         field: int | None = None,
         integer_lift: IntegerLift | None = None,
@@ -286,11 +286,9 @@ class Group:
 
         return Group(*members, field=field, lift=lift)
 
-    @classmethod
+    @staticmethod
     def from_generating_mats(
-        cls,
-        *matrices: npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        field: int | None = None,
+        *matrices: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
     ) -> Group:
         """Constructs a Group from a given set of generating matrices.
 
@@ -406,14 +404,18 @@ class Group:
                     singles.remove(member)
                 return singles | doubles
 
-    @classmethod
-    def from_name(cls, name: str, field: int | None = None) -> Group:
+    @staticmethod
+    def from_name(name: str, field: int | None = None) -> Group:
         """Named group in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")
         if standardized_name == "SmallGroup(1,1)":
             return TrivialGroup()
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
         return Group(*generators, name=standardized_name, field=field)
+
+    def hashable_generators(self) -> tuple[tuple[int, ...], ...]:
+        """Generators of this group in a hashable form."""
+        return tuple(tuple(generator) for generator in self.generators)
 
 
 ################################################################################
@@ -619,11 +621,9 @@ class Protograph(npt.NDArray[np.object_]):
         vals = [val.T for val in self.ravel()]
         return Protograph(np.array(vals, dtype=object).reshape(self.shape).T)
 
-    @classmethod
+    @staticmethod
     def build(
-        cls,
-        group: Group,
-        data: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]],
+        group: Group, data: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]]
     ) -> Protograph:
         """Construct a protograph.
 
@@ -677,9 +677,9 @@ class TrivialGroup(Group):
         """
         return self.identity
 
-    @classmethod
+    @staticmethod
     def to_protograph(
-        cls, data: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
+        data: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
     ) -> Protograph:
         """Convert a matrix of 0s and 1s into a protograph of the trivial group."""
         array = np.asarray(data)
@@ -715,7 +715,7 @@ class AbelianGroup(Group):
     """Direct product of cyclic groups of the specified orders.
 
     By default, an AbelianGroup member of the form ∏_i g_i^{a_i}, where {g_i} are the generators of
-    the group, gets lifted to a direct sum ⨁_i L(g_i)^{a_i}.  If an AbelianGroup is initalized with
+    the group, gets lifted to a direct sum ⨁_i L(g_i)^{a_i}.  If an AbelianGroup is initialized with
     product_lift=True, the group members get lifted to a Kronecker product ⨂_i L(g_i)^{a_i}.
     """
 
@@ -724,19 +724,13 @@ class AbelianGroup(Group):
         identity_mats = [np.eye(order, dtype=int) for order in orders]
         vals = [sum(orders[:idx]) for idx in range(len(orders))]
 
-        # identify method to "combine" two cyclic matrices
-        _combine: Callable[[npt.NDArray[np.int_], npt.NDArray[np.int_]], npt.NDArray[np.int_]]
-        if product_lift:
-            _combine = np.kron
-
+        # identify method to "combine" cyclic matrices
+        if not product_lift:
+            _combine = scipy.linalg.block_diag
         else:
 
-            def _combine(
-                mat_a: npt.NDArray[np.int_], mat_b: npt.NDArray[np.int_]
-            ) -> npt.NDArray[np.int_]:
-                zero_ab = np.zeros((mat_a.shape[0], mat_b.shape[1]), dtype=int)
-                zero_ba = np.zeros((mat_b.shape[0], mat_a.shape[1]), dtype=int)
-                return np.block([[mat_a, zero_ab], [zero_ba, mat_b]])
+            def _combine(*mats: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+                return functools.reduce(np.kron, mats)
 
         # build lift manually, which is faster than the default_lift
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
@@ -745,8 +739,7 @@ class AbelianGroup(Group):
                 np.roll(identity_mat, shift, axis=1)
                 for identity_mat, shift in zip(identity_mats, shifts)
             ]
-            mat = functools.reduce(_combine, mats)
-            return galois.GF(field)(mat)
+            return galois.GF(field)(_combine(*mats))
 
         group = comb.named_groups.AbelianGroup(*orders)
         order_text = ",".join(map(str, orders))
@@ -839,19 +832,19 @@ class SmallGroup(Group):
         """A description of the structure of this group."""
         return self.get_structure(self.order, self.index)
 
-    @classmethod
-    def number(cls, order: int) -> int:
+    @staticmethod
+    def number(order: int) -> int:
         """The number of groups of a given order."""
         return external.groups.get_small_group_number(order)
 
-    @classmethod
-    def generator(cls, order: int) -> Iterator[SmallGroup]:
+    @staticmethod
+    def generator(order: int) -> Iterator[SmallGroup]:
         """Iterator over all groups of a given order."""
         for ii in range(SmallGroup.number(order)):
             yield SmallGroup(order, ii + 1)
 
-    @classmethod
-    def get_structure(cls, order: int, index: int) -> str:
+    @staticmethod
+    def get_structure(order: int, index: int) -> str:
         """Retrieve a description of the structure of a group."""
         return external.groups.get_small_group_structure(order, index)
 
@@ -920,9 +913,9 @@ class SpecialLinearGroup(Group):
         """Dimension of the elements of this group."""
         return self._dimension
 
-    @classmethod
+    @staticmethod
     def get_generating_mats(
-        cls, dimension: int, field: int | None = None
+        dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
         """Generating matrices for the Special Linear group, based on arXiv:2201.09155."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -937,8 +930,8 @@ class SpecialLinearGroup(Group):
             gen_w[0, 0] = -1 * base_field(1)
         return gen_x, gen_w
 
-    @classmethod
-    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+    @staticmethod
+    def iter_mats(dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of SL(dimension, field)."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         for vec in itertools.product(base_field.elements, repeat=dimension**2):
@@ -1025,9 +1018,9 @@ class ProjectiveSpecialLinearGroup(Group):
         """Dimension of the elements of this group."""
         return self._dimension
 
-    @classmethod
+    @staticmethod
     def get_generating_mats(
-        cls, dimension: int, field: int | None = None
+        dimension: int, field: int | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
         """Generating matrices of PSL, constructed out of the generating matrices of SL."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
@@ -1039,8 +1032,8 @@ class ProjectiveSpecialLinearGroup(Group):
             base_field(np.kron(np.linalg.inv(gen_w), gen_w)),
         )
 
-    @classmethod
-    def iter_mats(cls, dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
+    @staticmethod
+    def iter_mats(dimension: int, field: int | None = None) -> Iterator[galois.FieldArray]:
         """Iterate over all elements of PSL(dimension, field)."""
         field = field or DEFAULT_FIELD_ORDER
         base_field = galois.GF(field)

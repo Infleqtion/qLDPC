@@ -60,8 +60,8 @@ class Pauli(enum.Enum):
             return "X"
         return "Y"
 
-    @classmethod
-    def from_string(cls, string: str) -> Pauli:
+    @staticmethod
+    def from_string(string: str) -> Pauli:
         """Build a Pauli operator from a string."""
         if string == "I":
             return Pauli.I
@@ -121,8 +121,8 @@ class QuditOperator:
             ops.append(f"Z({val_z})")
         return "*".join(ops)
 
-    @classmethod
-    def from_string(cls, string: str) -> QuditOperator:
+    @staticmethod
+    def from_string(string: str) -> QuditOperator:
         """Build a qudit operator from its string representation."""
         if string == "I":
             return QuditOperator((0, 0))
@@ -300,9 +300,8 @@ class CayleyComplex:
             shift = identity @ shift
         return set(bb @ shift for bb in self.subset_b)
 
-    @classmethod
+    @staticmethod
     def build_cayley_graph(
-        cls,
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember] = (),
     ) -> None:
@@ -337,9 +336,8 @@ class CayleyComplex:
 
         return graph
 
-    @classmethod
+    @staticmethod
     def satisfies_total_no_conjugacy(
-        cls,
         subset_a: Collection[abstract.GroupMember],
         subset_b: Collection[abstract.GroupMember],
     ) -> bool:
@@ -462,9 +460,8 @@ class ChainComplex:
             return self.field.Zeros((self.ops[-1].shape[1], 0))
         return self.ops[degree - 1]
 
-    @classmethod
+    @staticmethod
     def tensor_product(  # noqa: C901 ignore complexity check
-        cls,
         chain_a: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.Protograph,
         chain_b: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.Protograph,
         field: int | None = None,
