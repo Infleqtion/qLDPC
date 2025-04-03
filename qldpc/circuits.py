@@ -25,7 +25,8 @@ import numpy as np
 import stim
 
 from qldpc import abstract, cache, codes
-from qldpc.objects import Pauli, op_to_string, symplectic_conjugate
+from qldpc.math import op_to_string, symplectic_conjugate
+from qldpc.objects import Pauli
 
 CACHE_NAME = "qldpc_automorphisms"
 
@@ -65,6 +66,12 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     for destab_op, pivot in zip(destab_ops, pivots):
         destab_op[(pivot + len(code)) % (2 * len(code))] = 1
 
+    # remove logical and gauge operator components
+    dual_logical_ops = logical_ops.reshape(2, -1)[::-1, :].reshape(logical_ops.shape)
+    dual_gauge_ops = gauge_ops.reshape(2, -1)[::-1, :].reshape(gauge_ops.shape)
+    destab_ops -= destab_ops @ symplectic_conjugate(dual_logical_ops).T @ logical_ops
+    destab_ops -= destab_ops @ symplectic_conjugate(dual_gauge_ops).T @ gauge_ops
+
     """
     Remove stabilizer factors to enforce that destabilizers commute with each other.  This process
     requires updating one destabilizer at a time, since each time we modify a destabilizer by
@@ -72,12 +79,6 @@ def get_encoding_tableau(code: codes.QuditCode) -> stim.Tableau:
     """
     for row, destab_op in enumerate(destab_ops[1:], start=1):
         destab_op -= destab_op @ symplectic_conjugate(destab_ops[:row]).T @ stab_ops[:row]
-
-    # remove logical and gauge operator components
-    dual_logical_ops = logical_ops.reshape(2, -1)[::-1, :].reshape(logical_ops.shape)
-    dual_gauge_ops = gauge_ops.reshape(2, -1)[::-1, :].reshape(gauge_ops.shape)
-    destab_ops -= destab_ops @ symplectic_conjugate(dual_logical_ops).T @ logical_ops
-    destab_ops -= destab_ops @ symplectic_conjugate(dual_gauge_ops).T @ gauge_ops
 
     # construct Pauli strings to hand over to Stim
     matrices_x = [logical_ops[: code.dimension], gauge_ops[: code.gauge_dimension], destab_ops]

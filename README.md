@@ -30,27 +30,32 @@ Notable features include:
 - `ClassicalCode`: class for representing classical linear error-correcting codes over finite fields.
   - Various pre-defined classical code families.
   - Communication with the [GAP](https://www.gap-system.org/)/[GUAVA](https://www.gap-system.org/Packages/guava.html) package for [even more codes](https://docs.gap-system.org/pkg/guava/doc/chap5.html).
-- `QuditCode`: general class for constructing [Galois-qudit codes](https://errorcorrectionzoo.org/c/galois_into_galois), including both [stabilizer](https://errorcorrectionzoo.org/c/galois_stabilizer) and [subsystem](https://errorcorrectionzoo.org/c/oecc) codes.
-  - Automatic construction of all SWAP-transversal logical Clifford gates in one code block of a qubit code, with `qldpc.circuits.get_transversal_ops` (see [arXiv:2409.18175](https://arxiv.org/abs/2409.18175); requires [GAP](https://www.gap-system.org/) and [GUAVA](https://www.gap-system.org/Packages/guava.html)).
+- `QuditCode`: class for constructing [Galois-qudit codes](https://errorcorrectionzoo.org/c/galois_into_galois), including both [stabilizer](https://errorcorrectionzoo.org/c/galois_stabilizer) and [subsystem](https://errorcorrectionzoo.org/c/oecc) codes.
   - `QuditCode.get_logical_ops`: method to construct a complete basis of nontrivial logical Pauli operators for a `QuditCode`.
   - `QuditCode.concatenate`: method to [concatenate](https://errorcorrectionzoo.org/c/quantum_concatenated) `QuditCode`s in various ways.
+  - `QuditCode.get_distance`: method to compute the code distance (i.e., the minimum weight of a nontrivial logical operator) of a `QuditCode`.
 - `CSSCode`: subclass of `QuditCode` for the special case of constructing a [quantum CSS code](https://errorcorrectionzoo.org/c/css) out of two mutually compatible `ClassicalCode`s.
-  - `CSSCode.get_distance`: method to compute the code distance (i.e., the minimum weight of a nontrivial logical operator) of a `CSSCode`.  Includes options for computing the exact code distance by brute force, as well as an estimate (or upper bound) with the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
-- `TBCode`: class for constructing [two-block quantum codes](https://errorcorrectionzoo.org/c/two_block_quantum).
-- `BBCode`: class for constructing the [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic) in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).
-  - Includes methods to identify "toric layouts" of a `BBCode`, in which the code looks like a toric code augmented by some long-distance checks, as in discussed in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
-- `HGPCode`: class for constructing [hypergraph product codes](https://errorcorrectionzoo.org/c/hypergraph_product) out of two `ClassicalCode`s.
-- `LPCode`: class for constructing [lifted product codes](https://errorcorrectionzoo.org/c/lifted_product) out of two protographs (i.e., matrices whose entries are elements of a group algebra).  See [arXiv:2012.04068](https://arxiv.org/abs/2012.04068) and [arXiv:2202.01702](https://arxiv.org/abs/2202.01702).
-- `QTCode`: class for constructing [quantum Tanner codes](https://errorcorrectionzoo.org/c/quantum_tanner) out of (a) two symmetric subsets `A` and `B` of a group `G`, and (b) two `ClassicalCode`s with block lengths `|A|` and `|B|`.  See [arXiv:2202.13641](https://arxiv.org/abs/2202.13641) and [arXiv:2206.07571](https://arxiv.org/abs/2206.07571).
-  - Random `QTCode`s can be constructed out of a choice of group `G` and one `ClassicalCode` only.
+  - `CSSCode.get_distance_bound`: method to estimate an upper bound on code distance using the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
+- Classes for special quantum code constructions and code families, such as:
+  - `TBCode`: [two-block quantum codes](https://errorcorrectionzoo.org/c/two_block_quantum).
+  - `BBCode`: [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic), as in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).  See [`examples/bivariate_bicycle_codes.ipynb`](https://github.com/Infleqtion/qLDPC/blob/main/examples/bivariate_bicycle_codes.ipynb) for methods to identify...
+    - toric layouts of a `BBCode`, in which the code looks like a toric code augmented by some long-distance checks, as in discussed in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915), and
+    - qubit layouts that minimize the communication distance for neutral atoms, as discussed in [arXiv:2404.18809](https://arxiv.org/abs/2404.18809).
+  - `HGPCode`: [hypergraph product codes](https://errorcorrectionzoo.org/c/hypergraph_product).
+  - `SHPCode`: [subsystem hypergraph product codes](https://errorcorrectionzoo.org/c/subsystem_quantum_parity), as in [arXiv:2002.06257](https://arxiv.org/abs/2002.06257).
+  - `SHYPSCode`: [subsystem hypergraph product codes simplex](https://errorcorrectionzoo.org/c/shyps), as in [arXiv:2502.07150](https://arxiv.org/abs/2502.07150).
+  - `LPCode`: [lifted product codes](https://errorcorrectionzoo.org/c/lifted_product), as in [arXiv:2012.04068](https://arxiv.org/abs/2012.04068) and [arXiv:2202.01702](https://arxiv.org/abs/2202.01702).
+  - `QTCode`: [quantum Tanner codes](https://errorcorrectionzoo.org/c/quantum_tanner), as in [arXiv:2202.13641](https://arxiv.org/abs/2202.13641) and [arXiv:2206.07571](https://arxiv.org/abs/2206.07571).
+- `decoders.py`: module for decoding errors with various methods, including BP-OSD, BP-LSD, and belief-field (via [`ldpc`](https://github.com/quantumgizmos/ldpc)), minimum-weight perfect matching (via [`pymatching`](https://github.com/oscarhiggott/PyMatching)), and others.  Includes an interface for using custom decoders. 
 - `abstract.py`: module for basic abstract algebra (groups, algebras, and representations thereof).
   - Various pre-defined groups (mostly borrowed from [SymPy](https://docs.sympy.org/latest/modules/combinatorics/named_groups.html)).
   - Communication with the [GAP](https://www.gap-system.org/) computer algebra system and [GroupNames.org](https://people.maths.bris.ac.uk/~matyd/GroupNames/) for constructing [even more groups](https://docs.gap-system.org/doc/ref/chap50.html).
 - `objects.py`: module for constructing helper objects such as Cayley complexes and chain complexes, which are instrumental for the construction of various quantum codes.
+- `qldpc.circuits.get_transversal_ops`: construction of all SWAP-transversal logical Clifford gates in one code block of a qubit code (see [arXiv:2409.18175](https://arxiv.org/abs/2409.18175); requires [GAP](https://www.gap-system.org/) and [GUAVA](https://www.gap-system.org/Packages/guava.html)).  Warning: this method relies on a subroutine (namely, finding classical code automorphisms) that has exponential complexity, and is therefore only practical for codes with small-to-moderate size.
 
 ## 🤔 Questions and issues
 
-This project technically has a [documentation page](https://qldpc.readthedocs.io/en/latest/), but at the moment the documentation is largely auto-generated from source code and comments that were written to be readable in a text editor.  For now, I recommend looking at the source code (and comments therein) directly, as well as the `examples` directory.  Test files (such as `qldpc/codes/quantum_test.py`) also contain some examples of using the classes and methods in this library.
+This project aspires to have a [documentation page](https://qldpc.readthedocs.io/en/latest/), but at the moment the documentation is out of date and auto-generated from source code that was written to be human-readable in a plain text editor.  For now, I recommend looking at the source code (and comments therein) directly, as well as the `examples` directory.  Test files (such as `qldpc/codes/quantum_test.py`) also contain some examples of using the classes and methods in this library.
 
 If you have any questions, feedback, or requests, please [open an issue on GitHub](https://github.com/Infleqtion/qLDPC/issues/new) or email me at [mika.perlin@gmail.com](mailto:mika.perlin@gmail.com)!
 

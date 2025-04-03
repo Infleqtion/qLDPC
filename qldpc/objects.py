@@ -22,49 +22,15 @@ import enum
 import functools
 import itertools
 from collections.abc import Collection, Iterator
-from typing import Literal, TypeVar
+from typing import Literal
 
 import galois
 import networkx as nx
 import numpy as np
 import numpy.typing as npt
-import stim
 
 from qldpc import abstract
 from qldpc.abstract import DEFAULT_FIELD_ORDER
-
-IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
-
-
-def symplectic_conjugate(vectors: IntegerArray) -> IntegerArray:
-    """Take symplectic vectors to their duals.
-
-    The symplectic conjugate of a Pauli string swaps its X and Z support, and multiplies its X
-    sector by -1, taking P = [P_x|P_z] -> [-P_z|P_x], such that the symplectic inner product between
-    Pauli strings P and Q is ⟨P,Q⟩_s = P_x @ Q_z - P_z @ Q_x = symplectic_conjugate(P) @ Q.
-    """
-    assert vectors.shape[-1] % 2 == 0
-    conjugated_string = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
-    conjugated_string[:, 0, :] *= -1
-    return conjugated_string.reshape(vectors.shape)  # type:ignore[return-value]
-
-
-def op_to_string(op: npt.NDArray[np.int_]) -> stim.PauliString:
-    """Convert an integer array that represents a Pauli string into a stim.PauliString.
-
-    The (first, second) half the array indicates the support of (X, Z) Paulis.
-    """
-    support_xz = np.array(op, dtype=int).reshape(2, -1)
-    paulis = [Pauli((support_xz[0, qq], support_xz[1, qq])) for qq in range(support_xz.shape[1])]
-    return stim.PauliString(map(str, paulis))
-
-    num_qubits = len(op) // 2
-    paulis = ""
-    for qubit in range(num_qubits):
-        val_x = int(op[qubit])
-        val_z = int(op[qubit + num_qubits])
-        paulis = str(Pauli((val_x, val_z)))
-    return stim.PauliString(paulis)
 
 
 class Pauli(enum.Enum):
