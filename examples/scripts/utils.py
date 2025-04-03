@@ -6,15 +6,17 @@ import numpy as np
 import qldpc
 
 
-def get_label(code: qldpc.codes.AbstractCode, estimate_distance: bool | int = False) -> str:
+def get_label(
+    code: qldpc.codes.AbstractCode, distance_estimation_trials: bool | int = False
+) -> str:
     """Get a label for a code in a figure."""
     known_distance = code.get_distance_if_known()
     if isinstance(known_distance, int):
         return f"$d={known_distance}$"
-    if not estimate_distance:
-        return f"$[{len(code)}, {code.dimension}]$"
-    distance_estimate = code.get_distance_bound(num_trials=int(estimate_distance))
-    return rf"$[{len(code)}, {code.dimension}, \le {distance_estimate}]$"
+    if not distance_estimation_trials:
+        return f"[{len(code)}, {code.dimension}]"
+    distance_estimate = code.get_distance_bound(num_trials=int(distance_estimation_trials))
+    return f"[{len(code)}, {code.dimension}, <= {distance_estimate}]"
 
 
 def make_error_rate_figure(
@@ -22,7 +24,7 @@ def make_error_rate_figure(
     num_samples: int = 10**4,
     physical_rates: Sequence[float] = list(np.logspace(-2, -0.1, 100)),
     figsize: tuple[int, int] = (5, 4),
-    estimate_distance: bool | int = False,
+    distance_estimation_trials: bool | int = False,
     **decoding_args: object,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Make a figure comparing physical vs. logical error rates in a code family."""
@@ -33,7 +35,7 @@ def make_error_rate_figure(
             num_samples, max(physical_rates), **decoding_args
         )
         logical_rates, stderrs = get_logical_error_rate(physical_rates)
-        label = get_label(code, estimate_distance)
+        label = get_label(code, distance_estimation_trials)
         line, *_ = axis.plot(physical_rates, logical_rates, label=label)
         axis.fill_between(
             physical_rates,
