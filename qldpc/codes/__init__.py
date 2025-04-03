@@ -6,7 +6,7 @@ from .classical import (
     ReedSolomonCode,
     RepetitionCode,
     RingCode,
-    SimplexCodes,
+    SimplexCode,
     TannerCode,
 )
 from .common import (
@@ -43,7 +43,7 @@ __all__ = [
     "ReedSolomonCode",
     "RepetitionCode",
     "RingCode",
-    "SimplexCodes",
+    "SimplexCode",
     "TannerCode",
     "AbstractCode",
     "ClassicalCode",

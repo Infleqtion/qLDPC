@@ -25,8 +25,8 @@ import numpy as np
 import stim
 
 from qldpc import abstract, cache, codes
-from qldpc.math import symplectic_conjugate
-from qldpc.objects import Pauli, op_to_string
+from qldpc.math import op_to_string, symplectic_conjugate
+from qldpc.objects import Pauli
 
 CACHE_NAME = "qldpc_automorphisms"
 

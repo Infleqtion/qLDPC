@@ -36,7 +36,7 @@ from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.math import first_nonzero_cols
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, QuditOperator
 
-from .classical import HammingCode, RepetitionCode, RingCode, SimplexCodes, TannerCode
+from .classical import HammingCode, RepetitionCode, RingCode, SimplexCode, TannerCode
 from .common import ClassicalCode, CSSCode, QuditCode
 
 
@@ -79,13 +79,13 @@ class IcebergCode(CSSCode):
     - https://arxiv.org/abs/2403.16054
     """
 
-    def __init__(self, size: int) -> None:
+    def __init__(self, size: int, *, alternative_logicals: bool = False) -> None:
         checks = [[1] * (2 * size)]
         CSSCode.__init__(self, checks, checks, field=2, is_subsystem_code=False)
         self._dimension = 2 * size - 2
         self._distance_x = self._distance_z = 2
 
-        if size == 3:
+        if alternative_logicals and size == 3:
             # make a specific choice of logical operators for the [6, 4, 2] code, splitting the
             # four logical qubits into pairs with disjoint support on the physical qubits
             sector_ops_x = [[1, 1, 0], [0, 1, 1]]
@@ -1517,14 +1517,15 @@ class SHYPSCode(SHPCode):
     SWAP-transversal Clifford operations.
 
     References:
+    - https://errorcorrectionzoo.org/c/shyps
     - https://arxiv.org/abs/2502.07150
     """
 
     def __init__(self, dim_x: int, dim_z: int | None = None, *, set_logicals: bool = True) -> None:
         dim_z = dim_z if dim_z is not None else dim_x
 
-        code_x = SimplexCodes(dim_x)
-        code_z = SimplexCodes(dim_z)
+        code_x = SimplexCode(dim_x)
+        code_z = SimplexCode(dim_z)
         SHPCode.__init__(self, code_x, code_z, set_logicals=set_logicals)
 
         self._dimension = dim_x * dim_z

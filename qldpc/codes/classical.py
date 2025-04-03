@@ -252,12 +252,13 @@ class TannerCode(ClassicalCode):
         return directed_subgraph
 
 
-class SimplexCodes(ClassicalCode):
+class SimplexCode(ClassicalCode):
     """Classical simplex codes, with code parameters [2**k - 1, k, 2 ** (k - 1)].
 
     The automorphism group of SimplexCode(k) is the general linear group GL(k).
 
     References:
+    - https://errorcorrectionzoo.org/c/simplex
     - https://arxiv.org/abs/2502.07150
     """
 
@@ -266,7 +267,7 @@ class SimplexCodes(ClassicalCode):
 
         matrix = np.zeros([block_length] * 2, dtype=int)
         rows = np.arange(block_length, dtype=int)
-        for shift in SimplexCodes.get_polynomial_exponents(dim):
+        for shift in SimplexCode.get_polynomial_exponents(dim):
             matrix[rows, (rows + shift) % block_length] = 1
         ClassicalCode.__init__(self, matrix, field=2)
 
@@ -282,6 +283,8 @@ class SimplexCodes(ClassicalCode):
         where x is the generator of a cyclic group of order 2**dim - 1, and c is an integer.
         """
         # QUESTION: would any polynomial in galois.primitive_polys(2, dim, terms=3) suffice here?
+        if dim == 2:
+            return 0, 1, 2
         if dim == 3:
             return 0, 2, 3
         if dim == 4:
@@ -293,5 +296,5 @@ class SimplexCodes(ClassicalCode):
         if dim == 7:
             return 0, 6, 7
         raise ValueError(
-            f"Classical simplex codes are only supported for dimensions >=3, <=7 (provided: {dim})"
+            f"Classical simplex codes are only supported for dimensions >1, <=7 (provided: {dim})"
         )

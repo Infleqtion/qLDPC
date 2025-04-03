@@ -62,11 +62,11 @@ def test_special_codes() -> None:
     )
 
     # classical simplex codes
-    for dimension in range(3, 8):
-        code = codes.SimplexCodes(dimension)
+    for dimension in range(2, 8):
+        code = codes.SimplexCode(dimension)
         assert code.get_code_params() == (2**dimension - 1, dimension, 2 ** (dimension - 1))
-    with pytest.raises(ValueError, match="dimensions >=3, <=7"):
-        codes.SimplexCodes(8)
+    with pytest.raises(ValueError, match="dimensions >1, <=7"):
+        codes.SimplexCode(8)
 
 
 def test_tanner_code() -> None:
