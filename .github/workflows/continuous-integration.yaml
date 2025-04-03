@@ -21,17 +21,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml', 'build-cython.py') }}
+          python-version: 3.12
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/*.pyx
+            build-cython.py
       - name: Install package and dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+          uv venv
+          uv pip install '.[dev]'
 
   format:
     name: Lint and type check
@@ -42,28 +43,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml', 'build-cython.py') }}
+          python-version: 3.12
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/*.pyx
+            build-cython.py
       - name: Install package and dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+          uv venv
+          uv pip install '.[dev]'
       - name: Run ruff format
         id: ruff-format
-        run: checks/format_.py
+        run: |
+          source .venv/bin/activate
+          checks/format_.py
         continue-on-error: true
       - name: Run ruff check
         id: ruff-check
-        run: checks/lint_.py
+        run: |
+          source .venv/bin/activate
+          checks/lint_.py
         continue-on-error: true
       - name: Run mypy
         id: mypy
-        run: checks/mypy_.py
+        run: |
+          source .venv/bin/activate
+          checks/mypy_.py
         continue-on-error: true
       - name: Check for failures
         run: |
@@ -91,16 +99,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: astral-sh/setup-uv@v5
         with:
-          python-version: '3.12'
-      - uses: actions/cache@v4
-        with:
-          path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('pyproject.toml', 'build-cython.py') }}
+          python-version: 3.12
+          enable-cache: true
+          cache-dependency-glob: |
+            **/pyproject.toml
+            **/*.pyx
+            build-cython.py
       - name: Install package and dependencies
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install '.[dev]'
+          uv venv
+          uv pip install '.[dev]'
       - name: Run coverage
-        run: checks/coverage_.py
+        run: |
+          source .venv/bin/activate
+          checks/coverage_.py
