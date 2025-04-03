@@ -43,7 +43,8 @@ def test_small_codes() -> None:
     assert code.get_strings()[0] == "X Z Z X I"
 
     for size in range(2, 6):
-        assert codes.IcebergCode(size).get_code_params() == (2 * size, 2 * size - 2, 2)
+        code_params = (2 * size, 2 * size - 2, 2)
+        assert codes.IcebergCode(size, alternative_logicals=True).get_code_params() == code_params
 
     assert codes.CSSCode.equiv(codes.C4Code(), codes.IcebergCode(2))
     assert codes.C6Code().get_code_params() == (6, 2, 2)
