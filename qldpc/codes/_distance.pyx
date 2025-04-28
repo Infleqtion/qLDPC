@@ -55,7 +55,7 @@ cdef uint64_t EVEN_BITS_MASK = 0xAAAAAAAAAAAAAAAA  # 1 on the even bits of a 64-
 
 cdef uint64_t symplectic_weight(uint64_t num):
     """Symplectic weight of an integer."""
-    return hamming_weight((num & ODD_BITS_MASK) | (num & EVEN_BITS_MASK))
+    return hamming_weight((num | (num << 1)) & EVEN_BITS_MASK)
 
 
 def gray_code_flips(uint64_t num) -> Iterator[uint64_t]:
