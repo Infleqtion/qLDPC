@@ -9,11 +9,11 @@ from ldpc.bposd_decoder import BpOsdDecoder
 from ldpc.bp_decoder import BpDecoder, BpDecoderBase
 from ldpc.bplsd_decoder import BpLsdDecoder
 
+from qldpc.objects import PauliXZ, Pauli
 from qldpc.stim.util import (
     _det_basis_coord,
     detector_error_model_to_css_checks,
     CheckMatrices,
-    Basis,
 )
 
 
@@ -49,8 +49,8 @@ class BPTypeDecoder(Decoder):
     def __init__(
         self,
         decoder_cls: BpDecoderBase,
-        basis: Basis,
-        fn_det_basis: Callable[[DemTargetWithCoords], Basis] = _det_basis_coord,
+        basis: PauliXZ,
+        fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ] = _det_basis_coord,
         **kwargs,
     ):
         self.decoder_cls = decoder_cls
@@ -62,9 +62,9 @@ class BPTypeDecoder(Decoder):
         z_check_matrices, x_check_matrices = detector_error_model_to_css_checks(
             dem, self.fn_det_basis
         )
-        if self.basis == Basis.Z:
+        if self.basis == Pauli.Z:
             check_matrices = z_check_matrices
-        elif self.basis == Basis.X:
+        elif self.basis == Pauli.X:
             check_matrices = x_check_matrices
         else:
             raise ValueError(f"Invalid basis: {self.basis}")
@@ -92,17 +92,17 @@ class BPTypeDecoder(Decoder):
 
 class BP(BPTypeDecoder):
 
-    def __init__(self, basis: Basis, **kwargs):
+    def __init__(self, basis: PauliXZ, **kwargs):
         super().__init__(BpDecoder, basis, **kwargs)
 
 
 class BPOSD(BPTypeDecoder):
 
-    def __init__(self, basis: Basis, **kwargs):
+    def __init__(self, basis: PauliXZ, **kwargs):
         super().__init__(BpOsdDecoder, basis, **kwargs)
 
 
 class BPLSD(BPTypeDecoder):
 
-    def __init__(self, basis: Basis, **kwargs):
+    def __init__(self, basis: PauliXZ, **kwargs):
         super().__init__(BpLsdDecoder, basis, **kwargs)
