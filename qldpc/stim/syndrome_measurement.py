@@ -19,15 +19,39 @@ class StimIds:
 
 
 class SyndromeMeasurement(abc.ABC):
+    """
+    Base class for a syndrome measurement scheme
+    """
 
     @abc.abstractmethod
     def compile_sm_circuit(
         self, code: CSSCode, noise_model: NoiseModel, stim_ids: StimIds
     ) -> tuple[stim.Circuit, list[list[int]]]:
-        """TODO: doc"""
+        """
+        Compiles a syndrome measurement circuit for a given CSSCode and noise model.
+
+        args:
+            code: CSSCode
+                The quantum code to be compiled into a single round of syndrome measurements
+            noise_model: NoiseModel
+                The noise model to wrap stim operations (1q gate, 2q gate, meas, and reset)
+            stim_ids: StimIds
+                Stim circuit ids to be used for data qubits, z check qubits, and x check qubits
+        returns:
+            stim.Circuit:
+                Stim circuit containg the compiled syndrome measurement round
+            list[list[int]]:
+                The history of measurement rounds performed in the circuit.
+                Each round is a list of the stim ids measured that round, in the order they were passed to stim.
+        """
 
 
 class BareColorCircuit(SyndromeMeasurement):
+    """
+    A coloration circuit syndrome measurement scheme as defined in https://arxiv.org/abs/2109.14609 (Algorithm 1).
+
+    NOTE: This is not guaranteed to be distance-preserving.
+    """
 
     def _code_to_edge_coloring(self, code: ClassicalCode) -> dict[tuple[int, int], int]:
         graph = nx.Graph()
@@ -65,7 +89,7 @@ class BareColorCircuit(SyndromeMeasurement):
         self, code: CSSCode, noise_model: NoiseModel, stim_ids: StimIds
     ) -> tuple[stim.Circuit, list[list[int]]]:
         """
-        TODO: doc
+        Compiles a coloration circuit. Not depth-optimal as no interleaving of opposite type checks is present. Z checks are performed first followed by X checks
         """
         z_subcircuit = self._code_to_subcircuit(
             code.code_z,
