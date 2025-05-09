@@ -7,17 +7,14 @@ from stim import DetectorErrorModel, DemTarget, DemTargetWithCoords
 from scipy.sparse import csc_matrix
 import numpy as np
 
-
-class Basis(Enum):
-    Z = 0
-    X = 1
+from qldpc.objects import PauliXZ, Pauli
 
 
 @dataclass(frozen=True)
 class CircuitLevelError:
     dets: tuple[DemTargetWithCoords]
     obs: tuple[DemTarget]
-    basis: Basis
+    basis: PauliXZ
 
 
 @dataclass
@@ -28,15 +25,16 @@ class CheckMatrices:
     priors: np.ndarray
 
 
-def _det_basis_coord(det: DemTargetWithCoords) -> Basis:
+def _det_basis_coord(det: DemTargetWithCoords) -> PauliXZ:
     """
     Returns the basis of the detector based on the 4th coordinate (0 == Z, 1 == X)
     """
-    return Basis(det.coords[3])
-
-
-def _det_basis_parity(det: DemTargetWithCoords) -> Basis:
-    return Basis.Z if (det.coords[0] % 4 + det.coords[1] % 4) % 4 == 0 else Basis.X
+    if det.coords[3] == 0:
+        return Pauli.Z
+    elif det.coords[3] == 1:
+        return Pauli.X
+    else:
+        raise ValueError(f"Invalid basis: {det.coords[3]} (must be 0 or 1)")
 
 
 def _prior_dict_to_matrices(
@@ -92,7 +90,7 @@ def _prior_dict_to_matrices(
 
 def detector_error_model_to_css_checks(
     dem: DetectorErrorModel,
-    fn_det_basis: Callable[[DemTargetWithCoords], Basis] = _det_basis_coord,
+    fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ] = _det_basis_coord,
 ) -> tuple[CheckMatrices, CheckMatrices]:
     """
     Convert a DetectorErrorModel into separate Z/X check matrices
@@ -100,7 +98,7 @@ def detector_error_model_to_css_checks(
     args:
         dem: DetectorErrorModel
             The detector error model to convert
-        fn_det_basis: Callable[[DemTargetWithCoords], Basis]
+        fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ]
             A function that takes a detector and returns the basis of the CSS stabilizer it checks (Z/X)
             By default, the 4th coordinate of the detector is used to determine the basis (0 == Z, 1 == X)
     returns:
@@ -123,9 +121,9 @@ def detector_error_model_to_css_checks(
                         dem_target=targ, coords=det_coords[targ.val]
                     )
                     basis = fn_det_basis(det)
-                    if basis == Basis.Z:
+                    if basis == Pauli.Z:
                         z_dets.append(det)
-                    elif basis == Basis.X:
+                    elif basis == Pauli.X:
                         x_dets.append(det)
                     else:
                         raise ValueError(f"Invalid basis: {basis}")
@@ -133,11 +131,11 @@ def detector_error_model_to_css_checks(
                     obs.append(targ)
 
             if len(z_dets) > 0:
-                z_error = CircuitLevelError(tuple(z_dets), tuple(obs), Basis.Z)
+                z_error = CircuitLevelError(tuple(z_dets), tuple(obs), Pauli.Z)
                 z_error_priors[z_error] = z_error_priors.setdefault(z_error, 0) + prior
 
             if len(x_dets) > 0:
-                x_error = CircuitLevelError(tuple(x_dets), tuple(obs), Basis.X)
+                x_error = CircuitLevelError(tuple(x_dets), tuple(obs), Pauli.X)
                 x_error_priors[x_error] = x_error_priors.setdefault(x_error, 0) + prior
 
     z_check_matrices = _prior_dict_to_matrices(z_error_priors, dem.num_detectors)

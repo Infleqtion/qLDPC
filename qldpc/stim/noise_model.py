@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import stim
 
-from qldpc.stim.util import Basis
+from qldpc.objects import PauliXZ, Pauli
 
 
 class NoiseModel(abc.ABC):
@@ -19,11 +19,11 @@ class NoiseModel(abc.ABC):
         """TODO: doc"""
 
     @abc.abstractmethod
-    def apply_meas(self, circ: stim.Circuit, basis: Basis, qubits: list[int]):
+    def apply_meas(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
         """TODO: doc"""
 
     @abc.abstractmethod
-    def apply_reset(self, circ: stim.Circuit, basis: Basis, qubits: list[int]):
+    def apply_reset(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
         """TODO: doc"""
 
 
@@ -53,14 +53,14 @@ class UniformNoiseModel(NoiseModel):
         circ.append("DEPOLARIZE2", flattened_args, self.p)
         circ.append("TICK")
 
-    def apply_meas(self, circ: stim.Circuit, basis: Basis, qubits: list[int]):
+    def apply_meas(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
         """
         Measure qubits with error probability p
         """
-        if basis == basis.Z:
+        if basis == Pauli.Z:
             error_gate = "X_ERROR"
             meas_gate = "M"
-        elif basis == basis.X:
+        elif basis == Pauli.X:
             error_gate = "Z_ERROR"
             meas_gate = "MX"
         else:
@@ -70,14 +70,14 @@ class UniformNoiseModel(NoiseModel):
         circ.append(meas_gate, qubits)
         circ.append("TICK")
 
-    def apply_reset(self, circ: stim.Circuit, basis: Basis, qubits: list[int]):
+    def apply_reset(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
         """
         Reset qubits to 0 with error probability p
         """
-        if basis == basis.Z:
+        if basis == Pauli.Z:
             reset_gate = "R"
             error_gate = "X_ERROR"
-        elif basis == basis.X:
+        elif basis == Pauli.X:
             reset_gate = "RX"
             error_gate = "Z_ERROR"
         else:
