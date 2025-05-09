@@ -1,5 +1,7 @@
-import stim
+from __future__ import annotations
+
 import numpy as np
+import stim
 
 from qldpc.codes.common import CSSCode
 from qldpc.objects import PauliXZ, Pauli
@@ -45,15 +47,16 @@ def memory_experiment(
     (2, i) for X checks
 
     Detector coordinates are (coords, t, basis) where coords in the check qubit coordinates, t is the syndrome round, and basis is the basis of the check qubit (0 == Z, 1 == X)
-
-    TODO: documentation
     """
     data_qubits: list[int] = list(range(code.num_qubits))
     z_check_qubits: list[int] = list(
         range(code.num_qubits, code.num_qubits + code.num_checks_z)
     )
     x_check_qubits: list[int] = list(
-        range(code.num_qubits + code.num_checks_z, code.num_qubits + code.num_checks)
+        range(
+            code.num_qubits + code.num_checks_z,
+            code.num_qubits + code.num_checks_z + code.num_checks_x,
+        )
     )
     stim_ids = StimIds(data_qubits, z_check_qubits, x_check_qubits)
 
@@ -62,6 +65,9 @@ def memory_experiment(
         code, noise_model, stim_ids
     )
 
+    """
+    Define qubit coordinates
+    """
     circuit = stim.Circuit()
     for i, data in enumerate(data_qubits):
         circuit.append("QUBIT_COORDS", data, (0, i))
@@ -71,6 +77,7 @@ def memory_experiment(
         circuit.append("QUBIT_COORDS", x_check, (2, i))
 
     noise_model.apply_reset(circuit, basis, data_qubits)
+
     """
     Initial syndrome round to project into quiescent state
     """
@@ -80,15 +87,16 @@ def memory_experiment(
     if basis == Pauli.Z:
         for i, check_id in enumerate(z_check_qubits):
             circuit.append(
-                "DETECTOR", [_get_meas_rec(meas_rec, -1, check_id)], (1, i, 0, 0)
+                "DETECTOR", [_get_meas_rec(meas_rec, -1, check_id)], (1, i, 0)
             )
     elif basis == Pauli.X:
         for i, check_id in enumerate(x_check_qubits):
             circuit.append(
-                "DETECTOR", [_get_meas_rec(meas_rec, -1, check_id)], (2, i, 0, 1)
+                "DETECTOR", [_get_meas_rec(meas_rec, -1, check_id)], (2, i, 0)
             )
     else:
         raise ValueError(f"Invalid basis: {basis}")
+
     """
     Repeated syndrome rounds
     """
@@ -103,7 +111,7 @@ def memory_experiment(
                 _get_meas_rec(meas_rec, -1, check_id),
                 _get_meas_rec(meas_rec, -2, check_id),
             ],
-            (1, i, 1, 0),
+            (1, i, 1),
         )
     for i, check_id in enumerate(x_check_qubits):
         repeat_circuit.append(
@@ -112,9 +120,9 @@ def memory_experiment(
                 _get_meas_rec(meas_rec, -1, check_id),
                 _get_meas_rec(meas_rec, -2, check_id),
             ],
-            (2, i, 1, 1),
+            (2, i, 1),
         )
-    repeat_circuit.append("SHIFT_COORDS", [], (0, 0, 1, 0))
+    repeat_circuit.append("SHIFT_COORDS", [], (0, 0, 1))
     circuit.append(stim.CircuitRepeatBlock(num_rounds - 1, repeat_circuit))
 
     """
@@ -122,6 +130,7 @@ def memory_experiment(
     """
     noise_model.apply_meas(circuit, basis, data_qubits)
     _update_meas_rec(meas_rec, data_qubits)
+
     """
     Reconstruct a final round of checks based on data qubit measurements
     """
@@ -132,7 +141,7 @@ def memory_experiment(
                 "DETECTOR",
                 [_get_meas_rec(meas_rec, -1, data_qubits[q]) for q in data_support]
                 + [_get_meas_rec(meas_rec, -2, check_id)],
-                (1, i, num_rounds, 0),
+                (1, i, num_rounds),
             )
     elif basis == Pauli.X:
         for i, check_id in enumerate(x_check_qubits):
@@ -141,7 +150,7 @@ def memory_experiment(
                 "DETECTOR",
                 [_get_meas_rec(meas_rec, -1, data_qubits[q]) for q in data_support]
                 + [_get_meas_rec(meas_rec, -2, check_id)],
-                (2, i, num_rounds, 1),
+                (2, i, num_rounds),
             )
     else:
         raise ValueError(f"Invalid basis: {basis}")

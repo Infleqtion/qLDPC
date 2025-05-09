@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from enum import Enum
 from dataclasses import dataclass
-from stim import DetectorErrorModel, DemTarget, DemTargetWithCoords
-from scipy.sparse import csc_matrix
 import numpy as np
+from scipy.sparse import csc_matrix
+from stim import DetectorErrorModel, DemTarget, DemTargetWithCoords
 
 from qldpc.objects import PauliXZ, Pauli
 
@@ -27,26 +26,25 @@ class CheckMatrices:
 
 def _det_basis_coord(det: DemTargetWithCoords) -> PauliXZ:
     """
-    Returns the basis of the detector based on the 4th coordinate (0 == Z, 1 == X)
+    Returns the basis of the detector based on the 1st coordinate (1 == Z, 2 == X)
     """
-    if det.coords[3] == 0:
+    if det.coords[0] == 1:
         return Pauli.Z
-    elif det.coords[3] == 1:
+    elif det.coords[0] == 2:
         return Pauli.X
     else:
-        raise ValueError(f"Invalid basis: {det.coords[3]} (must be 0 or 1)")
+        raise ValueError(f"Invalid basis: {det.coords[0]} (must be 1 or 2)")
 
 
 def _prior_dict_to_matrices(
-    prior_dict: dict[CircuitLevelError, float], num_detectors: int
+    prior_dict: dict[CircuitLevelError, float], num_detectors: int, num_obs: int
 ) -> CheckMatrices:
     det_list: list[DemTarget] = []
     det_map: dict[DemTarget, int] = {}
     det_row_idx: list[int] = []
     det_col_idx: list[int] = []
 
-    obs_list: list[DemTarget] = []
-    obs_map: dict[DemTarget, int] = {}
+    obs_list: list[int] = list(range(num_obs))
     obs_row_idx: list[int] = []
     obs_col_idx: list[int] = []
 
@@ -64,10 +62,7 @@ def _prior_dict_to_matrices(
             det_col_idx += [i]
 
         for obs in c_err.obs:
-            if not obs in obs_list:
-                obs_map[obs] = len(obs_list)
-                obs_list += [obs]
-            obs_row_idx += [obs_map[obs]]
+            obs_row_idx += [obs.val]
             obs_col_idx += [i]
 
     # Resulting check matrix may have fewer dets than original
@@ -75,7 +70,6 @@ def _prior_dict_to_matrices(
         (np.ones(len(det_map)), (list(det_map.values()), list(det_map.keys()))),
         shape=(len(det_list), num_detectors),
     )
-
     check_matrix = csc_matrix(
         (np.ones(len(det_row_idx)), (det_row_idx, det_col_idx)),
         shape=(len(det_list), len(prior_dict)),
@@ -100,20 +94,20 @@ def detector_error_model_to_css_checks(
             The detector error model to convert
         fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ]
             A function that takes a detector and returns the basis of the CSS stabilizer it checks (Z/X)
-            By default, the 4th coordinate of the detector is used to determine the basis (0 == Z, 1 == X)
+            By default, the 1st coordinate of the detector is used to determine the basis (1 == Z, 2 == X)
     returns:
         tuple[CheckMatrices, CheckMatrices]
             The Z and X check matrices
     """
     det_coords: dict[int, list[float]] = dem.get_detector_coordinates()
 
-    x_error_priors: dict[CircuitLevelError, float] = {}
     z_error_priors: dict[CircuitLevelError, float] = {}
+    x_error_priors: dict[CircuitLevelError, float] = {}
     for instr in dem.flattened():
         if instr.type == "error":
             prior = instr.args_copy()[0]
-            x_dets: list[DemTarget] = []
             z_dets: list[DemTarget] = []
+            x_dets: list[DemTarget] = []
             obs: list[DemTarget] = []
             for targ in instr.targets_copy():
                 if targ.is_relative_detector_id():
@@ -138,7 +132,11 @@ def detector_error_model_to_css_checks(
                 x_error = CircuitLevelError(tuple(x_dets), tuple(obs), Pauli.X)
                 x_error_priors[x_error] = x_error_priors.setdefault(x_error, 0) + prior
 
-    z_check_matrices = _prior_dict_to_matrices(z_error_priors, dem.num_detectors)
-    x_check_matrices = _prior_dict_to_matrices(x_error_priors, dem.num_detectors)
+    z_check_matrices = _prior_dict_to_matrices(
+        z_error_priors, dem.num_detectors, dem.num_observables
+    )
+    x_check_matrices = _prior_dict_to_matrices(
+        x_error_priors, dem.num_detectors, dem.num_observables
+    )
 
     return z_check_matrices, x_check_matrices

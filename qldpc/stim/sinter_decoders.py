@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import pathlib
-import numpy as np
-from sinter import CompiledDecoder, Decoder
-from stim import DetectorErrorModel, DemTargetWithCoords
-from ldpc.bposd_decoder import BpOsdDecoder
 from ldpc.bp_decoder import BpDecoder, BpDecoderBase
 from ldpc.bplsd_decoder import BpLsdDecoder
+from ldpc.bposd_decoder import BpOsdDecoder
+import numpy as np
+import pathlib
+from sinter import CompiledDecoder, Decoder
+from stim import DetectorErrorModel, DemTargetWithCoords
 
 from qldpc.objects import PauliXZ, Pauli
 from qldpc.stim.util import (
     _det_basis_coord,
-    detector_error_model_to_css_checks,
     CheckMatrices,
+    detector_error_model_to_css_checks,
 )
 
 
@@ -45,6 +45,12 @@ class CompiledBPTypeDecoder(CompiledDecoder):
 
 
 class BPTypeDecoder(Decoder):
+    """
+    Base class for running sinter experiments using BP, BP_OSD, and BP_LSD from the ldpc decoding package.
+    See provided BP, BPOSD, and BPLSD subclasses.
+
+    NOTE: Currently assumes a CSS code experiment in a specified basis and therefore separates decoding into the resulting X or Z sub-problem.
+    """
 
     def __init__(
         self,
@@ -52,7 +58,22 @@ class BPTypeDecoder(Decoder):
         basis: PauliXZ,
         fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ] = _det_basis_coord,
         **kwargs,
-    ):
+    ) -> None:
+        """
+        args:
+            decoder_cls: BpDecoderBase
+                ldpc package decoder class
+            basis: PauliXZ
+                CSS decoding sub-problem basis
+            fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ]
+                For general CSS codes, determining a detector's basis is seemingly non-trivial.
+                This function extracts this from the detector coordinates, assuming some convention.
+                The default convention is based on first coordinate (1 = Z, 2 = X)
+                NOTE: This function needs to be defined at the top-level of a module (i.e. not in a jupyter notebook cell) to work with Sinter
+            kwargs: dict[str, Any]
+                keyword arguments to be passed to the decoder
+
+        """
         self.decoder_cls = decoder_cls
         self.basis = basis
         self.fn_det_basis = fn_det_basis
