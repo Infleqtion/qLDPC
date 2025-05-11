@@ -259,8 +259,12 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
             logical_ops, stabilizers, homogeneous=False, block_size=block_size
         )
 
-    int_stabilizers = qldpc.codes.distance.rows_to_ints_symplectic(stabilizers)
-    int_logical_ops = qldpc.codes.distance.rows_to_ints_symplectic(logical_ops)
+    int_stabilizers = qldpc.codes.distance.rows_to_ints(
+        qldpc.codes.distance._riffle(stabilizers)
+    )
+    int_logical_ops = qldpc.codes.distance.rows_to_ints(
+        qldpc.codes.distance._riffle(logical_ops)
+    )
     expected_bitstrings = np.array(
         [
             np.bitwise_xor.reduce(np.vstack(stabs + ops))

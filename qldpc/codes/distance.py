@@ -118,17 +118,12 @@ def rows_to_ints(
     return np.apply_along_axis(_to_ints, axis, array)
 
 
-def rows_to_ints_symplectic(
-    array: npt.ArrayLike, dtype: npt.DTypeLike = np.uint
-) -> npt.NDArray[np.uint]:
-    """Pack rows of a binary array into rows of the given integral type."""
-    array = np.asarray(array, dtype=dtype)
-    num_bits = array.shape[-1]
+def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
+    """'Riffle' Pauli strings, putting the X and Z support bits for each qubit next to each other.
+    """
+    num_bits = np.shape(array)[-1]
     assert num_bits % 2 == 0
-
-    # "riffle" Pauli strings, putting the X and Z support bits for each qubit next to each other
-    array = array.reshape(-1, 2, num_bits // 2).transpose(0, 2, 1).reshape(-1, num_bits)
-    return rows_to_ints(array, dtype=dtype)
+    return np.reshape(array, (-1, 2, num_bits // 2)).transpose(0, 2, 1).reshape(-1, num_bits)
 
 
 def get_distance_classical(generators: npt.ArrayLike, block_size: int = 15) -> int:
@@ -172,14 +167,14 @@ def get_distance_quantum(
     num_bits = np.shape(logical_ops)[-1]
 
     if homogeneous:
-        int_logical_ops = rows_to_ints(logical_ops, dtype=np.uint)
-        int_stabilizers = rows_to_ints(stabilizers, dtype=np.uint)
         weight_func = hamming_weight
     else:
-        int_logical_ops = rows_to_ints_symplectic(logical_ops, dtype=np.uint)
-        int_stabilizers = rows_to_ints_symplectic(stabilizers, dtype=np.uint)
+        logical_ops = _riffle(logical_ops)
+        stabilizers = _riffle(stabilizers)
         weight_func = symplectic_weight
 
+    int_logical_ops = rows_to_ints(logical_ops, dtype=np.uint)
+    int_stabilizers = rows_to_ints(stabilizers, dtype=np.uint)
     num_stabilizers = len(int_stabilizers)
 
     # Number of generators to include in the operational array. Most calculations will then be
