@@ -38,7 +38,7 @@ from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.math import first_nonzero_cols, log_choose, op_to_string, symplectic_conjugate
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
 
-from ._distance import get_distance_classical, get_distance_quantum
+from .distance import get_distance_classical, get_distance_quantum
 
 IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
 Slice = slice | npt.NDArray[np.int_] | list[int]

@@ -75,13 +75,11 @@ cdef cnp.ndarray[cnp.uint64_t, ndim=2] rows_to_uint64(
         (num_rows, int_cols), dtype=np.uint64
     )
     cdef uint64_t value
-    cdef uint64_t bit
     for row in range(num_rows):
         for c_int in range(int_cols):
             value = 0
             for c_bin in range(64 * c_int, min(64 * (c_int + 1), bin_cols)):
-                bit = binary_array[row, c_bin]
-                value = (value << 1) | bit # binary_array[row, c_bin]
+                value = (value << 1) | binary_array[row, c_bin]
             int_array[row, c_int] = value
     return int_array
 
