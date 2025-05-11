@@ -15,6 +15,10 @@ from .common import (
     CSSCode,
     QuditCode,
 )
+from .distance import (
+    get_distance_classical,
+    get_distance_quantum,
+)
 from .quantum import (
     BaconShorCode,
     BBCode,
@@ -66,4 +70,6 @@ __all__ = [
     "SurfaceCode",
     "TBCode",
     "ToricCode",
+    "get_distance_classical",
+    "get_distance_quantum",
 ]
