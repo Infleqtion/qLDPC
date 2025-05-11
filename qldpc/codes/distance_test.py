@@ -282,6 +282,22 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
 @pytest.mark.parametrize(
     "code, expected_distance",
     [
+        (qldpc.codes.classical.HammingCode(4), 3),
+        (qldpc.codes.classical.RepetitionCode(3), 3),
+        (qldpc.codes.classical.RepetitionCode(8), 8),
+        (qldpc.codes.classical.RingCode(8), 8),
+    ],
+)
+def test_get_distance_classical_known_codes(
+    code: qldpc.codes.ClassicalCode, expected_distance: int
+) -> None:
+    distance = qldpc.codes.distance.get_distance_classical(code.generator)
+    assert distance == expected_distance
+
+
+@pytest.mark.parametrize(
+    "code, expected_distance",
+    [
         (qldpc.codes.quantum.C4Code(), 2),
         (qldpc.codes.quantum.C6Code(), 2),
         (qldpc.codes.quantum.SteaneCode(), 3),

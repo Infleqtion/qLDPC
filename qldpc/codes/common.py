@@ -405,7 +405,7 @@ class ClassicalCode(AbstractCode):
 
         # we do not know the exact distance, so compute it
         if self.field.order == 2:
-            distance = get_distance_classical(self.generator.view(np.ndarray).astype(np.uint8))
+            distance = get_distance_classical(self.generator)
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
@@ -1296,10 +1296,7 @@ class QuditCode(AbstractCode):
             stabilizers = np.vstack([stabilizers, self.get_gauge_ops()])  # type:ignore[assignment]
 
         if self.field.order == 2:
-            distance = get_distance_quantum(
-                logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
-            )
+            distance = get_distance_quantum(logical_ops, stabilizers, homogeneous=False)
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
@@ -2009,11 +2006,7 @@ class CSSCode(QuditCode):
             stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)])  # type:ignore[assignment]
 
         if self.field.order == 2:
-            distance = get_distance_quantum(
-                logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
-                homogeneous=True,
-            )
+            distance = get_distance_quantum(logical_ops, stabilizers, homogeneous=True)
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"

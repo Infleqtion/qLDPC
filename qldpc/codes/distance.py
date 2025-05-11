@@ -98,7 +98,7 @@ def count_trailing_zeros(num: SupportsInt) -> int:
 
 
 def rows_to_ints(
-    array: npt.ArrayLike, dtype: npt.DTypeLike = np.uint, axis: int = -1,
+    array: npt.ArrayLike, dtype: npt.DTypeLike = np.uint, axis: int = -1
 ) -> npt.NDArray[np.uint]:
     """Pack rows of a binary array into rows of the given integral type."""
     array = np.asarray(array, dtype=dtype)
