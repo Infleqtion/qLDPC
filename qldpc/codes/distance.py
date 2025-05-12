@@ -162,7 +162,7 @@ def _count_trailing_zeros(val: int) -> int:
 def _inplace_rowsum(arr: npt.NDArray[np.uint]) -> npt.NDArray[np.uint]:
     """Destructively compute ``arr.sum(-1)``, placing the result in the first column or `arr`.
 
-    When complete, ``arr[..., 0]`` will contain the returned sum, while Other entries in
+    When complete, the returned sum will be stored in ``arr[..., 0]``, while other entries in
     ``arr[..., 1:]`` will be left in indeterminate states. This permits a faster sum implementation.
     """
     width = arr.shape[-1]
