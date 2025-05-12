@@ -153,13 +153,28 @@ def _get_symplectic_weight_fn(
     return _symplectic_weight, 1
 
 
-def count_trailing_zeros(val: int) -> int:
+def _count_trailing_zeros(val: int) -> int:
     """Returns the position of the least significant 1 in the binary representation of `val`."""
     val ^= val & (val - 1)
     return int(math.log2(val))
 
 
-def rows_to_ints(
+def _inplace_rowsum(arr: npt.NDArray[np.uint]) -> npt.NDArray[np.uint]:
+    """Destructively compute ``arr.sum(-1)``, placing the result in the first column or `arr`.
+
+    When complete, ``arr[..., 0]`` will contain the returned sum, while Other entries in
+    ``arr[..., 1:]`` will be left in indeterminate states. This permits a faster sum implementation.
+    """
+    width = arr.shape[-1]
+    while width > 1:
+        split = width // 2
+        arr[..., :split] += arr[..., width - split : width]
+        width -= split
+
+    return arr[..., 0]
+
+
+def _rows_to_ints(
     array: npt.ArrayLike, dtype: npt.DTypeLike = np.uint, axis: int = -1
 ) -> npt.NDArray[np.uint]:
     """Pack rows of a binary array into rows of the given integral type."""
@@ -196,7 +211,7 @@ def get_distance_classical(
     # This calculation is exactly the same as in the quantum case, but with no stabilizers
     return get_distance_quantum(
         logical_ops=generators,
-        stabilizers=np.take(generators, [], axis=0),
+        stabilizers=[],
         block_size=block_size,
         homogeneous=True,
         use_numba=use_numba,
@@ -221,10 +236,9 @@ def get_distance_quantum(
         logical_ops = _riffle(logical_ops)
         stabilizers = _riffle(stabilizers)
 
-    int_logical_ops = rows_to_ints(logical_ops, dtype=np.uint)
-    int_stabilizers = rows_to_ints(stabilizers, dtype=np.uint)
+    int_logical_ops = _rows_to_ints(logical_ops, dtype=np.uint)
+    int_stabilizers = _rows_to_ints(stabilizers, dtype=np.uint)
     num_stabilizers = len(int_stabilizers)
-    multiple_words = int_logical_ops.shape[-1] > 1
 
     # Number of generators to include in the operational array. Most calculations will then be
     # vectorized over ``2**block_size`` values
@@ -234,7 +248,7 @@ def get_distance_quantum(
     )
 
     # Vectorize all combinations of first `num_vectorized_ops` stabilizers
-    array = np.zeros((1, int_stabilizers.shape[-1]), dtype=np.uint)
+    array = np.zeros((1, int_logical_ops.shape[-1]), dtype=np.uint)
     for op in int_stabilizers[:num_vectorized_ops]:
         array = np.vstack([array, array ^ op])
 
@@ -255,22 +269,16 @@ def get_distance_quantum(
 
     # Min weight of the part containing logical ops
     weights = weight_func(arrayf[2**num_stabilizers :])
-    min_weight = weights.sum(-1).min(initial=num_bits)
+    min_weight = _inplace_rowsum(weights).min(initial=num_bits)
 
     for li in range(1, 2 ** len(int_logical_ops)):
-        arrayf ^= int_logical_ops[count_trailing_zeros(li)]
-
+        arrayf ^= int_logical_ops[_count_trailing_zeros(li)]
         weights = weight_func(arrayf, *bufs, out=out)
-        if multiple_words:
-            weights = weights.sum(-1)
-        min_weight = weights.min(initial=min_weight)
+        min_weight = _inplace_rowsum(weights).min(initial=min_weight)
 
         for si in range(1, 2 ** len(int_stabilizers)):
-            arrayf ^= int_stabilizers[count_trailing_zeros(si)]
-
+            arrayf ^= int_stabilizers[_count_trailing_zeros(si)]
             weights = weight_func(arrayf, *bufs, out=out)
-            if multiple_words:
-                weights = weights.sum(-1)
-            min_weight = weights.min(initial=min_weight)
+            min_weight = _inplace_rowsum(weights).min(initial=min_weight)
 
     return int(min_weight)

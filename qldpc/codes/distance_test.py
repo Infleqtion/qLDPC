@@ -163,13 +163,22 @@ def test_get_symplectic_weight_fn() -> None:
 )
 def test_count_trailing_zeros(base_val: int) -> None:
     for i in range(128):
-        assert qldpc.codes.distance.count_trailing_zeros(base_val << i) == i
+        assert qldpc.codes.distance._count_trailing_zeros(base_val << i) == i
+
+
+@pytest.mark.parametrize("width", range(1, 8))
+def test_inplace_rowsum(width: int) -> None:
+    arr = np.random.randint(2**32, size=(10, width), dtype=np.uint)
+    expected = arr.sum(-1)
+    actual = qldpc.codes.distance._inplace_rowsum(arr)
+    np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_array_equal(actual, arr[:, 0])
 
 
 def test_rows_to_ints_endianness() -> None:
     # Compare bit order to that used by `np.packbits`
     bits = np.random.randint(2, size=(10, 120))
-    ints = qldpc.codes.distance.rows_to_ints(bits, dtype=np.uint8)
+    ints = qldpc.codes.distance._rows_to_ints(bits, dtype=np.uint8)
     assert ints.shape == (10, 15)
 
     expected = np.packbits(bits).reshape(10, 15)
@@ -179,7 +188,7 @@ def test_rows_to_ints_endianness() -> None:
 @pytest.mark.parametrize("dtype", [int, np.uint, np.uint8, np.int16])
 def test_rows_to_ints(dtype: npt.DTypeLike) -> None:
     bits = np.random.randint(2, size=(10, 93))
-    ints = qldpc.codes.distance.rows_to_ints(bits, dtype=dtype)
+    ints = qldpc.codes.distance._rows_to_ints(bits, dtype=dtype)
 
     nbits = 8 * np.dtype(dtype).itemsize
     expected_words_per_row = int(np.ceil(93 / nbits))
@@ -197,21 +206,21 @@ def test_rows_to_ints(dtype: npt.DTypeLike) -> None:
     # Pack array with more dimensions
     bits = bits.reshape(5, 1, 2, -1)
     np.testing.assert_array_equal(
-        qldpc.codes.distance.rows_to_ints(bits, dtype=dtype),
+        qldpc.codes.distance._rows_to_ints(bits, dtype=dtype),
         ints.reshape(5, 1, 2, -1),
     )
 
     # Pack along a different axis
     bits = bits.swapaxes(0, 3)
     np.testing.assert_array_equal(
-        qldpc.codes.distance.rows_to_ints(bits, dtype=dtype, axis=0),
+        qldpc.codes.distance._rows_to_ints(bits, dtype=dtype, axis=0),
         ints.reshape(5, 1, 2, -1).swapaxes(0, 3),
     )
 
     bits = np.zeros((11, 0), dtype=dtype)
-    ints = qldpc.codes.distance.rows_to_ints(bits, dtype=dtype)
+    ints = qldpc.codes.distance._rows_to_ints(bits, dtype=dtype)
     np.testing.assert_array_equal(
-        qldpc.codes.distance.rows_to_ints(bits, dtype=dtype, axis=0), bits
+        qldpc.codes.distance._rows_to_ints(bits, dtype=dtype, axis=0), bits
     )
 
 
@@ -236,7 +245,7 @@ def test_get_distance_classical(block_size: int) -> None:
     ):
         distance = qldpc.codes.distance.get_distance_classical(generators, block_size=block_size)
 
-    int_generators = qldpc.codes.distance.rows_to_ints(generators)
+    int_generators = qldpc.codes.distance._rows_to_ints(generators)
     expected_bitstrings = [
         tuple(np.bitwise_xor.reduce(np.vstack(gens)).tolist())
         for n in range(1, len(generators) + 1)
@@ -275,8 +284,8 @@ def test_get_distance_quantum(block_size: int) -> None:
             logical_ops, stabilizers, homogeneous=True, block_size=block_size
         )
 
-    int_stabilizers = qldpc.codes.distance.rows_to_ints(stabilizers)
-    int_logical_ops = qldpc.codes.distance.rows_to_ints(logical_ops)
+    int_stabilizers = qldpc.codes.distance._rows_to_ints(stabilizers)
+    int_logical_ops = qldpc.codes.distance._rows_to_ints(logical_ops)
     expected_bitstrings = [
         tuple(np.bitwise_xor.reduce(np.vstack(stabs + ops)).tolist())
         for ns in range(len(stabilizers) + 1)
@@ -317,8 +326,8 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
             logical_ops, stabilizers, homogeneous=False, block_size=block_size
         )
 
-    int_stabilizers = qldpc.codes.distance.rows_to_ints(qldpc.codes.distance._riffle(stabilizers))
-    int_logical_ops = qldpc.codes.distance.rows_to_ints(qldpc.codes.distance._riffle(logical_ops))
+    int_stabilizers = qldpc.codes.distance._rows_to_ints(qldpc.codes.distance._riffle(stabilizers))
+    int_logical_ops = qldpc.codes.distance._rows_to_ints(qldpc.codes.distance._riffle(logical_ops))
     expected_bitstrings = np.array(
         [
             np.bitwise_xor.reduce(np.vstack(stabs + ops))
