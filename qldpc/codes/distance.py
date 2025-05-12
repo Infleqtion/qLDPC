@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections.abc import Callable
 
 import numpy as np
@@ -155,8 +154,7 @@ def _get_symplectic_weight_fn(
 
 def _count_trailing_zeros(val: int) -> int:
     """Returns the position of the least significant 1 in the binary representation of `val`."""
-    val ^= val & (val - 1)
-    return int(math.log2(val))
+    return (val & -val).bit_length() - 1
 
 
 def _inplace_rowsum(arr: npt.NDArray[np.uint]) -> npt.NDArray[np.uint]:
