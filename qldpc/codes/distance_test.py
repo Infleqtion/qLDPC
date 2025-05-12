@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import importlib
 import itertools
-from collections.abc import Iterable
 from unittest import mock
 
+import numba
 import numpy as np
 import numpy.typing as npt
 import pytest
@@ -12,25 +11,36 @@ import pytest
 import qldpc
 
 
-def _bitwise_count(val: npt.ArrayLike, out: object = None) -> npt.NDArray[np.uint]:
+def _bitwise_count(
+    val: npt.ArrayLike, out: npt.NDArray[np.uint] | None = None
+) -> npt.NDArray[np.uint]:
     """Simplistic implementation of `bitwise_count` used to validate optimized variants."""
-    if isinstance(val, Iterable):
-        return np.array(list(map(_bitwise_count, val)))
-
-    _ = out
     val = np.asarray(val)
     nbits = 8 * val.itemsize
-    return ((val >> np.arange(nbits, dtype=val.dtype)) & 1).sum()
+
+    if out is None:
+        out = np.empty_like(val)
+
+    for indices in np.ndindex(val.shape):
+        ival = int(val[indices])
+        out[indices] = sum(ival >> i & 1 for i in range(nbits))
+
+    return out
 
 
 def test_hamming_weight() -> None:
     vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint)
-    weights = qldpc.codes.distance._hamming_weight(vals)
     expected_weights = _bitwise_count(vals)
+
+    weights = qldpc.codes.distance._hamming_weight(vals)
+    np.testing.assert_array_equal(weights, expected_weights)
+
+    weight_fn = np.vectorize(qldpc.codes.distance._hamming_weight_single, signature="()->()")
+    weights = weight_fn(vals)
     np.testing.assert_array_equal(weights, expected_weights)
 
     buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = qldpc.codes.distance.hamming_weight(vals, buf=buf, out=out)
+    weights = qldpc.codes.distance._hamming_weight(vals, buf=buf, out=out)
     np.testing.assert_array_equal(weights, expected_weights)
     assert out is weights
 
@@ -41,78 +51,118 @@ def test_symplectic_weight() -> None:
     expected_weights = _bitwise_count((vals | (vals >> np.uint(1))) & 0x5555555555555555)
     np.testing.assert_array_equal(weights, expected_weights)
 
+    weight_fn = np.vectorize(qldpc.codes.distance._symplectic_weight_single, signature="()->()")
+    weights = weight_fn(vals)
+    np.testing.assert_array_equal(weights, expected_weights)
+
     buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = qldpc.codes.distance.symplectic_weight(vals, buf=buf, out=out)
+    weights = qldpc.codes.distance._symplectic_weight(vals, buf=buf, out=out)
     np.testing.assert_array_equal(weights, expected_weights)
     assert out is weights
 
 
-def test_function_selection() -> None:
-    stabilizers = np.random.randint(2, size=(4, 56), dtype=np.uint)
-    logical_ops = np.random.randint(2, size=(3, 56), dtype=np.uint)
+def test_get_hamming_weight_fn() -> None:
+    generators = np.random.randint(2, size=(4, 64), dtype=np.uint)
+    weight_fn, nbuf = qldpc.codes.distance._get_hamming_weight_fn()
+    weights_default = weight_fn(generators)
 
-    weights = qldpc.codes.distance.hamming_weight(stabilizers)
-    symplectic_weights = qldpc.codes.distance.symplectic_weight(stabilizers)
-    dist = qldpc.codes.distance.get_distance_quantum(
-        logical_ops, stabilizers, block_size=3, homogeneous=True
-    )
-    symplectic_dist = qldpc.codes.distance.get_distance_quantum(
-        logical_ops, stabilizers, block_size=3, homogeneous=False
-    )
+    # Tests should work with numpy < 2.0.0 so provide a backup `np.bitwise_count` implementation
+    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
 
-    try:
-        with mock.patch("numpy.bitwise_count", qldpc.codes.distance._hamming_weight, create=True):
-            importlib.reload(qldpc.codes.distance)
+    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
+        weight_fn, nbuf = qldpc.codes.distance._get_hamming_weight_fn(use_numba=False)
+        assert weight_fn is not qldpc.codes.distance._hamming_weight
+        assert nbuf == 0
 
-            assert qldpc.codes.distance.hamming_weight is not qldpc.codes.distance._hamming_weight
-            assert (
-                qldpc.codes.distance.symplectic_weight
-                is not qldpc.codes.distance._symplectic_weight
-            )
+        out = np.empty_like(generators)
+        weights = weight_fn(generators, out=out)
+        np.testing.assert_array_equal(weights, weights_default)
+        assert weights is out
+        patched.assert_called_once()
 
-            np.testing.assert_array_equal(qldpc.codes.distance.hamming_weight(stabilizers), weights)
-            np.testing.assert_array_equal(
-                qldpc.codes.distance.symplectic_weight(stabilizers), symplectic_weights
-            )
-            assert dist == qldpc.codes.distance.get_distance_quantum(
-                logical_ops, stabilizers, block_size=3, homogeneous=True
-            )
-            assert symplectic_dist == qldpc.codes.distance.get_distance_quantum(
-                logical_ops, stabilizers, block_size=3, homogeneous=False
-            )
+    with mock.patch.object(np, "bitwise_count", None, create=True):
+        weight_fn, nbuf = qldpc.codes.distance._get_hamming_weight_fn(use_numba=False)
+        assert weight_fn is qldpc.codes.distance._hamming_weight
+        assert nbuf == 1
 
-        with mock.patch("numpy.bitwise_count", None, create=True):
-            importlib.reload(qldpc.codes.distance)
+        out = np.empty_like(generators)
+        weights = weight_fn(generators, out=out)
+        np.testing.assert_array_equal(weights, weights_default)
+        assert weights is out
 
-            assert qldpc.codes.distance.hamming_weight is qldpc.codes.distance._hamming_weight
-            assert qldpc.codes.distance.symplectic_weight is qldpc.codes.distance._symplectic_weight
+        buf = np.empty_like(generators)
+        weights = weight_fn(generators, buf, out=out)
+        np.testing.assert_array_equal(weights, weights_default)
+        assert weights is out
 
-            np.testing.assert_array_equal(qldpc.codes.distance.hamming_weight(stabilizers), weights)
-            np.testing.assert_array_equal(
-                qldpc.codes.distance.symplectic_weight(stabilizers), symplectic_weights
-            )
-            assert dist == qldpc.codes.distance.get_distance_quantum(
-                logical_ops, stabilizers, block_size=3, homogeneous=True
-            )
-            assert symplectic_dist == qldpc.codes.distance.get_distance_quantum(
-                logical_ops, stabilizers, block_size=3, homogeneous=False
-            )
+    weight_fn, nbuf = qldpc.codes.distance._get_hamming_weight_fn(use_numba=True)
+    assert isinstance(weight_fn, numba.np.ufunc.dufunc.DUFunc)
+    assert nbuf == 0
 
-    finally:
-        importlib.reload(qldpc.codes.distance)
+    out = np.empty_like(generators)
+    weights = weight_fn(generators, out=out)
+    np.testing.assert_array_equal(weights, weights_default)
+    assert weights is out
+
+
+def test_get_symplectic_weight_fn() -> None:
+    generators = np.random.randint(2, size=(4, 56), dtype=np.uint)
+    weight_fn, nbuf = qldpc.codes.distance._get_symplectic_weight_fn()
+    weights_default = weight_fn(generators)
+
+    # Tests should work with numpy < 2.0.0 so provide a backup `np.bitwise_count` implementation
+    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
+
+    # Using np.bitwise_count:
+    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
+        weight_fn, nbuf = qldpc.codes.distance._get_symplectic_weight_fn(use_numba=False)
+        assert weight_fn is not qldpc.codes.distance._hamming_weight
+        assert nbuf == 1
+
+        out = np.empty_like(generators)
+        weights = weight_fn(generators, out=out)
+        np.testing.assert_array_equal(weights, weights_default)
+        assert weights is out
+        patched.assert_called_once()
+
+        buf = np.empty_like(generators)
+        weights = weight_fn(generators, buf, out=out)
+        np.testing.assert_array_equal(weights, weights_default)
+        assert weights is out
+
+    # Using qldpc.codes.distance._symplectic_weight:
+    with mock.patch.object(np, "bitwise_count", None, create=True):
+        weight_fn, nbuf = qldpc.codes.distance._get_symplectic_weight_fn(use_numba=False)
+        assert weight_fn is qldpc.codes.distance._symplectic_weight
+        assert nbuf == 1
+
+        out = np.empty_like(generators)
+        weights = weight_fn(generators, out=out)
+        np.testing.assert_array_equal(weights, weights_default)
+        assert weights is out
+
+        buf = np.empty_like(generators)
+        weights = weight_fn(generators, buf, out=out)
+        np.testing.assert_array_equal(weights, weights_default)
+        assert weights is out
+
+    # Using numba:
+    weight_fn, nbuf = qldpc.codes.distance._get_symplectic_weight_fn(use_numba=True)
+    assert isinstance(weight_fn, numba.np.ufunc.dufunc.DUFunc)
+    assert nbuf == 0
+
+    out = np.empty_like(generators)
+    weights = weight_fn(generators, out=out)
+    assert weights is out
+    np.testing.assert_array_equal(weights, weights_default)
 
 
 @pytest.mark.parametrize(
     "base_val",
-    (
-        1,
-        2**64 - 1,
-        int(np.random.randint(2**63)) | 1,
-        int(np.random.randint(2**64, dtype=np.uint)) | 1,
-    ),
+    [1, 2**64 - 1, int(np.random.randint(2**64, dtype=np.uint)) | 1],
 )
-def test_count_trailing_zeros(base_val: int | np.integer[npt.NBitBase]) -> None:
-    for i in range(64):
+def test_count_trailing_zeros(base_val: int) -> None:
+    for i in range(128):
         assert qldpc.codes.distance.count_trailing_zeros(base_val << i) == i
 
 
@@ -181,7 +231,9 @@ def test_get_distance_classical(block_size: int) -> None:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
         return qldpc.codes.distance._hamming_weight(arr, buf=buf, out=out)
 
-    with mock.patch("qldpc.codes.distance.hamming_weight", _mock_hamming_weight):
+    with mock.patch(
+        "qldpc.codes.distance._get_hamming_weight_fn", return_value=(_mock_hamming_weight, 0)
+    ):
         distance = qldpc.codes.distance.get_distance_classical(generators, block_size=block_size)
 
     int_generators = qldpc.codes.distance.rows_to_ints(generators)
@@ -194,7 +246,8 @@ def test_get_distance_classical(block_size: int) -> None:
     assert len(observed_bitstrings) == len(expected_bitstrings)
     assert set(observed_bitstrings) == set(expected_bitstrings)
 
-    expected_distance = _bitwise_count(observed_bitstrings).sum(-1).min()
+    observed_array = np.array(observed_bitstrings, dtype=np.uint)
+    expected_distance = _bitwise_count(observed_array).sum(-1).min()
     assert distance == expected_distance
 
 
@@ -215,7 +268,9 @@ def test_get_distance_quantum(block_size: int) -> None:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
         return qldpc.codes.distance._hamming_weight(arr, buf=buf, out=out)
 
-    with mock.patch("qldpc.codes.distance.hamming_weight", _mock_hamming_weight):
+    with mock.patch(
+        "qldpc.codes.distance._get_hamming_weight_fn", return_value=(_mock_hamming_weight, 0)
+    ):
         distance = qldpc.codes.distance.get_distance_quantum(
             logical_ops, stabilizers, homogeneous=True, block_size=block_size
         )
@@ -233,7 +288,8 @@ def test_get_distance_quantum(block_size: int) -> None:
     assert len(observed_bitstrings) == len(expected_bitstrings)
     assert set(observed_bitstrings) == set(expected_bitstrings)
 
-    expected_distance = _bitwise_count(observed_bitstrings).sum(-1).min()
+    observed_array = np.array(observed_bitstrings, dtype=np.uint)
+    expected_distance = _bitwise_count(observed_array).sum(-1).min()
     assert distance == expected_distance
 
 
@@ -254,17 +310,15 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
         return qldpc.codes.distance._symplectic_weight(arr, buf=buf, out=out)
 
-    with mock.patch("qldpc.codes.distance.symplectic_weight", _mock_symplectic_weight):
+    with mock.patch(
+        "qldpc.codes.distance._get_symplectic_weight_fn", return_value=(_mock_symplectic_weight, 0)
+    ):
         distance = qldpc.codes.distance.get_distance_quantum(
             logical_ops, stabilizers, homogeneous=False, block_size=block_size
         )
 
-    int_stabilizers = qldpc.codes.distance.rows_to_ints(
-        qldpc.codes.distance._riffle(stabilizers)
-    )
-    int_logical_ops = qldpc.codes.distance.rows_to_ints(
-        qldpc.codes.distance._riffle(logical_ops)
-    )
+    int_stabilizers = qldpc.codes.distance.rows_to_ints(qldpc.codes.distance._riffle(stabilizers))
+    int_logical_ops = qldpc.codes.distance.rows_to_ints(qldpc.codes.distance._riffle(logical_ops))
     expected_bitstrings = np.array(
         [
             np.bitwise_xor.reduce(np.vstack(stabs + ops))
@@ -283,6 +337,164 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
     assert distance == expected_distance
 
 
+def test_get_distance_classical_methods() -> None:
+    generators = np.random.randint(2, size=(6, 56), dtype=np.uint)
+    distance_default = qldpc.codes.distance.get_distance_classical(generators, block_size=3)
+
+    # Tests should work with numpy < 2.0.0 so provide a backup `np.bitwise_count` implementation
+    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
+
+    # Using np.bitwise_count:
+    with (
+        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
+        mock.patch(
+            "qldpc.codes.distance._hamming_weight",
+            wraps=qldpc.codes.distance._hamming_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_classical(generators, block_size=3)
+        bitcount.assert_called()
+        fallback.assert_not_called()
+        assert distance == distance_default
+
+    # Using fallback (qldpc.codes.distance._hamming_weight):
+    with (
+        mock.patch("numpy.bitwise_count", None, create=True),
+        mock.patch(
+            "qldpc.codes.distance._hamming_weight",
+            wraps=qldpc.codes.distance._hamming_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_classical(generators, block_size=3)
+        fallback.assert_called()
+        assert distance == distance_default
+
+    # Using numba:
+    with (
+        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
+        mock.patch(
+            "qldpc.codes.distance._hamming_weight",
+            wraps=qldpc.codes.distance._hamming_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_classical(
+            generators, block_size=3, use_numba=True
+        )
+        bitcount.assert_not_called()
+        fallback.assert_not_called()
+        assert distance == distance_default
+
+
+def test_get_distance_quantum_methods() -> None:
+    stabilizers = np.random.randint(2, size=(4, 56), dtype=np.uint)
+    logical_ops = np.random.randint(2, size=(3, 56), dtype=np.uint)
+    distance_default = qldpc.codes.distance.get_distance_quantum(
+        logical_ops, stabilizers, block_size=3, homogeneous=True
+    )
+
+    # Tests should work with numpy < 2.0.0 so provide a backup `np.bitwise_count` implementation
+    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
+
+    # Using np.bitwise_count:
+    with (
+        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
+        mock.patch(
+            "qldpc.codes.distance._hamming_weight",
+            wraps=qldpc.codes.distance._hamming_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_quantum(
+            logical_ops, stabilizers, block_size=3, homogeneous=True, use_numba=False
+        )
+        bitcount.assert_called()
+        fallback.assert_not_called()
+        assert distance == distance_default
+
+    # Using fallback (qldpc.codes.distance._hamming_weight):
+    with (
+        mock.patch("numpy.bitwise_count", None, create=True),
+        mock.patch(
+            "qldpc.codes.distance._hamming_weight",
+            wraps=qldpc.codes.distance._hamming_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_quantum(
+            logical_ops, stabilizers, block_size=3, homogeneous=True, use_numba=False
+        )
+        fallback.assert_called()
+        assert distance == distance_default
+
+    # Using numba:
+    with (
+        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
+        mock.patch(
+            "qldpc.codes.distance._hamming_weight",
+            wraps=qldpc.codes.distance._hamming_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_quantum(
+            logical_ops, stabilizers, block_size=3, homogeneous=True, use_numba=True
+        )
+        bitcount.assert_not_called()
+        fallback.assert_not_called()
+        assert distance == distance_default
+
+
+def test_get_distance_quantum_methods_symplectic() -> None:
+    stabilizers = np.random.randint(2, size=(4, 56), dtype=np.uint)
+    logical_ops = np.random.randint(2, size=(3, 56), dtype=np.uint)
+    distance_default = qldpc.codes.distance.get_distance_quantum(
+        logical_ops, stabilizers, block_size=3, homogeneous=False
+    )
+
+    # Tests should work with numpy < 2.0.0 so provide a backup `np.bitwise_count` implementation
+    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
+
+    # Using np.bitwise_count:
+    with (
+        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
+        mock.patch(
+            "qldpc.codes.distance._symplectic_weight",
+            wraps=qldpc.codes.distance._symplectic_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_quantum(
+            logical_ops, stabilizers, block_size=3, homogeneous=False, use_numba=False
+        )
+        bitcount.assert_called()
+        fallback.assert_not_called()
+        assert distance == distance_default
+
+    # Using fallback (qldpc.codes.distance._symplectic_weight):
+    with (
+        mock.patch("numpy.bitwise_count", None, create=True),
+        mock.patch(
+            "qldpc.codes.distance._symplectic_weight",
+            wraps=qldpc.codes.distance._symplectic_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_quantum(
+            logical_ops, stabilizers, block_size=3, homogeneous=False, use_numba=False
+        )
+        fallback.assert_called()
+        assert distance == distance_default
+
+    # Using numba:
+    with (
+        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
+        mock.patch(
+            "qldpc.codes.distance._symplectic_weight",
+            wraps=qldpc.codes.distance._symplectic_weight,
+        ) as fallback,
+    ):
+        distance = qldpc.codes.distance.get_distance_quantum(
+            logical_ops, stabilizers, block_size=3, homogeneous=False, use_numba=True
+        )
+        bitcount.assert_not_called()
+        fallback.assert_not_called()
+        assert distance == distance_default
+
+
 @pytest.mark.parametrize(
     "code, expected_distance",
     [
@@ -297,6 +509,9 @@ def test_get_distance_classical_known_codes(
 ) -> None:
     distance = qldpc.codes.distance.get_distance_classical(code.generator)
     assert distance == expected_distance
+
+    code._distance = None
+    assert code.get_distance_exact() == expected_distance
 
 
 @pytest.mark.parametrize(
@@ -328,6 +543,9 @@ def test_get_distance_quantum_css_codes(code: qldpc.codes.CSSCode, expected_dist
     )
     assert min(distance_x, distance_z, distance_all) == expected_distance
 
+    code._distance = None
+    assert code.get_distance_exact() == expected_distance
+
 
 @pytest.mark.parametrize(
     "code, expected_distance",
@@ -344,3 +562,6 @@ def test_get_distance_quantum_noncss_codes(
         homogeneous=False,
     )
     assert distance == expected_distance
+
+    code._distance = None
+    assert code.get_distance_exact() == expected_distance

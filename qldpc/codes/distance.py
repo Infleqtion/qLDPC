@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import math
-from typing import SupportsInt
+from collections.abc import Callable
 
 import numpy as np
 import numpy.typing as npt
+
+_mask55 = np.uint(0x5555555555555555)
+_mask33 = np.uint(0x3333333333333333)
+_mask0F = np.uint(0x0F0F0F0F0F0F0F0F)
+_mask01 = np.uint(0x0101010101010101)
 
 
 def _hamming_weight(
@@ -12,26 +17,27 @@ def _hamming_weight(
     buf: npt.NDArray[np.uint] | None = None,
     out: npt.NDArray[np.uint] | None = None,
 ) -> npt.NDArray[np.uint]:
-    """Somewhat efficient (vectorized) Hamming weight calculation. Assumes 64-bit (u)ints.
+    """Somewhat efficient (vectorized) Hamming weight calculation. Assumes 64-bit uints.
 
-    This is the weak point in the python/numpy implementation (unfortunately numpy<2.0.0 doesn't
-    expose processors' `popcnt` instruction).
+    For `numpy >= 2.0.0`, it's generally better to use `np.bitwise_count` (which uses processors'
+    builtin `popcnt` instruction). Unfortunately this isn't available for numpy < 2.0.0.
     """
     out = np.right_shift(arr, 1, out=out)
-    out &= 0x5555555555555555
+    out &= _mask55
     out = np.subtract(arr, out, out=out)
 
     buf = np.right_shift(out, 2, out=buf)
-    buf &= 0x3333333333333333
-    out &= 0x3333333333333333
+    buf &= _mask33
+    out &= _mask33
     out += buf
 
     buf = np.right_shift(out, 4, out=buf)
     out += buf
-    out &= 0x0F0F0F0F0F0F0F0F
+    out &= _mask0F
 
-    out *= 0x0101010101010101
-    out >>= 56
+    # out *= _mask01
+    out = np.multiply(out, _mask01, out=out)
+    out >>= np.uint(56)
     return out
 
 
@@ -40,61 +46,117 @@ def _symplectic_weight(
     buf: npt.NDArray[np.uint] | None = None,
     out: npt.NDArray[np.uint] | None = None,
 ) -> npt.NDArray[np.uint]:
-    """Somewhat efficient (vectorized) symplectic weight calculation. Assumes 64-bit (u)ints.
+    """Somewhat efficient (vectorized) symplectic weight calculation. Assumes 64-bit uints.
 
-    This function is equivalent to `_hamming_weight((arr | (arr >> 1)) & 0x5555555555555555).
+    This function is equivalent to (but slightly more efficient than) the expression
+    ``_hamming_weight((arr | (arr >> 1)) & 0x5555555555555555, buf=buf, out=out)``.
     """
     out = np.right_shift(arr, 1, out=out)
     out |= arr
-    out &= 0x5555555555555555
+    out &= _mask55
 
     buf = np.right_shift(out, 2, out=buf)
-    buf &= 0x3333333333333333
-    out &= 0x3333333333333333
+    buf &= _mask33
+    out &= _mask33
     out += buf
 
     buf = np.right_shift(out, 4, out=buf)
     out += buf
-    out &= 0x0F0F0F0F0F0F0F0F
+    out &= _mask0F
 
-    out *= 0x0101010101010101
-    out >>= 56
+    out *= _mask01
+    out >>= np.uint(56)
     return out
 
 
-if getattr(np, "bitwise_count", None):
-    np_bitwise_count = getattr(np, "bitwise_count")
+def _hamming_weight_single(val: np.uint) -> np.uint:
+    """Unbuffered version of `_hamming_weight`, useful for vectorization."""
+    out = val >> np.uint(1)
+    out &= _mask55
+    out = val - out
 
-    def hamming_weight(
-        arr: npt.NDArray[np.uint],
-        buf: npt.NDArray[np.uint] | None = None,
-        out: npt.NDArray[np.uint] | None = None,
-    ) -> npt.NDArray[np.uint]:
-        return np_bitwise_count(arr, out=out)
+    buf = out >> np.uint(2)
+    buf &= _mask33
+    out &= _mask33
+    out += buf
 
-    def symplectic_weight(
-        arr: npt.NDArray[np.uint],
-        buf: npt.NDArray[np.uint] | None = None,
-        out: npt.NDArray[np.uint] | None = None,
-    ) -> npt.NDArray[np.uint]:
-        """Symplectic weight of an integer."""
-        buf = np.right_shift(arr, 1, out=buf)
-        buf |= arr
-        buf &= 0x5555555555555555
-        return np_bitwise_count(buf, out=out)
+    buf = out >> np.uint(4)
+    out += buf
+    out &= _mask0F
 
-else:
-    hamming_weight = _hamming_weight
-    symplectic_weight = _symplectic_weight
-    np_bitwise_count = None
+    out = np.multiply(out, _mask01)
+    out >>= np.uint(56)
+    return out
 
 
-def count_trailing_zeros(num: SupportsInt) -> int:
-    """Returns the position of the least significant 1 in the binary representation of `num`."""
-    num = int(num)
-    num = num ^ (num - 1)
-    num ^= num >> 1
-    return int(math.log2(num))
+def _symplectic_weight_single(val: np.uint) -> np.uint:
+    """Unbuffered version of `_symplectic_weight`, useful for vectorization."""
+    out = val >> np.uint(1)
+    out |= val
+    out &= _mask55
+
+    buf = out >> np.uint(2)
+    buf &= _mask33
+    out &= _mask33
+    out += buf
+
+    buf = out >> np.uint(4)
+    out += buf
+    out &= _mask0F
+
+    out = np.multiply(out, _mask01)
+    out >>= np.uint(56)
+    return out
+
+
+def _get_hamming_weight_fn(
+    use_numba: bool = False,
+) -> tuple[Callable[..., npt.NDArray[np.uint]], int]:
+    if use_numba:
+        import numba
+
+        weight_fn = numba.vectorize([numba.uint(numba.uint)])(_hamming_weight_single)
+        return weight_fn, 0
+
+    if getattr(np, "bitwise_count", None) is not None:
+        weight_fn = getattr(np, "bitwise_count")
+        return weight_fn, 0
+
+    return _hamming_weight, 1
+
+
+def _get_symplectic_weight_fn(
+    use_numba: bool = False,
+) -> tuple[Callable[..., npt.NDArray[np.uint]], int]:
+    if use_numba:
+        import numba
+
+        weight_fn = numba.vectorize([numba.uint(numba.uint)])(_symplectic_weight_single)
+        return weight_fn, 0
+
+    if getattr(np, "bitwise_count", None) is not None:
+        np_bitwise_count = getattr(np, "bitwise_count")
+
+        def weight_fn(
+            arr: npt.NDArray[np.uint],
+            buf: npt.NDArray[np.uint] | None = None,
+            out: npt.NDArray[np.uint] | None = None,
+        ) -> npt.NDArray[np.uint]:
+            """Symplectic weight of an integer."""
+            buf = np.right_shift(arr, 1, out=buf)
+            buf |= arr
+            buf &= _mask55
+            return np_bitwise_count(buf, out=out)
+
+        return weight_fn, 1
+
+    return _symplectic_weight, 1
+
+
+def count_trailing_zeros(val: int) -> int:
+    """Returns the position of the least significant 1 in the binary representation of `val`."""
+    val ^= val & (val - 1)
+    return int(math.log2(val))
 
 
 def rows_to_ints(
@@ -119,39 +181,49 @@ def rows_to_ints(
 
 
 def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
-    """'Riffle' Pauli strings, putting the X and Z support bits for each qubit next to each other.
-    """
+    """'Riffle' Pauli strings, putting the X and Z support bits for each qubit next to each other."""
     num_bits = np.shape(array)[-1]
     assert num_bits % 2 == 0
     return np.reshape(array, (-1, 2, num_bits // 2)).transpose(0, 2, 1).reshape(-1, num_bits)
 
 
-def get_distance_classical(generators: npt.ArrayLike, block_size: int = 15) -> int:
+def get_distance_classical(
+    generators: npt.ArrayLike, block_size: int = 15, use_numba: bool = False
+) -> int:
     """Distance of a classical linear binary code."""
     num_bits = np.shape(generators)[-1]
+
+    weight_func, nbuf = _get_hamming_weight_fn(use_numba=use_numba)
+
     int_generators = rows_to_ints(generators, dtype=np.uint)
+    multiple_words = int_generators.shape[-1] > 1
 
     # Number of generators to include in the operational array. Most calculations will then be
     # vectorized over ``2**block_size`` values
-    num_blocked_ops = min(block_size + 1 - int_generators.shape[-1], len(int_generators))
+    num_vectorized_ops = min(block_size + 1 - int_generators.shape[-1], len(int_generators))
 
-    # Precompute all combinations of first `num_blocked_ops` generators
+    # Precompute all combinations of first `num_vectorized_ops` generators
     array = np.zeros((1, int_generators.shape[-1]), dtype=np.uint)
-    for op in int_generators[:num_blocked_ops]:
+    for op in int_generators[:num_vectorized_ops]:
         array = np.vstack([array, array ^ op])
 
-    int_generators = int_generators[num_blocked_ops:]
+    int_generators = int_generators[num_vectorized_ops:]
 
-    out = np.empty_like(array)
-    buf = np.empty_like(array) if np_bitwise_count is None else None
+    # Everything below will run much faster if we use Fortran-style ordering
+    arrayf = np.asarray(array, order="F")
 
-    # Initially array[0] is all zeros, so check array[1:]
-    weights = hamming_weight(array[1:], buf=None if buf is None else buf[1:], out=out[1:]).sum(-1)
+    out = np.empty_like(arrayf)
+    bufs = [np.empty_like(arrayf) for _ in range(nbuf)]
+
+    # Initially array[0] is all zeros, so only check array[1:]
+    weights = weight_func(arrayf[1:], out=out[1:]).sum(-1)
     min_weight = weights.min(initial=num_bits)
 
     for i in range(1, 2 ** len(int_generators)):
-        array ^= int_generators[count_trailing_zeros(i)]
-        weights = hamming_weight(array, buf=buf, out=out).sum(-1)
+        arrayf ^= int_generators[count_trailing_zeros(i)]
+        weights = weight_func(arrayf, *bufs, out=out)
+        if multiple_words:
+            weights = weights.sum(-1)
         min_weight = weights.min(initial=min_weight)
 
     return int(min_weight)
@@ -162,60 +234,73 @@ def get_distance_quantum(
     stabilizers: npt.ArrayLike,
     block_size: int = 15,
     homogeneous: bool = False,
+    use_numba: bool = False,
 ) -> int:
     """Distance of a binary quantum code."""
     num_bits = np.shape(logical_ops)[-1]
 
     if homogeneous:
-        weight_func = hamming_weight
+        weight_func, nbuf = _get_hamming_weight_fn(use_numba)
     else:
+        weight_func, nbuf = _get_symplectic_weight_fn(use_numba)
+
         logical_ops = _riffle(logical_ops)
         stabilizers = _riffle(stabilizers)
-        weight_func = symplectic_weight
 
     int_logical_ops = rows_to_ints(logical_ops, dtype=np.uint)
     int_stabilizers = rows_to_ints(stabilizers, dtype=np.uint)
     num_stabilizers = len(int_stabilizers)
+    multiple_words = int_logical_ops.shape[-1] > 1
 
     # Number of generators to include in the operational array. Most calculations will then be
     # vectorized over ``2**block_size`` values
-    num_blocked_ops = min(
+    num_vectorized_ops = min(
         block_size + 1 - int_logical_ops.shape[-1],
         len(int_logical_ops) + len(int_stabilizers),
     )
 
-    # Precompute all combinations of first `num_blocked_ops` stabilizers
+    # Vectorize all combinations of first `num_vectorized_ops` stabilizers
     array = np.zeros((1, int_stabilizers.shape[-1]), dtype=np.uint)
-    for op in int_stabilizers[:num_blocked_ops]:
+    for op in int_stabilizers[:num_vectorized_ops]:
         array = np.vstack([array, array ^ op])
 
-    if num_blocked_ops > num_stabilizers:
+    if num_vectorized_ops > num_stabilizers:
         # fill out block with products of some logical ops
-        for op in int_logical_ops[: num_blocked_ops - num_stabilizers]:
+        for op in int_logical_ops[: num_vectorized_ops - num_stabilizers]:
             array = np.vstack([array, array ^ op])
 
-        int_logical_ops = int_logical_ops[num_blocked_ops - num_stabilizers :]
+        int_logical_ops = int_logical_ops[num_vectorized_ops - num_stabilizers :]
 
-    int_stabilizers = int_stabilizers[num_blocked_ops:]
+    int_stabilizers = int_stabilizers[num_vectorized_ops:]
 
-    out = np.empty_like(array)
-    if homogeneous and np_bitwise_count is not None:
-        buf = None
-    else:
-        buf = np.empty_like(array)
+    # Everything below will run much faster if we use Fortran-style ordering
+    arrayf = np.asarray(array, order="F")
+
+    out = np.empty_like(arrayf)
+    bufs = [np.empty_like(arrayf) for _ in range(nbuf)]
+    # if homogeneous and np_bitwise_count is not None:
+    #     buf = None
+    # else:
+    #     buf = np.empty_like(arrayf)
 
     # Min weight of the part containing logical ops
-    weights = weight_func(array[2**num_stabilizers :]).sum(-1)
-    min_weight = weights.min(initial=num_bits)
+    weights = weight_func(arrayf[2**num_stabilizers :])
+    min_weight = weights.sum(-1).min(initial=num_bits)
 
     for li in range(1, 2 ** len(int_logical_ops)):
-        array ^= int_logical_ops[count_trailing_zeros(li)]
-        weights = weight_func(array, buf=buf, out=out).sum(-1)
+        arrayf ^= int_logical_ops[count_trailing_zeros(li)]
+
+        weights = weight_func(arrayf, *bufs, out=out)
+        if multiple_words:
+            weights = weights.sum(-1)
         min_weight = weights.min(initial=min_weight)
 
         for si in range(1, 2 ** len(int_stabilizers)):
-            array ^= int_stabilizers[count_trailing_zeros(si)]
-            weights = weight_func(array, buf=buf, out=out).sum(-1, out=weights)
+            arrayf ^= int_stabilizers[count_trailing_zeros(si)]
+
+            weights = weight_func(arrayf, *bufs, out=out)
+            if multiple_words:
+                weights = weights.sum(-1)
             min_weight = weights.min(initial=min_weight)
 
     return int(min_weight)
