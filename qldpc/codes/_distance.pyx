@@ -79,7 +79,7 @@ cdef cnp.ndarray[cnp.uint64_t, ndim=2] rows_to_uint64(
         for c_int in range(int_cols):
             value = 0
             for c_bin in range(64 * c_int, min(64 * (c_int + 1), bin_cols)):
-                value = (value << 1) | binary_array[row, c_bin]
+                value = (value << 1) | <uint64_t>binary_array[row, c_bin]
             int_array[row, c_int] = value
     return int_array
 
