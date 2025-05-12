@@ -1367,10 +1367,9 @@ class QuditCode(AbstractCode):
         code = QuditCode(matrix, field=self.field.order, is_subsystem_code=self.is_subsystem_code)
 
         if self._logical_ops is not None:
-            logical_ops_reshaped = self._logical_ops.copy().reshape(-1, 2, len(self))
-            logical_ops_reshaped[:, :, qudits] = logical_ops_reshaped[:, ::-1, qudits]
-            logical_ops = logical_ops_reshaped.reshape(-1, 2 * len(self))
-            code.set_logical_ops(logical_ops_reshaped)
+            logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
+            logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
+            code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)))
 
         return code
 
