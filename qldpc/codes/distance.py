@@ -167,7 +167,8 @@ def rows_to_ints(
     tsize = array.itemsize * 8
 
     if array.size == 0:
-        return array
+        num_words = int(np.ceil(array.shape[-1] / tsize))
+        return np.empty((*array.shape[:-1], num_words), dtype=dtype)
 
     def _to_int(bits: npt.NDArray[np.uint]) -> npt.NDArray[np.uint]:
         """Pack `bits` into a single integer (of type `dtype`)."""
@@ -191,42 +192,15 @@ def get_distance_classical(
     generators: npt.ArrayLike, block_size: int = 15, use_numba: bool = False
 ) -> int:
     """Distance of a classical linear binary code."""
-    num_bits = np.shape(generators)[-1]
 
-    weight_func, nbuf = _get_hamming_weight_fn(use_numba=use_numba)
-
-    int_generators = rows_to_ints(generators, dtype=np.uint)
-    multiple_words = int_generators.shape[-1] > 1
-
-    # Number of generators to include in the operational array. Most calculations will then be
-    # vectorized over ``2**block_size`` values
-    num_vectorized_ops = min(block_size + 1 - int_generators.shape[-1], len(int_generators))
-
-    # Precompute all combinations of first `num_vectorized_ops` generators
-    array = np.zeros((1, int_generators.shape[-1]), dtype=np.uint)
-    for op in int_generators[:num_vectorized_ops]:
-        array = np.vstack([array, array ^ op])
-
-    int_generators = int_generators[num_vectorized_ops:]
-
-    # Everything below will run much faster if we use Fortran-style ordering
-    arrayf = np.asarray(array, order="F")
-
-    out = np.empty_like(arrayf)
-    bufs = [np.empty_like(arrayf) for _ in range(nbuf)]
-
-    # Initially array[0] is all zeros, so skip the first entry
-    weights = weight_func(arrayf[1:], out=out[1:]).sum(-1)
-    min_weight = weights.min(initial=num_bits)
-
-    for i in range(1, 2 ** len(int_generators)):
-        arrayf ^= int_generators[count_trailing_zeros(i)]
-        weights = weight_func(arrayf, *bufs, out=out)
-        if multiple_words:
-            weights = weights.sum(-1)
-        min_weight = weights.min(initial=min_weight)
-
-    return int(min_weight)
+    # This is exactly the same as the quantum case, but with no stabilizers
+    return get_distance_quantum(
+        logical_ops=generators,
+        stabilizers=np.take(generators, [], axis=0),
+        block_size=block_size,
+        homogeneous=True,
+        use_numba=use_numba,
+    )
 
 
 def get_distance_quantum(
