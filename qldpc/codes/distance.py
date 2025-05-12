@@ -193,7 +193,7 @@ def get_distance_classical(
 ) -> int:
     """Distance of a classical linear binary code."""
 
-    # This is exactly the same as the quantum case, but with no stabilizers
+    # This calculation is exactly the same as in the quantum case, but with no stabilizers
     return get_distance_quantum(
         logical_ops=generators,
         stabilizers=np.take(generators, [], axis=0),
