@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import abc
+
 import stim
 
-from qldpc.objects import PauliXZ, Pauli
+from qldpc.objects import Pauli, PauliXZ
 
 
 class NoiseModel(abc.ABC):
@@ -13,7 +14,7 @@ class NoiseModel(abc.ABC):
     """
 
     @abc.abstractmethod
-    def apply_1q_gates(self, circ: stim.Circuit, gate: str, qubits: list[int]):
+    def apply_1q_gates(self, circ: stim.Circuit, gate: str, qubits: list[int]) -> None:
         """
         args:
             circ: stim.Circuit
@@ -27,7 +28,7 @@ class NoiseModel(abc.ABC):
     @abc.abstractmethod
     def apply_2q_gates(
         self, circ: stim.Circuit, gate: str, qubit_pairs: list[tuple[int, int]]
-    ):
+    ) -> None:
         """
         args:
             circ: stim.Circuit
@@ -39,7 +40,7 @@ class NoiseModel(abc.ABC):
         """
 
     @abc.abstractmethod
-    def apply_meas(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
+    def apply_meas(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]) -> None:
         """
         args:
             circ: stim.Circuit
@@ -51,7 +52,7 @@ class NoiseModel(abc.ABC):
         """
 
     @abc.abstractmethod
-    def apply_reset(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
+    def apply_reset(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]) -> None:
         """
         args:
             circ: stim.Circuit
@@ -68,10 +69,10 @@ class UniformNoiseModel(NoiseModel):
     A uniform noise model where all gate, reset, and measurement errors have equal probability
     """
 
-    def __init__(self, p):
+    def __init__(self, p: float) -> None:
         self.p = p
 
-    def apply_1q_gates(self, circ: stim.Circuit, gate: str, qubits: list[int]):
+    def apply_1q_gates(self, circ: stim.Circuit, gate: str, qubits: list[int]) -> None:
         """
         Apply single-qubit gates followed by single-qubit errors with probability p.
         """
@@ -82,7 +83,7 @@ class UniformNoiseModel(NoiseModel):
 
     def apply_2q_gates(
         self, circ: stim.Circuit, gate: str, qubit_pairs: list[tuple[int, int]]
-    ):
+    ) -> None:
         """
         Apply two-qubit gates followed by two-qubit errors with probability p.
         """
@@ -92,7 +93,7 @@ class UniformNoiseModel(NoiseModel):
         circ.append("DEPOLARIZE2", flattened_args, self.p)
         circ.append("TICK")
 
-    def apply_meas(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
+    def apply_meas(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]) -> None:
         """
         Measure qubits with error probability p
         """
@@ -109,7 +110,7 @@ class UniformNoiseModel(NoiseModel):
         circ.append(meas_gate, qubits)
         circ.append("TICK")
 
-    def apply_reset(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]):
+    def apply_reset(self, circ: stim.Circuit, basis: PauliXZ, qubits: list[int]) -> None:
         """
         Reset qubits to 0 with error probability p
         """

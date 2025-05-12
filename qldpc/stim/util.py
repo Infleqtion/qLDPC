@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-import numpy as np
-from scipy.sparse import csc_matrix
-from stim import DetectorErrorModel, DemTarget, DemTargetWithCoords
 
-from qldpc.objects import PauliXZ, Pauli
+import numpy as np
+import numpy.typing as npt
+from scipy.sparse import csc_matrix
+from stim import DemTarget, DemTargetWithCoords, DetectorErrorModel
+
+from qldpc.objects import Pauli, PauliXZ
 
 
 @dataclass(frozen=True)
@@ -21,7 +23,7 @@ class CheckMatrices:
     check_map: csc_matrix
     check_matrix: csc_matrix
     obs_matrix: csc_matrix
-    priors: np.ndarray
+    priors: npt.NDArray[np.float64]
 
 
 def _det_basis_coord(det: DemTargetWithCoords) -> PauliXZ:
@@ -55,7 +57,7 @@ def _prior_dict_to_matrices(
 
         for det in c_err.dets:
             det_val = det.dem_target.val
-            if not det in det_list:
+            if det not in det_list:
                 det_map[det_val] = len(det_list)
                 det_list += [det]
             det_row_idx += [det_map[det_val]]
@@ -111,9 +113,7 @@ def detector_error_model_to_css_checks(
             obs: list[DemTarget] = []
             for targ in instr.targets_copy():
                 if targ.is_relative_detector_id():
-                    det = DemTargetWithCoords(
-                        dem_target=targ, coords=det_coords[targ.val]
-                    )
+                    det = DemTargetWithCoords(dem_target=targ, coords=det_coords[targ.val])
                     basis = fn_det_basis(det)
                     if basis == Pauli.Z:
                         z_dets.append(det)
