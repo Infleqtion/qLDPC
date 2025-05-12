@@ -273,6 +273,7 @@ class ClassicalCode(AbstractCode):
         share an edge iff c addresses b; that is, edge (c, b) is in the graph iff H[c, b] != 0.
         """
         graph = nx.DiGraph()
+        matrix = np.asarray(matrix)
         for row, col in zip(*np.nonzero(matrix)):
             node_c = Node(index=int(row), is_data=False)
             node_d = Node(index=int(col), is_data=True)
@@ -929,7 +930,7 @@ class QuditCode(AbstractCode):
             logicals_zz[cols_lx] = self.field.Identity(self.dimension)
 
         else:
-            cols_gl = sorted(_join_slices(cols_gx, cols_lx))  # indices for all GL columns
+            cols_gl = np.sort(_join_slices(cols_gx, cols_lx))  # indices for all GL columns
             """
             Focusing on the gauge-qudit rows (i.e., constraints) of the parity check matrix, define
                 A = matrix_z[rows_gz, cols_gl],
@@ -1032,6 +1033,9 @@ class QuditCode(AbstractCode):
         matrix: npt.NDArray[np.int_]
         cols_lx: Slice
         cols_lz: Slice
+        cols_gx: Slice
+        cols_gz: Slice
+        cols_gl: Slice
 
         def _with_permuted_qudits(
             matrix: npt.NDArray[np.int_], permutation: Slice
@@ -1041,7 +1045,7 @@ class QuditCode(AbstractCode):
 
         if not self.is_subsystem_code:
             # keep track of qudit locations as we swap them around
-            qudit_locs = np.arange(len(self), dtype=int)
+            qudit_locs: npt.NDArray[np.int_] = np.arange(len(self), dtype=int)
 
             # row reduce and identify pivots in the X sector
             matrix = self.canonicalized.matrix
@@ -1144,8 +1148,8 @@ class QuditCode(AbstractCode):
             # split logical vs. gauge column sectors
             cols_gx = cols_gl[pivots_gx]
             cols_gz = cols_gl[pivots_gz]
-            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]  # type:ignore[operator]
-            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]  # type:ignore[operator]
+            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]
+            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]
 
         matrix = matrix.reshape(-1, 2, len(self))
         return (
@@ -1357,16 +1361,16 @@ class QuditCode(AbstractCode):
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
             qudits = getattr(self, "_default_conjugate", ())
-        matrix = self.matrix.copy().reshape(-1, 2, len(self))
-        matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        matrix = matrix.reshape(-1, 2 * len(self))
+        matrix_reshaped = self.matrix.copy().reshape(-1, 2, len(self))
+        matrix_reshaped[:, :, qudits] = matrix_reshaped[:, ::-1, qudits]
+        matrix = matrix_reshaped.reshape(-1, 2 * len(self))
         code = QuditCode(matrix, field=self.field.order, is_subsystem_code=self.is_subsystem_code)
 
         if self._logical_ops is not None:
-            logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
-            logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
-            logical_ops = logical_ops.reshape(-1, 2 * len(self))
-            code.set_logical_ops(logical_ops)
+            logical_ops_reshaped = self._logical_ops.copy().reshape(-1, 2, len(self))
+            logical_ops_reshaped[:, :, qudits] = logical_ops_reshaped[:, ::-1, qudits]
+            logical_ops = logical_ops_reshaped.reshape(-1, 2 * len(self))
+            code.set_logical_ops(logical_ops_reshaped)
 
         return code
 
@@ -1769,7 +1773,7 @@ class CSSCode(QuditCode):
 
         else:
             # see QuditCode.get_logical_ops for an explanation of what's happening here
-            cols_gl = sorted(_join_slices(cols_gx, cols_lx))
+            cols_gl = np.sort(_join_slices(cols_gx, cols_lx))
             mat_U = matrix_z[rows_gz, cols_gl].null_space().T  # type:ignore[attr-defined]
             mat_W = matrix_x[rows_gx, cols_gl].null_space().T  # type:ignore[attr-defined]
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
@@ -1803,10 +1807,12 @@ class CSSCode(QuditCode):
         """
         cols_lx: Slice
         cols_lz: Slice
+        cols_gx: Slice
+        cols_gz: Slice
 
         if not self.is_subsystem_code:
             # keep track of qudit locations as we swap them around
-            qudit_locs = np.arange(len(self), dtype=int)
+            qudit_locs: npt.NDArray[np.int_] = np.arange(len(self), dtype=int)
 
             # initialize matrix_x and matrix_z
             matrix_x = self.canonicalized.matrix_x
@@ -1815,7 +1821,7 @@ class CSSCode(QuditCode):
             # identify pivots in the X sector, and move X pivots to the back
             pivots_x = first_nonzero_cols(matrix_x)
             other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
-            permutation = other_x + list(pivots_x)
+            permutation: list[int] = other_x + list(pivots_x)
             matrix_x = matrix_x[:, permutation]
             matrix_z = matrix_z[:, permutation]
             qudit_locs = qudit_locs[permutation]
@@ -1899,8 +1905,8 @@ class CSSCode(QuditCode):
             # split logical vs. gauge column sectors
             cols_gx = cols_gl[pivots_gx]
             cols_gz = cols_gl[pivots_gz]
-            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]  # type:ignore[operator]
-            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]  # type:ignore[operator]
+            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]
+            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]
 
         return (
             matrix_x,
@@ -2313,7 +2319,7 @@ class CSSCode(QuditCode):
         See ClassicalCode.get_logical_error_rate_func for more details about how this method works.
         """
         # collect relative probabilities of Z, X, and Y errors
-        pauli_bias_zxy: npt.NDArray[np.float_] | None
+        pauli_bias_zxy: npt.NDArray[np.float64] | None
         if pauli_bias is not None:
             assert len(pauli_bias) == 3
             pauli_bias_zxy = np.array([pauli_bias[2], pauli_bias[0], pauli_bias[1]], dtype=float)
@@ -2374,7 +2380,7 @@ class CSSCode(QuditCode):
         decoder_z: decoders.Decoder,
         logicals_x: npt.NDArray[np.int_],
         logicals_z: npt.NDArray[np.int_],
-        pauli_bias_zxy: npt.NDArray[np.float_] | None,
+        pauli_bias_zxy: npt.NDArray[np.float64] | None,
     ) -> tuple[float, float]:
         """Estimate a fidelity and its standard error when decoding a fixed number of errors."""
         num_failures = 0
@@ -2456,7 +2462,7 @@ def _get_sample_allocation(
 
 def _get_error_probs_by_weight(
     block_length: int, error_rate: float, max_weight: int | None = None
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.float64]:
     """Build an array whose k-th entry is the probability of a weight-k error in a code.
 
     If a code has block_length n and each bit has an independent probability p = error_rate of an
