@@ -301,12 +301,12 @@ class GUFDecoder(Decoder):
 
         # convert solutions [y,c] --> [y/c,1] --> y
         if self.code.field.order == 2:
-            solutions = solutions[:, :-1]
+            converted_solutions = solutions[:, :-1]
         else:
-            solutions = solutions[:, :-1] / solutions[:, -1][:, None]
+            converted_solutions = solutions[:, :-1] / solutions[:, -1][:, None]
 
         # identify the minimum-weight solution found so far
-        min_weight_solution = min(solutions, key=lambda solution: self.get_weight(solution))
+        min_weight_solution = min(converted_solutions, key=self.get_weight)
         weight = self.get_weight(min_weight_solution)
 
         if max_weight is not None and weight > max_weight:
