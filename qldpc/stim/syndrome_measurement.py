@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import abc
 from dataclasses import dataclass
+
 import networkx as nx
 import numpy as np
 import stim
 
-from qldpc.codes.common import CSSCode, ClassicalCode
+from qldpc.codes.common import ClassicalCode, CSSCode
 from qldpc.objects import Pauli
 from qldpc.stim.noise_model import NoiseModel
 
@@ -106,19 +107,11 @@ class BareColorCircuit(SyndromeMeasurement):
             "CX",
         )
         circuit = stim.Circuit()
-        noise_model.apply_reset(
-            circuit, Pauli.Z, stim_ids.z_check_ids + stim_ids.x_check_ids
-        )
-        noise_model.apply_1q_gates(
-            circuit, "H", stim_ids.z_check_ids + stim_ids.x_check_ids
-        )
+        noise_model.apply_reset(circuit, Pauli.Z, stim_ids.z_check_ids + stim_ids.x_check_ids)
+        noise_model.apply_1q_gates(circuit, "H", stim_ids.z_check_ids + stim_ids.x_check_ids)
         circuit.append(z_subcircuit)
         circuit.append(x_subcircuit)
-        noise_model.apply_1q_gates(
-            circuit, "H", stim_ids.z_check_ids + stim_ids.x_check_ids
-        )
-        noise_model.apply_meas(
-            circuit, Pauli.Z, stim_ids.z_check_ids + stim_ids.x_check_ids
-        )
+        noise_model.apply_1q_gates(circuit, "H", stim_ids.z_check_ids + stim_ids.x_check_ids)
+        noise_model.apply_meas(circuit, Pauli.Z, stim_ids.z_check_ids + stim_ids.x_check_ids)
         measurements = [stim_ids.z_check_ids + stim_ids.x_check_ids]
         return circuit, measurements

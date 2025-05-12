@@ -1,31 +1,36 @@
 from __future__ import annotations
 
+import pathlib
 from collections.abc import Callable
-from ldpc.bp_decoder import BpDecoder, BpDecoderBase
+from typing import Any, Union
+
+import numpy as np
+import numpy.typing as npt
+from ldpc.bp_decoder import BpDecoder
 from ldpc.bplsd_decoder import BpLsdDecoder
 from ldpc.bposd_decoder import BpOsdDecoder
-import numpy as np
-import pathlib
 from sinter import CompiledDecoder, Decoder
-from stim import DetectorErrorModel, DemTargetWithCoords
+from stim import DemTargetWithCoords, DetectorErrorModel
 
-from qldpc.objects import PauliXZ, Pauli
+from qldpc.objects import Pauli, PauliXZ
 from qldpc.stim.util import (
-    _det_basis_coord,
     CheckMatrices,
+    _det_basis_coord,
     detector_error_model_to_css_checks,
 )
 
+type BpDecoderType = Union[BpDecoder, BpLsdDecoder, BpOsdDecoder]
+type BpDecoderClassType = Union[type[BpDecoder], type[BpLsdDecoder], type[BpOsdDecoder]]
+
 
 class CompiledBPTypeDecoder(CompiledDecoder):
-
-    def __init__(self, check_matrices: CheckMatrices, decoder):
+    def __init__(self, check_matrices: CheckMatrices, decoder: BpDecoderType) -> None:
         self.check_matrices = check_matrices
         self.decoder = decoder
 
     def decode_shots_bit_packed(
-        self, bit_packed_detection_event_data: np.ndarray
-    ) -> np.ndarray:
+        self, bit_packed_detection_event_data: npt.NDArray[np.uint8]
+    ) -> npt.NDArray[np.uint8]:
         obs_flip_data = []
         for shot_data in bit_packed_detection_event_data:
             unpacked_data = np.unpackbits(
@@ -33,13 +38,9 @@ class CompiledBPTypeDecoder(CompiledDecoder):
                 bitorder="little",
                 count=self.check_matrices.check_map.shape[1],
             )
-            pred_errors = self.decoder.decode(
-                self.check_matrices.check_map @ unpacked_data
-            )
+            pred_errors = self.decoder.decode(self.check_matrices.check_map @ unpacked_data)
             obs_pred = (self.check_matrices.obs_matrix @ pred_errors) % 2
-            obs_flip_data.append(
-                np.packbits(obs_pred.astype(np.uint8), bitorder="little")
-            )
+            obs_flip_data.append(np.packbits(obs_pred.astype(np.uint8), bitorder="little"))
 
         return np.array(obs_flip_data)
 
@@ -54,14 +55,14 @@ class BPTypeDecoder(Decoder):
 
     def __init__(
         self,
-        decoder_cls: BpDecoderBase,
+        decoder_cls: BpDecoderClassType,
         basis: PauliXZ,
-        fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ] = _det_basis_coord,
-        **kwargs,
+        fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ],
+        **kwargs: Any,
     ) -> None:
         """
         args:
-            decoder_cls: BpDecoderBase
+            decoder_cls: BpDecoderClassType
                 ldpc package decoder class
             basis: PauliXZ
                 CSS decoding sub-problem basis
@@ -70,7 +71,7 @@ class BPTypeDecoder(Decoder):
                 This function extracts this from the detector coordinates, assuming some convention.
                 The default convention is based on first coordinate (1 = Z, 2 = X)
                 NOTE: This function needs to be defined at the top-level of a module (i.e. not in a jupyter notebook cell) to work with Sinter
-            kwargs: dict[str, Any]
+            kwargs: Any
                 keyword arguments to be passed to the decoder
 
         """
@@ -112,18 +113,30 @@ class BPTypeDecoder(Decoder):
 
 
 class BP(BPTypeDecoder):
-
-    def __init__(self, basis: PauliXZ, **kwargs):
-        super().__init__(BpDecoder, basis, **kwargs)
+    def __init__(
+        self,
+        basis: PauliXZ,
+        fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ] = _det_basis_coord,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(BpDecoder, basis, fn_det_basis, **kwargs)
 
 
 class BPOSD(BPTypeDecoder):
-
-    def __init__(self, basis: PauliXZ, **kwargs):
-        super().__init__(BpOsdDecoder, basis, **kwargs)
+    def __init__(
+        self,
+        basis: PauliXZ,
+        fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ] = _det_basis_coord,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(BpOsdDecoder, basis, fn_det_basis, **kwargs)
 
 
 class BPLSD(BPTypeDecoder):
-
-    def __init__(self, basis: PauliXZ, **kwargs):
-        super().__init__(BpLsdDecoder, basis, **kwargs)
+    def __init__(
+        self,
+        basis: PauliXZ,
+        fn_det_basis: Callable[[DemTargetWithCoords], PauliXZ] = _det_basis_coord,
+        **kwargs: Any,
+    ) -> None:
+        super().__init__(BpLsdDecoder, basis, fn_det_basis, **kwargs)
