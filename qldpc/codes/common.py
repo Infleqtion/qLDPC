@@ -273,7 +273,7 @@ class ClassicalCode(AbstractCode):
         share an edge iff c addresses b; that is, edge (c, b) is in the graph iff H[c, b] != 0.
         """
         graph = nx.DiGraph()
-        matrix = np.asarray(matrix)
+        matrix = np.asanyarray(matrix)
         for row, col in zip(*np.nonzero(matrix)):
             node_c = Node(index=int(row), is_data=False)
             node_d = Node(index=int(col), is_data=True)
