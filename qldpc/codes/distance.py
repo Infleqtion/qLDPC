@@ -215,7 +215,7 @@ def get_distance_classical(
     out = np.empty_like(arrayf)
     bufs = [np.empty_like(arrayf) for _ in range(nbuf)]
 
-    # Initially array[0] is all zeros, so only check array[1:]
+    # Initially array[0] is all zeros, so skip the first entry
     weights = weight_func(arrayf[1:], out=out[1:]).sum(-1)
     min_weight = weights.min(initial=num_bits)
 
@@ -278,10 +278,6 @@ def get_distance_quantum(
 
     out = np.empty_like(arrayf)
     bufs = [np.empty_like(arrayf) for _ in range(nbuf)]
-    # if homogeneous and np_bitwise_count is not None:
-    #     buf = None
-    # else:
-    #     buf = np.empty_like(arrayf)
 
     # Min weight of the part containing logical ops
     weights = weight_func(arrayf[2**num_stabilizers :])
