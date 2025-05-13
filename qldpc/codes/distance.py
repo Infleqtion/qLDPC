@@ -223,7 +223,18 @@ def get_distance_quantum(
     homogeneous: bool = False,
     use_numba: bool = False,
 ) -> int:
-    """Distance of a binary quantum code."""
+    """Distance of a binary quantum code.
+
+    If homogeneous is True, all logical operators and stabilizers have the same homogeneous (X or Z)
+    type, meaning:
+    - Pauli strings are represented by bitstrings that indicate their support on each qubit, so
+    - the weight of a Pauli string is the Hamming weight of the corresponding bitstring.
+
+    If homogeneous is False, each Pauli string is represented by a bitstring with length equal to
+    twice the qubit number.  The first and second half of this bitstring indicate, respectively, the
+    X and Z support of the corresponding Pauli string.  The weight of a Pauli string is then the
+    symplectic weight of the corresponding bitstring.
+    """
     num_bits = np.shape(logical_ops)[-1]
 
     if homogeneous:
