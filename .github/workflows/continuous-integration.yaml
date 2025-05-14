@@ -74,11 +74,11 @@ jobs:
           fi
           if [ ${{ steps.ruff-check.outcome }} != 'success' ]; then
             echo "ruff check failed"
-            FAILED=1
+            FAILED=2
           fi
           if [ ${{ steps.mypy.outcome }} != 'success' ]; then
             echo "mypy failed"
-            FAILED=1
+            FAILED=3
           fi
           exit $FAILED
 
