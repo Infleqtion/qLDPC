@@ -11,7 +11,7 @@ pip install qldpc
 
 To install a local version of qLDPC from source:
 ```
-git clone https://github.com/Infleqtion/qLDPC.git
+git clone https://github.com/qLDPCOrg/qLDPC.git
 pip install -e qLDPC
 ```
 You can also `pip install -e 'qLDPC[dev]'` to additionally install some development tools.
@@ -34,7 +34,7 @@ Notable features include:
   - `CSSCode.get_distance_bound`: method to estimate an upper bound on code distance using the method of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915).
 - Classes for special quantum code constructions and code families, such as:
   - `TBCode`: [two-block quantum codes](https://errorcorrectionzoo.org/c/two_block_quantum).
-  - `BBCode`: [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic), as in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).  See [`examples/bivariate_bicycle_codes.ipynb`](https://github.com/Infleqtion/qLDPC/blob/main/examples/bivariate_bicycle_codes.ipynb) for methods to identify...
+  - `BBCode`: [bivariate bicycle codes](https://errorcorrectionzoo.org/c/quantum_quasi_cyclic), as in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) and [arXiv:2311.16980](https://arxiv.org/abs/2311.16980).  See [`examples/bivariate_bicycle_codes.ipynb`](https://github.com/qLDPCOrg/qLDPC/blob/main/examples/bivariate_bicycle_codes.ipynb) for methods to identify...
     - toric layouts of a `BBCode`, in which the code looks like a toric code augmented by some long-distance checks, as in discussed in [arXiv:2308.07915](https://arxiv.org/abs/2308.07915), and
     - qubit layouts that minimize the communication distance for neutral atoms, as discussed in [arXiv:2404.18809](https://arxiv.org/abs/2404.18809).
   - `HGPCode`: [hypergraph product codes](https://errorcorrectionzoo.org/c/hypergraph_product).
@@ -53,7 +53,7 @@ Notable features include:
 
 This project aspires to have a [documentation page](https://qldpc.readthedocs.io/en/latest/), but at the moment the documentation is out of date and auto-generated from source code that was written to be human-readable in a plain text editor.  For now, I recommend looking at the source code (and comments therein) directly, as well as the `examples` directory.  Test files (such as `qldpc/codes/quantum_test.py`) also contain some examples of using the classes and methods in this library.
 
-If you have any questions, feedback, or requests, please [open an issue on GitHub](https://github.com/Infleqtion/qLDPC/issues/new) or email me at [mika.perlin@gmail.com](mailto:mika.perlin@gmail.com)!
+If you have any questions, feedback, or requests, please [open an issue on GitHub](https://github.com/qLDPCOrg/qLDPC/issues/new) or email me at [mika.perlin@gmail.com](mailto:mika.perlin@gmail.com)!
 
 ## ⚓ Attribution
 
@@ -65,10 +65,10 @@ If you use this software in your work, please cite with:
   year = {2023},
   publisher = {GitHub},
   journal = {GitHub repository},
-  howpublished = {\url{https://github.com/Infleqtion/qLDPC}},
+  howpublished = {\url{https://github.com/qLDPCOrg/qLDPC}},
 }
 ```
 This may require adding `\usepackage{url}` to your LaTeX file header.  Alternatively, you can cite
 ```
-Michael A. Perlin. qLDPC. https://github.com/Infleqtion/qLDPC, 2023.
+Michael A. Perlin. qLDPC. https://github.com/qLDPCOrg/qLDPC, 2023.
 ```
