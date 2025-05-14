@@ -9,7 +9,7 @@ description = "Tools for constructing and analyzing quantum low density parity c
 license = "Apache-2.0"
 authors = ["Michael A. Perlin <mika.perlin@gmail.com>"]
 readme = "README.md"
-repository = "https://github.com/Infleqtion/qLDPC"
+repository = "https://github.com/qLDPCOrg/qLDPC"
 keywords = [
   "quantum computing",
   "quantum error correction",
