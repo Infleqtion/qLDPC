@@ -74,15 +74,15 @@ jobs:
           FAILED=0
           if [ ${{ steps.ruff-format.outcome }} != 'success' ]; then
             echo "ruff format failed"
-            FAILED=1
+            FAILED=$((FAILED + 1))
           fi
           if [ ${{ steps.ruff-check.outcome }} != 'success' ]; then
             echo "ruff check failed"
-            FAILED=2
+            FAILED=$((FAILED + 10))
           fi
           if [ ${{ steps.mypy.outcome }} != 'success' ]; then
             echo "mypy failed"
-            FAILED=3
+            FAILED=$((FAILED + 100))
           fi
           exit $FAILED
 
