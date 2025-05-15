@@ -31,7 +31,7 @@ class NoiseModel(abc.ABC):
 
     @abc.abstractmethod
     def apply_2q_gates(
-            self, circ: stim.Circuit, gate: str, qubit_pairs: list[tuple[int, int]]
+        self, circ: stim.Circuit, gate: str, qubit_pairs: list[tuple[int, int]]
     ) -> None:
         """
         Applies two-qubit gates and associated noise to the circuit.
@@ -83,11 +83,11 @@ class CircuitNoiseModel(NoiseModel):
     """
 
     def __init__(
-            self,
-            p1q: float,
-            p2q: float,
-            p_meas: float,
-            p_reset: float,
+        self,
+        p1q: float,
+        p2q: float,
+        p_meas: float,
+        p_reset: float,
     ) -> None:
         """
         Initializes the CircuitNoiseModel with specific error probabilities.
@@ -127,7 +127,7 @@ class CircuitNoiseModel(NoiseModel):
         circ.append("TICK")
 
     def apply_2q_gates(
-            self, circ: stim.Circuit, gate: str, qubit_pairs: list[tuple[int, int]]
+        self, circ: stim.Circuit, gate: str, qubit_pairs: list[tuple[int, int]]
     ) -> None:
         """
         Applies two-qubit gates followed by two-qubit depolarizing errors
