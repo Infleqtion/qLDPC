@@ -493,6 +493,10 @@ def test_toric_codes() -> None:
     with pytest.raises(ValueError, match="even side lengths"):
         codes.ToricCode(3, rotated=True)
 
+    # the rotated 2x2 Toric code is special -- we remove redundant checks
+    code = codes.ToricCode(2, rotated=True)
+    assert len(code.matrix_x) == len(code.matrix_z) == 1
+
     # rotated toric XZZX code
     rows, cols = 6, 4
     code = codes.ToricCode(rows, cols, rotated=True)

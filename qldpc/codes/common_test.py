@@ -504,17 +504,13 @@ def test_css_ops() -> None:
     # successfully construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
     code = codes.ToricCode(dist, rotated=True, field=2)
+    assert code.canonicalized.num_checks < code.num_checks
     assert code.get_code_params() == (dist**2, 2, dist)
     code.reduce_logical_ops()
     logical_ops_x = code.get_logical_ops(Pauli.X)
     logical_ops_z = code.get_logical_ops(Pauli.Z, symplectic=True)
     assert not np.any(np.count_nonzero(logical_ops_x.view(np.ndarray), axis=1) < dist)
     assert not np.any(np.count_nonzero(logical_ops_z.view(np.ndarray), axis=1) < dist)
-
-    # the 2x2 toric code has redundant stabilizers
-    code = codes.ToricCode(2)
-    assert code.num_checks == 4
-    assert code.canonicalized.num_checks == 2
 
 
 def test_distance_css() -> None:
