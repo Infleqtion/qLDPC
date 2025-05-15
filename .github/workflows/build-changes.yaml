@@ -5,7 +5,6 @@ on:
     branches: [ main ]
     paths:
       - 'pyproject.toml'
-      - '**/*.pyx'
   pull_request:
     branches: [ main ]
     types: [ opened, synchronize, reopened, ready_for_review ]  # defaults plus ready_for_review
@@ -20,14 +19,14 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.12
+          python-version: 3.13
       - uses: actions/cache@v4
         with:
           path: ${{ env.pythonLocation }}
-          key: ${{ env.pythonLocation }}-${{ hashFiles('**/pyproject.toml', '**/*.pyx', 'build-cython.py') }}
+          key: ${{ env.pythonLocation }}-${{ hashFiles('**/pyproject.toml') }}
       - name: Install package and dependencies
         run: |
           python -m pip install --upgrade pip
@@ -42,10 +41,10 @@ jobs:
     timeout-minutes: 3
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.12
+      - name: Set up Python
         uses: astral-sh/setup-uv@v5
         with:
-          python-version: 3.12
+          python-version: 3.13
           enable-cache: true
           cache-dependency-glob: |
             **/pyproject.toml
