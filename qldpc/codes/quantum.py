@@ -1401,8 +1401,8 @@ class ToricCode(CSSCode):
 
             if rows == cols == 2 and rotated:
                 # All Toric codes have redundant parity checks, but the case of the rotated 2x2
-                # Toric code is particularly egregious -- the two X/Z checks are *equal* -- so
-                # remove the extra checks in this case.
+                # Toric code is particularly egregious: the two X/Z checks are *equal*.  So remove
+                # the extra checks in this case.
                 matrix_x = matrix_x[:-1]
                 matrix_z = matrix_z[:-1]
 
