@@ -904,18 +904,33 @@ class SHPCode(CSSCode):
             code_z = code_x
         code_x = ClassicalCode(code_x, field)
         code_z = ClassicalCode(code_z, field)
-        code_field = code_x.field
+        field = code_x.field.order
 
-        matrix_x = np.kron(code_x.matrix, code_field.Identity(len(code_z)))
-        matrix_z = np.kron(code_field.Identity(len(code_x)), code_z.matrix)
-        CSSCode.__init__(self, matrix_x, matrix_z, field, is_subsystem_code=True)
+        matrix_x, matrix_z = SHPCode.get_matrix_product(code_x.matrix, code_z.matrix)
+        CSSCode.__init__(
+            self,
+            matrix_x.view(np.ndarray).astype(int),
+            matrix_z.view(np.ndarray).astype(int),
+            field,
+            is_subsystem_code=True,
+        )
 
         stab_ops_x = np.kron(code_x.matrix, code_z.generator)
         stab_ops_z = np.kron(-code_x.generator, code_z.matrix)
-        self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
+        self._stabilizer_ops = galois.GF(field)(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
         if set_logicals:
             self.set_logical_ops_xz(*self.get_canonical_logical_ops(code_x, code_z), validate=False)
+
+    @staticmethod
+    def get_matrix_product(
+        matrix_a: npt.NDArray[np.int_ | np.object_],
+        matrix_b: npt.NDArray[np.int_ | np.object_],
+    ) -> tuple[npt.NDArray[np.int_ | np.object_], npt.NDArray[np.int_ | np.object_]]:
+        """Subsystem hypergraph product of two parity check matrices."""
+        matrix_x = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
+        matrix_z = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
+        return matrix_x, matrix_z
 
     @staticmethod
     def get_canonical_logical_ops(
@@ -998,6 +1013,38 @@ class LPCode(CSSCode):
             abstract.Protograph(matrix_z.astype(object)).lift(),
             field,
             is_subsystem_code=False,
+        )
+
+
+class LSPCode(CSSCode):
+    """Lifted subsystem product (LSP) code.
+
+    The lifted subsystem product (LSP) code is to the subsystem hypergraph product (SHP) code what
+    the lifted product (LP) code is to the hypergaph product (HGP) code.  That is, the LSPCode is a
+    lifted version of the SHPCode.  See the docstring for the LPCode for additional information.
+    """
+
+    def __init__(
+        self,
+        protograph_a: npt.NDArray[np.object_] | Sequence[Sequence[object]],
+        protograph_b: npt.NDArray[np.object_] | Sequence[Sequence[object]] | None = None,
+    ) -> None:
+        """..."""
+        if protograph_b is None:
+            protograph_b = protograph_a
+        protograph_a = abstract.Protograph(protograph_a)
+        protograph_b = abstract.Protograph(protograph_b)
+        field = protograph_a.field.order
+
+        # identify X-sector and Z-sector parity checks
+        matrix_x, matrix_z = SHPCode.get_matrix_product(protograph_a, protograph_b)
+
+        CSSCode.__init__(
+            self,
+            abstract.Protograph(matrix_x.astype(object)).lift(),
+            abstract.Protograph(matrix_z.astype(object)).lift(),
+            field,
+            is_subsystem_code=True,
         )
 
 
