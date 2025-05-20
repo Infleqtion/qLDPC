@@ -39,7 +39,7 @@ Notable features include:
     - qubit layouts that minimize the communication distance for neutral atoms, as discussed in [arXiv:2404.18809](https://arxiv.org/abs/2404.18809).
   - `HGPCode`: [hypergraph product codes](https://errorcorrectionzoo.org/c/hypergraph_product).
   - `SHPCode`: [subsystem hypergraph product codes](https://errorcorrectionzoo.org/c/subsystem_quantum_parity), as in [arXiv:2002.06257](https://arxiv.org/abs/2002.06257).
-  - `SHYPSCode`: [subsystem hypergraph product codes simplex](https://errorcorrectionzoo.org/c/shyps), as in [arXiv:2502.07150](https://arxiv.org/abs/2502.07150).
+  - `SHYPSCode`: [subsystem hypergraph product simplex codes](https://errorcorrectionzoo.org/c/shyps), as in [arXiv:2502.07150](https://arxiv.org/abs/2502.07150).
   - `LPCode`: [lifted product codes](https://errorcorrectionzoo.org/c/lifted_product), as in [arXiv:2012.04068](https://arxiv.org/abs/2012.04068) and [arXiv:2202.01702](https://arxiv.org/abs/2202.01702).
   - `QTCode`: [quantum Tanner codes](https://errorcorrectionzoo.org/c/quantum_tanner), as in [arXiv:2202.13641](https://arxiv.org/abs/2202.13641) and [arXiv:2206.07571](https://arxiv.org/abs/2206.07571).
 - `decoders.py`: module for decoding errors with various methods, including BP-OSD, BP-LSD, and belief-field (via [`ldpc`](https://github.com/quantumgizmos/ldpc)), minimum-weight perfect matching (via [`pymatching`](https://github.com/oscarhiggott/PyMatching)), and others.  Includes an interface for using custom decoders. 
