@@ -1029,7 +1029,7 @@ class LSPCode(CSSCode):
         protograph_a: npt.NDArray[np.object_] | Sequence[Sequence[object]],
         protograph_b: npt.NDArray[np.object_] | Sequence[Sequence[object]] | None = None,
     ) -> None:
-        """..."""
+        """Lifted subsystem product of two protographs."""
         if protograph_b is None:
             protograph_b = protograph_a
         protograph_a = abstract.Protograph(protograph_a)
