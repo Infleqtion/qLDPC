@@ -1024,6 +1024,7 @@ class SLPCode(CSSCode):
     the LPCode for additional information.
 
     References:
+    - https://errorcorrectionzoo.org/c/subsystem_lifted_product
     - https://arxiv.org/abs/2404.18302
     """
 
