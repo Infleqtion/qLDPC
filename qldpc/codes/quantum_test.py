@@ -367,8 +367,8 @@ def test_lifted_product_codes() -> None:
         assert rate >= 2 / 17
 
         # the subsystem version of this code has a highe encoding rate
-        code = codes.LSPCode(protograph)
-        subsystem_rate = code.dimension / code.num_qudits
+        subsystem_code = codes.LSPCode(protograph)
+        subsystem_rate = subsystem_code.dimension / subsystem_code.num_qudits
         assert subsystem_rate > rate
 
 
