@@ -904,20 +904,20 @@ class SHPCode(CSSCode):
             code_z = code_x
         code_x = ClassicalCode(code_x, field)
         code_z = ClassicalCode(code_z, field)
-        field = code_x.field.order
+        code_field = code_x.field
 
         matrix_x, matrix_z = SHPCode.get_matrix_product(code_x.matrix, code_z.matrix)
         CSSCode.__init__(
             self,
             matrix_x.view(np.ndarray).astype(int),
             matrix_z.view(np.ndarray).astype(int),
-            field,
+            code_field.order,
             is_subsystem_code=True,
         )
 
         stab_ops_x = np.kron(code_x.matrix, code_z.generator)
         stab_ops_z = np.kron(-code_x.generator, code_z.matrix)
-        self._stabilizer_ops = galois.GF(field)(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
+        self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
 
         if set_logicals:
             self.set_logical_ops_xz(*self.get_canonical_logical_ops(code_x, code_z), validate=False)
