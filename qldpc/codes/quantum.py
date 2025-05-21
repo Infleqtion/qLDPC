@@ -1022,6 +1022,9 @@ class LSPCode(CSSCode):
     The lifted subsystem product code is a lifted version of the subsystem hypergraph product code.
     That is, the LSPCode is to the SHPCode what the LPCode is to the HGPCode.  See the docstring for
     the LPCode for additional information.
+
+    References:
+    - https://arxiv.org/abs/2404.18302
     """
 
     def __init__(
