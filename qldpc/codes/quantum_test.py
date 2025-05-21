@@ -366,6 +366,11 @@ def test_lifted_product_codes() -> None:
         rate = code.dimension / code.num_qudits
         assert rate >= 2 / 17
 
+        # the subsystem version of this code has a highe encoding rate
+        subsystem_code = codes.SLPCode(protograph)
+        subsystem_rate = subsystem_code.dimension / subsystem_code.num_qudits
+        assert subsystem_rate > rate
+
 
 def test_quantum_tanner(pytestconfig: pytest.Config) -> None:
     """Quantum Tanner code."""
