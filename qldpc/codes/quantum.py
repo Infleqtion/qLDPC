@@ -1016,11 +1016,11 @@ class LPCode(CSSCode):
         )
 
 
-class LSPCode(CSSCode):
-    """Lifted subsystem product (LSP) code.
+class SLPCode(CSSCode):
+    """Subsystem lifted product (SLP) code.
 
-    The lifted subsystem product code is a lifted version of the subsystem hypergraph product code.
-    That is, the LSPCode is to the SHPCode what the LPCode is to the HGPCode.  See the docstring for
+    The subsystem lifted product code is a lifted version of the subsystem hypergraph product code.
+    That is, the SLPCode is to the SHPCode what the LPCode is to the HGPCode.  See the docstring for
     the LPCode for additional information.
 
     References:
@@ -1032,7 +1032,7 @@ class LSPCode(CSSCode):
         protograph_a: npt.NDArray[np.object_] | Sequence[Sequence[object]],
         protograph_b: npt.NDArray[np.object_] | Sequence[Sequence[object]] | None = None,
     ) -> None:
-        """Lifted subsystem product of two protographs."""
+        """Subsystem lifted product of two protographs."""
         if protograph_b is None:
             protograph_b = protograph_a
         protograph_a = abstract.Protograph(protograph_a)
