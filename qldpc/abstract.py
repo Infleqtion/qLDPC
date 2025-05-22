@@ -648,6 +648,32 @@ class Protograph(npt.NDArray[np.object_]):
         vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape), group)
 
+    def __add__(self, other: object) -> Protograph:
+        if isinstance(other, Protograph) and not self._group == other._group:
+            raise ValueError("Cannot add protographs with different base groups")
+        protograph = super().__add__(other)
+        protograph._group = self._group
+        return protograph
+
+    def __sub__(self, other: object) -> Protograph:
+        if isinstance(other, Protograph) and not self._group == other._group:
+            raise ValueError("Cannot add protographs with different base groups")
+        protograph = super().__sub__(other)
+        protograph._group = self._group
+        return protograph
+
+    def __mul__(self, other: object) -> Protograph:
+        if isinstance(other, Protograph) and not self._group == other._group:
+            raise ValueError("Cannot multiply protographs with different base groups")
+        protograph = super().__mul__(other)
+        protograph._group = self._group
+        return protograph
+
+    def __rmul__(self, other: object) -> Protograph:
+        protograph = super().__rmul__(other)
+        protograph._group = self._group
+        return protograph
+
     def __matmul__(self, other: object) -> Protograph:
         if isinstance(other, Protograph) and not self._group == other._group:
             raise ValueError("Cannot multiply protographs with different base groups")
