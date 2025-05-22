@@ -597,6 +597,34 @@ class Protograph(npt.NDArray[np.object_]):
 
         return protograph
 
+    def __array_finalize__(self, obj: npt.NDArray[np.object_] | None) -> None:
+        """Propagate metadata to newly constructed arrays."""
+        group = getattr(obj, "_group", None)
+        if isinstance(group, Group):
+            self._group = group
+
+    def __array_ufunc__(
+        self,
+        ufunc: np.ufunc,
+        method: typing.Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "at"],
+        *inputs: npt.NDArray[np.object_],
+        **kwargs: object,
+    ) -> Protograph | None:
+        """Intercept array operations to ensure Protograph compatibility."""
+        groups = set()
+        if method == "__call__":
+            groups |= {x._group for x in inputs if isinstance(x, Protograph)}
+            if len(groups) > 1:
+                raise ValueError(
+                    "Cannot perform operations on Protographs with different base groups"
+                )
+        inputs = tuple(x.view(np.ndarray) if isinstance(x, Protograph) else x for x in inputs)
+        result = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+        if isinstance(result, np.ndarray):
+            result = result.view(Protograph)
+            setattr(result, "_group", next(iter(groups), None))
+        return result
+
     @property
     def group(self) -> Group:
         """Base group of this protograph."""
@@ -647,13 +675,6 @@ class Protograph(npt.NDArray[np.object_]):
 
         vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape), group)
-
-    def __matmul__(self, other: object) -> Protograph:
-        if isinstance(other, Protograph) and not self._group == other._group:
-            raise ValueError("Cannot multiply protographs with different base groups")
-        protograph = super().__matmul__(other)
-        protograph._group = self._group
-        return protograph
 
 
 ################################################################################
