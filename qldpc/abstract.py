@@ -575,7 +575,7 @@ def _protograph_arithmetic(
     """Decorator to set the group of protographs when performing arithmetic."""
 
     @functools.wraps(method)
-    def wrapper(protograph, other):
+    def wrapper(protograph: Protograph, other: object) -> Protograph:
         if isinstance(other, Protograph) and not protograph.group == other.group:
             raise ValueError(
                 "Cannot perform arithmetic with protographs that have different base groups"
