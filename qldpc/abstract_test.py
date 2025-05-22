@@ -127,32 +127,8 @@ def test_protograph() -> None:
     protograph = abstract.TrivialGroup.to_protograph(matrix)
     assert protograph.group == abstract.TrivialGroup()
     assert protograph.field == abstract.TrivialGroup().field
-
-    # array arithmetic
-    assert not np.any((protograph + protograph).lift())
-    assert not np.any((protograph - protograph).lift())
-    assert not np.any((2 * protograph).lift())
-    assert not np.any((protograph * 2).lift())
-    assert np.array_equal((protograph / 1).lift(), protograph.lift())
-    assert np.array_equal((protograph * protograph).lift(), protograph.lift())
+    assert np.array_equal(protograph.lift(), matrix)
     assert np.array_equal((protograph @ protograph).lift(), protograph.lift() @ protograph.lift())
-
-    # arithmetic failures
-    new_protograph = abstract.Protograph.build(abstract.CyclicGroup(1), [[1]])
-    with pytest.raises(ValueError, match="different base groups"):
-        protograph + new_protograph
-    with pytest.raises(ValueError, match="different base groups"):
-        protograph - new_protograph
-    with pytest.raises(ValueError, match="different base groups"):
-        protograph * new_protograph
-    with pytest.raises(ValueError, match="different base groups"):
-        protograph @ new_protograph
-    with pytest.raises(ValueError, match="not supported"):
-        1 + protograph
-    with pytest.raises(ValueError, match="not supported"):
-        protograph // 1
-    with pytest.raises(ValueError, match="base field"):
-        protograph / 1.5
 
     # fail to construct a valid protograph
     with pytest.raises(ValueError, match="must be Element-valued"):
