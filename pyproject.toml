@@ -13,7 +13,7 @@ repository = "https://github.com/qLDPCOrg/qLDPC"
 keywords = [
   "quantum computing",
   "quantum error correction",
-  "low density partiy check codes",
+  "low density parity check codes",
   "LDPC",
 ]
 classifiers = [
