@@ -569,6 +569,24 @@ class Element:
 # protographs: Element-valued matrices
 
 
+def _protograph_arithmetic(
+    method: Callable[[Protograph, object], Protograph],
+) -> Callable[[Protograph, object], Protograph]:
+    """Decorator to set the group of protographs when performing arithmetic."""
+
+    @functools.wraps(method)
+    def wrapper(protograph, other):
+        if isinstance(other, Protograph) and not protograph.group == other.group:
+            raise ValueError(
+                "Cannot perform arithmetic with protographs that have different base groups"
+            )
+        new_protograph = method(protograph, other)
+        new_protograph._group = protograph._group
+        return new_protograph
+
+    return wrapper
+
+
 class Protograph(npt.NDArray[np.object_]):
     """Array whose entries are members of a group algebra over a finite field."""
 
@@ -648,38 +666,38 @@ class Protograph(npt.NDArray[np.object_]):
         vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape), group)
 
+    @_protograph_arithmetic
     def __add__(self, other: object) -> Protograph:
-        if isinstance(other, Protograph) and not self._group == other._group:
-            raise ValueError("Cannot add protographs with different base groups")
-        protograph = super().__add__(other)
-        protograph._group = self._group
-        return protograph
+        return super().__add__(other)
 
+    def __radd__(self, other: object) -> Protograph:
+        raise ValueError("__radd__ not supported for protographs")
+        return NotImplemented
+
+    @_protograph_arithmetic
     def __sub__(self, other: object) -> Protograph:
-        if isinstance(other, Protograph) and not self._group == other._group:
-            raise ValueError("Cannot add protographs with different base groups")
-        protograph = super().__sub__(other)
-        protograph._group = self._group
-        return protograph
+        return super().__sub__(other)
 
+    @_protograph_arithmetic
     def __mul__(self, other: object) -> Protograph:
-        if isinstance(other, Protograph) and not self._group == other._group:
-            raise ValueError("Cannot multiply protographs with different base groups")
-        protograph = super().__mul__(other)
-        protograph._group = self._group
-        return protograph
+        return super().__mul__(other)
 
+    @_protograph_arithmetic
     def __rmul__(self, other: object) -> Protograph:
-        protograph = super().__rmul__(other)
-        protograph._group = self._group
-        return protograph
+        return super().__rmul__(other)
 
+    def __truediv__(self, other: object) -> Protograph:
+        if not isinstance(other, (self.group.field, int)):
+            raise ValueError("Protographs can only be divided by members of their base field")
+        return self * int(self.group.field(other) ** -1)
+
+    def __floordiv__(self, other: object) -> Protograph:
+        raise ValueError("__floordiv__ not supported for protographs")
+        return NotImplemented
+
+    @_protograph_arithmetic
     def __matmul__(self, other: object) -> Protograph:
-        if isinstance(other, Protograph) and not self._group == other._group:
-            raise ValueError("Cannot multiply protographs with different base groups")
-        protograph = super().__matmul__(other)
-        protograph._group = self._group
-        return protograph
+        return super().__matmul__(other)
 
 
 ################################################################################

@@ -127,8 +127,32 @@ def test_protograph() -> None:
     protograph = abstract.TrivialGroup.to_protograph(matrix)
     assert protograph.group == abstract.TrivialGroup()
     assert protograph.field == abstract.TrivialGroup().field
-    assert np.array_equal(protograph.lift(), matrix)
+
+    # array arithmetic
+    assert not np.any((protograph + protograph).lift())
+    assert not np.any((protograph - protograph).lift())
+    assert not np.any((2 * protograph).lift())
+    assert not np.any((protograph * 2).lift())
+    assert np.array_equal((protograph / 1).lift(), protograph.lift())
+    assert np.array_equal((protograph * protograph).lift(), protograph.lift())
     assert np.array_equal((protograph @ protograph).lift(), protograph.lift() @ protograph.lift())
+
+    # arithmetic failures
+    new_protograph = abstract.Protograph.build(abstract.CyclicGroup(1), [[1]])
+    with pytest.raises(ValueError, match="different base groups"):
+        protograph + new_protograph
+    with pytest.raises(ValueError, match="different base groups"):
+        protograph - new_protograph
+    with pytest.raises(ValueError, match="different base groups"):
+        protograph * new_protograph
+    with pytest.raises(ValueError, match="different base groups"):
+        protograph @ new_protograph
+    with pytest.raises(ValueError, match="not supported"):
+        1 + protograph
+    with pytest.raises(ValueError, match="not supported"):
+        protograph // 1
+    with pytest.raises(ValueError, match="base field"):
+        protograph / 1.5
 
     # fail to construct a valid protograph
     with pytest.raises(ValueError, match="must be Element-valued"):
@@ -138,9 +162,6 @@ def test_protograph() -> None:
         abstract.Protograph([[abstract.Element(group) for group in groups]])
     with pytest.raises(ValueError, match="Cannot determine the underlying group"):
         abstract.Protograph([])
-    with pytest.raises(ValueError, match="different base groups"):
-        new_protograph = abstract.Protograph.build(abstract.CyclicGroup(1), [[1]])
-        protograph @ new_protograph
 
 
 def test_transpose() -> None:
