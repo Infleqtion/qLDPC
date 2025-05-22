@@ -597,7 +597,7 @@ class Protograph(npt.NDArray[np.object_]):
 
         return protograph
 
-    def __array_finalize__(self, obj: Protograph | npt.NDArray[np.object_] | None) -> None:
+    def __array_finalize__(self, obj: npt.NDArray[np.object_] | None) -> None:
         """Propagate metadata to newly constructed arrays."""
         group = getattr(obj, "_group", None)
         if isinstance(group, Group):
@@ -607,9 +607,9 @@ class Protograph(npt.NDArray[np.object_]):
         self,
         ufunc: np.ufunc,
         method: typing.Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "at"],
-        *inputs: Protograph | npt.NDArray[np.object_],
+        *inputs: npt.NDArray[np.object_],
         **kwargs: object,
-    ) -> Protograph | npt.NDArray[np.object_] | None:
+    ) -> Protograph | None:
         """Intercept array operations to ensure Protograph compatibility."""
         groups = set()
         if method == "__call__":
