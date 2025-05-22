@@ -138,6 +138,9 @@ def test_protograph() -> None:
         abstract.Protograph([[abstract.Element(group) for group in groups]])
     with pytest.raises(ValueError, match="Cannot determine the underlying group"):
         abstract.Protograph([])
+    with pytest.raises(ValueError, match="different base groups"):
+        new_protograph = abstract.Protograph.build(abstract.CyclicGroup(1), [[1]])
+        protograph @ new_protograph
 
 
 def test_transpose() -> None:
