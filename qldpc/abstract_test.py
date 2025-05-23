@@ -129,6 +129,7 @@ def test_protograph() -> None:
     assert protograph.field == abstract.TrivialGroup().field
     assert np.array_equal(protograph.lift(), matrix)
     assert np.array_equal((protograph @ protograph).lift(), protograph.lift() @ protograph.lift())
+    assert isinstance(np.kron(protograph, protograph), abstract.Protograph)
 
     # fail to construct a valid protograph
     with pytest.raises(ValueError, match="must be Element-valued"):
