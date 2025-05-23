@@ -161,10 +161,10 @@ class CircuitNoiseModel(NoiseModel):
         """
         # Apply a flip error before measurement
         if self.p_meas > 0:
-            if basis == Pauli.Z:
+            if basis is Pauli.Z:
                 # X error before Z measurement causes a flip
                 circ.append("X_ERROR", qubits, self.p_meas)
-            elif basis == Pauli.X:
+            elif basis is Pauli.X:
                 # Z error before X measurement causes a flip
                 circ.append("Z_ERROR", qubits, self.p_meas)
             else:
@@ -172,9 +172,9 @@ class CircuitNoiseModel(NoiseModel):
             circ.append("TICK")
 
         # Apply the measurement
-        if basis == Pauli.Z:
+        if basis is Pauli.Z:
             meas_gate = "M"
-        elif basis == Pauli.X:
+        elif basis is Pauli.X:
             meas_gate = "MX"
         else:
             # This should ideally not be reached if the error check passed, but included for safety
@@ -196,10 +196,10 @@ class CircuitNoiseModel(NoiseModel):
             ValueError: If an invalid basis is provided.
         """
         # Determine the appropriate reset gate and the error gate that causes a flip
-        if basis == Pauli.Z:
+        if basis is Pauli.Z:
             reset_gate = "R"
             error_gate = "X_ERROR"  # X error flips |0> to |1> after Z reset
-        elif basis == Pauli.X:
+        elif basis is Pauli.X:
             reset_gate = "RX"
             error_gate = "Z_ERROR"  # Z error flips |+> to |-> after X reset
         else:

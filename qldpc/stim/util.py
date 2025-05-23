@@ -13,8 +13,8 @@ from qldpc.objects import Pauli, PauliXZ
 
 @dataclass(frozen=True)
 class CircuitLevelError:
-    dets: tuple[DemTargetWithCoords]
-    obs: tuple[DemTarget]
+    dets: tuple[DemTargetWithCoords, ...]
+    obs: tuple[DemTarget, ...]
     basis: PauliXZ
 
 
@@ -28,12 +28,12 @@ class CheckMatrices:
 
 def _det_basis_coord(det: DemTargetWithCoords) -> PauliXZ:
     """
-    Returns the basis of the detector based on the 1st coordinate (1 == Z, 2 == X)
+    Returns the basis of the detector based on the 1st coordinate (1 == X, 2 == Z)
     """
     if det.coords[0] == 1:
-        return Pauli.Z
-    elif det.coords[0] == 2:
         return Pauli.X
+    elif det.coords[0] == 2:
+        return Pauli.Z
     else:
         raise ValueError(f"Invalid basis: {det.coords[0]} (must be 1 or 2)")
 
@@ -115,9 +115,9 @@ def detector_error_model_to_css_checks(
                 if targ.is_relative_detector_id():
                     det = DemTargetWithCoords(dem_target=targ, coords=det_coords[targ.val])
                     basis = fn_det_basis(det)
-                    if basis == Pauli.Z:
+                    if basis is Pauli.Z:
                         z_dets.append(det)
-                    elif basis == Pauli.X:
+                    elif basis is Pauli.X:
                         x_dets.append(det)
                     else:
                         raise ValueError(f"Invalid basis: {basis}")
