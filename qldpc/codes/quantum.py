@@ -729,7 +729,11 @@ class HGPCode(CSSCode):
         self._default_conjugate = slice(self.sector_size[0, 0], None)
 
         CSSCode.__init__(
-            self, matrix_x.astype(int), matrix_z.astype(int), field, is_subsystem_code=False
+            self,
+            matrix_x.view(np.ndarray).astype(int),
+            matrix_z.view(np.ndarray).astype(int),
+            field,
+            is_subsystem_code=True,
         )
 
         if set_logicals:
@@ -997,6 +1001,8 @@ class LPCode(CSSCode):
 
         # identify X-sector and Z-sector parity checks
         matrix_x, matrix_z = HGPCode.get_matrix_product(protograph_a, protograph_b)
+        assert isinstance(matrix_x, abstract.Protograph)
+        assert isinstance(matrix_z, abstract.Protograph)
 
         # identify the number of qudits in each sector
         self.sector_size = protograph_a.group.lift_dim * np.outer(
@@ -1007,13 +1013,7 @@ class LPCode(CSSCode):
         # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
         self._default_conjugate = slice(self.sector_size[0, 0], None)
 
-        CSSCode.__init__(
-            self,
-            abstract.Protograph(matrix_x.astype(object)).lift(),
-            abstract.Protograph(matrix_z.astype(object)).lift(),
-            field,
-            is_subsystem_code=False,
-        )
+        CSSCode.__init__(self, matrix_x.lift(), matrix_z.lift(), field, is_subsystem_code=False)
 
 
 class SLPCode(CSSCode):
@@ -1042,14 +1042,10 @@ class SLPCode(CSSCode):
 
         # identify X-sector and Z-sector parity checks
         matrix_x, matrix_z = SHPCode.get_matrix_product(protograph_a, protograph_b)
+        assert isinstance(matrix_x, abstract.Protograph)
+        assert isinstance(matrix_z, abstract.Protograph)
 
-        CSSCode.__init__(
-            self,
-            abstract.Protograph(matrix_x.astype(object)).lift(),
-            abstract.Protograph(matrix_z.astype(object)).lift(),
-            field,
-            is_subsystem_code=True,
-        )
+        CSSCode.__init__(self, matrix_x.lift(), matrix_z.lift(), field, is_subsystem_code=True)
 
 
 ################################################################################

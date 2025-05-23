@@ -44,7 +44,7 @@ import functools
 import itertools
 import math
 import typing
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 import galois
 import numpy as np
@@ -599,9 +599,25 @@ class Protograph(npt.NDArray[np.object_]):
 
     def __array_finalize__(self, obj: npt.NDArray[np.object_] | None) -> None:
         """Propagate metadata to newly constructed arrays."""
-        group = getattr(obj, "_group", None)
-        if isinstance(group, Group):
-            self._group = group
+        setattr(self, "_group", getattr(obj, "_group", None))
+
+    def __array_function__(
+        self,
+        func: typing.Any,
+        types: Iterable[type],
+        args: Iterable[typing.Any],
+        kwargs: Mapping[str, typing.Any],
+    ) -> Protograph | None:
+        """Intercept array operations to ensure Protograph compatibility."""
+        groups = {self._group} | {x._group for x in args if isinstance(x, Protograph)}
+        if len(groups) > 1:
+            raise ValueError("Cannot perform operations on Protographs with different base groups")
+        args = tuple(x.view(np.ndarray) if isinstance(x, Protograph) else x for x in args)
+        result = super().__array_function__(func, types, args, kwargs)
+        if isinstance(result, np.ndarray):
+            result = result.view(Protograph)
+            setattr(result, "_group", next(iter(groups), None))
+        return result
 
     def __array_ufunc__(
         self,
@@ -611,13 +627,9 @@ class Protograph(npt.NDArray[np.object_]):
         **kwargs: object,
     ) -> Protograph | None:
         """Intercept array operations to ensure Protograph compatibility."""
-        groups = set()
-        if method == "__call__":
-            groups |= {x._group for x in inputs if isinstance(x, Protograph)}
-            if len(groups) > 1:
-                raise ValueError(
-                    "Cannot perform operations on Protographs with different base groups"
-                )
+        groups = {self._group} | {x._group for x in inputs if isinstance(x, Protograph)}
+        if len(groups) > 1:
+            raise ValueError("Cannot perform operations on Protographs with different base groups")
         inputs = tuple(x.view(np.ndarray) if isinstance(x, Protograph) else x for x in inputs)
         result = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
         if isinstance(result, np.ndarray):
