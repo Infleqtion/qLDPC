@@ -718,9 +718,9 @@ class TrivialGroup(Group):
         array = np.asarray(data)
         group = TrivialGroup(field)
         zero = Element(group)
-        unit = Element(group, group.identity)
-        terms = [val * unit if val else zero for val in array.ravel()]
-        return Protograph(np.array(terms).reshape(array.shape))
+        one = Element(group, group.identity)
+        terms = [val * one if val else zero for val in array.ravel()]
+        return Protograph(np.array(terms, dtype=object).reshape(array.shape))
 
 
 class CyclicGroup(Group):
