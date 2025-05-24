@@ -18,7 +18,11 @@ You can also `pip install -e 'qLDPC[dev]'` to additionally install some developm
 
 ### macOS
 
-If you use macOS you may need to install `cvxpy` manually by following the instructions [here](https://www.cvxpy.org/install/) before installing `qLDPC`.  If you use `conda` to manage your python environment, you can obtain `cvxpy` simply by running `conda install -c conda-forge cvxpy`.
+If you use macOS you may need to install `cvxpy` manually by following the instructions [here](https://www.cvxpy.org/install/) before installing `qLDPC`.  If you use `conda` to manage your python environment, you can obtain `cvxpy` by running `conda install -c conda-forge cvxpy`.
+
+### GAP
+
+Some features in `qLDPC` require the computer algebra system [GAP](https://www.gap-system.org/)/[GUAVA].  If you use `conda` to manage your python environment, you can obtain `gap` by running `conda install -c conda-forge gap-defaults`.
 
 ## 🚀 Features
 
