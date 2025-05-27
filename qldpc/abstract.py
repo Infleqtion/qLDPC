@@ -113,6 +113,18 @@ def default_lift(member: GroupMember) -> npt.NDArray[np.int_]:
     return matrix
 
 
+def regular_lift(group: Group, member: GroupMember) -> npt.NDArray[np.int_]:
+    """Regular lift: represent a group member by how it permutes elements of the group.
+
+    For consistency with how SymPy composes permutations, this matrix is right-acting, meaning that
+    it acts on a vector p from the right: p --> p @ M.
+    """
+    matrix = np.zeros((group.order,) * 2, dtype=int)
+    for ii, gg in enumerate(group.generate()):
+        matrix[ii, group.index(gg * member)] = 1
+    return matrix
+
+
 class Group:
     """Base class for a finite group.
 
@@ -262,9 +274,9 @@ class Group:
             sympy.core.random.seed(seed)
         return GroupMember.from_sympy(self._group.random())
 
-    def lift(self, member: GroupMember) -> galois.FieldArray:
+    def lift(self, member: GroupMember, *, regular: bool = False) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
-        return self.field(self._lift(member))
+        return self.field(regular_lift(self, member) if regular else self._lift(member))
 
     @functools.cached_property
     def lift_dim(self) -> int:
@@ -546,11 +558,12 @@ class Element:
         """Base group of this algebra."""
         return self._group
 
-    def lift(self) -> galois.FieldArray:
+    def lift(self, *, regular: bool = False) -> galois.FieldArray:
         """Lift this element using the underlying group representation."""
+        dim = self._group.lift_dim if regular is False else self._group.order
         return sum(
-            (val * self._group.lift(member) for member, val in self if val),
-            start=self.field.Zeros((self._group.lift_dim,) * 2),
+            (val * self._group.lift(member, regular=regular) for member, val in self if val),
+            start=self.field.Zeros((dim,) * 2),
         )
 
     def zero(self) -> Element:
@@ -657,9 +670,9 @@ class Protograph(npt.NDArray[np.object_]):
         """Base field of this protograph."""
         return self._group.field
 
-    def lift(self) -> galois.FieldArray:
+    def lift(self, *, regular: bool = False) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
-        vals = [val.lift() for val in self.ravel()]
+        vals = [val.lift(regular=regular) for val in self.ravel()]
         tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
         rows = tensor.shape[0] * tensor.shape[1]
         cols = tensor.shape[2] * tensor.shape[3]

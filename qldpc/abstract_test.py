@@ -79,16 +79,21 @@ def test_lift() -> None:
 
 def assert_valid_lift(group: abstract.Group) -> None:
     """Assert faithfulness of the group representation (lift)."""
-    assert all(
-        aa == bb or not np.array_equal(group.lift(aa), group.lift(bb))
-        for aa in group.generate()
-        for bb in group.generate()
-    )
-    assert all(
-        np.array_equal(group.lift(aa) @ group.lift(bb), group.lift(aa * bb))
-        for aa in group.generate()
-        for bb in group.generate()
-    )
+    for regular in [True, False]:
+        assert all(
+            aa == bb
+            or not np.array_equal(group.lift(aa, regular=regular), group.lift(bb, regular=regular))
+            for aa in group.generate()
+            for bb in group.generate()
+        )
+        assert all(
+            np.array_equal(
+                group.lift(aa, regular=regular) @ group.lift(bb, regular=regular),
+                group.lift(aa * bb, regular=regular),
+            )
+            for aa in group.generate()
+            for bb in group.generate()
+        )
 
 
 def test_group_product() -> None:
