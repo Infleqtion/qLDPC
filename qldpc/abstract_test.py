@@ -97,7 +97,7 @@ def assert_valid_lift(group: abstract.Group) -> None:
 
     array = group.field.Random((5, group.order))
     elements = abstract.Protograph.from_dense_array(group, array)
-    reconstructed_array = group.field([element.to_dense() for element in elements])
+    reconstructed_array = group.field([element.to_vector() for element in elements])
     assert np.array_equal(array, reconstructed_array)
 
 

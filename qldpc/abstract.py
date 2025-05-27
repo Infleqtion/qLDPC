@@ -592,12 +592,17 @@ class Element:
             new_element._vec[~member] = val
         return new_element
 
-    def to_dense(self) -> galois.FieldArray:
-        """Convert this element into a dense vector."""
+    def to_vector(self) -> galois.FieldArray:
+        """Convert this group algebra element into a vector of coefficients."""
         vector = self.field.Zeros(self.group.order)
         for val, member in self:
             vector[self.group.index(member)] = val
         return vector
+
+    @classmethod
+    def from_vector(cls, group: Group, vector: galois.FieldArray) -> Element:
+        """Construct a group algebra element from vector of coefficients."""
+        return Element(group, *[(x_g, gg) for x_g, gg in zip(vector, group.generate()) if x_g])
 
 
 ################################################################################
@@ -700,10 +705,7 @@ class Protograph(npt.NDArray[np.object_]):
         protograph.
         """
         assert array.shape[-1] % group.order == 0
-        vals = [
-            Element(group, *[(x_g, gg) for x_g, gg in zip(entry, group.generate()) if x_g])
-            for entry in array.reshape(-1, group.order)
-        ]
+        vals = [Element.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
         return Protograph(np.array(vals, dtype=object).reshape(array.shape[:-1]))
 
     @property
