@@ -106,7 +106,7 @@ def test_dense_forms() -> None:
         abstract.Element.from_vector(group, vector).to_vector(),
     )
 
-    array = group.field.Random((5, group.order))
+    array = group.field.Random((2, 3, 4, group.order))
     assert np.array_equal(
         array,
         abstract.Protograph.from_dense_array(group, array).to_dense_array(),
