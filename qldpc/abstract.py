@@ -672,6 +672,7 @@ class Protograph(npt.NDArray[np.object_]):
 
     def lift(self, *, regular: bool = False) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
+        assert self.ndim == 2
         vals = [val.lift(regular=regular) for val in self.ravel()]
         tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
         rows = tensor.shape[0] * tensor.shape[1]
