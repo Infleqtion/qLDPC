@@ -95,10 +95,22 @@ def assert_valid_lift(group: abstract.Group) -> None:
             for bb in group.generate()
         )
 
+
+def test_dense_forms() -> None:
+    """Test conversions of Elements and Protographs to/from dense forms."""
+    group = abstract.AbelianGroup(2, 3, field=4)
+
+    vector = group.field.Random(group.order)
+    assert np.array_equal(
+        vector,
+        abstract.Element.from_vector(group, vector).to_vector(),
+    )
+
     array = group.field.Random((5, group.order))
-    elements = abstract.Protograph.from_dense_array(group, array)
-    reconstructed_array = group.field([element.to_vector() for element in elements])
-    assert np.array_equal(array, reconstructed_array)
+    assert np.array_equal(
+        array,
+        abstract.Protograph.from_dense_array(group, array).to_dense_array(),
+    )
 
 
 def test_group_product() -> None:

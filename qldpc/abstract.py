@@ -592,17 +592,17 @@ class Element:
             new_element._vec[~member] = val
         return new_element
 
+    @classmethod
+    def from_vector(cls, group: Group, vector: galois.FieldArray) -> Element:
+        """Construct a group algebra element from vector of coefficients, (x_g : g in G)."""
+        return Element(group, *[(x_g, gg) for x_g, gg in zip(vector, group.generate()) if x_g])
+
     def to_vector(self) -> galois.FieldArray:
-        """Convert this group algebra element into a vector of coefficients."""
+        """Convert this group algebra element into a vector of coefficients, (x_g : g in G)."""
         vector = self.field.Zeros(self.group.order)
         for val, member in self:
             vector[self.group.index(member)] = val
         return vector
-
-    @classmethod
-    def from_vector(cls, group: Group, vector: galois.FieldArray) -> Element:
-        """Construct a group algebra element from vector of coefficients."""
-        return Element(group, *[(x_g, gg) for x_g, gg in zip(vector, group.generate()) if x_g])
 
 
 ################################################################################
@@ -696,18 +696,6 @@ class Protograph(npt.NDArray[np.object_]):
         cols = tensor.shape[2] * tensor.shape[3]
         return self.field(tensor.reshape(rows, cols))
 
-    @classmethod
-    def from_dense_array(cls, group: Group, array: npt.NDArray[np.int_]) -> Protograph:
-        """Convert a dense array into a Protograph.
-
-        The array should have shape (..., |G|), and last index is used to indicate a member g_i of
-        the group for which array[..., i] is a coefficient in the corresponing entry of the
-        protograph.
-        """
-        assert array.shape[-1] % group.order == 0
-        vals = [Element.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
-        return Protograph(np.array(vals, dtype=object).reshape(array.shape[:-1]))
-
     @property
     def T(self) -> Protograph:
         """Transpose of this protograph, which also transposes every array entry."""
@@ -740,6 +728,23 @@ class Protograph(npt.NDArray[np.object_]):
 
         vals = [elevate(value) for value in array.ravel()]
         return Protograph(np.array(vals).reshape(array.shape))
+
+    @classmethod
+    def from_dense_array(cls, group: Group, array: npt.NDArray[np.int_]) -> Protograph:
+        """Construct a Protograph from a dense array of coefficients.
+
+        The array should have shape (..., |G|), and last index is used to indicate a member g_i of
+        the group for which array[..., i] is a coefficient in the corresponing entry of the
+        protograph.
+        """
+        assert array.shape[-1] % group.order == 0
+        vals = [Element.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
+        return Protograph(np.array(vals, dtype=object).reshape(array.shape[:-1]))
+
+    def to_dense_array(self) -> galois.FieldArray:
+        """Convert Protograph into a dense array of coefficients."""
+        vals = [val.to_vector() for val in self.ravel()]
+        return self.field(np.asarray(vals).reshape(self.shape + (self.group.order,)))
 
 
 ################################################################################
