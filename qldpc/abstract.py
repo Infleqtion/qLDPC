@@ -692,20 +692,19 @@ class Protograph(npt.NDArray[np.object_]):
         return self.field(tensor.reshape(rows, cols))
 
     @classmethod
-    def from_regular_vector(cls, group: Group, vector: galois.FieldArray) -> Protograph:
-        """Convert a |G|×n-dimensional field array into an n-dimensional Protograph."""
-        assert vector.ndim == 1 and vector.size % group.order == 0
+    def from_dense_array(cls, group: Group, array: npt.NDArray[np.int_]) -> Protograph:
+        """Convert a dense array into a Protograph.
+
+        The array should have shape (..., |G|), and last index is used to indicate a member g_i of
+        the group for which array[..., i] is a coefficient in the corresponing entry of the
+        protograph.
+        """
+        assert array.shape[-1] % group.order == 0
         vals = [
-            functools.reduce(
-                operator.add,
-                [
-                    Element(group, (x_g, gg)) if x_g else Element(group)
-                    for x_g, gg in zip(row, group.generate())
-                ],
-            )
-            for row in vector.reshape(-1, group.order)
+            Element(group, *[(x_g, gg) for x_g, gg in zip(entry, group.generate()) if x_g])
+            for entry in array.reshape(-1, group.order)
         ]
-        return Protograph(np.array(vals, dtype=object))
+        return Protograph(np.array(vals, dtype=object).reshape(array.shape[:-1]))
 
     @property
     def T(self) -> Protograph:

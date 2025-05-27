@@ -95,10 +95,10 @@ def assert_valid_lift(group: abstract.Group) -> None:
             for bb in group.generate()
         )
 
-    vector = group.field.Random(group.order * 5)
-    elements = abstract.Protograph.from_regular_vector(group, vector)
-    reconstructed_vector_vector = group.field([element.to_dense() for element in elements]).ravel()
-    assert np.array_equal(vector, reconstructed_vector_vector)
+    array = group.field.Random((5, group.order))
+    elements = abstract.Protograph.from_dense_array(group, array)
+    reconstructed_array = group.field([element.to_dense() for element in elements])
+    assert np.array_equal(array, reconstructed_array)
 
 
 def test_group_product() -> None:
