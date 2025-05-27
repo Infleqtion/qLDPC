@@ -42,6 +42,9 @@ def test_permutation_group() -> None:
 
     assert abstract.Group.from_generating_mats([[1]]) == abstract.CyclicGroup(1)
 
+    with pytest.raises(ValueError, match="not in group"):
+        abstract.CyclicGroup(1).index(abstract.GroupMember(2, 1))
+
     with pytest.raises(ValueError, match="inconsistent"):
         gen = galois.GF(2)([[1]])
         abstract.Group.from_generating_mats(gen, field=3)

@@ -240,6 +240,17 @@ class Group:
         """Iterate over all group members."""
         yield from map(GroupMember.from_sympy, self._group.generate())
 
+    @functools.cached_property
+    def _members(self) -> dict[GroupMember, int]:
+        return {member: idx for idx, member in enumerate(self.generate())}
+
+    def index(self, member: GroupMember) -> int:
+        """The index of a GroupMember in this group."""
+        index = self._members.get(member)
+        if not isinstance(index, int):
+            raise ValueError(f"Member {member} not in group {self}")
+        return index
+
     @property
     def identity(self) -> GroupMember:
         """The identity element of this group."""
@@ -263,9 +274,8 @@ class Group:
     @functools.cached_property
     def table(self) -> npt.NDArray[np.int_]:
         """Multiplication (Cayley) table for this group."""
-        members = {member: idx for idx, member in enumerate(self.generate())}
         return np.array(
-            [members[aa * bb] for aa in members for bb in members],
+            [self.index(aa * bb) for aa, bb in itertools.product(self.generate(), repeat=2)],
             dtype=int,
         ).reshape(self.order, self.order)
 
@@ -841,7 +851,7 @@ class QuaternionGroup(Group):
 class SmallGroup(Group):
     """Group indexed by the GAP computer algebra system."""
 
-    index: int
+    group_index: int
 
     def __init__(self, order: int, index: int) -> None:
         assert order > 0
@@ -854,16 +864,16 @@ class SmallGroup(Group):
 
         name = f"SmallGroup({order},{index})"
         super()._init_from_group(Group.from_name(name))
-        self.index = index
+        self.group_index = index
 
     def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
-        return super().random(seed=seed) if self.index > 1 else self.identity
+        return super().random(seed=seed) if self.group_index > 1 else self.identity
 
     @functools.cached_property
     def structure(self) -> str:
         """A description of the structure of this group."""
-        return self.get_structure(self.order, self.index)
+        return self.get_structure(self.order, self.group_index)
 
     @staticmethod
     def number(order: int) -> int:
