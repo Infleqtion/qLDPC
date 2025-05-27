@@ -595,7 +595,7 @@ class Element:
     @classmethod
     def from_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> Element:
         """Construct a group algebra element from vector of coefficients, (x_g : g in G)."""
-        terms = [(x_g, gg) for x_g, gg in zip(vector, group.generate()) if x_g]
+        terms = [(int(x_g), gg) for x_g, gg in zip(vector, group.generate()) if x_g]
         return Element(group, *terms)
 
     def to_vector(self) -> galois.FieldArray:
