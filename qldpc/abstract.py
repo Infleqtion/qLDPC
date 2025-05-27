@@ -43,6 +43,7 @@ import copy
 import functools
 import itertools
 import math
+import operator
 import typing
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
@@ -226,12 +227,12 @@ class Group:
     def __pow__(self, power: int) -> Group:
         """Direct product of self multiple times."""
         assert power > 0
-        return functools.reduce(Group.__mul__, [self] * power)
+        return functools.reduce(operator.mul, [self] * power)
 
     @staticmethod
     def product(*groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""
-        return functools.reduce(Group.__mul__, groups * repeat)
+        return functools.reduce(operator.mul, groups * repeat)
 
     @property
     def field(self) -> type[galois.FieldArray]:
@@ -456,11 +457,14 @@ class Element:
     _group: Group
     _vec: collections.defaultdict[GroupMember, galois.FieldArray]
 
-    def __init__(self, group: Group, *members: GroupMember) -> None:
+    def __init__(
+        self, group: Group, *terms: GroupMember | tuple[int | galois.FieldArray, GroupMember]
+    ) -> None:
         self._group = group
         self._vec = collections.defaultdict(lambda: self.field(0))
-        for member in members:
-            self._vec[member] += self.field(1)
+        for term in terms:
+            value, member = (1, term) if isinstance(term, GroupMember) else term
+            self._vec[member] += self.field(value)
 
     def __eq__(self, other: object) -> bool:
         return (
@@ -473,8 +477,9 @@ class Element:
     def __bool__(self) -> bool:
         return any(self._vec.values())
 
-    def __iter__(self) -> Iterator[tuple[GroupMember, galois.FieldArray]]:
-        yield from self._vec.items()
+    def __iter__(self) -> Iterator[tuple[galois.FieldArray, GroupMember]]:
+        for gg, x_g in self._vec.items():
+            yield x_g, gg
 
     def __add__(self, other: int | GroupMember | Element) -> Element:
         if isinstance(other, int):
@@ -487,7 +492,7 @@ class Element:
 
         if isinstance(other, Element):
             new_element = self.copy()
-            for member, val in other:
+            for val, member in other:
                 new_element._vec[member] += val
             return new_element
 
@@ -503,21 +508,21 @@ class Element:
         if isinstance(other, int):
             # multiply coefficients by 'other'
             new_element = self.zero()
-            for member, val in self:
+            for val, member in self:
                 new_element._vec[member] = val * other
             return new_element
 
         if isinstance(other, GroupMember):
             # multiply group members by 'other'
             new_element = self.zero()
-            for member, val in self:
+            for val, member in self:
                 new_element._vec[member * other] = val
             return new_element
 
         if isinstance(other, Element):
             # collect and multiply pairs of terms from 'self' and 'other'
             new_element = self.zero()
-            for (aa, x_a), (bb, y_b) in itertools.product(self, other):
+            for (x_a, aa), (y_b, bb) in itertools.product(self, other):
                 new_element._vec[aa * bb] += x_a * y_b
             return new_element
 
@@ -529,7 +534,7 @@ class Element:
 
         if isinstance(other, GroupMember):
             new_element = self.zero()
-            for member, val in self:
+            for val, member in self:
                 new_element._vec[other * member] = val
             return new_element
 
@@ -539,12 +544,12 @@ class Element:
         return self * (-1)
 
     def __pow__(self, power: int) -> Element:
-        return functools.reduce(Element.__mul__, [self] * power, self.one())
+        return functools.reduce(operator.mul, [self] * power, self.one())
 
     def copy(self) -> Element:
         """Copy of self."""
         element = self.zero()
-        for member, val in self:
+        for val, member in self:
             element._vec[member] = copy.deepcopy(val)
         return element
 
@@ -562,7 +567,7 @@ class Element:
         """Lift this element using the underlying group representation."""
         dim = self._group.lift_dim if regular is False else self._group.order
         return sum(
-            (val * self._group.lift(member, regular=regular) for member, val in self if val),
+            (val * self._group.lift(member, regular=regular) for val, member in self if val),
             start=self.field.Zeros((dim,) * 2),
         )
 
@@ -583,9 +588,16 @@ class Element:
         to orthogonal matrices implies that g.T = ~g = g**-1.
         """
         new_element = self.zero()
-        for member, val in self:
+        for val, member in self:
             new_element._vec[~member] = val
         return new_element
+
+    def to_dense(self) -> galois.FieldArray:
+        """Convert this element into a dense vector."""
+        vector = self.field.Zeros(self.group.order)
+        for val, member in self:
+            vector[self.group.index(member)] = val
+        return vector
 
 
 ################################################################################
@@ -679,6 +691,22 @@ class Protograph(npt.NDArray[np.object_]):
         cols = tensor.shape[2] * tensor.shape[3]
         return self.field(tensor.reshape(rows, cols))
 
+    @classmethod
+    def from_regular_vector(cls, group: Group, vector: galois.FieldArray) -> Protograph:
+        """Convert a |G|×n-dimensional field array into an n-dimensional Protograph."""
+        assert vector.ndim == 1 and vector.size % group.order == 0
+        vals = [
+            functools.reduce(
+                operator.add,
+                [
+                    Element(group, (x_g, gg)) if x_g else Element(group)
+                    for x_g, gg in zip(row, group.generate())
+                ],
+            )
+            for row in vector.reshape(-1, group.order)
+        ]
+        return Protograph(np.array(vals, dtype=object))
+
     @property
     def T(self) -> Protograph:
         """Transpose of this protograph, which also transposes every array entry."""
@@ -707,10 +735,10 @@ class Protograph(npt.NDArray[np.object_]):
                 return value
             if isinstance(value, GroupMember):
                 return Element(group, value)
-            return int(value) * Element(group, group.identity)
+            return Element(group, (value, group.identity))
 
         vals = [elevate(value) for value in array.ravel()]
-        return Protograph(np.array(vals).reshape(array.shape), group)
+        return Protograph(np.array(vals).reshape(array.shape))
 
 
 ################################################################################

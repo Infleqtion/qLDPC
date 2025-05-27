@@ -67,9 +67,9 @@ def test_trivial_group() -> None:
 
 def test_lift() -> None:
     """Lift named group elements."""
-    assert_valid_lift(abstract.TrivialGroup())
-    assert_valid_lift(abstract.CyclicGroup(3))
-    assert_valid_lift(abstract.AbelianGroup(2, 3))
+    assert_valid_lift(abstract.TrivialGroup(field=3))
+    assert_valid_lift(abstract.CyclicGroup(3, field=4))
+    assert_valid_lift(abstract.AbelianGroup(2, 3, field=5))
     assert_valid_lift(abstract.AbelianGroup(2, 3, product_lift=True))
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
@@ -94,6 +94,11 @@ def assert_valid_lift(group: abstract.Group) -> None:
             for aa in group.generate()
             for bb in group.generate()
         )
+
+    vector = group.field.Random(group.order * 5)
+    elements = abstract.Protograph.from_regular_vector(group, vector)
+    reconstructed_vector_vector = group.field([element.to_dense() for element in elements]).ravel()
+    assert np.array_equal(vector, reconstructed_vector_vector)
 
 
 def test_group_product() -> None:
