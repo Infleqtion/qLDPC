@@ -111,13 +111,19 @@ def test_dense_forms() -> None:
 def test_matrix_action() -> None:
     """Test how protographs transform vectors of Elements."""
     group = abstract.AbelianGroup(2, 3, field=4)
-    matrix_1 = group.field.Random((3, 4, group.order))
-    matrix_2 = group.field.Random((3, 3, group.order))
-    vector = group.field.Random(group.order * matrix_1.shape[1])
+    array_vector = group.field.Random((4, group.order))
+    array_matrix_1 = group.field.Random((3, 4, group.order))
+    array_matrix_2 = group.field.Random((3, 3, group.order))
 
-    mat_1 = abstract.Protograph.from_dense_array(group, matrix_1)
-    mat_2 = abstract.Protograph.from_dense_array(group, matrix_2)
-    vec = abstract.Protograph([[abstract.Element.from_vector(group, vector)]])
+    vector = abstract.Protograph.from_dense_array(group, array_vector)
+    matrix_1 = abstract.Protograph.from_dense_array(group, array_matrix_1)
+    matrix_2 = abstract.Protograph.from_dense_array(group, array_matrix_2)
+
+    print()
+    print((matrix_1 @ vector).shape)
+    print()
+    print()
+    print()
 
     # one = abstract.Element(group).one()
     # g1 = abstract.Element(group, group.generators[0])

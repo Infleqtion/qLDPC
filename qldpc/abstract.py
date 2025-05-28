@@ -121,7 +121,7 @@ class Group:
 
     _group: comb.PermutationGroup
     _field: type[galois.FieldArray]
-    _lift: Lift
+    _lift: Lift | None
     _name: str | None
 
     def __init__(
