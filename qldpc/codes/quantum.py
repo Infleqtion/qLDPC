@@ -237,18 +237,18 @@ class QCCode(TBCode):
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
         # build defining matrices of a generalized bicycle code
-        matrix_a = self.eval(self.poly_a).lift().T
-        matrix_b = self.eval(self.poly_b).lift().T
+        matrix_a = self.eval(self.poly_a).lift()
+        matrix_b = self.eval(self.poly_b).lift()
         TBCode.__init__(
             self, matrix_a, matrix_b, field, promise_equal_distance_xz=True, validate=False
         )
 
     def eval(
-        self,
-        expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly,
+        self, expression: sympy.Integer | sympy.Symbol | sympy.Pow | sympy.Mul | sympy.Poly
     ) -> abstract.Element:
         """Convert a sympy expression into an element of this code's group algebra."""
         # evaluate a monomial
+        expression = expression.as_expr()
         if isinstance(expression, (sympy.Integer, sympy.Symbol, sympy.Pow, sympy.Mul)):
             coeff, monomial = expression.as_coeff_Mul()
             member = self.to_group_member(monomial)
@@ -256,7 +256,7 @@ class QCCode(TBCode):
 
         # evaluate a polynomial
         element = abstract.Element(self.group)
-        for term in expression.as_expr().args:
+        for term in expression.args:
             element += self.eval(term)
         return element
 

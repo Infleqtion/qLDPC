@@ -120,7 +120,7 @@ def test_matrix_action() -> None:
     matrix_2 = abstract.Protograph.from_dense_array(group, array_matrix_2)
 
     print()
-    print((matrix_1 @ vector).shape)
+    print((matrix_2 @ matrix_1 @ vector).shape)
     print()
     print()
     print()
