@@ -568,7 +568,7 @@ class RingMember:
         )
 
     def regular_lift(self) -> galois.FieldArray:
-        """Lift this element using the regular group representation."""
+        """Lift this element using the regular representation of its base group."""
         return sum(
             (val * self.group.regular_lift(member) for val, member in self if val),
             start=self.field.Zeros((self.group.order,) * 2),
@@ -612,11 +612,18 @@ class RingMember:
 class Element(RingMember):
     """Deprecated alias for RingMember."""
 
-    def __init__(
-        self, group: Group, *terms: GroupMember | tuple[int | galois.FieldArray, GroupMember]
-    ) -> None:
-        warnings.warn("qldpc.abstract.Element is deprecated; use qldpc.abstract.RingMember instead")
-        super().__init__(group, *terms)
+    def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
+        attribute = super().__getattribute__(name)
+        if callable(attribute):
+
+            def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                warnings.warn(
+                    "qldpc.abstract.Element is deprecated; use qldpc.abstract.RingMember instead"
+                )
+                return attribute(*args, **kwargs)
+
+            return wrapper
+        return attribute
 
 
 ################################################################################
@@ -796,13 +803,18 @@ class RingArray(npt.NDArray[np.object_]):
 class Protograph(RingArray):
     """Deprecated alias for RingArray."""
 
-    def __new__(
-        cls, data: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
-    ) -> RingArray:
-        warnings.warn(
-            "qldpc.abstract.RingArray is deprecated; use qldpc.abstract.RingArray instead"
-        )
-        return RingArray(data, group)
+    def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
+        attribute = super().__getattribute__(name)
+        if callable(attribute):
+
+            def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
+                warnings.warn(
+                    "qldpc.abstract.Protograph is deprecated; use qldpc.abstract.RingArray instead"
+                )
+                return attribute(*args, **kwargs)
+
+            return wrapper
+        return attribute
 
 
 ################################################################################

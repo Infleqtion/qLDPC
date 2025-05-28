@@ -126,8 +126,8 @@ def test_random_symmetric_subset() -> None:
 def test_algebra() -> None:
     """Construct elements of a group algebra."""
     group = abstract.TrivialGroup(field=3)
-    zero = abstract.Element(group)
-    one = abstract.Element(group).one()
+    zero = abstract.RingMember(group)
+    one = abstract.RingMember(group).one()
     assert bool(one) and not bool(zero)
     assert zero.group == group
     assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
@@ -150,11 +150,11 @@ def test_ring_array() -> None:
     assert isinstance(np.kron(matrix, matrix), abstract.RingArray)
 
     # fail to construct a valid ring array
-    with pytest.raises(ValueError, match="must be Element-valued"):
+    with pytest.raises(ValueError, match="must be RingMember-valued"):
         abstract.RingArray([[0]])
     with pytest.raises(ValueError, match="Inconsistent base groups"):
         groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
-        abstract.RingArray([[abstract.Element(group) for group in groups]])
+        abstract.RingArray([[abstract.RingMember(group) for group in groups]])
     with pytest.raises(ValueError, match="Cannot determine the underlying group"):
         abstract.RingArray([])
 
@@ -169,11 +169,11 @@ def test_transpose() -> None:
     """Transpose various objects."""
     group = abstract.CyclicGroup(4)
     for member in group.generate():
-        element = abstract.Element(group, member)
+        element = abstract.RingMember(group, member)
         assert element.T.T == element
 
     x0, x1, x2, x3 = group.generate()
-    matrix = abstract.RingArray.build(group, [[x0, 0, x1], [x2, 0, abstract.Element(group, x3)]])
+    matrix = abstract.RingArray.build(group, [[x0, 0, x1], [x2, 0, abstract.RingMember(group, x3)]])
     assert np.array_equal(matrix.T.T, matrix)
 
 
