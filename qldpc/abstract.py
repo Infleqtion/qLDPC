@@ -965,7 +965,7 @@ class SpecialLinearGroup(Group):
                 """Lift a group member to a square matrix.
 
                 Each column of the matrix is nominally determined by how the matrix acts on a
-                standard basis vector.  We then take the transpose to make the matrix left-acting.
+                standard basis vector.
                 """
                 cols = []
                 for entry in range(self.dimension):
@@ -975,7 +975,7 @@ class SpecialLinearGroup(Group):
                     out_idx = member(inp_idx)
                     out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
                     cols.append(out_vec)
-                return np.vstack(cols, dtype=int).T
+                return np.vstack(cols, dtype=int)
 
             super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
@@ -1070,7 +1070,7 @@ class ProjectiveSpecialLinearGroup(Group):
                 """Lift a group member to a square matrix.
 
                 Each column of the matrix is nominally determined by how the matrix acts on a
-                standard basis vector.  We then take the transpose to make the matrix left-acting.
+                standard basis vector.
                 """
                 cols = []
                 for entry in range(self.dimension):
@@ -1080,7 +1080,7 @@ class ProjectiveSpecialLinearGroup(Group):
                     out_idx = member(inp_idx)
                     out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
                     cols.append(out_vec)
-                return np.vstack(cols, dtype=int).T
+                return np.vstack(cols, dtype=int)
 
             super()._init_from_group(comb.PermutationGroup(generators), field, lift)
 
