@@ -187,10 +187,13 @@ def test_regular_rep(group: abstract.Group) -> None:
     assert np.array_equal(dense_array, abstract.Protograph.to_dense_array(matrix))
     assert np.array_equal(
         (matrix @ vector).to_dense_vector(),
-        matrix.lift() @ vector.to_dense_vector(),
+        matrix.regular_lift() @ vector.to_dense_vector(),
     )
 
     assert not np.any(matrix @ matrix.null_space().T)
+    assert not np.any(matrix.regular_lift() @ matrix.null_space().regular_lift().T)
+    assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
+
     assert matrix.null_space(reduce=True) is NotImplemented
 
 
