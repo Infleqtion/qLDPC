@@ -236,9 +236,9 @@ class QCCode(TBCode):
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
-        # build defining matrices of a generalized bicycle code
-        matrix_a = self.eval(self.poly_a).lift()
-        matrix_b = self.eval(self.poly_b).lift()
+        # build defining matrices of a generalized bicycle code; transpose the lift by convention
+        matrix_a = self.eval(self.poly_a).lift().T
+        matrix_b = self.eval(self.poly_b).lift().T
         TBCode.__init__(
             self, matrix_a, matrix_b, field, promise_equal_distance_xz=True, validate=False
         )
