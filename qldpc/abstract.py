@@ -36,6 +36,7 @@ import functools
 import itertools
 import math
 import operator
+import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -614,7 +615,7 @@ class Element(RingMember):
 
     def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
         attribute = super().__getattribute__(name)
-        if callable(attribute):
+        if isinstance(attribute, types.MethodType):
 
             def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
                 warnings.warn(
@@ -805,7 +806,7 @@ class Protograph(RingArray):
 
     def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
         attribute = super().__getattribute__(name)
-        if callable(attribute):
+        if isinstance(attribute, types.MethodType):
 
             def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
                 warnings.warn(
