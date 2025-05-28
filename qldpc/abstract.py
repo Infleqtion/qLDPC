@@ -159,13 +159,6 @@ class Group:
             self._name = self._name or group._name  # explicitly provided name overrides group name
         self._generate_func = generate_func
 
-    def _default_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
-        """Regular lift: represent a group member by how it permutes elements of the group."""
-        matrix = np.zeros((self.order,) * 2, dtype=int)
-        for ii, gg in enumerate(self.generate()):
-            matrix[self.index(member * gg), ii] = 1
-        return matrix
-
     @property
     def name(self) -> str:
         """A name for this group, which is not required to uniquely identify the group."""
@@ -267,10 +260,20 @@ class Group:
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
         if self._lift is None:
-            matrix = self._default_lift(member)
+            matrix = self.regular_lift(member)
         else:
             matrix = self._lift(member)
         return self.field(matrix)
+
+    def regular_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
+        """Lift a group member to its regular representation.
+
+        The regular representation represents each group member by a permutation matrix that reflects how the group member permutes elements of the group.
+        """
+        matrix = np.zeros((self.order,) * 2, dtype=int)
+        for ii, gg in enumerate(self.generate()):
+            matrix[self.index(member * gg), ii] = 1
+        return matrix
 
     @functools.cached_property
     def lift_dim(self) -> int:
@@ -560,10 +563,16 @@ class Element:
 
     def lift(self) -> galois.FieldArray:
         """Lift this element using the underlying group representation."""
-        dim = self._group.lift_dim
         return sum(
             (val * self._group.lift(member) for val, member in self if val),
-            start=self.field.Zeros((dim,) * 2),
+            start=self.field.Zeros((self._group.lift_dim,) * 2),
+        )
+
+    def regular_lift(self) -> galois.FieldArray:
+        """Lift this element using the regular group representation."""
+        return sum(
+            (val * self._group.regular_lift(member) for val, member in self if val),
+            start=self.field.Zeros((self._group.order,) * 2),
         )
 
     def zero(self) -> Element:
@@ -692,6 +701,15 @@ class Protograph(npt.NDArray[np.object_]):
         cols = tensor.shape[2] * tensor.shape[3]
         return self.field(tensor.reshape(rows, cols))
 
+    def regular_lift(self) -> galois.FieldArray:
+        """Block matrix obtained by a regular lift of ach entry of the protograph."""
+        assert self.ndim == 2
+        vals = [val.regular_lift() for val in self.ravel()]
+        tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
+        rows = tensor.shape[0] * tensor.shape[1]
+        cols = tensor.shape[2] * tensor.shape[3]
+        return self.field(tensor.reshape(rows, cols))
+
     @property
     def T(self) -> Protograph:
         """Transpose of this protograph, which also transposes every array entry."""
@@ -753,6 +771,23 @@ class Protograph(npt.NDArray[np.object_]):
         assert self.ndim == 1
         vals = [val.to_vector() for val in self.ravel()]
         return self.field(np.asarray(vals).ravel())
+
+    def null_space(self, reduce: bool = False) -> Protograph:
+        """Construct a matrix of null-space row vectors for this Protograph.
+
+        The null space satisfies: assert not np.any(self @ self.null_space().T)
+
+        If reduce is True, reduce the null space matrix to a minimal basis for the null space.
+        """
+        null_space = np.vstack(
+            [
+                Protograph.from_dense_vector(self.group, vector).T
+                for vector in self.regular_lift().null_space()
+            ]
+        )
+        if reduce:
+            return NotImplemented
+        return Protograph(null_space)
 
 
 ################################################################################
