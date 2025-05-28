@@ -78,77 +78,34 @@ def test_lift() -> None:
 
 
 def assert_valid_lift(group: abstract.Group) -> None:
-    """Assert faithfulness of the group representation (lift)."""
-    assert all(
-        aa == bb or not np.array_equal(group.lift(aa), group.lift(bb))
-        for aa in group.generate()
-        for bb in group.generate()
-    )
-    assert all(
-        np.array_equal(group.lift(aa) @ group.lift(bb), group.lift(aa * bb))
-        for aa in group.generate()
-        for bb in group.generate()
-    )
+    """Assert faithfulness of the regular and permutation representations of group members."""
+    for lift in [group.lift, abstract.GroupMember.to_matrix]:
+        assert all(
+            aa == bb or not np.array_equal(lift(aa), lift(bb))
+            for aa in group.generate()
+            for bb in group.generate()
+        )
+        assert all(
+            np.array_equal(lift(aa) @ lift(bb), lift(aa * bb))
+            for aa in group.generate()
+            for bb in group.generate()
+        )
 
 
-def test_dense_forms() -> None:
-    """Test conversions of Elements and Protographs to/from dense forms."""
-    group = abstract.AbelianGroup(2, 3, field=4)
+@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
+def test_regular_rep(group: abstract.Group) -> None:
+    """The regular representation enables straightforward linear algebra over group algebras."""
+    dense_vector = group.field.Random(4 * group.order)
+    dense_array = group.field.Random((3, 4, group.order))
 
-    vector = group.field.Random(group.order)
+    vector = abstract.Protograph.from_dense_vector(group, dense_vector)
+    matrix = abstract.Protograph.from_dense_array(group, dense_array)
+    assert np.array_equal(dense_vector, abstract.Protograph.to_dense_vector(vector))
+    assert np.array_equal(dense_array, abstract.Protograph.to_dense_array(matrix))
     assert np.array_equal(
-        vector,
-        abstract.Element.from_vector(group, vector).to_vector(),
+        (matrix @ vector).to_dense_vector(),
+        matrix.lift() @ vector.to_dense_vector(),
     )
-
-    array = group.field.Random((2, 3, 4, group.order))
-    assert np.array_equal(
-        array,
-        abstract.Protograph.from_dense_array(group, array).to_dense_array(),
-    )
-
-
-def test_matrix_action() -> None:
-    """Test how protographs transform vectors of Elements."""
-    group = abstract.AbelianGroup(2, 3, field=4)
-    # array_vector = group.field.Random((4, group.order))
-    # array_matrix_1 = group.field.Random((3, 4, group.order))
-    # array_matrix_2 = group.field.Random((3, 3, group.order))
-
-    # vector = abstract.Protograph.from_dense_array(group, array_vector)
-    # matrix_1 = abstract.Protograph.from_dense_array(group, array_matrix_1)
-    # matrix_2 = abstract.Protograph.from_dense_array(group, array_matrix_2)
-
-    # print()
-    # print()
-    # print((matrix_2 @ matrix_1 @ vector).shape)
-    # print()
-    # print()
-    # print()
-
-    one = abstract.Element(group).one()
-    g1 = abstract.Element(group, group.generators[0])
-    g2 = abstract.Element(group, group.generators[1])
-    m1 = abstract.Protograph([[g1]]).lift()
-    m2 = abstract.Protograph([[g2]]).lift()
-    print()
-    print()
-    for gg in group.generate():
-        print()
-        print(group.lift(gg) @ one.to_vector())
-    print()
-    print(m1)
-    print()
-    print(m2)
-    print()
-    print()
-    print((g1 * g2 * one).to_vector())
-    print()
-    print(m1 @ m2 @ one.to_vector())
-    print()
-    print((g2 * g1 * one).to_vector())
-    print()
-    print(m2 @ m1 @ one.to_vector())
 
 
 def test_group_product() -> None:

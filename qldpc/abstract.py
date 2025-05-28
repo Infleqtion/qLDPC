@@ -733,14 +733,26 @@ class Protograph(npt.NDArray[np.object_]):
         the group for which array[..., i] is a coefficient in the corresponing entry of the
         protograph.
         """
-        assert array.shape[-1] % group.order == 0
+        assert array.shape[-1] == group.order
         vals = [Element.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
         return Protograph(np.array(vals, dtype=object).reshape(array.shape[:-1]))
 
     def to_dense_array(self) -> galois.FieldArray:
-        """Convert Protograph into a dense array of coefficients."""
+        """Convert a Protograph into a dense array of coefficients."""
         vals = [val.to_vector() for val in self.ravel()]
         return self.field(np.asarray(vals).reshape(self.shape + (self.group.order,)))
+
+    @classmethod
+    def from_dense_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> Protograph:
+        """Construct a Protograph from a vector of coefficients."""
+        assert vector.ndim == 1 and vector.size % group.order == 0
+        return Protograph.from_dense_array(group, vector.reshape(-1, group.order))
+
+    def to_dense_vector(self) -> galois.FieldArray:
+        """Convert a Protograph into a vector of coefficients."""
+        assert self.ndim == 1
+        vals = [val.to_vector() for val in self.ravel()]
+        return self.field(np.asarray(vals).ravel())
 
 
 ################################################################################
