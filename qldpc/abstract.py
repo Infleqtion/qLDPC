@@ -260,14 +260,18 @@ class Group:
 
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
-        return self.field(self._default_lift(member) if self._lift is None else self._lift(member))
+        if self._lift is None:
+            matrix = self._default_lift(member)
+        else:
+            matrix = self._lift(member)
+        return self.field(matrix)
 
     @functools.cached_property
     def lift_dim(self) -> int:
         """Dimension of the representation for this group."""
         if self._lift is None:
             return self.order
-        return self.lift(next(iter(self._group.generators))).shape[0]
+        return self.lift(self.generators[0]).shape[0]
 
     @functools.cached_property
     def table(self) -> npt.NDArray[np.int_]:
