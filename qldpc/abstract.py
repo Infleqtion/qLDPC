@@ -105,6 +105,7 @@ class GroupMember(comb.Permutation):
 
 Lift = Callable[[GroupMember], npt.NDArray[np.int_]]
 IntegerLift = Callable[[int], npt.NDArray[np.int_]]
+GenerateFunc = Callable[[], Iterator[comb.Permutation]]
 
 
 class Group:
@@ -123,7 +124,7 @@ class Group:
     _field: type[galois.FieldArray]
     _lift: Lift | None
     _name: str | None
-    _iterator: Iterator[comb.Permutation] | None
+    _iterator: GenerateFunc | None
 
     def __init__(
         self,
@@ -131,9 +132,9 @@ class Group:
         field: int | None = None,
         lift: Lift | None = None,
         name: str | None = None,
-        iterator: Iterator[comb.Permutation] | None = None,
+        generate_func: GenerateFunc | None = None,
     ) -> None:
-        self._init_from_group(comb.PermutationGroup(*generators), field, lift, name, iterator)
+        self._init_from_group(comb.PermutationGroup(*generators), field, lift, name, generate_func)
 
     def _init_from_group(
         self,
@@ -141,7 +142,7 @@ class Group:
         field: int | None = None,
         lift: Lift | None = None,
         name: str | None = None,
-        iterator: Iterator[comb.Permutation] | None = None,
+        generate_func: GenerateFunc | None = None,
     ) -> None:
         """Initialize from an existing group."""
         self._name = name
@@ -156,7 +157,7 @@ class Group:
             self._field = group._field
             self._lift = lift or group._lift
             self._name = self._name or group._name  # explicitly provided name overrides group name
-        self._iterator = iterator
+        self._generate_func = generate_func
 
     def _default_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
         """Regular lift: represent a group member by how it permutes elements of the group."""
@@ -238,8 +239,8 @@ class Group:
 
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
-        iterator = self._iterator or self._group.generate()
-        yield from map(GroupMember.from_sympy, iterator)
+        generate = self._generate_func or self._group.generate
+        yield from map(GroupMember.from_sympy, generate())
 
     @functools.cached_property
     def _members(self) -> dict[GroupMember, int]:
@@ -811,14 +812,6 @@ class AbelianGroup(Group):
         order_text = ",".join(map(str, orders))
         name = f"AbelianGroup({order_text})"
 
-        # identify method to "combine" cyclic matrices
-        if direct_sum:
-            _combine = scipy.linalg.block_diag
-        else:
-
-            def _combine(*mats: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-                return functools.reduce(np.kron, mats)
-
         identity_mats = [np.eye(order, dtype=int) for order in orders]
         vals = [sum(orders[:idx]) for idx in range(len(orders))]
 
@@ -829,17 +822,19 @@ class AbelianGroup(Group):
                 np.roll(identity_mat, shift, axis=0)
                 for identity_mat, shift in zip(identity_mats, shifts)
             ]
-            return galois.GF(field)(_combine(*mats))
+            if direct_sum:
+                combined_mat = scipy.linalg.block_diag(*mats)
+            else:
+                combined_mat = functools.reduce(np.kron, mats)
+            return galois.GF(field)(combined_mat)
 
-        # override the default SymPy iteration order
-        iterator = (
-            functools.reduce(
-                operator.mul, [gen**power for gen, power in zip(group.generators, powers)]
-            )
-            for powers in itertools.product(*[range(order) for order in orders])
-        )
+        # override the default order in which SymPy iterates over group members
+        def generate_func() -> Iterator[comb.Permutation]:
+            for powers in itertools.product(*[range(order) for order in orders]):
+                factors = [gen**power for gen, power in zip(group.generators, powers)]
+                yield functools.reduce(operator.mul, factors)
 
-        super()._init_from_group(group, field, lift, name, iterator)
+        super()._init_from_group(group, field, lift, name, generate_func)
 
 
 class DihedralGroup(Group):
