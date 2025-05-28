@@ -95,7 +95,7 @@ class GroupMember(comb.Permutation):
         For consistency with how SymPy composes permutations, the permutation matrix constructed
         here is right-acting, meaning that it acts on a vector v as v --> v @ p.to_matrix().  This
         convension ensures that this lift is a homomorphism on SymPy Permutation objects, which is
-        to say that (p*q).to_matrix() = p.to_matrix() q.to_matrix().
+        to say that (p * q).to_matrix() = p.to_matrix() @ q.to_matrix().
         """
         matrix = np.zeros((self.size,) * 2, dtype=int)
         for ii in range(self.size):
@@ -964,8 +964,7 @@ class SpecialLinearGroup(Group):
             def lift(member: GroupMember) -> npt.NDArray[np.int_]:
                 """Lift a group member to a square matrix.
 
-                Each column of the matrix is nominally determined by how the matrix acts on a
-                standard basis vector.  We then take the transpose to make the matrix left-acting.
+                Each column is determined by how the matrix acts on a standard basis vector.
                 """
                 cols = []
                 for entry in range(self.dimension):
@@ -1069,8 +1068,7 @@ class ProjectiveSpecialLinearGroup(Group):
             def lift(member: GroupMember) -> npt.NDArray[np.int_]:
                 """Lift a group member to a square matrix.
 
-                Each column of the matrix is nominally determined by how the matrix acts on a
-                standard basis vector.  We then take the transpose to make the matrix left-acting.
+                Each column is determined by how the matrix acts on a standard basis vector.
                 """
                 cols = []
                 for entry in range(self.dimension):
