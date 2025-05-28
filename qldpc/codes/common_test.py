@@ -194,7 +194,8 @@ def test_automorphism() -> None:
     ):
         group = code.get_automorphism_group()
         for member in group.generate():
-            assert not np.any(code.matrix @ group.lift(member) @ code.generator.T)
+            permutation = code.field(member.to_matrix())
+            assert not np.any(code.matrix @ permutation @ code.generator.T)
 
 
 def test_classical_capacity() -> None:

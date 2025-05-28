@@ -42,6 +42,9 @@ def test_permutation_group() -> None:
 
     assert abstract.Group.from_generating_mats([[1]]) == abstract.CyclicGroup(1)
 
+    with pytest.raises(ValueError, match="not in group"):
+        abstract.CyclicGroup(1).index(abstract.GroupMember(2, 1))
+
     with pytest.raises(ValueError, match="inconsistent"):
         gen = galois.GF(2)([[1]])
         abstract.Group.from_generating_mats(gen, field=3)
@@ -64,10 +67,10 @@ def test_trivial_group() -> None:
 
 def test_lift() -> None:
     """Lift named group elements."""
-    assert_valid_lift(abstract.TrivialGroup())
-    assert_valid_lift(abstract.CyclicGroup(3))
-    assert_valid_lift(abstract.AbelianGroup(2, 3))
-    assert_valid_lift(abstract.AbelianGroup(2, 3, product_lift=True))
+    assert_valid_lift(abstract.TrivialGroup(field=3))
+    assert_valid_lift(abstract.CyclicGroup(3, field=4))
+    assert_valid_lift(abstract.AbelianGroup(2, 3, field=5))
+    assert_valid_lift(abstract.AbelianGroup(2, 3, field=5, direct_sum=True))
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
     assert_valid_lift(abstract.SymmetricGroup(3))
@@ -75,16 +78,33 @@ def test_lift() -> None:
 
 
 def assert_valid_lift(group: abstract.Group) -> None:
-    """Assert faithfulness of the group representation (lift)."""
-    assert all(
-        aa == bb or not np.array_equal(group.lift(aa), group.lift(bb))
-        for aa in group.generate()
-        for bb in group.generate()
-    )
-    assert all(
-        np.array_equal(group.lift(aa) @ group.lift(bb), group.lift(aa * bb))
-        for aa in group.generate()
-        for bb in group.generate()
+    """Assert faithfulness of the regular and permutation representations of group members."""
+    for lift in [group.lift, abstract.GroupMember.to_matrix]:
+        assert all(
+            aa == bb or not np.array_equal(lift(aa), lift(bb))
+            for aa in group.generate()
+            for bb in group.generate()
+        )
+        assert all(
+            np.array_equal(lift(aa) @ lift(bb), lift(aa * bb))
+            for aa in group.generate()
+            for bb in group.generate()
+        )
+
+
+@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
+def test_regular_rep(group: abstract.Group) -> None:
+    """The regular representation enables straightforward linear algebra over group algebras."""
+    dense_vector = group.field.Random(4 * group.order)
+    dense_array = group.field.Random((3, 4, group.order))
+
+    vector = abstract.Protograph.from_dense_vector(group, dense_vector)
+    matrix = abstract.Protograph.from_dense_array(group, dense_array)
+    assert np.array_equal(dense_vector, abstract.Protograph.to_dense_vector(vector))
+    assert np.array_equal(dense_array, abstract.Protograph.to_dense_array(matrix))
+    assert np.array_equal(
+        (matrix @ vector).to_dense_vector(),
+        matrix.lift() @ vector.to_dense_vector(),
     )
 
 
@@ -103,9 +123,6 @@ def test_group_product() -> None:
     assert group.generators == [shift @ identity, identity @ shift]
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
-
-    # product of groups over different fields results in a group over the binary field
-    assert abstract.TrivialGroup(2) * abstract.TrivialGroup(3) == abstract.TrivialGroup(2)
 
 
 def test_algebra() -> None:

@@ -294,9 +294,9 @@ def test_lift() -> None:
         [0, 1, 1, 1, 0, 0, 0, 0, 0],
         [1, 0, 1, 0, 1, 0, 0, 0, 0],
         [1, 1, 0, 0, 0, 1, 0, 0, 0],
-        [0, 0, 0, 1, 1, 0, 0, 1, 0],
-        [0, 0, 0, 0, 1, 1, 0, 0, 1],
-        [0, 0, 0, 1, 0, 1, 1, 0, 0],
+        [0, 0, 0, 1, 0, 1, 0, 0, 1],
+        [0, 0, 0, 1, 1, 0, 1, 0, 0],
+        [0, 0, 0, 0, 1, 1, 0, 1, 0],
     ]
     assert np.array_equal(protograph.lift(), matrix)
 
@@ -317,9 +317,9 @@ def test_twisted_XZZX(width: int = 3) -> None:
     code: codes.QuditCode
 
     # construct check matrix directly
-    ring = codes.RingCode(width).matrix
+    ring = codes.RingCode(width).matrix.T
     mat_1 = np.kron(ring, np.eye(width, dtype=int))
-    mat_2 = codes.RingCode(num_qudits // 2).matrix
+    mat_2 = codes.RingCode(num_qudits // 2).matrix.T
     zero_1 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
     zero_3 = np.zeros((mat_2.shape[1],) * 2, dtype=int)
