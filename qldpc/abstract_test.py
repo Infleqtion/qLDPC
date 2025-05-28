@@ -126,8 +126,8 @@ def test_random_symmetric_subset() -> None:
 def test_algebra() -> None:
     """Construct elements of a group algebra."""
     group = abstract.TrivialGroup(field=3)
-    zero = abstract.Element(group)
-    one = abstract.Element(group).one()
+    zero = abstract.RingMember(group)
+    one = abstract.RingMember(group).one()
     assert bool(one) and not bool(zero)
     assert zero.group == group
     assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
@@ -136,43 +136,45 @@ def test_algebra() -> None:
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
 
 
-def test_protograph() -> None:
-    """Construct and lift a protograph."""
-    matrix = np.random.randint(2, size=(3, 3))
-    protograph = abstract.TrivialGroup.to_protograph(matrix)
-    assert protograph.group == abstract.TrivialGroup()
-    assert protograph.field == abstract.TrivialGroup().field
-    assert np.array_equal(protograph.lift(), matrix)
-    assert np.array_equal((protograph @ protograph).lift(), protograph.lift() @ protograph.lift())
-    assert isinstance(np.kron(protograph, protograph), abstract.Protograph)
+def test_ring_array() -> None:
+    """Construct and lift a RingArray."""
+    int_matrix = np.random.randint(2, size=(3, 3))
+    matrix = abstract.TrivialGroup.to_ring_array(int_matrix)
+    assert matrix.group == abstract.TrivialGroup()
+    assert matrix.field == abstract.TrivialGroup().field
+    assert np.array_equal(matrix.lift(), int_matrix)
+    assert np.array_equal(
+        (matrix @ matrix).lift(),
+        matrix.lift() @ matrix.lift(),
+    )
+    assert isinstance(np.kron(matrix, matrix), abstract.RingArray)
 
-    # fail to construct a valid protograph
-    with pytest.raises(ValueError, match="must be Element-valued"):
-        abstract.Protograph([[0]])
+    # fail to construct a valid ring array
+    with pytest.raises(ValueError, match="must be RingMember-valued"):
+        abstract.RingArray([[0]])
     with pytest.raises(ValueError, match="Inconsistent base groups"):
         groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
-        abstract.Protograph([[abstract.Element(group) for group in groups]])
+        abstract.RingArray([[abstract.RingMember(group) for group in groups]])
     with pytest.raises(ValueError, match="Cannot determine the underlying group"):
-        abstract.Protograph([])
+        abstract.RingArray([])
 
-    new_protograph = abstract.Protograph.build(abstract.CyclicGroup(1), [[1]])
+    new_matrix = abstract.RingArray.build(abstract.CyclicGroup(1), [[1]])
     with pytest.raises(ValueError, match="different base groups"):
-        protograph @ new_protograph
+        matrix @ new_matrix
     with pytest.raises(ValueError, match="different base groups"):
-        np.kron(protograph, new_protograph)
+        np.kron(matrix, new_matrix)
 
 
 def test_transpose() -> None:
     """Transpose various objects."""
     group = abstract.CyclicGroup(4)
     for member in group.generate():
-        element = abstract.Element(group, member)
+        element = abstract.RingMember(group, member)
         assert element.T.T == element
 
     x0, x1, x2, x3 = group.generate()
-    matrix = [[x0, 0, x1], [x2, 0, abstract.Element(group, x3)]]
-    protograph = abstract.Protograph.build(group, matrix)
-    assert np.array_equal(protograph.T.T, protograph)
+    matrix = abstract.RingArray.build(group, [[x0, 0, x1], [x2, 0, abstract.RingMember(group, x3)]])
+    assert np.array_equal(matrix.T.T, matrix)
 
 
 @pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
@@ -181,10 +183,10 @@ def test_regular_rep(group: abstract.Group) -> None:
     dense_vector = group.field.Random(4 * group.order)
     dense_array = group.field.Random((3, 4, group.order))
 
-    vector = abstract.Protograph.from_dense_vector(group, dense_vector)
-    matrix = abstract.Protograph.from_dense_array(group, dense_array)
-    assert np.array_equal(dense_vector, abstract.Protograph.to_dense_vector(vector))
-    assert np.array_equal(dense_array, abstract.Protograph.to_dense_array(matrix))
+    vector = abstract.RingArray.from_dense_vector(group, dense_vector)
+    matrix = abstract.RingArray.from_dense_array(group, dense_array)
+    assert np.array_equal(dense_vector, abstract.RingArray.to_dense_vector(vector))
+    assert np.array_equal(dense_array, abstract.RingArray.to_dense_array(matrix))
     assert np.array_equal(
         (matrix @ vector).to_dense_vector(),
         matrix.regular_lift() @ vector.to_dense_vector(),
