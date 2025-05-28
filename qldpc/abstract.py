@@ -610,7 +610,7 @@ class RingMember:
         return vector
 
 
-class Element(RingMember):
+class Element(RingMember):  # pragma: no cover
     """Deprecated alias for RingMember."""
 
     def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
@@ -801,7 +801,7 @@ class RingArray(npt.NDArray[np.object_]):
         return RingArray(null_space)
 
 
-class Protograph(RingArray):
+class Protograph(RingArray):  # pragma: no cover
     """Deprecated alias for RingArray."""
 
     def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
