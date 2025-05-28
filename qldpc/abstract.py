@@ -123,6 +123,7 @@ class Group:
     _field: type[galois.FieldArray]
     _lift: Lift | None
     _name: str | None
+    _iterator: Iterator[GroupMember] | None
 
     def __init__(
         self,
@@ -130,8 +131,9 @@ class Group:
         field: int | None = None,
         lift: Lift | None = None,
         name: str | None = None,
+        iterator: Iterator[GroupMember] | None = None,
     ) -> None:
-        self._init_from_group(comb.PermutationGroup(*generators), field, lift, name)
+        self._init_from_group(comb.PermutationGroup(*generators), field, lift, name, iterator)
 
     def _init_from_group(
         self,
@@ -139,6 +141,7 @@ class Group:
         field: int | None = None,
         lift: Lift | None = None,
         name: str | None = None,
+        iterator: Iterator[GroupMember] | None = None,
     ) -> None:
         """Initialize from an existing group."""
         self._name = name
@@ -153,6 +156,7 @@ class Group:
             self._field = group._field
             self._lift = lift or group._lift
             self._name = self._name or group._name  # explicitly provided name overrides group name
+        self._iterator = iterator
 
     def _default_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
         """Regular lift: represent a group member by how it permutes elements of the group."""
@@ -234,7 +238,8 @@ class Group:
 
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
-        yield from map(GroupMember.from_sympy, self._group.generate())
+        iterator = self._iterator() or self._group.generate()
+        yield from map(GroupMember.from_sympy, iterator)
 
     @functools.cached_property
     def _members(self) -> dict[GroupMember, int]:
@@ -802,8 +807,9 @@ class AbelianGroup(Group):
 
     def __init__(self, *orders: int, field: int | None = None, direct_sum: bool = False) -> None:
         field = field or DEFAULT_FIELD_ORDER
-        identity_mats = [np.eye(order, dtype=int) for order in orders]
-        vals = [sum(orders[:idx]) for idx in range(len(orders))]
+        group = comb.named_groups.AbelianGroup(*orders)
+        order_text = ",".join(map(str, orders))
+        name = f"AbelianGroup({order_text})"
 
         # identify method to "combine" cyclic matrices
         if direct_sum:
@@ -812,6 +818,9 @@ class AbelianGroup(Group):
 
             def _combine(*mats: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
                 return functools.reduce(np.kron, mats)
+
+        identity_mats = [np.eye(order, dtype=int) for order in orders]
+        vals = [sum(orders[:idx]) for idx in range(len(orders))]
 
         # build lift manually, which is faster than the default lift
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
@@ -822,10 +831,14 @@ class AbelianGroup(Group):
             ]
             return galois.GF(field)(_combine(*mats))
 
-        group = comb.named_groups.AbelianGroup(*orders)
-        order_text = ",".join(map(str, orders))
-        name = f"AbelianGroup({order_text})"
-        super()._init_from_group(group, field, lift, name)
+        # override the default SymPy iteration order
+        def iterator() -> Iterator[GroupMember]:
+            generators = group.generators
+            for powers in itertools.product(*[range(order) for order in orders]):
+                factors = [gen**power for gen, power in zip(generators, powers)]
+                yield functools.reduce(operator.mul, factors)
+
+        super()._init_from_group(group, field, lift, name, iterator)
 
 
 class DihedralGroup(Group):
