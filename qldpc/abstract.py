@@ -695,20 +695,14 @@ class Protograph(npt.NDArray[np.object_]):
     def lift(self) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
         assert self.ndim == 2
-        vals = [val.lift() for val in self.ravel()]
-        tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
-        rows = tensor.shape[0] * tensor.shape[1]
-        cols = tensor.shape[2] * tensor.shape[3]
-        return self.field(tensor.reshape(rows, cols))
+        blocks = [[val.lift() for val in row] for row in self]
+        return self.field(np.block(blocks))
 
     def regular_lift(self) -> galois.FieldArray:
         """Block matrix obtained by a regular lift of ach entry of the protograph."""
         assert self.ndim == 2
-        vals = [val.regular_lift() for val in self.ravel()]
-        tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
-        rows = tensor.shape[0] * tensor.shape[1]
-        cols = tensor.shape[2] * tensor.shape[3]
-        return self.field(tensor.reshape(rows, cols))
+        blocks = [[val.regular_lift() for val in row] for row in self]
+        return self.field(np.block(blocks))
 
     @property
     def T(self) -> Protograph:
