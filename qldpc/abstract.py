@@ -123,7 +123,7 @@ class Group:
     _field: type[galois.FieldArray]
     _lift: Lift | None
     _name: str | None
-    _iterator: Iterator[GroupMember] | None
+    _iterator: Iterator[comb.Permutation] | None
 
     def __init__(
         self,
@@ -131,7 +131,7 @@ class Group:
         field: int | None = None,
         lift: Lift | None = None,
         name: str | None = None,
-        iterator: Iterator[GroupMember] | None = None,
+        iterator: Iterator[comb.Permutation] | None = None,
     ) -> None:
         self._init_from_group(comb.PermutationGroup(*generators), field, lift, name, iterator)
 
@@ -141,7 +141,7 @@ class Group:
         field: int | None = None,
         lift: Lift | None = None,
         name: str | None = None,
-        iterator: Iterator[GroupMember] | None = None,
+        iterator: Iterator[comb.Permutation] | None = None,
     ) -> None:
         """Initialize from an existing group."""
         self._name = name
@@ -238,7 +238,7 @@ class Group:
 
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
-        iterator = self._iterator() or self._group.generate()
+        iterator = self._iterator or self._group.generate()
         yield from map(GroupMember.from_sympy, iterator)
 
     @functools.cached_property
@@ -832,11 +832,12 @@ class AbelianGroup(Group):
             return galois.GF(field)(_combine(*mats))
 
         # override the default SymPy iteration order
-        def iterator() -> Iterator[GroupMember]:
-            generators = group.generators
-            for powers in itertools.product(*[range(order) for order in orders]):
-                factors = [gen**power for gen, power in zip(generators, powers)]
-                yield functools.reduce(operator.mul, factors)
+        iterator = (
+            functools.reduce(
+                operator.mul, [gen**power for gen, power in zip(group.generators, powers)]
+            )
+            for powers in itertools.product(*[range(order) for order in orders])
+        )
 
         super()._init_from_group(group, field, lift, name, iterator)
 
