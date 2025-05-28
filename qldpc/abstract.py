@@ -22,14 +22,6 @@ square matrices, such that the group action gets lifted to matrix multiplication
 
 !!! WARNINGS !!!
 
-Whereas matrices are "left-acting" (that is, act on objects from the left) by standard convention,
-SymPy permutations are "right-acting", which is to say that the action of two permutations p and q
-on an integer i compose as (p*q)(i) = q(p(i)) = i^p^q.  To preserve the order of products before and
-after lifting permutations to matrices, which ensures that the lift L(p*q) = L(p) @ L(q), we
-therefore make representations likewise right-acting, which is to say that a permutation matrix M
-transforms a vector v as v --> v @ M.  In practice, this simply means that matrices are the
-transpose of what one might expect.
-
 This module only supports representations of group members by orthogonal matrices over finite
 fields.  The restriction to orthogonal representations allows identifying the "transpose" of a group
 member p with respect to a representation (lift) L, which is defined by enforcing L(p.T) = L(p).T.
@@ -97,33 +89,22 @@ class GroupMember(comb.Permutation):
         """
         return GroupMember(self.array_form + [val + self.size for val in other.array_form])
 
+    def to_matrix(self) -> npt.NDArray[np.int_]:
+        """Lift this permutation object to a permutation matrix.
+
+        For consistency with how SymPy composes permutations, the permutation matrix constructed
+        here is right-acting, meaning that it acts on a vector v as v --> v @ p.to_matrix().  This
+        convension ensures that this lift is a homomorphism on SymPy Permutation objects, which is
+        to say that (p*q).to_matrix() = p.to_matrix() q.to_matrix().
+        """
+        matrix = np.zeros((self.size,) * 2, dtype=int)
+        for ii in range(self.size):
+            matrix[ii, self.apply(ii)] = 1
+        return matrix
+
 
 Lift = Callable[[GroupMember], npt.NDArray[np.int_]]
 IntegerLift = Callable[[int], npt.NDArray[np.int_]]
-
-
-def default_lift(member: GroupMember) -> npt.NDArray[np.int_]:
-    """Default lift: represent a permutation object by a permutation matrix.
-
-    For consistency with how SymPy composes permutations, this matrix is right-acting, meaning that
-    it acts on a vector p from the right: p --> p @ M.
-    """
-    matrix = np.zeros((member.size,) * 2, dtype=int)
-    for ii in range(member.size):
-        matrix[ii, member.apply(ii)] = 1
-    return matrix
-
-
-def regular_lift(group: Group, member: GroupMember) -> npt.NDArray[np.int_]:
-    """Regular lift: represent a group member by how it permutes elements of the group.
-
-    For consistency with how SymPy composes permutations, this matrix is right-acting, meaning that
-    it acts on a vector p from the right: p --> p @ M.
-    """
-    matrix = np.zeros((group.order,) * 2, dtype=int)
-    for ii, gg in enumerate(group.generate()):
-        matrix[ii, group.index(gg * member)] = 1
-    return matrix
 
 
 class Group:
@@ -164,7 +145,7 @@ class Group:
         if isinstance(group, comb.PermutationGroup):
             self._group = group
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-            self._lift = lift if lift is not None else default_lift
+            self._lift = lift
         else:
             assert isinstance(group, Group)
             assert field is None or field == group.field.order
@@ -172,6 +153,13 @@ class Group:
             self._field = group._field
             self._lift = lift if lift is not None else group._lift
             self._name = self._name or group._name  # explicitly provided name overrides group name
+
+    def _default_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
+        """Regular lift: represent a group member by how it permutes elements of the group."""
+        matrix = np.zeros((self.order,) * 2, dtype=int)
+        for ii, gg in enumerate(self.generate()):
+            matrix[self.index(member * gg), ii] = 1
+        return matrix
 
     @property
     def name(self) -> str:
@@ -207,19 +195,14 @@ class Group:
 
     def __mul__(self, other: Group) -> Group:
         """Direct product of two groups."""
+        assert self.field is other.field
         group = self._group * other._group
-
-        if self.field == other.field:
-            left_lift = self._lift
-            right_lift = other._lift
-        else:
-            left_lift = right_lift = default_lift
 
         def lift(member: GroupMember) -> galois.FieldArray:
             degree = self._group.degree
             left = GroupMember(member.array_form[:degree])
             right = GroupMember([index - degree for index in member.array_form[degree:]])
-            matrix = np.kron(left_lift(left), right_lift(right))
+            matrix = np.kron(self.lift(left), other.lift(right))
             return self.field(matrix)
 
         return Group.from_sympy(group, self.field.order, lift)
@@ -275,14 +258,16 @@ class Group:
             sympy.core.random.seed(seed)
         return GroupMember.from_sympy(self._group.random())
 
-    def lift(self, member: GroupMember, *, regular: bool = False) -> galois.FieldArray:
+    def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
-        return self.field(regular_lift(self, member) if regular else self._lift(member))
+        return self.field(self._default_lift(member) if self._lift is None else self._lift(member))
 
     @functools.cached_property
     def lift_dim(self) -> int:
         """Dimension of the representation for this group."""
-        return self._lift(next(iter(self._group.generators))).shape[0]
+        if self._lift is None:
+            return self.order
+        return self.lift(next(iter(self._group.generators))).shape[0]
 
     @functools.cached_property
     def table(self) -> npt.NDArray[np.int_]:
@@ -302,7 +287,7 @@ class Group:
         members = {GroupMember(row): idx for idx, row in enumerate(table)}
 
         if integer_lift is None:
-            return Group(*members, lift=default_lift)
+            return Group(*members)
 
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
             return integer_lift(members[member])
@@ -563,11 +548,11 @@ class Element:
         """Base group of this algebra."""
         return self._group
 
-    def lift(self, *, regular: bool = False) -> galois.FieldArray:
+    def lift(self) -> galois.FieldArray:
         """Lift this element using the underlying group representation."""
-        dim = self._group.lift_dim if regular is False else self._group.order
+        dim = self._group.lift_dim
         return sum(
-            (val * self._group.lift(member, regular=regular) for val, member in self if val),
+            (val * self._group.lift(member) for val, member in self if val),
             start=self.field.Zeros((dim,) * 2),
         )
 
@@ -688,10 +673,10 @@ class Protograph(npt.NDArray[np.object_]):
         """Base field of this protograph."""
         return self._group.field
 
-    def lift(self, *, regular: bool = False) -> galois.FieldArray:
+    def lift(self) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of the protograph."""
         assert self.ndim == 2
-        vals = [val.lift(regular=regular) for val in self.ravel()]
+        vals = [val.lift() for val in self.ravel()]
         tensor = np.transpose(np.reshape(vals, self.shape + vals[0].shape), [0, 2, 1, 3])
         rows = tensor.shape[0] * tensor.shape[1]
         cols = tensor.shape[2] * tensor.shape[3]
@@ -796,9 +781,9 @@ class CyclicGroup(Group):
         field = field or DEFAULT_FIELD_ORDER
         identity_mat = np.eye(order, dtype=int)
 
-        # build lift manually, which is faster than the default_lift
+        # build lift manually, which is faster than the default lift
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-            return galois.GF(field)(np.roll(identity_mat, member.apply(0), axis=1))
+            return galois.GF(field)(np.roll(identity_mat, member.apply(0), axis=0))
 
         super()._init_from_group(comb.named_groups.CyclicGroup(order), field, lift)
 
@@ -824,11 +809,11 @@ class AbelianGroup(Group):
             def _combine(*mats: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
                 return functools.reduce(np.kron, mats)
 
-        # build lift manually, which is faster than the default_lift
+        # build lift manually, which is faster than the default lift
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
             shifts = [member.apply(val) - val for val in vals]
             mats = [
-                np.roll(identity_mat, shift, axis=1)
+                np.roll(identity_mat, shift, axis=0)
                 for identity_mat, shift in zip(identity_mats, shifts)
             ]
             return galois.GF(field)(_combine(*mats))

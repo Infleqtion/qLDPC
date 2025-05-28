@@ -79,21 +79,16 @@ def test_lift() -> None:
 
 def assert_valid_lift(group: abstract.Group) -> None:
     """Assert faithfulness of the group representation (lift)."""
-    for regular in [True, False]:
-        assert all(
-            aa == bb
-            or not np.array_equal(group.lift(aa, regular=regular), group.lift(bb, regular=regular))
-            for aa in group.generate()
-            for bb in group.generate()
-        )
-        assert all(
-            np.array_equal(
-                group.lift(aa, regular=regular) @ group.lift(bb, regular=regular),
-                group.lift(aa * bb, regular=regular),
-            )
-            for aa in group.generate()
-            for bb in group.generate()
-        )
+    assert all(
+        aa == bb or not np.array_equal(group.lift(aa), group.lift(bb))
+        for aa in group.generate()
+        for bb in group.generate()
+    )
+    assert all(
+        np.array_equal(group.lift(aa) @ group.lift(bb), group.lift(aa * bb))
+        for aa in group.generate()
+        for bb in group.generate()
+    )
 
 
 def test_dense_forms() -> None:
@@ -113,6 +108,30 @@ def test_dense_forms() -> None:
     )
 
 
+def test_matrix_action() -> None:
+    """Test how protographs transform vectors of Elements."""
+    # group = abstract.AbelianGroup(2, 3, field=4)
+    group = abstract.DihedralGroup(3)
+
+    one = abstract.Element(group).one()
+    g1 = abstract.Element(group, group.generators[0])
+    g2 = abstract.Element(group, group.generators[1])
+    m1 = abstract.Protograph([[g1]]).lift()
+    m2 = abstract.Protograph([[g2]]).lift()
+    print()
+    print(m1)
+    print()
+    print(one.to_vector())
+    print()
+    print((g1 * g2 * one).to_vector())
+    print()
+    print(m1 @ m2 @ one.to_vector())
+    print()
+    print((g2 * g1 * one).to_vector())
+    print()
+    print(m2 @ m1 @ one.to_vector())
+
+
 def test_group_product() -> None:
     """Direct product of groups."""
     cycle = abstract.CyclicGroup(2)
@@ -128,9 +147,6 @@ def test_group_product() -> None:
     assert group.generators == [shift @ identity, identity @ shift]
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
-
-    # product of groups over different fields results in a group over the binary field
-    assert abstract.TrivialGroup(2) * abstract.TrivialGroup(3) == abstract.TrivialGroup(2)
 
 
 def test_algebra() -> None:
