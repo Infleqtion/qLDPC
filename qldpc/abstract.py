@@ -151,7 +151,7 @@ class Group:
             assert field is None or field == group.field.order
             self._group = group._group
             self._field = group._field
-            self._lift = lift if lift is not None else group._lift
+            self._lift = lift or group._lift
             self._name = self._name or group._name  # explicitly provided name overrides group name
 
     def _default_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
@@ -792,17 +792,17 @@ class AbelianGroup(Group):
     """Direct product of cyclic groups of the specified orders.
 
     By default, an AbelianGroup member of the form ∏_i g_i^{a_i}, where {g_i} are the generators of
-    the group, gets lifted to a direct sum ⨁_i L(g_i)^{a_i}.  If an AbelianGroup is initialized with
-    product_lift=True, the group members get lifted to a Kronecker product ⨂_i L(g_i)^{a_i}.
+    the group, gets lifted to a Kronecker product ⨂_i L(g_i)^{a_i}.  If an AbelianGroup is
+    initialized with direct_sum=True, the group members get lifted to a direct sum ⨁_i L(g_i)^{a_i}.
     """
 
-    def __init__(self, *orders: int, field: int | None = None, product_lift: bool = False) -> None:
+    def __init__(self, *orders: int, field: int | None = None, direct_sum: bool = False) -> None:
         field = field or DEFAULT_FIELD_ORDER
         identity_mats = [np.eye(order, dtype=int) for order in orders]
         vals = [sum(orders[:idx]) for idx in range(len(orders))]
 
         # identify method to "combine" cyclic matrices
-        if not product_lift:
+        if direct_sum:
             _combine = scipy.linalg.block_diag
         else:
 

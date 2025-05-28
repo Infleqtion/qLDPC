@@ -232,7 +232,7 @@ class QCCode(TBCode):
         self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
-        self.group = abstract.AbelianGroup(*self.orders, field=field, product_lift=True)
+        self.group = abstract.AbelianGroup(*self.orders, field=field)
         self.gens = self.group.generators
         self.symbol_gens = dict(zip(self.symbols, self.gens))
 
