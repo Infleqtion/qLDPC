@@ -37,6 +37,7 @@ import itertools
 import math
 import operator
 import typing
+import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 import galois
@@ -441,10 +442,10 @@ class Group:
 # elements of a group algebra
 
 
-class Element:
+class RingMember:
     """An element of a group algebra over a finite field F_q.
 
-    Each Element x is a sum of group members with coefficients in F_q:
+    Each RingMember x is a sum of group members with coefficients in F_q:
     x = sum_{g in G} x_g g, with each x_g in F_q.
 
     The field F_q is taken to be the same as that of the representation of the group.
@@ -464,7 +465,7 @@ class Element:
 
     def __eq__(self, other: object) -> bool:
         return (
-            isinstance(other, Element)
+            isinstance(other, RingMember)
             and self._group == other._group
             and all(self._vec[member] == other._vec[member] for member in self._vec)
             and all(self._vec[member] == other._vec[member] for member in other._vec)
@@ -477,7 +478,7 @@ class Element:
         for gg, x_g in self._vec.items():
             yield x_g, gg
 
-    def __add__(self, other: int | GroupMember | Element) -> Element:
+    def __add__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
             return self + other * self.one()
 
@@ -486,7 +487,7 @@ class Element:
             new_element._vec[other] += self.field(1)
             return new_element
 
-        if isinstance(other, Element):
+        if isinstance(other, RingMember):
             new_element = self.copy()
             for val, member in other:
                 new_element._vec[member] += val
@@ -494,13 +495,13 @@ class Element:
 
         return NotImplemented  # pragma: no cover
 
-    def __sub__(self, other: Element | GroupMember | int) -> Element:
+    def __sub__(self, other: RingMember | GroupMember | int) -> RingMember:
         return self + (-1) * other
 
-    def __radd__(self, other: GroupMember) -> Element:
+    def __radd__(self, other: GroupMember) -> RingMember:
         return self + other
 
-    def __mul__(self, other: int | GroupMember | Element) -> Element:
+    def __mul__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
             # multiply coefficients by 'other'
             new_element = self.zero()
@@ -515,7 +516,7 @@ class Element:
                 new_element._vec[member * other] = val
             return new_element
 
-        if isinstance(other, Element):
+        if isinstance(other, RingMember):
             # collect and multiply pairs of terms from 'self' and 'other'
             new_element = self.zero()
             for (x_a, aa), (y_b, bb) in itertools.product(self, other):
@@ -524,7 +525,7 @@ class Element:
 
         return NotImplemented  # pragma: no cover
 
-    def __rmul__(self, other: int | GroupMember) -> Element:
+    def __rmul__(self, other: int | GroupMember) -> RingMember:
         if isinstance(other, int):
             return self * other
 
@@ -536,13 +537,13 @@ class Element:
 
         return NotImplemented  # pragma: no cover
 
-    def __neg__(self) -> Element:
+    def __neg__(self) -> RingMember:
         return self * (-1)
 
-    def __pow__(self, power: int) -> Element:
+    def __pow__(self, power: int) -> RingMember:
         return functools.reduce(operator.mul, [self] * power, self.one())
 
-    def copy(self) -> Element:
+    def copy(self) -> RingMember:
         """Copy of self."""
         element = self.zero()
         for val, member in self:
@@ -550,39 +551,39 @@ class Element:
         return element
 
     @property
-    def field(self) -> type[galois.FieldArray]:
-        """Base field of this algebra."""
-        return self.group.field
-
-    @property
     def group(self) -> Group:
         """Base group of this algebra."""
         return self._group
 
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """Base field of this algebra."""
+        return self.group.field
+
     def lift(self) -> galois.FieldArray:
         """Lift this element using the underlying group representation."""
         return sum(
-            (val * self._group.lift(member) for val, member in self if val),
-            start=self.field.Zeros((self._group.lift_dim,) * 2),
+            (val * self.group.lift(member) for val, member in self if val),
+            start=self.field.Zeros((self.group.lift_dim,) * 2),
         )
 
     def regular_lift(self) -> galois.FieldArray:
         """Lift this element using the regular group representation."""
         return sum(
-            (val * self._group.regular_lift(member) for val, member in self if val),
-            start=self.field.Zeros((self._group.order,) * 2),
+            (val * self.group.regular_lift(member) for val, member in self if val),
+            start=self.field.Zeros((self.group.order,) * 2),
         )
 
-    def zero(self) -> Element:
+    def zero(self) -> RingMember:
         """Zero (additive identity) element."""
-        return Element(self._group)
+        return RingMember(self.group)
 
-    def one(self) -> Element:
+    def one(self) -> RingMember:
         """One (multiplicative identity) element."""
-        return Element(self._group, self._group.identity)
+        return RingMember(self.group, self.group.identity)
 
     @property
-    def T(self) -> Element:
+    def T(self) -> RingMember:
         """Transpose of this element.
 
         If this element is x = sum_{g in G) x_g g, return x.T = sum_{g in G} x_g g.T, where g.T is
@@ -595,10 +596,10 @@ class Element:
         return new_element
 
     @classmethod
-    def from_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> Element:
+    def from_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingMember:
         """Construct a group algebra element from vector of coefficients, (x_g : g in G)."""
         terms = [(int(x_g), gg) for x_g, gg in zip(vector, group.generate()) if x_g]
-        return Element(group, *terms)
+        return RingMember(group, *terms)
 
     def to_vector(self) -> galois.FieldArray:
         """Convert this group algebra element into a vector of coefficients, (x_g : g in G)."""
@@ -608,37 +609,47 @@ class Element:
         return vector
 
 
+class Element(RingMember):
+    """Deprecated alias for RingMember."""
+
+    def __init__(
+        self, group: Group, *terms: GroupMember | tuple[int | galois.FieldArray, GroupMember]
+    ) -> None:
+        warnings.warn("qldpc.abstract.Element is deprecated; use qldpc.abstract.RingMember instead")
+        super().__init__(group, *terms)
+
+
 ################################################################################
-# protographs: Element-valued matrices
+# RingArray: RingMember-valued array
 
 
-class Protograph(npt.NDArray[np.object_]):
+class RingArray(npt.NDArray[np.object_]):
     """Array whose entries are members of a group algebra over a finite field."""
 
     _group: Group
 
     def __new__(
         cls, data: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
-    ) -> Protograph:
-        protograph = np.asarray(data).view(cls)
+    ) -> RingArray:
+        array = np.asarray(data).view(cls)
 
-        # identify the base group for this protograph
-        for value in protograph.ravel():
-            if not isinstance(value, Element):
+        # identify the base group for this RingArray
+        for value in array.ravel():
+            if not isinstance(value, RingMember):
                 raise ValueError(
-                    "Requirement failed: all entries of a protograph must be Element-valued\n"
-                    "Try building a protograph with Protograph.build(...)"
+                    "Requirement failed: all entries of a RingArray must be RingMember-valued\n"
+                    "Try building an array with RingArray.build(...)"
                 )
             else:
                 if not (group is None or group == value.group):
-                    raise ValueError("Inconsistent base groups provided for a protograph")
+                    raise ValueError("Inconsistent base groups provided for a RingArray")
                 group = value.group
 
         if group is None:
-            raise ValueError("Cannot determine the underlying group for a protograh")
-        protograph._group = group
+            raise ValueError("Cannot determine the underlying group for a RingArray")
+        array._group = group
 
-        return protograph
+        return array
 
     def __array_finalize__(self, obj: npt.NDArray[np.object_] | None) -> None:
         """Propagate metadata to newly constructed arrays."""
@@ -650,15 +661,15 @@ class Protograph(npt.NDArray[np.object_]):
         types: Iterable[type],
         args: Iterable[typing.Any],
         kwargs: Mapping[str, typing.Any],
-    ) -> Protograph | None:
-        """Intercept array operations to ensure Protograph compatibility."""
-        groups = {self._group} | {x._group for x in args if isinstance(x, Protograph)}
+    ) -> RingArray | None:
+        """Intercept array operations to ensure RingArray compatibility."""
+        groups = {self._group} | {x._group for x in args if isinstance(x, RingArray)}
         if len(groups) > 1:
-            raise ValueError("Cannot perform operations on Protographs with different base groups")
-        args = tuple(x.view(np.ndarray) if isinstance(x, Protograph) else x for x in args)
+            raise ValueError("Cannot perform operations on RingArrays with different base groups")
+        args = tuple(x.view(np.ndarray) if isinstance(x, RingArray) else x for x in args)
         result = super().__array_function__(func, types, args, kwargs)
         if isinstance(result, np.ndarray):
-            result = result.view(Protograph)
+            result = result.view(RingArray)
             setattr(result, "_group", next(iter(groups), None))
         return result
 
@@ -668,53 +679,53 @@ class Protograph(npt.NDArray[np.object_]):
         method: typing.Literal["__call__", "reduce", "reduceat", "accumulate", "outer", "at"],
         *inputs: npt.NDArray[np.object_],
         **kwargs: object,
-    ) -> Protograph | None:
-        """Intercept array operations to ensure Protograph compatibility."""
-        groups = {self._group} | {x._group for x in inputs if isinstance(x, Protograph)}
+    ) -> RingArray | None:
+        """Intercept array operations to ensure RingArray compatibility."""
+        groups = {self._group} | {x._group for x in inputs if isinstance(x, RingArray)}
         if len(groups) > 1:
-            raise ValueError("Cannot perform operations on Protographs with different base groups")
-        inputs = tuple(x.view(np.ndarray) if isinstance(x, Protograph) else x for x in inputs)
+            raise ValueError("Cannot perform operations on RingArrays with different base groups")
+        inputs = tuple(x.view(np.ndarray) if isinstance(x, RingArray) else x for x in inputs)
         result = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
         if isinstance(result, np.ndarray):
-            result = result.view(Protograph)
+            result = result.view(RingArray)
             setattr(result, "_group", next(iter(groups), None))
         return result
 
     @property
     def group(self) -> Group:
-        """Base group of this protograph."""
+        """Base group of this RingArray."""
         return self._group
 
     @property
     def field(self) -> type[galois.FieldArray]:
-        """Base field of this protograph."""
-        return self._group.field
+        """Base field of this RingArray."""
+        return self.group.field
 
     def lift(self) -> galois.FieldArray:
-        """Block matrix obtained by lifting each entry of the protograph."""
+        """Block matrix obtained by lifting each entry of this RingArray."""
         assert self.ndim == 2
         blocks = [[val.lift() for val in row] for row in self]
         return self.field(np.block(blocks))
 
     def regular_lift(self) -> galois.FieldArray:
-        """Block matrix obtained by a regular lift of ach entry of the protograph."""
+        """Block matrix obtained by a regular lift of each entry of this RingArray."""
         assert self.ndim == 2
         blocks = [[val.regular_lift() for val in row] for row in self]
         return self.field(np.block(blocks))
 
     @property
-    def T(self) -> Protograph:
-        """Transpose of this protograph, which also transposes every array entry."""
+    def T(self) -> RingArray:
+        """Transpose of this RingArray, which also transposes every array entry."""
         vals = [val.T for val in self.ravel()]
-        return Protograph(np.array(vals, dtype=object).reshape(self.shape).T)
+        return RingArray(np.array(vals, dtype=object).reshape(self.shape).T)
 
     @staticmethod
     def build(
         group: Group, data: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]]
-    ) -> Protograph:
-        """Construct a protograph.
+    ) -> RingArray:
+        """Construct a RingArray.
 
-        The constructed protograph is built from:
+        The constructed array is built from:
         - a group, and
         - an array populated by
             (a) elements of the group algebra,
@@ -724,48 +735,48 @@ class Protograph(npt.NDArray[np.object_]):
         """
         array = np.asarray(data)
 
-        def elevate(value: Element | GroupMember | int) -> Element:
+        def elevate(value: RingMember | GroupMember | int) -> RingMember:
             """Elevate a value to an element of a group algebra."""
-            if isinstance(value, Element):
+            if isinstance(value, RingMember):
                 return value
             if isinstance(value, GroupMember):
-                return Element(group, value)
-            return Element(group, (value, group.identity))
+                return RingMember(group, value)
+            return RingMember(group, (value, group.identity))
 
         vals = [elevate(value) for value in array.ravel()]
-        return Protograph(np.array(vals).reshape(array.shape))
+        return RingArray(np.array(vals).reshape(array.shape))
 
     @classmethod
-    def from_dense_array(cls, group: Group, array: npt.NDArray[np.int_]) -> Protograph:
-        """Construct a Protograph from a dense array of coefficients.
+    def from_dense_array(cls, group: Group, array: npt.NDArray[np.int_]) -> RingArray:
+        """Construct a RingArray from a dense array of coefficients.
 
-        The array should have shape (..., |G|), and last index is used to indicate a member g_i of
-        the group for which array[..., i] is a coefficient in the corresponing entry of the
-        protograph.
+        The array of coefficients should have shape (..., |G|), where the last index is used to
+        indicate a member g_i of the group for which array[..., i] is a coefficient in the
+        corresponing entry of the RingArray.
         """
         assert array.shape[-1] == group.order
-        vals = [Element.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
-        return Protograph(np.array(vals, dtype=object).reshape(array.shape[:-1]))
+        vals = [RingMember.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
+        return RingArray(np.array(vals, dtype=object).reshape(array.shape[:-1]))
 
     def to_dense_array(self) -> galois.FieldArray:
-        """Convert a Protograph into a dense array of coefficients."""
+        """Convert a RingArray into a dense array of coefficients."""
         vals = [val.to_vector() for val in self.ravel()]
         return self.field(np.asarray(vals).reshape(self.shape + (self.group.order,)))
 
     @classmethod
-    def from_dense_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> Protograph:
-        """Construct a Protograph from a vector of coefficients."""
+    def from_dense_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingArray:
+        """Construct a RingArray from a vector of coefficients."""
         assert vector.ndim == 1 and vector.size % group.order == 0
-        return Protograph.from_dense_array(group, vector.reshape(-1, group.order))
+        return RingArray.from_dense_array(group, vector.reshape(-1, group.order))
 
     def to_dense_vector(self) -> galois.FieldArray:
-        """Convert a Protograph into a vector of coefficients."""
+        """Convert a RingArray into a vector of coefficients."""
         assert self.ndim == 1
         vals = [val.to_vector() for val in self.ravel()]
         return self.field(np.asarray(vals).ravel())
 
-    def null_space(self, reduce: bool = False) -> Protograph:
-        """Construct a matrix of null-space row vectors for this Protograph.
+    def null_space(self, reduce: bool = False) -> RingArray:
+        """Construct a matrix of null-space row vectors for this RingArray.
 
         The null space satisfies: assert not np.any(self @ self.null_space().T)
 
@@ -773,13 +784,25 @@ class Protograph(npt.NDArray[np.object_]):
         """
         null_space = np.vstack(
             [
-                Protograph.from_dense_vector(self.group, vector).T
+                RingArray.from_dense_vector(self.group, vector).T
                 for vector in self.regular_lift().null_space()
             ]
         )
         if reduce:
             return NotImplemented
-        return Protograph(null_space)
+        return RingArray(null_space)
+
+
+class Protograph(RingArray):
+    """Deprecated alias for RingArray."""
+
+    def __new__(
+        cls, data: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
+    ) -> RingArray:
+        warnings.warn(
+            "qldpc.abstract.RingArray is deprecated; use qldpc.abstract.RingArray instead"
+        )
+        return RingArray(data, group)
 
 
 ################################################################################
@@ -804,16 +827,16 @@ class TrivialGroup(Group):
         return self.identity
 
     @staticmethod
-    def to_protograph(
+    def to_ring_array(
         data: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
-    ) -> Protograph:
-        """Convert a matrix of 0s and 1s into a protograph of the trivial group."""
+    ) -> RingArray:
+        """Convert a matrix of 0s and 1s into a RingArray over the trivial group."""
         array = np.asarray(data)
         group = TrivialGroup(field)
-        zero = Element(group)
-        one = Element(group, group.identity)
+        zero = RingMember(group)
+        one = RingMember(group, group.identity)
         terms = [val * one if val else zero for val in array.ravel()]
-        return Protograph(np.array(terms, dtype=object).reshape(array.shape))
+        return RingArray(np.array(terms, dtype=object).reshape(array.shape))
 
 
 class CyclicGroup(Group):
