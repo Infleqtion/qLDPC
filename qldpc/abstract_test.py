@@ -92,22 +92,6 @@ def assert_valid_lift(group: abstract.Group) -> None:
         )
 
 
-@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
-def test_regular_rep(group: abstract.Group) -> None:
-    """The regular representation enables straightforward linear algebra over group algebras."""
-    dense_vector = group.field.Random(4 * group.order)
-    dense_array = group.field.Random((3, 4, group.order))
-
-    vector = abstract.Protograph.from_dense_vector(group, dense_vector)
-    matrix = abstract.Protograph.from_dense_array(group, dense_array)
-    assert np.array_equal(dense_vector, abstract.Protograph.to_dense_vector(vector))
-    assert np.array_equal(dense_array, abstract.Protograph.to_dense_array(matrix))
-    assert np.array_equal(
-        (matrix @ vector).to_dense_vector(),
-        matrix.lift() @ vector.to_dense_vector(),
-    )
-
-
 def test_group_product() -> None:
     """Direct product of groups."""
     cycle = abstract.CyclicGroup(2)
@@ -123,6 +107,20 @@ def test_group_product() -> None:
     assert group.generators == [shift @ identity, identity @ shift]
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
+
+
+def test_random_symmetric_subset() -> None:
+    """Cover Group.random_symmetric_subset."""
+    group = abstract.CyclicGroup(2) * abstract.CyclicGroup(3)
+    for seed in [0, 1]:
+        subset = group.random_symmetric_subset(size=2, seed=seed)
+        assert subset == {~member for member in subset}
+
+    subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
+    assert subset == {group.identity}
+
+    with pytest.raises(ValueError, match="must have a size between"):
+        group.random_symmetric_subset(size=0)
 
 
 def test_algebra() -> None:
@@ -177,18 +175,26 @@ def test_transpose() -> None:
     assert np.array_equal(protograph.T.T, protograph)
 
 
-def test_random_symmetric_subset() -> None:
-    """Cover Group.random_symmetric_subset."""
-    group = abstract.CyclicGroup(2) * abstract.CyclicGroup(3)
-    for seed in [0, 1]:
-        subset = group.random_symmetric_subset(size=2, seed=seed)
-        assert subset == {~member for member in subset}
+@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
+def test_regular_rep(group: abstract.Group) -> None:
+    """The regular representation enables straightforward linear algebra over group algebras."""
+    dense_vector = group.field.Random(4 * group.order)
+    dense_array = group.field.Random((3, 4, group.order))
 
-    subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
-    assert subset == {group.identity}
+    vector = abstract.Protograph.from_dense_vector(group, dense_vector)
+    matrix = abstract.Protograph.from_dense_array(group, dense_array)
+    assert np.array_equal(dense_vector, abstract.Protograph.to_dense_vector(vector))
+    assert np.array_equal(dense_array, abstract.Protograph.to_dense_array(matrix))
+    assert np.array_equal(
+        (matrix @ vector).to_dense_vector(),
+        matrix.regular_lift() @ vector.to_dense_vector(),
+    )
 
-    with pytest.raises(ValueError, match="must have a size between"):
-        group.random_symmetric_subset(size=0)
+    assert not np.any(matrix @ matrix.null_space().T)
+    assert not np.any(matrix.regular_lift() @ matrix.null_space().regular_lift().T)
+    assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
+
+    assert matrix.null_space(reduce=True) is NotImplemented
 
 
 @pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])
