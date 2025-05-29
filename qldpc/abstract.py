@@ -632,9 +632,7 @@ class Element(RingMember):  # pragma: no cover
         if isinstance(attribute, types.MethodType):
 
             def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-                warnings.warn(
-                    "qldpc.abstract.Element is deprecated; use qldpc.abstract.RingMember instead"
-                )
+                warnings.warn(f"{Element} is deprecated; use {RingMember} instead")
                 return attribute(*args, **kwargs)
 
             return wrapper
@@ -827,9 +825,7 @@ class Protograph(RingArray):  # pragma: no cover
         if isinstance(attribute, types.MethodType):
 
             def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-                warnings.warn(
-                    "qldpc.abstract.Protograph is deprecated; use qldpc.abstract.RingArray instead"
-                )
+                warnings.warn(f"{Protograph} is deprecated; use {RingArray} instead")
                 return attribute(*args, **kwargs)
 
             return wrapper
