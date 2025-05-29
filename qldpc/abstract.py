@@ -596,6 +596,18 @@ class RingMember:
             new_element._vec[~member] = val
         return new_element
 
+    def inverse(self) -> RingMember | None:
+        """The inverse of this RingMember, if it exists."""
+        if len(self._vec) == 1:
+            x_g, gg = next(iter(self))
+            return RingMember(self.group, (x_g**-1, gg**-1))
+        try:
+            matrix = self.regular_lift()
+            matrix_inv = self.field(np.linalg.inv(matrix))
+            return RingMember.from_vector(self.group, matrix_inv[:, 0])
+        except np.linalg.LinAlgError:
+            return None
+
     @classmethod
     def from_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingMember:
         """Construct a group algebra element from vector of coefficients, (x_g : g in G)."""

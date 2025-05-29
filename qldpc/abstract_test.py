@@ -125,6 +125,8 @@ def test_random_symmetric_subset() -> None:
 
 def test_algebra() -> None:
     """Construct elements of a group algebra."""
+    group: abstract.Group
+
     group = abstract.TrivialGroup(field=3)
     zero = abstract.RingMember(group)
     one = abstract.RingMember(group).one()
@@ -134,6 +136,27 @@ def test_algebra() -> None:
     assert group.identity * one == one * group.identity == one**2 == one
     assert np.array_equal(zero.lift(), np.array(0, ndmin=2))
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
+
+    for group in [
+        abstract.TrivialGroup(field=3),
+        abstract.AbelianGroup(2, 3, field=4),
+        abstract.QuaternionGroup(),
+    ]:
+        for group_member in group.generate():
+            ring_member = abstract.RingMember(group, group_member)
+            ring_member_inverse = ring_member.inverse()
+            assert ring_member_inverse is not None
+            assert ring_member * ring_member_inverse == abstract.RingMember(group).one()
+
+    # nontrivial inverse
+    group = abstract.CyclicGroup(2, field=5)
+    ring_member = abstract.RingMember(group, group.identity, (3, group.generators[0]))
+    assert ring_member.inverse() is not None
+
+    # nonexistent inverse
+    group = abstract.CyclicGroup(2, field=2)
+    ring_member = abstract.RingMember(group, group.identity, *group.generators)
+    assert ring_member.inverse() is None
 
 
 def test_ring_array() -> None:
