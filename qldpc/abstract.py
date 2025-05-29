@@ -481,7 +481,7 @@ class RingMember:
 
     def __add__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
-            return self + other * self.one()
+            return self + other * RingMember.one(self.group)
 
         if isinstance(other, GroupMember):
             new_element = self.copy()
@@ -505,21 +505,21 @@ class RingMember:
     def __mul__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
             # multiply coefficients by 'other'
-            new_element = self.zero()
+            new_element = RingMember.zero(self.group)
             for val, member in self:
                 new_element._vec[member] = val * other
             return new_element
 
         if isinstance(other, GroupMember):
             # multiply group members by 'other'
-            new_element = self.zero()
+            new_element = RingMember.zero(self.group)
             for val, member in self:
                 new_element._vec[member * other] = val
             return new_element
 
         if isinstance(other, RingMember):
             # collect and multiply pairs of terms from 'self' and 'other'
-            new_element = self.zero()
+            new_element = RingMember.zero(self.group)
             for (x_a, aa), (y_b, bb) in itertools.product(self, other):
                 new_element._vec[aa * bb] += x_a * y_b
             return new_element
@@ -531,7 +531,7 @@ class RingMember:
             return self * other
 
         if isinstance(other, GroupMember):
-            new_element = self.zero()
+            new_element = RingMember.zero(self.group)
             for val, member in self:
                 new_element._vec[other * member] = val
             return new_element
@@ -542,11 +542,11 @@ class RingMember:
         return self * (-1)
 
     def __pow__(self, power: int) -> RingMember:
-        return functools.reduce(operator.mul, [self] * power, self.one())
+        return functools.reduce(operator.mul, [self] * power, RingMember.one(self.group))
 
     def copy(self) -> RingMember:
         """Copy of self."""
-        element = self.zero()
+        element = RingMember.zero(self.group)
         for val, member in self:
             element._vec[member] = copy.deepcopy(val)
         return element
@@ -575,13 +575,15 @@ class RingMember:
             start=self.field.Zeros((self.group.order,) * 2),
         )
 
-    def zero(self) -> RingMember:
+    @classmethod
+    def zero(cls, group: Group) -> RingMember:
         """Zero (additive identity) element."""
-        return RingMember(self.group)
+        return RingMember(group)
 
-    def one(self) -> RingMember:
+    @classmethod
+    def one(cls, group: Group) -> RingMember:
         """One (multiplicative identity) element."""
-        return RingMember(self.group, self.group.identity)
+        return RingMember(group, group.identity)
 
     @property
     def T(self) -> RingMember:
@@ -591,7 +593,7 @@ class RingMember:
         the group member for which the lift L(g.T) = L(g).T.  The fact that group members get lifted
         to orthogonal matrices implies that g.T = ~g = g**-1.
         """
-        new_element = self.zero()
+        new_element = RingMember.zero(self.group)
         for val, member in self:
             new_element._vec[~member] = val
         return new_element

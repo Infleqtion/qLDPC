@@ -128,8 +128,8 @@ def test_algebra() -> None:
     group: abstract.Group
 
     group = abstract.TrivialGroup(field=3)
-    zero = abstract.RingMember(group)
-    one = abstract.RingMember(group).one()
+    zero = abstract.RingMember.zero(group)
+    one = abstract.RingMember.one(group)
     assert bool(one) and not bool(zero)
     assert zero.group == group
     assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
@@ -137,6 +137,7 @@ def test_algebra() -> None:
     assert np.array_equal(zero.lift(), np.array(0, ndmin=2))
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
 
+    # test inverses
     for group in [
         abstract.TrivialGroup(field=3),
         abstract.AbelianGroup(2, 3, field=4),
@@ -146,7 +147,7 @@ def test_algebra() -> None:
             ring_member = abstract.RingMember(group, group_member)
             ring_member_inverse = ring_member.inverse()
             assert ring_member_inverse is not None
-            assert ring_member * ring_member_inverse == abstract.RingMember(group).one()
+            assert ring_member * ring_member_inverse == abstract.RingMember.one(group)
 
     # nontrivial inverse
     group = abstract.CyclicGroup(2, field=5)
