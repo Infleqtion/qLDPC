@@ -769,29 +769,32 @@ class RingArray(npt.NDArray[np.object_]):
         return RingArray(np.array(vals).reshape(array.shape))
 
     @classmethod
-    def from_dense_array(cls, group: Group, array: npt.NDArray[np.int_]) -> RingArray:
-        """Construct a RingArray from a dense array of coefficients.
+    def from_field_array(cls, group: Group, array: npt.NDArray[np.int_]) -> RingArray:
+        """Construct a RingArray from an array of coefficients (in a finite field) for each entry.
 
-        The array of coefficients should have shape (..., |G|), where the last index is used to
-        indicate a member g_i of the group for which array[..., i] is a coefficient in the
-        corresponing entry of the RingArray.
+        The input array should have shape (..., group.order), such that if array.ndim == 3, for
+        example, then array[a, b, :] is the vector of coefficients for the RingMember at the
+        constructed ring_array[a, b].
         """
         assert array.shape[-1] == group.order
         vals = [RingMember.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
         return RingArray(np.array(vals, dtype=object).reshape(array.shape[:-1]))
 
-    def to_dense_array(self) -> galois.FieldArray:
-        """Convert a RingArray into a dense array of coefficients."""
+    def to_field_array(self) -> galois.FieldArray:
+        """Convert a RingArray into an array of coefficients (in a finite field) for each entry.
+
+        This method is the inverse of RingArray.from_field_array.
+        """
         vals = [val.to_vector() for val in self.ravel()]
         return self.field(np.asarray(vals).reshape(self.shape + (self.group.order,)))
 
     @classmethod
-    def from_dense_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingArray:
+    def from_field_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingArray:
         """Construct a RingArray from a vector of coefficients."""
         assert vector.ndim == 1 and vector.size % group.order == 0
-        return RingArray.from_dense_array(group, vector.reshape(-1, group.order))
+        return RingArray.from_field_array(group, vector.reshape(-1, group.order))
 
-    def to_dense_vector(self) -> galois.FieldArray:
+    def to_field_vector(self) -> galois.FieldArray:
         """Convert a RingArray into a vector of coefficients."""
         assert self.ndim == 1
         vals = [val.to_vector() for val in self.ravel()]
@@ -800,13 +803,14 @@ class RingArray(npt.NDArray[np.object_]):
     def null_space(self, reduce: bool = False) -> RingArray:
         """Construct a matrix of null-space row vectors for this RingArray.
 
-        The null space satisfies: assert not np.any(self @ self.null_space().T)
+        The transpose of the null-space matrix is annihilated by this RingArray, such that
+        np.any(self @ self.null_space().T) is False.
 
         If reduce is True, reduce the null space matrix to a minimal basis for the null space.
         """
         null_space = np.vstack(
             [
-                RingArray.from_dense_vector(self.group, vector).T
+                RingArray.from_field_vector(self.group, vector).T
                 for vector in self.regular_lift().null_space()
             ]
         )

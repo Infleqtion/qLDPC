@@ -207,13 +207,13 @@ def test_regular_rep(group: abstract.Group) -> None:
     dense_vector = group.field.Random(4 * group.order)
     dense_array = group.field.Random((3, 4, group.order))
 
-    vector = abstract.RingArray.from_dense_vector(group, dense_vector)
-    matrix = abstract.RingArray.from_dense_array(group, dense_array)
-    assert np.array_equal(dense_vector, abstract.RingArray.to_dense_vector(vector))
-    assert np.array_equal(dense_array, abstract.RingArray.to_dense_array(matrix))
+    vector = abstract.RingArray.from_field_vector(group, dense_vector)
+    matrix = abstract.RingArray.from_field_array(group, dense_array)
+    assert np.array_equal(dense_vector, abstract.RingArray.to_field_vector(vector))
+    assert np.array_equal(dense_array, abstract.RingArray.to_field_array(matrix))
     assert np.array_equal(
-        (matrix @ vector).to_dense_vector(),
-        matrix.regular_lift() @ vector.to_dense_vector(),
+        (matrix @ vector).to_field_vector(),
+        matrix.regular_lift() @ vector.to_field_vector(),
     )
 
     assert not np.any(matrix @ matrix.null_space().T)
