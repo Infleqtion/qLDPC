@@ -36,7 +36,6 @@ import functools
 import itertools
 import math
 import operator
-import types
 import typing
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
@@ -628,15 +627,8 @@ class Element(RingMember):  # pragma: no cover
     """Deprecated alias for RingMember."""
 
     def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
-        attribute = super().__getattribute__(name)
-        if isinstance(attribute, types.MethodType):
-
-            def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-                warnings.warn(f"{Element} is deprecated; use {RingMember} instead")
-                return attribute(*args, **kwargs)
-
-            return wrapper
-        return attribute
+        warnings.warn(f"{Element} is deprecated; use {RingMember} instead")
+        return super().__getattribute__(name)
 
 
 ################################################################################
@@ -821,15 +813,8 @@ class Protograph(RingArray):  # pragma: no cover
     """Deprecated alias for RingArray."""
 
     def __getattribute__(self, name: str) -> Callable[..., typing.Any]:
-        attribute = super().__getattribute__(name)
-        if isinstance(attribute, types.MethodType):
-
-            def wrapper(*args: typing.Any, **kwargs: typing.Any) -> typing.Any:
-                warnings.warn(f"{Protograph} is deprecated; use {RingArray} instead")
-                return attribute(*args, **kwargs)
-
-            return wrapper
-        return attribute
+        warnings.warn(f"{Protograph} is deprecated; use {RingArray} instead")
+        return super().__getattribute__(name)
 
 
 ################################################################################
