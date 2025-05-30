@@ -790,23 +790,18 @@ class RingArray(npt.NDArray[np.object_]):
         vals = [val.to_vector() for val in self.ravel()]
         return self.field(np.asarray(vals).ravel())
 
-    def null_space(self, reduce: bool = False) -> RingArray:
+    def null_space(self) -> RingArray:
         """Construct a matrix of null-space row vectors for this RingArray.
 
         The transpose of the null-space matrix is annihilated by this RingArray, such that
         np.any(self @ self.null_space().T) is False.
-
-        If reduce is True, reduce the null space matrix to a minimal basis for the null space.
         """
-        null_space = np.vstack(
+        return RingArray(
             [
                 RingArray.from_field_vector(self.group, vector).T
                 for vector in self.regular_lift().null_space()
             ]
         )
-        if reduce:
-            return NotImplemented
-        return RingArray(null_space)
 
 
 class Protograph(RingArray):  # pragma: no cover
