@@ -801,21 +801,37 @@ class RingArray(npt.NDArray[np.object_]):
         # self, via conversion with RingArray.from_field_vector <-> RingArray.to_field_vector.
         null_field_vectors = self.regular_lift().null_space()
 
-        # When modding out by left-multiplication by ring members, we can enforce without loss of
-        # generality that the first nonzero entry of a null vector has a group.identity term.
-        null_field_vectors = null_field_vectors[
-            qldpc.math.first_nonzero_cols(null_field_vectors) % self.group.order == 0
+        # The above basis of null vectors is over-complete, since it separately counts vectors that
+        # are multiples of each other (by ring members), so we need to mod out by (left)
+        # multiplication by ring members.  Without loss of generality, when modding out we can
+        # enforce that the first nonzero entry of a null vector has a group.identity term.
+        pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
+        null_field_vectors = null_field_vectors[pivot_cols % self.group.order == 0]
+
+        # split vectors by whether their leading entry is invertible (and WLOG, a 1)
+        pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
+        unit_vectors = [
+            vector
+            for vector, col in zip(null_field_vectors, pivot_cols)
+            if not np.any(vector[col + 1 : col + self.group.order])
+        ]
+        non_unit_vectors = [
+            vector
+            for vector, col in zip(null_field_vectors, pivot_cols)
+            if np.any(vector[col + 1 : col + self.group.order])
         ]
 
         print()
+        print(self.field(unit_vectors))
         print()
-        print(null_field_vectors)
+        print(self.field(non_unit_vectors))
         print()
 
-        null_space = np.vstack(
+        # construct a null matrix of row (transposed!) vectors
+        null_field_vectors = unit_vectors + non_unit_vectors
+        return RingArray(
             [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors]
         )
-        return RingArray(null_space)
 
 
 class Protograph(RingArray):  # pragma: no cover
