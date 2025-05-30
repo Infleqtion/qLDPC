@@ -473,7 +473,7 @@ class RingMember:
         )
 
     def __bool__(self) -> bool:
-        return any(self._vec.values())
+        return any(x_g for x_g in self._vec.values())
 
     def __iter__(self) -> Iterator[tuple[galois.FieldArray, GroupMember]]:
         for gg, x_g in self._vec.items():
@@ -600,7 +600,8 @@ class RingMember:
 
     def inverse(self) -> RingMember | None:
         """The inverse of this RingMember, if it exists."""
-        if len(self._vec) == 1:
+        self_vec = {gg: x_g for gg, x_g in self._vec.items() if x_g}
+        if self_vec == 1:
             x_g, gg = next(iter(self))
             return RingMember(self.group, (x_g**-1, gg**-1))
         try:
@@ -801,37 +802,59 @@ class RingArray(npt.NDArray[np.object_]):
         # self, via conversion with RingArray.from_field_vector <-> RingArray.to_field_vector.
         null_field_vectors = self.regular_lift().null_space()
 
-        # The above basis of null vectors is over-complete, since it separately counts vectors that
-        # are multiples of each other (by ring members), so we need to mod out by (left)
-        # multiplication by ring members.  Without loss of generality, when modding out we can
-        # enforce that the first nonzero entry of a null vector has a group.identity term.
-        pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
-        null_field_vectors = null_field_vectors[pivot_cols % self.group.order == 0]
+        """
+        The above basis of null vectors is over-complete, since it separately counts vectors that
+        are multiples of each other (by ring members), so we need to mod out by (left)
+        multiplication by ring members.  Without loss of generality, when modding out we can enforce
+        that the first nonzero entry of a null vector has a group.identity term.
+        """
+        field_pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
+        null_field_vectors = null_field_vectors[field_pivot_cols % self.group.order == 0]
 
-        # split vectors by whether their leading entry is invertible (and WLOG, a 1)
-        pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
-        unit_vectors = [
-            vector
-            for vector, col in zip(null_field_vectors, pivot_cols)
-            if not np.any(vector[col + 1 : col + self.group.order])
-        ]
-        non_unit_vectors = [
-            vector
-            for vector, col in zip(null_field_vectors, pivot_cols)
+        # collect ring-valued null row vectors (that is, transposed null column vectors)
+        null_vectors = RingArray(
+            [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors]
+        )
+
+        # identify non-invertible pivot entries
+        non_invertible_pivots = [
+            (row, col // self.group.order)
+            for row, (vector, col) in enumerate(zip(null_field_vectors, field_pivot_cols))
             if np.any(vector[col + 1 : col + self.group.order])
         ]
 
-        print()
-        print(self.field(unit_vectors))
-        print()
-        print(self.field(non_unit_vectors))
-        print()
+        """
+        For each row with a non-invertible pivot, check whether there is a different entry in that
+        row that is invertible.  If so, make that entry a pivot:
+        - left-multiply the row by the inverse, and
+        - zero out that column from all other rows.
+        """
+        for pivot_row, pivot_col in non_invertible_pivots:
+            # check whether any other entries in these rows are invertible
+            old_vector = null_vectors[pivot_row]
+            for col in range(pivot_col + 1, self.shape[1]):
+                if inverse := old_vector[col].inverse():
+                    new_vector = inverse * old_vector
+                    null_vectors[pivot_row] = new_vector
+                    for rows in [slice(None, pivot_row), slice(pivot_row + 1, None)]:
+                        null_vectors[rows, pivot_col:] = null_vectors[rows, pivot_col:] - (
+                            null_vectors[rows, col, np.newaxis] * new_vector[np.newaxis, pivot_col:]
+                        )
 
-        # construct a null matrix of row (transposed!) vectors
-        null_field_vectors = unit_vectors + non_unit_vectors
-        return RingArray(
-            [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors]
-        )
+        # remove zero vectors
+        null_vectors = RingArray([row for row in null_vectors if np.any(row)])
+
+        # # identify vectors with no invertible entries
+        # for idx, row in enumerate(null_vectors):
+        #     if not any(entry.inverse() for entry in row):
+        #         print()
+        #         print(idx)
+        #         print()
+        #         print(row.to_field_vector())
+        #         print([entry.to_vector() for entry in row])
+        #         print([entry.inverse() for entry in row])
+
+        return null_vectors
 
 
 class Protograph(RingArray):  # pragma: no cover

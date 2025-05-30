@@ -202,10 +202,11 @@ def test_transpose() -> None:
 
 
 @pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
-def test_regular_rep(group: abstract.Group) -> None:
+def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None:
     """The regular representation enables straightforward linear algebra over group algebras."""
-    dense_vector = group.field.Random(4 * group.order)
-    dense_array = group.field.Random((3, 4, group.order))
+    seed = pytestconfig.getoption("randomly_seed")
+    dense_vector = group.field.Random(4 * group.order, seed=seed)
+    dense_array = group.field.Random((3, 4, group.order), seed=seed + 1)
 
     vector = abstract.RingArray.from_field_vector(group, dense_vector)
     matrix = abstract.RingArray.from_field_array(group, dense_array)
@@ -219,8 +220,6 @@ def test_regular_rep(group: abstract.Group) -> None:
     assert not np.any(matrix @ matrix.null_space().T)
     assert not np.any(matrix.regular_lift() @ matrix.null_space().regular_lift().T)
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
-
-    assert matrix.null_space(reduce=True) is NotImplemented
 
 
 @pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])
