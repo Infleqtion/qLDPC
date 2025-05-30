@@ -825,9 +825,9 @@ class RingArray(npt.NDArray[np.object_]):
 
         """
         For each row with a non-invertible pivot, check whether there is a different entry in that
-        row that is invertible.  If so, make that entry a pivot:
-        - left-multiply the row by the inverse, and
-        - zero out that column from all other rows.
+        row that is invertible.  If so,
+        - left-multiply that row by the inverse, and
+        - zero out the corresponding column from all other rows.
         """
         for pivot_row, pivot_col in non_invertible_pivots:
             # check whether any other entries in these rows are invertible
@@ -840,6 +840,7 @@ class RingArray(npt.NDArray[np.object_]):
                         null_vectors[rows, pivot_col:] = null_vectors[rows, pivot_col:] - (
                             null_vectors[rows, col, np.newaxis] * new_vector[np.newaxis, pivot_col:]
                         )
+                    break
 
         # remove zero vectors
         null_vectors = RingArray([row for row in null_vectors if np.any(row)])
