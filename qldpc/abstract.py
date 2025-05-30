@@ -47,6 +47,7 @@ import scipy.linalg
 import sympy.combinatorics as comb
 import sympy.core
 
+import qldpc
 from qldpc import external
 
 DEFAULT_FIELD_ORDER = 2
@@ -790,22 +791,30 @@ class RingArray(npt.NDArray[np.object_]):
         vals = [val.to_vector() for val in self.ravel()]
         return self.field(np.asarray(vals).ravel())
 
-    def null_space(self, reduce: bool = False) -> RingArray:
+    def null_space(self) -> RingArray:
         """Construct a matrix of null-space row vectors for this RingArray.
 
         The transpose of the null-space matrix is annihilated by this RingArray, such that
         np.any(self @ self.null_space().T) is False.
-
-        If reduce is True, reduce the null space matrix to a minimal basis for the null space.
         """
+        # Field-valued null vectors of self.regular_lift() correspond to ring-valued null vectors of
+        # self, via conversion with RingArray.from_field_vector <-> RingArray.to_field_vector.
+        null_field_vectors = self.regular_lift().null_space()
+
+        # When modding out by left-multiplication by ring members, we can enforce without loss of
+        # generality that the first nonzero entry of a null vector has a group.identity term.
+        null_field_vectors = null_field_vectors[
+            qldpc.math.first_nonzero_cols(null_field_vectors) % self.group.order == 0
+        ]
+
+        print()
+        print()
+        print(null_field_vectors)
+        print()
+
         null_space = np.vstack(
-            [
-                RingArray.from_field_vector(self.group, vector).T
-                for vector in self.regular_lift().null_space()
-            ]
+            [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors]
         )
-        if reduce:
-            return NotImplemented
         return RingArray(null_space)
 
 
