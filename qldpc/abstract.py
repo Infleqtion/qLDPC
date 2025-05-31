@@ -601,7 +601,9 @@ class RingMember:
     def inverse(self) -> RingMember | None:
         """The inverse of this RingMember, if it exists."""
         self_vec = {gg: x_g for gg, x_g in self._vec.items() if x_g}
-        if self_vec == 1:
+        if not self_vec:
+            return None
+        if len(self_vec) == 1:
             x_g, gg = next(iter(self))
             return RingMember(self.group, (x_g**-1, gg**-1))
         try:
