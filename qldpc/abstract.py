@@ -760,7 +760,7 @@ class RingArray(npt.NDArray[np.object_]):
             return RingMember(group, (value, group.identity))
 
         vals = [elevate(value) for value in array.ravel()]
-        return RingArray(np.array(vals).reshape(array.shape))
+        return RingArray(np.array(vals).reshape(array.shape), group=group)
 
     @classmethod
     def from_field_array(cls, group: Group, array: npt.NDArray[np.int_]) -> RingArray:
@@ -815,7 +815,8 @@ class RingArray(npt.NDArray[np.object_]):
 
         # collect ring-valued null row vectors (that is, transposed null column vectors)
         null_vectors = RingArray(
-            [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors]
+            [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors],
+            group=self.group,
         )
 
         """
@@ -842,7 +843,7 @@ class RingArray(npt.NDArray[np.object_]):
                     break
 
         # remove zero vectors
-        null_vectors = RingArray([row for row in null_vectors if np.any(row)])
+        null_vectors = RingArray([row for row in null_vectors if np.any(row)], group=self.group)
 
         # # identify vectors with no invertible entries
         # one = RingMember.one(self.group)
@@ -854,7 +855,7 @@ class RingArray(npt.NDArray[np.object_]):
         #     for row in non_invertible_rows:
         #         print(row.to_field_vector())
 
-        return null_vectors
+        return null_vectors.reshape(len(null_vectors), self.shape[1])
 
 
 class Protograph(RingArray):  # pragma: no cover
