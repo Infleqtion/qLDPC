@@ -869,7 +869,7 @@ class RingArray(npt.NDArray[np.object_]):
                         )
                     break
         if not all(nonzero_rows := np.any(matrix, axis=1)):
-            matrix = matrix[nonzero_rows, :]
+            matrix = matrix[nonzero_rows, :].view(RingArray)
         return matrix
 
 
