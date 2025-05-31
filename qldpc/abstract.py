@@ -807,8 +807,8 @@ class RingArray(npt.NDArray[np.object_]):
         null_field_vectors = self.regular_lift().null_space()
 
         """
-        The above basis of null vectors is over-complete, since it separately counts vectors that
-        are multiples of each other (by ring members), so we need to mod out by (left)
+        The above basis of null vectors is vastly over-complete, since it counts vectors that are
+        multiples of each other (by ring members) as distinct, so we need to mod out by (left)
         multiplication by ring members.  Without loss of generality, when modding out we can enforce
         that the first nonzero entry of a null vector has a group.identity term.
         """
@@ -844,9 +844,8 @@ class RingArray(npt.NDArray[np.object_]):
                         )
                     break
 
-        # remove zero vectors
+        # remove zero vectors and return
         null_vectors = RingArray([row for row in null_vectors if np.any(row)], group=self.group)
-
         return null_vectors.reshape(len(null_vectors), self.shape[1]).view(RingArray)
 
 
