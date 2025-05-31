@@ -604,7 +604,7 @@ class RingMember:
         if not self_vec:
             return None
         if len(self_vec) == 1:
-            x_g, gg = next(iter(self))
+            gg, x_g = next(iter(self_vec.items()))
             return RingMember(self.group, (x_g**-1, gg**-1))
         try:
             matrix = self.regular_lift()
