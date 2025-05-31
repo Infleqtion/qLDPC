@@ -816,29 +816,26 @@ class RingArray(npt.NDArray[np.object_]):
             [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors]
         )
 
-        # identify non-invertible pivot entries
-        non_invertible_pivots = [
-            (row, col // self.group.order)
+        """
+        For each row with a non-invertible pivot, look for an invertible entry in that row.  If we
+        find an invertible entry in some column,
+        - left-multiply that row by the inverse of the entry, and
+        - zero out the column from all other rows.
+        """
+        non_invertible_pivot_rows = [
+            row
             for row, (vector, col) in enumerate(zip(null_field_vectors, field_pivot_cols))
             if np.any(vector[col + 1 : col + self.group.order])
         ]
-
-        """
-        For each row with a non-invertible pivot, check whether there is a different entry in that
-        row that is invertible.  If so,
-        - left-multiply that row by the inverse, and
-        - zero out the corresponding column from all other rows.
-        """
-        for pivot_row, pivot_col in non_invertible_pivots:
-            # check whether any other entries in these rows are invertible
-            old_vector = null_vectors[pivot_row]
-            for col in range(pivot_col + 1, self.shape[1]):
+        for row in non_invertible_pivot_rows:
+            old_vector = null_vectors[row]
+            for col in range(len(old_vector)):
                 if inverse := old_vector[col].inverse():
                     new_vector = inverse * old_vector
-                    null_vectors[pivot_row] = new_vector
-                    for rows in [slice(None, pivot_row), slice(pivot_row + 1, None)]:
-                        null_vectors[rows, pivot_col:] = null_vectors[rows, pivot_col:] - (
-                            null_vectors[rows, col, np.newaxis] * new_vector[np.newaxis, pivot_col:]
+                    null_vectors[row] = new_vector
+                    for rows in [slice(None, row), slice(row + 1, None)]:
+                        null_vectors[rows, :] = null_vectors[rows, :] - (
+                            null_vectors[rows, col, np.newaxis] * new_vector[np.newaxis, :]
                         )
                     break
 
