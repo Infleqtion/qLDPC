@@ -38,7 +38,7 @@ import math
 import operator
 import typing
 import warnings
-from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
 
 import galois
 import numpy as np
@@ -802,8 +802,12 @@ class RingArray(npt.NDArray[np.object_]):
         The transpose of the null-space matrix is annihilated by this RingArray, such that
         np.any(self @ self.null_space().T) is False.
         """
-        # Field-valued null vectors of self.regular_lift() correspond to ring-valued null vectors of
-        # self, via conversion with RingArray.from_field_vector <-> RingArray.to_field_vector.
+        assert self.ndim == 2
+
+        """
+        Field-valued null vectors of matrix.regular_lift() correspond to ring-valued null vectors
+        of the matrix via conversion with RingArray.from_field_vector <> RingArray.to_field_vector.
+        """
         null_field_vectors = self.regular_lift().null_space()
 
         """
@@ -832,21 +836,39 @@ class RingArray(npt.NDArray[np.object_]):
             for row, (vector, col) in enumerate(zip(null_field_vectors, field_pivot_cols))
             if np.any(vector[col + 1 : col + self.group.order])
         ]
-        for row in non_invertible_pivot_rows:
-            old_vector = null_vectors[row]
-            for col in range(len(old_vector)):
+        null_vectors = null_vectors.partial_row_reduce(non_invertible_pivot_rows)
+
+        return null_vectors
+
+    def partial_row_reduce(self, rows_to_reduce: Collection[int] | None = None) -> RingArray:
+        """Row-reduce this RingArray to the degree possible.
+
+        This method first uses invertible row operations (namely, left-multiplication by invertible
+        ring elements and row addition) to construct a matrix in which every row satisfies one of
+        the following:
+        - the row contains a 1 in some column, in which case all other rows are 0 at that column; or
+        - all entries of the row are non-invertible.
+        All-zero rows are removed from the final matrix returned by this method.
+
+        If rows_to_reduce is not None, only these rows are required to satisfy the above conditions.
+        """
+        assert self.ndim == 2
+        matrix = self.copy()
+        num_rows, num_cols = self.shape
+        for row in rows_to_reduce or range(num_rows):
+            old_vector = matrix[row]
+            for col in range(num_cols):
                 if inverse := old_vector[col].inverse():
                     new_vector = inverse * old_vector
-                    null_vectors[row] = new_vector
+                    matrix[row] = new_vector
                     for rows in [slice(None, row), slice(row + 1, None)]:
-                        null_vectors[rows, :] = null_vectors[rows, :] - (
-                            null_vectors[rows, col, np.newaxis] * new_vector[np.newaxis, :]
+                        matrix[rows, :] = matrix[rows, :] - (
+                            matrix[rows, col, np.newaxis] * new_vector[np.newaxis, :]
                         )
                     break
-
-        # remove zero vectors and return
-        null_vectors = RingArray([row for row in null_vectors if np.any(row)], group=self.group)
-        return null_vectors.reshape(len(null_vectors), self.shape[1]).view(RingArray)
+        if not all(nonzero_rows := np.any(matrix, axis=1)):
+            matrix = matrix[nonzero_rows, :]
+        return matrix
 
 
 class Protograph(RingArray):  # pragma: no cover
