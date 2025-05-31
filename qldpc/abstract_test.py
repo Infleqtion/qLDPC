@@ -222,30 +222,24 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
 
 
-def test_null_space() -> None:
+def test_partial_row_reduce() -> None:
     """Some RingArrays need "secondary" Gaussian elimination to identify invertible pivots."""
-    group = abstract.CyclicGroup(3)
-
-    coefficients = group.field.Random((2, 3, group.order), seed=0)
-    matrix = abstract.RingArray.from_field_array(group, coefficients)
-    null_space = matrix.null_space()
-
-    def get_pivot_col(vector: abstract.RingArray) -> int | None:
-        for col, entry in enumerate(vector):
-            if entry.inverse() is not None:
-                return col
-        return None  # pragma: no cover
-
-    # find a row which the first nonzero entry is non-invertible, but there is still a pivot
-    example_found = False
-    for vector in null_space:
-        if (pivot_col := get_pivot_col(vector)) is not None:
-            first_nonzero_col = next(col for col, entry in enumerate(vector) if bool(entry))
-            if first_nonzero_col < pivot_col:
-                example_found = True
-                break
-    assert example_found
-    assert all(row[first_nonzero_col].inverse() is None for row in null_space)
+    group = abstract.CyclicGroup(3, field=4)
+    one = abstract.RingMember.one(group)
+    gen = group.generators[0] * one
+    matrix = [
+        [one + gen, gen],
+        [gen + gen**2, gen**2],
+        [0, one + gen],
+    ]
+    reduced_matrix = [
+        [gen.inverse() + one, one],
+        [(one + gen) * (gen.inverse() + one), 0],
+    ]
+    assert np.array_equal(
+        abstract.RingArray.build(group, matrix).partial_row_reduce(),
+        abstract.RingArray.build(group, reduced_matrix),
+    )
 
 
 @pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])
