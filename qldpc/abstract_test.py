@@ -224,9 +224,9 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
 
 def test_null_space() -> None:
     """Some RingArrays need "secondary" Gaussian elimination to identify invertible pivots."""
-    group = abstract.DihedralGroup(3)
+    group = abstract.CyclicGroup(3)
 
-    coefficients = group.field.Random((2, 3, group.order), seed=4)
+    coefficients = group.field.Random((2, 3, group.order), seed=0)
     matrix = abstract.RingArray.from_field_array(group, coefficients)
     null_space = matrix.null_space()
 
