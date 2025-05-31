@@ -645,9 +645,13 @@ class RingArray(npt.NDArray[np.object_]):
     _group: Group
 
     def __new__(
-        cls, data: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
+        cls,
+        data: npt.NDArray[np.object_]
+        | Sequence[npt.NDArray[np.object_]]
+        | Sequence[Sequence[object]],
+        group: Group | None = None,
     ) -> RingArray:
-        array = np.asarray(data).view(cls)
+        array = np.asarray(data, dtype=object).view(cls)
 
         # identify the base group for this RingArray
         for value in array.ravel():
@@ -845,17 +849,7 @@ class RingArray(npt.NDArray[np.object_]):
         # remove zero vectors
         null_vectors = RingArray([row for row in null_vectors if np.any(row)], group=self.group)
 
-        # # identify vectors with no invertible entries
-        # one = RingMember.one(self.group)
-        # non_invertible_rows = [
-        #     row for row in null_vectors if not any(entry == one for entry in row)
-        # ]
-        # if non_invertible_rows:
-        #     print()
-        #     for row in non_invertible_rows:
-        #         print(row.to_field_vector())
-
-        return null_vectors.reshape(len(null_vectors), self.shape[1])
+        return null_vectors.reshape(len(null_vectors), self.shape[1]).view(RingArray)
 
 
 class Protograph(RingArray):  # pragma: no cover
@@ -889,10 +883,10 @@ class TrivialGroup(Group):
 
     @staticmethod
     def to_ring_array(
-        data: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
+        data: npt.NDArray[np.int_] | Sequence[Sequence[object]], field: int | None = None
     ) -> RingArray:
         """Convert a matrix of 0s and 1s into a RingArray over the trivial group."""
-        array = np.asarray(data)
+        array = np.asarray(data, dtype=int)
         group = TrivialGroup(field)
         zero = RingMember(group)
         one = RingMember(group, group.identity)
