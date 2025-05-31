@@ -856,17 +856,33 @@ class RingArray(npt.NDArray[np.object_]):
         assert self.ndim == 2
         matrix = self.copy()
         num_rows, num_cols = self.shape
+
+        row_reductions_made = False  # did we perform row reductions?
+        rows_without_inverses = []  # which rows had no inverse entries?
         for row in rows_to_reduce or range(num_rows):
             old_vector = matrix[row]
+
+            inverse_col: int | None = None
             for col in range(num_cols):
                 if inverse := old_vector[col].inverse():
-                    new_vector = inverse * old_vector
-                    matrix[row] = new_vector
-                    for rows in [slice(None, row), slice(row + 1, None)]:
-                        matrix[rows, :] = matrix[rows, :] - (
-                            matrix[rows, col, np.newaxis] * new_vector[np.newaxis, :]
-                        )
+                    inverse_col = col
                     break
+
+            if inverse_col is not None:
+                new_vector = inverse * old_vector
+                matrix[row] = new_vector
+                for rows in [slice(None, row), slice(row + 1, None)]:
+                    matrix[rows, :] = matrix[rows, :] - (
+                        matrix[rows, col, np.newaxis] * new_vector[np.newaxis, :]
+                    )
+                row_reductions_made = True
+            else:
+                rows_without_inverses.append(row)
+
+        if row_reductions_made and rows_without_inverses:
+            # we may have made some non-invertible entries invertible, so try row-reducing again
+            return matrix.partial_row_reduce(rows_without_inverses)
+
         if not all(nonzero_rows := np.any(matrix, axis=1)):
             matrix = matrix[nonzero_rows, :].view(RingArray)
         return matrix
