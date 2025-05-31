@@ -222,7 +222,7 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
 
 
-def test_null_space():
+def test_null_space() -> None:
     """Some RingArrays need "secondary" Gaussian elimination to identify invertible pivots."""
     group = abstract.DihedralGroup(3)
 
@@ -234,7 +234,7 @@ def test_null_space():
         for col, entry in enumerate(vector):
             if entry.inverse() is not None:
                 return col
-        return None
+        return None  # pragma: no cover
 
     # find a row which the first nonzero entry is non-invertible, but there is still a pivot
     example_found = False
