@@ -843,14 +843,14 @@ class RingArray(npt.NDArray[np.object_]):
         null_vectors = RingArray([row for row in null_vectors if np.any(row)])
 
         # # identify vectors with no invertible entries
-        # for idx, row in enumerate(null_vectors):
-        #     if not any(entry.inverse() for entry in row):
-        #         print()
-        #         print(idx)
-        #         print()
+        # one = RingMember.one(self.group)
+        # non_invertible_rows = [
+        #     row for row in null_vectors if not any(entry == one for entry in row)
+        # ]
+        # if non_invertible_rows:
+        #     print()
+        #     for row in non_invertible_rows:
         #         print(row.to_field_vector())
-        #         print([entry.to_vector() for entry in row])
-        #         print([entry.inverse() for entry in row])
 
         return null_vectors
 
