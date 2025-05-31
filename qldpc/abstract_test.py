@@ -202,10 +202,11 @@ def test_transpose() -> None:
 
 
 @pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
-def test_regular_rep(group: abstract.Group) -> None:
+def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None:
     """The regular representation enables straightforward linear algebra over group algebras."""
-    dense_vector = group.field.Random(4 * group.order)
-    dense_array = group.field.Random((3, 4, group.order))
+    seed = pytestconfig.getoption("randomly_seed")
+    dense_vector = group.field.Random(4 * group.order, seed=seed)
+    dense_array = group.field.Random((3, 4, group.order), seed=seed + 1)
 
     vector = abstract.RingArray.from_field_vector(group, dense_vector)
     matrix = abstract.RingArray.from_field_array(group, dense_array)
@@ -220,7 +221,31 @@ def test_regular_rep(group: abstract.Group) -> None:
     assert not np.any(matrix.regular_lift() @ matrix.null_space().regular_lift().T)
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
 
-    assert matrix.null_space(reduce=True) is NotImplemented
+
+def test_null_space() -> None:
+    """Some RingArrays need "secondary" Gaussian elimination to identify invertible pivots."""
+    group = abstract.DihedralGroup(3)
+
+    coefficients = group.field.Random((2, 3, group.order), seed=4)
+    matrix = abstract.RingArray.from_field_array(group, coefficients)
+    null_space = matrix.null_space()
+
+    def get_pivot_col(vector: abstract.RingArray) -> int | None:
+        for col, entry in enumerate(vector):
+            if entry.inverse() is not None:
+                return col
+        return None  # pragma: no cover
+
+    # find a row which the first nonzero entry is non-invertible, but there is still a pivot
+    example_found = False
+    for vector in null_space:
+        if (pivot_col := get_pivot_col(vector)) is not None:
+            first_nonzero_col = next(col for col, entry in enumerate(vector) if bool(entry))
+            if first_nonzero_col < pivot_col:
+                example_found = True
+                break
+    assert example_found
+    assert all(row[first_nonzero_col].inverse() is None for row in null_space)
 
 
 @pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])

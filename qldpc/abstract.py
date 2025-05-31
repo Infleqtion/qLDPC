@@ -47,6 +47,7 @@ import scipy.linalg
 import sympy.combinatorics as comb
 import sympy.core
 
+import qldpc
 from qldpc import external
 
 DEFAULT_FIELD_ORDER = 2
@@ -472,7 +473,7 @@ class RingMember:
         )
 
     def __bool__(self) -> bool:
-        return any(self._vec.values())
+        return any(x_g for x_g in self._vec.values())
 
     def __iter__(self) -> Iterator[tuple[galois.FieldArray, GroupMember]]:
         for gg, x_g in self._vec.items():
@@ -599,7 +600,10 @@ class RingMember:
 
     def inverse(self) -> RingMember | None:
         """The inverse of this RingMember, if it exists."""
-        if len(self._vec) == 1:
+        self_vec = {gg: x_g for gg, x_g in self._vec.items() if x_g}
+        if not self_vec:
+            return None
+        if len(self_vec) == 1:
             x_g, gg = next(iter(self))
             return RingMember(self.group, (x_g**-1, gg**-1))
         try:
@@ -634,6 +638,8 @@ class Element(RingMember):  # pragma: no cover
 ################################################################################
 # RingArray: RingMember-valued array
 
+NestedSequence = Sequence[typing.Union[object, Sequence["NestedSequence"]]]
+
 
 class RingArray(npt.NDArray[np.object_]):
     """Array whose entries are members of a group algebra over a finite field."""
@@ -641,9 +647,11 @@ class RingArray(npt.NDArray[np.object_]):
     _group: Group
 
     def __new__(
-        cls, data: npt.NDArray[np.object_] | Sequence[Sequence[object]], group: Group | None = None
+        cls,
+        data: npt.NDArray[np.object_] | NestedSequence,
+        group: Group | None = None,
     ) -> RingArray:
-        array = np.asarray(data).view(cls)
+        array = np.asarray(data, dtype=object).view(cls)
 
         # identify the base group for this RingArray
         for value in array.ravel():
@@ -732,9 +740,7 @@ class RingArray(npt.NDArray[np.object_]):
         return RingArray(np.array(vals, dtype=object).reshape(self.shape).T)
 
     @staticmethod
-    def build(
-        group: Group, data: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]]
-    ) -> RingArray:
+    def build(group: Group, data: npt.NDArray[np.object_ | np.int_] | NestedSequence) -> RingArray:
         """Construct a RingArray.
 
         The constructed array is built from:
@@ -756,7 +762,7 @@ class RingArray(npt.NDArray[np.object_]):
             return RingMember(group, (value, group.identity))
 
         vals = [elevate(value) for value in array.ravel()]
-        return RingArray(np.array(vals).reshape(array.shape))
+        return RingArray(np.array(vals).reshape(array.shape), group=group)
 
     @classmethod
     def from_field_array(cls, group: Group, array: npt.NDArray[np.int_]) -> RingArray:
@@ -796,12 +802,51 @@ class RingArray(npt.NDArray[np.object_]):
         The transpose of the null-space matrix is annihilated by this RingArray, such that
         np.any(self @ self.null_space().T) is False.
         """
-        return RingArray(
-            [
-                RingArray.from_field_vector(self.group, vector).T
-                for vector in self.regular_lift().null_space()
-            ]
+        # Field-valued null vectors of self.regular_lift() correspond to ring-valued null vectors of
+        # self, via conversion with RingArray.from_field_vector <-> RingArray.to_field_vector.
+        null_field_vectors = self.regular_lift().null_space()
+
+        """
+        The above basis of null vectors is vastly over-complete, since it counts vectors that are
+        multiples of each other (by ring members) as distinct, so we need to mod out by (left)
+        multiplication by ring members.  Without loss of generality, when modding out we can enforce
+        that the first nonzero entry of a null vector has a group.identity term.
+        """
+        field_pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
+        null_field_vectors = null_field_vectors[field_pivot_cols % self.group.order == 0]
+
+        # collect ring-valued null row vectors (that is, transposed null column vectors)
+        null_vectors = RingArray(
+            [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors],
+            group=self.group,
         )
+
+        """
+        For each row with a non-invertible pivot, look for an invertible entry in that row.  If we
+        find an invertible entry in some column,
+        - left-multiply that row by the inverse of the entry, and
+        - zero out the column from all other rows.
+        """
+        non_invertible_pivot_rows = [
+            row
+            for row, (vector, col) in enumerate(zip(null_field_vectors, field_pivot_cols))
+            if np.any(vector[col + 1 : col + self.group.order])
+        ]
+        for row in non_invertible_pivot_rows:
+            old_vector = null_vectors[row]
+            for col in range(len(old_vector)):
+                if inverse := old_vector[col].inverse():
+                    new_vector = inverse * old_vector
+                    null_vectors[row] = new_vector
+                    for rows in [slice(None, row), slice(row + 1, None)]:
+                        null_vectors[rows, :] = null_vectors[rows, :] - (
+                            null_vectors[rows, col, np.newaxis] * new_vector[np.newaxis, :]
+                        )
+                    break
+
+        # remove zero vectors and return
+        null_vectors = RingArray([row for row in null_vectors if np.any(row)], group=self.group)
+        return null_vectors.reshape(len(null_vectors), self.shape[1]).view(RingArray)
 
 
 class Protograph(RingArray):  # pragma: no cover
@@ -835,10 +880,10 @@ class TrivialGroup(Group):
 
     @staticmethod
     def to_ring_array(
-        data: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
+        data: npt.NDArray[np.int_] | NestedSequence, field: int | None = None
     ) -> RingArray:
         """Convert a matrix of 0s and 1s into a RingArray over the trivial group."""
-        array = np.asarray(data)
+        array = np.asarray(data, dtype=int)
         group = TrivialGroup(field)
         zero = RingMember(group)
         one = RingMember(group, group.identity)
