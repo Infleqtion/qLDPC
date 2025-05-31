@@ -843,16 +843,15 @@ class RingArray(npt.NDArray[np.object_]):
     def partial_row_reduce(self, rows_to_reduce: Collection[int] | None = None) -> RingArray:
         """Row-reduce this RingArray to the degree possible.
 
-        This method uses invertible row operations (namely, left-multiplication by invertible ring
-        elements and row addition) to construct a matrix in which every row satisfies one of the
-        following:
-        - the row contains a 1 in some column, in which case all other rows are 0 at that column; or
-        - all entries of the row are non-invertible.
-        All-zero rows are removed from the final matrix returned by this method.
+        This method first uses invertible row operations (namely, left-multiplication by invertible
+        ring elements and row addition) to construct a matrix in which every row satisfies one of
+        the following:
+        (a) the row contains a 1 in some column, or
+        (b) all entries of the row are non-invertible.
+        If rows_to_reduce is not None, only these rows are required to satisfy one of (a) or (b).
 
-        If rows_to_reduce is not None, only these rows are required to satisfy the above conditions
-        (prior to eliminating all-zero rows).  In this case, this method guarantees that every
-        column with a 1 in one of the original rows_to_reduce will be 0 in all other rows.
+        If any reduced row contains a 1 in some column, that column is guaranteed to be 0 in all
+        other rows.  All-zero rows are removed from the matrix prior to returning.
         """
         assert self.ndim == 2
         matrix = self.copy()
