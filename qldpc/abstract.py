@@ -638,6 +638,8 @@ class Element(RingMember):  # pragma: no cover
 ################################################################################
 # RingArray: RingMember-valued array
 
+NestedSequence = Sequence[typing.Union[object, Sequence["NestedSequence"]]]
+
 
 class RingArray(npt.NDArray[np.object_]):
     """Array whose entries are members of a group algebra over a finite field."""
@@ -646,9 +648,7 @@ class RingArray(npt.NDArray[np.object_]):
 
     def __new__(
         cls,
-        data: npt.NDArray[np.object_]
-        | Sequence[npt.NDArray[np.object_]]
-        | Sequence[Sequence[object]],
+        data: npt.NDArray[np.object_] | NestedSequence,
         group: Group | None = None,
     ) -> RingArray:
         array = np.asarray(data, dtype=object).view(cls)
@@ -740,9 +740,7 @@ class RingArray(npt.NDArray[np.object_]):
         return RingArray(np.array(vals, dtype=object).reshape(self.shape).T)
 
     @staticmethod
-    def build(
-        group: Group, data: npt.NDArray[np.object_ | np.int_] | Sequence[Sequence[object | int]]
-    ) -> RingArray:
+    def build(group: Group, data: npt.NDArray[np.object_ | np.int_] | NestedSequence) -> RingArray:
         """Construct a RingArray.
 
         The constructed array is built from:
@@ -883,7 +881,7 @@ class TrivialGroup(Group):
 
     @staticmethod
     def to_ring_array(
-        data: npt.NDArray[np.int_] | Sequence[Sequence[object]], field: int | None = None
+        data: npt.NDArray[np.int_] | NestedSequence, field: int | None = None
     ) -> RingArray:
         """Convert a matrix of 0s and 1s into a RingArray over the trivial group."""
         array = np.asarray(data, dtype=int)
