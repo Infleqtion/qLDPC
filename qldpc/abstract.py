@@ -737,7 +737,7 @@ class RingArray(npt.NDArray[np.object_]):
     def T(self) -> RingArray:
         """Transpose of this RingArray, which also transposes every array entry."""
         vals = [val.T for val in self.ravel()]
-        return RingArray(np.array(vals, dtype=object).reshape(self.shape).T)
+        return RingArray(np.array(vals, dtype=object).reshape(self.shape).T, self.group)
 
     @staticmethod
     def build(group: Group, data: npt.NDArray[np.object_ | np.int_] | NestedSequence) -> RingArray:
