@@ -212,6 +212,11 @@ class Group:
         assert power > 0
         return functools.reduce(operator.mul, [self] * power)
 
+    @property
+    def is_abelian(self) -> bool:
+        """Is this group Abelian?"""
+        return isinstance(self, AbelianGroup) or self._group.is_abelian
+
     @staticmethod
     def product(*groups: Group, repeat: int = 1) -> Group:
         """Direct product of Groups."""

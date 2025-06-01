@@ -17,6 +17,7 @@ limitations under the License.
 
 from __future__ import annotations
 
+import itertools
 import math
 import unittest.mock
 
@@ -39,6 +40,11 @@ def test_permutation_group() -> None:
     assert group.random(seed=0) == group.random(seed=0)
     assert group.to_sympy() == group._group
     assert hash(group) == hash(group.to_sympy())
+    assert group.is_abelian
+
+    gens = [abstract.GroupMember(seq) for seq in itertools.permutations([0, 1, 2])]
+    group = abstract.Group(*gens)
+    assert not group.is_abelian
 
     assert abstract.Group.from_generating_mats([[1]]) == abstract.CyclicGroup(1)
 
