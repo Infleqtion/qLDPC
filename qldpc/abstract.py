@@ -47,7 +47,6 @@ import scipy.linalg
 import sympy.combinatorics as comb
 import sympy.core
 
-import qldpc
 from qldpc import external
 
 DEFAULT_FIELD_ORDER = 2
@@ -815,14 +814,15 @@ class RingArray(npt.NDArray[np.object_]):
         """
         null_field_vectors = self.regular_lift().null_space()
 
-        """
-        The above basis of null vectors is vastly over-complete, since it counts vectors that are
-        multiples of each other (by ring members) as distinct, so we need to mod out by (left)
-        multiplication by ring members.  Without loss of generality, when modding out we can enforce
-        that the first nonzero entry of a null vector has a group.identity term.
-        """
-        field_pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
-        null_field_vectors = null_field_vectors[field_pivot_cols % self.group.order == 0]
+        """ !!! COMMENTED OUT BECAUSE THERE IS A MISTAKE OR BUG HERE !!! """
+        # """
+        # The above basis of null vectors is vastly over-complete, since it counts vectors that are
+        # multiples of each other (by ring members) as distinct, so we need to mod out by (left)
+        # multiplication by ring members.  Without loss of generality, when modding out we can enforce
+        # that the first nonzero entry of a null vector has a group.identity term.
+        # """
+        # field_pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
+        # null_field_vectors = null_field_vectors[field_pivot_cols % self.group.order == 0]
 
         # collect ring-valued null row vectors (that is, transposed null column vectors)
         null_vectors = RingArray(
@@ -830,18 +830,19 @@ class RingArray(npt.NDArray[np.object_]):
             group=self.group,
         )
 
-        """
-        For each row with a non-invertible pivot, look for an invertible entry in that row.  If we
-        find an invertible entry in some column,
-        - left-multiply that row by the inverse of the entry, and
-        - zero out the column from all other rows.
-        """
-        non_invertible_pivot_rows = [
-            row
-            for row, (vector, col) in enumerate(zip(null_field_vectors, field_pivot_cols))
-            if np.any(vector[col + 1 : col + self.group.order])
-        ]
-        null_vectors = null_vectors.partial_row_reduce(non_invertible_pivot_rows)
+        """ !!! COMMENTED OUT BECAUSE THERE IS A MISTAKE OR BUG HERE !!! """
+        # """
+        # For each row with a non-invertible pivot, look for an invertible entry in that row.  If we
+        # find an invertible entry in some column,
+        # - left-multiply that row by the inverse of the entry, and
+        # - zero out the column from all other rows.
+        # """
+        # non_invertible_pivot_rows = [
+        #     row
+        #     for row, (vector, col) in enumerate(zip(null_field_vectors, field_pivot_cols))
+        #     if np.any(vector[col + 1 : col + self.group.order])
+        # ]
+        # null_vectors = null_vectors.partial_row_reduce(non_invertible_pivot_rows)
 
         return null_vectors
 
