@@ -815,6 +815,7 @@ class RingArray(npt.NDArray[np.object_]):
         null_field_vectors = self.regular_lift().null_space()
 
         """ !!! COMMENTED OUT BECAUSE THERE IS A MISTAKE OR BUG HERE !!! """
+
         # """
         # The above basis of null vectors is vastly over-complete, since it counts vectors that are
         # multiples of each other (by ring members) as distinct, so we need to mod out by (left)
@@ -831,6 +832,7 @@ class RingArray(npt.NDArray[np.object_]):
         )
 
         """ !!! COMMENTED OUT BECAUSE THERE IS A MISTAKE OR BUG HERE !!! """
+
         # """
         # For each row with a non-invertible pivot, look for an invertible entry in that row.  If we
         # find an invertible entry in some column,
@@ -844,7 +846,9 @@ class RingArray(npt.NDArray[np.object_]):
         # ]
         # null_vectors = null_vectors.partial_row_reduce(non_invertible_pivot_rows)
 
-        return null_vectors
+        # return null_vectors
+
+        return null_vectors.partial_row_reduce()
 
     def partial_row_reduce(self, rows_to_reduce: Collection[int] | None = None) -> RingArray:
         """Row-reduce this RingArray to the degree possible.
@@ -856,8 +860,10 @@ class RingArray(npt.NDArray[np.object_]):
         (b) all entries of the row are non-invertible.
         If rows_to_reduce is not None, only these rows are required to satisfy one of (a) or (b).
 
-        If any reduced row contains a 1 in some column, that column is guaranteed to be 0 in all
-        other rows.  All-zero rows are removed from the matrix prior to returning.
+        For every reduced row with at least 1 in some column, one of these columns is guaranteed to
+        be 0 in all other rows.  All-zero rows are removed from the matrix prior to returning.
+
+        Note: this method is unoptimized; there is a lot of room for speeding things up.
         """
         assert self.ndim == 2
         matrix = self.copy()
@@ -876,17 +882,14 @@ class RingArray(npt.NDArray[np.object_]):
 
             if inverse_col is not None:
                 new_vector = inverse * old_vector
+                matrix = matrix - matrix[:, col, np.newaxis] * new_vector[np.newaxis, :]
                 matrix[row] = new_vector
-                for rows in [slice(None, row), slice(row + 1, None)]:
-                    matrix[rows, :] = matrix[rows, :] - (
-                        matrix[rows, col, np.newaxis] * new_vector[np.newaxis, :]
-                    )
                 row_reductions_made = True
             else:
                 rows_without_inverses.append(row)
 
         if row_reductions_made and rows_without_inverses:
-            # we may have made some non-invertible entries invertible, so try row-reducing again
+            # some non-invertible entries may have become invertible, so try row-reducing again
             return matrix.partial_row_reduce(rows_without_inverses)
 
         if not all(nonzero_rows := np.any(matrix, axis=1)):
