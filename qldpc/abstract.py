@@ -930,27 +930,6 @@ class TrivialGroup(Group):
         return RingArray(np.array(terms, dtype=object).reshape(array.shape))
 
 
-class CyclicGroup(Group):
-    """Cyclic group of a specified order.
-
-    The cyclic group has one generator, g.  All members of the cyclic group of order R can be
-    written as g^p for an integer power p in {0, 1, ..., R-1}.  The member g^p can be represented by
-    (that is, lifted to) an R×R "shift matrix", or the identity matrix with all rows shifted down
-    (equivalently, all columns shifted right) by p.  That is, the lift L(g^p) acts on a standard
-    basis vector <i| as <i| L(g^p) = < i + p mod R |.
-    """
-
-    def __init__(self, order: int, field: int | None = None) -> None:
-        field = field or DEFAULT_FIELD_ORDER
-        identity_mat = np.eye(order, dtype=int)
-
-        # build lift manually, which is faster than the default lift
-        def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-            return galois.GF(field)(np.roll(identity_mat, member.apply(0), axis=0))
-
-        super()._init_from_group(comb.named_groups.CyclicGroup(order), field, lift)
-
-
 class AbelianGroup(Group):
     """Direct product of cyclic groups of the specified orders.
 
@@ -988,6 +967,27 @@ class AbelianGroup(Group):
                 yield functools.reduce(operator.mul, factors)
 
         super()._init_from_group(group, field, lift, name, generate_func)
+
+
+class CyclicGroup(AbelianGroup):
+    """Cyclic group of a specified order.
+
+    The cyclic group has one generator, g.  All members of the cyclic group of order R can be
+    written as g^p for an integer power p in {0, 1, ..., R-1}.  The member g^p can be represented by
+    (that is, lifted to) an R×R "shift matrix", or the identity matrix with all rows shifted down
+    (equivalently, all columns shifted right) by p.  That is, the lift L(g^p) acts on a standard
+    basis vector <i| as <i| L(g^p) = < i + p mod R |.
+    """
+
+    def __init__(self, order: int, field: int | None = None) -> None:
+        field = field or DEFAULT_FIELD_ORDER
+        identity_mat = np.eye(order, dtype=int)
+
+        # build lift manually, which is faster than the default lift
+        def lift(member: GroupMember) -> npt.NDArray[np.int_]:
+            return galois.GF(field)(np.roll(identity_mat, member.apply(0), axis=0))
+
+        super()._init_from_group(comb.named_groups.CyclicGroup(order), field, lift)
 
 
 class DihedralGroup(Group):
