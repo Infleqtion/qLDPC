@@ -41,7 +41,6 @@ def test_permutation_group() -> None:
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
     assert group.to_sympy() == group._group
-    assert hash(group) == hash((group.to_sympy(), group.field.order))
     assert group.is_abelian
 
     gens = [abstract.GroupMember(seq) for seq in itertools.permutations([0, 1, 2])]

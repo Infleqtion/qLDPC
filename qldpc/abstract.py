@@ -160,6 +160,9 @@ class Group:
             self._name = self._name or group._name  # explicitly provided name overrides group name
         self._generate_func = generate_func
 
+    def __hash__(self) -> int:
+        return hash((self._group, self.field.order, self._lift, self._generate_func))
+
     @property
     def name(self) -> str:
         """A name for this group, which is not required to uniquely identify the group."""
@@ -185,10 +188,6 @@ class Group:
         return (
             isinstance(other, Group) and self._field == other._field and self._group == other._group
         )
-
-    def __hash__(self) -> int:
-        # WARNING: lift not accounted for
-        return hash((self._group, self.field.order))
 
     def __contains__(self, member: GroupMember) -> bool:
         return member in self._group
@@ -888,9 +887,13 @@ class TrivialGroup(Group):
     def __init__(self, field: int | None = None) -> None:
         super().__init__(
             field=field,
-            lift=lambda _: np.array(1, ndmin=2, dtype=int),
+            lift=TrivialGroup._trivial_lift,
             name=TrivialGroup.__name__,
         )
+
+    @classmethod
+    def _trivial_lift(cls, member: GroupMember) -> npt.NDArray[np.int_]:
+        return np.array(1, ndmin=2, dtype=int)
 
     def random(self, *, seed: int | None = None) -> GroupMember:
         """A random (albeit unique) element this group.

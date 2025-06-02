@@ -462,8 +462,8 @@ class ChainComplex:
 
     @staticmethod
     def tensor_product(  # noqa: C901 ignore complexity check
-        chain_a: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.RingArray,
-        chain_b: ChainComplex | npt.NDArray[np.int_] | galois.FieldArray | abstract.RingArray,
+        chain_a: ChainComplex | npt.NDArray[np.int_] | abstract.RingArray,
+        chain_b: ChainComplex | npt.NDArray[np.int_] | abstract.RingArray,
         field: int | None = None,
     ) -> ChainComplex:
         """Tensor product of two chain complexes.
