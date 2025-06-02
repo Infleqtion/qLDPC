@@ -20,9 +20,11 @@ from __future__ import annotations
 import itertools
 import math
 import unittest.mock
+from collections.abc import Callable
 
 import galois
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 from qldpc import abstract
@@ -85,7 +87,8 @@ def test_lift() -> None:
 
 def assert_valid_lift(group: abstract.Group) -> None:
     """Assert faithfulness of the regular and permutation representations of group members."""
-    for lift in [group.lift, abstract.GroupMember.to_matrix]:
+    lift: Callable[[abstract.GroupMember], npt.NDArray[np.int_]]
+    for lift in [group.lift, abstract.GroupMember.to_matrix]:  # type:ignore[assignment]
         assert all(
             aa == bb or not np.array_equal(lift(aa), lift(bb))
             for aa in group.generate()

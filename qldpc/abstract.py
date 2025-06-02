@@ -806,49 +806,19 @@ class RingArray(npt.NDArray[np.object_]):
         """Construct a matrix of null-space row vectors for this RingArray.
 
         The transpose of the null-space matrix is annihilated by this RingArray, such that
-        np.any(self @ self.null_space().T) is False.
+        np.any(self @ self.null_space().T) is False
         """
         assert self.ndim == 2
 
-        """
-        Field-valued null vectors of matrix.regular_lift() correspond to ring-valued null vectors
-        of the matrix via conversion with RingArray.from_field_vector <> RingArray.to_field_vector.
-        """
+        # field-valued null vectors of matrix.regular_lift() correspond to ring-valued null vectors
+        # of the matrix via conversion with RingArray.from_field_vector <> RingArray.to_field_vector
         null_field_vectors = self.regular_lift().null_space()
-
-        """ !!! COMMENTED OUT BECAUSE THERE IS A MISTAKE OR BUG HERE !!! """
-
-        # """
-        # The above basis of null vectors is vastly over-complete, since it counts vectors that are
-        # multiples of each other (by ring members) as distinct, so we need to mod out by (left)
-        # multiplication by ring members.  Without loss of generality, when modding out we can enforce
-        # that the first nonzero entry of a null vector has a group.identity term.
-        # """
-        # field_pivot_cols = qldpc.math.first_nonzero_cols(null_field_vectors)
-        # null_field_vectors = null_field_vectors[field_pivot_cols % self.group.order == 0]
 
         # collect ring-valued null row vectors (that is, transposed null column vectors)
         null_vectors = RingArray(
             [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors],
             group=self.group,
         )
-
-        """ !!! COMMENTED OUT BECAUSE THERE IS A MISTAKE OR BUG HERE !!! """
-
-        # """
-        # For each row with a non-invertible pivot, look for an invertible entry in that row.  If we
-        # find an invertible entry in some column,
-        # - left-multiply that row by the inverse of the entry, and
-        # - zero out the column from all other rows.
-        # """
-        # non_invertible_pivot_rows = [
-        #     row
-        #     for row, (vector, col) in enumerate(zip(null_field_vectors, field_pivot_cols))
-        #     if np.any(vector[col + 1 : col + self.group.order])
-        # ]
-        # null_vectors = null_vectors.partial_row_reduce(non_invertible_pivot_rows)
-
-        # return null_vectors
 
         return null_vectors.partial_row_reduce()
 
