@@ -41,7 +41,7 @@ def test_permutation_group() -> None:
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
     assert group.to_sympy() == group._group
-    assert hash(group) == hash(group.to_sympy())
+    assert hash(group) == hash((group.to_sympy(), group.field.order))
     assert group.is_abelian
 
     gens = [abstract.GroupMember(seq) for seq in itertools.permutations([0, 1, 2])]
@@ -78,7 +78,7 @@ def test_lift() -> None:
     assert_valid_lift(abstract.TrivialGroup(field=3))
     assert_valid_lift(abstract.CyclicGroup(3, field=4))
     assert_valid_lift(abstract.AbelianGroup(2, 3, field=5))
-    assert_valid_lift(abstract.AbelianGroup(2, 3, field=5, direct_sum=True))
+    assert_valid_lift(abstract.AbelianGroup(2, 3, direct_sum=True))
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
     assert_valid_lift(abstract.SymmetricGroup(3))

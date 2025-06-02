@@ -187,7 +187,8 @@ class Group:
         )
 
     def __hash__(self) -> int:
-        return hash(self._group)
+        # WARNING: lift not accounted for
+        return hash((self._group, self.field.order))
 
     def __contains__(self, member: GroupMember) -> bool:
         return member in self._group
@@ -912,7 +913,7 @@ class TrivialGroup(Group):
 
 
 class AbelianGroup(Group):
-    """Direct product of cyclic groups of the specified orders.
+    """Direct product of cyclic groups of the specified orders.  See CyclicGroup for more info.
 
     By default, an AbelianGroup member of the form ∏_i g_i^{a_i}, where {g_i} are the generators of
     the group, gets lifted to a Kronecker product ⨂_i L(g_i)^{a_i}.  If an AbelianGroup is
