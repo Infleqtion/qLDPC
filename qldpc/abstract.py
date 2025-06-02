@@ -263,6 +263,7 @@ class Group:
             sympy.core.random.seed(seed)
         return GroupMember.from_sympy(self._group.random())
 
+    @functools.cache
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
         if self._lift is None:
@@ -274,7 +275,8 @@ class Group:
     def regular_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
         """Lift a group member to its regular representation.
 
-        The regular representation represents each group member by a permutation matrix that reflects how the group member permutes elements of the group.
+        The regular representation represents each group member by a permutation matrix that
+        reflects how the group member permutes elements of the group.
         """
         matrix = np.zeros((self.order,) * 2, dtype=int)
         for ii, gg in enumerate(self.generate()):
