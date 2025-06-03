@@ -822,18 +822,15 @@ class RingArray(npt.NDArray[np.object_]):
 
         return null_vectors.partial_row_reduce()
 
-    def partial_row_reduce(self, rows_to_reduce: Collection[int] | None = None) -> RingArray:
+    def partial_row_reduce(self, *, keep_zero_rows: bool = False) -> RingArray:
         """Row-reduce this RingArray to the degree possible.
 
         This method first uses invertible row operations (namely, left-multiplication by invertible
         ring elements and row addition) to construct a matrix in which every row satisfies one of
         the following:
-        (a) the row contains a 1 in some column, or
+        (a) there is some column at which the row is 1 and all other rows are 0, or
         (b) all entries of the row are non-invertible.
-        If rows_to_reduce is not None, only these rows are required to satisfy one of (a) or (b).
-
-        For every reduced row with at least 1 in some column, one of these columns is guaranteed to
-        be 0 in all other rows.  All-zero rows are removed from the matrix prior to returning.
+        All-zero rows are removed from the matrix prior to returning, unless keep_zero_rows is True.
 
         Note: this method is unoptimized; there is a lot of room for speeding things up.
         """
@@ -843,7 +840,7 @@ class RingArray(npt.NDArray[np.object_]):
 
         row_reductions_made = False  # did we perform row reductions?
         non_invertible_rows = []  # which (nonzero) rows have only non-invertible entries?
-        for row in rows_to_reduce or range(num_rows):
+        for row in range(num_rows):
             row_vector = matrix[row]
 
             inverse_col: int | None = None
@@ -862,9 +859,10 @@ class RingArray(npt.NDArray[np.object_]):
 
         if row_reductions_made and non_invertible_rows:
             # some non-invertible entries may have become invertible, so try row-reducing again
-            return matrix.partial_row_reduce(non_invertible_rows)
+            rows = [row for row in non_invertible_rows if np.any(matrix[row])]
+            matrix[rows] = matrix[rows].partial_row_reduce(keep_zero_rows=True)
 
-        if not all(nonzero_rows := np.any(matrix, axis=1)):
+        if not keep_zero_rows and not all(nonzero_rows := np.any(matrix, axis=1)):
             matrix = matrix[nonzero_rows, :].view(RingArray)
         return matrix
 
