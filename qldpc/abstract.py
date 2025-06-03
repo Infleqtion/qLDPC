@@ -835,7 +835,6 @@ class RingArray(npt.NDArray[np.object_]):
         Note: this method is unoptimized; there is a lot of room for speeding things up.
         """
         assert self.ndim == 2
-        rows: slice | Collection[int]
 
         matrix = self.copy()
         row_reductions_made = False  # did we perform row reductions?
@@ -859,13 +858,15 @@ class RingArray(npt.NDArray[np.object_]):
                     matrix[rows] = matrix[rows] - matrix[rows, col, None] * new_vector[None, :]
                 row_reductions_made = True
 
-            elif any(entry for entry in row_vector):  # ignore all-zero rows
+            else:
                 non_invertible_rows.append(row)
 
         if row_reductions_made and non_invertible_rows:
             # some non-invertible entries may have become invertible, so try row-reducing again
-            rows = [row for row in non_invertible_rows if np.any(matrix[row])]
-            matrix[rows] = matrix[rows].view(RingArray).partial_row_reduce(keep_zero_rows=True)
+            non_invertible_rows = [row for row in non_invertible_rows if np.any(matrix[row])]
+            matrix[non_invertible_rows] = (
+                matrix[non_invertible_rows].view(RingArray).partial_row_reduce(keep_zero_rows=True)
+            )
 
         if not keep_zero_rows and not all(nonzero_rows := np.any(matrix, axis=1)):
             matrix = matrix[nonzero_rows, :].view(RingArray)
