@@ -838,18 +838,12 @@ class RingArray(npt.NDArray[np.object_]):
         rows: slice | Collection[int]
 
         matrix = self.copy()
-        num_rows, num_cols = self.shape
-
         row_reductions_made = False  # did we perform row reductions?
         non_invertible_rows = []  # which (nonzero) rows have only non-invertible entries?
-        for row in range(num_rows):
-            row_vector = matrix[row]
-
+        for row, row_vector in enumerate(matrix):
             # look for an invertible entry in this row
-            inverse_col: int | None = None
-            for col in range(num_cols):
-                if inverse := row_vector[col].inverse():
-                    inverse_col = col
+            for col, entry in enumerate(row_vector):
+                if inverse := entry.inverse():
                     break
 
             """
@@ -857,11 +851,11 @@ class RingArray(npt.NDArray[np.object_]):
             - multiply this row by the inverse, so that this entry is 1, and
             - zero out the corresponding column in all other rows.
             """
-            if inverse_col is not None:
+            if inverse:
                 # "normalize" the entry to 1, and zero out its column in all other rows
                 new_vector = inverse * row_vector
                 matrix[row] = new_vector
-                for rows in [slice(None, row), slice(row + 1, num_rows)]:
+                for rows in [slice(None, row), slice(row + 1, len(matrix))]:
                     matrix[rows] = matrix[rows] - matrix[rows, col, None] * new_vector[None, :]
                 row_reductions_made = True
 
