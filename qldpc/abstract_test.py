@@ -244,12 +244,6 @@ def test_partial_row_reduce() -> None:
         [gen.inverse() + one, one],
         [(one + gen) * (gen.inverse() + one), 0],
     ]
-    print()
-    print()
-    print(abstract.RingArray.build(group, matrix).partial_row_reduce().lift())
-    print()
-    print(abstract.RingArray.build(group, reduced_matrix).lift())
-    print()
     assert np.array_equal(
         abstract.RingArray.build(group, matrix).partial_row_reduce(),
         abstract.RingArray.build(group, reduced_matrix),
