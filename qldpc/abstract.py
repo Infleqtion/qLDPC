@@ -835,6 +835,8 @@ class RingArray(npt.NDArray[np.object_]):
         Note: this method is unoptimized; there is a lot of room for speeding things up.
         """
         assert self.ndim == 2
+        rows: slice | Collection[int]
+
         matrix = self.copy()
         num_rows, num_cols = self.shape
 
@@ -843,24 +845,33 @@ class RingArray(npt.NDArray[np.object_]):
         for row in range(num_rows):
             row_vector = matrix[row]
 
+            # look for an invertible entry in this row
             inverse_col: int | None = None
             for col in range(num_cols):
                 if inverse := row_vector[col].inverse():
                     inverse_col = col
                     break
 
+            """
+            If we found an invertible entry,
+            - multiply this row by the inverse, so that this entry is 1, and
+            - zero out the corresponding column in all other rows.
+            """
             if inverse_col is not None:
+                # "normalize" the entry to 1, and zero out its column in all other rows
                 new_vector = inverse * row_vector
-                matrix = matrix - matrix[:, col, np.newaxis] * new_vector[np.newaxis, :]
                 matrix[row] = new_vector
+                for rows in [slice(None, row), slice(row + 1, num_rows)]:
+                    matrix[rows] = matrix[rows] - matrix[rows, col, None] * new_vector[None, :]
                 row_reductions_made = True
+
             elif any(entry for entry in row_vector):  # ignore all-zero rows
                 non_invertible_rows.append(row)
 
         if row_reductions_made and non_invertible_rows:
             # some non-invertible entries may have become invertible, so try row-reducing again
             rows = [row for row in non_invertible_rows if np.any(matrix[row])]
-            matrix[rows] = matrix[rows].partial_row_reduce(keep_zero_rows=True)
+            matrix[rows] = matrix[rows].view(RingArray).partial_row_reduce(keep_zero_rows=True)
 
         if not keep_zero_rows and not all(nonzero_rows := np.any(matrix, axis=1)):
             matrix = matrix[nonzero_rows, :].view(RingArray)
