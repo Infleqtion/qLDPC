@@ -827,8 +827,8 @@ class RingArray(npt.NDArray[np.object_]):
         This method first uses invertible row operations (namely, left-multiplication by invertible
         ring elements and row addition) to construct a matrix in which every row satisfies one of
         the following:
-        (A) there is some column at which the row is 1 and all other rows are 0, or
-        (B) all entries of the row are non-invertible.
+        (a) there is some column at which the row is 1 and all other rows are 0, or
+        (b) all entries of the row are non-invertible.
         All-zero rows are removed from the matrix prior to returning, unless keep_zero_rows is True.
 
         Note: this method is unoptimized; there is a lot of room for speeding things up.
