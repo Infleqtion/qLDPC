@@ -843,45 +843,38 @@ class RingArray(npt.NDArray[np.object_]):
         # identify "pivot" rows that are uniquely nonzero in some column, and all other nonzero rows
         pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
 
-        print()
-        print(matrix.lift())
-        print()
-        print(pivot_matrix.lift())
-        print()
-        print(non_pivot_matrix.lift())
-        print()
-        print("===============================")
-
         # identify a minimal basis for the span of the non-pivot rows
         non_pivot_matrix_row_span_basis = non_pivot_matrix._get_minimal_row_span_basis()
-
-        print()
-        print(non_pivot_matrix_row_span_basis.lift())
-        exit()
 
         return np.vstack([pivot_matrix, non_pivot_matrix_row_span_basis]).view(RingArray)
 
     def _get_minimal_row_span_basis(self) -> RingArray:
         """Find a matrix whose rows form a minimal basis for the row span of self."""
         # row-reduce rows as field vectors to canonicalize in a fixed basis for the group
-        field_vectors = np.vstack([vector.to_field_vector() for vector in self])
-        field_vectors = field_vectors.row_reduce()  # type:ignore[attr-defined]
+        field_vectors = np.vstack([vector.to_field_vector() for vector in self]).view(self.field)
+        field_vectors = field_vectors.row_reduce()
         vectors = [
             RingArray.from_field_vector(self.group, vector)
             for vector in field_vectors
             if np.any(vector)
         ]
 
+        # track linearly independent vectors (the basis), and a lifted matrix of these vectors
         basis = []
-        lifted_basis_matrix = self.field.Zeros((0, field_vectors.shape[1]))
+        lifted_matrix = self.field.Zeros((0, field_vectors.shape[1]))
+
         for vector, field_vector in zip(vectors, field_vectors):
-            field_matrix_with_vector = np.vstack([lifted_basis_matrix, field_vector])
+            # check whether this vector lies in the ring-linear span of the the current basis
+            field_matrix_with_vector = np.vstack([lifted_matrix, field_vector])
             field_matrix_with_vector = field_matrix_with_vector.view(self.field).row_reduce()
-            if np.any(field_matrix_with_vector[-1]):
+            vector_not_in_span = np.any(field_matrix_with_vector[-1])
+
+            if vector_not_in_span:
                 basis.append(vector)
                 new_rows = vector.reshape(1, vector.size).view(RingArray)
-                lifted_basis_matrix = np.vstack([lifted_basis_matrix, new_rows.regular_lift()])
-                lifted_basis_matrix = lifted_basis_matrix.view(self.field).row_reduce()
+                lifted_matrix = np.vstack([lifted_matrix, new_rows.regular_lift()])
+                lifted_matrix = lifted_matrix.view(self.field).row_reduce()
+                lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(RingArray)
 
         return RingArray(vectors)
 
