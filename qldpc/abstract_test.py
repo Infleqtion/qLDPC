@@ -230,12 +230,11 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
 
 
-def test_ring_row_reduce(pytestconfig: pytest.Config) -> None:
+@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=3)])
+def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> None:
     """Row reduce a ring-valued matrix."""
-    group: abstract.Group
     seed = pytestconfig.getoption("randomly_seed")
 
-    group = abstract.CyclicGroup(3, field=4)
     one = abstract.RingMember.one(group)
     gen = group.generators[0] * one
     matrix = [
@@ -245,20 +244,21 @@ def test_ring_row_reduce(pytestconfig: pytest.Config) -> None:
     ]
     reduced_matrix = [
         [gen.inverse() + one, one],
-        [(one + gen) * (gen.inverse() + one), 0],
+        [-(one + gen) * (gen.inverse() + one), 0],
     ]
     assert np.array_equal(
         abstract.RingArray.build(group, matrix).row_reduce(),
         abstract.RingArray.build(group, reduced_matrix),
     )
 
-    # group = abstract.DihedralGroup(3)
-    # coefficients = group.field.Random((2, 5, group.order), seed=seed)
-    # matrix = abstract.RingArray.from_field_array(group, coefficients)
-    # assert np.array_equal(
-    #     matrix.row_reduce().to_field_array().row_reduce(),
-    #     matrix._get_row_span_basis().to_field_array().row_reduce(),
-    # )
+    # RingArray.row_reduce and RingArray._get_row_span_basis should have the same ring-linear span
+    num_rows, num_cols = 3, 5
+    coefficients = group.field.Random((num_rows, num_cols, group.order), seed=seed)
+    matrix = abstract.RingArray.from_field_array(group, coefficients)
+    assert np.array_equal(
+        matrix.row_reduce().lift().view(group.field).row_reduce(),
+        matrix._get_row_span_basis().lift().view(group.field).row_reduce(),
+    )
 
 
 @pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])
