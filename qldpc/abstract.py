@@ -844,9 +844,10 @@ class RingArray(npt.NDArray[np.object_]):
         pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
 
         # identify a minimal basis for the span of the non-pivot rows
-        non_pivot_matrix_row_span_basis = non_pivot_matrix._get_minimal_row_span_basis()
+        if non_pivot_matrix.size:
+            non_pivot_matrix = non_pivot_matrix._get_minimal_row_span_basis()
 
-        return np.vstack([pivot_matrix, non_pivot_matrix_row_span_basis]).view(RingArray)
+        return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
 
     def _get_minimal_row_span_basis(self) -> RingArray:
         """Find a matrix whose rows form a minimal basis for the row span of self."""
