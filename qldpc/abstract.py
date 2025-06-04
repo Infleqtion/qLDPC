@@ -38,7 +38,7 @@ import math
 import operator
 import typing
 import warnings
-from collections.abc import Callable, Collection, Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 
 import galois
 import numpy as np
