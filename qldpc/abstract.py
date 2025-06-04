@@ -919,14 +919,13 @@ class RingArray(npt.NDArray[np.object_]):
         Starting with an empty basis, consider each row one-by-one, and add each row to the basis if
         it does not lie in the ring-linear span of the rows currently in the basis.
         """
-        # row-reduce rows as field vectors to canonicalize in a fixed basis for the group
-        field_vectors = np.vstack([vector.to_field_vector() for vector in self]).view(self.field)
+        # expand row vectors over the ring into row vectors over the field
+        field_vectors = self.to_field_array().reshape(len(self), -1).view(self.field)
+
+        # row-reduce over the field, which removes field-linear redundancies
         field_vectors = field_vectors.row_reduce()
-        vectors = [
-            RingArray.from_field_vector(self.group, vector)
-            for vector in field_vectors
-            if np.any(vector)
-        ]
+        field_vectors = field_vectors[np.any(field_vectors, axis=1)]  # remove all-zero rows
+        vectors = [RingArray.from_field_vector(self.group, vector) for vector in field_vectors]
 
         # track linearly independent vectors (the basis), and a matrix of lifted basis vectors
         basis = []
@@ -943,7 +942,7 @@ class RingArray(npt.NDArray[np.object_]):
                 new_rows = vector.reshape(1, vector.size).view(RingArray)
                 lifted_matrix = np.vstack([lifted_matrix, new_rows.regular_lift()])
                 lifted_matrix = lifted_matrix.view(self.field).row_reduce()
-                lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(RingArray)
+                lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(self.field)
 
         return RingArray(vectors, group=self.group)
 
