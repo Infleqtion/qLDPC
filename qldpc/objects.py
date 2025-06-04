@@ -405,7 +405,7 @@ class ChainComplex:
 
         # identify the boundary operators of this chain complex
         if self._group is None:
-            self._ops = tuple(self.field(op) for op in ops)
+            self._ops = tuple(op.view(self.field) for op in ops)
         else:
             self._ops = ops
 
@@ -545,7 +545,7 @@ class ChainComplex:
             ops.append(np.block(blocks))
 
         if chain_a.group is None:
-            ops = [chain_field(op) for op in ops]
+            ops = [op.view(chain_field) for op in ops]
         else:
             ops = [abstract.RingArray(op) for op in ops]
         return ChainComplex(*ops, skip_validation=True)
