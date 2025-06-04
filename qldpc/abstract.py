@@ -915,15 +915,19 @@ class RingArray(npt.NDArray[np.object_]):
         pivot_rows = []
         non_pivot_rows = []
         for row, vector in enumerate(self):
+            # is this a pivot row?
             pivot_row = False
             for col, entry in enumerate(vector):
                 if entry and not np.any(self[:row, col]) and not np.any(self[row + 1 :, col]):
                     pivot_row = True
                     break
+
+            # add to our log of pivot and non-pivot rows, ignoing rows that are all zero
             if pivot_row:
                 pivot_rows.append(row)
             elif np.any(vector):
                 non_pivot_rows.append(row)
+
         return self[pivot_rows], self[non_pivot_rows]
 
 
