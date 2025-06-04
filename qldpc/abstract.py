@@ -925,7 +925,9 @@ class RingArray(npt.NDArray[np.object_]):
         # row-reduce over the field, which removes field-linear redundancies
         field_vectors = field_vectors.row_reduce()
         field_vectors = field_vectors[np.any(field_vectors, axis=1)]  # remove all-zero rows
-        vectors = [RingArray.from_field_vector(self.group, vector) for vector in field_vectors]
+        vectors = RingArray.from_field_array(
+            self.group, field_vectors.reshape(len(self), -1, self.group.order)
+        )
 
         # track linearly independent vectors (the basis), and a matrix of lifted basis vectors
         basis = []
