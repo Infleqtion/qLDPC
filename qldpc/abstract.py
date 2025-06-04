@@ -917,7 +917,10 @@ class RingArray(npt.NDArray[np.object_]):
         """Find a minimal basis for the row span of self.
 
         Starting with an empty basis, consider each row one-by-one, and add each row to the basis if
-        it does not lie in the ring-linear span of the rows currently in the basis.
+        it does not lie in the left-ring-linear span of the rows currently in the basis.
+
+        Here the left-ring-linear span of a collection of vectors is a sum of the vectors with
+        coefficients from the ring multiplied on the left: sum_i r_i v_i.
         """
         # expand row vectors over the ring into row vectors over the field
         field_vectors = self.to_field_array().reshape(len(self), -1).view(self.field)
@@ -934,7 +937,7 @@ class RingArray(npt.NDArray[np.object_]):
         lifted_matrix = self.field.Zeros((0, field_vectors.shape[1]))
 
         for vector, field_vector in zip(vectors, field_vectors):
-            # check whether this vector lies in the ring-linear span of the the current basis
+            # check whether this vector lies in the left-ring-linear span of the the current basis
             field_matrix_with_vector = np.vstack([lifted_matrix, field_vector])
             field_matrix_with_vector = field_matrix_with_vector.view(self.field).row_reduce()
             vector_not_in_span = np.any(field_matrix_with_vector[-1])
