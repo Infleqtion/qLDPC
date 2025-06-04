@@ -201,8 +201,7 @@ class Group:
             degree = self._group.degree
             left = GroupMember(member.array_form[:degree])
             right = GroupMember([index - degree for index in member.array_form[degree:]])
-            matrix = np.kron(self.lift(left), other.lift(right))
-            return self.field(matrix)
+            return np.kron(self.lift(left), other.lift(right)).view(self.field)
 
         return Group.from_sympy(group, self.field.order, lift)
 
@@ -267,21 +266,19 @@ class Group:
     def lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its representation by an orthogonal matrix."""
         if self._lift is None:
-            matrix = self.regular_lift(member)
-        else:
-            matrix = self._lift(member)
-        return self.field(matrix)
+            return self.regular_lift(member)
+        return self._lift(member).view(self.field)
 
-    def regular_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
+    def regular_lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its regular representation.
 
         The regular representation represents each group member by a permutation matrix that
         reflects how the group member permutes elements of the group.
         """
-        matrix = np.zeros((self.order,) * 2, dtype=int)
+        matrix = self.field.Zeros([self.order] * 2)
         for ii, gg in enumerate(self.generate()):
             matrix[self.index(member * gg), ii] = 1
-        return matrix
+        return matrix.view(self.field)
 
     @functools.cached_property
     def lift_dim(self) -> int:
@@ -614,7 +611,7 @@ class RingMember:
             return RingMember(self.group, (x_g**-1, gg**-1))
         try:
             matrix = self.regular_lift()
-            matrix_inv = self.field(np.linalg.inv(matrix))
+            matrix_inv = np.linalg.inv(matrix).view(self.field)
             return RingMember.from_vector(self.group, matrix_inv[:, 0])
         except np.linalg.LinAlgError:
             return None
@@ -731,13 +728,13 @@ class RingArray(npt.NDArray[np.object_]):
         """Block matrix obtained by lifting each entry of this RingArray."""
         assert self.ndim == 2
         blocks = [[val.lift() for val in row] for row in self]
-        return self.field(np.block(blocks))
+        return np.block(blocks).view(self.field)
 
     def regular_lift(self) -> galois.FieldArray:
         """Block matrix obtained by a regular lift of each entry of this RingArray."""
         assert self.ndim == 2
         blocks = [[val.regular_lift() for val in row] for row in self]
-        return self.field(np.block(blocks))
+        return np.block(blocks).view(self.field)
 
     @property
     def T(self) -> RingArray:
@@ -788,7 +785,7 @@ class RingArray(npt.NDArray[np.object_]):
         This method is the inverse of RingArray.from_field_array.
         """
         vals = [val.to_vector() for val in self.ravel()]
-        return self.field(np.asarray(vals).reshape(self.shape + (self.group.order,)))
+        return np.asarray(vals).reshape(self.shape + (self.group.order,)).view(self.field)
 
     @classmethod
     def from_field_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingArray:
@@ -800,7 +797,7 @@ class RingArray(npt.NDArray[np.object_]):
         """Convert a RingArray into a vector of coefficients."""
         assert self.ndim == 1
         vals = [val.to_vector() for val in self.ravel()]
-        return self.field(np.asarray(vals).ravel())
+        return np.asarray(vals).ravel().view(self.field)
 
     def null_space(self) -> RingArray:
         """Construct a matrix of null-space row vectors for this RingArray.
@@ -1102,7 +1099,7 @@ class SpecialLinearGroup(Group):
             # identify the target space that group members (as matrices) act on: all nonzero vectors
             target_space = [
                 self.field(vec).tobytes()
-                for vec in itertools.product(range(self.field.order), repeat=self.dimension)
+                for vec in itertools.product(self.field.elements, repeat=self.dimension)
             ]
             del target_space[0]  # remove the zero vector
 
@@ -1111,8 +1108,8 @@ class SpecialLinearGroup(Group):
             for member in self.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
-                    next_index = target_space.index(next_vec.tobytes())
+                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
+                    next_index = target_space.index(next_vec.view(np.ndarray).tobytes())
                     perm[index] = next_index
                 generators.append(GroupMember(perm))
 
@@ -1150,7 +1147,8 @@ class SpecialLinearGroup(Group):
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
         """Generating matrices for the Special Linear group, based on arXiv:2201.09155."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-        gen_w = -base_field(np.diag(np.ones(dimension - 1, dtype=int), k=-1))
+        minus_one = -base_field(1)
+        gen_w = minus_one * np.diag(np.ones(dimension - 1, dtype=int), k=-1).view(base_field)
         gen_w[0, -1] = 1
         gen_x = base_field.Identity(dimension)
         if base_field.order <= 3:
@@ -1158,7 +1156,7 @@ class SpecialLinearGroup(Group):
         else:
             gen_x[0, 0] = base_field.primitive_element
             gen_x[1, 1] = base_field.primitive_element**-1
-            gen_w[0, 0] = -1 * base_field(1)
+            gen_w[0, 0] = minus_one
         return gen_x, gen_w
 
     @staticmethod
@@ -1166,7 +1164,7 @@ class SpecialLinearGroup(Group):
         """Iterate over all elements of SL(dimension, field)."""
         base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
         for vec in itertools.product(base_field.elements, repeat=dimension**2):
-            mat = base_field(np.reshape(vec, (dimension, dimension)))
+            mat = np.reshape(vec, (dimension, dimension)).view(base_field)
             if np.linalg.det(mat) == 1:
                 yield mat
 
@@ -1212,7 +1210,7 @@ class ProjectiveSpecialLinearGroup(Group):
             for member in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
-                    vec = self.field(np.frombuffer(vec_bytes, dtype=np.uint8))
+                    vec = np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
                     next_orbit = [root * member @ vec for root in roots]
                     next_vec = next((vec for vec in next_orbit if vec.tobytes() in target_space))
                     next_index = target_space.index(next_vec.tobytes())
@@ -1258,8 +1256,8 @@ class ProjectiveSpecialLinearGroup(Group):
         if base_field.order == 2:
             return gen_x, gen_w
         return (
-            base_field(np.kron(np.linalg.inv(gen_x), gen_x)),
-            base_field(np.kron(np.linalg.inv(gen_w), gen_w)),
+            np.kron(np.linalg.inv(gen_x), gen_x).view(base_field),
+            np.kron(np.linalg.inv(gen_w), gen_w).view(base_field),
         )
 
     @staticmethod
@@ -1275,7 +1273,7 @@ class ProjectiveSpecialLinearGroup(Group):
             for mat in SpecialLinearGroup.iter_mats(dimension, field)
         ]
         for orbit in set(orbits):
-            yield base_field(np.frombuffer(next(iter(orbit)), dtype=np.uint8))
+            yield np.frombuffer(next(iter(orbit)), dtype=np.uint8).view(base_field)
 
 
 SL = SpecialLinearGroup

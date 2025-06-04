@@ -194,7 +194,7 @@ def test_automorphism() -> None:
     ):
         group = code.get_automorphism_group()
         for member in group.generate():
-            permutation = code.field(member.to_matrix())
+            permutation = member.to_matrix().view(code.field)
             assert not np.any(code.matrix @ permutation @ code.generator.T)
 
 
@@ -368,7 +368,7 @@ def get_symplectic_form(half_dimension: int, field: type[galois.FieldArray]) -> 
     """Get the symplectic form over a given field."""
     identity = field.Identity(half_dimension)
     zeros = field.Zeros((half_dimension, half_dimension))
-    return field(np.block([[zeros, identity], [-identity, zeros]]))
+    return np.block([[zeros, identity], [-identity, zeros]]).view(field)
 
 
 def test_qudit_ops() -> None:
