@@ -237,18 +237,18 @@ def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> 
 
     one = abstract.RingMember.one(group)
     gen = group.generators[0] * one
-    matrix = [
+    mat = [
         [one + gen, gen],
         [gen + gen**2, gen**2],
         [0, one + gen],
     ]
-    reduced_matrix = [
+    reduced_mat = [
         [gen.inverse() + one, one],
         [-(one + gen) * (gen.inverse() + one), 0],
     ]
     assert np.array_equal(
-        abstract.RingArray.build(group, matrix).row_reduce(),
-        abstract.RingArray.build(group, reduced_matrix),
+        abstract.RingArray.build(group, mat).row_reduce(),
+        abstract.RingArray.build(group, reduced_mat),
     )
 
     # RingArray.row_reduce and _get_row_span_basis should have the same left-ring-linear span
@@ -256,7 +256,7 @@ def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> 
     coefficients = group.field.Random((num_rows, num_cols, group.order), seed=seed)
     matrix = abstract.RingArray.from_field_array(group, coefficients)
     matrix_1 = matrix.row_reduce().regular_lift().row_reduce()
-    matrix_2 = matrix._get_row_span_basis().regular_liftlift().row_reduce()
+    matrix_2 = matrix._get_row_span_basis().regular_lift().row_reduce()
     assert np.array_equal(
         matrix_1[np.any(matrix_1, axis=1)],
         matrix_2[np.any(matrix_2, axis=1)],
