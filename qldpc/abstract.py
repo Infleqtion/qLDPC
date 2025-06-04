@@ -334,7 +334,9 @@ class Group:
             )
 
         # keep track of group members and a multiplication table
-        index_to_member = {idx: base_field(gen) for idx, gen in enumerate(matrices)}
+        index_to_member = {
+            idx: np.asarray(gen, dtype=int).view(base_field) for idx, gen in enumerate(matrices)
+        }
         hash_to_index = {hash(gen.data.tobytes()): idx for idx, gen in index_to_member.items()}
         table_as_dict = {}
 
@@ -752,11 +754,11 @@ class RingArray(npt.NDArray[np.object_]):
             (a) elements of the group algebra,
             (b) group members, or
             (c) integers.
-        Integers and group members are "elevated" to elements of the group algebra.
+        Integers and group members are cast as members of the group algebra.
         """
         array = np.asarray(data)
 
-        def elevate(value: RingMember | GroupMember | int) -> RingMember:
+        def as_ring_member(value: RingMember | GroupMember | int) -> RingMember:
             """Elevate a value to an element of a group algebra."""
             if isinstance(value, RingMember):
                 return value
@@ -764,7 +766,7 @@ class RingArray(npt.NDArray[np.object_]):
                 return RingMember(group, value)
             return RingMember(group, (value, group.identity))
 
-        vals = [elevate(value) for value in array.ravel()]
+        vals = [as_ring_member(value) for value in array.ravel()]
         return RingArray(np.array(vals).reshape(array.shape), group=group)
 
     @classmethod

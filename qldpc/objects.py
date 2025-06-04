@@ -547,5 +547,5 @@ class ChainComplex:
         if chain_a.group is None:
             ops = [op.view(chain_field) for op in ops]
         else:
-            ops = [abstract.RingArray(op) for op in ops]
+            ops = [op.view(abstract.RingArray) for op in ops]
         return ChainComplex(*ops, skip_validation=True)

@@ -109,7 +109,7 @@ class AbstractCode(abc.ABC):
 
         else:
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-            self._matrix = self._field(matrix)
+            self._matrix = np.asarray(matrix, dtype=int).view(self.field)
 
     @property
     def name(self) -> str:
@@ -239,7 +239,7 @@ class ClassicalCode(AbstractCode):
         self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]]
     ) -> bool:
         """Does this code contain the given word(s)?"""
-        return not np.any(self.matrix @ self.field(words).T)
+        return not np.any(self.matrix @ np.asarray(words, dtype=int).view(self.field).T)
 
     @functools.cached_property
     def canonicalized(self) -> ClassicalCode:
@@ -313,7 +313,7 @@ class ClassicalCode(AbstractCode):
 
     def set_generator(self, generator: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> None:
         """Set the generator matrix of this code."""
-        generator = self.field(generator)
+        generator = np.asarray(generator, dtype=int).view(self.field)
         if np.any(self.matrix @ generator.T):
             raise ValueError("Provided generator matrix has nontrivial syndromes")
 
@@ -401,7 +401,7 @@ class ClassicalCode(AbstractCode):
             return known_distance
 
         if vector is not None:
-            vector = self.field(vector)
+            vector = np.asarray(vector, dtype=int).view(self.field)
             return min(np.count_nonzero(word - vector) for word in self.iter_words())
 
         # we do not know the exact distance, so compute it
@@ -474,7 +474,9 @@ class ClassicalCode(AbstractCode):
         if vector is not None:
             # find the distance of the given vector from a code word
             correction = decoders.decode(
-                self.matrix, self.matrix @ self.field(vector), **decoder_args
+                self.matrix,
+                self.matrix @ np.asarray(vector, dtype=int).view(self.field),
+                **decoder_args,
             )
             return int(np.count_nonzero(correction))
 
@@ -1165,7 +1167,7 @@ class QuditCode(AbstractCode):
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
-        logical_ops = self.field(logical_ops)
+        logical_ops = np.asarray(logical_ops, dtype=int).view(self.field)
         if validate:
             dimension = len(logical_ops) // 2
             logical_ops_x = logical_ops[:dimension]
