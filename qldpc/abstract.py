@@ -946,7 +946,7 @@ class RingArray(npt.NDArray[np.object_]):
                 lifted_matrix = lifted_matrix.view(self.field).row_reduce()
                 lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(RingArray)
 
-        return RingArray(vectors)
+        return RingArray(vectors, group=self.group)
 
 
 class Protograph(RingArray):  # pragma: no cover
