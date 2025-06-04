@@ -230,8 +230,8 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
 
 
-def test_partial_row_reduce() -> None:
-    """Some RingArrays need "secondary" Gaussian elimination to identify invertible pivots."""
+def test_ring_row_reduce() -> None:
+    """Row reduce a ring-valued matrix."""
     group = abstract.CyclicGroup(3, field=4)
     one = abstract.RingMember.one(group)
     gen = group.generators[0] * one
@@ -245,7 +245,7 @@ def test_partial_row_reduce() -> None:
         [(one + gen) * (gen.inverse() + one), 0],
     ]
     assert np.array_equal(
-        abstract.RingArray.build(group, matrix).partial_row_reduce(),
+        abstract.RingArray.build(group, matrix).row_reduce(),
         abstract.RingArray.build(group, reduced_matrix),
     )
 

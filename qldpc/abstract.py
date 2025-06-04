@@ -820,26 +820,53 @@ class RingArray(npt.NDArray[np.object_]):
             group=self.group,
         )
 
-        return null_vectors.partial_row_reduce()
+        return null_vectors.row_reduce()
 
-    def partial_row_reduce(self, *, keep_zero_rows: bool = False) -> RingArray:
+    def row_reduce(self, *, _restart_call: bool = False) -> RingArray:
         """Row-reduce this RingArray to the degree possible.
 
         This method first uses invertible row operations (namely, left-multiplication by invertible
         ring elements and row addition) to construct a matrix in which every row satisfies one of
         the following:
-        (a) there is some column at which the row is 1 and all other rows are 0, or
-        (b) all entries of the row are non-invertible.
+        (A) there is some column at which the row is 1 and all other rows are 0, or
+        (B) all entries of the row are non-invertible.
         All-zero rows are removed from the matrix prior to returning, unless keep_zero_rows is True.
 
         Note: this method is unoptimized; there is a lot of room for speeding things up.
         """
         assert self.ndim == 2
+        matrix = self if _restart_call else self.copy()  # modify in-place for restart calls
+        num_rows, num_cols = self.shape
 
-        matrix = self.copy()
+        # enforce condition (A)
+        matrix = self._reduce_rows_with_invertible_entries()
+
+        # identify "pivot" rows that are uniquely nonzero in some column, and all other nonzero rows
+        pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
+
+        print()
+        print(matrix.lift())
+        print()
+        print(pivot_matrix.lift())
+        print()
+        print(non_pivot_matrix.lift())
+        exit()
+
+        return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
+
+    def _reduce_rows_with_invertible_entries(self, *, restart_call: bool = False) -> RingArray:
+        """Row-reduce "invertible" rows, which have at least one entry with an inverse.
+
+        Every reduced rows has a column in which it is 1, and in which all other rows are zero.
+        """
+        matrix = self if restart_call else self.copy()
+        num_rows, num_cols = self.shape
+
         row_reductions_made = False  # did we perform row reductions?
-        non_invertible_rows = []  # which (nonzero) rows have only non-invertible entries?
-        for row, row_vector in enumerate(matrix):
+        noninvertible_rows = []  # which rows have only non-invertible entries?
+        for row in range(num_rows):
+            row_vector = matrix[row]
+
             # look for an invertible entry in this row
             for col, entry in enumerate(row_vector):
                 if inverse := entry.inverse():
@@ -854,23 +881,38 @@ class RingArray(npt.NDArray[np.object_]):
                 # "normalize" the entry to 1, and zero out its column in all other rows
                 new_vector = inverse * row_vector
                 matrix[row] = new_vector
-                for rows in [slice(None, row), slice(row + 1, len(matrix))]:
+                for rows in [slice(None, row), slice(row + 1, num_rows)]:
                     matrix[rows] = matrix[rows] - matrix[rows, col, None] * new_vector[None, :]
                 row_reductions_made = True
 
             else:
-                non_invertible_rows.append(row)
+                noninvertible_rows.append(row)
 
-        if row_reductions_made and non_invertible_rows:
+        if row_reductions_made and noninvertible_rows:
             # some non-invertible entries may have become invertible, so try row-reducing again
-            non_invertible_rows = [row for row in non_invertible_rows if np.any(matrix[row])]
-            matrix[non_invertible_rows] = (
-                matrix[non_invertible_rows].view(RingArray).partial_row_reduce(keep_zero_rows=True)
-            )
+            noninvertible_rows = [row for row in noninvertible_rows if np.any(matrix[row])]
+            matrix[rows].view(RingArray)._reduce_rows_with_invertible_entries(restart_call=True)
 
-        if not keep_zero_rows and not all(nonzero_rows := np.any(matrix, axis=1)):
-            matrix = matrix[nonzero_rows, :].view(RingArray)
         return matrix
+
+    def _split_by_pivots(self) -> tuple[RingArray, RingArray]:
+        """Split into a matrix with all "pivot" rows, and a matrix with all other nonzero rows.
+
+        "Pivot" rows are those that are uniquely nonzero in some column.
+        """
+        pivot_rows = []
+        non_pivot_rows = []
+        for row, vector in enumerate(self):
+            pivot_row = False
+            for col, entry in enumerate(vector):
+                if entry and not np.any(self[:row, col]) and not np.any(self[row + 1 :, col]):
+                    pivot_row = True
+                    break
+            if pivot_row:
+                pivot_rows.append(row)
+            elif np.any(vector):
+                non_pivot_rows.append(row)
+        return self[pivot_rows], self[non_pivot_rows]
 
 
 class Protograph(RingArray):  # pragma: no cover
