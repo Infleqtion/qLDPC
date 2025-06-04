@@ -492,7 +492,7 @@ class ClassicalCode(AbstractCode):
             candidate = decoders.decode(effective_check_matrix, effective_syndrome, **decoder_args)
 
             # check whether we found a valid candidate
-            actual_syndrome = effective_check_matrix @ self.field(candidate)
+            actual_syndrome = effective_check_matrix @ candidate.view(self.field)
             valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         return int(np.count_nonzero(candidate))
@@ -968,12 +968,14 @@ class QuditCode(AbstractCode):
         logicals_x = np.vstack([logicals_xx, logicals_xz]).T
         logicals_z = np.vstack([np.zeros_like(logicals_zz), logicals_zz]).T
 
-        # move qudits back to their original locations, save logicals, and return
+        # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
-        self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
-        return self._logical_ops  # type:ignore[return-value]
+        logical_ops = np.vstack([logicals_x, logicals_z]).view(self.field)
+
+        self._logical_ops = logical_ops
+        return logical_ops
 
     def get_standard_form_data(
         self,
@@ -1650,13 +1652,12 @@ class CSSCode(QuditCode):
     @functools.cached_property
     def matrix(self) -> galois.FieldArray:
         """Overall parity check matrix."""
-        matrix = np.block(
+        return np.block(
             [
-                [self.matrix_x, np.zeros_like(self.matrix_x)],
-                [np.zeros_like(self.matrix_z), self.matrix_z],
+                [self.matrix_x, self.field.Zeros(self.matrix_x.shape)],
+                [self.field.Zeros(self.matrix_z.shape), self.matrix_z],
             ]
-        )
-        return self.field(matrix)
+        ).view(self.field)
 
     @functools.cached_property
     def canonicalized(self) -> CSSCode:
@@ -1784,8 +1785,10 @@ class CSSCode(QuditCode):
         permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x[permutation]
         logicals_z = logicals_z[permutation]
-        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x.T, logicals_z.T))
-        return self._logical_ops
+        logical_ops = scipy.linalg.block_diag(logicals_x.T, logicals_z.T).view(self.field)
+
+        self._logical_ops = logical_ops
+        return logical_ops
 
     def get_standard_form_data_xz(
         self,
@@ -1948,7 +1951,7 @@ class CSSCode(QuditCode):
 
             stabs_x = stabs_and_gauges_and_logs_z.null_space()
             stabs_z = stabs_and_gauges_and_logs_x.null_space()
-            self._stabilizer_ops = self.field(scipy.linalg.block_diag(stabs_x, stabs_z))
+            self._stabilizer_ops = scipy.linalg.block_diag(stabs_x, stabs_z).view(self.field)
 
         stabilizer_ops = QuditCode.get_stabilizer_ops(
             self, pauli, recompute=recompute, canonicalized=canonicalized
@@ -2135,7 +2138,7 @@ class CSSCode(QuditCode):
             )
 
             # check whether decoding was successful
-            actual_syndrome = effective_check_matrix @ self.field(candidate_logical_op)
+            actual_syndrome = effective_check_matrix @ candidate_logical_op.view(self.field)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
@@ -2187,7 +2190,7 @@ class CSSCode(QuditCode):
             candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
-            actual_syndrome = effective_check_matrix @ self.field(candidate_logical_op)
+            actual_syndrome = effective_check_matrix @ candidate_logical_op.view(self.field)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
@@ -2387,7 +2390,7 @@ class CSSCode(QuditCode):
             error_z[error_locs_z] = np.random.choice(
                 range(1, self.field.order), size=len(error_locs_z)
             )
-            residual_z = self.field(decoder_z.decode(error_z))
+            residual_z = decoder_z.decode(error_z).view(self.field)
             if np.any(logicals_x @ residual_z):
                 num_failures += 1
                 continue
@@ -2398,7 +2401,7 @@ class CSSCode(QuditCode):
             error_x[error_locs_x] = np.random.choice(
                 range(1, self.field.order), size=len(error_locs_x)
             )
-            residual_x = self.field(decoder_x.decode(error_x))
+            residual_x = decoder_x.decode(error_x).view(self.field)
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 

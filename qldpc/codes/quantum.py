@@ -873,9 +873,9 @@ class HGPCode(CSSCode):
         logical_ops_z_l = np.kron(generator_a, pivots_b)
         logical_ops_z_r = np.kron(pivots_a_T, generator_b_T)
 
-        logical_ops_x = code_field(scipy.linalg.block_diag(logical_ops_x_l, logical_ops_x_r))
-        logical_ops_z = code_field(scipy.linalg.block_diag(logical_ops_z_l, logical_ops_z_r))
-        return logical_ops_x, logical_ops_z
+        logical_ops_x = scipy.linalg.block_diag(logical_ops_x_l, logical_ops_x_r)
+        logical_ops_z = scipy.linalg.block_diag(logical_ops_z_l, logical_ops_z_r)
+        return logical_ops_x.view(code_field), logical_ops_z.view(code_field)
 
 
 class SHPCode(CSSCode):
@@ -921,7 +921,7 @@ class SHPCode(CSSCode):
 
         stab_ops_x = np.kron(code_x.matrix, code_z.generator)
         stab_ops_z = np.kron(-code_x.generator, code_z.matrix)
-        self._stabilizer_ops = code_field(scipy.linalg.block_diag(stab_ops_x, stab_ops_z))
+        self._stabilizer_ops = scipy.linalg.block_diag(stab_ops_x, stab_ops_z).view(code_field)
 
         if set_logicals:
             self.set_logical_ops_xz(*self.get_canonical_logical_ops(code_x, code_z), validate=False)
@@ -956,9 +956,9 @@ class SHPCode(CSSCode):
         pivots_x[range(len(pivots_x)), first_nonzero_cols(generator_x)] = 1
         pivots_z[range(len(pivots_z)), first_nonzero_cols(generator_z)] = 1
 
-        logical_ops_x = code_field(np.kron(pivots_x, generator_z))
-        logical_ops_z = code_field(np.kron(generator_x, pivots_z))
-        return logical_ops_x, logical_ops_z
+        logical_ops_x = np.kron(pivots_x, generator_z)
+        logical_ops_z = np.kron(generator_x, pivots_z)
+        return logical_ops_x.view(code_field), logical_ops_z.view(code_field)
 
 
 class LPCode(CSSCode):
@@ -1322,7 +1322,7 @@ class SurfaceCode(CSSCode):
             # invert Z-type Pauli on every other qubit
             code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
             if code_field.order > 2:
-                matrix_z = code_field(matrix_z)
+                matrix_z = matrix_z.view(code_field)
                 matrix_z[:, self._default_conjugate] *= -1
 
         else:
@@ -1443,7 +1443,7 @@ class ToricCode(CSSCode):
             # invert Z-type Pauli on every other qubit
             code_field = galois.GF(field or DEFAULT_FIELD_ORDER)
             if code_field.order > 2:
-                matrix_z = code_field(matrix_z)
+                matrix_z = matrix_z.view(code_field)
                 matrix_z[:, self._default_conjugate] *= -1
 
             if rows == cols == 2 and rotated:
