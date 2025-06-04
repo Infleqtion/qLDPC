@@ -929,7 +929,7 @@ class RingArray(npt.NDArray[np.object_]):
             if np.any(vector)
         ]
 
-        # track linearly independent vectors (the basis), and a lifted matrix of these vectors
+        # track linearly independent vectors (the basis), and a matrix of lifted basis vectors
         basis = []
         lifted_matrix = self.field.Zeros((0, field_vectors.shape[1]))
 
