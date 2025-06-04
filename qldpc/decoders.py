@@ -268,7 +268,7 @@ class GUFDecoder(Decoder):
     ) -> npt.NDArray[np.int_]:
         """Decode an error syndrome and return an inferred error."""
         max_weight = max_weight if max_weight is not None else self.default_max_weight
-        syndrome = self.code.field(syndrome)
+        syndrome = np.asarray(syndrome, dtype=int).view(self.code.field)
         syndrome_bits = np.where(syndrome)[0]
 
         # construct an "error set", within which we look for solutions to the decoding problem
@@ -505,9 +505,9 @@ class DirectDecoder(Decoder):
         else:
 
             def decode_func(candidate_word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-                candidate_word = field(candidate_word)
+                candidate_word = candidate_word.view(field)
                 syndrome = matrix @ candidate_word
-                error = field(decoder.decode(syndrome.view(np.ndarray)))
+                error = decoder.decode(syndrome.view(np.ndarray)).view(field)
                 return (candidate_word - error).view(np.ndarray)
 
         return DirectDecoder(decode_func)
