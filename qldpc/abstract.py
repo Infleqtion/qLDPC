@@ -837,7 +837,7 @@ class RingArray(npt.NDArray[np.object_]):
         matrix = self if _restart_call else self.copy()  # modify in-place for restart calls
         num_rows, num_cols = self.shape
 
-        # enforce condition (A)
+        # enforce condition (a)
         matrix = self._reduce_rows_with_invertible_entries()
 
         # identify "pivot" rows that are uniquely nonzero in some column, and all other nonzero rows
