@@ -850,9 +850,21 @@ class RingArray(npt.NDArray[np.object_]):
         print(pivot_matrix.lift())
         print()
         print(non_pivot_matrix.lift())
+        print()
+        print("===============================")
+
+        # identify a minimal basis for the span of the non-pivot rows
+        non_pivot_matrix_row_span_basis = non_pivot_matrix._get_minimal_row_span_basis()
+
+        print()
+        print(non_pivot_matrix_row_span_basis.lift())
         exit()
 
-        return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
+        return np.vstack([pivot_matrix, non_pivot_matrix_row_span_basis]).view(RingArray)
+
+    def _get_minimal_row_span_basis(self) -> RingArray:
+        """Find a matrix whose rows form a minimal basis for the row span of self."""
+        return self  # TENTATIVE
 
     def _reduce_rows_with_invertible_entries(self, *, restart_call: bool = False) -> RingArray:
         """Row-reduce "invertible" rows, which have at least one entry with an inverse.
