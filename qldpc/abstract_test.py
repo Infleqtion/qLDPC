@@ -230,23 +230,36 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
 
 
-def test_partial_row_reduce() -> None:
-    """Some RingArrays need "secondary" Gaussian elimination to identify invertible pivots."""
-    group = abstract.CyclicGroup(3, field=4)
+@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=3)])
+def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> None:
+    """Row reduce a ring-valued matrix."""
+    seed = pytestconfig.getoption("randomly_seed")
+
     one = abstract.RingMember.one(group)
     gen = group.generators[0] * one
-    matrix = [
+    mat = [
         [one + gen, gen],
         [gen + gen**2, gen**2],
         [0, one + gen],
     ]
-    reduced_matrix = [
+    reduced_mat = [
         [gen.inverse() + one, one],
-        [(one + gen) * (gen.inverse() + one), 0],
+        [-(one + gen) * (gen.inverse() + one), 0],
     ]
     assert np.array_equal(
-        abstract.RingArray.build(group, matrix).partial_row_reduce(),
-        abstract.RingArray.build(group, reduced_matrix),
+        abstract.RingArray.build(group, mat).row_reduce(),
+        abstract.RingArray.build(group, reduced_mat),
+    )
+
+    # RingArray.row_reduce and _get_row_span_basis should have the same left-ring-linear span
+    num_rows, num_cols = 3, 5
+    coefficients = group.field.Random((num_rows, num_cols, group.order), seed=seed)
+    matrix = abstract.RingArray.from_field_array(group, coefficients)
+    matrix_1 = matrix.row_reduce().regular_lift().row_reduce()
+    matrix_2 = matrix._get_row_span_basis().regular_lift().row_reduce()
+    assert np.array_equal(
+        matrix_1[np.any(matrix_1, axis=1)],
+        matrix_2[np.any(matrix_2, axis=1)],
     )
 
 

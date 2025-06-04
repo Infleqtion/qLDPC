@@ -819,9 +819,9 @@ class RingArray(npt.NDArray[np.object_]):
             group=self.group,
         )
 
-        return null_vectors.partial_row_reduce()
+        return null_vectors.row_reduce()
 
-    def partial_row_reduce(self, *, keep_zero_rows: bool = False) -> RingArray:
+    def row_reduce(self, *, _restart_call: bool = False) -> RingArray:
         """Row-reduce this RingArray to the degree possible.
 
         This method first uses invertible row operations (namely, left-multiplication by invertible
@@ -834,11 +834,34 @@ class RingArray(npt.NDArray[np.object_]):
         Note: this method is unoptimized; there is a lot of room for speeding things up.
         """
         assert self.ndim == 2
+        matrix = self if _restart_call else self.copy()  # modify in-place for restart calls
+        num_rows, num_cols = self.shape
 
-        matrix = self.copy()
+        # enforce condition (a)
+        matrix = self._reduce_rows_with_invertible_entries()
+
+        # identify "pivot" rows that are uniquely nonzero in some column, and all other nonzero rows
+        pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
+
+        # identify a minimal basis for the span of the non-pivot rows
+        if non_pivot_matrix.size:
+            non_pivot_matrix = non_pivot_matrix._get_row_span_basis()
+
+        return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
+
+    def _reduce_rows_with_invertible_entries(self, *, restart_call: bool = False) -> RingArray:
+        """Row-reduce "invertible" rows, which have at least one entry with an inverse.
+
+        Every reduced rows has a column in which it is 1, and in which all other rows are zero.
+        """
+        matrix = self if restart_call else self.copy()
+        num_rows, num_cols = self.shape
+
         row_reductions_made = False  # did we perform row reductions?
-        non_invertible_rows = []  # which (nonzero) rows have only non-invertible entries?
-        for row, row_vector in enumerate(matrix):
+        noninvertible_rows = []  # which rows have only non-invertible entries?
+        for row in range(num_rows):
+            row_vector = matrix[row]
+
             # look for an invertible entry in this row
             for col, entry in enumerate(row_vector):
                 if inverse := entry.inverse():
@@ -853,23 +876,80 @@ class RingArray(npt.NDArray[np.object_]):
                 # "normalize" the entry to 1, and zero out its column in all other rows
                 new_vector = inverse * row_vector
                 matrix[row] = new_vector
-                for rows in [slice(None, row), slice(row + 1, len(matrix))]:
+                for rows in [slice(None, row), slice(row + 1, num_rows)]:
                     matrix[rows] = matrix[rows] - matrix[rows, col, None] * new_vector[None, :]
                 row_reductions_made = True
 
             else:
-                non_invertible_rows.append(row)
+                noninvertible_rows.append(row)
 
-        if row_reductions_made and non_invertible_rows:
+        if row_reductions_made and noninvertible_rows:
             # some non-invertible entries may have become invertible, so try row-reducing again
-            non_invertible_rows = [row for row in non_invertible_rows if np.any(matrix[row])]
-            matrix[non_invertible_rows] = (
-                matrix[non_invertible_rows].view(RingArray).partial_row_reduce(keep_zero_rows=True)
-            )
+            noninvertible_rows = [row for row in noninvertible_rows if np.any(matrix[row])]
+            matrix[rows].view(RingArray)._reduce_rows_with_invertible_entries(restart_call=True)
 
-        if not keep_zero_rows and not all(nonzero_rows := np.any(matrix, axis=1)):
-            matrix = matrix[nonzero_rows, :].view(RingArray)
         return matrix
+
+    def _split_by_pivots(self) -> tuple[RingArray, RingArray]:
+        """Split into a matrix with all "pivot" rows, and a matrix with all other nonzero rows.
+
+        "Pivot" rows are those that are uniquely nonzero in some column.
+        """
+        pivot_rows = []
+        non_pivot_rows = []
+        for row, vector in enumerate(self):
+            # is this a pivot row?
+            pivot_row = False
+            for col, entry in enumerate(vector):
+                if entry and not np.any(self[:row, col]) and not np.any(self[row + 1 :, col]):
+                    pivot_row = True
+                    break
+
+            # add to our log of pivot and non-pivot rows, ignoing rows that are all zero
+            if pivot_row:
+                pivot_rows.append(row)
+            elif np.any(vector):
+                non_pivot_rows.append(row)
+
+        return self[pivot_rows].view(RingArray), self[non_pivot_rows].view(RingArray)
+
+    def _get_row_span_basis(self) -> RingArray:
+        """Find a minimal basis for the row span of self.
+
+        Starting with an empty basis, consider each row one-by-one, and add each row to the basis if
+        it does not lie in the left-ring-linear span of the rows currently in the basis.
+
+        Here the left-ring-linear span of a collection of vectors is a sum of the vectors with
+        coefficients from the ring multiplied on the left: sum_i r_i v_i.
+        """
+        # expand row vectors over the ring into row vectors over the field
+        field_vectors = self.to_field_array().reshape(len(self), -1).view(self.field)
+
+        # row-reduce over the field, which removes field-linear redundancies
+        field_vectors = field_vectors.row_reduce()
+        field_vectors = field_vectors[np.any(field_vectors, axis=1)]  # remove all-zero rows
+        vectors = RingArray.from_field_array(
+            self.group, field_vectors.reshape(len(field_vectors), -1, self.group.order)
+        )
+
+        # track linearly independent vectors (the basis), and a matrix of lifted basis vectors
+        basis = []
+        lifted_matrix = self.field.Zeros((0, field_vectors.shape[1]))
+
+        for vector, field_vector in zip(vectors, field_vectors):
+            # check whether this vector lies in the left-ring-linear span of the the current basis
+            field_matrix_with_vector = np.vstack([lifted_matrix, field_vector])
+            field_matrix_with_vector = field_matrix_with_vector.view(self.field).row_reduce()
+            vector_not_in_span = np.any(field_matrix_with_vector[-1])
+
+            if vector_not_in_span:
+                basis.append(vector)
+                new_rows = vector.reshape(1, vector.size).view(RingArray)
+                lifted_matrix = np.vstack([lifted_matrix, new_rows.regular_lift()])
+                lifted_matrix = lifted_matrix.view(self.field).row_reduce()
+                lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(self.field)
+
+        return RingArray(vectors, group=self.group)
 
 
 class Protograph(RingArray):  # pragma: no cover
