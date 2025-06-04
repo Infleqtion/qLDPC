@@ -849,41 +849,6 @@ class RingArray(npt.NDArray[np.object_]):
 
         return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
 
-    def _brute_force_row_reduce(self) -> RingArray:
-        """Row-reduce by brute force.
-
-        Find a minimal linearly independent collection of the row vectors in self by brute force,
-        considering one vector at a time and checking whether it lies in the (ring-linear) span of
-        the collection; if not, add it to the collection.
-        """
-        # row-reduce rows as field vectors to canonicalize in a fixed basis for the group
-        field_vectors = np.vstack([vector.to_field_vector() for vector in self]).view(self.field)
-        field_vectors = field_vectors.row_reduce()
-        vectors = [
-            RingArray.from_field_vector(self.group, vector)
-            for vector in field_vectors
-            if np.any(vector)
-        ]
-
-        # track linearly independent vectors (the basis), and a lifted matrix of these vectors
-        basis = []
-        lifted_matrix = self.field.Zeros((0, field_vectors.shape[1]))
-
-        for vector, field_vector in zip(vectors, field_vectors):
-            # check whether this vector lies in the ring-linear span of the the current basis
-            field_matrix_with_vector = np.vstack([lifted_matrix, field_vector])
-            field_matrix_with_vector = field_matrix_with_vector.view(self.field).row_reduce()
-            vector_not_in_span = np.any(field_matrix_with_vector[-1])
-
-            if vector_not_in_span:
-                basis.append(vector)
-                new_rows = vector.reshape(1, vector.size).view(RingArray)
-                lifted_matrix = np.vstack([lifted_matrix, new_rows.regular_lift()])
-                lifted_matrix = lifted_matrix.view(self.field).row_reduce()
-                lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(RingArray)
-
-        return RingArray(vectors)
-
     def _reduce_rows_with_invertible_entries(self, *, restart_call: bool = False) -> RingArray:
         """Row-reduce "invertible" rows, which have at least one entry with an inverse.
 
@@ -947,6 +912,41 @@ class RingArray(npt.NDArray[np.object_]):
                 non_pivot_rows.append(row)
 
         return self[pivot_rows].view(RingArray), self[non_pivot_rows].view(RingArray)
+
+    def _brute_force_row_reduce(self) -> RingArray:
+        """Row-reduce by brute force.
+
+        Find a minimal linearly independent collection of the row vectors in self by brute force,
+        considering one vector at a time and checking whether it lies in the (ring-linear) span of
+        the collection; if not, add it to the collection.
+        """
+        # row-reduce rows as field vectors to canonicalize in a fixed basis for the group
+        field_vectors = np.vstack([vector.to_field_vector() for vector in self]).view(self.field)
+        field_vectors = field_vectors.row_reduce()
+        vectors = [
+            RingArray.from_field_vector(self.group, vector)
+            for vector in field_vectors
+            if np.any(vector)
+        ]
+
+        # track linearly independent vectors (the basis), and a lifted matrix of these vectors
+        basis = []
+        lifted_matrix = self.field.Zeros((0, field_vectors.shape[1]))
+
+        for vector, field_vector in zip(vectors, field_vectors):
+            # check whether this vector lies in the ring-linear span of the the current basis
+            field_matrix_with_vector = np.vstack([lifted_matrix, field_vector])
+            field_matrix_with_vector = field_matrix_with_vector.view(self.field).row_reduce()
+            vector_not_in_span = np.any(field_matrix_with_vector[-1])
+
+            if vector_not_in_span:
+                basis.append(vector)
+                new_rows = vector.reshape(1, vector.size).view(RingArray)
+                lifted_matrix = np.vstack([lifted_matrix, new_rows.regular_lift()])
+                lifted_matrix = lifted_matrix.view(self.field).row_reduce()
+                lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(RingArray)
+
+        return RingArray(vectors)
 
 
 class Protograph(RingArray):  # pragma: no cover
