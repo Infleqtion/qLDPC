@@ -864,7 +864,27 @@ class RingArray(npt.NDArray[np.object_]):
 
     def _get_minimal_row_span_basis(self) -> RingArray:
         """Find a matrix whose rows form a minimal basis for the row span of self."""
-        return self  # TENTATIVE
+        # row-reduce rows as field vectors to canonicalize in a fixed basis for the group
+        field_vectors = np.vstack([vector.to_field_vector() for vector in self])
+        field_vectors = field_vectors.row_reduce()  # type:ignore[attr-defined]
+        vectors = [
+            RingArray.from_field_vector(self.group, vector)
+            for vector in field_vectors
+            if np.any(vector)
+        ]
+
+        basis = []
+        lifted_basis_matrix = self.field.Zeros((0, field_vectors.shape[1]))
+        for vector, field_vector in zip(vectors, field_vectors):
+            field_matrix_with_vector = np.vstack([lifted_basis_matrix, field_vector])
+            field_matrix_with_vector = field_matrix_with_vector.view(self.field).row_reduce()
+            if np.any(field_matrix_with_vector[-1]):
+                basis.append(vector)
+                new_rows = vector.reshape(1, vector.size).view(RingArray)
+                lifted_basis_matrix = np.vstack([lifted_basis_matrix, new_rows.regular_lift()])
+                lifted_basis_matrix = lifted_basis_matrix.view(self.field).row_reduce()
+
+        return RingArray(vectors)
 
     def _reduce_rows_with_invertible_entries(self, *, restart_call: bool = False) -> RingArray:
         """Row-reduce "invertible" rows, which have at least one entry with an inverse.
@@ -928,7 +948,7 @@ class RingArray(npt.NDArray[np.object_]):
             elif np.any(vector):
                 non_pivot_rows.append(row)
 
-        return self[pivot_rows], self[non_pivot_rows]
+        return self[pivot_rows].view(RingArray), self[non_pivot_rows].view(RingArray)
 
 
 class Protograph(RingArray):  # pragma: no cover
