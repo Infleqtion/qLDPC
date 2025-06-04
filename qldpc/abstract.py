@@ -845,7 +845,7 @@ class RingArray(npt.NDArray[np.object_]):
 
         # identify a minimal basis for the span of the non-pivot rows
         if non_pivot_matrix.size:
-            non_pivot_matrix = non_pivot_matrix._brute_force_row_reduce()
+            non_pivot_matrix = non_pivot_matrix._get_row_span_basis()
 
         return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
 
@@ -913,12 +913,11 @@ class RingArray(npt.NDArray[np.object_]):
 
         return self[pivot_rows].view(RingArray), self[non_pivot_rows].view(RingArray)
 
-    def _brute_force_row_reduce(self) -> RingArray:
-        """Row-reduce by brute force.
+    def _get_row_span_basis(self) -> RingArray:
+        """Find a minimal basis for the row span of self.
 
-        Find a minimal linearly independent collection of the row vectors in self by brute force,
-        considering one vector at a time and checking whether it lies in the (ring-linear) span of
-        the collection; if not, add it to the collection.
+        Starting with an empty basis, consider each row one-by-one, and add each row to the basis if
+        it does not lie in the ring-linear span of the rows currently in the basis.
         """
         # row-reduce rows as field vectors to canonicalize in a fixed basis for the group
         field_vectors = np.vstack([vector.to_field_vector() for vector in self]).view(self.field)
