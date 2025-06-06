@@ -473,8 +473,8 @@ class RingMember:
         return (
             isinstance(other, RingMember)
             and self._group == other._group
-            and all(self._vec[member] == other._vec[member] for member in self._vec)
-            and all(self._vec[member] == other._vec[member] for member in other._vec)
+            and all(self._vec.get(member, 0) == other._vec.get(member, 0) for member in self._vec)
+            and all(self._vec.get(member, 0) == other._vec.get(member, 0) for member in other._vec)
         )
 
     def __bool__(self) -> bool:
