@@ -234,21 +234,22 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
 def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> None:
     """Row reduce a ring-valued matrix."""
     seed = pytestconfig.getoption("randomly_seed")
+    matrix: list[list[int | abstract.RingMmber]] | abstract.RingArray
 
     one = abstract.RingMember.one(group)
     gen = group.generators[0] * one
-    mat = [
+    matrix = [
         [one + gen, gen],
         [gen + gen**2, gen**2],
         [0, one + gen],
     ]
-    reduced_mat = [
+    reduced_matrix = [
         [gen.inverse() + one, one],
         [-(one + gen) * (gen.inverse() + one), 0],
     ]
     assert np.array_equal(
-        abstract.RingArray.build(group, mat).row_reduce(),
-        abstract.RingArray.build(group, reduced_mat),
+        abstract.RingArray.build(group, matrix).row_reduce(),
+        abstract.RingArray.build(group, reduced_matrix),
     )
 
     # RingArray.row_reduce and _get_row_span_basis should have the same left-ring-linear span

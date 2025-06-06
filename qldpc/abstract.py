@@ -843,8 +843,8 @@ class RingArray(npt.NDArray[np.object_]):
         # identify "pivot" rows that are uniquely nonzero in some column, and all other nonzero rows
         pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
 
-        # identify a minimal basis for the span of the non-pivot rows
         if non_pivot_matrix.size:
+            # identify a minimal basis for the span of the non-pivot rows
             non_pivot_matrix = non_pivot_matrix._get_row_span_basis()
 
         return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
