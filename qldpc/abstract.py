@@ -822,7 +822,7 @@ class RingArray(npt.NDArray[np.object_]):
         return null_vectors.row_reduce()
 
     def row_reduce(self, *, _restart_call: bool = False) -> RingArray:
-        """Row-reduce this RingArray to the degree possible.
+        """Row-reduce this RingArray to the degree that we can.
 
         This method first uses invertible row operations (namely, left-multiplication by invertible
         ring elements and row addition) to construct a matrix in which every row satisfies one of
