@@ -234,7 +234,7 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
 def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> None:
     """Row reduce a ring-valued matrix."""
     seed = pytestconfig.getoption("randomly_seed")
-    matrix: list[list[int | abstract.RingMmber]] | abstract.RingArray
+    matrix: list[list[int | abstract.RingMember]] | abstract.RingArray
 
     one = abstract.RingMember.one(group)
     gen = group.generators[0] * one

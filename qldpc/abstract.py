@@ -98,7 +98,7 @@ class GroupMember(comb.Permutation):
         convension ensures that this lift is a homomorphism on SymPy Permutation objects, which is
         to say that (p * q).to_matrix() = p.to_matrix() @ q.to_matrix().
         """
-        matrix = np.zeros((self.size,) * 2, dtype=int)
+        matrix = np.zeros([self.size] * 2, dtype=int)
         for ii in range(self.size):
             matrix[ii, self.apply(ii)] = 1
         return matrix
@@ -269,6 +269,7 @@ class Group:
             return self.regular_lift(member)
         return self._lift(member).view(self.field)
 
+    @functools.cache
     def regular_lift(self, member: GroupMember) -> galois.FieldArray:
         """Lift a group member to its regular representation.
 
@@ -570,14 +571,14 @@ class RingMember:
         """Lift this element using the underlying group representation."""
         return sum(
             (val * self.group.lift(member) for val, member in self if val),
-            start=self.field.Zeros((self.group.lift_dim,) * 2),
+            start=self.field.Zeros([self.group.lift_dim] * 2),
         )
 
     def regular_lift(self) -> galois.FieldArray:
         """Lift this element using the regular representation of its base group."""
         return sum(
             (val * self.group.regular_lift(member) for val, member in self if val),
-            start=self.field.Zeros((self.group.order,) * 2),
+            start=self.field.Zeros([self.group.order] * 2),
         )
 
     @classmethod
@@ -738,11 +739,15 @@ class RingArray(npt.NDArray[np.object_]):
         blocks = [[val.regular_lift() for val in row] for row in self]
         return np.block(blocks).view(self.field)
 
+    def __invert__(self) -> RingArray:
+        """Transpose the entries of this RingArray."""
+        vals = [val.T for val in self.ravel()]
+        return RingArray(np.array(vals, dtype=object).reshape(self.shape), self.group)
+
     @property
     def T(self) -> RingArray:
         """Transpose of this RingArray, which also transposes every array entry."""
-        vals = [val.T for val in self.ravel()]
-        return RingArray(np.array(vals, dtype=object).reshape(self.shape).T, self.group)
+        return (~self).transpose()
 
     @staticmethod
     def build(group: Group, data: npt.NDArray[np.object_ | np.int_] | NestedSequence) -> RingArray:
@@ -814,28 +819,25 @@ class RingArray(npt.NDArray[np.object_]):
         null_field_vectors = self.regular_lift().null_space()
 
         # collect ring-valued null row vectors (that is, transposed null column vectors)
-        null_vectors = RingArray(
-            [RingArray.from_field_vector(self.group, vector).T for vector in null_field_vectors],
-            group=self.group,
+        null_vectors = ~RingArray.from_field_array(
+            self.group, null_field_vectors.reshape(len(null_field_vectors), -1, self.group.order)
         )
 
         return null_vectors.row_reduce()
 
-    def row_reduce(self, *, _restart_call: bool = False) -> RingArray:
+    def row_reduce(self) -> RingArray:
         """Row-reduce this RingArray to the degree that we can.
 
-        This method first uses invertible row operations (namely, left-multiplication by invertible
-        ring elements and row addition) to construct a matrix in which every row satisfies one of
+        This method uses invertible row operations (namely, left-multiplication by invertible ring
+        elements and row addition) to construct a matrix in which every row satisfies one of
         the following:
         (a) there is some column at which the row is 1 and all other rows are 0, or
         (b) all entries of the row are non-invertible.
-        All-zero rows are removed from the matrix prior to returning, unless keep_zero_rows is True.
+        Moreover, all rows of the returned matrix are linearly independent and nonzero.
 
         Note: this method is unoptimized; there is a lot of room for speeding things up.
         """
         assert self.ndim == 2
-        matrix = self if _restart_call else self.copy()  # modify in-place for restart calls
-        num_rows, num_cols = self.shape
 
         # enforce condition (a)
         matrix = self._reduce_rows_with_invertible_entries()
@@ -914,42 +916,47 @@ class RingArray(npt.NDArray[np.object_]):
         return self[pivot_rows].view(RingArray), self[non_pivot_rows].view(RingArray)
 
     def _get_row_span_basis(self) -> RingArray:
-        """Find a minimal basis for the row span of self.
+        """Find a minimal basis for the row span of this RingArray.
 
-        Starting with an empty basis, consider each row one-by-one, and add each row to the basis if
-        it does not lie in the left-ring-linear span of the rows currently in the basis.
-
-        Here the left-ring-linear span of a collection of vectors is a sum of the vectors with
-        coefficients from the ring multiplied on the left: sum_i r_i v_i.
+        Due to peculiarities of working with modules (the generalization of a vector space when
+        working over rings, as opposed to fields), we have to start by considering all rows in the
+        RingArray, and checking individually whether each row lies in the span of the rest; if so,
+        we remove that row.  "Trimming down" to a minimal basis, as opposed to "building one up"
+        by accumulating linearly independent row vectors, is necessary because rows may have
+        nontrivial annihilators, which is to say that a row v may have a ring element r for which
+        r * v = 0 even though r and v are nonzero.  It is therefore possible, for examle, for a row
+        v to lie in the left-ring-linear span of another row w (v = r * w for some r), but not the
+        other way around (there is no r for which w = r * v).
         """
         # expand row vectors over the ring into row vectors over the field
         field_vectors = self.to_field_array().reshape(len(self), -1).view(self.field)
 
-        # row-reduce over the field, which removes field-linear redundancies
+        # row-reduce over the field to find rows that are field-linearly independent
         field_vectors = field_vectors.row_reduce()
         field_vectors = field_vectors[np.any(field_vectors, axis=1)]  # remove all-zero rows
-        vectors = RingArray.from_field_array(
+        ring_matrix = RingArray.from_field_array(
             self.group, field_vectors.reshape(len(field_vectors), -1, self.group.order)
         )
 
-        # track linearly independent vectors (the basis), and a matrix of lifted basis vectors
-        basis = []
-        lifted_matrix = self.field.Zeros((0, field_vectors.shape[1]))
+        """
+        Invert (transpose the entries of the matrix to make them right-acting (that is, to
+        transform coefficients that are to the left of each row vector), and lift to a matrix over
+        the field.
+        """
+        field_matrix = (~ring_matrix).view(RingArray).regular_lift()
 
-        for vector, field_vector in zip(vectors, field_vectors):
-            # check whether this vector lies in the left-ring-linear span of the the current basis
-            field_matrix_with_vector = np.vstack([lifted_matrix, field_vector])
-            field_matrix_with_vector = field_matrix_with_vector.view(self.field).row_reduce()
-            vector_not_in_span = np.any(field_matrix_with_vector[-1])
+        # throw out rows that can be expressed as ring-linear combinations of other rows
+        rows_to_keep = np.ones((len(ring_matrix), self.group.order), dtype=bool)
+        for row in range(len(ring_matrix) - 1, -1, -1):
+            rows_to_keep[row, :] = False
+            linear_system = np.vstack([field_matrix[rows_to_keep.ravel()], field_vectors[row]])
+            linear_system_rref = linear_system.T.view(self.field).row_reduce()
+            for row_rref in np.argwhere(linear_system_rref[:, -1]):
+                if not np.any(linear_system_rref[row_rref, :-1]):
+                    rows_to_keep[row, :] = True
+                    break
 
-            if vector_not_in_span:
-                basis.append(vector)
-                new_rows = vector.reshape(1, vector.size).view(RingArray)
-                lifted_matrix = np.vstack([lifted_matrix, new_rows.regular_lift()])
-                lifted_matrix = lifted_matrix.view(self.field).row_reduce()
-                lifted_matrix = lifted_matrix[np.any(lifted_matrix, axis=1)].view(self.field)
-
-        return RingArray(vectors, group=self.group)
+        return ring_matrix[rows_to_keep[:, 0]].view(RingArray)
 
 
 class Protograph(RingArray):  # pragma: no cover
