@@ -860,6 +860,8 @@ class RingArray(npt.NDArray[np.object_]):
 
         Every reduced rows has a column in which it is 1, and in which all other rows are zero.
         """
+        rows: slice | list[int]
+
         matrix = self if restart_call else self.copy()
         num_rows, num_cols = self.shape
 
