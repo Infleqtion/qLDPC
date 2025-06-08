@@ -842,8 +842,12 @@ class RingArray(npt.NDArray[np.object_]):
         # enforce condition (a)
         matrix = self._reduce_rows_with_invertible_entries()
 
-        # identify "pivot" rows that are uniquely nonzero in some column, and all other nonzero rows
-        pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
+        # split matrix into "pivot" rows with a 1, and non-pivot rows
+        one = RingMember.one(self.group)
+        pivot_rows = np.array([one in row for row in matrix], dtype=bool)
+        pivot_matrix = matrix[pivot_rows].view(RingArray)
+        non_pivot_matrix = matrix[~pivot_rows].view(RingArray)
+        non_pivot_matrix = non_pivot_matrix[np.any(non_pivot_matrix, axis=1)]
 
         if non_pivot_matrix.size:
             # identify a minimal basis for the span of the non-pivot rows
@@ -887,33 +891,10 @@ class RingArray(npt.NDArray[np.object_]):
 
         if row_reductions_made and noninvertible_rows:
             # some non-invertible entries may have become invertible, so try row-reducing again
-            noninvertible_rows = [row for row in noninvertible_rows if np.any(matrix[row])]
+            rows = [row for row in noninvertible_rows if np.any(matrix[row])]
             matrix[rows].view(RingArray)._reduce_rows_with_invertible_entries(restart_call=True)
 
         return matrix
-
-    def _split_by_pivots(self) -> tuple[RingArray, RingArray]:
-        """Split into a matrix with all "pivot" rows, and a matrix with all other nonzero rows.
-
-        "Pivot" rows are those that are uniquely nonzero in some column.
-        """
-        pivot_rows = []
-        non_pivot_rows = []
-        for row, vector in enumerate(self):
-            # is this a pivot row?
-            pivot_row = False
-            for col, entry in enumerate(vector):
-                if entry and not np.any(self[:row, col]) and not np.any(self[row + 1 :, col]):
-                    pivot_row = True
-                    break
-
-            # add to our log of pivot and non-pivot rows, ignoing rows that are all zero
-            if pivot_row:
-                pivot_rows.append(row)
-            elif np.any(vector):
-                non_pivot_rows.append(row)
-
-        return self[pivot_rows].view(RingArray), self[non_pivot_rows].view(RingArray)
 
     def _get_row_span_basis(self) -> RingArray:
         """Find a minimal basis for the row span of this RingArray.
