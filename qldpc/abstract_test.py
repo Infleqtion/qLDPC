@@ -252,12 +252,12 @@ def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> 
         abstract.RingArray.build(group, reduced_matrix),
     )
 
-    # RingArray.row_reduce and _get_row_span_basis should have the same left-ring-linear span
+    # RingArray.row_reduce and _remove_linearly_dependent_rows have the same left-ring-linear span
     num_rows, num_cols = 3, 5
     coefficients = group.field.Random((num_rows, num_cols, group.order), seed=seed)
     matrix = abstract.RingArray.from_field_array(group, coefficients)
     matrix_1 = matrix.row_reduce().regular_lift().row_reduce()
-    matrix_2 = matrix._get_row_span_basis().regular_lift().row_reduce()
+    matrix_2 = matrix._remove_linearly_dependent_rows().regular_lift().row_reduce()
     assert np.array_equal(
         matrix_1[np.any(matrix_1, axis=1)],
         matrix_2[np.any(matrix_2, axis=1)],
