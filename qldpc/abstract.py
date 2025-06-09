@@ -847,7 +847,7 @@ class RingArray(npt.NDArray[np.object_]):
 
         if non_pivot_matrix.size:
             # identify a minimal basis for the span of the non-pivot rows
-            non_pivot_matrix = non_pivot_matrix._get_row_span_basis()
+            non_pivot_matrix = non_pivot_matrix._remove_linearly_dependent_rows()
 
         return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
 
@@ -909,7 +909,7 @@ class RingArray(npt.NDArray[np.object_]):
         non_pivot_matrix = self[~pivot_rows].view(RingArray)
         return pivot_matrix, non_pivot_matrix[np.any(non_pivot_matrix, axis=1)]
 
-    def _get_row_span_basis(self) -> RingArray:
+    def _remove_linearly_dependent_rows(self) -> RingArray:
         """Find a minimal basis for the row span of this RingArray.
 
         Due to peculiarities of working with modules (the generalization of a vector space when
