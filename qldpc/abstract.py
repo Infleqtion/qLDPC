@@ -842,12 +842,8 @@ class RingArray(npt.NDArray[np.object_]):
         # enforce condition (a)
         matrix = self._reduce_rows_with_invertible_entries()
 
-        # split matrix into "pivot" rows with a 1, and non-pivot rows
-        one = RingMember.one(self.group)
-        pivot_rows = np.array([one in row for row in matrix], dtype=bool)
-        pivot_matrix = matrix[pivot_rows].view(RingArray)
-        non_pivot_matrix = matrix[~pivot_rows].view(RingArray)
-        non_pivot_matrix = non_pivot_matrix[np.any(non_pivot_matrix, axis=1)]
+        # split matrix into "pivot" rows that are uniquely nonzero in some column, and other rows
+        pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
 
         if non_pivot_matrix.size:
             # identify a minimal basis for the span of the non-pivot rows
@@ -897,6 +893,21 @@ class RingArray(npt.NDArray[np.object_]):
             matrix[rows].view(RingArray)._reduce_rows_with_invertible_entries(restart_call=True)
 
         return matrix
+
+    def _split_by_pivots(self) -> tuple[RingArray, RingArray]:
+        """Split into a matrix with all "pivot" rows, and a matrix with all other nonzero rows.
+
+        "Pivot" rows are those that are uniquely nonzero in some column.
+        """
+        self_as_bool = self.astype(bool)
+        pivot_rows = np.zeros(len(self), dtype=bool)
+        pivot_cols = np.sum(self_as_bool, axis=0) == 1
+        for col in np.argwhere(pivot_cols):
+            row = np.argwhere(self_as_bool[:, col])[0][0]
+            pivot_rows[row] = True
+        pivot_matrix = self[pivot_rows].view(RingArray)
+        non_pivot_matrix = self[~pivot_rows].view(RingArray)
+        return pivot_matrix, non_pivot_matrix[np.any(non_pivot_matrix, axis=1)]
 
     def _get_row_span_basis(self) -> RingArray:
         """Find a minimal basis for the row span of this RingArray.
