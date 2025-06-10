@@ -86,8 +86,11 @@ def test_lift() -> None:
 
 def assert_valid_lift(group: abstract.Group) -> None:
     """Assert faithfulness of the regular and permutation representations of group members."""
-    lift: Callable[[abstract.GroupMember], npt.NDArray[np.int_]]
-    for lift in [group.lift, abstract.GroupMember.to_matrix]:  # type:ignore[assignment]
+    lifts: list[Callable[[abstract.GroupMember], npt.NDArray[np.int_]]] = [
+        group.lift,
+        abstract.GroupMember.to_matrix,
+    ]
+    for lift in lifts:
         assert all(
             aa == bb or not np.array_equal(lift(aa), lift(bb))
             for aa in group.generate()

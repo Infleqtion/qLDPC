@@ -295,8 +295,8 @@ class GUFDecoder(Decoder):
             Try to identify errors in the interior of the error_set that reproduce the syndrome,
             looking for solutions x to H @ x = s, or solutions [y,c] to [H|-s] @ [y,c].T = 0.
             """
-            augmented_matrix = np.column_stack([sub_matrix, -sub_syndrome])
-            candidate_solutions = augmented_matrix.null_space()  # type:ignore[attr-defined]
+            augmented_matrix = np.column_stack([sub_matrix, -sub_syndrome]).view(self.code.field)
+            candidate_solutions = augmented_matrix.null_space()
             solutions = candidate_solutions[np.where(candidate_solutions[:, -1])]
 
         # convert solutions [y,c] --> [y/c,1] --> y

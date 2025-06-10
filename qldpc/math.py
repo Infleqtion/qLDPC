@@ -59,7 +59,7 @@ def symplectic_conjugate(vectors: IntegerArray) -> IntegerArray:
     assert vectors.shape[-1] % 2 == 0
     conjugated_vectors = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
     conjugated_vectors[:, 0, :] *= -1
-    return conjugated_vectors.reshape(vectors.shape)  # type:ignore[return-value]
+    return conjugated_vectors.reshape(vectors.shape).view(type(vectors))
 
 
 def first_nonzero_cols(matrix: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:

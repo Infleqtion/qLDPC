@@ -601,9 +601,9 @@ class ClassicalCode(AbstractCode):
         assert all(0 <= bit < len(self) for bit in bits)
         generator = self.generator
         for bit in sorted(bits, reverse=True):
-            generator = np.roll(generator, -bit, axis=1)  # type:ignore[assignment]
+            generator = np.roll(generator, -bit, axis=1).view(self.field)
             generator = generator.row_reduce()[1:, 1:]
-            generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
+            generator = np.roll(generator, bit, axis=1).view(self.field)
         return ClassicalCode.from_generator(generator)
 
     def get_logical_error_rate_func(
@@ -950,8 +950,8 @@ class QuditCode(AbstractCode):
             where the matrix M is determined by subsituting U and V back into (3),
                 U.T @ W @ M = I.
             """
-            mat_U = matrix_z[rows_gz, cols_gl].null_space().T  # type:ignore[attr-defined]
-            mat_W = matrix_x[rows_gx, cols_gl].null_space().T  # type:ignore[attr-defined]
+            mat_U = matrix_z[rows_gz, cols_gl].view(self.field).null_space().T
+            mat_W = matrix_x[rows_gx, cols_gl].view(self.field).null_space().T
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
             logicals_xx[cols_gl] = mat_U
             logicals_zz[cols_gl] = mat_W @ mat_M
@@ -1301,7 +1301,7 @@ class QuditCode(AbstractCode):
         logical_ops = self.get_logical_ops()
         stabilizers = self.get_stabilizer_ops(canonicalized=True)
         if self.is_subsystem_code:
-            stabilizers = np.vstack([stabilizers, self.get_gauge_ops()])  # type:ignore[assignment]
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops()]).view(self.field)
 
         if self.field.order == 2:
             distance = get_distance_quantum(logical_ops, stabilizers, homogeneous=False)
@@ -1545,10 +1545,10 @@ class QuditCode(AbstractCode):
 
         # permute logical operators of the inner code
         inner._logical_ops = (
-            inner.get_logical_ops()  # type:ignore[assignment]
+            inner.get_logical_ops()
             .reshape(2, inner.dimension, -1)[:, outer_physical_to_inner_logical, :]
             .reshape(2 * inner.dimension, -1)
-        )
+        ).view(inner.field)
 
         return inner, outer
 
@@ -1746,7 +1746,11 @@ class CSSCode(QuditCode):
             else:
                 shape = (2, self.dimension, 2, len(self))
                 index = [pauli, slice(None), pauli, slice(None)]
-            return self.get_logical_ops(recompute=recompute).reshape(shape)[tuple(index)]  # type:ignore[return-value]
+            return (
+                self.get_logical_ops(recompute=recompute)
+                .reshape(shape)[tuple(index)]
+                .view(self.field)
+            )
 
         # return logical operators if known and not asked to recompute
         if not (self._logical_ops is None or recompute):
@@ -1773,8 +1777,8 @@ class CSSCode(QuditCode):
         else:
             # see QuditCode.get_logical_ops for an explanation of what's happening here
             cols_gl = np.sort(_join_slices(cols_gx, cols_lx))
-            mat_U = matrix_z[rows_gz, cols_gl].null_space().T  # type:ignore[attr-defined]
-            mat_W = matrix_x[rows_gx, cols_gl].null_space().T  # type:ignore[attr-defined]
+            mat_U = matrix_z[rows_gz, cols_gl].view(self.field).null_space().T
+            mat_W = matrix_x[rows_gx, cols_gl].view(self.field).null_space().T
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
             logicals_x[cols_gl] = mat_U
             logicals_z[cols_gl] = mat_W @ mat_M
@@ -1876,14 +1880,14 @@ class CSSCode(QuditCode):
 
             # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_x = _join_slices(cols_sx, cols_gl, cols_sz)
-            matrix_x = np.vstack([stabilizers_x, checks_x])[:, permutation_x]  # type:ignore[assignment]
+            matrix_x = np.vstack([stabilizers_x, checks_x])[:, permutation_x].view(self.field)
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
             pivots_gx = first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = matrix_x[:, np.argsort(permutation_x)]
 
             # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_z = _join_slices(cols_sz, cols_gl, cols_sx)
-            matrix_z = np.vstack([stabilizers_z, checks_z])[:, permutation_z]  # type:ignore[assignment]
+            matrix_z = np.vstack([stabilizers_z, checks_z])[:, permutation_z].view(self.field)
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
             pivots_gz = first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
             matrix_z = matrix_z[:, np.argsort(permutation_z)]
@@ -1960,7 +1964,7 @@ class CSSCode(QuditCode):
         )
         if symplectic or pauli is None:
             return stabilizer_ops
-        return stabilizer_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
+        return stabilizer_ops.reshape(-1, 2, len(self))[:, pauli, :].view(self.field)
 
     def get_gauge_ops(
         self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
@@ -1973,7 +1977,7 @@ class CSSCode(QuditCode):
         gauge_ops = QuditCode.get_gauge_ops(self, pauli)
         if symplectic or pauli is None:
             return gauge_ops
-        return gauge_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
+        return gauge_ops.reshape(-1, 2, len(self))[:, pauli, :].view(self.field)
 
     def get_dual_subsystem_code(self) -> CSSCode:
         """Get the subsystem code that swaps gauge and logical qudits of this code."""
@@ -2013,7 +2017,7 @@ class CSSCode(QuditCode):
         logical_ops = self.get_logical_ops(pauli)
         stabilizers = self.get_stabilizer_ops(pauli, canonicalized=True)
         if self.is_subsystem_code:
-            stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)])  # type:ignore[assignment]
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)]).view(self.field)
 
         if self.field.order == 2:
             distance = get_distance_quantum(logical_ops, stabilizers, homogeneous=True)
