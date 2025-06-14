@@ -894,17 +894,19 @@ class RingArray(npt.NDArray[np.object_]):
 
         return matrix
 
-    def _split_by_pivots(self) -> tuple[RingArray, RingArray]:
+    def _split_by_pivots(self, *, allow_non_units: bool = True) -> tuple[RingArray, RingArray]:
         """Split into a matrix with all "pivot" rows, and a matrix with all other nonzero rows.
 
-        "Pivot" rows are those that are uniquely nonzero in some column.
+        "Pivot" rows are those that are uniquely nonzero in some column.  If allow_non_unit is
+        False, this nonzero entry is also required to be a unit (invertible entry) of the base ring
+        (group algebra) of this RingArray.
         """
         self_as_bool = self.astype(bool)
         pivot_rows = np.zeros(len(self), dtype=bool)
         pivot_cols = np.sum(self_as_bool, axis=0) == 1
         for col in np.argwhere(pivot_cols):
             row = np.argwhere(self_as_bool[:, col])[0][0]
-            pivot_rows[row] = True
+            pivot_rows[row] = allow_non_units or self[row, col][0].inverse()
         pivot_matrix = self[pivot_rows].view(RingArray)
         non_pivot_matrix = self[~pivot_rows].view(RingArray)
         return pivot_matrix, non_pivot_matrix[np.any(non_pivot_matrix, axis=1)]
