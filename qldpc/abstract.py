@@ -835,7 +835,7 @@ class RingArray(npt.NDArray[np.object_]):
         (b) all entries of the row are non-invertible.
         Moreover, all rows of the returned matrix are linearly independent and nonzero.
 
-        Note: this method is unoptimized; there is a lot of room for speeding things up.
+        Warning: this method is unoptimized.  There is a lot of room for speeding things up.
         """
         assert self.ndim == 2
 
@@ -852,10 +852,13 @@ class RingArray(npt.NDArray[np.object_]):
         return np.vstack([pivot_matrix, non_pivot_matrix]).view(RingArray)
 
     def _reduce_rows_with_invertible_entries(self, *, restart_call: bool = False) -> RingArray:
-        """Row-reduce "invertible" rows, which have at least one entry with an inverse.
+        """Row-reduce greedily using invertible entries.
 
-        Every reduced rows has a column in which it is 1, and in which all other rows are zero.
+        Loop over every row.  If that row contains an invertible entry, normalize the row by this
+        entry's inverse, and zero out all other rows at the corresponding column by subtracting off
+        an appropriate multiple of this row (as you would with ordinary Gaussian elimination).
         """
+        assert self.ndim == 2
         rows: slice | list[int]
 
         matrix = self if restart_call else self.copy()
@@ -912,7 +915,7 @@ class RingArray(npt.NDArray[np.object_]):
         return pivot_matrix, non_pivot_matrix[np.any(non_pivot_matrix, axis=1)]
 
     def _remove_linearly_dependent_rows(self) -> RingArray:
-        """Find a minimal basis for the row span of this RingArray.
+        """Remove rows that can be expressed as ring-linear combinations of others.
 
         Due to peculiarities of working with modules (the generalization of a vector space when
         working over rings, as opposed to fields), we have to start by considering all rows in the
@@ -924,6 +927,8 @@ class RingArray(npt.NDArray[np.object_]):
         v to lie in the left-ring-linear span of another row w (v = r * w for some r), but not the
         other way around (there is no r for which w = r * v).
         """
+        assert self.ndim == 2
+
         # expand row vectors over the ring into row vectors over the field
         field_vectors = self.to_field_array().reshape(len(self), -1).view(self.field)
 
