@@ -24,7 +24,7 @@ class SyndromeMeasurement(abc.ABC):
 
     @abc.abstractmethod
     def compile_sm_circuit(
-        self, code: CSSCode, noise_model: NoiseModel, stim_ids: StimIds
+        self, code: CSSCode, stim_ids: StimIds
     ) -> tuple[stim.Circuit, list[list[int]]]:
         """
         Compiles a syndrome measurement circuit for a given CSSCode and noise model.
@@ -32,13 +32,11 @@ class SyndromeMeasurement(abc.ABC):
         args:
             code: CSSCode
                 The quantum code to be compiled into a single round of syndrome measurements
-            noise_model: NoiseModel
-                The noise model to wrap stim operations (1q gate, 2q gate, meas, and reset)
             stim_ids: StimIds
                 Stim circuit ids to be used for data qubits, z check qubits, and x check qubits
         returns:
             stim.Circuit:
-                Stim circuit containg the compiled syndrome measurement round
+                Stim circuit containing the compiled syndrome measurement round
             list[list[int]]:
                 The history of measurement rounds performed in the circuit.
                 Each round is a list of the stim ids measured that round, in the order they were passed to stim.
@@ -81,7 +79,6 @@ class BareColorCircuit(SyndromeMeasurement):
     def compile_sm_circuit(
         self,
         code: CSSCode,
-        noise_model: NoiseModel,
         stim_ids: StimIds,
         coloring_strategy: str = "largest_first",
     ) -> tuple[stim.Circuit, list[list[int]]]:
@@ -120,9 +117,6 @@ class BareColorCircuit(SyndromeMeasurement):
         # Measure check qubits in Z basis
         if reset_qubits:
             circuit.append("M", reset_qubits) 
-        
-        # Apply noise model to the entire circuit
-        noisy_circuit = noise_model.noisy_circuit(circuit)
-        
+                
         measurements = [stim_ids.z_check_ids + stim_ids.x_check_ids]
-        return noisy_circuit, measurements
+        return circuit, measurements
