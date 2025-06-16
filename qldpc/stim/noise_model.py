@@ -20,13 +20,6 @@ It is part of the code from the paper:
     Gidney, C. (2022). Data for "Inplace Access to the Surface Code Y Basis".
     https://doi.org/10.5281/zenodo.7487893
 
-Modifications to the original code:
-1. Formatting with ruff and improved type annotations
-2. Added automatic TICK insertion preprocessing for circuits without explicit timing
-3. Enhanced documentation following Google Python style guide
-4. Minor adjustments to measurement noise rules for better compatibility with
-   reset-after-measurement patterns
-
 Example:
     Basic usage with a predefined noise model:
 
