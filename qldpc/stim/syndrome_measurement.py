@@ -71,9 +71,9 @@ class BareColorCircuit(SyndromeMeasurement):
             schedule.setdefault(color, []).append(check_op)
         for color, moment in schedule.items():
             for check_qubit, data_qubit in moment:
-                circuit.append(gate, [check_qubit, data_qubit])  # type: ignore
+                circuit.append(gate, [check_qubit, data_qubit])
             if moment:  # Only add TICK if there were operations in this moment
-                circuit.append("TICK")  # type: ignore
+                circuit.append("TICK")
         return circuit
 
     def compile_sm_circuit(
@@ -100,23 +100,23 @@ class BareColorCircuit(SyndromeMeasurement):
             coloring_strategy,
         )
         circuit = stim.Circuit()
-        
+
         # Reset check qubits to |+⟩ state
         reset_qubits = stim_ids.z_check_ids + stim_ids.x_check_ids
         if reset_qubits:
-            circuit.append("RX", reset_qubits)  # type: ignore
-        
+            circuit.append("RX", reset_qubits)
+
         # Append the Z and X subcircuits
         circuit += z_subcircuit
         circuit += x_subcircuit
-        
+
         # Apply Hadamard gates to return check qubits to Z basis
         if reset_qubits:
-            circuit.append("H", reset_qubits) 
-        
+            circuit.append("H", reset_qubits)
+
         # Measure check qubits in Z basis
         if reset_qubits:
-            circuit.append("M", reset_qubits) 
-                
+            circuit.append("M", reset_qubits)
+
         measurements = [stim_ids.z_check_ids + stim_ids.x_check_ids]
         return circuit, measurements

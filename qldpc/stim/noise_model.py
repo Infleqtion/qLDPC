@@ -1,7 +1,7 @@
 """Implementation of different noise models for Stim quantum circuits.
 
 This module provides a comprehensive framework for adding noise models
-to quantum circuits built with Stim. 
+to quantum circuits built with Stim.
 
 The main components are:
 - NoiseRule: Defines how to add noise to individual operations
@@ -371,21 +371,9 @@ class NoiseModel:
                 "ZZ": NoiseRule(after={}, flip_result=measure_flip_zz),
             },
             gate_rules={
-                "RX": (
-                    NoiseRule(after={"Z_ERROR": reset_x})
-                    if reset_x
-                    else NoiseRule(after={})
-                ),
-                "RY": (
-                    NoiseRule(after={"X_ERROR": reset_y})
-                    if reset_y
-                    else NoiseRule(after={})
-                ),
-                "R": (
-                    NoiseRule(after={"X_ERROR": reset_z})
-                    if reset_z
-                    else NoiseRule(after={})
-                ),
+                "RX": (NoiseRule(after={"Z_ERROR": reset_x}) if reset_x else NoiseRule(after={})),
+                "RY": (NoiseRule(after={"X_ERROR": reset_y}) if reset_y else NoiseRule(after={})),
+                "R": (NoiseRule(after={"X_ERROR": reset_z}) if reset_z else NoiseRule(after={})),
             },
         )
 
@@ -542,9 +530,7 @@ class NoiseModel:
 
         collapse_qubits_set = set(collapse_qubits)
         clifford_qubits_set = set(clifford_qubits)
-        idle = sorted(
-            system_qubits - collapse_qubits_set - clifford_qubits_set - immune_qubits
-        )
+        idle = sorted(system_qubits - collapse_qubits_set - clifford_qubits_set - immune_qubits)
         if idle and self.idle_depolarization:
             out.append("DEPOLARIZE1", idle, self.idle_depolarization)
 
@@ -554,9 +540,7 @@ class NoiseModel:
             and waiting_for_mr
             and self.additional_depolarization_waiting_for_m_or_r
         ):
-            out.append(
-                "DEPOLARIZE1", idle, self.additional_depolarization_waiting_for_m_or_r
-            )
+            out.append("DEPOLARIZE1", idle, self.additional_depolarization_waiting_for_m_or_r)
 
     def _append_noisy_moment(
         self,
@@ -601,9 +585,7 @@ class NoiseModel:
             immune_qubits=immune_qubits,
         )
 
-    def _preprocess_circuit_with_auto_ticks(
-        self, circuit: stim.Circuit
-    ) -> stim.Circuit:
+    def _preprocess_circuit_with_auto_ticks(self, circuit: stim.Circuit) -> stim.Circuit:
         """Preprocesses a circuit to automatically insert TICKs when qubits are reused.
 
         This ensures that no qubit is operated on multiple times within a single moment,
@@ -617,7 +599,7 @@ class NoiseModel:
             within the same moment.
         """
         result = stim.Circuit()
-        used_qubits = set()
+        used_qubits: set[int] = set()
 
         for op in circuit:
             if isinstance(op, stim.CircuitRepeatBlock):
@@ -625,13 +607,9 @@ class NoiseModel:
                 if used_qubits:
                     result.append("TICK")
                     used_qubits.clear()
-                processed_body = self._preprocess_circuit_with_auto_ticks(
-                    op.body_copy()
-                )
+                processed_body = self._preprocess_circuit_with_auto_ticks(op.body_copy())
                 result.append(
-                    stim.CircuitRepeatBlock(
-                        repeat_count=op.repeat_count, body=processed_body
-                    )
+                    stim.CircuitRepeatBlock(repeat_count=op.repeat_count, body=processed_body)
                 )
                 continue
 
@@ -671,7 +649,7 @@ class NoiseModel:
         *,
         system_qubits: set[int] | None = None,
         immune_qubits: set[int] | None = None,
-        automatic_ticks: bool = True
+        automatic_ticks: bool = True,
     ) -> stim.Circuit:
         """Returns a noisy version of the given circuit.
 
@@ -703,17 +681,13 @@ class NoiseModel:
         # Preprocess the circuit to automatically insert TICKs when qubits are reused
         if automatic_ticks:
             if immune_qubits:
-                raise ValueError(
-                    "Automatic TICK insertion does not support immune qubits."
-                )
+                raise ValueError("Automatic TICK insertion does not support immune qubits.")
             circuit = self._preprocess_circuit_with_auto_ticks(circuit)
 
         result = stim.Circuit()
 
         first = True
-        for moment_split_ops in _iter_split_op_moments(
-            circuit, immune_qubits=immune_qubits
-        ):
+        for moment_split_ops in _iter_split_op_moments(circuit, immune_qubits=immune_qubits):
             if first:
                 first = False
             elif result and isinstance(result[-1], stim.CircuitRepeatBlock):
