@@ -10,12 +10,10 @@ Example:
     >>> from qldpc.stim.noise_model import NoiseModel
     >>> from qldpc.stim.syndrome_measurement_strategy import BareColorCircuit
     >>> from qldpc.objects import Pauli
-    >>> 
     >>> # Create a CSS code and noise model
     >>> css_code = SteanCode()
     >>> noise_model = NoiseModel.uniform_depolarizing(0.001)
     >>> syndrome_measurement_strategy = BareColorCircuit()
-    >>> 
     >>> # Generate memory experiment circuit
     >>> circuit = memory_experiment(
     ...     code=css_code,
@@ -141,13 +139,13 @@ def memory_experiment(
         >>> from qldpc.stim.noise_model import NoiseModel
         >>> from qldpc.stim.syndrome_measurement_strategyurement import BareColorCircuit
         >>> from qldpc.objects import Pauli
-        >>> 
+        >>>
         >>> # Create a 3-qubit repetition code
         >>> rep_code = RepetitionCode(3)
         >>> css_code = CSSCode(rep_code, rep_code)
         >>> noise_model = NoiseModel.uniform_depolarizing(0.01)
         >>> syndrome_measurement_strategy = BareColorCircuit()
-        >>> 
+        >>>
         >>> # Generate 5-round Z-basis memory experiment
         >>> circuit = memory_experiment(
         ...     code=css_code,
@@ -156,7 +154,7 @@ def memory_experiment(
         ...     num_rounds=5,
         ...     basis=Pauli.Z
         ... )
-        >>> 
+        >>>
         >>> # Circuit is ready for simulation
         >>> sampler = circuit.compile_sampler()
         >>> results = sampler.sample(1000)
@@ -187,9 +185,9 @@ def memory_experiment(
 
     # Reset data qubits to appropriate basis
     if basis is Pauli.X:
-        circuit.append("RX", data_qubits)  # type: ignore
+        circuit.append("RX", data_qubits)
     elif basis is Pauli.Z:
-        circuit.append("R", data_qubits)  # type: ignore
+        circuit.append("R", data_qubits)
     else:
         raise ValueError(f"Invalid basis: {basis}")
 
@@ -240,9 +238,9 @@ def memory_experiment(
     Measure out data qubits
     """
     if basis is Pauli.X:
-        circuit.append("MX", data_qubits)  # type: ignore
+        circuit.append("MX", data_qubits)
     elif basis is Pauli.Z:
-        circuit.append("M", data_qubits)  # type: ignore
+        circuit.append("M", data_qubits)
     else:
         raise ValueError(f"Invalid basis: {basis}")
     _update_meas_rec(meas_rec, data_qubits)
@@ -282,6 +280,6 @@ def memory_experiment(
             [stim.target_rec(meas_rec[-1][data_qubits[q]]) for q in data_support],
             k,
         )
-    
+
     # Apply noise model to the entire circuit
     return noise_model.noisy_circuit(circuit)
