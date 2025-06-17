@@ -1032,7 +1032,7 @@ class SLPCode(CSSCode):
         group = CyclicGroup(2)
         ring = GroupRing(group)
         x = RingMember(ring, group.generators[0])
-        matrix = RingArray([[ring.one, x, x], [x, x, ring.one]])
+        matrix = RingArray([[ring.one, x, x], [x, x, ring.one]])  # Eq. 21 of arXiv:2404.18302v1
         code = SLPCode(matrix)
         assert code.get_code_parameters() == (18, 4, 2)  # TODO: debug discrepancy with 2404.18302v1
 
@@ -1041,7 +1041,7 @@ class SLPCode(CSSCode):
         group = CyclicGroup(3)
         ring = GroupRing(group)
         x = RingMember(ring, group.generators[0])
-        matrix = RingArray([[ring.one + x + x**2, ring.one + x, x]])
+        matrix = RingArray([[ring.one + x + x**2, ring.one + x, x]])  # Eq. 23 of arXiv:2404.18302v1
         code = SLPCode(matrix)
         assert code.get_code_parameters() == (27, 12, 2)
 
