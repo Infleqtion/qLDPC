@@ -22,7 +22,6 @@ import math
 import unittest.mock
 from collections.abc import Callable
 
-import galois
 import numpy as np
 import numpy.typing as npt
 import pytest
@@ -52,10 +51,6 @@ def test_permutation_group() -> None:
     with pytest.raises(ValueError, match="not in group"):
         abstract.CyclicGroup(1).index(abstract.GroupMember(2, 1))
 
-    with pytest.raises(ValueError, match="inconsistent"):
-        gen = galois.GF(2)([[1]])
-        abstract.Group.from_generating_mats(gen, field=3)
-
     assert isinstance(hash(group.hashable_generators()), int)
 
 
@@ -74,9 +69,9 @@ def test_trivial_group() -> None:
 
 def test_lift() -> None:
     """Lift named group elements."""
-    assert_valid_lift(abstract.TrivialGroup(field=3))
-    assert_valid_lift(abstract.CyclicGroup(3, field=4))
-    assert_valid_lift(abstract.AbelianGroup(2, 3, field=5))
+    assert_valid_lift(abstract.TrivialGroup())
+    assert_valid_lift(abstract.CyclicGroup(3))
+    assert_valid_lift(abstract.AbelianGroup(2, 3))
     assert_valid_lift(abstract.AbelianGroup(2, 3, direct_sum=True))
     assert_valid_lift(abstract.DihedralGroup(3))
     assert_valid_lift(abstract.AlternatingGroup(3))
@@ -138,9 +133,10 @@ def test_algebra() -> None:
     """Construct elements of a group algebra."""
     group: abstract.Group
 
-    group = abstract.TrivialGroup(field=3)
-    zero = abstract.RingMember.zero(group)
-    one = abstract.RingMember.one(group)
+    group = abstract.TrivialGroup()
+    ring = abstract.GroupRing(group, field=3)
+    zero = abstract.RingMember.zero(ring)
+    one = abstract.RingMember.one(ring)
     assert bool(one) and not bool(zero)
     assert zero.group == group
     assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
@@ -149,24 +145,25 @@ def test_algebra() -> None:
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
 
     # test inverses
-    for group in [
-        abstract.TrivialGroup(field=3),
-        abstract.AbelianGroup(2, 3, field=4),
-        abstract.QuaternionGroup(),
+    for ring in [
+        abstract.GroupRing(abstract.TrivialGroup(), field=3),
+        abstract.GroupRing(abstract.AbelianGroup(2, 3), field=4),
+        abstract.GroupRing(abstract.QuaternionGroup()),
     ]:
-        for group_member in group.generate():
-            ring_member = abstract.RingMember(group, group_member)
+        for group_member in ring.group.generate():
+            ring_member = abstract.RingMember(ring, group_member)
             ring_member_inverse = ring_member.inverse()
             assert ring_member_inverse is not None
-            assert ring_member * ring_member_inverse == abstract.RingMember.one(group)
+            assert ring_member * ring_member_inverse == abstract.RingMember.one(ring)
 
     # nontrivial inverse
-    group = abstract.CyclicGroup(2, field=5)
-    ring_member = abstract.RingMember(group, group.identity, (3, group.generators[0]))
+    group = abstract.CyclicGroup(2)
+    ring = abstract.GroupRing(group, field=5)
+    ring_member = abstract.RingMember(ring, group.identity, (3, group.generators[0]))
     assert ring_member.inverse() is not None
 
     # nonexistent inverse
-    group = abstract.CyclicGroup(2, field=2)
+    group = abstract.CyclicGroup(2)
     ring_member = abstract.RingMember(group, group.identity, *group.generators)
     assert ring_member.inverse() is None
 
@@ -176,7 +173,6 @@ def test_ring_array() -> None:
     int_matrix = np.random.randint(2, size=(3, 3))
     matrix = abstract.TrivialGroup.to_ring_array(int_matrix)
     assert matrix.group == abstract.TrivialGroup()
-    assert matrix.field == abstract.TrivialGroup().field
     assert np.array_equal(matrix.lift(), int_matrix)
     assert np.array_equal(
         (matrix @ matrix).lift(),
@@ -187,16 +183,13 @@ def test_ring_array() -> None:
     # fail to construct a valid ring array
     with pytest.raises(ValueError, match="must be RingMember-valued"):
         abstract.RingArray([[0]])
-    with pytest.raises(ValueError, match="Inconsistent base groups"):
-        groups = [abstract.TrivialGroup(), abstract.CyclicGroup(1)]
-        abstract.RingArray([[abstract.RingMember(group) for group in groups]])
-    with pytest.raises(ValueError, match="Cannot determine the underlying group"):
+    with pytest.raises(ValueError, match="Cannot determine the underlying ring"):
         abstract.RingArray([])
 
     new_matrix = abstract.RingArray.build(abstract.CyclicGroup(1), [[1]])
-    with pytest.raises(ValueError, match="different base groups"):
+    with pytest.raises(ValueError, match="different base rings"):
         matrix @ new_matrix
-    with pytest.raises(ValueError, match="different base groups"):
+    with pytest.raises(ValueError, match="different base rings"):
         np.kron(matrix, new_matrix)
 
 
@@ -212,15 +205,21 @@ def test_transpose() -> None:
     assert np.array_equal(matrix.T.T, matrix)
 
 
-@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=4)])
-def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None:
+@pytest.mark.parametrize(
+    "ring",
+    [
+        abstract.GroupRing(abstract.DihedralGroup(3)),
+        abstract.GroupRing(abstract.AbelianGroup(2, 3), field=4),
+    ],
+)
+def test_regular_rep(ring: abstract.GroupRing, pytestconfig: pytest.Config) -> None:
     """The regular representation enables straightforward linear algebra over group algebras."""
     seed = pytestconfig.getoption("randomly_seed")
-    dense_vector = group.field.Random(4 * group.order, seed=seed)
-    dense_array = group.field.Random((3, 4, group.order), seed=seed + 1)
+    dense_vector = ring.field.Random(4 * ring.group.order, seed=seed)
+    dense_array = ring.field.Random((3, 4, ring.group.order), seed=seed + 1)
 
-    vector = abstract.RingArray.from_field_vector(group, dense_vector)
-    matrix = abstract.RingArray.from_field_array(group, dense_array)
+    vector = abstract.RingArray.from_field_vector(ring, dense_vector)
+    matrix = abstract.RingArray.from_field_array(ring, dense_array)
     assert np.array_equal(dense_vector, abstract.RingArray.to_field_vector(vector))
     assert np.array_equal(dense_array, abstract.RingArray.to_field_array(matrix))
     assert np.array_equal(
@@ -233,14 +232,20 @@ def test_regular_rep(group: abstract.Group, pytestconfig: pytest.Config) -> None
     assert not np.any(matrix.regular_lift() @ matrix.regular_lift().null_space().T)
 
 
-@pytest.mark.parametrize("group", [abstract.DihedralGroup(3), abstract.AbelianGroup(2, 3, field=3)])
-def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> None:
+@pytest.mark.parametrize(
+    "ring",
+    [
+        abstract.GroupRing(abstract.DihedralGroup(3)),
+        abstract.GroupRing(abstract.AbelianGroup(2, 3), field=3),
+    ],
+)
+def test_ring_row_reduce(ring: abstract.GroupRing, pytestconfig: pytest.Config) -> None:
     """Row reduce a ring-valued matrix."""
     seed = pytestconfig.getoption("randomly_seed")
     matrix: list[list[int | abstract.RingMember]] | abstract.RingArray
 
-    one = abstract.RingMember.one(group)
-    gen = group.generators[0] * one
+    one = abstract.RingMember.one(ring)
+    gen = ring.group.generators[0] * one
     matrix = [
         [one + gen, gen],
         [gen + gen**2, gen**2],
@@ -251,14 +256,14 @@ def test_ring_row_reduce(group: abstract.Group, pytestconfig: pytest.Config) -> 
         [-(one + gen) * (gen.inverse() + one), 0],
     ]
     assert np.array_equal(
-        abstract.RingArray.build(group, matrix).row_reduce(),
-        abstract.RingArray.build(group, reduced_matrix),
+        abstract.RingArray.build(ring, matrix).row_reduce(),
+        abstract.RingArray.build(ring, reduced_matrix),
     )
 
     # RingArray.row_reduce and _remove_linearly_dependent_rows have the same left-ring-linear span
     num_rows, num_cols = 3, 5
-    coefficients = group.field.Random((num_rows, num_cols, group.order), seed=seed)
-    matrix = abstract.RingArray.from_field_array(group, coefficients)
+    coefficients = ring.field.Random((num_rows, num_cols, ring.group.order), seed=seed)
+    matrix = abstract.RingArray.from_field_array(ring, coefficients)
     matrix_1 = matrix.row_reduce().regular_lift().row_reduce()
     matrix_2 = matrix._remove_linearly_dependent_rows().regular_lift().row_reduce()
     assert np.array_equal(

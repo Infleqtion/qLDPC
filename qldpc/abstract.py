@@ -291,7 +291,10 @@ class Group:
             return TrivialGroup()
 
         # keep track of group members and a multiplication table
-        index_to_member = {idx: np.asarray(gen, dtype=int) for idx, gen in enumerate(matrices)}
+        index_to_member = {
+            idx: gen if isinstance(gen, np.ndarray) else np.asarray(gen, dtype=int)
+            for idx, gen in enumerate(matrices)
+        }
         hash_to_index = {hash(gen.data.tobytes()): idx for idx, gen in index_to_member.items()}
         table_as_dict = {}
 
@@ -1015,9 +1018,7 @@ class TrivialGroup(Group):
         return self.identity
 
     @staticmethod
-    def to_ring_array(
-        data: npt.NDArray[np.int_] | NestedSequence
-    ) -> RingArray:
+    def to_ring_array(data: npt.NDArray[np.int_] | NestedSequence) -> RingArray:
         """Convert a matrix of 0s and 1s into a RingArray over the trivial group."""
         array = np.asarray(data, dtype=int)
         group = TrivialGroup()
@@ -1197,11 +1198,12 @@ class SpecialLinearGroup(Group):
     """Special linear group (SL): square matrices with determinant 1."""
 
     _dimension: int
+    _field: type[galois.FieldArray]
 
     def __init__(self, dimension: int, field: int | None = None, linear_rep: bool = True) -> None:
         self._name = f"SL({dimension},{field})"
         self._dimension = dimension
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
         if linear_rep:
             # Construct a linear representation of this group, in which group elements permute
@@ -1209,17 +1211,17 @@ class SpecialLinearGroup(Group):
 
             # identify the target space that group members (as matrices) act on: all nonzero vectors
             target_space = [
-                base_field(vec).tobytes()
-                for vec in itertools.product(base_field.elements, repeat=self.dimension)
+                self.field(vec).tobytes()
+                for vec in itertools.product(self.field.elements, repeat=self.dimension)
             ]
             del target_space[0]  # remove the zero vector
 
             # identify how the generators permute elements of the target space
             generators = []
-            for member in self.get_generating_mats(self.dimension, base_field.order):
+            for member in self.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(base_field)
+                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
                     next_index = target_space.index(next_vec.view(np.ndarray).tobytes())
                     perm[index] = next_index
                 generators.append(GroupMember(perm))
@@ -1243,7 +1245,7 @@ class SpecialLinearGroup(Group):
 
         else:
             # represent group members by how they permute elements of the group itself
-            generating_mats = self.get_generating_mats(self.dimension, base_field.order)
+            generating_mats = self.get_generating_mats(self.dimension, self.field.order)
             group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
 
@@ -1251,6 +1253,11 @@ class SpecialLinearGroup(Group):
     def dimension(self) -> int:
         """Dimension of the elements of this group."""
         return self._dimension
+
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """Base field of this group."""
+        return self._field
 
     @staticmethod
     def get_generating_mats(
@@ -1292,36 +1299,37 @@ class ProjectiveSpecialLinearGroup(Group):
     """
 
     _dimension: int
+    _field: type[galois.FieldArray]
 
     def __init__(self, dimension: int, field: int | None = None, linear_rep: bool = True) -> None:
         self._name = f"PSL({dimension},{field})"
         self._dimension = dimension
-        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
         if linear_rep:
             # Construct a linear representation of this group, in which group elements permute
             # elements of the vector space that the generating matrices act on.
 
             # identify multiplicative roots of unity
-            num_roots = math.gcd(self.dimension, base_field.order - 1)
-            primitive_root = base_field.primitive_element ** ((base_field.order - 1) // num_roots)
+            num_roots = math.gcd(self.dimension, self.field.order - 1)
+            primitive_root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
             roots = [primitive_root**kk for kk in range(num_roots)]
 
             # Identify the target space that group members (as matrices) act on:
             # all nonzero vectors, modded out by roots of unity.
             target_orbits = [
-                frozenset([(root * base_field(vec)).tobytes() for root in roots])
-                for vec in itertools.product(range(base_field.order), repeat=self.dimension)
+                frozenset([(root * self.field(vec)).tobytes() for root in roots])
+                for vec in itertools.product(range(self.field.order), repeat=self.dimension)
             ]
             del target_orbits[0]  # remove the orbit of the zero vector
             target_space = [next(iter(orbit)) for orbit in set(target_orbits)]
 
             # identify how the generators permute elements of the target space
             generators = []
-            for member in SpecialLinearGroup.get_generating_mats(self.dimension, base_field.order):
+            for member in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
-                    vec = np.frombuffer(vec_bytes, dtype=np.uint8).view(base_field)
+                    vec = np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
                     next_orbit = [root * member @ vec for root in roots]
                     next_vec = next((vec for vec in next_orbit if vec.tobytes() in target_space))
                     next_index = target_space.index(next_vec.tobytes())
@@ -1348,7 +1356,7 @@ class ProjectiveSpecialLinearGroup(Group):
 
         else:
             # represent group members by how they permute elements of the group itself
-            generating_mats = self.get_generating_mats(self.dimension, base_field.order)
+            generating_mats = self.get_generating_mats(self.dimension, self.field.order)
             group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
 
@@ -1356,6 +1364,11 @@ class ProjectiveSpecialLinearGroup(Group):
     def dimension(self) -> int:
         """Dimension of the elements of this group."""
         return self._dimension
+
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """Base field of this group."""
+        return self._field
 
     @staticmethod
     def get_generating_mats(
