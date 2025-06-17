@@ -1034,7 +1034,7 @@ class SLPCode(CSSCode):
         x = RingMember(ring, group.generators[0])
         matrix = RingArray([[ring.one, x, x], [x, x, ring.one]])  # Eq. 21 of arXiv:2404.18302v1
         code = SLPCode(matrix)
-        assert code.get_code_parameters() == (18, 4, 2)  # TODO: debug discrepancy with 2404.18302v1
+        assert code.get_code_parameters() == (18, 4, 2)
 
     while the SLPCode in example 2 is
 
