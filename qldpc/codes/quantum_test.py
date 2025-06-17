@@ -265,8 +265,8 @@ def test_trivial_lift(
     code_b = codes.ClassicalCode.random(*bits_checks_b, field=field, seed=np.random.randint(2**32))
     code_HGP = codes.HGPCode(code_a, code_b, field)
 
-    matrix_a = abstract.TrivialGroup.to_ring_array(code_a.matrix, field)
-    matrix_b = abstract.TrivialGroup.to_ring_array(code_b.matrix, field)
+    matrix_a = abstract.TrivialGroup.to_ring_array(code_a.matrix)
+    matrix_b = abstract.TrivialGroup.to_ring_array(code_b.matrix)
     code_LP = codes.LPCode(matrix_a, matrix_b)
 
     assert np.array_equal(code_HGP.matrix_x, code_LP.matrix_x)
@@ -317,8 +317,8 @@ def test_twisted_XZZX(width: int = 3) -> None:
     code: codes.QuditCode
 
     # construct check matrix directly
-    ring = codes.RingCode(width).matrix.T
-    mat_1 = np.kron(ring, np.eye(width, dtype=int))
+    ring_code = codes.RingCode(width).matrix.T
+    mat_1 = np.kron(ring_code, np.eye(width, dtype=int))
     mat_2 = codes.RingCode(num_qudits // 2).matrix.T
     zero_1 = np.zeros((mat_1.shape[1],) * 2, dtype=int)
     zero_2 = np.zeros((mat_1.shape[0],) * 2, dtype=int)
@@ -333,10 +333,10 @@ def test_twisted_XZZX(width: int = 3) -> None:
 
     # construct lifted product code
     group = abstract.CyclicGroup(num_qudits // 2)
-    unit = abstract.RingMember.one(group)
-    shift = abstract.RingMember(group, group.generators[0])
-    element_a = unit - shift**width
-    element_b = unit - shift
+    ring = abstract.GroupRing(group)
+    shift = abstract.RingMember(ring, group.generators[0])
+    element_a = ring.one - shift**width
+    element_b = ring.one - shift
     code = codes.LPCode([[element_a]], [[element_b]])
     qudits_to_conjugate = slice(code.sector_size[0, 0], None)
     assert np.array_equal(matrix, code.conjugated(qudits_to_conjugate).matrix)

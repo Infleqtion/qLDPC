@@ -135,8 +135,8 @@ def test_algebra() -> None:
 
     group = abstract.TrivialGroup()
     ring = abstract.GroupRing(group, field=3)
-    zero = abstract.RingMember.zero(ring)
-    one = abstract.RingMember.one(ring)
+    zero = ring.zero
+    one = ring.one
     assert bool(one) and not bool(zero)
     assert zero.group == group
     assert one + 2 == group.identity + 2 * one == -one + 1 == one - 1 == zero
@@ -154,7 +154,7 @@ def test_algebra() -> None:
             ring_member = abstract.RingMember(ring, group_member)
             ring_member_inverse = ring_member.inverse()
             assert ring_member_inverse is not None
-            assert ring_member * ring_member_inverse == abstract.RingMember.one(ring)
+            assert ring_member * ring_member_inverse == ring.one
 
     # nontrivial inverse
     group = abstract.CyclicGroup(2)
@@ -244,7 +244,7 @@ def test_ring_row_reduce(ring: abstract.GroupRing, pytestconfig: pytest.Config) 
     seed = pytestconfig.getoption("randomly_seed")
     matrix: list[list[int | abstract.RingMember]] | abstract.RingArray
 
-    one = abstract.RingMember.one(ring)
+    one = ring.one
     gen = ring.group.generators[0] * one
     matrix = [
         [one + gen, gen],

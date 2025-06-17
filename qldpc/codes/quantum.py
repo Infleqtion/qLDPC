@@ -232,9 +232,9 @@ class QCCode(TBCode):
         self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
-        self.group = abstract.AbelianGroup(*self.orders, field=field)
-        self.gens = self.group.generators
-        self.symbol_gens = dict(zip(self.symbols, self.gens))
+        self.group = abstract.AbelianGroup(*self.orders)
+        self.ring = abstract.GroupRing(self.group, field)
+        self.symbol_gens = dict(zip(self.symbols, self.group.generators))
 
         # build defining matrices of a generalized bicycle code; transpose the lift by convention
         matrix_a = self.eval(self.poly_a).lift().T
@@ -252,10 +252,10 @@ class QCCode(TBCode):
         if isinstance(expression, (sympy.Integer, sympy.Symbol, sympy.Pow, sympy.Mul)):
             coeff, monomial = expression.as_coeff_Mul()
             member = self.to_group_member(monomial)
-            return abstract.RingMember(self.group, (int(coeff), member))
+            return abstract.RingMember(self.ring, (int(coeff), member))
 
         # evaluate a polynomial
-        element = abstract.RingMember(self.group)
+        element = abstract.RingMember(self.ring)
         for term in expression.args:
             element += self.eval(term)
         return element

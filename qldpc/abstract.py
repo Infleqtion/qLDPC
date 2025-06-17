@@ -451,6 +451,16 @@ class GroupRing:
         """Lift a group member to a representation by an orthogonal matrix."""
         return self.group.lift(member)
 
+    @functools.cached_property
+    def zero(self) -> RingMember:
+        """Zero (additive identity) element."""
+        return RingMember(self)
+
+    @functools.cached_property
+    def one(self) -> RingMember:
+        """One (multiplicative identity) element."""
+        return RingMember(self, self.group.identity)
+
 
 class RingMember:
     """An element of a group algebra over a finite field F_q.
@@ -492,7 +502,7 @@ class RingMember:
 
     def __add__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
-            return self + other * RingMember.one(self.ring)
+            return self + other * self.ring.one
 
         if isinstance(other, GroupMember):
             new_element = self.copy()
@@ -516,21 +526,21 @@ class RingMember:
     def __mul__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
             # multiply coefficients by 'other'
-            new_element = RingMember.zero(self.ring)
+            new_element = self.ring.zero
             for val, member in self:
                 new_element._vec[member] = val * other
             return new_element
 
         if isinstance(other, GroupMember):
             # multiply group members by 'other'
-            new_element = RingMember.zero(self.ring)
+            new_element = self.ring.zero
             for val, member in self:
                 new_element._vec[member * other] = val
             return new_element
 
         if isinstance(other, RingMember):
             # collect and multiply pairs of terms from 'self' and 'other'
-            new_element = RingMember.zero(self.ring)
+            new_element = self.ring.zero
             for (x_a, aa), (y_b, bb) in itertools.product(self, other):
                 new_element._vec[aa * bb] += x_a * y_b
             return new_element
@@ -542,7 +552,7 @@ class RingMember:
             return self * other
 
         if isinstance(other, GroupMember):
-            new_element = RingMember.zero(self.ring)
+            new_element = self.ring.zero
             for val, member in self:
                 new_element._vec[other * member] = val
             return new_element
@@ -553,11 +563,11 @@ class RingMember:
         return self * (-1)
 
     def __pow__(self, power: int) -> RingMember:
-        return functools.reduce(operator.mul, [self] * power, RingMember.one(self.ring))
+        return functools.reduce(operator.mul, [self] * power, self.ring.one)
 
     def copy(self) -> RingMember:
         """Copy of self."""
-        element = RingMember.zero(self.ring)
+        element = self.ring.zero
         for val, member in self:
             element._vec[member] = copy.deepcopy(val)
         return element
@@ -591,17 +601,6 @@ class RingMember:
             start=self.field.Zeros([self.group.order] * 2),
         )
 
-    @classmethod
-    def zero(cls, ring: GroupRing | Group) -> RingMember:
-        """Zero (additive identity) element."""
-        return RingMember(ring)
-
-    @classmethod
-    def one(cls, ring: GroupRing | Group) -> RingMember:
-        """One (multiplicative identity) element."""
-        group = ring.group if isinstance(ring, GroupRing) else ring
-        return RingMember(ring, group.identity)
-
     @property
     def T(self) -> RingMember:
         """Transpose of this element.
@@ -610,7 +609,7 @@ class RingMember:
         the group member for which the lift L(g.T) = L(g).T.  The fact that group members get lifted
         to orthogonal matrices implies that g.T = ~g = g**-1.
         """
-        new_element = RingMember.zero(self.ring)
+        new_element = self.ring.zero
         for val, member in self:
             new_element._vec[~member] = val
         return new_element
@@ -1020,10 +1019,13 @@ class TrivialGroup(Group):
     @staticmethod
     def to_ring_array(data: npt.NDArray[np.int_] | NestedSequence) -> RingArray:
         """Convert a matrix of 0s and 1s into a RingArray over the trivial group."""
-        array = np.asarray(data, dtype=int)
+        field = type(data).order if isinstance(data, galois.FieldArray) else None
         group = TrivialGroup()
-        zero = RingMember(group)
-        one = RingMember(group, group.identity)
+        ring = GroupRing(group, field)
+        zero = ring.zero
+        one = ring.one
+
+        array = np.asarray(data, dtype=int)
         terms = [val * one if val else zero for val in array.ravel()]
         return RingArray(np.array(terms, dtype=object).reshape(array.shape))
 
@@ -1036,8 +1038,7 @@ class AbelianGroup(Group):
     initialized with direct_sum=True, the group members get lifted to a direct sum ⨁_i L(g_i)^{a_i}.
     """
 
-    def __init__(self, *orders: int, field: int | None = None, direct_sum: bool = False) -> None:
-        field = field or DEFAULT_FIELD_ORDER
+    def __init__(self, *orders: int, direct_sum: bool = False) -> None:
         group = comb.named_groups.AbelianGroup(*orders)
         order_text = ",".join(map(str, orders))
         name = f"AbelianGroup({order_text})"
@@ -1056,7 +1057,7 @@ class AbelianGroup(Group):
                 combined_mat = scipy.linalg.block_diag(*mats)
             else:
                 combined_mat = functools.reduce(np.kron, mats)
-            return galois.GF(field)(combined_mat)
+            return combined_mat
 
         # override the default order in which SymPy iterates over group members
         def generate_func() -> Iterator[comb.Permutation]:
@@ -1077,13 +1078,12 @@ class CyclicGroup(AbelianGroup):
     basis vector <i| as <i| L(g^p) = < i + p mod R |.
     """
 
-    def __init__(self, order: int, field: int | None = None) -> None:
-        field = field or DEFAULT_FIELD_ORDER
+    def __init__(self, order: int) -> None:
         identity_mat = np.eye(order, dtype=int)
 
         # build lift manually, which is faster than the default lift
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-            return galois.GF(field)(np.roll(identity_mat, member.apply(0), axis=0))
+            return np.roll(identity_mat, member.apply(0), axis=0)
 
         super()._init_from_group(comb.named_groups.CyclicGroup(order), lift=lift)
 
