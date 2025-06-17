@@ -232,9 +232,9 @@ class QCCode(TBCode):
         self.orders = tuple(symbol_to_order.values())
 
         # identify the group generator associated with each symbol
-        self.group = abstract.AbelianGroup(*self.orders, field=field)
-        self.gens = self.group.generators
-        self.symbol_gens = dict(zip(self.symbols, self.gens))
+        self.group = abstract.AbelianGroup(*self.orders)
+        self.ring = abstract.GroupRing(self.group, field)
+        self.symbol_gens = dict(zip(self.symbols, self.group.generators))
 
         # build defining matrices of a generalized bicycle code; transpose the lift by convention
         matrix_a = self.eval(self.poly_a).lift().T
@@ -252,10 +252,10 @@ class QCCode(TBCode):
         if isinstance(expression, (sympy.Integer, sympy.Symbol, sympy.Pow, sympy.Mul)):
             coeff, monomial = expression.as_coeff_Mul()
             member = self.to_group_member(monomial)
-            return abstract.RingMember(self.group, (int(coeff), member))
+            return abstract.RingMember(self.ring, (int(coeff), member))
 
         # evaluate a polynomial
-        element = abstract.RingMember(self.group)
+        element = abstract.RingMember(self.ring)
         for term in expression.args:
             element += self.eval(term)
         return element
@@ -733,7 +733,7 @@ class HGPCode(CSSCode):
             matrix_x.view(np.ndarray).astype(int),
             matrix_z.view(np.ndarray).astype(int),
             field,
-            is_subsystem_code=True,
+            is_subsystem_code=False,
         )
 
         if set_logicals:
@@ -754,7 +754,7 @@ class HGPCode(CSSCode):
         # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
         matrix_z = np.block([-mat_In1_H2, mat_H1_T_Im2])
-        return matrix_x, matrix_z
+        return matrix_x.view(type(matrix_a)), matrix_z.view(type(matrix_a))
 
     @staticmethod
     def get_graph_product(graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> nx.DiGraph:
@@ -932,8 +932,8 @@ class SHPCode(CSSCode):
         matrix_b: npt.NDArray[np.int_ | np.object_],
     ) -> tuple[npt.NDArray[np.int_ | np.object_], npt.NDArray[np.int_ | np.object_]]:
         """Subsystem hypergraph product of two parity check matrices."""
-        matrix_x = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        matrix_z = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
+        matrix_x = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int)).view(type(matrix_a))
+        matrix_z = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b).view(type(matrix_a))
         return matrix_x, matrix_z
 
     @staticmethod

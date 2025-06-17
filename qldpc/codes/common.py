@@ -563,7 +563,7 @@ class ClassicalCode(AbstractCode):
         matrix_str = "[" + ",".join(checks_str) + "]"
         code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"
         group_str = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
-        return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
+        return abstract.Group.from_name(f"{group_str}({code_str})")
 
     @staticmethod
     def stack(*codes: ClassicalCode) -> ClassicalCode:
