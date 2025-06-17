@@ -446,7 +446,28 @@ class Group:
 
 
 ################################################################################
-# elements of a group algebra
+# group algebra and elements thereof
+
+
+class GroupRing:
+    """A finite group algebra over a finite field."""
+
+    _group: Group
+    _field: type[galois.FieldArray]
+
+    def __init__(self, group: Group, field: int | None = None) -> None:
+        self._group = group
+        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+
+    @property
+    def group(self) -> Group:
+        """Base group of this ring."""
+        return self._group
+
+    @property
+    def field(self) -> type[galois.FieldArray]:
+        """Base field of this ring."""
+        return self._field
 
 
 class RingMember:
