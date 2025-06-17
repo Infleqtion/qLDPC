@@ -1023,6 +1023,26 @@ class SLPCode(CSSCode):
     That is, the SLPCode is to the SHPCode what the LPCode is to the HGPCode.  See the docstring for
     the LPCode for additional information.
 
+    As an example, the SLPCode in examples 1 on page 6 of https://arxiv.org/pdf/2404.18302v1 can be
+    constructed by
+
+        group = qldpc.abstract.CyclicGroup(2)
+        ring = qldpc.abstract.GroupRing(group)
+        x = group.generators[0]
+        matrix = qldpc.abstract.RingArray.build([[1, x, x], [x, x, 1]], ring)
+        code = qldpc.codes.SLPCode(matrix)
+
+    while the SLPCode in example 2 is similarly
+
+        group = qldpc.abstract.CyclicGroup(3)
+        ring = qldpc.abstract.GroupRing(group)
+        x = qldpc.abstract.RingMember(ring, group.generators[0])
+        matrix = qldpc.abstract.RingArray.build([[ring.one + x + x**2, ring.one + x, x]], ring)
+        code = qldpc.codes.SLPCode(matrix)
+
+    Note: for some reason, the code parameters obtained above with code.get_code_params() differ
+    from those reported in arXiv:2404.18302v1; we should figure out why.
+
     References:
     - https://errorcorrectionzoo.org/c/subsystem_lifted_product
     - https://arxiv.org/abs/2404.18302
