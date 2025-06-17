@@ -27,7 +27,7 @@ def is_installed() -> bool:
     commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n"); QUIT;']
     try:
         result = subprocess.run(commands, capture_output=True, text=True)
-        return bool(re.match(r"\n4\.[0-9]+\.[0-9]+$", result.stdout))
+        return bool(re.match(r"4\.[0-9]+\.[0-9]", result.stdout.strip()))
     except Exception:
         return False
 
