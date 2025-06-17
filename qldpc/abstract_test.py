@@ -129,7 +129,7 @@ def test_random_symmetric_subset() -> None:
         group.random_symmetric_subset(size=0)
 
 
-def test_algebra() -> None:
+def test_ring() -> None:
     """Construct elements of a group algebra."""
     group: abstract.Group
 
@@ -143,6 +143,8 @@ def test_algebra() -> None:
     assert group.identity * one == one * group.identity == one**2 == one
     assert np.array_equal(zero.lift(), np.array(0, ndmin=2))
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
+    assert "GF(3)" in str(ring)
+    assert ring.is_abelian
 
     # test inverses
     for ring in [
@@ -185,6 +187,9 @@ def test_ring_array() -> None:
         abstract.RingArray([[0]])
     with pytest.raises(ValueError, match="Cannot determine the underlying ring"):
         abstract.RingArray([])
+    with pytest.raises(ValueError, match="Inconsistent base rings"):
+        rings = [abstract.GroupRing(abstract.TrivialGroup(), field) for field in [2, 3]]
+        abstract.RingArray([ring.one for ring in rings])
 
     new_matrix = abstract.RingArray.build(abstract.CyclicGroup(1), [[1]])
     with pytest.raises(ValueError, match="different base rings"):
