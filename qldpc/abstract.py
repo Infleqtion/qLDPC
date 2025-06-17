@@ -403,7 +403,10 @@ class Group:
 
 
 class GroupRing:
-    """A finite group algebra over a finite field."""
+    """A finite group algebra over a finite field.
+
+    The base field is GF(2) by default.
+    """
 
     _group: Group
     _field: type[galois.FieldArray]
@@ -463,12 +466,10 @@ class GroupRing:
 
 
 class RingMember:
-    """An element of a group algebra over a finite field F_q.
+    """An element of the algebra of a group G over a finite field F_q.
 
-    Each RingMember x is a sum of group members with coefficients in F_q:
+    Each RingMember x is a sum of group members with coefficients in the field:
     x = sum_{g in G} x_g g, with each x_g in F_q.
-
-    The field F_q is taken to be the same as that of the representation of the group.
     """
 
     _ring: GroupRing
