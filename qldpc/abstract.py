@@ -451,12 +451,12 @@ class GroupRing:
         """Lift a group member to a representation by an orthogonal matrix."""
         return self.group.lift(member)
 
-    @functools.cached_property
+    @property
     def zero(self) -> RingMember:
         """Zero (additive identity) element."""
         return RingMember(self)
 
-    @functools.cached_property
+    @property
     def one(self) -> RingMember:
         """One (multiplicative identity) element."""
         return RingMember(self, self.group.identity)
