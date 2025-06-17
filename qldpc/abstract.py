@@ -17,9 +17,6 @@
 All groups in this module are finite, and represented under the hood as a SymPy PermutationGroup, or
 a subgroup of the symmetric group.  Group members subclass the SymPy Permutation class.
 
-Groups additionally come equipped with a representation, or "lift", that maps group elements to
-square matrices, such that the group action gets lifted to matrix multiplication.
-
 !!! WARNINGS !!!
 
 This module only supports representations of group members by orthogonal matrices over finite
@@ -112,61 +109,62 @@ GenerateFunc = Callable[[], Iterator[comb.Permutation]]
 class Group:
     """Base class for a finite group.
 
-    Under the hood, a Group is represented by a SymPy PermutationGroup.
-    Group elements are represented by SymPy permutations.
+    Under the hood, a Group is represented by a SymPy PermutationGroup, and group members are
+    represented by SymPy permutations.
 
-    A group additionally comes equipped with a "lift", or a representation that maps group elements
-    to orthogonal matrices over a finite field.  The group action gets lifted to matrix
-    multiplication.  If no lift is provided, the group will default to the representation of group
-    members by explicit permutation matrices.
+    A group naturally comes equipped with a "regular lift" that maps each group member to a
+    permutation matrix corresponding to the regular representation of the group.  The regular
+    representation of a group represents group members by how they act on the group itself (from the
+    left); see https://en.wikipedia.org/wiki/Regular_representation.
+
+    A group may additionally be equipped with a custom lift to an orthogonal matrix over a finite
+    field, for which the group action corresponds to matrix multiplication.  If no lift is provided,
+    group.lift(member) will default to the regular lift of the group.
     """
 
     _group: comb.PermutationGroup
-    _field: type[galois.FieldArray]
-    _lift: Lift | None
     _name: str | None
     _iterator: GenerateFunc | None
+    _lift: Lift | None
 
     def __init__(
         self,
         *generators: comb.Permutation,
-        field: int | None = None,
-        lift: Lift | None = None,
         name: str | None = None,
         generate_func: GenerateFunc | None = None,
+        lift: Lift | None = None,
     ) -> None:
-        self._init_from_group(comb.PermutationGroup(*generators), field, lift, name, generate_func)
+        self._init_from_group(comb.PermutationGroup(*generators), name, generate_func, lift)
 
     def _init_from_group(
         self,
         group: comb.PermutationGroup | Group,
-        field: int | None = None,
-        lift: Lift | None = None,
         name: str | None = None,
         generate_func: GenerateFunc | None = None,
+        lift: Lift | None = None,
     ) -> None:
         """Initialize from an existing group."""
         self._name = name
         if isinstance(group, comb.PermutationGroup):
             self._group = group
-            self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
             self._lift = lift
         else:
             assert isinstance(group, Group)
-            assert field is None or field == group.field.order
             self._group = group._group
-            self._field = group._field
-            self._lift = lift or group._lift
             self._name = self._name or group._name  # explicitly provided name overrides group name
+            self._lift = lift or group._lift
         self._generate_func = generate_func
 
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Group) and self._group == other._group
+
     def __hash__(self) -> int:
-        return hash((self._group, self.field.order, self._lift, self._generate_func))
+        return hash((self._group, self._generate_func, self._lift))
 
     @property
     def name(self) -> str:
         """A name for this group, which is not required to uniquely identify the group."""
-        return self._name or f"{type(self).__name__} of order {self.order}"
+        return self._name or f"{type(self).__name__}"
 
     def __str__(self) -> str:
         return self.name
@@ -176,54 +174,14 @@ class Group:
         return self._group
 
     @staticmethod
-    def from_sympy(
-        group: comb.PermutationGroup, field: int | None = None, lift: Lift | None = None
-    ) -> Group:
+    def from_sympy(group: comb.PermutationGroup, *, lift: Lift | None = None) -> Group:
         """Instantiate a Group from a SymPy permutation group."""
-        new_group = Group(field=field, lift=lift)
+        new_group = Group(lift=lift)
         new_group._group = group
         return new_group
 
-    def __eq__(self, other: object) -> bool:
-        return (
-            isinstance(other, Group) and self._field == other._field and self._group == other._group
-        )
-
     def __contains__(self, member: GroupMember) -> bool:
         return member in self._group
-
-    def __mul__(self, other: Group) -> Group:
-        """Direct product of two groups."""
-        assert self.field is other.field
-        group = self._group * other._group
-
-        def lift(member: GroupMember) -> galois.FieldArray:
-            degree = self._group.degree
-            left = GroupMember(member.array_form[:degree])
-            right = GroupMember([index - degree for index in member.array_form[degree:]])
-            return np.kron(self.lift(left), other.lift(right)).view(self.field)
-
-        return Group.from_sympy(group, self.field.order, lift)
-
-    def __pow__(self, power: int) -> Group:
-        """Direct product of self multiple times."""
-        assert power > 0
-        return functools.reduce(operator.mul, [self] * power)
-
-    @property
-    def is_abelian(self) -> bool:
-        """Is this group Abelian?"""
-        return isinstance(self, AbelianGroup) or self._group.is_abelian
-
-    @staticmethod
-    def product(*groups: Group, repeat: int = 1) -> Group:
-        """Direct product of Groups."""
-        return functools.reduce(operator.mul, groups * repeat)
-
-    @property
-    def field(self) -> type[galois.FieldArray]:
-        """Base field of this group."""
-        return self._field
 
     @property
     def order(self) -> int:
@@ -231,14 +189,28 @@ class Group:
         return self._group.order()
 
     @property
+    def is_abelian(self) -> bool:
+        """Is this group Abelian?"""
+        return isinstance(self, AbelianGroup) or self._group.is_abelian
+
+    @property
     def generators(self) -> Sequence[GroupMember]:
         """Generators of this group."""
         return list(map(GroupMember.from_sympy, self._group.generators))
+
+    def hashable_generators(self) -> tuple[tuple[int, ...], ...]:
+        """Generators of this group in a hashable form."""
+        return tuple(tuple(generator) for generator in self.generators)
 
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
         generate = self._generate_func or self._group.generate
         yield from map(GroupMember.from_sympy, generate())
+
+    @property
+    def identity(self) -> GroupMember:
+        """The identity element of this group."""
+        return GroupMember.from_sympy(self._group.identity)
 
     @functools.cached_property
     def _members(self) -> dict[GroupMember, int]:
@@ -251,10 +223,19 @@ class Group:
             raise ValueError(f"Member {member} not in group {self}")
         return index
 
-    @property
-    def identity(self) -> GroupMember:
-        """The identity element of this group."""
-        return GroupMember.from_sympy(self._group.identity)
+    def __mul__(self, other: Group) -> Group:
+        """Direct product of two groups."""
+        return Group.from_sympy(self._group * other._group)
+
+    def __pow__(self, power: int) -> Group:
+        """Direct product of self multiple times."""
+        assert power > 0
+        return functools.reduce(operator.mul, [self] * power)
+
+    @staticmethod
+    def product(*groups: Group, repeat: int = 1) -> Group:
+        """Direct product of Groups."""
+        return functools.reduce(operator.mul, groups * repeat)
 
     def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
@@ -263,23 +244,16 @@ class Group:
         return GroupMember.from_sympy(self._group.random())
 
     @functools.cache
-    def lift(self, member: GroupMember) -> galois.FieldArray:
-        """Lift a group member to its representation by an orthogonal matrix."""
-        if self._lift is None:
-            return self.regular_lift(member)
-        return self._lift(member).view(self.field)
-
-    @functools.cache
-    def regular_lift(self, member: GroupMember) -> galois.FieldArray:
-        """Lift a group member to its regular representation.
-
-        The regular representation represents each group member by a permutation matrix that
-        reflects how the group member permutes elements of the group.
-        """
-        matrix = self.field.Zeros([self.order] * 2)
+    def regular_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
+        """Lift a group member to its regular representation."""
+        matrix = np.zeros([self.order] * 2, dtype=int)
         for ii, gg in enumerate(self.generate()):
             matrix[self.index(member * gg), ii] = 1
-        return matrix.view(self.field)
+        return matrix
+
+    def lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
+        """Lift a group member to a representation by an orthogonal matrix."""
+        return self.regular_lift(member) if self._lift is None else self._lift(member)
 
     @functools.cached_property
     def lift_dim(self) -> int:
@@ -297,7 +271,6 @@ class Group:
     @staticmethod
     def from_table(
         table: npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        field: int | None = None,
         integer_lift: IntegerLift | None = None,
     ) -> Group:
         """Construct a group from a multiplication (Cayley) table."""
@@ -309,39 +282,20 @@ class Group:
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
             return integer_lift(members[member])
 
-        return Group(*members, field=field, lift=lift)
+        return Group(*members, lift=lift)
 
     @staticmethod
-    def from_generating_mats(
-        *matrices: npt.NDArray[np.int_] | Sequence[Sequence[int]], field: int | None = None
-    ) -> Group:
-        """Constructs a Group from a given set of generating matrices.
-
-        Group members are represented by how they permute elements of the group itself.
-        """
+    def from_generating_mats(*matrices: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> Group:
+        """Constructs a Group from a given set of generating matrices."""
         if not matrices:
-            return TrivialGroup(field=field)
-
-        # identify the field we are working over
-        if isinstance(matrices[0], galois.FieldArray):
-            base_field = type(matrices[0])
-        else:
-            base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
-
-        if field is not None and field != base_field.order:
-            raise ValueError(
-                f"Field argument {field} is inconsistent with the given generators, which are"
-                f" defined over F_{base_field.order}"
-            )
+            return TrivialGroup()
 
         # keep track of group members and a multiplication table
-        index_to_member = {
-            idx: np.asarray(gen, dtype=int).view(base_field) for idx, gen in enumerate(matrices)
-        }
+        index_to_member = {idx: np.asarray(gen, dtype=int) for idx, gen in enumerate(matrices)}
         hash_to_index = {hash(gen.data.tobytes()): idx for idx, gen in index_to_member.items()}
         table_as_dict = {}
 
-        new_members: dict[int, galois.FieldArray]
+        new_members: dict[int, npt.NDArray[np.int_]]
 
         def _account_for_product(aa_idx: int, bb_idx: int) -> None:
             """Account for the product of two matrices."""
@@ -378,7 +332,7 @@ class Group:
 
         # identify generating permutations and build the group itself
         generators = [GroupMember(table[row]) for row in range(len(matrices))]
-        return Group(*generators, field=base_field.order, lift=lift)
+        return Group(*generators, lift=lift)
 
     def random_symmetric_subset(
         self, size: int, *, exclude_identity: bool = False, seed: int | None = None
@@ -432,17 +386,13 @@ class Group:
                 return singles | doubles
 
     @staticmethod
-    def from_name(name: str, field: int | None = None) -> Group:
+    def from_name(name: str) -> Group:
         """Named group in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")
         if standardized_name == "SmallGroup(1,1)":
             return TrivialGroup()
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
-        return Group(*generators, name=standardized_name, field=field)
-
-    def hashable_generators(self) -> tuple[tuple[int, ...], ...]:
-        """Generators of this group in a hashable form."""
-        return tuple(tuple(generator) for generator in self.generators)
+        return Group(*generators, name=standardized_name)
 
 
 ################################################################################
@@ -469,6 +419,35 @@ class GroupRing:
         """Base field of this ring."""
         return self._field
 
+    def __eq__(self, other: object) -> bool:
+        return (
+            isinstance(other, GroupRing) and self.field is other.field and self.group == other.group
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.field.order, self.group))
+
+    @property
+    def name(self) -> str:
+        """A name for this ring, which is not required to uniquely identify the ring."""
+        return f"Group algebra of {self.group.name} over GF({self.field.order})"
+
+    def __str__(self) -> str:
+        return self.name
+
+    @property
+    def is_abelian(self) -> bool:
+        """Is this group Abelian?"""
+        return isinstance(self, AbelianGroup) or self._group.is_abelian
+
+    def regular_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
+        """Lift a group member to its regular representation."""
+        return self.group.regular_lift(member)
+
+    def lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
+        """Lift a group member to a representation by an orthogonal matrix."""
+        return self.group.lift(member)
+
 
 class RingMember:
     """An element of a group algebra over a finite field F_q.
@@ -479,13 +458,15 @@ class RingMember:
     The field F_q is taken to be the same as that of the representation of the group.
     """
 
-    _group: Group
+    _ring: GroupRing
     _vec: collections.defaultdict[GroupMember, galois.FieldArray]
 
     def __init__(
-        self, group: Group, *terms: GroupMember | tuple[int | galois.FieldArray, GroupMember]
+        self,
+        ring: GroupRing | Group,
+        *terms: GroupMember | tuple[int | galois.FieldArray, GroupMember],
     ) -> None:
-        self._group = group
+        self._ring = ring if isinstance(ring, GroupRing) else GroupRing(ring)
         self._vec = collections.defaultdict(lambda: self.field(0))
         for term in terms:
             value, member = (1, term) if isinstance(term, GroupMember) else term
@@ -494,7 +475,7 @@ class RingMember:
     def __eq__(self, other: object) -> bool:
         return (
             isinstance(other, RingMember)
-            and self._group == other._group
+            and self._ring == other._ring
             and all(self._vec.get(member, 0) == other._vec.get(member, 0) for member in self._vec)
             and all(self._vec.get(member, 0) == other._vec.get(member, 0) for member in other._vec)
         )
@@ -508,7 +489,7 @@ class RingMember:
 
     def __add__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
-            return self + other * RingMember.one(self.group)
+            return self + other * RingMember.one(self.ring)
 
         if isinstance(other, GroupMember):
             new_element = self.copy()
@@ -532,21 +513,21 @@ class RingMember:
     def __mul__(self, other: int | GroupMember | RingMember) -> RingMember:
         if isinstance(other, int):
             # multiply coefficients by 'other'
-            new_element = RingMember.zero(self.group)
+            new_element = RingMember.zero(self.ring)
             for val, member in self:
                 new_element._vec[member] = val * other
             return new_element
 
         if isinstance(other, GroupMember):
             # multiply group members by 'other'
-            new_element = RingMember.zero(self.group)
+            new_element = RingMember.zero(self.ring)
             for val, member in self:
                 new_element._vec[member * other] = val
             return new_element
 
         if isinstance(other, RingMember):
             # collect and multiply pairs of terms from 'self' and 'other'
-            new_element = RingMember.zero(self.group)
+            new_element = RingMember.zero(self.ring)
             for (x_a, aa), (y_b, bb) in itertools.product(self, other):
                 new_element._vec[aa * bb] += x_a * y_b
             return new_element
@@ -558,7 +539,7 @@ class RingMember:
             return self * other
 
         if isinstance(other, GroupMember):
-            new_element = RingMember.zero(self.group)
+            new_element = RingMember.zero(self.ring)
             for val, member in self:
                 new_element._vec[other * member] = val
             return new_element
@@ -569,48 +550,54 @@ class RingMember:
         return self * (-1)
 
     def __pow__(self, power: int) -> RingMember:
-        return functools.reduce(operator.mul, [self] * power, RingMember.one(self.group))
+        return functools.reduce(operator.mul, [self] * power, RingMember.one(self.ring))
 
     def copy(self) -> RingMember:
         """Copy of self."""
-        element = RingMember.zero(self.group)
+        element = RingMember.zero(self.ring)
         for val, member in self:
             element._vec[member] = copy.deepcopy(val)
         return element
 
     @property
+    def ring(self) -> GroupRing:
+        """Base ring of this algebra."""
+        return self._ring
+
+    @property
     def group(self) -> Group:
         """Base group of this algebra."""
-        return self._group
+        return self.ring.group
 
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field of this algebra."""
-        return self.group.field
+        return self.ring.field
 
     def lift(self) -> galois.FieldArray:
         """Lift this element using the underlying group representation."""
         return sum(
-            (val * self.group.lift(member) for val, member in self if val),
+            (val * self.ring.lift(member) for val, member in self if val),
             start=self.field.Zeros([self.group.lift_dim] * 2),
         )
 
     def regular_lift(self) -> galois.FieldArray:
         """Lift this element using the regular representation of its base group."""
         return sum(
-            (val * self.group.regular_lift(member) for val, member in self if val),
+            (val * self.ring.regular_lift(member) for val, member in self if val),
             start=self.field.Zeros([self.group.order] * 2),
         )
 
     @classmethod
-    def zero(cls, group: Group) -> RingMember:
+    def zero(cls, ring: GroupRing | Group) -> RingMember:
         """Zero (additive identity) element."""
-        return RingMember(group)
+        return RingMember(ring)
 
     @classmethod
-    def one(cls, group: Group) -> RingMember:
+    def one(cls, ring: GroupRing | Group) -> RingMember:
         """One (multiplicative identity) element."""
-        return RingMember(group, group.identity)
+        group = ring.group if isinstance(ring, GroupRing) else ring
+        return RingMember(ring, group.identity)
 
     @property
     def T(self) -> RingMember:
@@ -620,7 +607,7 @@ class RingMember:
         the group member for which the lift L(g.T) = L(g).T.  The fact that group members get lifted
         to orthogonal matrices implies that g.T = ~g = g**-1.
         """
-        new_element = RingMember.zero(self.group)
+        new_element = RingMember.zero(self.ring)
         for val, member in self:
             new_element._vec[~member] = val
         return new_element
@@ -632,19 +619,20 @@ class RingMember:
             return None
         if len(self_vec) == 1:
             gg, x_g = next(iter(self_vec.items()))
-            return RingMember(self.group, (x_g**-1, gg**-1))
+            return RingMember(self.ring, (x_g**-1, gg**-1))
         try:
             matrix = self.regular_lift()
             matrix_inv = np.linalg.inv(matrix).view(self.field)
-            return RingMember.from_vector(self.group, matrix_inv[:, 0])
+            return RingMember.from_vector(self.ring, matrix_inv[:, 0])
         except np.linalg.LinAlgError:
             return None
 
     @classmethod
-    def from_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingMember:
+    def from_vector(cls, ring: GroupRing | Group, vector: npt.NDArray[np.int_]) -> RingMember:
         """Construct a group algebra element from vector of coefficients, (x_g : g in G)."""
+        group = ring.group if isinstance(ring, GroupRing) else ring
         terms = [(int(x_g), gg) for x_g, gg in zip(vector, group.generate()) if x_g]
-        return RingMember(group, *terms)
+        return RingMember(ring, *terms)
 
     def to_vector(self) -> galois.FieldArray:
         """Convert this group algebra element into a vector of coefficients, (x_g : g in G)."""
@@ -669,16 +657,17 @@ NestedSequence = Sequence[typing.Union[object, Sequence["NestedSequence"]]]
 
 
 class RingArray(npt.NDArray[np.object_]):
-    """Array whose entries are members of a group algebra over a finite field."""
+    """Array whose entries are members of a GroupRing."""
 
-    _group: Group
+    _ring: GroupRing
 
     def __new__(
         cls,
         data: npt.NDArray[np.object_] | NestedSequence,
-        group: Group | None = None,
+        ring: GroupRing | Group | None = None,
     ) -> RingArray:
         array = np.asarray(data, dtype=object).view(cls)
+        ring = GroupRing(ring) if isinstance(ring, Group) else ring
 
         # identify the base group for this RingArray
         for value in array.ravel():
@@ -688,19 +677,19 @@ class RingArray(npt.NDArray[np.object_]):
                     "Try building an array with RingArray.build(...)"
                 )
             else:
-                if not (group is None or group == value.group):
-                    raise ValueError("Inconsistent base groups provided for a RingArray")
-                group = value.group
+                if not (ring is None or ring == value.ring):
+                    raise ValueError("Inconsistent base rings provided for a RingArray")
+                ring = value.ring
 
-        if group is None:
-            raise ValueError("Cannot determine the underlying group for a RingArray")
-        array._group = group
+        if ring is None:
+            raise ValueError("Cannot determine the underlying ring for a RingArray")
+        array._ring = ring
 
         return array
 
     def __array_finalize__(self, obj: npt.NDArray[np.object_] | None) -> None:
         """Propagate metadata to newly constructed arrays."""
-        setattr(self, "_group", getattr(obj, "_group", None))
+        setattr(self, "_ring", getattr(obj, "_ring", None))
 
     def __array_function__(
         self,
@@ -710,14 +699,14 @@ class RingArray(npt.NDArray[np.object_]):
         kwargs: Mapping[str, typing.Any],
     ) -> RingArray | None:
         """Intercept array operations to ensure RingArray compatibility."""
-        groups = {self._group} | {x._group for x in args if isinstance(x, RingArray)}
-        if len(groups) > 1:
-            raise ValueError("Cannot perform operations on RingArrays with different base groups")
+        rings = {self._ring} | {x._ring for x in args if isinstance(x, RingArray)}
+        if len(rings) > 1:
+            raise ValueError("Cannot perform operations on RingArrays with different base rings")
         args = tuple(x.view(np.ndarray) if isinstance(x, RingArray) else x for x in args)
         result = super().__array_function__(func, types, args, kwargs)
         if isinstance(result, np.ndarray):
             result = result.view(RingArray)
-            setattr(result, "_group", next(iter(groups), None))
+            setattr(result, "_ring", next(iter(rings), None))
         return result
 
     def __array_ufunc__(
@@ -728,31 +717,30 @@ class RingArray(npt.NDArray[np.object_]):
         **kwargs: object,
     ) -> RingArray | None:
         """Intercept array operations to ensure RingArray compatibility."""
-        groups = {self._group} | {x._group for x in inputs if isinstance(x, RingArray)}
-        if len(groups) > 1:
-            raise ValueError("Cannot perform operations on RingArrays with different base groups")
+        rings = {self._ring} | {x._ring for x in inputs if isinstance(x, RingArray)}
+        if len(rings) > 1:
+            raise ValueError("Cannot perform operations on RingArrays with different base rings")
         inputs = tuple(x.view(np.ndarray) if isinstance(x, RingArray) else x for x in inputs)
         result = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
         if isinstance(result, np.ndarray):
             result = result.view(RingArray)
-            setattr(result, "_group", next(iter(groups), None))
+            setattr(result, "_ring", next(iter(rings), None))
         return result
+
+    @property
+    def ring(self) -> GroupRing:
+        """Base ring of this RingArray."""
+        return self._ring
 
     @property
     def group(self) -> Group:
         """Base group of this RingArray."""
-        return self._group
+        return self.ring.group
 
     @property
     def field(self) -> type[galois.FieldArray]:
         """Base field of this RingArray."""
-        return self.group.field
-
-    def lift(self) -> galois.FieldArray:
-        """Block matrix obtained by lifting each entry of this RingArray."""
-        assert self.ndim == 2
-        blocks = [[val.lift() for val in row] for row in self]
-        return np.block(blocks).view(self.field)
+        return self.ring.field
 
     def regular_lift(self) -> galois.FieldArray:
         """Block matrix obtained by a regular lift of each entry of this RingArray."""
@@ -760,10 +748,16 @@ class RingArray(npt.NDArray[np.object_]):
         blocks = [[val.regular_lift() for val in row] for row in self]
         return np.block(blocks).view(self.field)
 
+    def lift(self) -> galois.FieldArray:
+        """Block matrix obtained by lifting each entry of this RingArray."""
+        assert self.ndim == 2
+        blocks = [[val.lift() for val in row] for row in self]
+        return np.block(blocks).view(self.field)
+
     def __invert__(self) -> RingArray:
         """Transpose the entries of this RingArray."""
         vals = [val.T for val in self.ravel()]
-        return RingArray(np.array(vals, dtype=object).reshape(self.shape), self.group)
+        return RingArray(np.array(vals, dtype=object).reshape(self.shape), self.ring)
 
     @property
     def T(self) -> RingArray:
@@ -771,40 +765,44 @@ class RingArray(npt.NDArray[np.object_]):
         return (~self).transpose()
 
     @staticmethod
-    def build(group: Group, data: npt.NDArray[np.object_ | np.int_] | NestedSequence) -> RingArray:
+    def build(
+        ring: GroupRing | Group, data: npt.NDArray[np.object_ | np.int_] | NestedSequence
+    ) -> RingArray:
         """Construct a RingArray.
 
         The constructed array is built from:
-        - a group, and
+        - a ring (or group, inducing a group algebra over GF(2)), and
         - an array populated by
-            (a) elements of the group algebra,
+            (a) ring members,
             (b) group members, or
             (c) integers.
-        Integers and group members are cast as members of the group algebra.
+        Integers and group members are cast as members of the ring.
         """
         array = np.asarray(data)
+        group = ring.group if isinstance(ring, GroupRing) else ring
 
         def as_ring_member(value: RingMember | GroupMember | int) -> RingMember:
-            """Elevate a value to an element of a group algebra."""
+            """Elevate a value to an element of the ring."""
             if isinstance(value, RingMember):
                 return value
             if isinstance(value, GroupMember):
-                return RingMember(group, value)
-            return RingMember(group, (value, group.identity))
+                return RingMember(ring, value)
+            return RingMember(ring, (value, group.identity))
 
         vals = [as_ring_member(value) for value in array.ravel()]
-        return RingArray(np.array(vals).reshape(array.shape), group=group)
+        return RingArray(np.array(vals).reshape(array.shape), ring)
 
     @classmethod
-    def from_field_array(cls, group: Group, array: npt.NDArray[np.int_]) -> RingArray:
+    def from_field_array(cls, ring: GroupRing | Group, array: npt.NDArray[np.int_]) -> RingArray:
         """Construct a RingArray from an array of coefficients (in a finite field) for each entry.
 
-        The input array should have shape (..., group.order), such that if array.ndim == 3, for
+        The input array should have shape (..., ring.group.order), such that if array.ndim == 3, for
         example, then array[a, b, :] is the vector of coefficients for the RingMember at the
         constructed ring_array[a, b].
         """
+        group = ring.group if isinstance(ring, GroupRing) else ring
         assert array.shape[-1] == group.order
-        vals = [RingMember.from_vector(group, entry) for entry in array.reshape(-1, group.order)]
+        vals = [RingMember.from_vector(ring, entry) for entry in array.reshape(-1, group.order)]
         return RingArray(np.array(vals, dtype=object).reshape(array.shape[:-1]))
 
     def to_field_array(self) -> galois.FieldArray:
@@ -816,10 +814,12 @@ class RingArray(npt.NDArray[np.object_]):
         return np.asarray(vals).reshape(self.shape + (self.group.order,)).view(self.field)
 
     @classmethod
-    def from_field_vector(cls, group: Group, vector: npt.NDArray[np.int_]) -> RingArray:
+    def from_field_vector(cls, ring: GroupRing | Group, vector: npt.NDArray[np.int_]) -> RingArray:
         """Construct a RingArray from a vector of coefficients."""
-        assert vector.ndim == 1 and vector.size % group.order == 0
-        return RingArray.from_field_array(group, vector.reshape(-1, group.order))
+        assert vector.ndim == 1
+        group = ring.group if isinstance(ring, GroupRing) else ring
+        assert vector.size % group.order == 0
+        return RingArray.from_field_array(ring, vector.reshape(-1, group.order))
 
     def to_field_vector(self) -> galois.FieldArray:
         """Convert a RingArray into a vector of coefficients."""
@@ -841,7 +841,8 @@ class RingArray(npt.NDArray[np.object_]):
 
         # collect ring-valued null row vectors (that is, transposed null column vectors)
         null_vectors = ~RingArray.from_field_array(
-            self.group, null_field_vectors.reshape(len(null_field_vectors), -1, self.group.order)
+            self.ring,
+            null_field_vectors.reshape(len(null_field_vectors), -1, self.group.order),
         )
 
         return null_vectors.row_reduce()
@@ -957,7 +958,7 @@ class RingArray(npt.NDArray[np.object_]):
         field_vectors = field_vectors.row_reduce()
         field_vectors = field_vectors[np.any(field_vectors, axis=1)]  # remove all-zero rows
         ring_matrix = RingArray.from_field_array(
-            self.group, field_vectors.reshape(len(field_vectors), -1, self.group.order)
+            self.ring, field_vectors.reshape(len(field_vectors), -1, self.group.order)
         )
 
         """
@@ -996,11 +997,10 @@ class Protograph(RingArray):  # pragma: no cover
 class TrivialGroup(Group):
     """The trivial group with one member: the identity."""
 
-    def __init__(self, field: int | None = None) -> None:
+    def __init__(self) -> None:
         super().__init__(
-            field=field,
-            lift=TrivialGroup._trivial_lift,
             name=TrivialGroup.__name__,
+            lift=TrivialGroup._trivial_lift,
         )
 
     @classmethod
@@ -1016,11 +1016,11 @@ class TrivialGroup(Group):
 
     @staticmethod
     def to_ring_array(
-        data: npt.NDArray[np.int_] | NestedSequence, field: int | None = None
+        data: npt.NDArray[np.int_] | NestedSequence
     ) -> RingArray:
         """Convert a matrix of 0s and 1s into a RingArray over the trivial group."""
         array = np.asarray(data, dtype=int)
-        group = TrivialGroup(field)
+        group = TrivialGroup()
         zero = RingMember(group)
         one = RingMember(group, group.identity)
         terms = [val * one if val else zero for val in array.ravel()]
@@ -1063,7 +1063,7 @@ class AbelianGroup(Group):
                 factors = [gen**power for gen, power in zip(group.generators, powers)]
                 yield functools.reduce(operator.mul, factors)
 
-        super()._init_from_group(group, field, lift, name, generate_func)
+        super()._init_from_group(group, name, generate_func, lift)
 
 
 class CyclicGroup(AbelianGroup):
@@ -1084,7 +1084,7 @@ class CyclicGroup(AbelianGroup):
         def lift(member: GroupMember) -> npt.NDArray[np.int_]:
             return galois.GF(field)(np.roll(identity_mat, member.apply(0), axis=0))
 
-        super()._init_from_group(comb.named_groups.CyclicGroup(order), field, lift)
+        super()._init_from_group(comb.named_groups.CyclicGroup(order), lift=lift)
 
 
 class DihedralGroup(Group):
@@ -1139,9 +1139,9 @@ class QuaternionGroup(Group):
                 blocks = [[zero, -unit], [unit, zero]]
             else:  # if base == 3; +/- k
                 blocks = [[zero, -imag], [-imag, zero]]
-            return sign * np.block(blocks).T % 3
+            return sign * (np.block(blocks).T % 3).view(galois.GF(3))
 
-        group = Group.from_table(table, field=3, integer_lift=integer_lift)
+        group = Group.from_table(table, integer_lift=integer_lift)
         super()._init_from_group(group, name=QuaternionGroup.__name__)
 
 
@@ -1201,7 +1201,7 @@ class SpecialLinearGroup(Group):
     def __init__(self, dimension: int, field: int | None = None, linear_rep: bool = True) -> None:
         self._name = f"SL({dimension},{field})"
         self._dimension = dimension
-        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
         if linear_rep:
             # Construct a linear representation of this group, in which group elements permute
@@ -1209,17 +1209,17 @@ class SpecialLinearGroup(Group):
 
             # identify the target space that group members (as matrices) act on: all nonzero vectors
             target_space = [
-                self.field(vec).tobytes()
-                for vec in itertools.product(self.field.elements, repeat=self.dimension)
+                base_field(vec).tobytes()
+                for vec in itertools.product(base_field.elements, repeat=self.dimension)
             ]
             del target_space[0]  # remove the zero vector
 
             # identify how the generators permute elements of the target space
             generators = []
-            for member in self.get_generating_mats(self.dimension, self.field.order):
+            for member in self.get_generating_mats(self.dimension, base_field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
+                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(base_field)
                     next_index = target_space.index(next_vec.view(np.ndarray).tobytes())
                     perm[index] = next_index
                 generators.append(GroupMember(perm))
@@ -1239,11 +1239,11 @@ class SpecialLinearGroup(Group):
                     cols.append(out_vec)
                 return np.vstack(cols, dtype=int).T
 
-            super()._init_from_group(comb.PermutationGroup(generators), field, lift)
+            super()._init_from_group(comb.PermutationGroup(generators), lift=lift)
 
         else:
             # represent group members by how they permute elements of the group itself
-            generating_mats = self.get_generating_mats(self.dimension, self.field.order)
+            generating_mats = self.get_generating_mats(self.dimension, base_field.order)
             group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
 
@@ -1296,32 +1296,32 @@ class ProjectiveSpecialLinearGroup(Group):
     def __init__(self, dimension: int, field: int | None = None, linear_rep: bool = True) -> None:
         self._name = f"PSL({dimension},{field})"
         self._dimension = dimension
-        self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
+        base_field = galois.GF(field or DEFAULT_FIELD_ORDER)
 
         if linear_rep:
             # Construct a linear representation of this group, in which group elements permute
             # elements of the vector space that the generating matrices act on.
 
             # identify multiplicative roots of unity
-            num_roots = math.gcd(self.dimension, self.field.order - 1)
-            primitive_root = self.field.primitive_element ** ((self.field.order - 1) // num_roots)
+            num_roots = math.gcd(self.dimension, base_field.order - 1)
+            primitive_root = base_field.primitive_element ** ((base_field.order - 1) // num_roots)
             roots = [primitive_root**kk for kk in range(num_roots)]
 
             # Identify the target space that group members (as matrices) act on:
             # all nonzero vectors, modded out by roots of unity.
             target_orbits = [
-                frozenset([(root * self.field(vec)).tobytes() for root in roots])
-                for vec in itertools.product(range(self.field.order), repeat=self.dimension)
+                frozenset([(root * base_field(vec)).tobytes() for root in roots])
+                for vec in itertools.product(range(base_field.order), repeat=self.dimension)
             ]
             del target_orbits[0]  # remove the orbit of the zero vector
             target_space = [next(iter(orbit)) for orbit in set(target_orbits)]
 
             # identify how the generators permute elements of the target space
             generators = []
-            for member in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
+            for member in SpecialLinearGroup.get_generating_mats(self.dimension, base_field.order):
                 perm = np.empty(len(target_space), dtype=int)
                 for index, vec_bytes in enumerate(target_space):
-                    vec = np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
+                    vec = np.frombuffer(vec_bytes, dtype=np.uint8).view(base_field)
                     next_orbit = [root * member @ vec for root in roots]
                     next_vec = next((vec for vec in next_orbit if vec.tobytes() in target_space))
                     next_index = target_space.index(next_vec.tobytes())
@@ -1344,11 +1344,11 @@ class ProjectiveSpecialLinearGroup(Group):
                     cols.append(out_vec)
                 return np.vstack(cols, dtype=int).T
 
-            super()._init_from_group(comb.PermutationGroup(generators), field, lift)
+            super()._init_from_group(comb.PermutationGroup(generators), lift=lift)
 
         else:
             # represent group members by how they permute elements of the group itself
-            generating_mats = self.get_generating_mats(self.dimension, self.field.order)
+            generating_mats = self.get_generating_mats(self.dimension, base_field.order)
             group = self.from_generating_mats(*generating_mats)
             super()._init_from_group(group)
 
