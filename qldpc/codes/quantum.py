@@ -1037,7 +1037,7 @@ class SLPCode(CSSCode):
         group = qldpc.abstract.CyclicGroup(3)
         ring = qldpc.abstract.GroupRing(group)
         x = qldpc.abstract.RingMember(ring, group.generators[0])
-        matrix = qldpc.abstract.RingArray.build([[ring.one + x + x**2, ring.one + x, x]], ring)
+        matrix = qldpc.abstract.RingArray([[ring.one + x + x**2, ring.one + x, x]])
         code = qldpc.codes.SLPCode(matrix)
 
     Note: for some reason, the code parameters obtained above with code.get_code_params() differ
