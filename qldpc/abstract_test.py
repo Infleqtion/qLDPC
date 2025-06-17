@@ -240,7 +240,7 @@ def test_regular_rep(ring: abstract.GroupRing, pytestconfig: pytest.Config) -> N
 @pytest.mark.parametrize(
     "ring",
     [
-        abstract.GroupRing(abstract.DihedralGroup(3)),
+        abstract.GroupRing(abstract.DihedralGroup(3), field=2),
         abstract.GroupRing(abstract.AbelianGroup(2, 3), field=3),
     ],
 )

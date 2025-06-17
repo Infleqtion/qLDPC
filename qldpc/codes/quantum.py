@@ -733,7 +733,7 @@ class HGPCode(CSSCode):
             matrix_x.view(np.ndarray).astype(int),
             matrix_z.view(np.ndarray).astype(int),
             field,
-            is_subsystem_code=True,
+            is_subsystem_code=False,
         )
 
         if set_logicals:
@@ -754,7 +754,7 @@ class HGPCode(CSSCode):
         # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.block([mat_H1_In2, mat_Im1_H2_T])
         matrix_z = np.block([-mat_In1_H2, mat_H1_T_Im2])
-        return matrix_x, matrix_z
+        return matrix_x.view(type(matrix_a)), matrix_z.view(type(matrix_a))
 
     @staticmethod
     def get_graph_product(graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> nx.DiGraph:
@@ -932,8 +932,8 @@ class SHPCode(CSSCode):
         matrix_b: npt.NDArray[np.int_ | np.object_],
     ) -> tuple[npt.NDArray[np.int_ | np.object_], npt.NDArray[np.int_ | np.object_]]:
         """Subsystem hypergraph product of two parity check matrices."""
-        matrix_x = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int))
-        matrix_z = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b)
+        matrix_x = np.kron(matrix_a, np.eye(matrix_b.shape[1], dtype=int)).view(type(matrix_a))
+        matrix_z = np.kron(np.eye(matrix_a.shape[1], dtype=int), matrix_b).view(type(matrix_a))
         return matrix_x, matrix_z
 
     @staticmethod
