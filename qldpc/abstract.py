@@ -769,16 +769,16 @@ class RingArray(npt.NDArray[np.object_]):
 
     @staticmethod
     def build(
-        ring: GroupRing | Group, data: npt.NDArray[np.object_ | np.int_] | NestedSequence
+        data: npt.NDArray[np.object_ | np.int_] | NestedSequence, ring: GroupRing | Group
     ) -> RingArray:
         """Construct a RingArray.
 
         The constructed array is built from:
-        - a ring (or group, inducing a group algebra over GF(2)), and
         - an array populated by
             (a) ring members,
             (b) group members, or
-            (c) integers.
+            (c) integers, and
+        - a ring (or group, inducing a group algebra over GF(2)).
         Integers and group members are cast as members of the ring.
         """
         array = np.asarray(data)

@@ -130,7 +130,7 @@ def test_chain_complex(field: int = 3) -> None:
 
     # tensor product of one-complexes over a group algebra
     ring = abstract.GroupRing(abstract.TrivialGroup(), field)
-    ring_matrix = abstract.RingArray.build(ring, matrix)
+    ring_matrix = abstract.RingArray.build(matrix, ring)
     two_chain = objects.ChainComplex.tensor_product(ring_matrix, ring_matrix, field)
     assert not np.any(two_chain.op(0))
     assert not np.any(two_chain.op(two_chain.num_links + 1))

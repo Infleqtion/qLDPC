@@ -361,7 +361,7 @@ def test_lifted_product_codes() -> None:
         group = abstract.CyclicGroup(lift_dim)
         xx = group.generators[0]
         matrix = abstract.RingArray.build(
-            group, [[xx**power for power in row] for row in exponents]
+            [[xx**power for power in row] for row in exponents], group
         )
         code = codes.LPCode(matrix)
         rate = code.dimension / code.num_qudits

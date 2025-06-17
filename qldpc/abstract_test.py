@@ -191,7 +191,7 @@ def test_ring_array() -> None:
         rings = [abstract.GroupRing(abstract.TrivialGroup(), field) for field in [2, 3]]
         abstract.RingArray([ring.one for ring in rings])
 
-    new_matrix = abstract.RingArray.build(abstract.CyclicGroup(1), [[1]])
+    new_matrix = abstract.RingArray.build([[1]], abstract.CyclicGroup(1))
     with pytest.raises(ValueError, match="different base rings"):
         matrix @ new_matrix
     with pytest.raises(ValueError, match="different base rings"):
@@ -206,7 +206,7 @@ def test_transpose() -> None:
         assert element.T.T == element
 
     x0, x1, x2, x3 = group.generate()
-    matrix = abstract.RingArray.build(group, [[x0, 0, x1], [x2, 0, abstract.RingMember(group, x3)]])
+    matrix = abstract.RingArray.build([[x0, 0, x1], [x2, 0, abstract.RingMember(group, x3)]], group)
     assert np.array_equal(matrix.T.T, matrix)
 
 
@@ -261,8 +261,8 @@ def test_ring_row_reduce(ring: abstract.GroupRing, pytestconfig: pytest.Config) 
         [-(one + gen) * (gen.inverse() + one), 0],
     ]
     assert np.array_equal(
-        abstract.RingArray.build(ring, matrix).row_reduce(),
-        abstract.RingArray.build(ring, reduced_matrix),
+        abstract.RingArray.build(matrix, ring).row_reduce(),
+        abstract.RingArray.build(reduced_matrix, ring),
     )
 
     # RingArray.row_reduce and _remove_linearly_dependent_rows have the same left-ring-linear span
