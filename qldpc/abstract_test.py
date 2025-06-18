@@ -22,7 +22,6 @@ import math
 import unittest.mock
 from collections.abc import Callable
 
-import galois
 import numpy as np
 import numpy.typing as npt
 import pytest
