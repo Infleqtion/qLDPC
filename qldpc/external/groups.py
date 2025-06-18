@@ -21,6 +21,8 @@ import re
 import urllib.error
 import urllib.request
 
+import galois
+
 import qldpc.cache
 import qldpc.external.gap
 
@@ -215,6 +217,77 @@ def maybe_get_webpage(order: int) -> str | None:
     except (urllib.error.URLError, urllib.error.HTTPError):
         # we cannot access the webapage
         return None
+
+
+@qldpc.cache.use_disk_cache("idempotents")
+def get_primitive_central_idempotents(
+    group: str, field: int
+) -> tuple[tuple[tuple[int, tuple[tuple[int, ...], ...]], ...], ...] | None:
+    """Get the primitive central idempotents of a group algebra over a finite field.
+
+    Primitive central idempotents of a ring are nonzero elements that:
+    - square to themselves (they are idempotent)
+    - commute with all other elements of the ring (they lie in the ring's center), and
+    - cannot be decomposed into a sum of two nonzero orthogonal idempotents.
+    Two idempotents g, h are orthogonal if g * h = h * g 0.
+
+    Intuitively, primitive central idempotents idempotents act like projectors onto orthogonal
+    components of a ring.
+
+    See https://en.wikipedia.org/wiki/Idempotent_(ring_theory).
+
+    Returns a tuple of idempotents, where each idempotent is represented by a tuple of terms (to
+    sum), and each term is in turn a tuple (coefficient, permutation).  Here the coefficient is an
+    element of galois.GF(field) cast to an integer, and the permutation is expressed in cyclic form,
+    namely as a tuple of tuples of integers.
+    """
+    if not qldpc.external.gap.is_installed():
+        raise ValueError("Computing primitive central idempotents requires a GAP installation")
+    qldpc.external.gap.require_package("Wedderga")
+
+    idempotents_str = qldpc.external.gap.get_output(
+        'LoadPackage("wedderga");',
+        f"group := {group};",
+        f"ring := GroupRing(GF({field}), group);",
+        "idempotents := PrimitiveCentralIdempotentsByCharacterTable(ring);",
+        "Print(idempotents);",
+    )
+
+    coefficient_pattern = r"\(Z\(\d+(?:\^\d+)?\)(?:\^\d+)?\)"
+    cycle_pattern = r"\(\d+(?:,\d+)*\)|\(\)"
+    cycles_pattern = f"(?:{cycle_pattern})+"
+    ring_term_pattern = rf"{coefficient_pattern}\*{cycles_pattern}"
+    ring_member_pattern = rf"(?:{ring_term_pattern})(?:\+{ring_term_pattern})*"
+
+    re_ring_term = re.compile(ring_term_pattern)
+    re_ring_member = re.compile(ring_member_pattern)
+    re_cycle = re.compile(cycle_pattern)
+    re_integer = re.compile(r"\d+")
+    re_coefficient_components = re.compile(r"\(Z\((\d+)(?:\^(\d+))?\)(?:\^(\d+))?\)")
+
+    idempotents = []
+    for ring_member_match in re_ring_member.finditer(idempotents_str):
+        idempotent = []
+        for ring_term_match in re_ring_term.finditer(ring_member_match.group()):
+            coefficient_string, cycles_string = ring_term_match.group().split("*")
+
+            # convert "Z(p^k)^m" into galois.GF(field)(galois.GF(p**k).primitive_element ** m)
+            coefficient_match = re_coefficient_components.match(coefficient_string)
+            pp = int(coefficient_match.group(1))
+            kk = int(coefficient_match.group(2) or 1)
+            mm = int(coefficient_match.group(3) or 1)
+            coefficient = galois.GF(field)(galois.GF(pp**kk).primitive_element ** mm)
+
+            # extract and 0-index cycles
+            cycles = tuple(
+                tuple(int(ii) - 1 for ii in re_integer.findall(cycle_match.group()))
+                for cycle_match in re_cycle.finditer(cycles_string)
+            )
+            idempotent.append((int(coefficient), cycles))
+
+        idempotents.append(tuple(idempotent))
+
+    return tuple(idempotents)
 
 
 KNOWN_GROUPS: dict[str, GENERATORS_LIST] = {

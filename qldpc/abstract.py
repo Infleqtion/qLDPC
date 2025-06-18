@@ -464,6 +464,26 @@ class GroupRing:
         """One (multiplicative identity) element."""
         return RingMember(self, self.group.identity)
 
+    def get_primitive_central_idempotents(self) -> tuple[RingMember, ...]:
+        """Get the primitive central idempotents of this ring."""
+        idempotents_as_tuples = external.groups.get_primitive_central_idempotents(
+            self.group.to_gap_group(), self.field.order
+        )
+        idempotents = []
+        for idempotent in idempotents_as_tuples:
+            # collect terms, coercing cycles into elements of self.group
+            terms = [
+                (
+                    self.field(coefficient),
+                    GroupMember(cycles) * self.group.identity
+                    if cycles != ((),)  # the empty cycle needs special treatment
+                    else self.group.identity,
+                )
+                for coefficient, cycles in idempotent
+            ]
+            idempotents.append(RingMember(self, *terms))
+        return tuple(idempotents)
+
 
 class RingMember:
     """An element of the algebra of a group G over a finite field F_q.
