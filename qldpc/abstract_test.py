@@ -22,6 +22,7 @@ import math
 import unittest.mock
 from collections.abc import Callable
 
+import galois
 import numpy as np
 import numpy.typing as npt
 import pytest
@@ -170,6 +171,29 @@ def test_ring() -> None:
     group = abstract.CyclicGroup(2)
     ring_member = abstract.RingMember(group, group.identity, *group.generators)
     assert ring_member.inverse() is None
+
+
+def test_primitive_central_idempotents() -> None:
+    """Convert external primitive central idempotents into RingMembers."""
+    with pytest.raises(ValueError, match="Only semisimple rings"):
+        abstract.GroupRing(abstract.CyclicGroup(2), 2).get_primitive_central_idempotents()
+
+    group = abstract.CyclicGroup(3)
+    xx = group.generators[0]
+    one = group.identity
+    ring = abstract.GroupRing(group, 2)
+    fake_output = (
+        ((1, ((),)), (1, ((0, 1, 2),)), (1, ((0, 2, 1),))),
+        ((1, ((0, 1, 2),)), (1, ((0, 2, 1),))),
+    )
+    expected_idempotents = (
+        abstract.RingMember(ring, one, xx, xx**2),
+        abstract.RingMember(ring, xx, xx**2),
+    )
+    with unittest.mock.patch(
+        "qldpc.external.groups.get_primitive_central_idempotents", return_value=fake_output
+    ):
+        assert ring.get_primitive_central_idempotents() == expected_idempotents
 
 
 def test_ring_array() -> None:
