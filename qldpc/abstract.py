@@ -100,6 +100,17 @@ class GroupMember(comb.Permutation):
             matrix[ii, self.apply(ii)] = 1
         return matrix
 
+    def to_gap_cycles(self) -> str:
+        """Convert a GroupMember into a GAP cycle."""
+
+        def to_gap_cycle(cycle: tuple[int, ...]) -> str:
+            """Convert a SymPy cycle into a GAP cycle."""
+            shifted_cycle = [ii + 1 for ii in cycle]  # GAP indexes from 1
+            return f"({','.join(map(str, shifted_cycle))})"
+
+        cycles = [to_gap_cycle(cycle) for cycle in self.cyclic_form]
+        return "".join(cycles) if cycles else "()"
+
 
 Lift = Callable[[GroupMember], npt.NDArray[np.int_]]
 IntegerLift = Callable[[int], npt.NDArray[np.int_]]
@@ -396,6 +407,11 @@ class Group:
             return TrivialGroup()
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
         return Group(*generators, name=standardized_name)
+
+    def to_gap_group(self) -> str:
+        """Convert a Group into a GAP group."""
+        generators = [gen.to_gap_cycles() for gen in self.generators]
+        return f"Group({','.join(generators)})"
 
 
 ################################################################################
