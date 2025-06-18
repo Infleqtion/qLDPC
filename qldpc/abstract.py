@@ -443,8 +443,13 @@ class GroupRing:
 
     @property
     def is_abelian(self) -> bool:
-        """Is this group Abelian?"""
+        """Is this ring Abelian?"""
         return isinstance(self, AbelianGroup) or self._group.is_abelian
+
+    @property
+    def is_semisimple(self) -> bool:
+        """Is this ring semisimple?"""
+        return bool(self.group.order % self.field.characteristic)
 
     def regular_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
         """Lift a group member to its regular representation."""
@@ -466,6 +471,8 @@ class GroupRing:
 
     def get_primitive_central_idempotents(self) -> tuple[RingMember, ...]:
         """Get the primitive central idempotents of this ring."""
+        if not self.is_semisimple:
+            raise ValueError("Only semisimple rings have primitive central idempotents")
         idempotents_as_tuples = external.groups.get_primitive_central_idempotents(
             self.group.to_gap_group(), self.field.order
         )
