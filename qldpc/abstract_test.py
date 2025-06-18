@@ -192,7 +192,9 @@ def test_primitive_central_idempotents() -> None:
     with unittest.mock.patch(
         "qldpc.external.groups.get_primitive_central_idempotents", return_value=fake_output
     ):
-        assert ring.get_primitive_central_idempotents() == expected_idempotents
+        idempotents = ring.get_primitive_central_idempotents()
+        assert idempotents == expected_idempotents
+        assert all(idempotent == idempotent * idempotent for idempotent in idempotents)
 
 
 def test_ring_array() -> None:
