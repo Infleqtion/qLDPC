@@ -273,6 +273,7 @@ def get_primitive_central_idempotents(
 
             # convert "Z(p^k)^m" into galois.GF(field)(galois.GF(p**k).primitive_element ** m)
             coefficient_match = re_coefficient_components.match(coefficient_string)
+            assert coefficient_match is not None
             pp = int(coefficient_match.group(1))
             kk = int(coefficient_match.group(2) or 1)
             mm = int(coefficient_match.group(3) or 1)
