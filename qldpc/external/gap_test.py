@@ -49,6 +49,11 @@ def test_get_output() -> None:
     output = "test"
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process(output)):
         assert external.gap.get_output() == output
+    with (
+        unittest.mock.patch("subprocess.run", return_value=get_mock_process(output, "error")),
+        pytest.raises(ValueError, match="Error encountered"),
+    ):
+        assert external.gap.get_output()
 
 
 def test_require_package() -> None:
