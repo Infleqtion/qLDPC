@@ -61,7 +61,7 @@ def get_small_group_number(order: int) -> int:
     """Get the number of 'SmallGroup's of a given order."""
     if qldpc.external.gap.is_installed():
         command = f"Print(NumberSmallGroups({order}));"
-        return int(qldpc.external.gap.get_result(command).stdout)
+        return int(qldpc.external.gap.get_output(command))
 
     # get the HTML for the page with all groups
     page_html = maybe_get_webpage(order)
@@ -85,8 +85,7 @@ def get_small_group_structure(order: int, index: int) -> str:
     name = f"SmallGroup({order},{index})"
     if qldpc.external.gap.is_installed():
         command = f"Print(StructureDescription({name}));"
-        result = qldpc.external.gap.get_result(command)
-        structure = result.stdout.strip()
+        structure = qldpc.external.gap.get_output(command).strip()
 
         if not structure:
             raise ValueError(f"Group not recognized by GAP: {name}")
@@ -103,24 +102,22 @@ def get_generators_with_gap(group: str) -> GENERATORS_LIST | None:
 
     if not qldpc.external.gap.is_installed():
         return None
+    qldpc.external.gap.require_package("GUAVA")
 
     # run GAP commands
     commands = [
         'LoadPackage("guava");',
-        f"G := {group};",
-        "iso := IsomorphismPermGroup(G);",
-        "permG := Image(iso, G);",
-        "gens := GeneratorsOfGroup(permG);",
+        f"group := {group};",
+        "iso := IsomorphismPermGroup(group);",
+        "perm_group := Image(iso, group);",
+        "gens := GeneratorsOfGroup(perm_group);",
         r'for gen in gens do Print(gen, "\n"); od;',
     ]
-    result = qldpc.external.gap.get_result(*commands)
-
-    if not result.stdout.strip():
-        raise ValueError(f"Group not recognized by GAP: {group}")
+    generators_str = qldpc.external.gap.get_output(*commands)
 
     # collect generators
     generators = []
-    for line in result.stdout.splitlines():
+    for line in generators_str.splitlines():
         if not line.strip():
             continue
 
