@@ -28,6 +28,7 @@ import qldpc
 GAP_ROOT = os.path.join(os.path.dirname(os.path.dirname(qldpc.__file__)), "gap")
 
 
+@functools.cache
 def is_installed() -> bool:
     """Is GAP 4 installed?"""
     commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n"); QUIT;']
