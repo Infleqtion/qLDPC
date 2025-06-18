@@ -41,6 +41,7 @@ def test_permutation_group() -> None:
     assert group.random(seed=0) == group.random(seed=0)
     assert group.to_sympy() == group._group
     assert group.is_abelian
+    assert group.to_gap_group() == "Group((1,2,3),(1,3,2))"
 
     gens = [abstract.GroupMember(seq) for seq in itertools.permutations([0, 1, 2])]
     group = abstract.Group(*gens)
@@ -145,6 +146,7 @@ def test_ring() -> None:
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
     assert "GF(3)" in str(ring)
     assert ring.is_abelian
+    assert ring.is_semisimple
 
     # test inverses
     for ring in [
@@ -168,6 +170,31 @@ def test_ring() -> None:
     group = abstract.CyclicGroup(2)
     ring_member = abstract.RingMember(group, group.identity, *group.generators)
     assert ring_member.inverse() is None
+
+
+def test_primitive_central_idempotents() -> None:
+    """Convert external primitive central idempotents into RingMembers."""
+    with pytest.raises(ValueError, match="Only semisimple rings"):
+        abstract.GroupRing(abstract.CyclicGroup(2), 2).get_primitive_central_idempotents()
+
+    group = abstract.CyclicGroup(3)
+    xx = group.generators[0]
+    one = group.identity
+    ring = abstract.GroupRing(group, 2)
+    fake_output = (
+        ((1, ((),)), (1, ((0, 1, 2),)), (1, ((0, 2, 1),))),
+        ((1, ((0, 1, 2),)), (1, ((0, 2, 1),))),
+    )
+    expected_idempotents = (
+        abstract.RingMember(ring, one, xx, xx**2),
+        abstract.RingMember(ring, xx, xx**2),
+    )
+    with unittest.mock.patch(
+        "qldpc.external.groups.get_primitive_central_idempotents", return_value=fake_output
+    ):
+        idempotents = ring.get_primitive_central_idempotents()
+        assert idempotents == expected_idempotents
+        assert all(idempotent == idempotent * idempotent for idempotent in idempotents)
 
 
 def test_ring_array() -> None:

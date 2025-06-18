@@ -100,6 +100,17 @@ class GroupMember(comb.Permutation):
             matrix[ii, self.apply(ii)] = 1
         return matrix
 
+    def to_gap_cycles(self) -> str:
+        """Convert a GroupMember into a GAP cycle."""
+
+        def to_gap_cycle(cycle: tuple[int, ...]) -> str:
+            """Convert a SymPy cycle into a GAP cycle."""
+            shifted_cycle = [ii + 1 for ii in cycle]  # GAP indexes from 1
+            return f"({','.join(map(str, shifted_cycle))})"
+
+        cycles = [to_gap_cycle(cycle) for cycle in self.cyclic_form]
+        return "".join(cycles) if cycles else "()"
+
 
 Lift = Callable[[GroupMember], npt.NDArray[np.int_]]
 IntegerLift = Callable[[int], npt.NDArray[np.int_]]
@@ -397,6 +408,11 @@ class Group:
         generators = [GroupMember(gen) for gen in external.groups.get_generators(standardized_name)]
         return Group(*generators, name=standardized_name)
 
+    def to_gap_group(self) -> str:
+        """Convert a Group into a GAP group."""
+        generators = [gen.to_gap_cycles() for gen in self.generators]
+        return f"Group({','.join(generators)})"
+
 
 ################################################################################
 # group algebra and elements thereof
@@ -443,8 +459,13 @@ class GroupRing:
 
     @property
     def is_abelian(self) -> bool:
-        """Is this group Abelian?"""
+        """Is this ring Abelian?"""
         return isinstance(self, AbelianGroup) or self._group.is_abelian
+
+    @property
+    def is_semisimple(self) -> bool:
+        """Is this ring semisimple?"""
+        return bool(self.group.order % self.field.characteristic)
 
     def regular_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
         """Lift a group member to its regular representation."""
@@ -463,6 +484,28 @@ class GroupRing:
     def one(self) -> RingMember:
         """One (multiplicative identity) element."""
         return RingMember(self, self.group.identity)
+
+    def get_primitive_central_idempotents(self) -> tuple[RingMember, ...]:
+        """Get the primitive central idempotents of this ring."""
+        if not self.is_semisimple:
+            raise ValueError("Only semisimple rings have primitive central idempotents")
+        idempotents_as_tuples = external.groups.get_primitive_central_idempotents(
+            self.group.to_gap_group(), self.field.order
+        )
+        idempotents = []
+        for idempotent in idempotents_as_tuples:
+            # collect terms, coercing cycles into elements of self.group
+            terms = [
+                (
+                    self.field(coefficient),
+                    GroupMember(cycles) * self.group.identity
+                    if cycles != ((),)  # the empty cycle needs special treatment
+                    else self.group.identity,
+                )
+                for coefficient, cycles in idempotent
+            ]
+            idempotents.append(RingMember(self, *terms))
+        return tuple(idempotents)
 
 
 class RingMember:
