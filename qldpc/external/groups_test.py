@@ -230,18 +230,19 @@ def test_idempotents() -> None:
 
     z_2 = galois.GF(2).primitive_element
     z_2_2 = galois.GF(4).primitive_element
-    field_4 = galois.GF(4)
-    output = "[ (Z(2))*(), (Z(2^2)^2)*(1,2)(3,4)+(Z(2)^0)*(3,4)(5,6) ]"
-    idempotents = (
-        ((int(field_4(z_2)), ((),)),),
-        ((int(field_4(z_2_2**2)), ((0, 1),)), (int(field_4(z_2**0)), ((2, 3), (4, 5)))),
+    field = galois.GF(4)
+    fake_output = "[ (Z(2))*(), (Z(2^2)^2)*(1,2)+(Z(2)^0)*(3,4)(5,6) ]"
+    expected_idempotents = (
+        ((int(field(z_2)), ((),)),),
+        ((int(field(z_2_2**2)), ((0, 1),)), (int(field(z_2**0)), ((2, 3), (4, 5)))),
     )
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.require_package", return_value=None),
-        unittest.mock.patch("qldpc.external.gap.get_output", return_value=output),
+        unittest.mock.patch("qldpc.external.gap.get_output", return_value=fake_output),
     ):
-        external.groups.get_primitive_central_idempotents("fake_group", 4) == idempotents
+        idempotents = external.groups.get_primitive_central_idempotents("fake_group", field.order)
+        assert idempotents == expected_idempotents
 
 
 def test_known_groups() -> None:
