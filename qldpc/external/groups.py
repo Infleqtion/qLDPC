@@ -24,12 +24,11 @@ import urllib.request
 import qldpc.cache
 import qldpc.external.gap
 
-CACHE_NAME = "qldpc_groups"
 GENERATORS_LIST = list[list[tuple[int, ...]]]
 GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 
 
-@qldpc.cache.use_disk_cache(CACHE_NAME)
+@qldpc.cache.use_disk_cache("group_generators")
 def get_generators(group: str) -> GENERATORS_LIST:
     """Retrieve GAP group generators."""
 
@@ -56,7 +55,7 @@ def get_generators(group: str) -> GENERATORS_LIST:
     raise ValueError("\n".join(message))
 
 
-@qldpc.cache.use_disk_cache(CACHE_NAME)
+@qldpc.cache.use_disk_cache("small_group_number")
 def get_small_group_number(order: int) -> int:
     """Get the number of 'SmallGroup's of a given order."""
     if qldpc.external.gap.is_installed():
@@ -77,7 +76,7 @@ def get_small_group_structure(order: int, index: int) -> str:
     """Get a description of the structure of a SmallGroup from GAP."""
     # if we have the structure cached, retrieve it
     key = (order, index)
-    cache = qldpc.cache.get_disk_cache(CACHE_NAME)
+    cache = qldpc.cache.get_disk_cache("qldpc_group_structure")
     if structure := cache.get(key, None):
         return structure
 

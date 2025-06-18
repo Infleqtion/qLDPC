@@ -23,10 +23,8 @@ import re
 import qldpc.cache
 import qldpc.external.gap
 
-CACHE_NAME = "qldpc_codes"
 
-
-@qldpc.cache.use_disk_cache(CACHE_NAME)
+@qldpc.cache.use_disk_cache("codes")
 def get_code(code: str) -> tuple[list[list[int]], int | None]:
     """Retrieve a group from GAP."""
 

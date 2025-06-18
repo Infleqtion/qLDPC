@@ -32,6 +32,7 @@ def get_mock_process(stdout: str, stderr: str = "") -> subprocess.CompletedProce
 
 def test_is_installed() -> None:
     """Is GAP 4 installed?"""
+    external.gap.is_installed.cache_clear()
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("")):
         assert not external.gap.is_installed()
 
