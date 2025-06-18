@@ -41,6 +41,7 @@ def test_permutation_group() -> None:
     assert group.random(seed=0) == group.random(seed=0)
     assert group.to_sympy() == group._group
     assert group.is_abelian
+    assert group.to_gap_group() == "Group((1,2,3),(1,3,2))"
 
     gens = [abstract.GroupMember(seq) for seq in itertools.permutations([0, 1, 2])]
     group = abstract.Group(*gens)
@@ -145,6 +146,7 @@ def test_ring() -> None:
     assert np.array_equal(one.lift(), np.array(1, ndmin=2))
     assert "GF(3)" in str(ring)
     assert ring.is_abelian
+    assert ring.is_semisimple
 
     # test inverses
     for ring in [
