@@ -18,7 +18,6 @@ limitations under the License.
 from __future__ import annotations
 
 import itertools
-import subprocess
 import unittest.mock
 from typing import Iterator
 
@@ -168,11 +167,6 @@ def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(code.graph))
 
 
-def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
-    """Fake process with the given stdout."""
-    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
-
-
 def test_automorphism() -> None:
     """Compute automorphism group of the smallest nontrivial trinary Hamming code."""
     code = codes.HammingCode(2, field=3)
@@ -188,9 +182,7 @@ def test_automorphism() -> None:
     # otherwise, check that automorphisms do indeed preserve the code space
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch(
-            "qldpc.external.gap.get_result", return_value=get_mock_process(automorphisms)
-        ),
+        unittest.mock.patch("qldpc.external.gap.get_output", return_value=automorphisms),
     ):
         group = code.get_automorphism_group()
         for member in group.generate():
