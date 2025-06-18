@@ -59,7 +59,7 @@ def get_output(*commands: str) -> str:
     if result.stderr:
         raise ValueError(
             f"Error encountered when running GAP:{result.stderr}\n\n"
-            "GAP command:\n{' '.join(commands)}"
+            f"GAP command:\n{' '.join(commands)}"
         )
     return result.stdout
 
