@@ -499,7 +499,6 @@ class GroupRing:
 
         See https://en.wikipedia.org/wiki/Idempotent_(ring_theory).
         """
-
         if not self.is_semisimple:
             raise ValueError("Only semisimple rings have primitive central idempotents")
         idempotents_as_tuples = external.groups.get_primitive_central_idempotents(
