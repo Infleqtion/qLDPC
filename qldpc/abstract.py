@@ -486,7 +486,20 @@ class GroupRing:
         return RingMember(self, self.group.identity)
 
     def get_primitive_central_idempotents(self) -> tuple[RingMember, ...]:
-        """Get the primitive central idempotents of this ring."""
+        """Get the primitive central idempotents of this ring.
+
+        Primitive central idempotents of a ring are nonzero elements that:
+        - square to themselves (they are idempotent)
+        - commute with all other elements of the ring (they lie in the ring's center), and
+        - cannot be decomposed into a sum of two nonzero orthogonal idempotents.
+        Two idempotents g, h are orthogonal if g * h = h * g 0.
+
+        Intuitively, primitive central idempotents idempotents act like projectors onto orthogonal
+        components of a ring.
+
+        See https://en.wikipedia.org/wiki/Idempotent_(ring_theory).
+        """
+
         if not self.is_semisimple:
             raise ValueError("Only semisimple rings have primitive central idempotents")
         idempotents_as_tuples = external.groups.get_primitive_central_idempotents(
@@ -873,7 +886,7 @@ class RingArray(npt.NDArray[np.object_]):
         vals = [val.to_vector() for val in self.ravel()]
         return np.asarray(vals).ravel().view(self.field)
 
-    def null_space(self) -> RingArray:
+    def null_space(self, *, force_heuristic: bool = False) -> RingArray:
         """Construct a matrix of null-space row vectors for this RingArray.
 
         The transpose of the null-space matrix is annihilated by this RingArray, such that
@@ -891,26 +904,46 @@ class RingArray(npt.NDArray[np.object_]):
             null_field_vectors.reshape(len(null_field_vectors), -1, self.group.order),
         )
 
-        return null_vectors.row_reduce()
+        return null_vectors.row_reduce(force_heuristic=force_heuristic)
 
-    def row_reduce(self) -> RingArray:
-        """Row-reduce this RingArray to the degree that we can.
+    def row_reduce(self, *, force_heuristic: bool = False) -> RingArray:
+        """Compute the reduced row Echelon form of this RingArray, or the closest we can get to it.
 
-        This method uses invertible row operations (namely, left-multiplication by invertible ring
-        elements and row addition) to construct a matrix in which every row satisfies one of
-        the following:
+        If the base ring is semisimple, perform exact row reduction based on the Wedderburn-Artin
+        decomposition of the ring into a Cartesian product of simple rings.  Otherwise, use a series
+        of heuristics for (possibly only partial) row reduction.  Either way, this method guarantees
+        that every row in the returned RingArray satisfies one the following:
         (a) there is some column at which the row is 1 and all other rows are 0, or
         (b) all entries of the row are non-invertible.
-        Moreover, all rows of the returned matrix are linearly independent and nonzero.
-
-        Warning: this method is unoptimized.  There is a lot of room for speeding things up.
+        Moreover, all rows of the returned RingArray are linearly independent and nonzero.
         """
         assert self.ndim == 2
 
-        # enforce condition (a)
+        if self.ring.is_semisimple and not force_heuristic:
+            return self._exact_row_reduce()
+
+        if not force_heuristic:
+            warnings.warn(
+                "RingArray.row_reduce only supports exact row reduction for semisimple group"
+                " algebras, for which the field.characteristic does not divide the group.order."
+                "  Using heuristics for (possibly only partial) row reduction instead."
+            )
+        return self._heuristic_row_reduce()
+
+    def _exact_row_reduce(self) -> RingArray:
+        """Perform exact row reduction using the Wedderburn-Artin decomposition of the base ring."""
+        return NotImplemented
+
+    def _heuristic_row_reduce(self) -> RingArray:
+        """Use heuristics for (possibly only partial) row reduction.
+
+        Warning: this method is unoptimized.  There is a lot of room for speeding things up.
+        """
+
+        # greedily convert invertible entries into "pivots" that are uniquely nonzero in some column
         matrix = self._reduce_rows_with_invertible_entries()
 
-        # split matrix into "pivot" rows that are uniquely nonzero in some column, and other rows
+        # split matrix into rows with pivots, and all other rows
         pivot_matrix, non_pivot_matrix = matrix._split_by_pivots()
 
         if non_pivot_matrix.size:
