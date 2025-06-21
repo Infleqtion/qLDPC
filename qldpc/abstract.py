@@ -885,7 +885,7 @@ class RingArray(npt.NDArray[np.object_]):
         vals = [val.to_vector() for val in self.ravel()]
         return np.asarray(vals).ravel().view(self.field)
 
-    def null_space(self) -> RingArray:
+    def null_space(self, *, force_heuristic: bool = True) -> RingArray:
         """Construct a matrix of null-space row vectors for this RingArray.
 
         The transpose of the null-space matrix is annihilated by this RingArray, such that
@@ -903,17 +903,49 @@ class RingArray(npt.NDArray[np.object_]):
             null_field_vectors.reshape(len(null_field_vectors), -1, self.group.order),
         )
 
-        return null_vectors.row_reduce()
+        return null_vectors.row_reduce(force_heuristic=force_heuristic)
 
-    def row_reduce(self) -> RingArray:
+    def row_reduce(self, *, force_heuristic: bool = True) -> RingArray:
         """Compute the reduced row Echelon form of this RingArray, or the closest we can get to it.
 
-        This method uses invertible row operations (namely, left-multiplication by invertible ring
-        elements and row addition) to construct a matrix in which every row satisfies one of
-        the following:
+        Use a series of heuristics for (possibly only partial) row reduction.  Every row in the
+        returned RingArray is guaranteed to satisfy one the following:
         (a) there is some column at which the row is 1 and all other rows are 0, or
         (b) all entries of the row are non-invertible.
         Moreover, all rows of the returned RingArray are linearly independent and nonzero.
+        """
+        assert self.ndim == 2
+
+        if self.ring.is_semisimple and not force_heuristic:
+            return self._exact_row_reduce()
+
+        if not force_heuristic:
+            warnings.warn(
+                "RingArray.row_reduce only supports exact row reduction for semisimple group"
+                " algebras, for which the field.characteristic does not divide the group.order."
+                "  Using heuristics for (possibly only partial) row reduction instead."
+            )
+        return self._heuristic_row_reduce()
+
+    def _exact_row_reduce(self) -> RingArray:
+        """Perform exact row reduction based on the Wedderburn-Artin decomposition of the base ring.
+
+        A semisimple ring can be decomposed into a direct sum of simple rings, which are in turn
+        isomorphic to matrix algebras over finite fields.  This method thereby row-reduces a
+        RingArray over a semisimple ring by
+        (a) decomposing the ring into simple components,
+        (b) "lifting" each component to a matrix over a finite field,
+        (c) row-reducing these matrices using standard methods, and
+        (d) mapping back into the original semisimple ring.
+        At least, that's the plan.  It has yet to be implemented.
+        """
+        assert self.is_simisimple
+        raise NotImplementedError(
+            "We only aspire to perform exact row reduction over semisimple rings :("
+        )
+
+    def _heuristic_row_reduce(self) -> RingArray:
+        """Use heuristics for (possibly only partial) row reduction.
 
         Warning: this method is unoptimized.  There is a lot of room for speeding things up.
         """
