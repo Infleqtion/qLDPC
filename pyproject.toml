@@ -23,7 +23,7 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Mathematics",
   "Topic :: Scientific/Engineering :: Physics",
 ]
-include = ["qldpc/py.typed", { path = "qldpc/**/*.so", format = "wheel" }]
+include = ["qldpc/py.typed"]
 
 [tool.poetry.dependencies]
 python = "^3.10"
