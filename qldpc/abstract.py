@@ -489,13 +489,13 @@ class GroupRing:
         """Get the primitive central idempotents of this ring.
 
         Primitive central idempotents of a ring are nonzero elements that:
-        - square to themselves (they are idempotent)
+        - square to themselves (they are idempotent),
         - commute with all other elements of the ring (they lie in the ring's center), and
         - cannot be decomposed into a sum of two nonzero orthogonal idempotents.
         Two idempotents g, h are orthogonal if g * h = h * g 0.
 
         Intuitively, primitive central idempotents idempotents act like projectors onto orthogonal
-        components of a ring.
+        simple components of a ring.
 
         See https://en.wikipedia.org/wiki/Idempotent_(ring_theory).
         """
