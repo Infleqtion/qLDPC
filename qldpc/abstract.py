@@ -930,7 +930,7 @@ class RingArray(npt.NDArray[np.object_]):
     def _exact_row_reduce(self) -> RingArray:
         """Perform exact row reduction based on the Wedderburn-Artin decomposition of the base ring.
 
-        A semisimple ring can be decomposed into a direct sum of simple rings, which are in turn
+        A semisimple ring can be decomposed into a direct product of simple rings, which are in turn
         isomorphic to matrix algebras over finite fields.  This method thereby row-reduces a
         RingArray over a semisimple ring by
         (a) decomposing the RingArray into its simple components,
