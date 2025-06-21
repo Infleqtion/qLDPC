@@ -939,7 +939,7 @@ class RingArray(npt.NDArray[np.object_]):
         (d) mapping back into the original semisimple ring.
         At least, that's the plan.  It has yet to be implemented.
         """
-        assert self.is_simisimple
+        assert self.ring.is_semisimple
         raise NotImplementedError(
             "We only aspire to perform exact row reduction over semisimple rings :("
         )

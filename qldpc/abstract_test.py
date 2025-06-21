@@ -304,6 +304,15 @@ def test_ring_row_reduce(ring: abstract.GroupRing, pytestconfig: pytest.Config) 
     )
 
 
+def test_exact_row_reduce() -> None:
+    """Exact row reduction over a ring is not yet implemented."""
+    ring = abstract.GroupRing(abstract.CyclicGroup(3), field=2)
+    coefficients = ring.field.Random((1, 2, ring.group.order))
+    matrix = abstract.RingArray.from_field_array(ring, coefficients)
+    with pytest.raises(NotImplementedError, match=r"We only aspire to perform exact row reduction"):
+        matrix.row_reduce(force_heuristic=False)
+
+
 @pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False)])
 def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group."""
