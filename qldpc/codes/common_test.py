@@ -18,7 +18,6 @@ limitations under the License.
 from __future__ import annotations
 
 import itertools
-import subprocess
 import unittest.mock
 from typing import Iterator
 
@@ -168,11 +167,6 @@ def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(code.graph))
 
 
-def get_mock_process(stdout: str) -> subprocess.CompletedProcess[str]:
-    """Fake process with the given stdout."""
-    return subprocess.CompletedProcess(args=[], returncode=0, stdout=stdout)
-
-
 def test_automorphism() -> None:
     """Compute automorphism group of the smallest nontrivial trinary Hamming code."""
     code = codes.HammingCode(2, field=3)
@@ -188,13 +182,12 @@ def test_automorphism() -> None:
     # otherwise, check that automorphisms do indeed preserve the code space
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch(
-            "qldpc.external.gap.get_result", return_value=get_mock_process(automorphisms)
-        ),
+        unittest.mock.patch("qldpc.external.gap.get_output", return_value=automorphisms),
     ):
         group = code.get_automorphism_group()
         for member in group.generate():
-            assert not np.any(code.matrix @ group.lift(member) @ code.generator.T)
+            permutation = member.to_matrix().view(code.field)
+            assert not np.any(code.matrix @ permutation @ code.generator.T)
 
 
 def test_classical_capacity() -> None:
@@ -367,7 +360,7 @@ def get_symplectic_form(half_dimension: int, field: type[galois.FieldArray]) -> 
     """Get the symplectic form over a given field."""
     identity = field.Identity(half_dimension)
     zeros = field.Zeros((half_dimension, half_dimension))
-    return field(np.block([[zeros, identity], [-identity, zeros]]))
+    return np.block([[zeros, identity], [-identity, zeros]]).view(field)
 
 
 def test_qudit_ops() -> None:
@@ -403,7 +396,7 @@ def test_qudit_ops() -> None:
     code = codes.FiveQubitCode()
     code._is_subsystem_code = True
     stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
-    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]])  # type:ignore[assignment]
+    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]]).view(code.field)
     code._stabilizer_ops = stabilizer_ops
     assert np.array_equal(code.get_stabilizer_ops(), stabilizer_ops)
     assert np.array_equal(code.get_stabilizer_ops(canonicalized=True), stabilizer_ops[:-1])
@@ -504,17 +497,13 @@ def test_css_ops() -> None:
     # successfully construct and reduce logical operators in a code with "over-complete" checks
     dist = 4
     code = codes.ToricCode(dist, rotated=True, field=2)
+    assert code.canonicalized.num_checks < code.num_checks
     assert code.get_code_params() == (dist**2, 2, dist)
     code.reduce_logical_ops()
     logical_ops_x = code.get_logical_ops(Pauli.X)
     logical_ops_z = code.get_logical_ops(Pauli.Z, symplectic=True)
     assert not np.any(np.count_nonzero(logical_ops_x.view(np.ndarray), axis=1) < dist)
     assert not np.any(np.count_nonzero(logical_ops_z.view(np.ndarray), axis=1) < dist)
-
-    # the 2x2 toric code has redundant stabilizers
-    code = codes.ToricCode(2)
-    assert code.num_checks == 4
-    assert code.canonicalized.num_checks == 2
 
 
 def test_distance_css() -> None:

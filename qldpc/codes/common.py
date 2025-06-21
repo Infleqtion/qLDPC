@@ -38,7 +38,7 @@ from qldpc.abstract import DEFAULT_FIELD_ORDER
 from qldpc.math import first_nonzero_cols, log_choose, op_to_string, symplectic_conjugate
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, QuditOperator
 
-from ._distance import get_distance_classical, get_distance_quantum
+from .distance import get_distance_classical, get_distance_quantum
 
 IntegerArray = TypeVar("IntegerArray", npt.NDArray[np.int_], galois.FieldArray)
 Slice = slice | npt.NDArray[np.int_] | list[int]
@@ -109,7 +109,7 @@ class AbstractCode(abc.ABC):
 
         else:
             self._field = galois.GF(field or DEFAULT_FIELD_ORDER)
-            self._matrix = self._field(matrix)
+            self._matrix = np.asarray(matrix, dtype=int).view(self.field)
 
     @property
     def name(self) -> str:
@@ -239,7 +239,7 @@ class ClassicalCode(AbstractCode):
         self, words: npt.NDArray[np.int_] | Sequence[int] | Sequence[Sequence[int]]
     ) -> bool:
         """Does this code contain the given word(s)?"""
-        return not np.any(self.matrix @ self.field(words).T)
+        return not np.any(self.matrix @ np.asarray(words, dtype=int).view(self.field).T)
 
     @functools.cached_property
     def canonicalized(self) -> ClassicalCode:
@@ -273,6 +273,7 @@ class ClassicalCode(AbstractCode):
         share an edge iff c addresses b; that is, edge (c, b) is in the graph iff H[c, b] != 0.
         """
         graph = nx.DiGraph()
+        matrix = np.asanyarray(matrix)
         for row, col in zip(*np.nonzero(matrix)):
             node_c = Node(index=int(row), is_data=False)
             node_d = Node(index=int(col), is_data=True)
@@ -312,7 +313,7 @@ class ClassicalCode(AbstractCode):
 
     def set_generator(self, generator: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> None:
         """Set the generator matrix of this code."""
-        generator = self.field(generator)
+        generator = np.asarray(generator, dtype=int).view(self.field)
         if np.any(self.matrix @ generator.T):
             raise ValueError("Provided generator matrix has nontrivial syndromes")
 
@@ -400,12 +401,12 @@ class ClassicalCode(AbstractCode):
             return known_distance
 
         if vector is not None:
-            vector = self.field(vector)
+            vector = np.asarray(vector, dtype=int).view(self.field)
             return min(np.count_nonzero(word - vector) for word in self.iter_words())
 
         # we do not know the exact distance, so compute it
         if self.field.order == 2:
-            distance = get_distance_classical(self.generator.view(np.ndarray).astype(np.uint8))
+            distance = get_distance_classical(self.generator)
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
@@ -473,7 +474,9 @@ class ClassicalCode(AbstractCode):
         if vector is not None:
             # find the distance of the given vector from a code word
             correction = decoders.decode(
-                self.matrix, self.matrix @ self.field(vector), **decoder_args
+                self.matrix,
+                self.matrix @ np.asarray(vector, dtype=int).view(self.field),
+                **decoder_args,
             )
             return int(np.count_nonzero(correction))
 
@@ -491,7 +494,7 @@ class ClassicalCode(AbstractCode):
             candidate = decoders.decode(effective_check_matrix, effective_syndrome, **decoder_args)
 
             # check whether we found a valid candidate
-            actual_syndrome = effective_check_matrix @ self.field(candidate)
+            actual_syndrome = effective_check_matrix @ candidate.view(self.field)
             valid_candidate_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         return int(np.count_nonzero(candidate))
@@ -560,7 +563,7 @@ class ClassicalCode(AbstractCode):
         matrix_str = "[" + ",".join(checks_str) + "]"
         code_str = f"CheckMatCode({matrix_str}, GF({self.field.order}))"
         group_str = "AutomorphismGroup" if self.field.order == 2 else "PermutationAutomorphismGroup"
-        return abstract.Group.from_name(f"{group_str}({code_str})", field=self.field.order)
+        return abstract.Group.from_name(f"{group_str}({code_str})")
 
     @staticmethod
     def stack(*codes: ClassicalCode) -> ClassicalCode:
@@ -598,9 +601,9 @@ class ClassicalCode(AbstractCode):
         assert all(0 <= bit < len(self) for bit in bits)
         generator = self.generator
         for bit in sorted(bits, reverse=True):
-            generator = np.roll(generator, -bit, axis=1)  # type:ignore[assignment]
+            generator = np.roll(generator, -bit, axis=1).view(self.field)
             generator = generator.row_reduce()[1:, 1:]
-            generator = np.roll(generator, bit, axis=1)  # type:ignore[assignment]
+            generator = np.roll(generator, bit, axis=1).view(self.field)
         return ClassicalCode.from_generator(generator)
 
     def get_logical_error_rate_func(
@@ -929,7 +932,7 @@ class QuditCode(AbstractCode):
             logicals_zz[cols_lx] = self.field.Identity(self.dimension)
 
         else:
-            cols_gl = sorted(_join_slices(cols_gx, cols_lx))  # indices for all GL columns
+            cols_gl = np.sort(_join_slices(cols_gx, cols_lx))  # indices for all GL columns
             """
             Focusing on the gauge-qudit rows (i.e., constraints) of the parity check matrix, define
                 A = matrix_z[rows_gz, cols_gl],
@@ -947,8 +950,8 @@ class QuditCode(AbstractCode):
             where the matrix M is determined by subsituting U and V back into (3),
                 U.T @ W @ M = I.
             """
-            mat_U = matrix_z[rows_gz, cols_gl].null_space().T  # type:ignore[attr-defined]
-            mat_W = matrix_x[rows_gx, cols_gl].null_space().T  # type:ignore[attr-defined]
+            mat_U = matrix_z[rows_gz, cols_gl].view(self.field).null_space().T
+            mat_W = matrix_x[rows_gx, cols_gl].view(self.field).null_space().T
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
             logicals_xx[cols_gl] = mat_U
             logicals_zz[cols_gl] = mat_W @ mat_M
@@ -967,12 +970,14 @@ class QuditCode(AbstractCode):
         logicals_x = np.vstack([logicals_xx, logicals_xz]).T
         logicals_z = np.vstack([np.zeros_like(logicals_zz), logicals_zz]).T
 
-        # move qudits back to their original locations, save logicals, and return
+        # move qudits back to their original locations
         permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
         logicals_z = logicals_z.reshape(-1, len(self))[:, permutation].reshape(-1, 2 * len(self))
-        self._logical_ops = np.vstack([logicals_x, logicals_z])  # type:ignore[assignment]
-        return self._logical_ops  # type:ignore[return-value]
+        logical_ops = np.vstack([logicals_x, logicals_z]).view(self.field)
+
+        self._logical_ops = logical_ops
+        return logical_ops
 
     def get_standard_form_data(
         self,
@@ -1032,6 +1037,9 @@ class QuditCode(AbstractCode):
         matrix: npt.NDArray[np.int_]
         cols_lx: Slice
         cols_lz: Slice
+        cols_gx: Slice
+        cols_gz: Slice
+        cols_gl: Slice
 
         def _with_permuted_qudits(
             matrix: npt.NDArray[np.int_], permutation: Slice
@@ -1041,7 +1049,7 @@ class QuditCode(AbstractCode):
 
         if not self.is_subsystem_code:
             # keep track of qudit locations as we swap them around
-            qudit_locs = np.arange(len(self), dtype=int)
+            qudit_locs: npt.NDArray[np.int_] = np.arange(len(self), dtype=int)
 
             # row reduce and identify pivots in the X sector
             matrix = self.canonicalized.matrix
@@ -1144,8 +1152,8 @@ class QuditCode(AbstractCode):
             # split logical vs. gauge column sectors
             cols_gx = cols_gl[pivots_gx]
             cols_gz = cols_gl[pivots_gz]
-            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]  # type:ignore[operator]
-            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]  # type:ignore[operator]
+            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]
+            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]
 
         matrix = matrix.reshape(-1, 2, len(self))
         return (
@@ -1159,7 +1167,7 @@ class QuditCode(AbstractCode):
         self, logical_ops: npt.NDArray[np.int_] | Sequence[Sequence[int]], *, validate: bool = True
     ) -> None:
         """Set the logical operators of this code to the provided logical operators."""
-        logical_ops = self.field(logical_ops)
+        logical_ops = np.asarray(logical_ops, dtype=int).view(self.field)
         if validate:
             dimension = len(logical_ops) // 2
             logical_ops_x = logical_ops[:dimension]
@@ -1293,13 +1301,10 @@ class QuditCode(AbstractCode):
         logical_ops = self.get_logical_ops()
         stabilizers = self.get_stabilizer_ops(canonicalized=True)
         if self.is_subsystem_code:
-            stabilizers = np.vstack([stabilizers, self.get_gauge_ops()])  # type:ignore[assignment]
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops()]).view(self.field)
 
         if self.field.order == 2:
-            distance = get_distance_quantum(
-                logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
-            )
+            distance = get_distance_quantum(logical_ops, stabilizers, homogeneous=False)
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
@@ -1357,16 +1362,15 @@ class QuditCode(AbstractCode):
         """Apply local Fourier transforms to data qudits, swapping X-type and Z-type operators."""
         if qudits is None:
             qudits = getattr(self, "_default_conjugate", ())
-        matrix = self.matrix.copy().reshape(-1, 2, len(self))
-        matrix[:, :, qudits] = matrix[:, ::-1, qudits]
-        matrix = matrix.reshape(-1, 2 * len(self))
+        matrix_reshaped = self.matrix.copy().reshape(-1, 2, len(self))
+        matrix_reshaped[:, :, qudits] = matrix_reshaped[:, ::-1, qudits]
+        matrix = matrix_reshaped.reshape(-1, 2 * len(self))
         code = QuditCode(matrix, field=self.field.order, is_subsystem_code=self.is_subsystem_code)
 
         if self._logical_ops is not None:
             logical_ops = self._logical_ops.copy().reshape(-1, 2, len(self))
             logical_ops[:, :, qudits] = logical_ops[:, ::-1, qudits]
-            logical_ops = logical_ops.reshape(-1, 2 * len(self))
-            code.set_logical_ops(logical_ops)
+            code.set_logical_ops(logical_ops.reshape(-1, 2 * len(self)))
 
         return code
 
@@ -1541,10 +1545,10 @@ class QuditCode(AbstractCode):
 
         # permute logical operators of the inner code
         inner._logical_ops = (
-            inner.get_logical_ops()  # type:ignore[assignment]
+            inner.get_logical_ops()
             .reshape(2, inner.dimension, -1)[:, outer_physical_to_inner_logical, :]
             .reshape(2 * inner.dimension, -1)
-        )
+        ).view(inner.field)
 
         return inner, outer
 
@@ -1650,13 +1654,12 @@ class CSSCode(QuditCode):
     @functools.cached_property
     def matrix(self) -> galois.FieldArray:
         """Overall parity check matrix."""
-        matrix = np.block(
+        return np.block(
             [
-                [self.matrix_x, np.zeros_like(self.matrix_x)],
-                [np.zeros_like(self.matrix_z), self.matrix_z],
+                [self.matrix_x, self.field.Zeros(self.matrix_x.shape)],
+                [self.field.Zeros(self.matrix_z.shape), self.matrix_z],
             ]
-        )
-        return self.field(matrix)
+        ).view(self.field)
 
     @functools.cached_property
     def canonicalized(self) -> CSSCode:
@@ -1743,7 +1746,11 @@ class CSSCode(QuditCode):
             else:
                 shape = (2, self.dimension, 2, len(self))
                 index = [pauli, slice(None), pauli, slice(None)]
-            return self.get_logical_ops(recompute=recompute).reshape(shape)[tuple(index)]  # type:ignore[return-value]
+            return (
+                self.get_logical_ops(recompute=recompute)
+                .reshape(shape)[tuple(index)]
+                .view(self.field)
+            )
 
         # return logical operators if known and not asked to recompute
         if not (self._logical_ops is None or recompute):
@@ -1769,9 +1776,9 @@ class CSSCode(QuditCode):
 
         else:
             # see QuditCode.get_logical_ops for an explanation of what's happening here
-            cols_gl = sorted(_join_slices(cols_gx, cols_lx))
-            mat_U = matrix_z[rows_gz, cols_gl].null_space().T  # type:ignore[attr-defined]
-            mat_W = matrix_x[rows_gx, cols_gl].null_space().T  # type:ignore[attr-defined]
+            cols_gl = np.sort(_join_slices(cols_gx, cols_lx))
+            mat_U = matrix_z[rows_gz, cols_gl].view(self.field).null_space().T
+            mat_W = matrix_x[rows_gx, cols_gl].view(self.field).null_space().T
             mat_M = np.linalg.inv(mat_U.T @ mat_W)
             logicals_x[cols_gl] = mat_U
             logicals_z[cols_gl] = mat_W @ mat_M
@@ -1784,8 +1791,10 @@ class CSSCode(QuditCode):
         permutation = np.argsort(qudit_locs)
         logicals_x = logicals_x[permutation]
         logicals_z = logicals_z[permutation]
-        self._logical_ops = self.field(scipy.linalg.block_diag(logicals_x.T, logicals_z.T))
-        return self._logical_ops
+        logical_ops = scipy.linalg.block_diag(logicals_x.T, logicals_z.T).view(self.field)
+
+        self._logical_ops = logical_ops
+        return logical_ops
 
     def get_standard_form_data_xz(
         self,
@@ -1803,10 +1812,12 @@ class CSSCode(QuditCode):
         """
         cols_lx: Slice
         cols_lz: Slice
+        cols_gx: Slice
+        cols_gz: Slice
 
         if not self.is_subsystem_code:
             # keep track of qudit locations as we swap them around
-            qudit_locs = np.arange(len(self), dtype=int)
+            qudit_locs: npt.NDArray[np.int_] = np.arange(len(self), dtype=int)
 
             # initialize matrix_x and matrix_z
             matrix_x = self.canonicalized.matrix_x
@@ -1815,7 +1826,7 @@ class CSSCode(QuditCode):
             # identify pivots in the X sector, and move X pivots to the back
             pivots_x = first_nonzero_cols(matrix_x)
             other_x = [qq for qq in range(len(self)) if qq not in pivots_x]
-            permutation = other_x + list(pivots_x)
+            permutation: list[int] = other_x + list(pivots_x)
             matrix_x = matrix_x[:, permutation]
             matrix_z = matrix_z[:, permutation]
             qudit_locs = qudit_locs[permutation]
@@ -1869,14 +1880,14 @@ class CSSCode(QuditCode):
 
             # row reduce X-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_x = _join_slices(cols_sx, cols_gl, cols_sz)
-            matrix_x = np.vstack([stabilizers_x, checks_x])[:, permutation_x]  # type:ignore[assignment]
+            matrix_x = np.vstack([stabilizers_x, checks_x])[:, permutation_x].view(self.field)
             matrix_x = ClassicalCode(matrix_x).canonicalized.matrix
             pivots_gx = first_nonzero_cols(matrix_x)[num_stabs_x:] - num_stabs_x
             matrix_x = matrix_x[:, np.argsort(permutation_x)]
 
             # row reduce Z-type stabilizers + parity checks to ensure that gauge ops at the bottom
             permutation_z = _join_slices(cols_sz, cols_gl, cols_sx)
-            matrix_z = np.vstack([stabilizers_z, checks_z])[:, permutation_z]  # type:ignore[assignment]
+            matrix_z = np.vstack([stabilizers_z, checks_z])[:, permutation_z].view(self.field)
             matrix_z = ClassicalCode(matrix_z).canonicalized.matrix
             pivots_gz = first_nonzero_cols(matrix_z)[num_stabs_z:] - num_stabs_z
             matrix_z = matrix_z[:, np.argsort(permutation_z)]
@@ -1899,8 +1910,8 @@ class CSSCode(QuditCode):
             # split logical vs. gauge column sectors
             cols_gx = cols_gl[pivots_gx]
             cols_gz = cols_gl[pivots_gz]
-            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]  # type:ignore[operator]
-            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]  # type:ignore[operator]
+            cols_lx = [qq for qq in cols_gl if qq not in cols_gx]
+            cols_lz = [qq for qq in cols_gl if qq not in cols_gz]
 
         return (
             matrix_x,
@@ -1946,14 +1957,14 @@ class CSSCode(QuditCode):
 
             stabs_x = stabs_and_gauges_and_logs_z.null_space()
             stabs_z = stabs_and_gauges_and_logs_x.null_space()
-            self._stabilizer_ops = self.field(scipy.linalg.block_diag(stabs_x, stabs_z))
+            self._stabilizer_ops = scipy.linalg.block_diag(stabs_x, stabs_z).view(self.field)
 
         stabilizer_ops = QuditCode.get_stabilizer_ops(
             self, pauli, recompute=recompute, canonicalized=canonicalized
         )
         if symplectic or pauli is None:
             return stabilizer_ops
-        return stabilizer_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
+        return stabilizer_ops.reshape(-1, 2, len(self))[:, pauli, :].view(self.field)
 
     def get_gauge_ops(
         self, pauli: PauliXZ | None = None, *, recompute: bool = False, symplectic: bool = False
@@ -1966,7 +1977,7 @@ class CSSCode(QuditCode):
         gauge_ops = QuditCode.get_gauge_ops(self, pauli)
         if symplectic or pauli is None:
             return gauge_ops
-        return gauge_ops.reshape(-1, 2, len(self))[:, pauli, :]  # type:ignore[return-value]
+        return gauge_ops.reshape(-1, 2, len(self))[:, pauli, :].view(self.field)
 
     def get_dual_subsystem_code(self) -> CSSCode:
         """Get the subsystem code that swaps gauge and logical qudits of this code."""
@@ -2006,14 +2017,10 @@ class CSSCode(QuditCode):
         logical_ops = self.get_logical_ops(pauli)
         stabilizers = self.get_stabilizer_ops(pauli, canonicalized=True)
         if self.is_subsystem_code:
-            stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)])  # type:ignore[assignment]
+            stabilizers = np.vstack([stabilizers, self.get_gauge_ops(pauli)]).view(self.field)
 
         if self.field.order == 2:
-            distance = get_distance_quantum(
-                logical_ops.view(np.ndarray).astype(np.uint8),
-                stabilizers.view(np.ndarray).astype(np.uint8),
-                homogeneous=True,
-            )
+            distance = get_distance_quantum(logical_ops, stabilizers, homogeneous=True)
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time"
@@ -2137,7 +2144,7 @@ class CSSCode(QuditCode):
             )
 
             # check whether decoding was successful
-            actual_syndrome = effective_check_matrix @ self.field(candidate_logical_op)
+            actual_syndrome = effective_check_matrix @ candidate_logical_op.view(self.field)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         # return the Hamming weight of the logical operator
@@ -2189,7 +2196,7 @@ class CSSCode(QuditCode):
             candidate_logical_op = decoders.decode(
                 effective_check_matrix, effective_syndrome, **decoder_args
             )
-            actual_syndrome = effective_check_matrix @ self.field(candidate_logical_op)
+            actual_syndrome = effective_check_matrix @ candidate_logical_op.view(self.field)
             logical_op_found = np.array_equal(actual_syndrome, effective_syndrome)
 
         assert self._logical_ops is not None
@@ -2313,7 +2320,7 @@ class CSSCode(QuditCode):
         See ClassicalCode.get_logical_error_rate_func for more details about how this method works.
         """
         # collect relative probabilities of Z, X, and Y errors
-        pauli_bias_zxy: npt.NDArray[np.float_] | None
+        pauli_bias_zxy: npt.NDArray[np.float64] | None
         if pauli_bias is not None:
             assert len(pauli_bias) == 3
             pauli_bias_zxy = np.array([pauli_bias[2], pauli_bias[0], pauli_bias[1]], dtype=float)
@@ -2374,7 +2381,7 @@ class CSSCode(QuditCode):
         decoder_z: decoders.Decoder,
         logicals_x: npt.NDArray[np.int_],
         logicals_z: npt.NDArray[np.int_],
-        pauli_bias_zxy: npt.NDArray[np.float_] | None,
+        pauli_bias_zxy: npt.NDArray[np.float64] | None,
     ) -> tuple[float, float]:
         """Estimate a fidelity and its standard error when decoding a fixed number of errors."""
         num_failures = 0
@@ -2389,7 +2396,7 @@ class CSSCode(QuditCode):
             error_z[error_locs_z] = np.random.choice(
                 range(1, self.field.order), size=len(error_locs_z)
             )
-            residual_z = self.field(decoder_z.decode(error_z))
+            residual_z = decoder_z.decode(error_z).view(self.field)
             if np.any(logicals_x @ residual_z):
                 num_failures += 1
                 continue
@@ -2400,7 +2407,7 @@ class CSSCode(QuditCode):
             error_x[error_locs_x] = np.random.choice(
                 range(1, self.field.order), size=len(error_locs_x)
             )
-            residual_x = self.field(decoder_x.decode(error_x))
+            residual_x = decoder_x.decode(error_x).view(self.field)
             if np.any(logicals_z @ residual_x):
                 num_failures += 1
 
@@ -2456,7 +2463,7 @@ def _get_sample_allocation(
 
 def _get_error_probs_by_weight(
     block_length: int, error_rate: float, max_weight: int | None = None
-) -> npt.NDArray[np.float_]:
+) -> npt.NDArray[np.float64]:
     """Build an array whose k-th entry is the probability of a weight-k error in a code.
 
     If a code has block_length n and each bit has an independent probability p = error_rate of an
