@@ -933,10 +933,10 @@ class RingArray(npt.NDArray[np.object_]):
         A semisimple ring can be decomposed into a direct sum of simple rings, which are in turn
         isomorphic to matrix algebras over finite fields.  This method thereby row-reduces a
         RingArray over a semisimple ring by
-        (a) decomposing the ring into simple components,
+        (a) decomposing the RingArray into its simple components,
         (b) "lifting" each component to a matrix over a finite field,
-        (c) row-reducing these matrices using standard methods, and
-        (d) mapping back into the original semisimple ring.
+        (c) row-reducing these matrices, and
+        (d) mapping back to a RingArray over the original semisimple ring.
         At least, that's the plan.  It has yet to be implemented.
         """
         assert self.ring.is_semisimple
