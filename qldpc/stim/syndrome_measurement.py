@@ -7,8 +7,6 @@ import networkx as nx
 import stim
 
 from qldpc.codes.common import ClassicalCode, CSSCode
-from qldpc.objects import Pauli
-from qldpc.stim.noise_model import NoiseModel
 
 
 @dataclass
@@ -25,7 +23,7 @@ class SyndromeMeasurement(abc.ABC):
 
     @abc.abstractmethod
     def compile_sm_circuit(
-        self, code: CSSCode, noise_model: NoiseModel, stim_ids: StimIds
+        self, code: CSSCode, stim_ids: StimIds
     ) -> tuple[stim.Circuit, list[list[int]]]:
         """
         Compiles a syndrome measurement circuit for a given CSSCode and noise model.
@@ -33,13 +31,11 @@ class SyndromeMeasurement(abc.ABC):
         args:
             code: CSSCode
                 The quantum code to be compiled into a single round of syndrome measurements
-            noise_model: NoiseModel
-                The noise model to wrap stim operations (1q gate, 2q gate, meas, and reset)
             stim_ids: StimIds
                 Stim circuit ids to be used for data qubits, z check qubits, and x check qubits
         returns:
             stim.Circuit:
-                Stim circuit containg the compiled syndrome measurement round
+                Stim circuit containing the compiled syndrome measurement round
             list[list[int]]:
                 The history of measurement rounds performed in the circuit.
                 Each round is a list of the stim ids measured that round, in the order they were passed to stim.
@@ -56,7 +52,6 @@ class BareColorCircuit(SyndromeMeasurement):
     def _code_to_subcircuit(
         self,
         code: ClassicalCode,
-        noise_model: NoiseModel,
         check_ids: list[int],
         data_ids: list[int],
         gate: str,
@@ -74,13 +69,15 @@ class BareColorCircuit(SyndromeMeasurement):
                 check_op = (check_ids[edge[0].index], data_ids[edge[1].index])
             schedule.setdefault(color, []).append(check_op)
         for color, moment in schedule.items():
-            noise_model.apply_2q_gates(circuit, gate, moment)
+            for check_qubit, data_qubit in moment:
+                circuit.append(gate, [check_qubit, data_qubit])
+            if moment:  # Only add TICK if there were operations in this moment
+                circuit.append("TICK")
         return circuit
 
     def compile_sm_circuit(
         self,
         code: CSSCode,
-        noise_model: NoiseModel,
         stim_ids: StimIds,
         coloring_strategy: str = "largest_first",
     ) -> tuple[stim.Circuit, list[list[int]]]:
@@ -89,7 +86,6 @@ class BareColorCircuit(SyndromeMeasurement):
         """
         z_subcircuit = self._code_to_subcircuit(
             code.code_z,
-            noise_model,
             stim_ids.z_check_ids,
             stim_ids.data_ids,
             "CZ",
@@ -97,18 +93,29 @@ class BareColorCircuit(SyndromeMeasurement):
         )
         x_subcircuit = self._code_to_subcircuit(
             code.code_x,
-            noise_model,
             stim_ids.x_check_ids,
             stim_ids.data_ids,
             "CX",
             coloring_strategy,
         )
         circuit = stim.Circuit()
-        noise_model.apply_reset(circuit, Pauli.Z, stim_ids.z_check_ids + stim_ids.x_check_ids)
-        noise_model.apply_1q_gates(circuit, "H", stim_ids.z_check_ids + stim_ids.x_check_ids)
-        circuit.append(z_subcircuit)
-        circuit.append(x_subcircuit)
-        noise_model.apply_1q_gates(circuit, "H", stim_ids.z_check_ids + stim_ids.x_check_ids)
-        noise_model.apply_meas(circuit, Pauli.Z, stim_ids.z_check_ids + stim_ids.x_check_ids)
+
+        # Reset check qubits to |+⟩ state
+        reset_qubits = stim_ids.z_check_ids + stim_ids.x_check_ids
+        if reset_qubits:
+            circuit.append("RX", reset_qubits)
+
+        # Append the Z and X subcircuits
+        circuit += z_subcircuit
+        circuit += x_subcircuit
+
+        # Apply Hadamard gates to return check qubits to Z basis
+        if reset_qubits:
+            circuit.append("H", reset_qubits)
+
+        # Measure check qubits in Z basis
+        if reset_qubits:
+            circuit.append("M", reset_qubits)
+
         measurements = [stim_ids.z_check_ids + stim_ids.x_check_ids]
         return circuit, measurements
