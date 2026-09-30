@@ -22,9 +22,12 @@ from .common import (
 )
 from .distance import (
     DistanceBackend,
+    DistanceMethod,
     get_distance_classical,
+    get_distance_css_brouwer_zimmermann,
     get_distance_quantum,
     validate_distance_backend,
+    validate_distance_method,
 )
 from .quantum import (
     BaconShorCode,
@@ -75,6 +78,7 @@ __all__ = [
     "CyclicCode",
     "DistanceBackend",
     "DistanceBalancedCode",
+    "DistanceMethod",
     "ErrorRateFunc",
     "ExtendedHammingCode",
     "FiveQubitCode",
@@ -110,6 +114,8 @@ __all__ = [
     "ToricCode",
     "TrivialCode",
     "get_distance_classical",
+    "get_distance_css_brouwer_zimmermann",
     "get_distance_quantum",
     "validate_distance_backend",
+    "validate_distance_method",
 ]

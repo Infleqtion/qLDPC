@@ -63,6 +63,20 @@ Some built-in families carry known parameters from their construction or the lit
 methods also accept explicit promises, such as equal X and Z distances. These values and promises
 are trusted rather than recomputed automatically; exact distance calculations can be exponential.
 
+Exact distances
+~~~~~~~~~~~~~~~
+
+Binary exact-distance calculations use Brouwer--Zimmermann enumeration by default. Pass
+``method="brute_force"`` to enumerate every generator combination instead. Both methods return
+once an observed upper bound is at most ``cutoff``; the default cutoff of one gives an exact result
+for valid codes.
+
+Classical distance is the minimum Hamming weight of a nonzero codeword. CSS codes support separate X
+and Z distances as well as their minimum. Stabilizer and subsystem codes use the minimum Pauli
+weight of a nontrivial logical operator. The implementations follow
+`Algorithm 994 <https://arxiv.org/abs/1603.06757>`_ and its
+`quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_.
+
 Distance bounds
 ~~~~~~~~~~~~~~~
 
@@ -245,9 +259,13 @@ checks do not commute, make sure you intend to build a subsystem code and test t
 Choose or supply a decoder
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``qldpc.decoders.get_decoder`` accepts a parity-check matrix or Stim detector error model. It uses
-GUF by default for a nonbinary field array and BP+OSD otherwise. Select one named decoder with its
-``with_<NAME>`` option, pass a ``decoder_constructor``, or supply a ``static_decoder``.
+Configure a decoder with a typed helper such as ``decoders.bp_lsd(...)`` or ``decoders.mwpm(...)``,
+and build it for a parity-check matrix or Stim detector error model with ``.build(...)``, or pass
+the settings as ``decoder=`` to a method that decodes. The default decoder is GUF for a nonbinary
+field array and BP+OSD otherwise. ``qldpc.decoders.get_observable_decoder`` builds a decoder that predicts the
+observable flips of a detector error model instead, and ``qldpc.decoders.SinterDecoder`` does so for
+Sinter. See :doc:`Choosing a decoder <decoders>` for the difference between error and observable
+decoders, custom decoders, and per-sector CSS choices.
 
 .. code-block:: python
 
@@ -257,8 +275,8 @@ GUF by default for a nonbinary field array and BP+OSD otherwise. Select one name
 
    code = codes.RepetitionCode(5)
    syndrome = np.array([1, 0, 0, 0])
-   decoder = decoders.get_decoder(code.matrix)
-   correction = decoder.decode(syndrome)
+   decoder = decoders.bp_osd().build(code.matrix)
+   correction = decoder.decode_errors(syndrome)
 
 Only some decoders can signal an erasure. Those decoders append the erasure flag as the last entry
 of each inferred error.
