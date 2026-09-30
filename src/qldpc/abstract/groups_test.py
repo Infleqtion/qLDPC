@@ -12,6 +12,7 @@ import operator
 import random
 import unittest.mock
 from collections.abc import Callable
+from typing import cast
 
 import galois
 import numpy as np
@@ -116,6 +117,174 @@ def test_natural_lift() -> None:
         for member in natural_group.generate()
     )
     assert_valid_lifts(natural_group)
+
+
+def test_permutation_representation() -> None:
+    """Construct permutation representations of cyclic and non-Abelian groups."""
+    cyclic_group = abstract.CyclicGroup(3)
+    representation = abstract.PermutationRepresentation(
+        cyclic_group, [abstract.GroupMember(0, 1, 2)], 5
+    )
+    generator = cyclic_group.generators[0]
+
+    assert representation.group is cyclic_group
+    assert representation.degree == 5
+    assert representation.generator_images == (abstract.GroupMember(0, 1, 2, size=5),)
+    assert representation.image(generator**2) == representation(generator) ** 2
+    assert representation(generator).array_form == [1, 2, 0, 3, 4]
+    assert np.array_equal(
+        representation.to_matrix(generator), representation(generator).to_matrix()
+    )
+    assert np.array_equal(
+        representation.to_matrix(generator * generator),
+        representation.to_matrix(generator) @ representation.to_matrix(generator),
+    )
+
+    symmetric_group = abstract.SymmetricGroup(3)
+    natural_representation = abstract.PermutationRepresentation(
+        symmetric_group, symmetric_group.generators, symmetric_group.degree
+    )
+    assert all(natural_representation(member) == member for member in symmetric_group.generate())
+
+    with pytest.raises(ValueError, match="do not define a group homomorphism"):
+        abstract.PermutationRepresentation(
+            abstract.CyclicGroup(2), [abstract.GroupMember(0, 1, 2)], 3
+        )
+
+    # Group subclasses may expose a preferred generator list that differs from the generators stored
+    # by their underlying SymPy group.  Evaluation must bind images to the same public generators
+    # that construction and relation validation use.
+    class ReversedGeneratorGroup(abstract.Group):
+        @property
+        def generators(self) -> list[abstract.GroupMember]:
+            return super().generators[::-1]
+
+    reordered_group = ReversedGeneratorGroup(
+        sympy.combinatorics.Permutation(0, 1, 2),
+        sympy.combinatorics.Permutation(3, 4),
+    )
+    reordered_representation = abstract.PermutationRepresentation(
+        reordered_group, reordered_group.generators, reordered_group.degree
+    )
+    assert all(
+        reordered_representation(generator) == generator for generator in reordered_group.generators
+    )
+
+    quaternion_group = abstract.QuaternionGroup()
+    quaternion_regular = abstract.PermutationRepresentation.regular(quaternion_group)
+    assert quaternion_regular.group is quaternion_group
+    assert len(set(map(quaternion_regular, quaternion_group.generate()))) == quaternion_group.order
+
+
+def test_nonfaithful_permutation_representation() -> None:
+    """A permutation representation need not be faithful."""
+    group = abstract.CyclicGroup(4)
+    representation = abstract.PermutationRepresentation(group, [[1, 0]], 2)
+    generator = group.generators[0]
+
+    assert representation(generator) == abstract.GroupMember(0, 1)
+    assert representation(generator**2) == abstract.GroupMember([], size=2)
+
+
+def test_permutation_representation_inputs() -> None:
+    """Normalize sequence, SymPy-permutation, and matrix generator images."""
+    group = abstract.CyclicGroup(2)
+    expected = abstract.GroupMember([1, 0, 2])
+    representations = [
+        abstract.PermutationRepresentation(group, [[1, 0]], 3),
+        abstract.PermutationRepresentation(group, [sympy.combinatorics.Permutation(0, 1)], 3),
+        abstract.PermutationRepresentation(group, [np.array([[0, 1], [1, 0]])], 3),
+    ]
+    assert all(representation.generator_images == (expected,) for representation in representations)
+
+    invalid_matrices = [
+        np.ones((2, 3), dtype=int),
+        np.array([[0, 2], [1, 0]]),
+        np.array([[1, 0], [1, 0]]),
+        np.array([[1, 1], [0, 0]]),
+    ]
+    for matrix in invalid_matrices:
+        with pytest.raises(ValueError, match="permutation matrix"):
+            abstract.PermutationRepresentation(group, [matrix], 3)
+
+    with pytest.raises(ValueError, match="must define a permutation"):
+        abstract.PermutationRepresentation(group, [[0, 0]], 2)
+    with pytest.raises(ValueError, match="exceeds the degree"):
+        abstract.PermutationRepresentation(group, [[1, 0]], 1)
+    with pytest.raises(ValueError, match="exceeds the degree"):
+        abstract.PermutationRepresentation.normalize_image(
+            sympy.combinatorics.Permutation(0, 1, 2), 2
+        )
+    with pytest.raises(ValueError, match="permutation or permutation matrix"):
+        abstract.PermutationRepresentation.normalize_image([[0], [1, 0]], 2)
+    with pytest.raises(ValueError, match="must contain integers"):
+        abstract.PermutationRepresentation.normalize_image([1.0, 0.0], 2)
+    with pytest.raises(ValueError, match="square permutation matrix"):
+        abstract.PermutationRepresentation.normalize_image(np.zeros((1, 1, 1), dtype=int), 1)
+    with pytest.raises(ValueError, match=r"degree.*nonnegative"):
+        abstract.PermutationRepresentation.normalize_image([], -1)
+
+    with pytest.raises(TypeError, match="must be defined on a Group"):
+        abstract.PermutationRepresentation(
+            cast(abstract.Group, object()),
+            [],
+            0,
+        )
+    with pytest.raises(ValueError, match=r"degree.*nonnegative"):
+        abstract.PermutationRepresentation(group, [[]], -1)
+
+
+def test_zero_degree_permutation_representation() -> None:
+    """The degree-zero action is represented by the unique empty permutation."""
+    group = abstract.CyclicGroup(3)
+    representation = abstract.PermutationRepresentation(group, [np.empty((0, 0), dtype=int)], 0)
+    sequence_representation = abstract.PermutationRepresentation(group, [[]], 0)
+
+    assert representation(group.identity) == abstract.GroupMember()
+    assert representation(group.generators[0]) == abstract.GroupMember()
+    assert representation.to_matrix(group.identity).shape == (0, 0)
+    assert sequence_representation.generator_images == (abstract.GroupMember(),)
+
+
+def test_permutation_representation_image_count() -> None:
+    """Require exactly one image for every stored group generator."""
+    group = abstract.CyclicGroup(2)
+    with pytest.raises(ValueError, match="Expected 1 generator images"):
+        abstract.PermutationRepresentation(group, [], 2)
+    with pytest.raises(ValueError, match="Expected 1 generator images"):
+        abstract.PermutationRepresentation(group, [[1, 0], [1, 0]], 2)
+
+
+def test_permutation_representation_rejects_nonmembers() -> None:
+    """Reject permutations outside the representation's domain group."""
+    group = abstract.CyclicGroup(3)
+    representation = abstract.PermutationRepresentation(group, group.generators, group.degree)
+
+    with pytest.raises(ValueError, match="does not belong"):
+        representation.image(sympy.combinatorics.Permutation(0, 1, 2, 3))
+    with pytest.raises(ValueError, match="does not belong"):
+        representation.image(sympy.combinatorics.Permutation(0, 1, size=3))
+
+
+def test_permutation_representation_helpers() -> None:
+    """Construct trivial and right-regular permutation actions."""
+    group = abstract.SymmetricGroup(3)
+    trivial = abstract.PermutationRepresentation.trivial(group, 4)
+    identity = abstract.GroupMember([], size=4)
+    assert trivial.group is group
+    assert all(trivial(member) == identity for member in group.generate())
+
+    regular = abstract.PermutationRepresentation.regular(group)
+    members = list(group.generate())
+    assert regular.group is group
+    assert regular.degree == group.order
+    assert len(set(map(regular, members))) == group.order
+    for generator, image in zip(group.generators, regular.generator_images):
+        assert image.array_form == [group.index(member * generator) for member in members]
+
+    trivial_group = abstract.TrivialGroup()
+    trivial_regular = abstract.PermutationRepresentation.regular(trivial_group)
+    assert trivial_regular(trivial_group.identity) == abstract.GroupMember([], size=1)
 
 
 def test_lifts() -> None:

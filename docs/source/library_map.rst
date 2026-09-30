@@ -88,6 +88,57 @@ The ``qldpc.abstract`` package provides finite groups, group rings, semisimple-r
 and ``RingArray``. A ``RingArray`` is a matrix over a group algebra whose entries can be lifted to
 blocks over a finite field; lifted-product and related code families build on this representation.
 
+Product constructions
+~~~~~~~~~~~~~~~~~~~~~
+
+``BPCode`` builds the balanced-product quotient of two equivariant chain complexes. Unlike a
+``Group``'s single matrix lift, a ``PermutationRepresentation`` describes one explicit action of a
+shared group on a distinguished basis. This permits different, including non-free, actions in each
+chain degree. Lifted products are the free-action specialization.
+
+For example, trivial actions make the quotient equal the ordinary tensor product. Action pairs
+passed to ``BPCode.from_codes`` are ordered as ``(checks, bits)``:
+
+.. code-block:: python
+
+   from qldpc.abstract import PermutationRepresentation, TrivialGroup
+   from qldpc.codes import BPCode, ClassicalCode
+
+   code_a = ClassicalCode([[1, 1]])
+   code_b = ClassicalCode([[1, 1, 1]])
+   group = TrivialGroup()
+   action_a = (
+       PermutationRepresentation.trivial(group, code_a.matrix.shape[0]),
+       PermutationRepresentation.trivial(group, code_a.matrix.shape[1]),
+   )
+   action_b = (
+       PermutationRepresentation.trivial(group, code_b.matrix.shape[0]),
+       PermutationRepresentation.trivial(group, code_b.matrix.shape[1]),
+   )
+   balanced_code = BPCode.from_codes(code_a, code_b, action_a, action_b)
+
+For the narrower cyclic free-action presentation, provide the row and column permutations of a seed
+matrix directly:
+
+.. code-block:: python
+
+   from qldpc.codes import BPCode
+
+   cyclic_code = BPCode.from_seed(
+       [[1, 1], [1, 1]], perm_rows=[1, 0], perm_cols=[1, 0]
+   )
+
+Distance balancing is a separate tensor-product construction. The sector is always an explicit
+caller choice; the constructor does not compare or compute distances:
+
+.. code-block:: python
+
+   from qldpc.codes import CSSCode, ClassicalCode, DistanceBalancedCode
+
+   css_code = CSSCode([[1, 1]], [[1, 1]])
+   auxiliary_code = ClassicalCode([[1, 1]])
+   distance_balanced_code = DistanceBalancedCode(css_code, auxiliary_code, "X")
+
 What each package does
 ----------------------
 

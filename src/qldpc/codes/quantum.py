@@ -23,7 +23,16 @@ from sympy.matrices.normalforms import hermite_normal_form
 import qldpc
 from qldpc import abstract
 from qldpc._util import networkx as nx
-from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
+from qldpc.objects import (
+    CayleyComplex,
+    ChainComplex,
+    ChainComplexAction,
+    Node,
+    Pauli,
+    PauliXZ,
+    PauliXZLike,
+    QuditPauli,
+)
 
 from .classical import (
     CyclicCode,
@@ -1260,6 +1269,221 @@ class BBCode(QCCode):
 
 
 FieldOrRingArray = TypeVar("FieldOrRingArray", galois.FieldArray, abstract.RingArray)
+
+
+class BPCode(CSSCode):
+    """Balanced-product CSS code from two equivariant one-link complexes.
+
+    This implements the `balanced-product code
+    <https://errorcorrectionzoo.org/c/balanced_product>`_, taking the quotient of a tensor-product
+    complex by a shared group action as in https://arxiv.org/abs/2012.09271.  It supports non-free
+    actions.  Lifted-product codes are the free-action specialization and are also available through
+    :class:`LPCode`.
+
+    The core constructor accepts an explicit right action and left action on two one-link chain
+    complexes.  Both actions must use the exact same group instance and finite field.  This class
+    validates supplied actions but does not discover symmetries of matrices or codes.
+
+    References:
+
+    - https://arxiv.org/abs/2012.09271
+    - https://arxiv.org/abs/2505.13679
+    """
+
+    action_a: ChainComplexAction
+    action_b: ChainComplexAction
+    chain: ChainComplex
+    seed_matrix: galois.FieldArray
+    perm_rows: abstract.GroupMember
+    perm_cols: abstract.GroupMember
+    orbit_length: int
+
+    def __init__(self, action_a: ChainComplexAction, action_b: ChainComplexAction) -> None:
+        """Construct a code from explicit right- and left-acting one-link complexes."""
+        if not isinstance(action_a, ChainComplexAction) or not isinstance(
+            action_b, ChainComplexAction
+        ):
+            raise TypeError("BPCode requires two ChainComplexAction inputs")
+        if action_a.chain.num_links != 1 or action_b.chain.num_links != 1:
+            raise ValueError("BPCode requires both chain complexes to have exactly one link")
+
+        self.action_a = action_a
+        self.action_b = action_b
+        self.chain = ChainComplex.balanced_product(action_a, action_b)
+
+        matrix_x = self.chain.op(1)
+        matrix_z = self.chain.op(2).T
+        assert isinstance(matrix_x, galois.FieldArray)
+        assert isinstance(matrix_z, galois.FieldArray)
+        super().__init__(matrix_x, matrix_z, is_subsystem_code=False)
+
+    @classmethod
+    def from_codes(
+        cls,
+        code_a: ClassicalCode,
+        code_b: ClassicalCode,
+        action_a_checks_bits: tuple[
+            abstract.PermutationRepresentation,
+            abstract.PermutationRepresentation,
+        ],
+        action_b_checks_bits: tuple[
+            abstract.PermutationRepresentation,
+            abstract.PermutationRepresentation,
+        ],
+    ) -> BPCode:
+        """Construct a balanced product from two classical codes and their right actions.
+
+        Each representation pair is ordered explicitly as ``(checks, bits)``, matching chain
+        degrees zero and one.  The complete action on ``code_b`` is dualized to provide the
+        left-acting cochain required by :class:`BPCode`.  The actions must be supplied; this method
+        does not search either parity-check matrix for symmetries.
+        """
+        if not isinstance(code_a, ClassicalCode) or not isinstance(code_b, ClassicalCode):
+            raise TypeError("BPCode.from_codes requires two ClassicalCode inputs")
+
+        chain_a = ChainComplex([code_a.matrix])
+        chain_b = ChainComplex([code_b.matrix])
+        action_a = ChainComplexAction(chain_a, action_a_checks_bits)
+        action_b = ChainComplexAction(chain_b, action_b_checks_bits)
+        return cls(action_a, action_b.T)
+
+    @classmethod
+    def from_seed(
+        cls,
+        seed_matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        perm_rows: abstract.PermutationImage,
+        perm_cols: abstract.PermutationImage,
+        field: int | type[galois.FieldArray] | None = None,
+    ) -> BPCode:
+        """Construct the cyclic, free-action presentation of arXiv:2505.13679v2.
+
+        This is the narrower presentation in Definition 1 of that paper, not the general
+        :class:`BPCode` constructor.  ``perm_rows`` and ``perm_cols`` are the supplied right-acting
+        matrices ``R`` and ``C`` in the convention ``R @ seed_matrix == seed_matrix @ C.T``.  Every
+        row and column orbit must have the same full cyclic length.  Inputs may be permutations,
+        integer image sequences, or square 0/1 permutation matrices.  No row or column symmetry is
+        discovered automatically.
+        """
+        seed = ClassicalCode(seed_matrix, field).matrix
+        if seed.ndim != 2:
+            raise ValueError("A balanced-product seed matrix must be two-dimensional")
+        num_checks, num_bits = seed.shape
+        seed_field = type(seed)
+
+        normalized_rows = abstract.PermutationRepresentation.normalize_image(perm_rows, num_checks)
+        normalized_cols = abstract.PermutationRepresentation.normalize_image(perm_cols, num_bits)
+        order_rows = int(normalized_rows.order())
+        order_cols = int(normalized_cols.order())
+        if order_rows != order_cols:
+            raise ValueError("The row and column permutations must have the same order")
+        orbit_length = order_rows
+
+        for name, permutation in [
+            ("row", normalized_rows),
+            ("column", normalized_cols),
+        ]:
+            if any(len(cycle) != orbit_length for cycle in permutation.full_cyclic_form):
+                raise ValueError(f"Every {name}-permutation orbit must have length {orbit_length}")
+
+        matrix_rows = seed_field(normalized_rows.to_matrix())
+        matrix_cols = seed_field(normalized_cols.to_matrix())
+        if not np.array_equal(matrix_rows @ seed, seed @ matrix_cols.T):
+            raise ValueError("The seed must satisfy the equivariance relation R @ I == I @ C.T")
+
+        group = abstract.CyclicGroup(orbit_length)
+        representation_checks = abstract.PermutationRepresentation(
+            group, [normalized_rows**-1], num_checks
+        )
+        representation_bits = abstract.PermutationRepresentation(group, [normalized_cols], num_bits)
+        seed_action = ChainComplexAction(
+            ChainComplex([seed]),
+            (representation_checks, representation_bits),
+        )
+
+        cycle_chain = ChainComplex([RingCode(orbit_length, seed_field).matrix])
+        regular = abstract.PermutationRepresentation.regular(group)
+        cycle_action = ChainComplexAction(cycle_chain, (regular, regular))
+
+        code = cls(cycle_action, seed_action.T)
+        code.seed_matrix = seed.copy()
+        code.perm_rows = normalized_rows
+        code.perm_cols = normalized_cols
+        code.orbit_length = orbit_length
+        return code
+
+
+class DistanceBalancedCode(CSSCode):
+    r"""Distance-balanced product of a CSS code and an auxiliary classical code.
+
+    This construction is separate from :class:`BPCode`.  The caller must use ``pauli`` to select the
+    logical sector to amplify; the class never inspects distances to determine which sector is
+    imbalanced.  For X amplification, the input checks form the chain
+    ``C_2 --H_X.T--> C_1 --H_Z--> C_0`` and the auxiliary parity-check matrix forms
+    ``D_1 --H_C--> D_0``.  The physical qudits are the total-degree-two module of ``C tensor D``.
+    Z amplification first exchanges X and Z in the input chain and exchanges them back in the
+    output.  This algebraic exchange works over arbitrary finite fields.
+
+    When ``H_pauli`` and ``H_C`` are full row rank, as in the presentation hypotheses used by the
+    cited distance results, the simple parameter formulas are ``K = k * k_C``,
+    ``D_pauli = d_pauli * d_C``, and ``D_other = d_other``.  This class preserves redundant and zero
+    check rows rather than replacing the supplied presentations by row-space bases.  In general,
+    the Kunneth contribution gives
+    ``K = k * k_C + (m_pauli - rank(H_pauli)) * (m_C - rank(H_C))``.  Thus dependencies in both the
+    selected quantum-check presentation and the auxiliary-check presentation add logical qudits,
+    and the simple distance equalities do not describe those additional sectors.
+
+    The construction does not determine whether the selected sector was actually the smaller one,
+    and it neither computes nor caches any distance.
+
+    References:
+
+    - Theorem 4.2 of https://arxiv.org/abs/2004.07935
+    - Equation (4) of https://arxiv.org/abs/2505.13679
+    - https://errorcorrectionzoo.org/c/distance_balanced
+    """
+
+    code: CSSCode
+    auxiliary_code: ClassicalCode
+    pauli: PauliXZ
+    chain: ChainComplex
+
+    def __init__(
+        self,
+        code: CSSCode,
+        auxiliary_code: ClassicalCode,
+        pauli: PauliXZLike,
+    ) -> None:
+        """Construct a distance-balanced code in the explicitly selected Pauli orientation."""
+        if not isinstance(code, CSSCode):
+            raise TypeError("DistanceBalancedCode requires a CSSCode input")
+        if not isinstance(auxiliary_code, ClassicalCode):
+            raise TypeError("DistanceBalancedCode requires a ClassicalCode auxiliary input")
+        if code.is_subsystem_code:
+            raise ValueError("DistanceBalancedCode does not support subsystem CSS codes")
+        if code.field is not auxiliary_code.field:
+            raise ValueError("DistanceBalancedCode inputs must use the same finite field")
+
+        self.code = code
+        self.auxiliary_code = auxiliary_code
+        self.pauli = Pauli.coerce_xz(pauli)
+
+        matrix_x = code.matrix_x
+        matrix_z = code.matrix_z
+        if self.pauli is Pauli.Z:
+            matrix_x, matrix_z = matrix_z, matrix_x
+
+        css_chain = ChainComplex([matrix_z, matrix_x.T])
+        auxiliary_chain = ChainComplex([auxiliary_code.matrix])
+        self.chain = ChainComplex.tensor_product(css_chain, auxiliary_chain)
+
+        output_x = self.chain.op(3).T
+        output_z = self.chain.op(2)
+        assert isinstance(output_x, galois.FieldArray)
+        assert isinstance(output_z, galois.FieldArray)
+        if self.pauli is Pauli.Z:
+            output_x, output_z = output_z, output_x
+
+        super().__init__(output_x, output_z, is_subsystem_code=False)
 
 
 class HGPCode(CSSCode):
