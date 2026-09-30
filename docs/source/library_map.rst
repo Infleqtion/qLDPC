@@ -102,56 +102,26 @@ The ``qldpc.abstract`` package provides finite groups, group rings, semisimple-r
 and ``RingArray``. A ``RingArray`` is a matrix over a group algebra whose entries can be lifted to
 blocks over a finite field; lifted-product and related code families build on this representation.
 
-Product constructions
-~~~~~~~~~~~~~~~~~~~~~
+Balanced products
+~~~~~~~~~~~~~~~~~
 
-``BPCode`` builds the balanced-product quotient of two equivariant chain complexes. Unlike a
-``Group``'s single matrix lift, a ``PermutationRepresentation`` describes one explicit action of a
-shared group on a distinguished basis. This permits different, including non-free, actions in each
-chain degree. Lifted products are the free-action specialization.
-
-For example, trivial actions make the quotient equal the ordinary tensor product. Action pairs
-passed to ``BPCode.from_codes`` are ordered as ``(checks, bits)``:
-
-.. code-block:: python
-
-   from qldpc.abstract import PermutationRepresentation, TrivialGroup
-   from qldpc.codes import BPCode, ClassicalCode
-
-   code_a = ClassicalCode([[1, 1]])
-   code_b = ClassicalCode([[1, 1, 1]])
-   group = TrivialGroup()
-   action_a = (
-       PermutationRepresentation.trivial(group, code_a.matrix.shape[0]),
-       PermutationRepresentation.trivial(group, code_a.matrix.shape[1]),
-   )
-   action_b = (
-       PermutationRepresentation.trivial(group, code_b.matrix.shape[0]),
-       PermutationRepresentation.trivial(group, code_b.matrix.shape[1]),
-   )
-   balanced_code = BPCode.from_codes(code_a, code_b, action_a, action_b)
-
-For the narrower cyclic free-action presentation, provide the row and column permutations of a seed
-matrix directly:
+A ``PermutationRepresentation`` is an action of a group by permutations. Unlike the single matrix
+lift of a ``Group``, a group can have many permutation representations, which need not be free or
+faithful. A ``ChainComplexAction`` assigns a permutation representation of one group to each module
+of a chain complex, and ``ChainComplex.balanced_product`` takes the quotient of the tensor product
+of two such chain complexes by their shared group action. ``BPCode`` is the CSS code defined by this
+quotient, and is a lifted product code if the group acts freely. For example, the following
+constructs the ``[[12, 2, 3]]`` code in Example 1 of `arXiv:2505.13679
+<https://arxiv.org/abs/2505.13679>`_ from a 6-cycle with an order-3 symmetry:
 
 .. code-block:: python
 
-   from qldpc.codes import BPCode
+   from qldpc.codes import BPCode, RingCode
 
-   cyclic_code = BPCode.from_seed(
-       [[1, 1], [1, 1]], perm_rows=[1, 0], perm_cols=[1, 0]
-   )
+   code = BPCode.from_seed(RingCode(6).matrix, [2, 3, 4, 5, 0, 1], [4, 5, 0, 1, 2, 3])
 
-Distance balancing is a separate tensor-product construction. The sector is always an explicit
-caller choice; the constructor does not compare or compute distances:
-
-.. code-block:: python
-
-   from qldpc.codes import CSSCode, ClassicalCode, DistanceBalancedCode
-
-   css_code = CSSCode([[1, 1]], [[1, 1]])
-   auxiliary_code = ClassicalCode([[1, 1]])
-   distance_balanced_code = DistanceBalancedCode(css_code, auxiliary_code, "X")
+``DistanceBalancedCode`` is a different tensor-product construction that multiplies either the X-
+or the Z-distance of a CSS code by the distance of a classical code.
 
 What each package does
 ----------------------

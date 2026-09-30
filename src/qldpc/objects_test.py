@@ -4,12 +4,13 @@
 
 from __future__ import annotations
 
-import itertools
-from typing import cast
+import math
 
 import galois
 import numpy as np
+import numpy.typing as npt
 import pytest
+import scipy.linalg
 import sympy.combinatorics as comb
 
 from qldpc import abstract, objects
@@ -174,455 +175,155 @@ def test_chain_complex(field: int = 3) -> None:
         objects.ChainComplex.tensor_product(ring_matrix, ring_matrix)
 
 
-def get_chain_action_data() -> tuple[
-    objects.ChainComplex,
-    abstract.Group,
-    tuple[abstract.PermutationRepresentation, abstract.PermutationRepresentation],
-]:
-    """Build a one-link chain with compatible actions having different orbit structures."""
-    field = galois.GF(5)
-    differential = field(np.column_stack((np.identity(3, dtype=int), np.ones(3, dtype=int))))
-    chain = objects.ChainComplex([differential])
+def test_chain_complex_action() -> None:
+    """Permutation actions on chain complexes."""
     group = abstract.CyclicGroup(3)
-    representations = (
+    chain = objects.ChainComplex([np.array([[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1]])], field=5)
+    representations = [
         abstract.PermutationRepresentation(group, [[1, 2, 0]], 3),
         abstract.PermutationRepresentation(group, [[1, 2, 0]], 4),
-    )
-    return chain, group, representations
+    ]
+    action = objects.ChainComplexAction(chain, representations)
+    assert action.group is group
+    assert action.T.representations == tuple(representations[::-1])
+    assert np.array_equal(action.T.chain.op(1), chain.op(1).T)
 
-
-def test_chain_complex_action() -> None:
-    """Construct nontrivial right and left actions with distinct degree-wise orbit structures."""
-    chain, group, representations = get_chain_action_data()
-    original_field = chain.field
-
-    for right in [True, False]:
-        action = objects.ChainComplexAction(chain, representations, right=right)
-        assert action.chain is chain
-        assert action.representations == representations
-        assert action.group is group
-        assert action.right is right
-        assert action.representation(0) is representations[0]
-        assert action.representation(1) is representations[1]
-        assert chain.field is original_field
-
-    assert representations[0].generator_images[0].array_form == [1, 2, 0]
-    assert representations[1].generator_images[0].array_form == [1, 2, 0, 3]
-
-
-def test_chain_complex_action_validation() -> None:
-    """Reject incompatible chain complexes and permutation representations."""
-    chain, group, representations = get_chain_action_data()
-
-    with pytest.raises(TypeError, match="ChainComplex"):
-        objects.ChainComplexAction(cast(objects.ChainComplex, object()), representations)
-    with pytest.raises(TypeError, match="boolean 'right' value"):
-        objects.ChainComplexAction(chain, representations, right=cast(bool, 1))
-    with pytest.raises(ValueError, match="exactly 2"):
+    with pytest.raises(ValueError, match="does not commute"):
+        bad_chain = objects.ChainComplex([np.array([[1, 0, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0]])])
+        objects.ChainComplexAction(bad_chain, representations)
+    with pytest.raises(ValueError, match="Expected 2 permutation representations"):
         objects.ChainComplexAction(chain, representations[:1])
-    with pytest.raises(TypeError, match="Every chain degree"):
-        invalid_representation = cast(abstract.PermutationRepresentation, object())
-        objects.ChainComplexAction(chain, (representations[0], invalid_representation))
-    with pytest.raises(ValueError, match=r"degree 1 has degree 3.*dimension 4"):
-        wrong_dimension = abstract.PermutationRepresentation(group, [[1, 2, 0]], 3)
-        objects.ChainComplexAction(chain, (representations[0], wrong_dimension))
-    with pytest.raises(ValueError, match="exact same Group instance"):
+    with pytest.raises(ValueError, match="acts on 3 points"):
+        objects.ChainComplexAction(chain, [representations[0], representations[0]])
+    with pytest.raises(ValueError, match="same Group instance"):
         other_group = abstract.CyclicGroup(3)
         other_representation = abstract.PermutationRepresentation(other_group, [[1, 2, 0]], 4)
-        objects.ChainComplexAction(chain, (representations[0], other_representation))
-
-    bad_differential = np.column_stack((np.identity(3, dtype=int), [1, 0, 0]))
-    bad_chain = objects.ChainComplex([bad_differential], field=5)
-    with pytest.raises(ValueError, match="degree 1 is not equivariant under the right action"):
-        objects.ChainComplexAction(bad_chain, representations)
-
-    ring = abstract.GroupRing(abstract.TrivialGroup())
-    ring_chain = objects.ChainComplex([abstract.RingArray.build([[0]], ring)])
-    trivial_representations = (
-        abstract.PermutationRepresentation.trivial(group, 1),
-        abstract.PermutationRepresentation.trivial(group, 1),
-    )
-    with pytest.raises(ValueError, match="RingArray-valued"):
-        objects.ChainComplexAction(ring_chain, trivial_representations)
-
-
-def test_chain_complex_action_transpose() -> None:
-    """Dualize a right action to a left action without inverting its images."""
-    chain, group, representations = get_chain_action_data()
-    action = objects.ChainComplexAction(chain, representations)
-    dual = action.T
-
-    assert dual.group is group
-    assert not dual.right
-    assert dual.chain.field is chain.field
-    assert dual.representations == representations[::-1]
-    assert dual.representation(0).generator_images == representations[1].generator_images
-    assert dual.representation(1).generator_images == representations[0].generator_images
-    assert np.array_equal(dual.chain.op(1), chain.op(1).T)
-
-    round_trip = dual.T
-    assert round_trip.right
-    assert round_trip.representations == representations
-    assert round_trip.chain.field is chain.field
-    assert np.array_equal(round_trip.chain.op(1), chain.op(1))
-
-
-def test_chain_complex_action_zero_dimension() -> None:
-    """Support chain degrees with a zero-dimensional module."""
-    field = galois.GF(3)
-    chain = objects.ChainComplex([field.Zeros((0, 2))])
-    group = abstract.CyclicGroup(2)
-    representations = (
-        abstract.PermutationRepresentation(group, [[]], 0),
-        abstract.PermutationRepresentation(group, [[1, 0]], 2),
-    )
-
-    action = objects.ChainComplexAction(chain, representations)
-    assert action.representation(0).degree == 0
-    assert action.T.representation(1).degree == 0
-
-    with pytest.raises(IndexError, match="out of range"):
-        action.representation(-1)
-    with pytest.raises(IndexError, match="out of range"):
-        action.representation(2)
-
-
-def get_test_degree_pairs(
-    chain_a: objects.ChainComplex, chain_b: objects.ChainComplex, degree: int
-) -> list[tuple[int, int]]:
-    """Get total-product sectors without using the implementation helper."""
-    return [
-        (deg_a, degree - deg_a)
-        for deg_a in range(min(chain_a.num_links, degree), -1, -1)
-        if degree - deg_a <= chain_b.num_links
-    ]
-
-
-def get_diagonal_orbits(
-    representation_a: abstract.PermutationRepresentation,
-    representation_b: abstract.PermutationRepresentation,
-) -> list[tuple[tuple[int, int], ...]]:
-    """Enumerate simultaneous-action orbits independently using every group member."""
-    members = tuple(representation_a.group.generate())
-    remaining = set(
-        itertools.product(range(representation_a.degree), range(representation_b.degree))
-    )
-    orbits = []
-    while remaining:
-        representative = min(remaining)
-        orbit = {
-            (
-                representation_a(member).apply(representative[0]),
-                representation_b(member).apply(representative[1]),
-            )
-            for member in members
-        }
-        orbits.append(tuple(sorted(orbit)))
-        remaining -= orbit
-    return orbits
-
-
-def get_quotient_basis(
-    action_a: objects.ChainComplexAction,
-    action_b: objects.ChainComplexAction,
-    degree: int,
-) -> list[tuple[tuple[int, int], tuple[tuple[int, int], ...]]]:
-    """List quotient basis orbits in tensor-sector order."""
-    basis: list[tuple[tuple[int, int], tuple[tuple[int, int], ...]]] = []
-    for deg_a, deg_b in get_test_degree_pairs(action_a.chain, action_b.chain, degree):
-        orbits = get_diagonal_orbits(action_a.representation(deg_a), action_b.representation(deg_b))
-        basis.extend(((deg_a, deg_b), orbit) for orbit in orbits)
-    return basis
-
-
-def get_quotient_maps(
-    action_a: objects.ChainComplexAction,
-    action_b: objects.ChainComplexAction,
-    degree: int,
-    basis: list[tuple[tuple[int, int], tuple[tuple[int, int], ...]]] | None = None,
-) -> tuple[galois.FieldArray, galois.FieldArray]:
-    """Build an orbit projection and a representative lift into the full tensor module."""
-    chain_a, chain_b = action_a.chain, action_b.chain
-    basis = basis if basis is not None else get_quotient_basis(action_a, action_b, degree)
-
-    sector_offsets = {}
-    full_dimension = 0
-    for deg_a, deg_b in get_test_degree_pairs(chain_a, chain_b, degree):
-        sector_offsets[deg_a, deg_b] = full_dimension
-        full_dimension += chain_a.dim(deg_a) * chain_b.dim(deg_b)
-
-    projection = chain_a.field.Zeros((len(basis), full_dimension))
-    lift = chain_a.field.Zeros((full_dimension, len(basis)))
-    for quotient_index, ((deg_a, deg_b), orbit) in enumerate(basis):
-        sector_offset = sector_offsets[deg_a, deg_b]
-        dim_b = chain_b.dim(deg_b)
-        for index_a, index_b in orbit:
-            projection[quotient_index, sector_offset + index_a * dim_b + index_b] = 1
-        representative_a, representative_b = orbit[0]
-        lift[sector_offset + representative_a * dim_b + representative_b, quotient_index] = 1
-
-    return projection, lift
-
-
-def assert_balanced_quotient_diagram(
-    action_a: objects.ChainComplexAction, action_b: objects.ChainComplexAction
-) -> objects.ChainComplex:
-    """Check the quotient diagram against a separately materialized tensor product."""
-    tensor = objects.ChainComplex.tensor_product(action_a.chain, action_b.chain)
-    balanced = objects.ChainComplex.balanced_product(action_a, action_b)
-    projections = [
-        get_quotient_maps(action_a, action_b, degree)[0] for degree in range(tensor.num_links + 1)
-    ]
-
-    for degree in range(1, tensor.num_links + 1):
-        tensor_op = tensor.op(degree)
-        balanced_op = balanced.op(degree)
-        assert isinstance(tensor_op, galois.FieldArray)
-        assert isinstance(balanced_op, galois.FieldArray)
-        assert np.array_equal(
-            balanced_op @ projections[degree],
-            projections[degree - 1] @ tensor_op,
+        objects.ChainComplexAction(chain, [representations[0], other_representation])
+    with pytest.raises(ValueError, match="over a finite field"):
+        ring = abstract.GroupRing(abstract.TrivialGroup())
+        ring_chain = objects.ChainComplex([abstract.RingArray.build([[0]], ring)])
+        objects.ChainComplexAction(
+            ring_chain, [abstract.PermutationRepresentation.trivial(group, 1)] * 2
         )
 
-    return balanced
 
+def get_orbit_projection(
+    representation_a: abstract.PermutationRepresentation,
+    representation_b: abstract.PermutationRepresentation,
+) -> npt.NDArray[np.int_]:
+    """Project pairs of points onto their orbits under the diagonal group action.
 
-@pytest.mark.parametrize("field_order", [2, 3])
-def test_balanced_product_trivial_group(field_order: int) -> None:
-    """A balanced product by the trivial group is the ordinary tensor product."""
-    field = galois.GF(field_order)
-    chain_a = objects.ChainComplex([field([[1, 1, 0], [0, 1, 1]])])
-    chain_b = objects.ChainComplex([field([[1, 0], [1, 1], [0, 1]])])
-    group = abstract.TrivialGroup()
-    representations_a = tuple(
-        abstract.PermutationRepresentation.trivial(group, chain_a.dim(degree))
-        for degree in range(chain_a.num_links + 1)
-    )
-    representations_b = tuple(
-        abstract.PermutationRepresentation.trivial(group, chain_b.dim(degree))
-        for degree in range(chain_b.num_links + 1)
-    )
-    action_a = objects.ChainComplexAction(chain_a, representations_a)
-    action_b = objects.ChainComplexAction(chain_b, representations_b, right=False)
-
-    balanced = assert_balanced_quotient_diagram(action_a, action_b)
-    tensor = objects.ChainComplex.tensor_product(chain_a, chain_b)
-    assert balanced.field is field
-    assert balanced.ring is None
-    assert all(
-        np.array_equal(op_balanced, op_tensor)
-        for op_balanced, op_tensor in zip(balanced.ops, tensor.ops)
-    )
-
-
-def test_balanced_product_nonfree_actions() -> None:
-    """Count quotient sectors for C2 actions with degree-dependent fixed points."""
-    field = galois.GF(5)
-    group = abstract.CyclicGroup(2)
-    one_swap = [1, 0, 2, 3]
-    two_swaps = [1, 0, 3, 2]
-    identity = [0, 1, 2, 3]
-
-    chain_a = objects.ChainComplex(
+    Orbits are ordered by their smallest pair, and pairs are flattened in row-major order.
+    """
+    shape = (representation_a.degree, representation_b.degree)
+    diagonal_group = comb.PermutationGroup(
         [
-            field(
+            comb.Permutation(
                 [
-                    [1, 0, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, 1, 1],
-                    [0, 0, 0, 0],
+                    np.ravel_multi_index((image_a.array_form[aa], image_b.array_form[bb]), shape)
+                    for aa, bb in np.ndindex(shape)
                 ]
+            )
+            for image_a, image_b in zip(
+                representation_a.generator_images, representation_b.generator_images
             )
         ]
     )
+    orbits = sorted(diagonal_group.orbits(), key=min)
+    projection = np.zeros((len(orbits), math.prod(shape)), dtype=int)
+    for index, orbit in enumerate(orbits):
+        projection[index, list(orbit)] = 1
+    return projection
+
+
+def test_balanced_product() -> None:
+    """Balanced products of chain complexes are quotients of tensor products."""
+    # non-free actions of a cyclic group
+    group = abstract.CyclicGroup(2)
+    chain_a = objects.ChainComplex(
+        [np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]])], field=3
+    )
+    chain_b = objects.ChainComplex(
+        [np.array([[1, 0, 0, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])], field=3
+    )
+    swap_one, swap_two = [1, 0, 2, 3], [1, 0, 3, 2]
     action_a = objects.ChainComplexAction(
         chain_a,
-        (
-            abstract.PermutationRepresentation(group, [one_swap], 4),
-            abstract.PermutationRepresentation(group, [two_swaps], 4),
-        ),
-    )
-
-    chain_b = objects.ChainComplex(
         [
-            field(
-                [
-                    [1, 0, 0, 0],
-                    [1, 0, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, 1, 0],
-                ]
-            )
-        ]
+            abstract.PermutationRepresentation(group, [swap_one], 4),
+            abstract.PermutationRepresentation(group, [swap_two], 4),
+        ],
     )
     action_b = objects.ChainComplexAction(
         chain_b,
-        (
-            abstract.PermutationRepresentation(group, [one_swap], 4),
-            abstract.PermutationRepresentation(group, [identity], 4),
-        ),
-        right=False,
+        [
+            abstract.PermutationRepresentation(group, [swap_one], 4),
+            abstract.PermutationRepresentation.trivial(group, 4),
+        ],
     )
+    assert_valid_balanced_product(action_a, action_b, [10, 20, 8])
 
-    balanced = assert_balanced_quotient_diagram(action_a, action_b)
-    assert [balanced.dim(degree) for degree in range(3)] == [10, 20, 8]
-    middle_basis = get_quotient_basis(action_a, action_b, 1)
-    assert [
-        sum(degrees == sector for degrees, _ in middle_basis) for sector in [(1, 0), (0, 1)]
-    ] == [8, 12]
-
-
-@pytest.mark.parametrize("group_order", [2, 3])
-def test_balanced_product_modular_cancellation(group_order: int) -> None:
-    """Accumulate orbit coefficients in the field, including modular cancellation."""
-    field = galois.GF(group_order)
-    group = abstract.CyclicGroup(group_order)
-    chain = objects.ChainComplex([field.Ones((group_order, 1))])
-    representations = (
-        abstract.PermutationRepresentation.regular(group),
-        abstract.PermutationRepresentation.trivial(group, 1),
+    # orbits that contribute to the same boundary operator entry, whose contributions cancel
+    regular = abstract.PermutationRepresentation.regular(group)
+    chain = objects.ChainComplex([np.ones((2, 1), dtype=int)])
+    action = objects.ChainComplexAction(
+        chain, [regular, abstract.PermutationRepresentation.trivial(group, 1)]
     )
-    action_a = objects.ChainComplexAction(chain, representations)
-    action_b = objects.ChainComplexAction(chain, representations, right=False)
-
-    balanced = assert_balanced_quotient_diagram(action_a, action_b)
-    assert [balanced.dim(degree) for degree in range(3)] == [group_order, 2, 1]
+    balanced = assert_valid_balanced_product(action, action, [2, 2, 1])
     assert not np.any(balanced.op(2))
-    assert np.any(balanced.op(1))
 
-
-def test_balanced_product_nonabelian_diagonal_action() -> None:
-    """Use a Frobenius group to distinguish diagonal from inverse-paired generators."""
-    group = abstract.Group(
-        comb.Permutation(0, 1, 2, 3, 4, 5, 6),
-        comb.Permutation(1, 2, 4)(3, 6, 5),
+    # the regular action of a non-abelian group, for which ignoring the distinction between left
+    # and right actions would identify too many basis elements
+    frobenius_group = abstract.Group(
+        comb.Permutation(0, 1, 2, 3, 4, 5, 6), comb.Permutation(1, 2, 4)(3, 6, 5)
     )
-    assert group.order == 21
-    field = galois.GF(2)
-    chain = objects.ChainComplex([field.Identity(group.order)])
-    regular = abstract.PermutationRepresentation.regular(group)
-    action_a = objects.ChainComplexAction(chain, (regular, regular))
-    action_b = objects.ChainComplexAction(chain, (regular, regular), right=False)
+    regular = abstract.PermutationRepresentation.regular(frobenius_group)
+    chain = objects.ChainComplex([np.eye(frobenius_group.order, dtype=int)])
+    action = objects.ChainComplexAction(chain, [regular, regular])
+    assert_valid_balanced_product(action, action, [21, 42, 21])
 
-    assert len(get_diagonal_orbits(regular, regular)) == 21
-    balanced = objects.ChainComplex.balanced_product(action_a, action_b)
-    assert [balanced.dim(degree) for degree in range(3)] == [21, 42, 21]
-
-
-def get_basis_mapping(
-    field: type[galois.FieldArray],
-    canonical_basis: list[tuple[tuple[int, int], tuple[tuple[int, int], ...]]],
-    alternative_basis: list[tuple[tuple[int, int], tuple[tuple[int, int], ...]]],
-) -> galois.FieldArray:
-    """Map canonical quotient coordinates to a reordered orbit basis."""
-    mapping = field.Zeros((len(alternative_basis), len(canonical_basis)))
-    canonical_orbits = [(degrees, frozenset(orbit)) for degrees, orbit in canonical_basis]
-    for alternative_index, (degrees, orbit) in enumerate(alternative_basis):
-        canonical_index = canonical_orbits.index((degrees, frozenset(orbit)))
-        mapping[alternative_index, canonical_index] = 1
-    return mapping
-
-
-def test_balanced_product_representative_independence() -> None:
-    """Changing every orbit representative only changes the explicitly ordered quotient basis."""
-    field = galois.GF(5)
-    group = abstract.CyclicGroup(3)
-    chain = objects.ChainComplex([field.Identity(group.order)])
-    regular = abstract.PermutationRepresentation.regular(group)
-    action_a = objects.ChainComplexAction(chain, (regular, regular))
-    action_b = objects.ChainComplexAction(chain, (regular, regular), right=False)
-    tensor = objects.ChainComplex.tensor_product(chain, chain)
-    balanced = objects.ChainComplex.balanced_product(action_a, action_b)
-
-    canonical_bases = [get_quotient_basis(action_a, action_b, degree) for degree in range(3)]
-    alternative_bases = [
-        [(degrees, orbit[1:] + orbit[:1]) for degrees, orbit in reversed(canonical_basis)]
-        for canonical_basis in canonical_bases
-    ]
-    assert all(
-        orbit[0] != alternative_orbit[0]
-        for canonical_basis, alternative_basis in zip(canonical_bases, alternative_bases)
-        for (_, orbit), (_, alternative_orbit) in zip(canonical_basis, reversed(alternative_basis))
-    )
-
-    basis_mappings = [
-        get_basis_mapping(field, canonical_basis, alternative_basis)
-        for canonical_basis, alternative_basis in zip(canonical_bases, alternative_bases)
-    ]
-    quotient_maps = [
-        get_quotient_maps(action_a, action_b, degree, alternative_basis)
-        for degree, alternative_basis in enumerate(alternative_bases)
-    ]
-    for degree in range(1, 3):
-        tensor_op = tensor.op(degree)
-        balanced_op = balanced.op(degree)
-        assert isinstance(tensor_op, galois.FieldArray)
-        assert isinstance(balanced_op, galois.FieldArray)
-        target_projection = quotient_maps[degree - 1][0]
-        source_lift = quotient_maps[degree][1]
-        alternative_op = target_projection @ tensor_op @ source_lift
-        assert np.array_equal(
-            alternative_op @ basis_mappings[degree],
-            basis_mappings[degree - 1] @ balanced_op,
+    with pytest.raises(ValueError, match="same field"):
+        chain_b = objects.ChainComplex([np.eye(frobenius_group.order, dtype=int)], field=3)
+        objects.ChainComplex.balanced_product(
+            action, objects.ChainComplexAction(chain_b, [regular, regular])
         )
+    with pytest.raises(ValueError, match="same Group instance"):
+        other_group = abstract.TrivialGroup()
+        other_action = objects.ChainComplexAction(
+            objects.ChainComplex([np.eye(1, dtype=int)]),
+            [abstract.PermutationRepresentation.trivial(other_group, 1)] * 2,
+        )
+        objects.ChainComplex.balanced_product(action, other_action)
 
 
-def test_balanced_product_zero_dimensions() -> None:
-    """Preserve empty modules and zero-row and zero-column differentials."""
-    field = galois.GF(3)
-    group = abstract.CyclicGroup(2)
-    chain = objects.ChainComplex([field.Zeros((0, 2))])
-    representations = (
-        abstract.PermutationRepresentation(group, [[]], 0),
-        abstract.PermutationRepresentation(group, [[1, 0]], 2),
-    )
-    action_a = objects.ChainComplexAction(chain, representations)
-    action_b = action_a.T
+def assert_valid_balanced_product(
+    action_a: objects.ChainComplexAction,
+    action_b: objects.ChainComplexAction,
+    dims: list[int],
+) -> objects.ChainComplex:
+    """Check that projecting onto orbits maps a tensor product onto a balanced product."""
+    chain_a, chain_b = action_a.chain, action_b.chain
+    tensor = objects.ChainComplex.tensor_product(chain_a, chain_b)
+    balanced = objects.ChainComplex.balanced_product(action_a, action_b)
+    assert [balanced.dim(degree) for degree in range(len(dims))] == dims
 
-    balanced = assert_balanced_quotient_diagram(action_a, action_b)
-    assert [balanced.dim(degree) for degree in range(3)] == [0, 2, 0]
-    assert [op.shape for op in balanced.ops] == [(0, 2), (2, 0)]
-
-
-def test_balanced_product_validation() -> None:
-    """Reject invalid action types, sides, fields, and group identities."""
-    field = galois.GF(2)
-    group = abstract.TrivialGroup()
-    chain = objects.ChainComplex([field.Identity(1)])
-    representations = (
-        abstract.PermutationRepresentation.trivial(group, 1),
-        abstract.PermutationRepresentation.trivial(group, 1),
-    )
-    right_action = objects.ChainComplexAction(chain, representations)
-    left_action = objects.ChainComplexAction(chain, representations, right=False)
-
-    invalid_action = cast(objects.ChainComplexAction, object())
-    with pytest.raises(TypeError, match="two ChainComplexAction"):
-        objects.ChainComplex.balanced_product(invalid_action, left_action)
-    with pytest.raises(TypeError, match="two ChainComplexAction"):
-        objects.ChainComplex.balanced_product(right_action, invalid_action)
-    with pytest.raises(ValueError, match=r"first.*right action"):
-        objects.ChainComplex.balanced_product(left_action, left_action)
-    with pytest.raises(ValueError, match=r"second.*left action"):
-        objects.ChainComplex.balanced_product(right_action, right_action)
-
-    other_field = galois.GF(3)
-    other_chain = objects.ChainComplex([other_field.Identity(1)])
-    other_field_representations = (
-        abstract.PermutationRepresentation.trivial(group, 1),
-        abstract.PermutationRepresentation.trivial(group, 1),
-    )
-    other_field_action = objects.ChainComplexAction(
-        other_chain, other_field_representations, right=False
-    )
-    with pytest.raises(ValueError, match="same finite field"):
-        objects.ChainComplex.balanced_product(right_action, other_field_action)
-
-    other_group = abstract.TrivialGroup()
-    other_group_representations = (
-        abstract.PermutationRepresentation.trivial(other_group, 1),
-        abstract.PermutationRepresentation.trivial(other_group, 1),
-    )
-    other_group_action = objects.ChainComplexAction(chain, other_group_representations, right=False)
-    with pytest.raises(ValueError, match="exact same Group instance"):
-        objects.ChainComplex.balanced_product(right_action, other_group_action)
+    projections = [
+        chain_a.field(
+            scipy.linalg.block_diag(
+                *[
+                    get_orbit_projection(
+                        action_a.representations[deg_a], action_b.representations[deg_b]
+                    )
+                    for deg_a, deg_b in objects.ChainComplex._get_degree_pairs(
+                        chain_a, chain_b, degree
+                    )
+                ]
+            )
+        )
+        for degree in range(tensor.num_links + 1)
+    ]
+    for degree in range(1, tensor.num_links + 1):
+        assert np.array_equal(
+            balanced.op(degree) @ projections[degree], projections[degree - 1] @ tensor.op(degree)
+        )
+    return balanced

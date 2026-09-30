@@ -9,7 +9,6 @@ import os
 import subprocess
 import sys
 import unittest.mock
-from typing import cast
 
 import networkx as nx
 import numpy as np
@@ -568,562 +567,6 @@ def test_hypergraph_product(
     )
 
 
-@pytest.mark.parametrize("field_order", [2, 3])
-def test_balanced_product_trivial_actions(field_order: int) -> None:
-    """A BPCode over a trivial group is exactly the corresponding HGPCode."""
-    code_a = codes.ClassicalCode([[1, 1, 0], [0, 1, 1]], field=field_order)
-    code_b = codes.ClassicalCode([[1, 0], [1, 1], [0, 1]], field=field_order)
-    group = abstract.TrivialGroup()
-    chain_a = ChainComplex([code_a.matrix])
-    chain_b = ChainComplex([code_b.matrix])
-    representations_a = tuple(
-        abstract.PermutationRepresentation.trivial(group, chain_a.dim(degree))
-        for degree in range(2)
-    )
-    representations_b = tuple(
-        abstract.PermutationRepresentation.trivial(group, chain_b.dim(degree))
-        for degree in range(2)
-    )
-    action_a = qldpc.objects.ChainComplexAction(chain_a, representations_a)
-    action_b = qldpc.objects.ChainComplexAction(chain_b, representations_b).T
-
-    code = codes.BPCode(action_a, action_b)
-    expected = codes.HGPCode(code_a, code_b, set_logicals=False)
-
-    assert code.action_a is action_a
-    assert code.action_b is action_b
-    assert code.chain.field is code_a.field
-    assert np.array_equal(code.matrix_x, expected.matrix_x)
-    assert np.array_equal(code.matrix_z, expected.matrix_z)
-
-
-def test_balanced_product_from_codes_action_order() -> None:
-    """Keep the explicitly supplied (checks, bits) action order before dualizing code B."""
-    field = abstract.resolve_field(5)
-    group = abstract.CyclicGroup(2)
-    one_swap = [1, 0, 2, 3]
-    two_swaps = [1, 0, 3, 2]
-    identity = [0, 1, 2, 3]
-    code_a = codes.ClassicalCode(
-        field(
-            [
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, 1],
-                [0, 0, 0, 0],
-            ]
-        )
-    )
-    code_b = codes.ClassicalCode(
-        field(
-            [
-                [1, 0, 0, 0],
-                [1, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 1, 0],
-            ]
-        )
-    )
-    action_a_checks_bits = (
-        abstract.PermutationRepresentation(group, [one_swap], 4),
-        abstract.PermutationRepresentation(group, [two_swaps], 4),
-    )
-    action_b_checks_bits = (
-        abstract.PermutationRepresentation(group, [one_swap], 4),
-        abstract.PermutationRepresentation(group, [identity], 4),
-    )
-
-    code = codes.BPCode.from_codes(
-        code_a,
-        code_b,
-        action_a_checks_bits,
-        action_b_checks_bits,
-    )
-
-    assert code.action_a.representations == action_a_checks_bits
-    assert code.action_b.representations == action_b_checks_bits[::-1]
-    assert not code.action_b.right
-    assert [code.chain.dim(degree) for degree in range(3)] == [12, 18, 8]
-
-
-def test_balanced_product_nonfree_actions() -> None:
-    """Non-free actions give the independently counted orbit modules and a valid CSS code."""
-    field = abstract.resolve_field(5)
-    group = abstract.CyclicGroup(2)
-    one_swap = [1, 0, 2, 3]
-    two_swaps = [1, 0, 3, 2]
-    identity = [0, 1, 2, 3]
-    chain_a = ChainComplex(
-        [
-            field(
-                [
-                    [1, 0, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, 1, 1],
-                    [0, 0, 0, 0],
-                ]
-            )
-        ]
-    )
-    action_a = qldpc.objects.ChainComplexAction(
-        chain_a,
-        (
-            abstract.PermutationRepresentation(group, [one_swap], 4),
-            abstract.PermutationRepresentation(group, [two_swaps], 4),
-        ),
-    )
-    chain_b = ChainComplex(
-        [
-            field(
-                [
-                    [1, 0, 0, 0],
-                    [1, 0, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 0, 1, 0],
-                ]
-            )
-        ]
-    )
-    action_b = qldpc.objects.ChainComplexAction(
-        chain_b,
-        (
-            abstract.PermutationRepresentation(group, [one_swap], 4),
-            abstract.PermutationRepresentation(group, [identity], 4),
-        ),
-        right=False,
-    )
-
-    code = codes.BPCode(action_a, action_b)
-
-    # Burnside counts for degrees 0, 1, and 2 are 10, 8 + 12, and 8, respectively.
-    assert [code.chain.dim(degree) for degree in range(3)] == [10, 20, 8]
-    rank_x = int(np.linalg.matrix_rank(code.matrix_x))
-    rank_z = int(np.linalg.matrix_rank(code.matrix_z))
-    assert (rank_x, rank_z) == (10, 8)
-    assert code.dimension == 20 - rank_x - rank_z == 2
-    assert not np.any(code.matrix_x @ code.matrix_z.T)
-
-
-def test_balanced_product_review_example() -> None:
-    """Reproduce the [[12, 2, 3]] six-cycle example in arXiv:2505.13679v2."""
-    seed = np.array(
-        [
-            [1, 1, 0, 0, 0, 0],
-            [0, 1, 1, 0, 0, 0],
-            [0, 0, 1, 1, 0, 0],
-            [0, 0, 0, 1, 1, 0],
-            [0, 0, 0, 0, 1, 1],
-            [1, 0, 0, 0, 0, 1],
-        ]
-    )
-    shift = np.roll(np.eye(6, dtype=int), 1, axis=1)
-    perm_rows = np.linalg.matrix_power(shift, 2)
-    perm_cols = perm_rows.T
-
-    code = codes.BPCode.from_seed(seed, perm_rows, perm_cols)
-
-    assert type(code.seed_matrix) is code.field
-    assert np.array_equal(code.seed_matrix, seed)
-    assert np.array_equal(code.perm_rows.to_matrix(), perm_rows)
-    assert np.array_equal(code.perm_cols.to_matrix(), perm_cols)
-    assert code.orbit_length == 3
-    seed_action = code.action_b.T
-    target = code.field(seed_action.representation(0).generator_images[0].to_matrix())
-    source = code.field(seed_action.representation(1).generator_images[0].to_matrix())
-    assert np.array_equal(target, code.field(perm_rows).T)
-    assert np.array_equal(source, code.field(perm_cols))
-    assert np.array_equal(seed_action.chain.op(1) @ source.T, target.T @ seed_action.chain.op(1))
-    assert not np.any(code.matrix_x @ code.matrix_z.T)
-    rank_x = int(np.linalg.matrix_rank(code.matrix_x))
-    rank_z = int(np.linalg.matrix_rank(code.matrix_z))
-    assert code.dimension == len(code) - rank_x - rank_z == 2
-    assert code.get_distance() == 3
-
-    # This direct cyclic oracle is stronger than an LPCode parameter comparison; the two
-    # constructions choose different lift/quotient bases.  The general quotient projection itself
-    # is independently tested in objects_test.py.
-    # The quotient orders sectors as (cycle bits, seed bits), then (cycle checks, seed checks).
-    # Swap those sectors and use C^-1 to identify the first quotient basis with the paper's bits.
-    seed_field = code.field(seed)
-    identity = code.field.Identity(6)
-    review_x = code.field(np.hstack([seed_field.T, identity + code.field(perm_cols)]))
-    review_z = code.field(np.hstack([identity + code.field(perm_rows), seed_field]))
-    qudit_order = list(range(6, 12)) + (code.perm_cols**-1).array_form
-    assert np.array_equal(code.matrix_x[:, qudit_order].row_space(), review_x.row_space())
-    assert np.array_equal(code.matrix_z[:, qudit_order].row_space(), review_z.row_space())
-
-
-def test_balanced_product_rectangular_seed() -> None:
-    """Support a rectangular equivariant seed with free row and column actions."""
-    seed = [[1, 0, 1, 1], [0, 1, 1, 1]]
-    code = codes.BPCode.from_seed(seed, [1, 0], [1, 0, 3, 2])
-
-    assert code.seed_matrix.shape == (2, 4)
-    assert code.orbit_length == 2
-    assert code.matrix_x.shape == (4, 6)
-    assert code.matrix_z.shape == (2, 6)
-    assert not np.any(code.matrix_x @ code.matrix_z.T)
-
-
-@pytest.mark.parametrize(
-    "perm_rows, perm_cols",
-    [
-        (
-            abstract.GroupMember([], size=2),
-            sympy.combinatorics.Permutation([], size=2),
-        ),
-        ([0, 1], [0, 1]),
-        (np.eye(2, dtype=int), np.eye(2, dtype=int)),
-    ],
-)
-def test_balanced_product_seed_permutation_forms(
-    perm_rows: abstract.PermutationImage,
-    perm_cols: abstract.PermutationImage,
-) -> None:
-    """Accept every public permutation-image form, including fixed points for orbit length one."""
-    code = codes.BPCode.from_seed([[1, 0], [0, 1]], perm_rows, perm_cols)
-    assert code.orbit_length == 1
-    assert not np.any(code.matrix_x @ code.matrix_z.T)
-
-
-def test_balanced_product_seed_over_odd_field() -> None:
-    """Retain the Koszul signs needed for a ternary cyclic balanced product."""
-    seed = codes.RingCode(3, field=3).matrix
-    perm_rows = abstract.GroupMember(0, 1, 2)
-    perm_cols = sympy.combinatorics.Permutation(0, 2, 1)
-
-    code = codes.BPCode.from_seed(seed, perm_rows, perm_cols)
-
-    assert code.field.order == 3
-    assert not np.any(code.matrix_x @ code.matrix_z.T)
-    assert np.any(code.matrix_x == -code.field(1))
-    assert np.any(code.matrix_z == -code.field(1))
-
-
-def test_balanced_product_validation() -> None:
-    """Reject invalid action types, chain lengths, sides, fields, and groups."""
-    field = abstract.resolve_field(2)
-    group = abstract.TrivialGroup()
-    chain = ChainComplex([field.Identity(1)])
-    representations = (
-        abstract.PermutationRepresentation.trivial(group, 1),
-        abstract.PermutationRepresentation.trivial(group, 1),
-    )
-    right_action = qldpc.objects.ChainComplexAction(chain, representations)
-    left_action = right_action.T
-
-    invalid_action = cast(qldpc.objects.ChainComplexAction, object())
-    with pytest.raises(TypeError, match="two ChainComplexAction"):
-        codes.BPCode(invalid_action, left_action)
-    with pytest.raises(TypeError, match="two ChainComplexAction"):
-        codes.BPCode(right_action, invalid_action)
-
-    long_chain = ChainComplex([field.Identity(1), field.Zeros((1, 1))])
-    long_representations = tuple(
-        abstract.PermutationRepresentation.trivial(group, 1) for _ in range(3)
-    )
-    long_action = qldpc.objects.ChainComplexAction(long_chain, long_representations)
-    with pytest.raises(ValueError, match="exactly one link"):
-        codes.BPCode(long_action, left_action)
-    with pytest.raises(ValueError, match="exactly one link"):
-        codes.BPCode(right_action, long_action.T)
-
-    with pytest.raises(ValueError, match=r"first.*right action"):
-        codes.BPCode(left_action, left_action)
-    with pytest.raises(ValueError, match=r"second.*left action"):
-        codes.BPCode(right_action, right_action)
-
-    other_field = abstract.resolve_field(3)
-    other_chain = ChainComplex([other_field.Identity(1)])
-    other_field_representations = (
-        abstract.PermutationRepresentation.trivial(group, 1),
-        abstract.PermutationRepresentation.trivial(group, 1),
-    )
-    other_field_action = qldpc.objects.ChainComplexAction(
-        other_chain, other_field_representations
-    ).T
-    with pytest.raises(ValueError, match="same finite field"):
-        codes.BPCode(right_action, other_field_action)
-
-    other_group = abstract.TrivialGroup()
-    other_group_representations = (
-        abstract.PermutationRepresentation.trivial(other_group, 1),
-        abstract.PermutationRepresentation.trivial(other_group, 1),
-    )
-    other_group_action = qldpc.objects.ChainComplexAction(chain, other_group_representations).T
-    with pytest.raises(ValueError, match="exact same Group instance"):
-        codes.BPCode(right_action, other_group_action)
-
-    with pytest.raises(TypeError, match="two ClassicalCode"):
-        codes.BPCode.from_codes(
-            cast(codes.ClassicalCode, object()),
-            codes.ClassicalCode([[1]]),
-            representations,
-            representations,
-        )
-
-
-def test_balanced_product_seed_validation() -> None:
-    """Reject malformed permutations, actions, seed fields, and seed shapes."""
-    identity = np.eye(2, dtype=int)
-    malformed_matrices = [
-        np.ones((2, 3), dtype=int),
-        np.array([[0, 2], [1, 0]]),
-        np.array([[1, 0], [1, 0]]),
-    ]
-    for malformed in malformed_matrices:
-        with pytest.raises(ValueError, match="permutation matrix"):
-            codes.BPCode.from_seed(np.zeros((2, 2), dtype=int), malformed, identity)
-
-    with pytest.raises(ValueError, match="same order"):
-        codes.BPCode.from_seed(np.zeros((2, 3), dtype=int), [1, 0], [1, 2, 0])
-
-    with pytest.raises(ValueError, match="row-permutation orbit"):
-        codes.BPCode.from_seed(np.zeros((3, 3), dtype=int), [1, 0, 2], [1, 0, 2])
-    with pytest.raises(ValueError, match="column-permutation orbit"):
-        codes.BPCode.from_seed(np.zeros((2, 3), dtype=int), [1, 0], [1, 0, 2])
-
-    with pytest.raises(ValueError, match="equivariance relation"):
-        codes.BPCode.from_seed([[1, 0], [0, 0]], [1, 0], [1, 0])
-
-    with pytest.raises(ValueError, match="two-dimensional"):
-        codes.BPCode.from_seed(cast(list[list[int]], [1, 1]), [0, 1], [0, 1])
-    with pytest.raises(ValueError, match=r"elements in .*0 <= x < 2"):
-        codes.BPCode.from_seed([[2]], [0], [0], field=2)
-
-    ternary_seed = abstract.resolve_field(3)([[1]])
-    with pytest.raises(ValueError, match="incompatible with a matrix over GF"):
-        codes.BPCode.from_seed(ternary_seed, [0], [0], field=2)
-
-
-def test_distance_balanced_eq_4_oracle() -> None:
-    """Match the direct binary matrices of Eq. (4), including explicit sector permutations."""
-    field = abstract.resolve_field(2)
-    matrix_x = field([[1, 1, 0, 0], [0, 0, 1, 1]])
-    matrix_z = field([[1, 1, 1, 1]])
-    matrix_aux = field([[1, 1, 0], [0, 1, 1]])
-    source = codes.CSSCode(matrix_x, matrix_z)
-    auxiliary = codes.ClassicalCode(matrix_aux)
-
-    balanced = codes.DistanceBalancedCode(source, auxiliary, Pauli.X)
-
-    num_qudits = matrix_x.shape[1]
-    num_checks_x = matrix_x.shape[0]
-    num_checks_z = matrix_z.shape[0]
-    num_aux_bits = matrix_aux.shape[1]
-    num_aux_checks = matrix_aux.shape[0]
-
-    # Eq. (4) orders qudits as (C_1 tensor D_1, C_2 tensor D_0), while ChainComplex orders
-    # total-degree sectors as (C_2 tensor D_0, C_1 tensor D_1).
-    eq_4_x = field(
-        np.hstack(
-            [
-                np.kron(matrix_x, field.Identity(num_aux_bits)),
-                np.kron(field.Identity(num_checks_x), matrix_aux.T),
-            ]
-        )
-    )
-    eq_4_z = field(
-        np.block(
-            [
-                [
-                    np.kron(matrix_z, field.Identity(num_aux_bits)),
-                    field.Zeros((num_checks_z * num_aux_bits, num_checks_x * num_aux_checks)),
-                ],
-                [
-                    -np.kron(field.Identity(num_qudits), matrix_aux),
-                    np.kron(matrix_x.T, field.Identity(num_aux_checks)),
-                ],
-            ]
-        )
-    )
-    first_sector_size = num_qudits * num_aux_bits
-    qudit_permutation = [
-        *range(first_sector_size, eq_4_x.shape[1]),
-        *range(first_sector_size),
-    ]
-
-    # Eq. (4) lists Z checks as (C_0 tensor D_1, C_1 tensor D_0); the tensor product reverses
-    # those two total-degree-one sectors.  X checks already have the same order.
-    first_z_check_sector_size = num_checks_z * num_aux_bits
-    z_check_permutation = [
-        *range(first_z_check_sector_size, eq_4_z.shape[0]),
-        *range(first_z_check_sector_size),
-    ]
-    assert np.array_equal(balanced.matrix_x, eq_4_x[:, qudit_permutation])
-    assert np.array_equal(balanced.matrix_z, eq_4_z[z_check_permutation][:, qudit_permutation])
-
-
-def test_distance_balanced_ternary_orientations() -> None:
-    """Retain the Koszul sign and make Z amplification the exact algebraic sector swap."""
-    field = abstract.resolve_field(3)
-    source = codes.CSSCode(
-        field([[1, 1, 0, 0], [0, 1, 1, 0]]),
-        field([[1, 2, 1, 1]]),
-    )
-    auxiliary = codes.ClassicalCode(field([[1, 1, 0], [0, 1, 1]]))
-
-    balanced_x = codes.DistanceBalancedCode(source, auxiliary, Pauli.X)
-    balanced_z = codes.DistanceBalancedCode(source, auxiliary, Pauli.Z)
-    assert not np.any(balanced_x.matrix_x @ balanced_x.matrix_z.T)
-    assert not np.any(balanced_z.matrix_x @ balanced_z.matrix_z.T)
-
-    swapped_source = codes.CSSCode(source.matrix_z, source.matrix_x)
-    balanced_swapped_x = codes.DistanceBalancedCode(swapped_source, auxiliary, Pauli.X)
-    assert np.array_equal(balanced_z.matrix_x, balanced_swapped_x.matrix_z)
-    assert np.array_equal(balanced_z.matrix_z, balanced_swapped_x.matrix_x)
-
-
-def test_distance_balanced_exact_asymmetric_distances() -> None:
-    """Multiply only the selected distance of a tiny asymmetric code."""
-    source = codes.CSSCode(
-        codes.RepetitionCode(3),
-        codes.ClassicalCode(np.zeros((0, 3), dtype=int)),
-    )
-    auxiliary = codes.RepetitionCode(2)
-    source_distances = {
-        Pauli.X: source.get_distance_exact(Pauli.X),
-        Pauli.Z: source.get_distance_exact(Pauli.Z),
-    }
-    assert source_distances == {Pauli.X: 1, Pauli.Z: 3}
-
-    for pauli in qldpc.objects.PAULIS_XZ:
-        balanced = codes.DistanceBalancedCode(source, auxiliary, pauli)
-        other = pauli.swap_xz()
-        assert balanced.dimension == source.dimension == 1
-        assert balanced.get_distance_exact(pauli) == 2 * source_distances[pauli]
-        assert balanced.get_distance_exact(other) == source_distances[other]
-
-
-def test_distance_balanced_does_not_compute_distance() -> None:
-    """Construct both orientations without consulting any CSS distance method."""
-    source = codes.TrivialCode(2)
-    auxiliary = codes.RepetitionCode(2)
-    distance_error = AssertionError("distance method called during construction")
-
-    with (
-        unittest.mock.patch.object(codes.CSSCode, "get_distance", side_effect=distance_error),
-        unittest.mock.patch.object(codes.CSSCode, "get_distance_exact", side_effect=distance_error),
-        unittest.mock.patch.object(
-            codes.CSSCode, "get_distance_if_known", side_effect=distance_error
-        ),
-    ):
-        balanced_x = codes.DistanceBalancedCode(source, auxiliary, Pauli.X)
-        balanced_z = codes.DistanceBalancedCode(source, auxiliary, Pauli.Z)
-
-    for balanced in [balanced_x, balanced_z]:
-        assert balanced._distance is None
-        assert balanced._distance_x is None
-        assert balanced._distance_z is None
-
-
-def test_distance_balanced_redundant_presentations() -> None:
-    """Preserve raw row counts and retain the extra Kunneth logical sector."""
-    matrix_x = codes.ClassicalCode(
-        [
-            [1, 1, 0],
-            [0, 1, 1],
-            [1, 0, 1],
-            [0, 0, 0],
-        ]
-    ).matrix
-    matrix_z = type(matrix_x).Zeros((1, 3))
-    matrix_aux = codes.ClassicalCode(
-        [
-            [1, 1],
-            [1, 1],
-            [0, 0],
-        ]
-    ).matrix
-    source = codes.CSSCode(matrix_x, matrix_z)
-    auxiliary = codes.ClassicalCode(matrix_aux)
-
-    balanced = codes.DistanceBalancedCode(source, auxiliary, Pauli.X)
-
-    num_qudits = matrix_x.shape[1]
-    num_checks_x = matrix_x.shape[0]
-    num_checks_z = matrix_z.shape[0]
-    num_aux_bits = matrix_aux.shape[1]
-    num_aux_checks = matrix_aux.shape[0]
-    expected_num_qudits = num_qudits * num_aux_bits + num_checks_x * num_aux_checks
-    assert balanced.matrix_x.shape == (num_checks_x * num_aux_bits, expected_num_qudits)
-    assert balanced.matrix_z.shape == (
-        num_qudits * num_aux_checks + num_checks_z * num_aux_bits,
-        expected_num_qudits,
-    )
-
-    rank_x = int(np.linalg.matrix_rank(matrix_x))
-    rank_z = int(np.linalg.matrix_rank(matrix_z))
-    rank_aux = int(np.linalg.matrix_rank(matrix_aux))
-    output_dimension = (
-        expected_num_qudits
-        - int(np.linalg.matrix_rank(balanced.matrix_x))
-        - int(np.linalg.matrix_rank(balanced.matrix_z))
-    )
-    simple_dimension = (num_qudits - rank_x - rank_z) * (num_aux_bits - rank_aux)
-    extra_dimension = (num_checks_x - rank_x) * (num_aux_checks - rank_aux)
-    assert output_dimension == simple_dimension + extra_dimension == 5
-    assert output_dimension > simple_dimension
-    assert balanced.dimension == output_dimension
-
-
-@pytest.mark.parametrize(
-    "value, expected_pauli",
-    [
-        ("x", Pauli.X),
-        ("X", Pauli.X),
-        ("z", Pauli.Z),
-        ("Z", Pauli.Z),
-    ],
-)
-def test_distance_balanced_metadata_and_size(
-    value: qldpc.objects.PauliXZLike, expected_pauli: qldpc.objects.PauliXZ
-) -> None:
-    """Store inputs and use the selected check sector in the qudit-count formula."""
-    source = codes.CSSCode(
-        [[1, 1, 0], [0, 1, 1]],
-        np.zeros((1, 3), dtype=int),
-    )
-    auxiliary = codes.ClassicalCode([[1, 1, 0], [0, 1, 1]])
-
-    balanced = codes.DistanceBalancedCode(source, auxiliary, value)
-
-    selected_checks = source.get_matrix(expected_pauli).shape[0]
-    expected_num_qudits = len(source) * len(auxiliary) + selected_checks * auxiliary.num_checks
-    assert balanced.code is source
-    assert balanced.auxiliary_code is auxiliary
-    assert balanced.pauli is expected_pauli
-    assert balanced.chain.field is source.field
-    assert balanced.chain.dim(2) == expected_num_qudits
-    assert len(balanced) == expected_num_qudits
-
-
-def test_distance_balanced_validation() -> None:
-    """Reject invalid code types, subsystems, Pauli sectors, and finite fields."""
-    source = codes.TrivialCode(1)
-    auxiliary = codes.RepetitionCode(2)
-
-    with pytest.raises(TypeError, match="requires a CSSCode"):
-        codes.DistanceBalancedCode(cast(codes.CSSCode, object()), auxiliary, Pauli.X)
-    with pytest.raises(TypeError, match="requires a ClassicalCode"):
-        codes.DistanceBalancedCode(source, cast(codes.ClassicalCode, object()), Pauli.X)
-
-    subsystem = codes.CSSCode([[1]], [[1]], is_subsystem_code=True)
-    with pytest.raises(ValueError, match="subsystem CSS"):
-        codes.DistanceBalancedCode(subsystem, auxiliary, Pauli.X)
-
-    with pytest.raises(ValueError, match=r"Pauli\.X or Pauli\.Z"):
-        codes.DistanceBalancedCode(
-            source,
-            auxiliary,
-            cast(qldpc.objects.PauliXZLike, Pauli.Y),
-        )
-
-    ternary_auxiliary = codes.ClassicalCode([[1, 1]], field=3)
-    with pytest.raises(ValueError, match="same finite field"):
-        codes.DistanceBalancedCode(source, ternary_auxiliary, Pauli.X)
-
-
 @pytest.mark.parametrize(
     "seed_a, seed_b",
     [
@@ -1499,6 +942,76 @@ def test_unsupported_line_logicals(rows: int = 2, cols: int = 3) -> None:
         codes.LPCode(matrix, set_logicals=True)
     with pytest.raises(ValueError, match="not yet supported"):
         codes.SLPCode(matrix, set_logicals=True)
+
+
+def test_balanced_product_code() -> None:
+    """Balanced product codes."""
+    # over the trivial group, a balanced product of classical codes is a hypergraph product
+    code_a = codes.ClassicalCode([[1, 1, 0], [0, 1, 1]], field=3)
+    code_b = codes.ClassicalCode([[1, 0], [1, 2], [0, 1]], field=3)
+    group = abstract.TrivialGroup()
+    code = codes.BPCode.from_codes(
+        code_a,
+        code_b,
+        [abstract.PermutationRepresentation.trivial(group, dim) for dim in code_a.matrix.shape],
+        [abstract.PermutationRepresentation.trivial(group, dim) for dim in code_b.matrix.shape],
+    )
+    hgp_code = codes.HGPCode(code_a, code_b)
+    assert np.array_equal(code.matrix_x, hgp_code.matrix_x)
+    assert np.array_equal(code.matrix_z, hgp_code.matrix_z)
+
+    # reproduce the [[12, 2, 3]] code in Example 1 of arXiv:2505.13679v2, up to qudit order
+    seed = codes.RingCode(6).matrix
+    perm_rows = np.linalg.matrix_power(np.roll(np.eye(6, dtype=int), 1, axis=1), 2)
+    perm_cols = perm_rows.T
+    code = codes.BPCode.from_seed(seed, perm_rows, perm_cols)
+    matrix_x = np.hstack([seed.T, np.eye(6, dtype=int) + perm_cols]).view(code.field)
+    matrix_z = np.hstack([np.eye(6, dtype=int) + perm_rows, seed]).view(code.field)
+    qudit_order = [*range(6, 12), *np.argmax(perm_cols, axis=0)]
+    assert np.array_equal(code.matrix_x[:, qudit_order].row_space(), matrix_x.row_space())
+    assert np.array_equal(code.matrix_z[:, qudit_order].row_space(), matrix_z.row_space())
+
+    with pytest.raises(ValueError, match="one-link chain complexes"):
+        chain = ChainComplex([code_a.matrix, code_a.field.Zeros((3, 0))])
+        action = qldpc.objects.ChainComplexAction(
+            chain, [abstract.PermutationRepresentation.trivial(group, dim) for dim in [2, 3, 0]]
+        )
+        codes.BPCode(action, action)
+
+
+def test_distance_balanced_code() -> None:
+    """Distance-balanced codes."""
+    # compare to Eq. (4) of arXiv:2505.13679v2 (with a sign that matters over non-binary fields),
+    # up to the order of qudits and Z-type checks
+    field = abstract.resolve_field(3)
+    matrix_x = field([[1, 2, 0, 0], [0, 0, 1, 2]])
+    matrix_z = field([[1, 1, 1, 1]])
+    matrix = field([[1, 2, 0], [0, 1, 2]])
+    balanced_code = codes.DistanceBalancedCode(
+        codes.CSSCode(matrix_x, matrix_z), codes.ClassicalCode(matrix), Pauli.X
+    )
+    iden_n, iden_m = np.eye(3, dtype=int), np.eye(2, dtype=int)
+    assert np.array_equal(
+        balanced_code.matrix_x,
+        np.hstack([np.kron(iden_m, matrix.T), np.kron(matrix_x, iden_n)]),
+    )
+    assert np.array_equal(
+        balanced_code.matrix_z,
+        np.block(
+            [
+                [np.kron(matrix_x.T, iden_m), -np.kron(field.Identity(4), matrix)],
+                [field.Zeros((3, 4)), np.kron(matrix_z, iden_n)],
+            ]
+        ),
+    )
+
+    # distance balancing amplifies only the distance of the selected Pauli type
+    code = codes.CSSCode(codes.RepetitionCode(3), np.zeros((0, 3), dtype=int))
+    assert (code.get_distance_exact(Pauli.X), code.get_distance_exact(Pauli.Z)) == (1, 3)
+    code_x = codes.DistanceBalancedCode(code, codes.RepetitionCode(2), "x")
+    code_z = codes.DistanceBalancedCode(code, codes.RepetitionCode(2), "z")
+    assert (code_x.get_distance_exact(Pauli.X), code_x.get_distance_exact(Pauli.Z)) == (2, 3)
+    assert (code_z.get_distance_exact(Pauli.X), code_z.get_distance_exact(Pauli.Z)) == (1, 6)
 
 
 def test_quantum_tanner(pytestconfig: pytest.Config) -> None:

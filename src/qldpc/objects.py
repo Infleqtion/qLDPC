@@ -14,6 +14,8 @@ from typing import Literal
 import galois
 import numpy as np
 import numpy.typing as npt
+import scipy.sparse
+import scipy.sparse.csgraph
 
 from qldpc import abstract
 from qldpc._util import networkx as nx
@@ -372,16 +374,6 @@ class CayleyComplex:
         )
 
 
-@dataclasses.dataclass(frozen=True)
-class _BalancedProductSector:
-    """Orbit-basis data for one tensor sector."""
-
-    degrees: tuple[int, int]
-    offset: int
-    representatives: tuple[tuple[int, int], ...]
-    orbit_indices: npt.NDArray[np.int_]
-
-
 class ChainComplex:
     """Chain complex: a sequence modules with "boundary operators" that map between them.
 
@@ -599,256 +591,142 @@ class ChainComplex:
         return ChainComplex(ops, skip_validation=True)
 
     @staticmethod
-    def _get_balanced_product_layout(
-        action_a: ChainComplexAction, action_b: ChainComplexAction, degree: int
-    ) -> tuple[_BalancedProductSector, ...]:
-        """Build the orbit basis for one degree of a balanced product."""
-        sectors = []
-        offset = 0
-        for deg_a, deg_b in ChainComplex._get_degree_pairs(action_a.chain, action_b.chain, degree):
-            representation_a = action_a.representation(deg_a)
-            representation_b = action_b.representation(deg_b)
-            orbit_indices = np.full(
-                (representation_a.degree, representation_b.degree), -1, dtype=int
-            )
-            representatives: list[tuple[int, int]] = []
-
-            for index_a in range(representation_a.degree):
-                for index_b in range(representation_b.degree):
-                    if orbit_indices[index_a, index_b] >= 0:
-                        continue
-
-                    orbit_index = len(representatives)
-                    representatives.append((index_a, index_b))
-                    orbit_indices[index_a, index_b] = orbit_index
-                    pending = [(index_a, index_b)]
-                    while pending:
-                        current_a, current_b = pending.pop()
-                        # Normalized images make the balanced relation diagonal on basis indices;
-                        # the image for the left action is not inverted.
-                        for image_a, image_b in zip(
-                            representation_a.generator_images,
-                            representation_b.generator_images,
-                        ):
-                            image = (image_a.apply(current_a), image_b.apply(current_b))
-                            if orbit_indices[image] < 0:
-                                orbit_indices[image] = orbit_index
-                                pending.append(image)
-
-            sectors.append(
-                _BalancedProductSector(
-                    (deg_a, deg_b),
-                    offset,
-                    tuple(representatives),
-                    orbit_indices,
-                )
-            )
-            offset += len(representatives)
-
-        return tuple(sectors)
-
-    @staticmethod
     def balanced_product(
         action_a: ChainComplexAction, action_b: ChainComplexAction
     ) -> ChainComplex:
-        """Take the balanced product of complexes with right and left actions.
+        """Balanced product of two chain complexes with permutation actions of the same group.
 
-        This is the quotient of the ordinary tensor-product complex by the diagonal orbit relation,
-        equivalently the tensor product over the shared group, used in the balanced-product
-        construction of https://arxiv.org/abs/2012.09271.  The first action must be right-acting and
-        the second left-acting.  Their permutation actions need not be free: the output basis has
-        one element for each orbit of pairs of distinguished basis elements.  For trivial actions,
-        every orbit is a singleton and this method reduces to :meth:`tensor_product`.
+        The balanced product is the quotient of the tensor-product complex that identifies every
+        basis element ``a ⊗ b`` with ``g(a) ⊗ g(b)``, where ``g`` is any group member.
+        Equivalently, this is the tensor product ``A ⊗_G B`` of a right module ``A`` and a left
+        module ``B``, with ``a·g = g(a)`` and ``g·b = g^{-1}(b)``.  The group actions need not be
+        free.
 
-        Args:
-            action_a: Right action on the first chain complex.
-            action_b: Left action on the second chain complex, over the same field and exact same
-                :class:`qldpc.abstract.Group` instance.
+        The quotient has one basis element for every orbit of basis-element pairs ``(a, b)``.
+        Within each tensor-product sector, these orbits are ordered by their smallest member.
+
+        References:
+
+        - https://errorcorrectionzoo.org/c/balanced_product
+        - Section IV of https://arxiv.org/abs/2012.09271
         """
-        if not isinstance(action_a, ChainComplexAction) or not isinstance(
-            action_b, ChainComplexAction
-        ):
-            raise TypeError("A balanced product requires two ChainComplexAction inputs")
-        if not action_a.right:
-            raise ValueError("The first ChainComplexAction must be a right action")
-        if action_b.right:
-            raise ValueError("The second ChainComplexAction must be a left action")
-        if action_a.chain.field is not action_b.chain.field:
-            raise ValueError("Balanced-product chain complexes must use the same finite field")
+        chain_a, chain_b = action_a.chain, action_b.chain
+        if chain_a.field is not chain_b.field:
+            raise ValueError("Balanced products require chain complexes over the same field")
         if action_a.group is not action_b.group:
-            raise ValueError("Balanced-product actions must use the exact same Group instance")
+            raise ValueError("Balanced products require actions of the same Group instance")
 
-        chain_a = action_a.chain
-        chain_b = action_b.chain
-        chain_field = chain_a.field
-        layouts = [
-            ChainComplex._get_balanced_product_layout(action_a, action_b, degree)
-            for degree in range(chain_a.num_links + chain_b.num_links + 1)
-        ]
-        dimensions = [sum(len(sector.representatives) for sector in layout) for layout in layouts]
+        # for each degree, map each sector (deg_a, deg_b) to the quotient-basis indices of its pairs
+        orbit_labels: list[dict[tuple[int, int], npt.NDArray[np.int_]]] = []
+        dims = []
+        for degree in range(chain_a.num_links + chain_b.num_links + 1):
+            sector_labels = {}
+            dim = 0
+            for deg_a, deg_b in ChainComplex._get_degree_pairs(chain_a, chain_b, degree):
+                labels = _get_diagonal_orbits(
+                    action_a.representations[deg_a], action_b.representations[deg_b]
+                )
+                sector_labels[deg_a, deg_b] = labels + dim
+                dim += int(labels.max(initial=-1)) + 1
+            orbit_labels.append(sector_labels)
+            dims.append(dim)
 
+        # map one representative of each orbit through the tensor-product boundary operator
         ops = []
-        for degree in range(1, len(layouts)):
-            source_layout = layouts[degree]
-            target_layout = layouts[degree - 1]
-            differential = chain_field.Zeros((dimensions[degree - 1], dimensions[degree]))
-
-            for source_sector in source_layout:
-                deg_a, deg_b = source_sector.degrees
-                for source_index, (index_a, index_b) in enumerate(source_sector.representatives):
-                    column = source_sector.offset + source_index
-
-                    if deg_a:
-                        op_a = chain_a.op(deg_a)
-                        assert isinstance(op_a, galois.FieldArray)
-                        target_sector = target_layout[
-                            ChainComplex._get_block_index(chain_a, deg_a - 1, deg_b)
-                        ]
-                        for target_a in range(op_a.shape[0]):
-                            target_orbit = target_sector.orbit_indices[target_a, index_b]
-                            differential[target_sector.offset + target_orbit, column] += op_a[
-                                target_a, index_a
-                            ]
-
-                    if deg_b:
-                        op_b = chain_b.op(deg_b)
-                        assert isinstance(op_b, galois.FieldArray)
-                        target_sector = target_layout[
-                            ChainComplex._get_block_index(chain_a, deg_a, deg_b - 1)
-                        ]
-                        for target_b in range(op_b.shape[0]):
-                            coefficient = op_b[target_b, index_b]
-                            if deg_a % 2:
-                                coefficient = -coefficient
-                            target_orbit = target_sector.orbit_indices[index_a, target_b]
-                            differential[target_sector.offset + target_orbit, column] += coefficient
-
-            ops.append(differential)
+        for degree in range(1, len(orbit_labels)):
+            op = chain_a.field.Zeros((dims[degree - 1], dims[degree]))
+            target_labels = orbit_labels[degree - 1]
+            for (deg_a, deg_b), labels in orbit_labels[degree].items():
+                cols, representatives = np.unique(labels, return_index=True)
+                reps_a, reps_b = np.divmod(representatives, labels.shape[1])
+                if deg_a:
+                    rows = target_labels[deg_a - 1, deg_b][:, reps_b]
+                    np.add.at(op, (rows, cols), chain_a.op(deg_a)[:, reps_a])
+                if deg_b:
+                    rows = target_labels[deg_a, deg_b - 1][reps_a, :].T
+                    vals = chain_b.op(deg_b)[:, reps_b]
+                    np.add.at(op, (rows, cols), -vals if deg_a % 2 else vals)
+            ops.append(op)
 
         return ChainComplex(ops)
 
 
+def _get_diagonal_orbits(
+    representation_a: abstract.PermutationRepresentation,
+    representation_b: abstract.PermutationRepresentation,
+) -> npt.NDArray[np.int_]:
+    """Label pairs of points by their orbit under the diagonal action (a, b) --> (g(a), g(b)).
+
+    Orbits are labeled 0, 1, ... in order of their smallest pair in row-major order.
+    """
+    pairs = np.arange(representation_a.degree * representation_b.degree).reshape(
+        representation_a.degree, representation_b.degree
+    )
+    image_pairs = [
+        pairs[image_a.array_form][:, image_b.array_form]
+        for image_a, image_b in zip(
+            representation_a.generator_images, representation_b.generator_images
+        )
+    ]
+    edges = (np.tile(pairs.ravel(), len(image_pairs)), np.ravel(image_pairs))
+    graph = scipy.sparse.coo_array((np.ones(edges[0].size), edges), shape=(pairs.size,) * 2)
+    _, components = scipy.sparse.csgraph.connected_components(graph, directed=False)
+    _, smallest_pairs = np.unique(components, return_index=True)
+    return np.argsort(np.argsort(smallest_pairs))[components].reshape(pairs.shape)
+
+
 class ChainComplexAction:
-    """Permutation actions on the distinguished bases of a chain complex.
+    """Permutation action of a group on the distinguished bases of a chain complex.
 
-    Each chain module is supplied with a permutation representation whose points index its
-    distinguished basis.  Construction validates that every differential is equivariant.  With
-    matrices returned by :meth:`qldpc.abstract.PermutationRepresentation.to_matrix`, a right action
-    satisfies ``d @ P_source.T == P_target.T @ d``; a left action satisfies
-    ``d @ P_source == P_target @ d``.
-
-    The :attr:`T` property acts on the dual complex: it transposes and reverses the differentials,
-    reverses the representation sequence, and exchanges right with left.  It keeps the same
-    permutation images rather than replacing them by inverses.
+    Each module of the chain complex carries a permutation representation of the same group, and
+    every boundary operator must commute with the group action.
 
     Args:
-        chain: The chain complex on which the group acts.
-        representations: One permutation representation for every chain degree, ordered from
-            degree zero through ``chain.num_links``.
-        right: Whether the representations define a right action.  In the distinguished column
-            basis, a right-acting permutation matrix ``P`` acts by ``P.T``.
+        chain: A chain complex over a finite field.
+        representations: Permutation representations of one group for chain degrees
+            ``0, 1, ..., chain.num_links``.
     """
 
-    _chain: ChainComplex
-    _representations: tuple[abstract.PermutationRepresentation, ...]
-    _right: bool
+    chain: ChainComplex
+    representations: tuple[abstract.PermutationRepresentation, ...]
+    group: abstract.Group
 
     def __init__(
-        self,
-        chain: ChainComplex,
-        representations: Sequence[abstract.PermutationRepresentation],
-        *,
-        right: bool = True,
+        self, chain: ChainComplex, representations: Sequence[abstract.PermutationRepresentation]
     ) -> None:
-        if not isinstance(chain, ChainComplex):
-            raise TypeError("A ChainComplexAction must be defined on a ChainComplex")
         if chain.ring is not None:
-            raise ValueError("ChainComplexAction does not support RingArray-valued chain complexes")
-        if not isinstance(right, bool):
-            raise TypeError("The action side must be specified by a boolean 'right' value")
-
-        normalized_representations = tuple(representations)
-        expected_count = chain.num_links + 1
-        if len(normalized_representations) != expected_count:
+            raise ValueError("ChainComplexAction requires a chain complex over a finite field")
+        if len(representations) != chain.num_links + 1:
             raise ValueError(
-                f"Expected exactly {expected_count} permutation representations "
-                f"(provided: {len(normalized_representations)})"
+                f"Expected {chain.num_links + 1} permutation representations"
+                f" (provided: {len(representations)})"
             )
-        if not all(
-            isinstance(representation, abstract.PermutationRepresentation)
-            for representation in normalized_representations
-        ):
-            raise TypeError("Every chain degree must have a PermutationRepresentation")
+        self.chain = chain
+        self.representations = tuple(representations)
+        self.group = representations[0].group
 
-        group = normalized_representations[0].group
-        for degree, representation in enumerate(normalized_representations):
+        for degree, representation in enumerate(representations):
+            if representation.group is not self.group:
+                raise ValueError("All representations must be of the same Group instance")
             if representation.degree != chain.dim(degree):
                 raise ValueError(
-                    f"The representation at degree {degree} has degree {representation.degree}, "
-                    f"but the chain module has dimension {chain.dim(degree)}"
+                    f"The representation for degree {degree} acts on {representation.degree}"
+                    f" points, but the chain module has dimension {chain.dim(degree)}"
                 )
-            if representation.group is not group:
-                raise ValueError("All representations must use the exact same Group instance")
 
         for degree in range(1, chain.num_links + 1):
-            differential = chain.op(degree)
-            assert isinstance(differential, galois.FieldArray)
-            source_representation = normalized_representations[degree]
-            target_representation = normalized_representations[degree - 1]
-            for generator in group.generators:
-                source = chain.field(source_representation.to_matrix(generator))
-                target = chain.field(target_representation.to_matrix(generator))
-                if right:
-                    is_equivariant = np.array_equal(
-                        differential @ source.T, target.T @ differential
-                    )
-                else:
-                    is_equivariant = np.array_equal(differential @ source, target @ differential)
-                if not is_equivariant:
-                    side = "right" if right else "left"
+            op = chain.op(degree)
+            for image_source, image_target in zip(
+                representations[degree].generator_images,
+                representations[degree - 1].generator_images,
+            ):
+                if not np.array_equal(op[image_target.array_form][:, image_source.array_form], op):
                     raise ValueError(
-                        f"The differential at degree {degree} is not equivariant "
-                        f"under the {side} action"
+                        f"The boundary operator on degree {degree} does not commute with the"
+                        " group action"
                     )
-
-        self._chain = chain
-        self._representations = normalized_representations
-        self._right = right
-
-    @property
-    def chain(self) -> ChainComplex:
-        """The chain complex carrying this action."""
-        return self._chain
-
-    @property
-    def representations(self) -> tuple[abstract.PermutationRepresentation, ...]:
-        """The permutation representations, ordered by chain degree."""
-        return self._representations
-
-    @property
-    def group(self) -> abstract.Group:
-        """The exact group instance acting on this chain complex."""
-        return self.representations[0].group
-
-    @property
-    def right(self) -> bool:
-        """Whether this is a right action rather than a left action."""
-        return self._right
-
-    def representation(self, degree: int) -> abstract.PermutationRepresentation:
-        """Return the permutation representation on a given chain degree."""
-        if not 0 <= degree <= self.chain.num_links:
-            raise IndexError(f"Chain degree out of range: {degree}")
-        return self.representations[degree]
 
     @property
     def T(self) -> ChainComplexAction:
-        """Dualize the complex and action, exchanging right and left conventions."""
-        # Transposing d P_source.T = P_target.T d gives
-        # P_source d.T = d.T P_target, the left-action equation on the reversed chain.  The
-        # representations therefore keep the same images rather than taking inverse images.
-        return ChainComplexAction(
-            self.chain.T,
-            self.representations[::-1],
-            right=not self.right,
-        )
+        """The dual action on the transposed chain complex, with the same generator images."""
+        return ChainComplexAction(self.chain.T, self.representations[::-1])
