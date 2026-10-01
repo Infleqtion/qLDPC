@@ -84,12 +84,23 @@ Distance bounds
 GAP/QDistRnd, ``backend="sqetch"`` to use the optional GPU-accelerated random-ISD estimator for
 binary CSS codes, or ``backend="decoder"`` to use qLDPC's decoder-based estimator. By default,
 ``backend="auto"`` chooses the first applicable backend in this order: an installed ``sqetch`` for
-binary CSS codes, available GAP/QDistRnd, then the decoder. Install the optional backend with
-``python -m pip install 'qldpc[sqetch]'``. It requires a CUDA-enabled PyTorch installation and a
-visible CUDA GPU.
+binary CSS codes, available GAP/QDistRnd, then the decoder. ``sqetch`` is not published on PyPI;
+install the version that qLDPC is tested against with:
+
+.. code-block:: bash
+
+   python -m pip install 'sqetch[gpu] @ git+https://github.com/a7b/yarn.git@e9ce9d0fcecc973988558bfee27fab6d6b8d7f97#subdirectory=sqetch'
+
+The backend requires a CUDA-enabled PyTorch installation and a visible CUDA GPU.
 
 ``sqetch`` estimates the X- and Z-distance sectors separately. The lowest logical weight it observes
 is an upper bound on the corresponding distance.
+
+Codes remember the best upper bound on distance that they have found or been given, such as the
+witness-certified bounds loaded by ``QuditCode.from_qldpc_challenge_id``. CSS codes remember X and
+Z bounds separately. With the default ``num_trials=None``, ``get_distance_bound`` returns the exact
+distance or best known bound if there is one, and otherwise computes a single bound. An explicit
+``num_trials`` always runs that many trials and never returns a worse bound than the best known one.
 
 Graphs, complexes, and lifted matrices
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -135,7 +146,8 @@ What each package does
      - Start here
    * - ``qldpc.codes``
      - Core classical, quantum, CSS, and subsystem code models; built-in constructions; distance and
-       code-capacity estimation.
+       code-capacity estimation. Fixed-weight statistics and allocation live separately from
+       code-capacity detector-error-model and decoder orchestration.
      - :doc:`qLDPC basics <examples/basics>` and
        :doc:`codes API <autoapi/qldpc/codes/index>`.
    * - ``qldpc.decoders``
@@ -208,7 +220,7 @@ Built-in and custom codes share the same basic interface:
 
 Use ``code.matrix`` for a classical or general quantum check matrix, and ``code.matrix_x`` /
 ``code.matrix_z`` for the two CSS sectors. Use ``forget_distance()`` deliberately when a cached or
-construction-supplied distance should be discarded before recomputation.
+construction-supplied distance (or distance bound) should be discarded before recomputation.
 
 Build a custom CSS code
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -234,8 +246,9 @@ and build it for a parity-check matrix or Stim detector error model with ``.buil
 the settings as ``decoder=`` to a method that decodes. The default decoder is GUF for a nonbinary
 field array and BP+OSD otherwise. ``qldpc.decoders.get_observable_decoder`` builds a decoder that predicts the
 observable flips of a detector error model instead, and ``qldpc.decoders.SinterDecoder`` does so for
-Sinter. See :doc:`Choosing a decoder <decoders>` for the difference between error and observable
-decoders, custom decoders, and per-sector CSS choices.
+Sinter. Code-capacity estimators accept either kind of decoder. See
+:doc:`Choosing a decoder <decoders>` for the difference between error and observable decoders,
+custom decoders, and per-sector CSS choices.
 
 .. code-block:: python
 
@@ -277,18 +290,20 @@ The :doc:`API reference <autoapi/index>` carries the literature links for each f
 Optional integrations and side effects
 --------------------------------------
 
-* Install ``qldpc[gap]`` for the optional ``passagemath-gap`` libgap binding. GAP-backed
-  features use that in-process binding when available. Otherwise, qLDPC can invoke a separately
-  installed GAP executable in a child process. If neither option is available, some paths offer a
-  manual copy/paste workflow that reads standard input and uses the system clipboard.
+* Install ``qldpc[gap]`` for the optional ``passagemath-gap`` libgap binding.
+  The binding requires non-Windows Python 3.13.
+  If neither option is available, some paths offer a manual copy/paste workflow that reads standard
+  input and uses the system clipboard.
 * When a GAP package is unavailable to libgap, qLDPC asks for permission to install it with GAP's
   PackageManager so that the active libgap runtime can discover it. If that attempt fails and a
   separate GAP executable is available, qLDPC prints manual installation instructions before using
   the executable instead. Packages missing from the executable backend can trigger an installation
   prompt and ``git clone`` into qLDPC's GAP package directory.
 * Group and code lookups may use online resources when local data and GAP cannot answer the request.
-* Expensive results can be cached under the user's platform cache directory. Disk caching is
-  intentionally bypassed while pytest is running.
+* Expensive results can be cached under the user's platform cache directory. A cached function
+  ``func`` also has a ``func.refresh(...)`` method, which takes the same arguments, recomputes the
+  result, and overwrites the cached value. Disk caching is intentionally bypassed while pytest is
+  running.
 * The test configuration disables network sockets. Tests for optional integrations use mocks rather
   than live services.
 
