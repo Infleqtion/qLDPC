@@ -991,6 +991,41 @@ def test_balanced_product_seed_permutations() -> None:
     assert codes.BPCode.from_seed(seed, perm_rows, perm_cols).get_code_params() == (12, 2, 3)
 
 
+def test_distance_balanced_code() -> None:
+    """Distance-balanced codes."""
+    # compare to Eq. (4) of arXiv:2505.13679v2 (with a sign that matters over non-binary fields),
+    # up to the order of qudits and Z-type checks
+    field = abstract.resolve_field(3)
+    matrix_x = field([[1, 2, 0, 0], [0, 0, 1, 2]])
+    matrix_z = field([[1, 1, 1, 1]])
+    matrix = field([[1, 2, 0], [0, 1, 2]])
+    balanced_code = codes.DistanceBalancedCode(
+        codes.CSSCode(matrix_x, matrix_z), codes.ClassicalCode(matrix), Pauli.X
+    )
+    iden_n, iden_m = np.eye(3, dtype=int), np.eye(2, dtype=int)
+    assert np.array_equal(
+        balanced_code.matrix_x,
+        np.hstack([np.kron(iden_m, matrix.T), np.kron(matrix_x, iden_n)]),
+    )
+    assert np.array_equal(
+        balanced_code.matrix_z,
+        np.block(
+            [
+                [np.kron(matrix_x.T, iden_m), -np.kron(field.Identity(4), matrix)],
+                [field.Zeros((3, 4)), np.kron(matrix_z, iden_n)],
+            ]
+        ),
+    )
+
+    # distance balancing amplifies only the distance of the selected Pauli type
+    code = codes.CSSCode(codes.RepetitionCode(3), np.zeros((0, 3), dtype=int))
+    assert (code.get_distance_exact(Pauli.X), code.get_distance_exact(Pauli.Z)) == (1, 3)
+    code_x = codes.DistanceBalancedCode(code, codes.RepetitionCode(2), "x")
+    code_z = codes.DistanceBalancedCode(code, codes.RepetitionCode(2), "z")
+    assert (code_x.get_distance_exact(Pauli.X), code_x.get_distance_exact(Pauli.Z)) == (2, 3)
+    assert (code_z.get_distance_exact(Pauli.X), code_z.get_distance_exact(Pauli.Z)) == (1, 6)
+
+
 def test_quantum_tanner(pytestconfig: pytest.Config) -> None:
     """Quantum Tanner code."""
     np.random.seed(pytestconfig.getoption("randomly_seed"))

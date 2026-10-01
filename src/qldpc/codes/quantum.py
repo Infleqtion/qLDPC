@@ -23,7 +23,15 @@ from sympy.matrices.normalforms import hermite_normal_form
 import qldpc
 from qldpc import abstract
 from qldpc._util import networkx as nx
-from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
+from qldpc.objects import (
+    CayleyComplex,
+    ChainComplex,
+    Node,
+    Pauli,
+    PauliXZ,
+    PauliXZLike,
+    QuditPauli,
+)
 
 from .classical import (
     CyclicCode,
@@ -2262,6 +2270,57 @@ class BPCode(CSSCode):
                 perm_cols = np.argsort(member.array_form[seed.num_checks :]).tolist()
                 permutations.append((perm_rows, perm_cols))
         return permutations
+
+
+####################################################################################################
+# distance-balanced code
+
+
+class DistanceBalancedCode(CSSCode):
+    """Distance-balanced code, obtained from a CSS code and a classical code.
+
+    Distance balancing multiplies the X-distance or Z-distance of a CSS code by the distance of a
+    classical code, while preserving its other distance.  If ``pauli`` is X, the CSS code defines a
+    chain complex ``C_2 --[H_X.T]--> C_1 --[H_Z]--> C_0`` and the classical code defines a chain
+    complex ``D_1 --[H]--> D_0``, where ``H_X``, ``H_Z``, and ``H`` are parity-check matrices.  The
+    distance-balanced code then has Z-type checks, qudits, and X-type checks in degrees 1, 2, and 3
+    of the tensor product ``C ⨂ D``.  If ``pauli`` is Z, the roles of X and Z are exchanged.
+
+    Suppose that ``pauli`` is X, the CSS code has parameters ``[[n, k, (d_X, d_Z)]]`` and
+    ``m_X = len(H_X)`` X-type checks, and the classical code has parameters ``[n_C, k_C, d_C]`` and
+    ``m_C = len(H)`` checks.  The distance-balanced code then has ``n * n_C + m_X * m_C`` qudits and
+    ``k * k_C + (m_X - rank(H_X)) * (m_C - rank(H))`` logical qudits.  If ``H_X`` and ``H`` have
+    full rank, the distance-balanced code has distances ``(d_X * d_C, d_Z)``.
+
+    References:
+
+    - Theorem 4.2 of https://arxiv.org/abs/2004.07935
+    - Equation (4) of https://arxiv.org/abs/2505.13679
+    - https://errorcorrectionzoo.org/c/distance_balanced
+    """
+
+    code: CSSCode
+    auxiliary_code: ClassicalCode
+    pauli: PauliXZ
+    chain: ChainComplex
+
+    def __init__(self, code: CSSCode, auxiliary_code: ClassicalCode, pauli: PauliXZLike) -> None:
+        self.code = code
+        self.auxiliary_code = auxiliary_code
+        self.pauli = Pauli.coerce_xz(pauli)
+
+        code_x, code_z = code.matrix_x, code.matrix_z
+        if self.pauli is Pauli.Z:
+            code_x, code_z = code_z, code_x
+        css_chain = ChainComplex([code_z, code_x.T])
+        self.chain = ChainComplex.tensor_product(css_chain, ChainComplex([auxiliary_code.matrix]))
+
+        matrix_x, matrix_z = self.chain.op(3).T, self.chain.op(2)
+        assert not isinstance(matrix_x, abstract.RingArray)
+        assert not isinstance(matrix_z, abstract.RingArray)
+        if self.pauli is Pauli.Z:
+            matrix_x, matrix_z = matrix_z, matrix_x
+        super().__init__(matrix_x, matrix_z, is_subsystem_code=False)
 
 
 ####################################################################################################

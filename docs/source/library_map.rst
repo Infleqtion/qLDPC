@@ -115,6 +115,9 @@ Symmetries of a parity check matrix are automorphisms of its Tanner graph, which
 Install it with ``python -m pip install 'qldpc[bliss]'``.
 ``BPCode.get_seed_permutations`` uses these automorphisms to find the permutations that ``BPCode.from_seed`` needs, such as those in the example above.
 
+Balanced product codes often have different X and Z distances.
+``DistanceBalancedCode`` multiplies either distance of a CSS code by the distance of a classical code, as in `arXiv:2004.07935 <https://arxiv.org/abs/2004.07935>`_.
+
 What each package does
 ----------------------
 
