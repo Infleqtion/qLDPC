@@ -5,10 +5,10 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable, Sequence
 
 import galois
 import numpy as np
-import numpy.typing as npt
 import pytest
 import scipy.linalg
 import sympy.combinatorics as comb
@@ -175,71 +175,9 @@ def test_chain_complex(field: int = 3) -> None:
         objects.ChainComplex.tensor_product(ring_matrix, ring_matrix)
 
 
-def test_chain_complex_action() -> None:
-    """Permutation actions on chain complexes."""
-    group = abstract.CyclicGroup(3)
-    chain = objects.ChainComplex([np.array([[1, 0, 0, 1], [0, 1, 0, 1], [0, 0, 1, 1]])], field=5)
-    representations = [
-        abstract.PermutationRepresentation(group, [[1, 2, 0]], 3),
-        abstract.PermutationRepresentation(group, [[1, 2, 0]], 4),
-    ]
-    action = objects.ChainComplexAction(chain, representations)
-    assert action.group is group
-    assert action.T.representations == tuple(representations[::-1])
-    assert np.array_equal(action.T.chain.op(1), chain.op(1).T)
-
-    with pytest.raises(ValueError, match="does not commute"):
-        bad_chain = objects.ChainComplex([np.array([[1, 0, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0]])])
-        objects.ChainComplexAction(bad_chain, representations)
-    with pytest.raises(ValueError, match="Expected 2 permutation representations"):
-        objects.ChainComplexAction(chain, representations[:1])
-    with pytest.raises(ValueError, match="acts on 3 points"):
-        objects.ChainComplexAction(chain, [representations[0], representations[0]])
-    with pytest.raises(ValueError, match="same Group instance"):
-        other_group = abstract.CyclicGroup(3)
-        other_representation = abstract.PermutationRepresentation(other_group, [[1, 2, 0]], 4)
-        objects.ChainComplexAction(chain, [representations[0], other_representation])
-    with pytest.raises(ValueError, match="over a finite field"):
-        ring = abstract.GroupRing(abstract.TrivialGroup())
-        ring_chain = objects.ChainComplex([abstract.RingArray.build([[0]], ring)])
-        objects.ChainComplexAction(
-            ring_chain, [abstract.PermutationRepresentation.trivial(group, 1)] * 2
-        )
-
-
-def get_orbit_projection(
-    representation_a: abstract.PermutationRepresentation,
-    representation_b: abstract.PermutationRepresentation,
-) -> npt.NDArray[np.int_]:
-    """Project pairs of points onto their orbits under the diagonal group action.
-
-    Orbits are ordered by their smallest pair, and pairs are flattened in row-major order.
-    """
-    shape = (representation_a.degree, representation_b.degree)
-    diagonal_group = comb.PermutationGroup(
-        [
-            comb.Permutation(
-                [
-                    np.ravel_multi_index((image_a.array_form[aa], image_b.array_form[bb]), shape)
-                    for aa, bb in np.ndindex(shape)
-                ]
-            )
-            for image_a, image_b in zip(
-                representation_a.generator_images, representation_b.generator_images
-            )
-        ]
-    )
-    orbits = sorted(diagonal_group.orbits(), key=min)
-    projection = np.zeros((len(orbits), math.prod(shape)), dtype=int)
-    for index, orbit in enumerate(orbits):
-        projection[index, list(orbit)] = 1
-    return projection
-
-
 def test_balanced_product() -> None:
     """Balanced products of chain complexes are quotients of tensor products."""
-    # non-free actions of a cyclic group
-    group = abstract.CyclicGroup(2)
+    # non-free symmetries
     chain_a = objects.ChainComplex(
         [np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 1], [0, 0, 0, 0]])], field=3
     )
@@ -247,81 +185,64 @@ def test_balanced_product() -> None:
         [np.array([[1, 0, 0, 0], [1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0]])], field=3
     )
     swap_one, swap_two = [1, 0, 2, 3], [1, 0, 3, 2]
-    action_a = objects.ChainComplexAction(
-        chain_a,
-        [
-            abstract.PermutationRepresentation(group, [swap_one], 4),
-            abstract.PermutationRepresentation(group, [swap_two], 4),
-        ],
-    )
-    action_b = objects.ChainComplexAction(
-        chain_b,
-        [
-            abstract.PermutationRepresentation(group, [swap_one], 4),
-            abstract.PermutationRepresentation.trivial(group, 4),
-        ],
-    )
-    assert_valid_balanced_product(action_a, action_b, [10, 20, 8])
+    symmetries_a = [(swap_one, swap_two)]
+    symmetries_b = [(swap_one, comb.Permutation(3))]
+    assert_valid_balanced_product(chain_a, chain_b, symmetries_a, symmetries_b, [10, 20, 8])
 
     # orbits that contribute to the same boundary operator entry, whose contributions cancel
-    regular = abstract.PermutationRepresentation.regular(group)
     chain = objects.ChainComplex([np.ones((2, 1), dtype=int)])
-    action = objects.ChainComplexAction(
-        chain, [regular, abstract.PermutationRepresentation.trivial(group, 1)]
+    balanced = assert_valid_balanced_product(
+        chain, chain, [([1, 0], [0])], [([1, 0], [0])], [2, 2, 1]
     )
-    balanced = assert_valid_balanced_product(action, action, [2, 2, 1])
     assert not np.any(balanced.op(2))
 
-    # the regular action of a non-abelian group, for which ignoring the distinction between left
-    # and right actions would identify too many basis elements
-    frobenius_group = abstract.Group(
-        comb.Permutation(0, 1, 2, 3, 4, 5, 6), comb.Permutation(1, 2, 4)(3, 6, 5)
-    )
-    regular = abstract.PermutationRepresentation.regular(frobenius_group)
-    chain = objects.ChainComplex([np.eye(frobenius_group.order, dtype=int)])
-    action = objects.ChainComplexAction(chain, [regular, regular])
-    assert_valid_balanced_product(action, action, [21, 42, 21])
-
-    with pytest.raises(ValueError, match="same field"):
-        chain_b = objects.ChainComplex([np.eye(frobenius_group.order, dtype=int)], field=3)
+    with pytest.raises(ValueError, match="same finite field"):
+        objects.ChainComplex.balanced_product(chain_a, chain, [], [])
+    with pytest.raises(ValueError, match="same number of symmetries"):
+        objects.ChainComplex.balanced_product(chain_a, chain_b, symmetries_a, [])
+    with pytest.raises(ValueError, match="must have 2 permutations"):
+        objects.ChainComplex.balanced_product(chain_a, chain_b, [(swap_one,)], symmetries_b)
+    with pytest.raises(ValueError, match="not symmetric"):
         objects.ChainComplex.balanced_product(
-            action, objects.ChainComplexAction(chain_b, [regular, regular])
+            chain_a, chain_b, [(swap_two, swap_one)], symmetries_b
         )
-    with pytest.raises(ValueError, match="same Group instance"):
-        other_group = abstract.TrivialGroup()
-        other_action = objects.ChainComplexAction(
-            objects.ChainComplex([np.eye(1, dtype=int)]),
-            [abstract.PermutationRepresentation.trivial(other_group, 1)] * 2,
-        )
-        objects.ChainComplex.balanced_product(action, other_action)
 
 
 def assert_valid_balanced_product(
-    action_a: objects.ChainComplexAction,
-    action_b: objects.ChainComplexAction,
+    chain_a: objects.ChainComplex,
+    chain_b: objects.ChainComplex,
+    symmetries_a: Sequence[Sequence[Iterable[int]]],
+    symmetries_b: Sequence[Sequence[Iterable[int]]],
     dims: list[int],
 ) -> objects.ChainComplex:
     """Check that projecting onto orbits maps a tensor product onto a balanced product."""
-    chain_a, chain_b = action_a.chain, action_b.chain
     tensor = objects.ChainComplex.tensor_product(chain_a, chain_b)
-    balanced = objects.ChainComplex.balanced_product(action_a, action_b)
+    balanced = objects.ChainComplex.balanced_product(chain_a, chain_b, symmetries_a, symmetries_b)
     assert [balanced.dim(degree) for degree in range(len(dims))] == dims
 
-    projections = [
-        chain_a.field(
-            scipy.linalg.block_diag(
-                *[
-                    get_orbit_projection(
-                        action_a.representations[deg_a], action_b.representations[deg_b]
-                    )
-                    for deg_a, deg_b in objects.ChainComplex._get_degree_pairs(
-                        chain_a, chain_b, degree
-                    )
-                ]
-            )
-        )
-        for degree in range(tensor.num_links + 1)
-    ]
+    projections = []
+    for degree in range(tensor.num_links + 1):
+        blocks = []
+        for deg_a, deg_b in objects.ChainComplex._get_degree_pairs(chain_a, chain_b, degree):
+            shape = (chain_a.dim(deg_a), chain_b.dim(deg_b))
+            perms = [
+                comb.Permutation(
+                    [
+                        np.ravel_multi_index(
+                            (list(perms_a[deg_a])[aa], list(perms_b[deg_b])[bb]), shape
+                        )
+                        for aa, bb in np.ndindex(shape)
+                    ]
+                )
+                for perms_a, perms_b in zip(symmetries_a, symmetries_b)
+            ]
+            orbits = sorted(comb.PermutationGroup(perms).orbits(), key=min)
+            block = np.zeros((len(orbits), math.prod(shape)), dtype=int)
+            for index, orbit in enumerate(orbits):
+                block[index, list(orbit)] = 1
+            blocks.append(block)
+        projections.append(chain_a.field(scipy.linalg.block_diag(*blocks)))
+
     for degree in range(1, tensor.num_links + 1):
         assert np.array_equal(
             balanced.op(degree) @ projections[degree], projections[degree - 1] @ tensor.op(degree)

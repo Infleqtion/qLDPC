@@ -118,31 +118,6 @@ def test_natural_lift() -> None:
     assert_valid_lifts(natural_group)
 
 
-def test_permutation_representation() -> None:
-    """Permutation representations of groups."""
-    group = abstract.CyclicGroup(3)
-    image = abstract.GroupMember(0, 1, 2, size=4)
-    for generator_image in [[1, 2, 0], sympy.combinatorics.Permutation(0, 1, 2), image.to_matrix()]:
-        representation = abstract.PermutationRepresentation(group, [generator_image], 4)
-        assert representation.generator_images == (image,)
-
-    with pytest.raises(ValueError, match="nonnegative degree"):
-        abstract.PermutationRepresentation(group, [[]], -1)
-    with pytest.raises(ValueError, match="Expected 1 generator images"):
-        abstract.PermutationRepresentation(group, [], 3)
-    with pytest.raises(ValueError, match="Invalid permutation matrix"):
-        abstract.PermutationRepresentation(group, [[[0, 1], [1, 1]]], 2)
-    with pytest.raises(ValueError, match="do not define a group homomorphism"):
-        abstract.PermutationRepresentation(group, [[1, 0]], 2)
-
-    # the quaternion group has generators that differ from those of its underlying SymPy group
-    quaternion_group = abstract.QuaternionGroup()
-    representation = abstract.PermutationRepresentation.regular(quaternion_group)
-    assert representation.degree == quaternion_group.order
-    representation = abstract.PermutationRepresentation.trivial(quaternion_group, 2)
-    assert all(image == abstract.GroupMember(size=2) for image in representation.generator_images)
-
-
 def test_lifts() -> None:
     """Lift named group elements."""
     assert_valid_lifts(abstract.TrivialGroup())

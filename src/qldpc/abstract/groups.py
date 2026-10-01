@@ -27,7 +27,7 @@ import itertools
 import math
 import operator
 from collections.abc import Callable, Iterator, Sequence
-from typing import Any, ClassVar, TypeAlias
+from typing import Any, ClassVar
 
 import galois
 import numpy as np
@@ -659,85 +659,6 @@ class Group:
         for base, exponent in exponents:
             output *= symbols[base] ** exponent
         return output
-
-
-PermutationImage: TypeAlias = (
-    comb.Permutation | Sequence[int] | Sequence[Sequence[int]] | npt.NDArray[np.int_]
-)
-
-
-class PermutationRepresentation:
-    """Action of a group on a set of points by permutations.
-
-    Unlike the matrix lift of a :class:`Group`, a group can have any number of permutation
-    representations, which need not be faithful.
-
-    Args:
-        group: The group being represented.
-        generator_images: The permutations representing ``group.generators``.  Each image may be a
-            permutation, a sequence of integers, or a permutation matrix in the convention of
-            :meth:`GroupMember.to_matrix`.
-        degree: The number of points acted on.  Images on fewer points are padded with fixed points.
-    """
-
-    group: Group
-    degree: int
-    generator_images: tuple[GroupMember, ...]
-
-    def __init__(
-        self, group: Group, generator_images: Sequence[PermutationImage], degree: int
-    ) -> None:
-        if degree < 0:
-            raise ValueError(f"Permutation representations must have nonnegative degree ({degree})")
-        if len(generator_images) != len(group.generators):
-            raise ValueError(
-                f"Expected {len(group.generators)} generator images"
-                f" (provided: {len(generator_images)})"
-            )
-        images = tuple(self.normalize_image(image, degree) for image in generator_images)
-
-        # the generators of the group, paired with their images, generate the graph of a
-        # homomorphism if and only if they generate a group of the same order as the domain
-        graph = comb.PermutationGroup(
-            *(
-                GroupMember(generator, size=group.degree) @ image
-                for generator, image in zip(group.generators, images)
-            )
-        )
-        if graph.order() != group.order:
-            raise ValueError("The generator images do not define a group homomorphism")
-
-        self.group = group
-        self.degree = degree
-        self.generator_images = images
-
-    @staticmethod
-    def normalize_image(image: PermutationImage, degree: int) -> GroupMember:
-        """Convert a permutation, integer sequence, or permutation matrix into a GroupMember."""
-        if isinstance(image, comb.Permutation):
-            return GroupMember(image.array_form, size=degree)
-        array = np.asarray(image, dtype=int)
-        if array.ndim == 2:
-            member = GroupMember(np.argmax(array, axis=1).tolist() if array.size else [])
-            if not np.array_equal(member.to_matrix(), array):
-                raise ValueError(f"Invalid permutation matrix:\n{array}")
-            return GroupMember(member.array_form, size=degree)
-        return GroupMember(array.tolist(), size=degree)
-
-    @staticmethod
-    def trivial(group: Group, degree: int) -> PermutationRepresentation:
-        """Trivial action of a group on a given number of points."""
-        return PermutationRepresentation(group, [[]] * len(group.generators), degree)
-
-    @staticmethod
-    def regular(group: Group) -> PermutationRepresentation:
-        """Action of a group on itself by right multiplication, h --> h * g."""
-        members = list(group.generate())
-        generator_images = [
-            [group.index(member * generator) for member in members]
-            for generator in group.generators
-        ]
-        return PermutationRepresentation(group, generator_images, group.order)
 
 
 class WreathProductGroup(Group):

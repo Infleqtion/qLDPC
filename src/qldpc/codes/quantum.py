@@ -23,16 +23,7 @@ from sympy.matrices.normalforms import hermite_normal_form
 import qldpc
 from qldpc import abstract
 from qldpc._util import networkx as nx
-from qldpc.objects import (
-    CayleyComplex,
-    ChainComplex,
-    ChainComplexAction,
-    Node,
-    Pauli,
-    PauliXZ,
-    PauliXZLike,
-    QuditPauli,
-)
+from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
 
 from .classical import (
     CyclicCode,
@@ -2119,69 +2110,70 @@ class SLPCode(CSSCode):
 
 
 ####################################################################################################
-# balanced product code and distance-balanced code
+# balanced product code
 
 
 class BPCode(CSSCode):
     """Balanced product code.
 
-    A balanced product code is built from two one-link chain complexes (such as those of classical
-    codes) whose distinguished bases are permuted by the same group.  The balanced product of these
-    complexes (see :meth:`ChainComplex.balanced_product`) is a two-link chain complex
-    ``C_2 --> C_1 --> C_0``, which defines a CSS code with Z-type checks in ``C_2``, qudits in
-    ``C_1``, and X-type checks in ``C_0``.  If the group acts freely on both complexes, a balanced
-    product code is a lifted product code (see :class:`LPCode`).
+    A balanced product code is built from two classical codes, each with a list of symmetries.  A
+    symmetry of a classical code is a pair of permutations ``(p_checks, p_bits)`` of its checks and
+    bits that leaves its parity check matrix ``H`` invariant, in the sense that
+    ``H[p_checks][:, p_bits] == H``.  Here each permutation is an integer sequence or a SymPy
+    permutation, which maps index ``j`` to ``p[j]``.
+
+    Pairing the symmetries of the two classical codes, a balanced product code is the quotient of
+    the hypergraph product code (see :class:`HGPCode`) that identifies qudits and checks related by
+    every pair of symmetries.  See :meth:`qldpc.objects.ChainComplex.balanced_product` for details.
+    Without symmetries, a balanced product code is a hypergraph product code.  If the pairs of
+    symmetries generate a group that acts freely on both codes, a balanced product code is a lifted
+    product code (see :class:`LPCode`).
 
     Args:
-        action_a: A group action on the first chain complex.
-        action_b: An action of the same group on the second chain complex.
+        code_a: The first classical code.
+        code_b: The second classical code.
+        symmetries_a: Symmetries ``(p_checks, p_bits)`` of the first code.
+        symmetries_b: Symmetries ``(p_checks, p_bits)`` of the second code, as many as there are
+            symmetries of the first code.
+        field: The finite field for the classical codes, if they are not ClassicalCode objects.
 
     References:
 
     - https://errorcorrectionzoo.org/c/balanced_product
     - https://arxiv.org/abs/2012.09271
+    - https://arxiv.org/abs/2505.13679
     """
 
-    action_a: ChainComplexAction
-    action_b: ChainComplexAction
+    code_a: ClassicalCode
+    code_b: ClassicalCode
     chain: ChainComplex
 
-    def __init__(self, action_a: ChainComplexAction, action_b: ChainComplexAction) -> None:
-        if action_a.chain.num_links != 1 or action_b.chain.num_links != 1:
-            raise ValueError("BPCode requires two one-link chain complexes")
-        self.action_a = action_a
-        self.action_b = action_b
-        self.chain = ChainComplex.balanced_product(action_a, action_b)
-
+    def __init__(
+        self,
+        code_a: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        code_b: ClassicalCode | npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        symmetries_a: Sequence[tuple[Iterable[int], Iterable[int]]] = (),
+        symmetries_b: Sequence[tuple[Iterable[int], Iterable[int]]] = (),
+        field: int | type[galois.FieldArray] | None = None,
+    ) -> None:
+        self.code_a = ClassicalCode(code_a, field)
+        self.code_b = ClassicalCode(code_b, field)
+        self.chain = ChainComplex.balanced_product(
+            ChainComplex([self.code_a.matrix]),
+            ChainComplex([self.code_b.matrix]).T,
+            symmetries_a,
+            [symmetry[::-1] for symmetry in symmetries_b],
+        )
         matrix_x, matrix_z = self.chain.op(1), self.chain.op(2).T
         assert not isinstance(matrix_x, abstract.RingArray)
         assert not isinstance(matrix_z, abstract.RingArray)
         super().__init__(matrix_x, matrix_z, is_subsystem_code=False)
 
-    @classmethod
-    def from_codes(
-        cls,
-        code_a: ClassicalCode,
-        code_b: ClassicalCode,
-        representations_a: Sequence[abstract.PermutationRepresentation],
-        representations_b: Sequence[abstract.PermutationRepresentation],
-    ) -> BPCode:
-        """Balanced product of two classical codes.
-
-        Each code comes with two permutation representations of the same group, which act on its
-        checks and bits (in that order) and commute with its parity-check matrix.  If the group is
-        trivial, this method constructs the hypergraph product code ``HGPCode(code_a, code_b)``.
-        """
-        action_a = ChainComplexAction(ChainComplex([code_a.matrix]), representations_a)
-        action_b = ChainComplexAction(ChainComplex([code_b.matrix]), representations_b)
-        return cls(action_a, action_b.T)
-
-    @classmethod
+    @staticmethod
     def from_seed(
-        cls,
         seed_matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]],
-        perm_rows: abstract.PermutationImage,
-        perm_cols: abstract.PermutationImage,
+        perm_rows: Iterable[int],
+        perm_cols: Iterable[int],
         field: int | type[galois.FieldArray] | None = None,
     ) -> BPCode:
         """Balanced product of a cycle graph with a seed matrix.
@@ -2189,76 +2181,24 @@ class BPCode(CSSCode):
         Here ``perm_rows`` and ``perm_cols`` permute the rows and columns of the seed matrix, and
         their permutation matrices ``R`` and ``C`` (see
         :meth:`qldpc.abstract.GroupMember.to_matrix`) must satisfy
-        ``R @ seed_matrix == seed_matrix @ C.T``.  These permutations generate an action of the
-        cyclic group ``Z_l`` on the seed matrix, where ``l`` is the least common multiple of their
-        orders.  This method constructs the balanced product over ``Z_l`` of a length-``l``
-        cycle graph with the seed matrix.  If all orbits of ``R`` and ``C`` have length ``l``, the
+        ``R @ seed_matrix == seed_matrix @ C.T``.  If ``l`` is the least common multiple of the
+        orders of ``R`` and ``C``, this method constructs the balanced product of the parity check
+        matrix of a length-``l`` cycle graph with the seed matrix, pairing a cyclic shift of the
+        cycle graph with ``(R^{-1}, C)``.  If all orbits of ``R`` and ``C`` have length ``l``, the
         result is the code in Definition 1 of https://arxiv.org/abs/2505.13679, up to a permutation
         of qudits.
         """
-        seed = ClassicalCode(seed_matrix, field).matrix
-        perm_rows = abstract.PermutationRepresentation.normalize_image(perm_rows, seed.shape[0])
-        perm_cols = abstract.PermutationRepresentation.normalize_image(perm_cols, seed.shape[1])
-        group = abstract.CyclicGroup(math.lcm(int(perm_rows.order()), int(perm_cols.order())))
-        seed_action = ChainComplexAction(
-            ChainComplex([seed]),
-            [
-                abstract.PermutationRepresentation(group, [perm_rows**-1], seed.shape[0]),
-                abstract.PermutationRepresentation(group, [perm_cols], seed.shape[1]),
-            ],
+        seed = ClassicalCode(seed_matrix, field)
+        perm_rows = abstract.GroupMember(list(perm_rows), size=seed.num_checks)
+        perm_cols = abstract.GroupMember(list(perm_cols), size=len(seed))
+        length = math.lcm(int(perm_rows.order()), int(perm_cols.order()))
+        shift = [*range(1, length), 0]
+        return BPCode(
+            RingCode(length, seed.field),
+            seed,
+            [(shift, shift)],
+            [((perm_rows**-1).array_form, perm_cols.array_form)],
         )
-        regular = abstract.PermutationRepresentation.regular(group)
-        cycle_action = ChainComplexAction(
-            ChainComplex([RingCode(group.order, type(seed)).matrix]), [regular, regular]
-        )
-        return cls(cycle_action, seed_action.T)
-
-
-class DistanceBalancedCode(CSSCode):
-    """Distance-balanced code, obtained from a CSS code and a classical code.
-
-    Distance balancing multiplies the X-distance or Z-distance of a CSS code by the distance of a
-    classical code, while preserving its other distance.  If ``pauli`` is X, the CSS code defines a
-    chain complex ``C_2 --[H_X.T]--> C_1 --[H_Z]--> C_0`` and the classical code defines a chain
-    complex ``D_1 --[H]--> D_0``, where ``H_X``, ``H_Z``, and ``H`` are parity-check matrices.  The
-    distance-balanced code then has Z-type checks, qudits, and X-type checks in degrees 1, 2, and 3
-    of the tensor product ``C ⨂ D``.  If ``pauli`` is Z, the roles of X and Z are exchanged.
-
-    Suppose that ``pauli`` is X, the CSS code has parameters ``[[n, k, (d_X, d_Z)]]`` and
-    ``m_X = len(H_X)`` X-type checks, and the classical code has parameters ``[n_C, k_C, d_C]`` and
-    ``m_C = len(H)`` checks.  The distance-balanced code then has ``n * n_C + m_X * m_C`` qudits and
-    ``k * k_C + (m_X - rank(H_X)) * (m_C - rank(H))`` logical qudits.  If ``H_X`` and ``H`` have
-    full rank, the distance-balanced code has distances ``(d_X * d_C, d_Z)``.
-
-    References:
-
-    - Theorem 4.2 of https://arxiv.org/abs/2004.07935
-    - Equation (4) of https://arxiv.org/abs/2505.13679
-    - https://errorcorrectionzoo.org/c/distance_balanced
-    """
-
-    code: CSSCode
-    auxiliary_code: ClassicalCode
-    pauli: PauliXZ
-    chain: ChainComplex
-
-    def __init__(self, code: CSSCode, auxiliary_code: ClassicalCode, pauli: PauliXZLike) -> None:
-        self.code = code
-        self.auxiliary_code = auxiliary_code
-        self.pauli = Pauli.coerce_xz(pauli)
-
-        code_x, code_z = code.matrix_x, code.matrix_z
-        if self.pauli is Pauli.Z:
-            code_x, code_z = code_z, code_x
-        css_chain = ChainComplex([code_z, code_x.T])
-        self.chain = ChainComplex.tensor_product(css_chain, ChainComplex([auxiliary_code.matrix]))
-
-        matrix_x, matrix_z = self.chain.op(3).T, self.chain.op(2)
-        assert not isinstance(matrix_x, abstract.RingArray)
-        assert not isinstance(matrix_z, abstract.RingArray)
-        if self.pauli is Pauli.Z:
-            matrix_x, matrix_z = matrix_z, matrix_x
-        super().__init__(matrix_x, matrix_z, is_subsystem_code=False)
 
 
 ####################################################################################################

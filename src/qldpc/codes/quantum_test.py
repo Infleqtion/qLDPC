@@ -958,16 +958,10 @@ def test_unsupported_line_logicals(rows: int = 2, cols: int = 3) -> None:
 
 def test_balanced_product_code() -> None:
     """Balanced product codes."""
-    # over the trivial group, a balanced product of classical codes is a hypergraph product
+    # without symmetries, a balanced product code is a hypergraph product code
     code_a = codes.ClassicalCode([[1, 1, 0], [0, 1, 1]], field=3)
     code_b = codes.ClassicalCode([[1, 0], [1, 2], [0, 1]], field=3)
-    group = abstract.TrivialGroup()
-    code = codes.BPCode.from_codes(
-        code_a,
-        code_b,
-        [abstract.PermutationRepresentation.trivial(group, dim) for dim in code_a.matrix.shape],
-        [abstract.PermutationRepresentation.trivial(group, dim) for dim in code_b.matrix.shape],
-    )
+    code = codes.BPCode(code_a, code_b)
     hgp_code = codes.HGPCode(code_a, code_b)
     assert np.array_equal(code.matrix_x, hgp_code.matrix_x)
     assert np.array_equal(code.matrix_z, hgp_code.matrix_z)
@@ -976,54 +970,12 @@ def test_balanced_product_code() -> None:
     seed = codes.RingCode(6).matrix
     perm_rows = np.linalg.matrix_power(np.roll(np.eye(6, dtype=int), 1, axis=1), 2)
     perm_cols = perm_rows.T
-    code = codes.BPCode.from_seed(seed, perm_rows, perm_cols)
+    code = codes.BPCode.from_seed(seed, np.argmax(perm_rows, axis=1), np.argmax(perm_cols, axis=1))
     matrix_x = np.hstack([seed.T, np.eye(6, dtype=int) + perm_cols]).view(code.field)
     matrix_z = np.hstack([np.eye(6, dtype=int) + perm_rows, seed]).view(code.field)
     qudit_order = [*range(6, 12), *np.argmax(perm_cols, axis=0)]
     assert np.array_equal(code.matrix_x[:, qudit_order].row_space(), matrix_x.row_space())
     assert np.array_equal(code.matrix_z[:, qudit_order].row_space(), matrix_z.row_space())
-
-    with pytest.raises(ValueError, match="one-link chain complexes"):
-        chain = ChainComplex([code_a.matrix, code_a.field.Zeros((3, 0))])
-        action = qldpc.objects.ChainComplexAction(
-            chain, [abstract.PermutationRepresentation.trivial(group, dim) for dim in [2, 3, 0]]
-        )
-        codes.BPCode(action, action)
-
-
-def test_distance_balanced_code() -> None:
-    """Distance-balanced codes."""
-    # compare to Eq. (4) of arXiv:2505.13679v2 (with a sign that matters over non-binary fields),
-    # up to the order of qudits and Z-type checks
-    field = abstract.resolve_field(3)
-    matrix_x = field([[1, 2, 0, 0], [0, 0, 1, 2]])
-    matrix_z = field([[1, 1, 1, 1]])
-    matrix = field([[1, 2, 0], [0, 1, 2]])
-    balanced_code = codes.DistanceBalancedCode(
-        codes.CSSCode(matrix_x, matrix_z), codes.ClassicalCode(matrix), Pauli.X
-    )
-    iden_n, iden_m = np.eye(3, dtype=int), np.eye(2, dtype=int)
-    assert np.array_equal(
-        balanced_code.matrix_x,
-        np.hstack([np.kron(iden_m, matrix.T), np.kron(matrix_x, iden_n)]),
-    )
-    assert np.array_equal(
-        balanced_code.matrix_z,
-        np.block(
-            [
-                [np.kron(matrix_x.T, iden_m), -np.kron(field.Identity(4), matrix)],
-                [field.Zeros((3, 4)), np.kron(matrix_z, iden_n)],
-            ]
-        ),
-    )
-
-    # distance balancing amplifies only the distance of the selected Pauli type
-    code = codes.CSSCode(codes.RepetitionCode(3), np.zeros((0, 3), dtype=int))
-    assert (code.get_distance_exact(Pauli.X), code.get_distance_exact(Pauli.Z)) == (1, 3)
-    code_x = codes.DistanceBalancedCode(code, codes.RepetitionCode(2), "x")
-    code_z = codes.DistanceBalancedCode(code, codes.RepetitionCode(2), "z")
-    assert (code_x.get_distance_exact(Pauli.X), code_x.get_distance_exact(Pauli.Z)) == (2, 3)
-    assert (code_z.get_distance_exact(Pauli.X), code_z.get_distance_exact(Pauli.Z)) == (1, 6)
 
 
 def test_quantum_tanner(pytestconfig: pytest.Config) -> None:
