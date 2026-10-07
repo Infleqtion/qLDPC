@@ -98,9 +98,13 @@ Per-gate-application noise via a callback (``rule_func``)::
 
 .. rubric:: Idling errors
 
-``idle_error`` applies to every qubit that is not operated on during a circuit moment.
+``idle_error`` applies to every qubit that is not operated on during a circuit moment.  Consecutive
+Pauli idle errors on the same qubit are combined into one equivalent error before the qubit is next
+used.  Idle counts include every iteration of nested ``REPEAT`` blocks, even when a run crosses a
+block boundary; the output retains compact ``REPEAT`` blocks where possible.  Custom Stim noise
+fragments retain their per-moment behavior.
 ``additional_error_waiting_for_m_or_r`` applies additional noise to non-collapsing qubits during a
-moment that contains a measurement or reset.
+moment that contains a measurement or reset; it always applies per moment, without aggregation.
 
 Explicit identity gates (``I`` and ``II``) are treated as idle for this accounting.  ``rules`` can
 append errors after these gates, and ``rule_func`` can select errors based on an identity's tag or
@@ -884,12 +888,15 @@ class NoiseModel:
                 unconfigured multi-qubit arity.  Configure basis-specific rules explicitly when
                 needed.
             idle_error: Noise rule or depolarization probability applied to each idling qubit in any
-                given moment.  If a NoiseRule is provided, its `after` channels are appended to the
-                idle qubits (its readout_error/reset_error fields are ignored).
+                given moment.  Consecutive Pauli-channel errors on an idle qubit are composed into
+                one equivalent error, accounting for every iteration and boundary of nested
+                ``REPEAT`` blocks while retaining compact blocks where possible.  Custom Stim noise
+                fragments remain per-moment.  If a NoiseRule is provided, its `after` channels are
+                used (its readout_error/reset_error fields are ignored).
             additional_error_waiting_for_m_or_r: Additional noise rule or depolarization probability
                 applied to every non-collapsing qubit while another qubit undergoes measurement or
-                reset, including qubits undergoing a unitary operation.  Same NoiseRule semantics as
-                ``idle_error``.
+                reset, including qubits undergoing a unitary operation.  Accepts the same NoiseRule
+                fields as ``idle_error``, but always applies per moment without aggregation.
             rules: Dictionary mapping specific gate names to their noise rules.  Overrides the
                 arity-based defaults for unitary, measurement, and reset gates.  Explicit ``I`` and
                 ``II`` markers accept one- and two-qubit ``after`` rules, respectively.  If
@@ -1132,6 +1139,9 @@ class NoiseModel:
         This method first uses TICKs to split the input circuit into moments of operations that can
         be applied in parallel, thereby preventing qubit reuse conflicts.  Noise is then applied to
         each operation according to the rules of this NoiseModel.
+        Unticked repeat boundaries may be restructured to preserve the same moments as the
+        flattened circuit.  Tags on non-immune repeats are retained on compact repeated portions,
+        but may be lost on iterations that must be peeled off to align those boundaries.
 
         Args:
             circuit: The circuit to apply noise to.
@@ -1150,7 +1160,8 @@ class NoiseModel:
                 An immune-tagged operation is still a real operation for moment accounting; it does
                 not suppress idle noise on unrelated qubits in the same moment.
             insert_ticks: If True, automatically inserts TICK operations to prevent qubit reuse
-                conflicts.  If False, assumes that this preprocessing is not necessary.
+                conflicts.  If False, a qubit reused within a moment (including across repeat
+                boundaries) raises ValueError instead.
 
         Returns:
             The input circuit with added noise.
@@ -1186,56 +1197,282 @@ class NoiseModel:
             else frozenset()
         )
 
+        aggregate_idle = self.idle_error is not None and isinstance(
+            self.idle_error.after, (PauliChannel, PauliChannelSequence)
+        )
+        if not insert_ticks:
+            _validate_moments_across_repeats(circuit, immune_op_tag)
+        if aggregate_idle:
+            circuit = _align_repeat_moment_seams(circuit, immune_op_tag)
         if insert_ticks:
             # split moments with TICKs to prevent qubit reuse conflicts.  The preprocessing operates
             # purely on gate-level qubit reuse and ignores ``immune_qubits`` (it uses a sentinel to
             # force per-target splitting), so it composes cleanly with immunity.
-            circuit = _split_moments_with_ticks(circuit, immune_op_tag)
+            circuit = _split_moments_with_ticks(
+                circuit, immune_op_tag, preserve_transparent_repeats=aggregate_idle
+            )
 
         noisy_circuit = stim.Circuit()
+        pending_idle_moments: dict[int, int] = {}
+        aggregated_idle_channels: dict[int, PauliChannel] = {}
+        self._inplace_append_noisy_circuit(
+            circuit,
+            noisy_circuit,
+            system_qubits=system_qubits,
+            immune_qubits=immune_qubits,
+            immune_op_tag=immune_op_tag,
+            immune_qubit_tag=immune_qubit_tag,
+            immunize_gates=immunize_gates,
+            insert_ticks=insert_ticks,
+            pending_idle_moments=pending_idle_moments,
+            aggregated_idle_channels=aggregated_idle_channels,
+        )
+        self._flush_idle_errors(noisy_circuit, pending_idle_moments, aggregated_idle_channels)
+        return noisy_circuit
+
+    def _inplace_append_noisy_circuit(
+        self,
+        circuit: stim.Circuit,
+        noisy_circuit: stim.Circuit,
+        *,
+        system_qubits: frozenset[int],
+        immune_qubits: frozenset[int],
+        immune_op_tag: str | None,
+        immune_qubit_tag: str | None,
+        immunize_gates: bool,
+        insert_ticks: bool,
+        pending_idle_moments: dict[int, int],
+        aggregated_idle_channels: dict[int, PauliChannel],
+    ) -> None:
+        """Process a circuit while carrying un-emitted idle counts through its repeat blocks."""
+        idle_after = self.idle_error.after if self.idle_error is not None else None
+        aggregate_idle = isinstance(idle_after, (PauliChannel, PauliChannelSequence))
 
         first_moment = True
         for moment_or_repeat_block in _iter_moments_and_repeat_blocks(
-            circuit, immune_qubits, immune_op_tag, force_split=self.rule_func is not None
+            circuit,
+            immune_qubits,
+            immune_op_tag,
+            force_split=self.rule_func is not None,
+            preserve_transparent_repeats=aggregate_idle,
         ):
+            if isinstance(moment_or_repeat_block, stim.CircuitRepeatBlock):
+                if immune_op_tag is not None and immune_op_tag in moment_or_repeat_block.tag:
+                    self._flush_idle_errors(
+                        noisy_circuit,
+                        pending_idle_moments,
+                        aggregated_idle_channels,
+                        _qubits_touched_in_circuit(moment_or_repeat_block.body_copy()),
+                    )
+                elif not aggregate_idle:
+                    self._flush_idle_errors(
+                        noisy_circuit, pending_idle_moments, aggregated_idle_channels
+                    )
+            elif pending_idle_moments:
+                touched_qubits = {
+                    target.qubit_value
+                    for op in moment_or_repeat_block
+                    if isinstance(op, stim.CircuitInstruction)
+                    if op.name not in IDLE_OPS and op_type(op.name) != ANNOTATION
+                    for target in op.targets_copy()
+                    if target.qubit_value is not None
+                }
+                self._flush_idle_errors(
+                    noisy_circuit, pending_idle_moments, aggregated_idle_channels, touched_qubits
+                )
             if first_moment:
                 first_moment = False
-            elif not isinstance(noisy_circuit[-1], stim.CircuitRepeatBlock):
+            elif not isinstance(
+                noisy_circuit[-1], stim.CircuitRepeatBlock
+            ) or _is_transparent_repeat(noisy_circuit[-1]):
                 noisy_circuit.append("TICK")
 
             if isinstance(moment_or_repeat_block, stim.CircuitRepeatBlock):
-                if immune_op_tag is not None and immune_op_tag in moment_or_repeat_block.tag:
-                    noisy_circuit.append(moment_or_repeat_block)
-                else:
-                    noisy_body = self.noisy_circuit(
-                        moment_or_repeat_block.body_copy(),
+                self._inplace_append_noisy_repeat(
+                    moment_or_repeat_block,
+                    noisy_circuit,
+                    system_qubits=system_qubits,
+                    immune_qubits=immune_qubits,
+                    immune_op_tag=immune_op_tag,
+                    immune_qubit_tag=immune_qubit_tag,
+                    immunize_gates=immunize_gates,
+                    insert_ticks=insert_ticks,
+                    pending_idle_moments=pending_idle_moments,
+                    aggregated_idle_channels=aggregated_idle_channels,
+                    aggregate_idle=aggregate_idle,
+                )
+            else:
+                instructions = [
+                    op for op in moment_or_repeat_block if isinstance(op, stim.CircuitInstruction)
+                ]
+                if len(instructions) == len(moment_or_repeat_block):
+                    self._inplace_append_noisy_moment(
+                        circuit=noisy_circuit,
+                        moment=instructions,
+                        system_qubits=system_qubits,
+                        immune_qubits=immune_qubits,
+                        immune_op_tag=immune_op_tag,
+                        immunize_gates=immunize_gates,
+                        pending_idle_moments=pending_idle_moments if aggregate_idle else None,
+                        aggregated_idle_channels=aggregated_idle_channels,
+                    )
+                    continue
+                collapsed_qubits, operation_qubits = _categorize_moment_qubits(instructions)
+                fragment: list[stim.CircuitInstruction] = []
+                for part in moment_or_repeat_block:
+                    if isinstance(part, stim.CircuitRepeatBlock):
+                        if fragment:
+                            self._inplace_append_noisy_moment(
+                                circuit=noisy_circuit,
+                                moment=fragment,
+                                system_qubits=system_qubits,
+                                immune_qubits=immune_qubits,
+                                immune_op_tag=immune_op_tag,
+                                immunize_gates=immunize_gates,
+                                pending_idle_moments=pending_idle_moments,
+                                aggregated_idle_channels=aggregated_idle_channels,
+                                apply_moment_noise=False,
+                            )
+                            fragment = []
+                        if immune_op_tag is not None and immune_op_tag in part.tag:
+                            self._flush_idle_errors(
+                                noisy_circuit,
+                                pending_idle_moments,
+                                aggregated_idle_channels,
+                                _qubits_touched_in_circuit(part.body_copy()),
+                            )
+                        self._inplace_append_noisy_repeat(
+                            part,
+                            noisy_circuit,
+                            system_qubits=system_qubits,
+                            immune_qubits=immune_qubits,
+                            immune_op_tag=immune_op_tag,
+                            immune_qubit_tag=immune_qubit_tag,
+                            immunize_gates=immunize_gates,
+                            insert_ticks=False,
+                            pending_idle_moments=pending_idle_moments,
+                            aggregated_idle_channels=aggregated_idle_channels,
+                            aggregate_idle=True,
+                        )
+                    else:
+                        fragment.append(part)
+                if fragment:
+                    self._inplace_append_noisy_moment(
+                        circuit=noisy_circuit,
+                        moment=fragment,
+                        system_qubits=system_qubits,
+                        immune_qubits=immune_qubits,
+                        immune_op_tag=immune_op_tag,
+                        immunize_gates=immunize_gates,
+                        pending_idle_moments=pending_idle_moments,
+                        aggregated_idle_channels=aggregated_idle_channels,
+                        apply_moment_noise=False,
+                    )
+                if any(op_type(op.name) in GATE_OP_TYPES for op in instructions):
+                    self._inplace_append_idle_errors(
+                        circuit=noisy_circuit,
+                        collapsed_qubits=collapsed_qubits,
+                        operation_qubits=operation_qubits,
+                        system_qubits=system_qubits,
+                        immune_qubits=immune_qubits,
+                        pending_idle_moments=pending_idle_moments,
+                        aggregated_idle_channels=aggregated_idle_channels,
+                    )
+
+    def _inplace_append_noisy_repeat(
+        self,
+        block: stim.CircuitRepeatBlock,
+        noisy_circuit: stim.Circuit,
+        *,
+        system_qubits: frozenset[int],
+        immune_qubits: frozenset[int],
+        immune_op_tag: str | None,
+        immune_qubit_tag: str | None,
+        immunize_gates: bool,
+        insert_ticks: bool,
+        pending_idle_moments: dict[int, int],
+        aggregated_idle_channels: dict[int, PauliChannel],
+        aggregate_idle: bool,
+    ) -> None:
+        """Process a repeat without expanding its iteration count."""
+        if immune_op_tag is not None and immune_op_tag in block.tag:
+            noisy_circuit.append(block)
+        elif aggregate_idle:
+            body = block.body_copy()
+            first_body = stim.Circuit()
+            initial_pending = pending_idle_moments.copy()
+            self._inplace_append_noisy_circuit(
+                body,
+                first_body,
+                system_qubits=system_qubits,
+                immune_qubits=immune_qubits,
+                immune_op_tag=immune_op_tag,
+                immune_qubit_tag=immune_qubit_tag,
+                immunize_gates=immunize_gates,
+                insert_ticks=insert_ticks,
+                pending_idle_moments=pending_idle_moments,
+                aggregated_idle_channels=aggregated_idle_channels,
+            )
+            if not insert_ticks:
+                first_body = _preserve_boundary_ticks(body, first_body)
+            else:
+                first_body.append("TICK")
+            count = block.repeat_count
+            first_pending = pending_idle_moments.copy()
+            touched = _qubits_touched_in_circuit(first_body)
+            if count > 1:
+                if any(
+                    initial_pending.get(qubit, 0) != first_pending.get(qubit, 0)
+                    for qubit in touched
+                ):
+                    steady_body = stim.Circuit()
+                    self._inplace_append_noisy_circuit(
+                        body,
+                        steady_body,
                         system_qubits=system_qubits,
                         immune_qubits=immune_qubits,
                         immune_op_tag=immune_op_tag,
                         immune_qubit_tag=immune_qubit_tag,
                         immunize_gates=immunize_gates,
                         insert_ticks=insert_ticks,
+                        pending_idle_moments=pending_idle_moments,
+                        aggregated_idle_channels=aggregated_idle_channels,
                     )
-                    if insert_ticks:
-                        noisy_body.append("TICK")
-                    noisy_circuit.append(
-                        stim.CircuitRepeatBlock(
-                            repeat_count=moment_or_repeat_block.repeat_count,
-                            body=noisy_body,
-                            tag=moment_or_repeat_block.tag,
+                    if not insert_ticks:
+                        steady_body = _preserve_boundary_ticks(body, steady_body)
+                    else:
+                        steady_body.append("TICK")
+                    if first_body != steady_body:
+                        noisy_circuit.append(stim.CircuitRepeatBlock(1, first_body, tag=block.tag))
+                        first_body = steady_body
+                        count -= 1
+                for qubit in set(initial_pending) | set(pending_idle_moments):
+                    if qubit not in touched:
+                        per_iteration = first_pending.get(qubit, 0) - initial_pending.get(qubit, 0)
+                        pending_idle_moments[qubit] = (
+                            initial_pending.get(qubit, 0) + block.repeat_count * per_iteration
                         )
-                    )
+            noisy_circuit.append(stim.CircuitRepeatBlock(count, first_body, tag=block.tag))
+        else:
+            noisy_body = self.noisy_circuit(
+                block.body_copy(),
+                system_qubits=system_qubits,
+                immune_qubits=immune_qubits,
+                immune_op_tag=immune_op_tag,
+                immune_qubit_tag=immune_qubit_tag,
+                immunize_gates=immunize_gates,
+                insert_ticks=insert_ticks,
+            )
+            body = block.body_copy()
+            if not insert_ticks:
+                noisy_body = _preserve_boundary_ticks(body, noisy_body)
             else:
-                self._inplace_append_noisy_moment(
-                    circuit=noisy_circuit,
-                    moment=moment_or_repeat_block,
-                    system_qubits=system_qubits,
-                    immune_qubits=immune_qubits,
-                    immune_op_tag=immune_op_tag,
-                    immunize_gates=immunize_gates,
+                noisy_body.append("TICK")
+            noisy_circuit.append(
+                stim.CircuitRepeatBlock(
+                    repeat_count=block.repeat_count, body=noisy_body, tag=block.tag
                 )
-
-        return noisy_circuit
+            )
 
     def _inplace_append_noisy_moment(
         self,
@@ -1246,6 +1483,9 @@ class NoiseModel:
         immune_qubits: frozenset[int],
         immune_op_tag: str | None,
         immunize_gates: bool,
+        pending_idle_moments: dict[int, int] | None,
+        aggregated_idle_channels: dict[int, PauliChannel],
+        apply_moment_noise: bool = True,
     ) -> None:
         """Applies noise to a moment and appends it to a circuit (in-place).
 
@@ -1264,6 +1504,10 @@ class NoiseModel:
                 noise-immune qubits, keeping only strings that act as ``I`` on every immune qubit.
                 An immune-tagged operation does not suppress idle noise on unrelated qubits in the
                 same moment.
+            pending_idle_moments: Idle counts to aggregate, or None for per-moment noise.
+            aggregated_idle_channels: Cached effective channels indexed by idle count.
+            apply_moment_noise: Whether to apply idle/waiting noise now, rather than after adjoining
+                fragments of the same moment have been processed.
 
         Raises:
             ValueError: If qubits are operated on multiple times within the same moment without a
@@ -1284,19 +1528,36 @@ class NoiseModel:
             if effective_rule is None:
                 circuit.append(op)
                 continue
+            if op.name in IDLE_OPS and effective_rule.after is not None:
+                self._flush_idle_errors(
+                    circuit,
+                    pending_idle_moments,
+                    aggregated_idle_channels,
+                    (
+                        target.qubit_value
+                        for target in op.targets_copy()
+                        if target.qubit_value is not None
+                    ),
+                )
             noisy_op, after = effective_rule.noisy_operation(op)
             circuit.append(noisy_op)
             noise_after_moment += after
         circuit += noise_after_moment
 
         moment_was_noisy = any(op_type(op.name) in GATE_OP_TYPES for op in moment)
-        if moment_was_noisy and (self.idle_error or self.additional_error_waiting_for_m_or_r):
+        if (
+            apply_moment_noise
+            and moment_was_noisy
+            and (self.idle_error or self.additional_error_waiting_for_m_or_r)
+        ):
             self._inplace_append_idle_errors(
                 circuit=circuit,
                 collapsed_qubits=collapsed_qubits,
                 operation_qubits=operation_qubits,
                 system_qubits=system_qubits,
                 immune_qubits=immune_qubits,
+                pending_idle_moments=pending_idle_moments,
+                aggregated_idle_channels=aggregated_idle_channels,
             )
 
     def _inplace_append_idle_errors(
@@ -1307,12 +1568,12 @@ class NoiseModel:
         operation_qubits: list[int],
         system_qubits: frozenset[int],
         immune_qubits: frozenset[int],
+        pending_idle_moments: dict[int, int] | None,
+        aggregated_idle_channels: dict[int, PauliChannel],
     ) -> None:
-        """Append idling errors from the given moment to the given circuit.
+        """Record or append idling errors from the given moment.
 
-        This method identifies which qubits are idle during a moment and applies depolarization
-        noise to them according to the noise model parameters.  The qubit categorization is
-        precomputed by ``_categorize_moment_qubits`` and passed in.
+        The qubit categorization is precomputed by ``_categorize_moment_qubits`` and passed in.
 
         Args:
             circuit: The circuit to append idle error operations to.
@@ -1320,16 +1581,52 @@ class NoiseModel:
             operation_qubits: Qubits acted on by non-collapsing (unitary) ops in this moment.
             system_qubits: Set of all qubits in the system that can experience idle errors.
             immune_qubits: Qubits that are declared to be immune to noise.
+            pending_idle_moments: Idle counts to aggregate, or None for per-moment noise.
+            aggregated_idle_channels: Cached effective channels indexed by idle count.
         """
         non_collapse_qubits = system_qubits - immune_qubits - set(collapsed_qubits)
         idle_qubits = sorted(non_collapse_qubits - set(operation_qubits))
 
         if self.idle_error and idle_qubits:
-            self.idle_error.emit_after(circuit, idle_qubits, context="idle qubits")
+            if pending_idle_moments is None:
+                self.idle_error.emit_after(circuit, idle_qubits, context="idle qubits")
+            else:
+                for qubit in idle_qubits:
+                    pending_idle_moments[qubit] = pending_idle_moments.get(qubit, 0) + 1
         if self.additional_error_waiting_for_m_or_r and collapsed_qubits and non_collapse_qubits:
+            if self.additional_error_waiting_for_m_or_r.after:
+                self._flush_idle_errors(
+                    circuit, pending_idle_moments, aggregated_idle_channels, non_collapse_qubits
+                )
             self.additional_error_waiting_for_m_or_r.emit_after(
                 circuit, sorted(non_collapse_qubits), context="qubits waiting for m/r"
             )
+
+    def _flush_idle_errors(
+        self,
+        circuit: stim.Circuit,
+        pending_idle_moments: dict[int, int] | None,
+        aggregated_idle_channels: dict[int, PauliChannel],
+        qubits: Iterable[int] | None = None,
+    ) -> None:
+        """Emit pending idle noise before it crosses an operation on the same qubit."""
+        if not pending_idle_moments:
+            return
+        assert self.idle_error is not None
+        idle_after = self.idle_error.after
+        assert isinstance(idle_after, (PauliChannel, PauliChannelSequence))
+        counts: dict[int, list[int]] = {}
+        for qubit in sorted(pending_idle_moments if qubits is None else qubits):
+            if (count := pending_idle_moments.pop(qubit, None)) is not None:
+                counts.setdefault(count, []).append(qubit)
+        for count, targets in counts.items():
+            if count == 1:
+                self.idle_error.emit_after(circuit, targets, context="idle qubits")
+            else:
+                if count not in aggregated_idle_channels:
+                    aggregated_idle_channels[count] = _repeated_idle_channel(idle_after, count)
+                for qubit in targets:
+                    aggregated_idle_channels[count].to_circuit(append_to=circuit, qubits=[qubit])
 
 
 ####################################################################################################
@@ -1402,6 +1699,75 @@ class SI1000NoiseModel(NoiseModel):
 # catch real bugs, large enough to absorb the ~O(n * eps) drift that accumulates when summing or
 # renormalizing many probabilities.
 _ABSOLUTE_ERROR_TOLERANCE = 1e-9
+
+
+def _qubits_touched_in_circuit(circuit: stim.Circuit) -> set[int]:
+    """Find barriers to carrying idle noise across a (possibly nested) circuit."""
+    touched: set[int] = set()
+    for op in circuit:
+        if isinstance(op, stim.CircuitRepeatBlock):
+            touched.update(_qubits_touched_in_circuit(op.body_copy()))
+        elif op.name not in IDLE_OPS and op_type(op.name) != ANNOTATION:
+            touched.update(
+                target.qubit_value for target in op.targets_copy() if target.qubit_value is not None
+            )
+    return touched
+
+
+def _is_transparent_repeat(block: stim.CircuitRepeatBlock) -> bool:
+    """Whether a block contains only noise/annotations and cannot advance a moment."""
+    for op in block.body_copy():
+        if isinstance(op, stim.CircuitRepeatBlock):
+            if not _is_transparent_repeat(op):
+                return False
+        elif op.name == "TICK" or op_type(op.name) in GATE_OP_TYPES:
+            return False
+    return True
+
+
+def _repeated_idle_channel(
+    channel: PauliChannel | PauliChannelSequence, moments: int
+) -> PauliChannel:
+    """Compose a one-qubit Pauli channel across ``moments`` independent idle moments."""
+    distribution: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0)
+    if isinstance(channel, PauliChannel):
+        probabilities = tuple(channel.probabilities.get(pauli, 0.0) for pauli in "XYZ")
+        base = (max(0.0, 1 - math.fsum(probabilities)), *probabilities)
+    else:
+        for pauli, probability in channel.probabilities.items():
+            outcome = [0.0] * 4
+            outcome[0] = 1 - probability
+            outcome["IXYZ".index(pauli)] = probability
+            distribution = _compose_pauli_distributions(distribution, outcome)
+        base = distribution
+        distribution = (1.0, 0.0, 0.0, 0.0)
+
+    while moments:
+        if moments & 1:
+            distribution = _compose_pauli_distributions(distribution, base)
+        moments >>= 1
+        if moments:
+            base = _compose_pauli_distributions(base, base)
+
+    total = math.fsum(distribution)
+    return PauliChannel(
+        {
+            pauli: max(0.0, probability / total)
+            for pauli, probability in zip("XYZ", distribution[1:], strict=True)
+        }
+    )
+
+
+def _compose_pauli_distributions(
+    left: Collection[float], right: Collection[float]
+) -> tuple[float, ...]:
+    """Compose independent Pauli outcomes, ignoring irrelevant global phases."""
+    left_values = tuple(left)
+    right_values = tuple(right)
+    return tuple(
+        math.fsum(left_values[index] * right_values[index ^ outcome] for index in range(4))
+        for outcome in range(4)
+    )
 
 
 def _get_gate_aliases(op: stim.CircuitInstruction) -> tuple[str, ...]:
@@ -1828,7 +2194,258 @@ def _categorize_moment_qubits(
     return collapsed_qubits, operation_qubits
 
 
-def _split_moments_with_ticks(circuit: stim.Circuit, immune_op_tag: str | None) -> stim.Circuit:
+def _preserve_boundary_ticks(source: stim.Circuit, processed: stim.Circuit) -> stim.Circuit:
+    """Keep explicit repeat-boundary ticks omitted by moment iteration."""
+    if source and isinstance(source[0], stim.CircuitInstruction) and source[0].name == "TICK":
+        processed = stim.Circuit("TICK") + processed
+    if (
+        len(source) > 1
+        and isinstance(source[-1], stim.CircuitInstruction)
+        and source[-1].name == "TICK"
+    ):
+        processed.append("TICK")
+    return processed
+
+
+def _validate_moments_across_repeats(circuit: stim.Circuit, immune_op_tag: str | None) -> None:
+    """Check qubit reuse in flattened moments without expanding repeat counts."""
+
+    def raise_reuse(qubits: set[int]) -> None:
+        raise ValueError(
+            "Qubits were operated on multiple times without a TICK in between:\n"
+            f"multiple uses: {sorted(qubits)}"
+        )
+
+    def summarize(body: stim.Circuit) -> tuple[set[int], set[int], bool]:
+        first: set[int] = set()
+        last: set[int] = set()
+        has_tick = False
+        for op in body:
+            if isinstance(op, stim.CircuitRepeatBlock):
+                op_first, op_last, op_has_tick = summarize(op.body_copy())
+                if op.repeat_count > 1:
+                    reused = op_last & op_first
+                    if reused:
+                        raise_reuse(reused)
+            elif op.name == "TICK":
+                op_first, op_last, op_has_tick = set(), set(), True
+            else:
+                qubits: set[int] = set()
+                parts = (
+                    [op]
+                    if op_type(op.name) in (CLIFFORD_PP, JUST_MEASURE_PP)
+                    else _split_targets_if_needed(op, frozenset({-1}), immune_op_tag)
+                )
+                for part in parts:
+                    _categorize_moment_qubits([part])
+                    part_qubits = (
+                        {
+                            target.qubit_value
+                            for target in part.targets_copy()
+                            if target.qubit_value is not None
+                        }
+                        if op_type(part.name) not in (ANNOTATION, NOISE)
+                        else set()
+                    )
+                    if qubits & part_qubits:
+                        raise_reuse(qubits & part_qubits)
+                    qubits.update(part_qubits)
+                op_first, op_last, op_has_tick = qubits, qubits, False
+
+            reused = last & op_first
+            if reused:
+                raise_reuse(reused)
+            if not has_tick:
+                first.update(op_first)
+            if op_has_tick:
+                last = op_last.copy()
+            else:
+                last.update(op_last)
+            has_tick |= op_has_tick
+        return first, last, has_tick
+
+    summarize(circuit)
+
+
+def _align_repeat_moment_seams(circuit: stim.Circuit, immune_op_tag: str | None) -> stim.Circuit:
+    """Keep repeated moments joined to their neighbors unless a TICK separates them."""
+
+    def gate_qubits(moment: Iterable[stim.CircuitInstruction]) -> set[int]:
+        return {
+            target.qubit_value
+            for part in moment
+            if op_type(part.name) in GATE_OP_TYPES
+            for target in part.targets_copy()
+            if target.qubit_value is not None
+        }
+
+    def trailing_qubits(circuit: stim.Circuit) -> set[int]:
+        moment: list[stim.CircuitInstruction] = []
+        for part in reversed(list(circuit)):
+            if isinstance(part, stim.CircuitRepeatBlock):
+                if _is_transparent_repeat(part):
+                    continue
+                break
+            if part.name == "TICK":
+                break
+            moment.append(part)
+        linear = stim.Circuit()
+        for part in reversed(moment):
+            linear.append(part)
+        split = _split_moments_with_ticks(linear, None)
+        last_moment: list[stim.CircuitInstruction] = []
+        for part in reversed(list(split)):
+            if part.name == "TICK":
+                break
+            last_moment.append(part)
+        return gate_qubits(last_moment)
+
+    def next_gate_qubits(ops: list[stim.CircuitInstruction | stim.CircuitRepeatBlock]) -> set[int]:
+        for part in ops:
+            if isinstance(part, stim.CircuitRepeatBlock):
+                if _is_transparent_repeat(part):
+                    continue
+                break
+            if part.name == "TICK":
+                break
+            if op_type(part.name) in GATE_OP_TYPES:
+                first_application = next(
+                    _split_targets_if_needed(part, frozenset(), None, force_split=True)
+                )
+                return gate_qubits([first_application])
+        return set()
+
+    def ends_at_tick(part: stim.CircuitInstruction | stim.CircuitRepeatBlock) -> bool:
+        if isinstance(part, stim.CircuitRepeatBlock):
+            body = part.body_copy()
+            return bool(body) and ends_at_tick(body[-1])
+        return part.name == "TICK"
+
+    def first_qubits(ops: Iterable[stim.CircuitInstruction | stim.CircuitRepeatBlock]) -> set[int]:
+        qubits: set[int] = set()
+        for part in ops:
+            if isinstance(part, stim.CircuitRepeatBlock):
+                qubits.update(first_qubits(part.body_copy()))
+                if ends_at_tick(part):
+                    break
+            elif part.name == "TICK":
+                break
+            else:
+                qubits.update(gate_qubits([part]))
+        return qubits
+
+    result = stim.Circuit()
+    ops = list(circuit)
+    for index, op in enumerate(ops):
+        if not isinstance(op, stim.CircuitRepeatBlock) or (
+            immune_op_tag is not None and immune_op_tag in op.tag
+        ):
+            result.append(op)
+            continue
+        body = _align_repeat_moment_seams(op.body_copy(), immune_op_tag)
+        count = op.repeat_count
+        has_nested = any(isinstance(part, stim.CircuitRepeatBlock) for part in body)
+        ends_with_tick = bool(body) and ends_at_tick(body[-1])
+        if count == 1:
+            result = (
+                _align_repeat_moment_seams(result + body, immune_op_tag)
+                if has_nested
+                else result + body
+            )
+        else:
+            instructions = list(body)
+            boundaries = [index for index, part in enumerate(instructions) if ends_at_tick(part)]
+            first = first_qubits(instructions)
+            active = trailing_qubits(result)
+            if active and first and not active & first:
+                result = (
+                    _align_repeat_moment_seams(result + body, immune_op_tag)
+                    if has_nested
+                    else result + body
+                )
+                count -= 1
+            if count == 0:
+                continue
+            if count == 1:
+                result = (
+                    _align_repeat_moment_seams(result + body, immune_op_tag)
+                    if has_nested
+                    else result + body
+                )
+                continue
+            if ends_with_tick:
+                result.append(stim.CircuitRepeatBlock(count, body, tag=op.tag))
+                continue
+            last = (
+                gate_qubits(instructions[boundaries[-1] + 1 :] if boundaries else instructions)
+                if not has_nested
+                else set()
+            )
+            if last & first and last & next_gate_qubits(ops[index + 1 :]):
+                closed_body = body.copy()
+                closed_body.append("TICK")
+                result.append(stim.CircuitRepeatBlock(count, closed_body, tag=op.tag))
+                continue
+            if boundaries:
+                # Rephase (prefix + suffix)^count around the last complete moment.
+                prefix = stim.Circuit()
+                suffix = stim.Circuit()
+                for part in instructions[: boundaries[-1] + 1]:
+                    prefix.append(part)
+                for part in instructions[boundaries[-1] + 1 :]:
+                    suffix.append(part)
+                result = (
+                    _align_repeat_moment_seams(result + prefix, immune_op_tag)
+                    if has_nested
+                    else result + prefix
+                )
+                steady = (
+                    _align_repeat_moment_seams(suffix + prefix, immune_op_tag)
+                    if has_nested
+                    else suffix + prefix
+                )
+                result.append(stim.CircuitRepeatBlock(count - 1, steady, tag=op.tag))
+                result = (
+                    _align_repeat_moment_seams(result + suffix, immune_op_tag)
+                    if has_nested
+                    else result + suffix
+                )
+            elif has_nested:
+                result.append(stim.CircuitRepeatBlock(count, body, tag=op.tag))
+            else:
+                first_gate = next(
+                    (
+                        index
+                        for index, part in enumerate(instructions)
+                        if op_type(part.name) in GATE_OP_TYPES
+                    ),
+                    None,
+                )
+                if first_gate is None:
+                    result.append(stim.CircuitRepeatBlock(count, body, tag=op.tag))
+                    continue
+                leading = stim.Circuit()
+                core = stim.Circuit()
+                for part in instructions[:first_gate]:
+                    leading.append(part)
+                for part in instructions[first_gate:]:
+                    core.append(part)
+                result += leading + core + leading
+                result.append("TICK")
+                if count > 2:
+                    steady = core + leading
+                    steady.append("TICK")
+                    result.append(stim.CircuitRepeatBlock(count - 2, steady, tag=op.tag))
+                result += core
+    return result
+
+
+def _split_moments_with_ticks(
+    circuit: stim.Circuit,
+    immune_op_tag: str | None,
+    *,
+    preserve_transparent_repeats: bool = False,
+) -> stim.Circuit:
     """Insert TICKs into a circuit to split stim.CircuitInstruction that reuse qubits.
 
     This preprocessing ensures that errors are applied correctly to a stim.CircuitInstruction that
@@ -1837,6 +2454,8 @@ def _split_moments_with_ticks(circuit: stim.Circuit, immune_op_tag: str | None) 
     Args:
         circuit: The input circuit to preprocess.
         immune_op_tag: Don't split operations with this tag.
+        preserve_transparent_repeats: Keep noise/annotation-only repeats within their surrounding
+            moment when aggregating idle errors.
 
     Returns:
         stim.Circuit: A circuit with TICKs added to prevent instructions from reusing qubits.
@@ -1846,6 +2465,9 @@ def _split_moments_with_ticks(circuit: stim.Circuit, immune_op_tag: str | None) 
 
     for op in circuit:
         if isinstance(op, stim.CircuitRepeatBlock):
+            if preserve_transparent_repeats and _is_transparent_repeat(op):
+                result.append(op)
+                continue
             if immune_op_tag is not None and immune_op_tag in op.tag:
                 result.append(op)
                 continue
@@ -1854,7 +2476,11 @@ def _split_moments_with_ticks(circuit: stim.Circuit, immune_op_tag: str | None) 
             if used_qubits:
                 result.append("TICK")
                 used_qubits.clear()
-            processed_body = _split_moments_with_ticks(op.body_copy(), immune_op_tag)
+            processed_body = _split_moments_with_ticks(
+                op.body_copy(),
+                immune_op_tag,
+                preserve_transparent_repeats=preserve_transparent_repeats,
+            )
             result.append(
                 stim.CircuitRepeatBlock(
                     repeat_count=op.repeat_count, body=processed_body, tag=op.tag
@@ -1901,7 +2527,8 @@ def _iter_moments_and_repeat_blocks(
     immune_op_tag: str | None,
     *,
     force_split: bool = False,
-) -> Iterator[stim.CircuitRepeatBlock | list[stim.CircuitInstruction]]:
+    preserve_transparent_repeats: bool = False,
+) -> Iterator[stim.CircuitRepeatBlock | list[stim.CircuitInstruction | stim.CircuitRepeatBlock]]:
     """Splits a circuit into moments and some operations into pieces.
 
     Classical control system operations like ``CX rec[-1] 0`` are split from quantum operations like
@@ -1915,18 +2542,24 @@ def _iter_moments_and_repeat_blocks(
             target for one-qubit gates, one pair for two-qubit gates) even when no qubit is immune.
             Used when a ``rule_func`` is present so the callback is consulted once per gate
             application.
+        preserve_transparent_repeats: Include repeat blocks without gates or TICKs in their
+            surrounding moment instead of treating them as moment boundaries.
 
     Yields:
-        Lists of operations corresponding to one moment in the circuit, with any problematic
-        operations like MPPs split into pieces, or CircuitRepeatBlock instances for repeat blocks.
+        Lists of operations corresponding to one moment in the circuit (including transparent
+        repeats when requested), with problematic operations like MPPs split into pieces, or
+        CircuitRepeatBlock instances for other repeat blocks.
 
     Note:
         A moment is the time between two TICKs.
     """
-    current_moment: list[stim.CircuitInstruction] = []
+    current_moment: list[stim.CircuitInstruction | stim.CircuitRepeatBlock] = []
 
     for op in circuit:
         if isinstance(op, stim.CircuitRepeatBlock):
+            if preserve_transparent_repeats and _is_transparent_repeat(op):
+                current_moment.append(op)
+                continue
             if current_moment:
                 yield current_moment
                 current_moment = []
