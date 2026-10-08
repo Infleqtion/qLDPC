@@ -97,6 +97,15 @@ Per-gate-application noise via a callback (``rule_func``)::
     )
     noisy_circuit = noise_model.noisy_circuit(circuit)
 
+.. rubric:: Moments and repeat blocks
+
+Noise is added moment by moment, where a moment is the time between two TICKs.  ``REPEAT`` blocks
+are treated as though they were flattened, so a moment may span the boundary of a repeat block or of
+its iterations.  The noisy circuit keeps repeat blocks compact, but it unrolls iterations whose
+moments differ from those of later iterations; for example, the first iteration of a block is
+unrolled if its first moment merges with operations that precede the block.  A repeat block tagged
+with ``immune_op_tag`` is noiseless and is not merged with neighboring moments.
+
 .. rubric:: Idling errors
 
 ``idle_error`` applies to every qubit that is not operated on during a circuit moment.  When

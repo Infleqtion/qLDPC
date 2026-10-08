@@ -9,7 +9,11 @@ import pytest
 import stim
 
 from qldpc import circuits, decoders
-from qldpc.circuits.conftest import StimCircuitWrapper, circuits_are_equivalent
+from qldpc.circuits.conftest import (
+    StimCircuitWrapper,
+    circuits_are_equivalent,
+    flatten_repeat_blocks,
+)
 from qldpc.circuits.noise_model import ErrorSpec
 
 
@@ -427,6 +431,55 @@ def test_aggregated_idle_matches_per_moment(
     actual = _dem_signature(aggregated)
     assert actual.keys() == expected.keys()
     assert all(actual[key] == pytest.approx(expected[key], abs=1e-12) for key in expected)
+
+
+_FLATTENING_TEST_CIRCUITS = {
+    **_AGGREGATION_TEST_CIRCUITS,
+    "unticked seams": """
+        R 0 1 2
+        TICK
+        X 0
+        REPEAT 4 {
+            M 1
+            DETECTOR rec[-1]
+            TICK
+            X 2
+            TICK
+            CX 0 2
+        }
+        X 1
+        TICK
+        M 0 1 2
+        DETECTOR rec[-1]
+        DETECTOR rec[-2]
+        DETECTOR rec[-3]
+    """,
+    "surface code": str(
+        stim.Circuit.generated("surface_code:rotated_memory_x", distance=3, rounds=4)
+    ),
+    "repetition code": str(stim.Circuit.generated("repetition_code:memory", distance=3, rounds=5)),
+}
+
+
+@pytest.mark.parametrize("circuit_name", sorted(_FLATTENING_TEST_CIRCUITS))
+@pytest.mark.parametrize("insert_ticks", [True, False])
+def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks: bool) -> None:
+    """Noise is added to repeat blocks as though they were flattened."""
+    circuit = stim.Circuit(_FLATTENING_TEST_CIRCUITS[circuit_name])
+    noise_model = circuits.NoiseModel(
+        clifford_1q_error=0.01,
+        clifford_2q_error=0.02,
+        readout_error=0.03,
+        idle_error=0.01,
+        additional_error_waiting_for_m_or_r=0.04,
+    )
+    noisy_circuit = noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
+    noisy_flattened_circuit = noise_model.noisy_circuit(
+        flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG), insert_ticks=insert_ticks
+    )
+    expected = _dem_signature(noisy_flattened_circuit)
+    assert _dem_signature(noisy_circuit) == pytest.approx(expected, abs=1e-12)
+    assert noisy_circuit.num_ticks == noisy_flattened_circuit.num_ticks
 
 
 def test_aggregated_idle_respects_observable_barrier() -> None:

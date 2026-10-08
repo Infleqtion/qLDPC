@@ -17,11 +17,12 @@ from qldpc._util import format_docstring
 from ..common import StimCircuitLike
 from .channels import PauliChannel, PauliChannelSequence, _repeated_idle_channel
 from .moments import (
+    ScheduleItem,
     _categorize_moment_qubits,
     _get_immune_qubits,
-    _idle_barrier_qubits,
-    _iter_moments_and_repeat_blocks,
-    _split_moments_with_ticks,
+    _schedule_barrier_qubits,
+    _schedule_moments,
+    _split_targets_if_needed,
 )
 from .operations import (
     ANNOTATION,
@@ -366,10 +367,16 @@ class NoiseModel:
                 An immune-tagged operation is still a real operation for moment accounting; it does
                 not suppress idle noise on unrelated qubits in the same moment.
             insert_ticks: If True, automatically inserts TICK operations to prevent qubit reuse
-                conflicts.  If False, assumes that this preprocessing is not necessary.
+                conflicts.  If False, assumes that this preprocessing is not necessary.  In either
+                case, moments are identified as though all repeat blocks (other than those tagged
+                with ``immune_op_tag``) were flattened.
 
         Returns:
             The input circuit with added noise.
+
+        Raises:
+            ValueError: If ``insert_ticks`` is False and a qubit is operated on more than once in a
+                moment, including in different iterations of a repeat block without TICKs.
         """
         if immune_op_tag == "":
             raise ValueError("immune_op_tag must be non-empty or None")
@@ -402,120 +409,111 @@ class NoiseModel:
             else frozenset()
         )
 
-        if insert_ticks:
-            # split moments with TICKs to prevent qubit reuse conflicts.  The preprocessing operates
-            # purely on gate-level qubit reuse and ignores ``immune_qubits`` (it uses a sentinel to
-            # force per-target splitting), so it composes cleanly with immunity.
-            circuit = _split_moments_with_ticks(circuit, immune_op_tag)
-
         noisy_circuit = stim.Circuit()
         pending_idle_moments: dict[int, int] = {}
-        self._inplace_append_noisy_circuit(
+        self._inplace_append_noisy_schedule(
             circuit=noisy_circuit,
-            source=circuit,
+            schedule=_schedule_moments(
+                circuit, insert_ticks=insert_ticks, immune_op_tag=immune_op_tag
+            ),
             system_qubits=system_qubits,
             immune_qubits=immune_qubits,
             immune_op_tag=immune_op_tag,
             immunize_gates=immunize_gates,
-            insert_ticks=insert_ticks,
             pending_idle_moments=pending_idle_moments,
         )
         self._flush_idle_errors(noisy_circuit, pending_idle_moments)
         return noisy_circuit
 
-    def _inplace_append_noisy_circuit(
+    def _inplace_append_noisy_schedule(
         self,
         *,
         circuit: stim.Circuit,
-        source: stim.Circuit,
+        schedule: Iterable[ScheduleItem],
         system_qubits: frozenset[int],
         immune_qubits: frozenset[int],
         immune_op_tag: str | None,
         immunize_gates: bool,
-        insert_ticks: bool,
         pending_idle_moments: dict[int, int],
     ) -> None:
-        """Apply noise to a preprocessed circuit and append the result to a circuit (in-place).
+        """Apply noise to a moment schedule and append the result to a circuit (in-place).
 
         Args:
             circuit: The circuit to append the noisy operations to.
-            source: The circuit to apply noise to, already split into moments.
+            schedule: The moments to apply noise to, as returned by ``_schedule_moments``.
             system_qubits: Set of all qubits in the system that may experience idle errors.
             immune_qubits: Qubits that are declared to be immune to noise.
             immune_op_tag: If an operation contains this string in its tag, that operation is
                 noiseless.
             immunize_gates: See ``noisy_circuit``.
-            insert_ticks: Whether TICKs were inserted to separate moments.
             pending_idle_moments: Map from each qubit to its number of idle moments that have not
                 yet been emitted as noise.  Updated in-place.
         """
-        previous_was_repeat_block = True  # no TICK before the first moment
-        for moment_or_repeat_block in _iter_moments_and_repeat_blocks(
-            source, immune_qubits, immune_op_tag, force_split=self.rule_func is not None
-        ):
+        previous_was_moment = False  # no TICK before the first moment
+        for item in schedule:
             if pending_idle_moments:
-                used_qubits = _idle_barrier_qubits(
-                    [moment_or_repeat_block]
-                    if isinstance(moment_or_repeat_block, stim.CircuitRepeatBlock)
-                    else moment_or_repeat_block
+                self._flush_idle_errors(
+                    circuit, pending_idle_moments, _schedule_barrier_qubits([item])
                 )
-                self._flush_idle_errors(circuit, pending_idle_moments, used_qubits)
-            if not previous_was_repeat_block:
+            if previous_was_moment:
                 circuit.append("TICK")
-            previous_was_repeat_block = isinstance(moment_or_repeat_block, stim.CircuitRepeatBlock)
+            previous_was_moment = isinstance(item, stim.Circuit)
 
-            if not isinstance(moment_or_repeat_block, stim.CircuitRepeatBlock):
+            if isinstance(item, stim.Circuit):
                 self._inplace_append_noisy_moment(
                     circuit=circuit,
-                    moment=moment_or_repeat_block,
+                    moment=[
+                        split_op
+                        for op in item
+                        for split_op in (
+                            [op]
+                            if isinstance(op, stim.CircuitRepeatBlock)
+                            else _split_targets_if_needed(
+                                op,
+                                immune_qubits,
+                                immune_op_tag,
+                                force_split=self.rule_func is not None,
+                            )
+                        )
+                    ],
                     system_qubits=system_qubits,
                     immune_qubits=immune_qubits,
                     immune_op_tag=immune_op_tag,
                     immunize_gates=immunize_gates,
                     pending_idle_moments=pending_idle_moments,
                 )
-            elif immune_op_tag is not None and immune_op_tag in moment_or_repeat_block.tag:
-                circuit.append(moment_or_repeat_block)
+            elif isinstance(item, stim.CircuitRepeatBlock):
+                circuit.append(item)
             else:
                 # Every iteration starts with no pending idle moments, so all iterations share one
                 # noisy body.  Idle runs on qubits that the body never uses carry across the block.
-                body = moment_or_repeat_block.body_copy()
                 noisy_body = stim.Circuit()
                 body_idle_moments: dict[int, int] = {}
-                self._inplace_append_noisy_circuit(
+                self._inplace_append_noisy_schedule(
                     circuit=noisy_body,
-                    source=body,
+                    schedule=item.body,
                     system_qubits=system_qubits,
                     immune_qubits=immune_qubits,
                     immune_op_tag=immune_op_tag,
                     immunize_gates=immunize_gates,
-                    insert_ticks=insert_ticks,
                     pending_idle_moments=body_idle_moments,
                 )
                 if body_idle_moments:
                     self._flush_idle_errors(
-                        noisy_body, body_idle_moments, _idle_barrier_qubits(body)
+                        noisy_body, body_idle_moments, _schedule_barrier_qubits(item.body)
                     )
                 for qubit, count in body_idle_moments.items():
                     pending_idle_moments[qubit] = (
-                        pending_idle_moments.get(qubit, 0)
-                        + count * moment_or_repeat_block.repeat_count
+                        pending_idle_moments.get(qubit, 0) + count * item.repeat_count
                     )
-                if insert_ticks:
-                    noisy_body.append("TICK")
-                circuit.append(
-                    stim.CircuitRepeatBlock(
-                        repeat_count=moment_or_repeat_block.repeat_count,
-                        body=noisy_body,
-                        tag=moment_or_repeat_block.tag,
-                    )
-                )
+                noisy_body.append("TICK")
+                circuit.append(stim.CircuitRepeatBlock(item.repeat_count, noisy_body, tag=item.tag))
 
     def _inplace_append_noisy_moment(
         self,
         *,
         circuit: stim.Circuit,
-        moment: Collection[stim.CircuitInstruction],
+        moment: Collection[stim.CircuitInstruction | stim.CircuitRepeatBlock],
         system_qubits: frozenset[int],
         immune_qubits: frozenset[int],
         immune_op_tag: str | None,
@@ -551,8 +549,11 @@ class NoiseModel:
 
         noise_after_moment = stim.Circuit()
         for op in moment:
-            tagged_immune = immune_op_tag is not None and immune_op_tag in op.tag
-            if tagged_immune or (rule := self.get_noise_rule(op)) is None:
+            if (
+                isinstance(op, stim.CircuitRepeatBlock)
+                or (immune_op_tag is not None and immune_op_tag in op.tag)
+                or (rule := self.get_noise_rule(op)) is None
+            ):
                 circuit.append(op)
                 continue
             effective_rule = _rule_with_immunity(
@@ -566,7 +567,10 @@ class NoiseModel:
             noise_after_moment += after
         circuit += noise_after_moment
 
-        moment_was_noisy = any(op_type(op.name) in GATE_OP_TYPES for op in moment)
+        moment_was_noisy = any(
+            isinstance(op, stim.CircuitInstruction) and op_type(op.name) in GATE_OP_TYPES
+            for op in moment
+        )
         if moment_was_noisy and (self.idle_error or self.additional_error_waiting_for_m_or_r):
             self._inplace_append_idle_errors(
                 circuit=circuit,
