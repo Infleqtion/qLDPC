@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for model.py."""
+"""Unit tests for noise_model.py."""
 
 import copy
 import pickle

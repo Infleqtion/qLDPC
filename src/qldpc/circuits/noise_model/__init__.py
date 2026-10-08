@@ -145,7 +145,7 @@ from .channels import (
     PauliChannel,
     PauliChannelSequence,
 )
-from .model import (
+from .noise_model import (
     DepolarizingNoiseModel,
     NoiseModel,
     SI1000NoiseModel,
