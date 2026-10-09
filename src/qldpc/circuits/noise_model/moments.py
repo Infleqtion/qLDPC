@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import collections
 import dataclasses
+import enum
 from collections.abc import Collection, Iterable, Iterator
 from typing import TypeAlias
 
@@ -74,7 +75,7 @@ def _categorize_moment_qubits(
     collapsed (measurement / reset), classically-controlled, explicit-idle, and everything else
     ("operation").  Raises if any qubit is used more than once across the four buckets, since noise
     application relies on the "each qubit at most once per moment" invariant that
-    ``_split_moments_with_ticks`` enforces when ``insert_ticks=True``.  The classically-controlled
+    ``_schedule_moments`` enforces when ``insert_ticks=True``.  The classically-controlled
     and explicit-idle buckets contribute only to the reuse check.
 
     Args:
@@ -139,9 +140,59 @@ class _RepeatedMoments:
     tag: str = ""
 
 
+@dataclasses.dataclass(frozen=True)
+class _GateFreeOps:
+    """Annotations and noise that were split off from their moment at the seam of a repeat block.
+
+    In the flattened circuit, these operations belong to the moment that follows them, unless a TICK
+    or an immune repeat block comes first, in which case they form a moment of their own.  Either
+    way, they receive no noise.
+    """
+
+    circuit: stim.Circuit
+
+
+@dataclasses.dataclass(frozen=True)
+class _Tick:
+    """A TICK that ended an empty moment, which only matters if it follows ``_GateFreeOps``."""
+
+
 # An item in a moment schedule: one moment (a stim.Circuit without TICKs, which may contain repeat
-# blocks of annotations and noise), repeated moments, or a repeat block that is immune to noise.
-ScheduleItem: TypeAlias = stim.Circuit | _RepeatedMoments | stim.CircuitRepeatBlock
+# blocks of annotations and noise), operations without gates, a TICK, repeated moments, or a repeat
+# block that is immune to noise.
+ScheduleItem: TypeAlias = (
+    stim.Circuit | _GateFreeOps | _Tick | _RepeatedMoments | stim.CircuitRepeatBlock
+)
+
+
+class _TickState(enum.Enum):
+    """What the items of a moment schedule end with, for the purpose of inserting TICKs."""
+
+    NONE = enum.auto()  # nothing that requires a TICK before the next item
+    MOMENT = enum.auto()  # a moment, which must be followed by a TICK
+    GATE_FREE_OPS = enum.auto()  # _GateFreeOps, which may merge into the next moment
+
+
+def _tick_state_after(state: _TickState, item: ScheduleItem) -> tuple[bool, _TickState]:
+    """Does the given (non-repeated) item need a TICK before it, and what state follows it?"""
+    assert not isinstance(item, _RepeatedMoments)
+    if isinstance(item, _Tick):
+        return False, _TickState.MOMENT if state is _TickState.GATE_FREE_OPS else state
+    if isinstance(item, stim.CircuitRepeatBlock):
+        return state is not _TickState.NONE, _TickState.NONE
+    next_state = _TickState.GATE_FREE_OPS if isinstance(item, _GateFreeOps) else _TickState.MOMENT
+    return state is _TickState.MOMENT, next_state
+
+
+def _needs_initial_tick(schedule: Iterable[ScheduleItem], state: _TickState) -> bool:
+    """Does a moment schedule need a TICK before its first item, given the preceding state?"""
+    for item in schedule:
+        if isinstance(item, _RepeatedMoments):
+            return _needs_initial_tick(item.body, state)
+        needs_tick, state = _tick_state_after(state, item)
+        if not isinstance(item, _Tick):
+            return needs_tick
+    return False
 
 
 @dataclasses.dataclass(eq=False)
@@ -194,7 +245,7 @@ def _schedule_moments(
             this tag are not split into individual gates.
 
     Returns:
-        A list of moments, repeated moments, and immune repeat blocks.
+        A list of schedule items (see ``ScheduleItem``).
 
     Raises:
         ValueError: If ``insert_ticks`` is False and a repeat block with no TICK reuses a qubit
@@ -257,7 +308,10 @@ class _MomentScheduler:
                     moment = moment.copy()
                     used_qubits = set().union(*map(_gate_qubits, moment))
             elif node.name == "TICK":
-                close_moment()
+                if moment:
+                    close_moment()
+                else:
+                    items.append(_Tick())
             elif not self.insert_ticks:
                 moment.append(node)
             else:
@@ -277,6 +331,8 @@ class _MomentScheduler:
         """Split a repeat block into moments, starting with a partially filled moment."""
         repeat_count = node.block.repeat_count
         if repeat_count > 1 and not self._body_has_boundary(node.body):
+            if _is_empty(node.body):
+                return [], open_moment
             if qubits := _flattened_gate_qubits(node.body):
                 raise ValueError(
                     "Qubits were operated on multiple times without a TICK in between:\n"
@@ -288,8 +344,8 @@ class _MomentScheduler:
             moment.append(node.block)
             return [], moment
 
-        # Simulate iterations until the open moment at the end of an iteration recurs.  Moments
-        # without gates are closed at iteration boundaries, which does not change their noise.
+        # Simulate iterations until the open moment at the end of an iteration recurs.  Operations
+        # without gates are split off at iteration boundaries, which does not change their noise.
         prefix, open_moment = _close_gate_free_moment(open_moment)
         outputs: list[list[ScheduleItem]] = []
         open_moments = [open_moment]
@@ -312,8 +368,10 @@ class _MomentScheduler:
         num_cycles, remainder = divmod(repeat_count - start, period)
         cycle = _concatenate(outputs[start:iteration])
         items = prefix + _concatenate(outputs[:start])
-        if cycle:
+        if any(not isinstance(item, _Tick) for item in cycle):
             items.append(_RepeatedMoments(num_cycles, tuple(cycle), node.block.tag))
+        elif cycle:
+            items.append(_Tick())
         items.extend(_concatenate(outputs[start : start + remainder]))
         return items, open_moments[start + remainder]
 
@@ -341,24 +399,29 @@ def _flattened_gate_qubits(body: tuple[stim.CircuitInstruction | _ParsedBlock, .
     )
 
 
+def _is_empty(body: tuple[stim.CircuitInstruction | _ParsedBlock, ...]) -> bool:
+    """Is a (parsed) circuit empty when flattened?"""
+    return all(isinstance(node, _ParsedBlock) and _is_empty(node.body) for node in body)
+
+
 def _concatenate(outputs: Iterable[list[ScheduleItem]]) -> list[ScheduleItem]:
     return [item for items in outputs for item in items]
 
 
 def _close_gate_free_moment(moment: stim.Circuit) -> tuple[list[ScheduleItem], stim.Circuit]:
-    """Close a nonempty moment that contains only annotations and noise.
+    """Split off a nonempty moment that contains only annotations and noise.
 
-    A moment without gates receives no noise, so closing it is equivalent to merging it into the
-    next moment: either way, its operations precede those of the next moment and its noise.
+    A moment without gates receives no noise, so splitting it off as ``_GateFreeOps`` does not
+    change the noise of the moment that it would otherwise merge into.
 
     Returns:
-        The closed moment (if any), and the moment that remains open.
+        The split-off operations (if any), and the moment that remains open.
     """
     if moment and all(
         isinstance(op, stim.CircuitRepeatBlock) or op_type(op.name) in (ANNOTATION, NOISE)
         for op in moment
     ):
-        return [moment], stim.Circuit()
+        return [_GateFreeOps(moment)], stim.Circuit()
     return [], moment
 
 
@@ -377,7 +440,8 @@ def _fold_repeated_moments(items: Iterable[ScheduleItem]) -> list[ScheduleItem]:
     index = 0
     while index < len(result):
         item = result[index]
-        if isinstance(item, _RepeatedMoments):
+        # do not move moments into (or out of) a tagged repeat block
+        if isinstance(item, _RepeatedMoments) and not item.tag:
             size = len(item.body)
             # prefer splits that do not rotate the body
             for split in sorted(range(size + 1), key=lambda split: 0 < split < size):
@@ -404,7 +468,9 @@ def _schedule_barrier_qubits(items: Iterable[ScheduleItem]) -> set[int]:
     for item in items:
         if isinstance(item, _RepeatedMoments):
             qubits |= _schedule_barrier_qubits(item.body)
-        else:
+        elif isinstance(item, _GateFreeOps):
+            qubits |= _idle_barrier_qubits(item.circuit)
+        elif not isinstance(item, _Tick):
             qubits |= _idle_barrier_qubits(
                 [item] if isinstance(item, stim.CircuitRepeatBlock) else item
             )

@@ -458,6 +458,135 @@ _FLATTENING_TEST_CIRCUITS = {
         stim.Circuit.generated("surface_code:rotated_memory_x", distance=3, rounds=4)
     ),
     "repetition code": str(stim.Circuit.generated("repetition_code:memory", distance=3, rounds=5)),
+    "gate-free tail": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            H 0
+            TICK
+            X_ERROR(0.1) 1
+        }
+        H 0
+        TICK
+        M 0 1
+    """,
+    "gate-free tail before tick": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            H 0
+            TICK
+            M 1
+            TICK
+            DETECTOR rec[-1]
+        }
+        TICK
+        M 0 1
+    """,
+    "gate-free ops before repeat": """
+        R 0
+        TICK
+        H 0
+        TICK
+        DETECTOR
+        REPEAT 3 {
+            H 0
+            TICK
+        }
+        M 0
+    """,
+    "nested ticks": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            H 0
+            TICK
+            REPEAT 2 {
+                H 1
+                TICK
+            }
+        }
+        M 0 1
+    """,
+    "nested gate-free tails": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            REPEAT 2 {
+                X 1
+                TICK
+                MR 0
+                TICK
+                DETECTOR rec[-1]
+            }
+            X 1
+            TICK
+            DETECTOR
+        }
+        M 0 1
+    """,
+    "gate-free tail between ticks": """
+        R 0
+        TICK
+        REPEAT 3 {
+            TICK
+            H 0
+            TICK
+            DETECTOR
+        }
+        H 0
+    """,
+    "gate-free tail between immune blocks": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            REPEAT[__IMMUNE_TO_NOISE__] 1 {
+                H 1
+            }
+            H 0
+            TICK
+            DETECTOR
+        }
+        H 0
+        TICK
+        M 0 1
+    """,
+    "gate-free tail after immune block": """
+        REPEAT[__IMMUNE_TO_NOISE__] 1 {
+            R 0 1
+        }
+        REPEAT 3 {
+            REPEAT[__IMMUNE_TO_NOISE__] 1 {
+                H 1
+            }
+            H 0
+            TICK
+            DETECTOR
+        }
+        H 0
+        TICK
+        M 0 1
+    """,
+    "tagged repeat block": """
+        R 0 1
+        TICK
+        H 0
+        TICK
+        REPEAT[my_tag] 3 {
+            H 0
+            TICK
+        }
+        M 0 1
+    """,
+    "empty repeat block": """
+        R 0
+        REPEAT 2 {
+            REPEAT 3 {
+            }
+        }
+        TICK
+        M 0
+    """,
 }
 
 
@@ -542,10 +671,7 @@ def test_aggregated_idle_nested_repeat_size() -> None:
         circuit.append(block)
     circuit = stim.Circuit("R 0 1 2\nTICK") + circuit + stim.Circuit("M 0 1 2")
     aggregated = circuits.NoiseModel(idle_error=0.01).noisy_circuit(circuit)
-    per_moment = circuits.NoiseModel(
-        idle_error=circuits.NoiseRule(after=stim.Circuit("DEPOLARIZE1(0.01) 0"))
-    ).noisy_circuit(circuit)
-    assert len(str(aggregated)) < 2 * len(str(per_moment))
+    assert len(str(aggregated)) < 5_000
 
 
 def test_custom_idle_fragment_stays_per_moment() -> None:
@@ -1278,3 +1404,12 @@ class _CallableRule:
 
     def __call__(self, op: stim.CircuitInstruction) -> circuits.NoiseRule | None:
         return None
+
+
+def test_legacy_imports() -> None:
+    """Names that were importable from the former noise_model.py module remain importable."""
+    from qldpc.circuits import common
+    from qldpc.circuits.noise_model import StimCircuitLike, with_remapped_qubits
+
+    assert StimCircuitLike is common.StimCircuitLike
+    assert with_remapped_qubits is common.with_remapped_qubits

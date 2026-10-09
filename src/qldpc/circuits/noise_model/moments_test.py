@@ -13,15 +13,18 @@ from qldpc.circuits.conftest import circuits_are_equivalent, flatten_repeat_bloc
 from qldpc.circuits.noise_model.moments import (
     ScheduleItem,
     _categorize_moment_qubits,
-    _close_gate_free_moment,
+    _GateFreeOps,
     _get_immune_qubits,
     _idle_barrier_qubits,
     _MomentScheduler,
+    _needs_initial_tick,
     _parse_circuit,
     _ParsedBlock,
     _RepeatedMoments,
     _schedule_barrier_qubits,
     _schedule_moments,
+    _Tick,
+    _TickState,
 )
 
 
@@ -152,7 +155,7 @@ def test_moment_qubits() -> None:
     assert _idle_barrier_qubits(circuit) == {3, 4}
 
 
-def _unroll(schedule: Iterable[ScheduleItem]) -> Iterator[stim.Circuit | stim.CircuitRepeatBlock]:
+def _unroll(schedule: Iterable[ScheduleItem]) -> Iterator[ScheduleItem]:
     """Unroll the repeated moments of a moment schedule."""
     for item in schedule:
         if isinstance(item, _RepeatedMoments):
@@ -163,19 +166,28 @@ def _unroll(schedule: Iterable[ScheduleItem]) -> Iterator[stim.Circuit | stim.Ci
 
 
 def _expand(schedule: list[ScheduleItem]) -> list[stim.Circuit | stim.CircuitRepeatBlock]:
-    """Expand a moment schedule, merging moments without gates into the next moment."""
+    """Expand a moment schedule into the moments and immune repeat blocks of a flattened circuit."""
     expanded: list[stim.Circuit | stim.CircuitRepeatBlock] = []
-    gate_free = stim.Circuit()
+    gate_free = stim.Circuit()  # operations that merge into the next moment, if there is one
+
+    def close_gate_free() -> None:
+        nonlocal gate_free
+        if gate_free:
+            expanded.append(gate_free)
+            gate_free = stim.Circuit()
+
     for item in _unroll(schedule):
-        if isinstance(item, stim.CircuitRepeatBlock):
+        if isinstance(item, _Tick):
+            close_gate_free()
+        elif isinstance(item, stim.CircuitRepeatBlock):
+            close_gate_free()
             expanded.append(item)
-        elif _close_gate_free_moment(item)[0]:
-            gate_free += flatten_repeat_blocks(item, circuits.DEFAULT_IMMUNE_OP_TAG)
+        elif isinstance(item, _GateFreeOps):
+            gate_free += flatten_repeat_blocks(item.circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
         else:
             expanded.append(gate_free + flatten_repeat_blocks(item, circuits.DEFAULT_IMMUNE_OP_TAG))
             gate_free = stim.Circuit()
-    if gate_free:
-        expanded.append(gate_free)
+    close_gate_free()
     return expanded
 
 
@@ -302,7 +314,7 @@ def test_schedule_moments_size() -> None:
     schedule = schedule_moments(circuit)
     assert [type(item) for item in schedule] == [
         stim.Circuit,
-        stim.Circuit,
+        _GateFreeOps,
         _RepeatedMoments,
         stim.Circuit,
     ]
@@ -383,3 +395,50 @@ def test_schedule_moments_without_boundaries() -> None:
         _schedule_moments(
             stim.Circuit("REPEAT 2 {\n    H 0\n}"), insert_ticks=False, immune_op_tag=None
         )
+
+
+def test_schedule_ticks() -> None:
+    """TICKs that end empty moments are kept only to the extent that they matter."""
+    schedule_moments = functools.partial(_schedule_moments, insert_ticks=True, immune_op_tag=None)
+    assert schedule_moments(stim.Circuit("H 0\nTICK\nTICK\nH 0")) == [
+        stim.Circuit("H 0"),
+        _Tick(),
+        stim.Circuit("H 0"),
+    ]
+    # a repeat block of TICKs is equivalent to a single TICK
+    circuit = stim.Circuit("H 0\nTICK\nDETECTOR\nREPEAT 5 {\n    TICK\n}\nH 0")
+    assert schedule_moments(circuit) == [
+        stim.Circuit("H 0"),
+        _GateFreeOps(stim.Circuit("DETECTOR")),
+        _Tick(),
+        stim.Circuit("H 0"),
+    ]
+    assert _expand(schedule_moments(circuit)) == _expand(schedule_moments(circuit.flattened()))
+
+    # a TICK ends preceding gate-free operations, but is itself not preceded by a TICK
+    h_0 = stim.Circuit("H 0")
+    assert not _needs_initial_tick([_Tick()], _TickState.GATE_FREE_OPS)
+    assert _needs_initial_tick([_Tick(), h_0], _TickState.GATE_FREE_OPS)
+    assert not _needs_initial_tick([h_0], _TickState.GATE_FREE_OPS)
+    assert _needs_initial_tick([_RepeatedMoments(2, (h_0,))], _TickState.MOMENT)
+
+
+def test_fold_preserves_tags() -> None:
+    """Moments are not folded into a tagged repeat block."""
+    circuit = stim.Circuit("""
+        H 0
+        TICK
+        REPEAT[my_tag] 3 {
+            H 0
+            TICK
+        }
+        H 1
+    """)
+    assert _schedule_moments(circuit, insert_ticks=True, immune_op_tag=None) == [
+        stim.Circuit("H 0"),
+        _RepeatedMoments(3, (stim.Circuit("H 0"),), "my_tag"),
+        stim.Circuit("H 1"),
+    ]
+    assert _schedule_moments(
+        stim.Circuit(str(circuit).replace("[my_tag]", "")), insert_ticks=True, immune_op_tag=None
+    ) == [_RepeatedMoments(4, (stim.Circuit("H 0"),)), stim.Circuit("H 1")]
