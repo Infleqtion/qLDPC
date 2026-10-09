@@ -567,6 +567,46 @@ _FLATTENING_TEST_CIRCUITS = {
         TICK
         M 0 1
     """,
+    "gate-free tail after immune block in steady state": """
+        R 0 1
+        TICK
+        H 0
+        TICK
+        REPEAT[__IMMUNE_TO_NOISE__] 1 {
+            X 0
+        }
+        REPEAT 3 {
+            REPEAT[__IMMUNE_TO_NOISE__] 1 {
+                H 1
+            }
+            H 0
+            TICK
+            DETECTOR
+        }
+        H 0
+        TICK
+        M 0 1
+    """,
+    "gate-free tail after immune block in steady state, twice": """
+        R 0 1
+        TICK
+        H 0
+        TICK
+        REPEAT[__IMMUNE_TO_NOISE__] 1 {
+            X 0
+        }
+        REPEAT 2 {
+            REPEAT[__IMMUNE_TO_NOISE__] 1 {
+                H 1
+            }
+            H 0
+            TICK
+            DETECTOR
+        }
+        H 0
+        TICK
+        M 0 1
+    """,
     "tagged repeat block": """
         R 0 1
         TICK
@@ -587,19 +627,61 @@ _FLATTENING_TEST_CIRCUITS = {
         TICK
         M 0
     """,
+    "idle run across seams": """
+        R 0 1
+        TICK
+        REPEAT 4 {
+            H 0
+            TICK
+            CX 0 1
+            TICK
+            H 0
+            TICK
+        }
+        M 0 1
+        DETECTOR rec[-1]
+        DETECTOR rec[-2]
+    """,
+    "idle run across nested seams": """
+        R 0 1 2
+        TICK
+        X 2
+        TICK
+        REPEAT 3 {
+            REPEAT 2 {
+                H 0
+                TICK
+                CX 0 1
+                TICK
+                H 0
+                TICK
+            }
+            CX 1 2
+            TICK
+        }
+        M 0 1 2
+        DETECTOR rec[-1]
+        DETECTOR rec[-2]
+        DETECTOR rec[-3]
+    """,
 }
 
 
 @pytest.mark.parametrize("circuit_name", sorted(_FLATTENING_TEST_CIRCUITS))
 @pytest.mark.parametrize("insert_ticks", [True, False])
 def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks: bool) -> None:
-    """Noise is added to repeat blocks as though they were flattened."""
+    """Noise is added to repeat blocks as though they were flattened.
+
+    Idle errors are composed into Pauli channels with several nonzero components, whose
+    approximate decomposition into detector error model errors is not compositional, so the idle
+    channels must be identical to those in the flattened circuit.
+    """
     circuit = stim.Circuit(_FLATTENING_TEST_CIRCUITS[circuit_name])
     noise_model = circuits.NoiseModel(
         clifford_1q_error=0.01,
         clifford_2q_error=0.02,
         readout_error=0.03,
-        idle_error=0.01,
+        idle_error={"X": 0.005, "Z": 0.007},
         additional_error_waiting_for_m_or_r=0.04,
     )
     noisy_circuit = noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
@@ -607,7 +689,7 @@ def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks:
         flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG), insert_ticks=insert_ticks
     )
     expected = _dem_signature(noisy_flattened_circuit)
-    assert _dem_signature(noisy_circuit) == pytest.approx(expected, abs=1e-12)
+    assert _dem_signature(noisy_circuit) == pytest.approx(expected, rel=1e-12, abs=0)
     assert noisy_circuit.num_ticks == noisy_flattened_circuit.num_ticks
 
 
@@ -628,7 +710,7 @@ def test_aggregated_idle_respects_observable_barrier() -> None:
 
 
 def test_aggregated_idle_in_repeat_body() -> None:
-    """Idle runs on qubits used inside a repeat body are emitted within each iteration."""
+    """Idle runs that cross iteration seams are emitted once, as in the flattened circuit."""
     circuit = stim.Circuit("""
         R 0 1
         TICK
@@ -643,19 +725,54 @@ def test_aggregated_idle_in_repeat_body() -> None:
         M 0
     """)
     noisy = circuits.NoiseModel(idle_error={"Z": 0.1}).noisy_circuit(circuit)
+    # the first iteration starts without pending idle moments on qubit 0, so it is peeled off
     expected_circuit = stim.Circuit("""
         R 0 1
         TICK
-        REPEAT 100 {
+        X 0
+        Z_ERROR(0.1) 1
+        TICK
+        X 1
+        TICK
+        X 1
+        TICK
+        REPEAT 99 {
+            Z_ERROR(0.18) 0
             X 0
             Z_ERROR(0.1) 1
             TICK
             X 1
             TICK
             X 1
-            Z_ERROR(0.18) 0
             TICK
         }
+        Z_ERROR(0.18) 0
+        M 0
+        Z_ERROR(0.1) 1
+    """)
+    assert noisy.approx_equals(expected_circuit, atol=1e-12)
+
+    # the first iteration starts in the steady state, so it is not peeled off
+    circuit = stim.Circuit("R 0 1\nTICK\nX 1\nTICK\nX 1\nTICK") + circuit[2:]
+    noisy = circuits.NoiseModel(idle_error={"Z": 0.1}).noisy_circuit(circuit)
+    expected_circuit = stim.Circuit("""
+        R 0 1
+        TICK
+        X 1
+        TICK
+        X 1
+        TICK
+        REPEAT 100 {
+            Z_ERROR(0.18) 0
+            X 0
+            Z_ERROR(0.1) 1
+            TICK
+            X 1
+            TICK
+            X 1
+            TICK
+        }
+        Z_ERROR(0.18) 0
         M 0
         Z_ERROR(0.1) 1
     """)
@@ -663,15 +780,27 @@ def test_aggregated_idle_in_repeat_body() -> None:
 
 
 def test_aggregated_idle_nested_repeat_size() -> None:
-    """Deeply nested repeats are not unrolled."""
-    circuit = stim.Circuit("X 2\nTICK\nX 0\nTICK")
-    for _ in range(10):
-        block = stim.CircuitRepeatBlock(3, circuit)
-        circuit = stim.Circuit("X 2\nTICK")
-        circuit.append(block)
-    circuit = stim.Circuit("R 0 1 2\nTICK") + circuit + stim.Circuit("M 0 1 2")
-    aggregated = circuits.NoiseModel(idle_error=0.01).noisy_circuit(circuit)
-    assert len(str(aggregated)) < 5_000
+    """Nested repeats are not unrolled, and are never longer than when flattened."""
+
+    def get_nested_circuit(inner: str, outer: str, depth: int) -> stim.Circuit:
+        circuit = stim.Circuit(inner)
+        for _ in range(depth):
+            block = stim.CircuitRepeatBlock(3, circuit)
+            circuit = stim.Circuit(outer)
+            circuit.append(block)
+        return stim.Circuit("R 0 1 2\nTICK") + circuit + stim.Circuit("M 0 1 2")
+
+    noise_model = circuits.NoiseModel(idle_error=0.01)
+
+    # every block starts in the same state as its iterations, so nothing is peeled off
+    circuit = get_nested_circuit("X 0 1 2\nTICK\nX 0\nTICK", "X 0 1 2\nTICK\nX 0\nTICK", 10)
+    assert len(str(noise_model.noisy_circuit(circuit))) < 5_000
+
+    # the first iteration of every block is peeled off
+    circuit = get_nested_circuit("X 2\nTICK\nX 0\nTICK", "X 2\nTICK", 5)
+    noisy_circuit = noise_model.noisy_circuit(circuit)
+    noisy_flattened_circuit = noise_model.noisy_circuit(circuit.flattened())
+    assert len(str(noisy_circuit)) < len(str(noisy_flattened_circuit)) / 2
 
 
 def test_custom_idle_fragment_stays_per_moment() -> None:

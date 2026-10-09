@@ -101,17 +101,18 @@ Per-gate-application noise via a callback (``rule_func``)::
 Noise is added moment by moment, where a moment is the time between two TICKs.  ``REPEAT`` blocks
 are treated as though they were flattened, so a moment may span the boundary of a repeat block or of
 its iterations.  The noisy circuit keeps repeat blocks compact, but it unrolls iterations whose
-moments differ from those of later iterations; for example, the first iteration of a block is
-unrolled if its first moment merges with operations that precede the block.  A repeat block tagged
-with ``immune_op_tag`` is noiseless and is not merged with neighboring moments.
+moments or noise differ from those of later iterations; for example, the first iteration of a block
+is unrolled if its first moment merges with operations that precede the block, or if a qubit enters
+the block after a different number of idle moments than it has between iterations.  A repeat block
+tagged with ``immune_op_tag`` is noiseless and is not merged with neighboring moments.
 
 .. rubric:: Idling errors
 
 ``idle_error`` applies to every qubit that is not operated on during a circuit moment.  When
 ``idle_error`` is a Pauli channel, consecutive idle errors on the same qubit are combined into one
-equivalent error that is emitted before the qubit is next used, including across ``REPEAT``
-iterations for qubits that the repeated body never uses.  Custom Stim noise fragments are applied
-once per idle moment.
+equivalent error that is emitted before the qubit is next used, exactly as in the flattened circuit
+(including across ``REPEAT`` iterations).  Custom Stim noise fragments are applied once per idle
+moment.
 ``additional_error_waiting_for_m_or_r`` applies additional noise to non-collapsing qubits during a
 moment that contains a measurement or reset; it is always applied once per such moment.
 

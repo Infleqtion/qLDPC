@@ -463,11 +463,8 @@ class NoiseModel:
             What the circuit ends with after appending the schedule.
         """
         for item in schedule:
-            if pending_idle_moments:
-                self._flush_idle_errors(
-                    circuit, pending_idle_moments, _schedule_barrier_qubits([item])
-                )
             if isinstance(item, _RepeatedMoments):
+                # the repeat block emits the pending idle errors of the qubits that it uses
                 tick_state = self._inplace_append_noisy_repeated_moments(
                     circuit=circuit,
                     item=item,
@@ -480,6 +477,10 @@ class NoiseModel:
                 )
                 continue
 
+            if pending_idle_moments:
+                self._flush_idle_errors(
+                    circuit, pending_idle_moments, _schedule_barrier_qubits([item])
+                )
             needs_tick, tick_state = _tick_state_after(tick_state, item)
             if needs_tick:
                 circuit.append("TICK")
@@ -524,29 +525,80 @@ class NoiseModel:
     ) -> _TickState:
         """Apply noise to repeated moments and append the result to a circuit (in-place).
 
+        The result is the noisy flattened circuit, re-rolled into a repeat block.  An iteration
+        ends with as many pending idle moments on each qubit that the body uses as there are idle
+        moments after its last use, regardless of how many it started with.  Every iteration after
+        the first therefore starts with the same pending idle moments on these qubits, and gets the
+        same noise.  The first iteration is peeled off if it starts differently.  Pending idle
+        moments of qubits that the body never uses accumulate across the block.
+
         Arguments and return value are as in ``_inplace_append_noisy_schedule``.
         """
-        # Every iteration starts with no pending idle moments, so all iterations share one noisy
-        # body.  Idle runs on qubits that the body never uses carry across the block.
-        noisy_body = stim.Circuit()
-        body_idle_moments: dict[int, int] = {}
-        end_state = self._inplace_append_noisy_schedule(
-            circuit=noisy_body,
-            schedule=item.body,
-            system_qubits=system_qubits,
-            immune_qubits=immune_qubits,
-            immune_op_tag=immune_op_tag,
-            immunize_gates=immunize_gates,
-            pending_idle_moments=body_idle_moments,
+        body_qubits = _schedule_barrier_qubits(item.body)
+
+        def get_noisy_body(
+            start_idle_moments: dict[int, int],
+        ) -> tuple[stim.Circuit, dict[int, int], _TickState]:
+            """Noisy body, with the pending idle moments and TICK state that it ends with."""
+            noisy_body = stim.Circuit()
+            idle_moments = dict(start_idle_moments)
+            end_state = self._inplace_append_noisy_schedule(
+                circuit=noisy_body,
+                schedule=item.body,
+                system_qubits=system_qubits,
+                immune_qubits=immune_qubits,
+                immune_op_tag=immune_op_tag,
+                immunize_gates=immunize_gates,
+                pending_idle_moments=idle_moments,
+            )
+            return noisy_body, idle_moments, end_state
+
+        def get_body_idle_moments(idle_moments: dict[int, int]) -> dict[int, int]:
+            return {qubit: idle_moments[qubit] for qubit in body_qubits if qubit in idle_moments}
+
+        def add_idle_moments(idle_moments: dict[int, int], num_iterations: int) -> None:
+            """Update pending idle moments after iterations that end with the given ones."""
+            for qubit, count in idle_moments.items():
+                if qubit in body_qubits:
+                    pending_idle_moments[qubit] = count
+                else:
+                    pending_idle_moments[qubit] = (
+                        pending_idle_moments.get(qubit, 0) + count * num_iterations
+                    )
+
+        def append_iteration(
+            tick_state: _TickState,
+            noisy_body: stim.Circuit,
+            idle_moments: dict[int, int],
+            end_state: _TickState,
+        ) -> _TickState:
+            """Append one iteration of a noisy body, and return the TICK state that it ends with."""
+            if _needs_initial_tick(item.body, tick_state):
+                circuit.append("TICK")
+            circuit.append(noisy_body)
+            add_idle_moments(idle_moments, 1)
+            return end_state
+
+        start_idle_moments = get_body_idle_moments(pending_idle_moments)
+        for qubit in start_idle_moments:
+            del pending_idle_moments[qubit]
+        first_iteration = get_noisy_body(start_idle_moments)
+        steady_idle_moments = get_body_idle_moments(first_iteration[1])
+        steady_iteration = (
+            first_iteration
+            if start_idle_moments == steady_idle_moments
+            else get_noisy_body(steady_idle_moments)
         )
-        if body_idle_moments:
-            self._flush_idle_errors(
-                noisy_body, body_idle_moments, _schedule_barrier_qubits(item.body)
-            )
-        for qubit, count in body_idle_moments.items():
-            pending_idle_moments[qubit] = (
-                pending_idle_moments.get(qubit, 0) + count * item.repeat_count
-            )
+
+        # peel off the first iteration if it starts differently, and never repeat only once
+        repeat_count = item.repeat_count
+        if first_iteration is not steady_iteration:
+            tick_state = append_iteration(tick_state, *first_iteration)
+            repeat_count -= 1
+        if repeat_count <= 1:
+            return append_iteration(tick_state, *steady_iteration) if repeat_count else tick_state
+        noisy_body, body_idle_moments, end_state = steady_iteration
+        add_idle_moments(body_idle_moments, repeat_count)
 
         # Insert the TICKs that precede the first iteration and separate iterations.
         tick_before_block = _needs_initial_tick(item.body, tick_state)
@@ -565,18 +617,17 @@ class NoiseModel:
             tick_state = end_state
         else:
             # there is no TICK before the first iteration or after the last, so peel off the last
-            if item.repeat_count > 1:
-                circuit.append(
-                    stim.CircuitRepeatBlock(
-                        item.repeat_count - 1, noisy_body + stim.Circuit("TICK"), tag=item.tag
-                    )
-                )
+            looped_body = noisy_body + stim.Circuit("TICK")
+            if repeat_count > 2:
+                circuit.append(stim.CircuitRepeatBlock(repeat_count - 1, looped_body, tag=item.tag))
+            else:
+                circuit += looped_body
             circuit += noisy_body
             return end_state
 
         if tick_before_block:
             circuit.append("TICK")
-        circuit.append(stim.CircuitRepeatBlock(item.repeat_count, noisy_body, tag=item.tag))
+        circuit.append(stim.CircuitRepeatBlock(repeat_count, noisy_body, tag=item.tag))
         return tick_state
 
     def _inplace_append_noisy_moment(
