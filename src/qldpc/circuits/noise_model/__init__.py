@@ -15,8 +15,7 @@ Examples of basic usage with a predefined noise model::
     from qldpc.circuits.noise_model import DepolarizingNoiseModel, NoiseModel, SI1000NoiseModel
 
     # Create a simple circuit
-    circuit = stim.Circuit("H 0
- CX 0 1")
+    circuit = stim.Circuit("H 0 \\n CX 0 1")
 
     # Apply simple depolarizing noise
     noise_model = DepolarizingNoiseModel(0.001)
