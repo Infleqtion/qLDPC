@@ -2,13 +2,17 @@
 
 """Unit tests for memory.py."""
 
+import collections
 import random
 
+import galois
 import numpy as np
+import numpy.typing as npt
 import pytest
 import stim
 
 from qldpc import circuits, codes, math
+from qldpc.circuits.memory import memory
 from qldpc.objects import PAULIS_XZ, Pauli, PauliXZ
 
 
@@ -283,6 +287,44 @@ def test_subsystem_product_memory_experiments(basis: PauliXZ | None) -> None:
         assert not np.any(circuit.compile_detector_sampler().sample(4, append_observables=True))
 
 
+def test_subsystem_memory_redundant_generators() -> None:
+    """Redundant gauge and stabilizer generators get low-weight detectors.
+
+    The [[49, 9, 4]] SHYPS code has 49 Z-type gauge generators of rank 28, and 21 Z-type stabilizer
+    generators of rank 12, each of which is a product of four Z-type gauge generators.  Detectors
+    should track all of these stabilizers, and complete the 49 - 28 = 21 relations among Z-type
+    gauge generators with 21 - 12 = 9 relations implied by these stabilizers, plus 12 others.
+    """
+    code = codes.SHYPSCode(3)
+    num_rounds = 2
+    parts = circuits.get_memory_experiment_parts(code, Pauli.Z, num_rounds=num_rounds)
+    assert_detectors_track_stabilizers(code, Pauli.Z, parts.detector_record, num_rounds)
+    detector_types = collections.Counter(
+        (len(key), len(parts.detector_record[key])) for key in parts.detector_record
+    )
+    assert detector_types == {(4, num_rounds + 1): 21, (4, num_rounds): 12}
+
+    # relation detectors only multiply outcomes from a single round
+    detector_sizes = collections.Counter(
+        len(instruction.targets_copy())
+        for instruction in parts.qec_cycle.flattened()
+        if instruction.name == "DETECTOR"
+    )
+    assert detector_sizes == {4: 21 + 12 * num_rounds, 8: 21 * (num_rounds - 1)}
+
+
+def test_low_weight_products() -> None:
+    """Greedy weight reduction preserves spans and reduces Hamming weights."""
+    basis = np.array([[1, 1, 1, 1, 0], [1, 1, 1, 0, 0], [0, 1, 1, 0, 1]])
+    reduced = memory._get_low_weight_basis(basis)
+    assert reduced.tolist() == [[0, 0, 0, 1, 0], [1, 0, 0, 0, 1], [0, 1, 1, 0, 1]]
+    assert get_rank(galois.GF2(np.vstack([basis, reduced]))) == 3
+
+    vector = np.array([1, 1, 1, 1, 1])
+    assert memory._reduce_weight(vector, reduced).tolist() == [1, 0, 0, 0, 0]
+    assert memory._reduce_weight(vector, reduced[:0]).tolist() == vector.tolist()
+
+
 def test_non_css_subsystem_memory_experiment() -> None:
     """Combined-basis memory experiments support non-CSS subsystem codes."""
     code = codes.QuditCode(codes.BaconShorCode(3).matrix, is_subsystem_code=True)
@@ -292,7 +334,9 @@ def test_non_css_subsystem_memory_experiment() -> None:
     assert np.any(np.any(support_x, axis=1) & np.any(support_z, axis=1))  # a check is not CSS
 
     parts = circuits.get_memory_experiment_parts(code, None, num_rounds=3)
-    assert_detectors_track_stabilizers(code, None, parts.detector_record, num_rounds=3)
+    assert_detectors_track_stabilizers(
+        code, None, parts.detector_record, num_rounds=3, generators_in_layers=False
+    )
     circuit = parts.initialization + parts.qec_cycle + parts.readout
     circuit.detector_error_model()
 
@@ -310,7 +354,9 @@ def test_subsystem_memory_non_generating_stabilizers() -> None:
     code._stabilizer_ops = stabilizer_ops
 
     parts = circuits.get_memory_experiment_parts(code, None, num_rounds=2)
-    assert_detectors_track_stabilizers(code, None, parts.detector_record, num_rounds=2)
+    assert_detectors_track_stabilizers(
+        code, None, parts.detector_record, num_rounds=2, generators_in_layers=False
+    )
     circuit = parts.initialization + parts.qec_cycle + parts.readout
     circuit.detector_error_model()
 
@@ -320,29 +366,83 @@ def assert_detectors_track_stabilizers(
     basis: PauliXZ | None,
     detector_record: circuits.DetectorRecord,
     num_rounds: int,
+    *,
+    generators_in_layers: bool = True,
 ) -> None:
-    """Assert that detectors of a subsystem-code memory experiment generate tracked stabilizers."""
+    """Assert that detectors of a subsystem-code memory experiment are complete.
+
+    Detectors should track a generating set of stabilizers of the tracked type, including all
+    tracked generators in code.get_stabilizer_ops() if these are products of checks in single gauge
+    layers.  Together with the stabilizer detectors in each default gauge layer, relation detectors
+    should generate all relations among the checks (of the tracked type) in that layer.
+    """
     qubit_ids = circuits.QubitIDs.from_code(code)
     check_to_row = {check_id: row for row, check_id in enumerate(qubit_ids.check)}
     gauge_ops = code.matrix
 
     keys = [key for key in detector_record if isinstance(key, tuple)]
     assert len(keys) == len(detector_record)
-    assert all(len(detector_record[key]) == num_rounds + 1 for key in keys)
-    stabilizers = code.field(
+    products = code.field(
         [np.sum(gauge_ops[[check_to_row[check_id] for check_id in key]], axis=0) for key in keys]
     )
+    is_relation = ~np.any(products, axis=1)
+    stabilizer_keys = [key for key, relation in zip(keys, is_relation) if not relation]
+    relation_keys = [key for key, relation in zip(keys, is_relation) if relation]
+    stabilizers = products[~is_relation]
+
+    # stabilizers are compared with readout, but relations are not
+    assert all(len(detector_record[key]) == num_rounds + 1 for key in stabilizer_keys)
+    assert all(len(detector_record[key]) == num_rounds for key in relation_keys)
 
     # every detector tracks a stabilizer, which commutes with all gauge operators
     assert not np.any(stabilizers @ math.symplectic_conjugate(gauge_ops).T)
 
     # the tracked stabilizers generate all stabilizers of the tracked type
+    is_tracked = np.ones(len(gauge_ops), dtype=bool)
     target = code.get_stabilizer_ops(symplectic=True)
     if basis is not None:
         other_support = target.reshape(-1, 2, len(code))[:, basis.swap_xz(), :]
         target = target[~np.any(other_support, axis=1)]
+        is_tracked = ~np.any(gauge_ops.reshape(-1, 2, len(code))[:, basis.swap_xz(), :], axis=1)
     rank = np.linalg.matrix_rank(target)
-    assert len(stabilizers) == rank == np.linalg.matrix_rank(np.vstack([stabilizers, target]))
+    assert rank == np.linalg.matrix_rank(stabilizers)
+    assert rank == np.linalg.matrix_rank(np.vstack([stabilizers, target]))
+    if generators_in_layers:
+        assert {tuple(row.tolist()) for row in target} <= {
+            tuple(row.tolist()) for row in stabilizers
+        }
+
+    # in each layer, relation detectors complete the relations implied by stabilizer detectors
+    layers = circuits.EdgeColoring().get_gauge_layers(code)
+    num_keys_in_layers = 0
+    for layer in layers:
+        layer_check_ids = {qubit_ids.check[cc] for cc in layer}
+        layer_vectors: dict[bool, list[npt.NDArray[np.int_]]] = {False: [], True: []}
+        for key, relation in zip(keys, is_relation):
+            if set(key) <= layer_check_ids:
+                vector = np.zeros(len(gauge_ops), dtype=int)
+                vector[[check_to_row[check_id] for check_id in key]] = 1
+                layer_vectors[bool(relation)].append(vector)
+                num_keys_in_layers += 1
+        stabilizer_vectors = code.field(
+            np.array(layer_vectors[False], dtype=int).reshape(-1, len(gauge_ops))
+        )
+        relation_vectors = code.field(
+            np.array(layer_vectors[True], dtype=int).reshape(-1, len(gauge_ops))
+        )
+        implied = code.field.Zeros((0, len(gauge_ops)))
+        if len(stabilizer_vectors):
+            implied = (stabilizer_vectors @ gauge_ops).T.null_space() @ stabilizer_vectors
+        tracked_layer = [cc for cc in layer if is_tracked[cc]]
+        num_relations = len(tracked_layer) - get_rank(gauge_ops[tracked_layer])
+        assert get_rank(code.field(np.vstack([implied, relation_vectors]))) == num_relations
+        assert get_rank(implied) + len(relation_vectors) == num_relations
+    assert num_keys_in_layers == len(keys)
+
+
+def get_rank(matrix: galois.FieldArray) -> int:
+    """The rank of a matrix, which may have no rows."""
+    return int(np.linalg.matrix_rank(matrix)) if matrix.size else 0
 
 
 def get_circuit_distance(circuit: stim.Circuit) -> int:

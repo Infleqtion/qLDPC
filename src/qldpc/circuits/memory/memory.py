@@ -128,8 +128,13 @@ def get_memory_experiment(
     and then all Z-type checks of a CSS code).  Individual gauge measurement outcomes may then be
     random, but any product of checks in a single layer that is a stabilizer of the code has a
     deterministic value.  Detectors therefore track such products of checks, rather than individual
-    checks, and the tracked products are chosen to generate all (basis-type) stabilizers of the
-    code.  A ValueError is raised if the gauge measurement schedule does not make that possible.
+    checks.  Every (basis-type) stabilizer generator in ``code.get_stabilizer_ops()`` that is a
+    product of checks in a single layer gets a detector, even if these generators are redundant,
+    and other products are added as necessary to generate all (basis-type) stabilizers of the code.
+    A ValueError is raised if the gauge measurement schedule does not make that possible.  If the
+    checks in a layer are linearly dependent, products of these checks that equal the identity
+    operator have deterministic values in every round, so additional detectors compare the outcomes
+    of these products within each round.
 
     Qubits and detectors are assigned coordinates as follows:
 
@@ -226,7 +231,9 @@ def get_memory_experiment_parts(
 
     For a stabilizer code, the detector record keys detectors by the check qubit whose stabilizer
     they track.  For a subsystem code, the detector record keys detectors by the tuple of check
-    qubits whose (gauge) measurement outcomes multiply to the stabilizer that they track.
+    qubits whose (gauge) measurement outcomes multiply to the stabilizer that they track.  Detectors
+    for products of checks that equal the identity operator appear in every round, but not in the
+    readout.
 
     Returns:
         initialization: A circuit that sets the coordinates and initializes data qubit state.
@@ -304,7 +311,8 @@ def _get_basis_memory_experiment_parts(
 
     # detectors for stabilizers that can be inferred from data qubit measurements
     readout.append("SHIFT_COORDS", [], (1, 0, 0))
-    for kk, detector in enumerate(detectors):
+    readout_detectors = [detector for detector in detectors if not detector.is_relation]
+    for kk, detector in enumerate(readout_detectors):
         basis_support = detector.stabilizer.reshape(2, len(code))[0 if basis is Pauli.X else 1]
         readout.append(
             "DETECTOR",
@@ -315,7 +323,7 @@ def _get_basis_memory_experiment_parts(
             + [measurement_record.get_target_rec(check_id) for check_id in detector.check_ids],
             (0, 0, kk),
         )
-    detector_record.append({detector.key: dd for dd, detector in enumerate(detectors)})
+    detector_record.append({detector.key: dd for dd, detector in enumerate(readout_detectors)})
 
     # annotate all basis-type observables
     targets = [measurement_record.get_target_rec(data_id) for data_id in data_ids]
@@ -388,28 +396,31 @@ def _get_combined_memory_simulation_parts(
         )
 
     # measure all stabilizers
+    readout_detectors = [detector for detector in detectors if not detector.is_relation]
     readout = get_pauli_product_measurements(
-        [detector.stabilizer for detector in detectors], data_ids
+        [detector.stabilizer for detector in readout_detectors], data_ids
     )
 
     # identify the final syndrome measurements that detectors compare against stabilizer readout
     last_syndrome_measurements = [
         [measurement_record.get_events(check_id)[-1] for check_id in detector.check_ids]
-        for detector in detectors
+        for detector in readout_detectors
     ]
 
     # update the measurement record, add detectors, and update the detector record
     readout.append("SHIFT_COORDS", [], (1, 0, 0))
-    measurement_record.append({detector.key: mm for mm, detector in enumerate(detectors)})
+    measurement_record.append({detector.key: mm for mm, detector in enumerate(readout_detectors)})
     measurement_count = qec_cycle.num_measurements + readout.num_measurements
     measurement_record.validate_num_measurements(measurement_count)
-    for kk, (detector, measurements) in enumerate(zip(detectors, last_syndrome_measurements)):
+    for kk, (detector, measurements) in enumerate(
+        zip(readout_detectors, last_syndrome_measurements)
+    ):
         targets = [measurement_record.get_target_rec(detector.key)] + [
             stim.target_rec(measurement - measurement_record.num_events)
             for measurement in measurements
         ]
         readout.append("DETECTOR", targets, (0, 0, kk))
-    detector_record.append({detector.key: dd for dd, detector in enumerate(detectors)})
+    detector_record.append({detector.key: dd for dd, detector in enumerate(readout_detectors)})
 
     # annotate all observables
     observables = get_observables(code, data_ids)
@@ -562,6 +573,7 @@ class _StabilizerDetector(NamedTuple):
     key: Hashable  # the key for this detector in a DetectorRecord
     check_ids: tuple[int, ...]  # the check qubits whose measurement outcomes we multiply
     stabilizer: galois.FieldArray  # the stabilizer, as a symplectic vector
+    is_relation: bool = False  # whether subsystem checks multiply to the identity (a relation)
 
 
 def _get_gauge_layers(
@@ -594,9 +606,19 @@ def _get_stabilizer_detectors(
     For a subsystem code, a detector tracks a product of checks from one of the given layers of the
     gauge measurement schedule, such that this product is a stabilizer.  The detector is keyed by
     the tuple of check qubits in this product.  If a basis is provided, only annotate stabilizers of
-    that type.  This method prefers the stabilizer generators in code.get_stabilizer_ops() (which
-    may, for example, have low weight), and adds other products of checks as necessary to generate
-    all tracked stabilizers.
+    that type.  Every stabilizer generator in code.get_stabilizer_ops() that is a product of checks
+    in a layer gets a detector, even if these generators are linearly dependent, since redundant
+    detectors can help decoders (as with redundant checks of a stabilizer code).  This method then
+    adds other products of checks as necessary to generate all tracked stabilizers.  The checks that
+    represent each stabilizer are chosen greedily to have low weight.
+
+    If the checks in a layer are linearly dependent (for example, because a code has redundant gauge
+    generators), some products of these checks are the identity operator.  These relations fix the
+    product of their measurement outcomes in every round, so this method additionally returns
+    detectors (marked by _StabilizerDetector.is_relation) for relations that complete those implied
+    by stabilizer detectors in the same layer and round.  These relations are again chosen greedily
+    to have low weight.  If a basis is provided, only relations among checks of that type are
+    annotated.
 
     Raises:
         ValueError: If the gauge measurement schedule of a subsystem code does not determine all
@@ -627,12 +649,28 @@ def _get_stabilizer_detectors(
         return ~np.any(other_support, axis=1)
 
     stabilizer_ops = code.get_stabilizer_ops(symplectic=True)
-    stabilizer_ops = stabilizer_ops[is_tracked(stabilizer_ops)]
+    stabilizer_ops = stabilizer_ops[is_tracked(stabilizer_ops) & np.any(stabilizer_ops, axis=1)]
+    _, unique_rows = np.unique(stabilizer_ops.view(np.ndarray), axis=0, return_index=True)
+    stabilizer_ops = stabilizer_ops[np.sort(unique_rows)]
 
-    # collect (layer, coefficients, stabilizer) triplets, where the coefficients of checks in a
-    # layer multiply to a stabilizer
-    candidates: list[tuple[Sequence[int], galois.FieldArray, galois.FieldArray]] = []
+    # identify a low-weight basis of products of tracked checks in each layer that are the identity
+    tracked_checks = is_tracked(gauge_ops)
+    layer_relations = []
     for layer in layers:
+        layer_tracked = tracked_checks[list(layer)]
+        relations = np.zeros((0, len(layer)), dtype=np.uint8)
+        if np.any(layer_tracked):
+            tracked_relations = gauge_ops[np.asarray(layer)[layer_tracked]].T.null_space()
+            relations = np.zeros((len(tracked_relations), len(layer)), dtype=np.uint8)
+            relations[:, layer_tracked] = tracked_relations.view(np.ndarray)
+        layer_relations.append(_get_low_weight_basis(relations))
+
+    # Annotate every stabilizer generator that is a product of checks in a layer, even if these
+    # generators are linearly dependent, which can help decoders (as with redundant checks of a
+    # stabilizer code).  Store (generator index, layer index, check coefficients, stabilizer).
+    generators: list[tuple[int, int, npt.NDArray[np.uint8], galois.FieldArray]] = []
+    unsolved = np.ones(len(stabilizer_ops), dtype=bool)
+    for ll, layer in enumerate(layers):
         # row-reduce [checks | identity] to express stabilizers in the span of these checks
         layer_ops = gauge_ops[list(layer)]
         identity = code.field.Identity(len(layer))
@@ -640,41 +678,91 @@ def _get_stabilizer_detectors(
         reduced = reduced[np.any(reduced[:, : 2 * num_qubits], axis=1)]
         pivots = math.first_nonzero_cols(reduced[:, : 2 * num_qubits])
         coefficients = stabilizer_ops[:, pivots] @ reduced[:, 2 * num_qubits :]
-        solved = ~np.any(coefficients @ layer_ops - stabilizer_ops, axis=1)
-        candidates.extend(
-            (layer, coefficients_row, stabilizer)
-            for coefficients_row, stabilizer in zip(coefficients[solved], stabilizer_ops[solved])
+        solved = unsolved & ~np.any(coefficients @ layer_ops - stabilizer_ops, axis=1)
+        generators.extend(
+            (
+                int(index),
+                ll,
+                coefficients[index].view(np.ndarray).astype(np.uint8),
+                stabilizer_ops[index],
+            )
+            for index in np.flatnonzero(solved)
         )
-    for layer in layers:
-        # every product of checks in this layer that commutes with all checks is a stabilizer
-        layer_ops = gauge_ops[list(layer)]
-        commutators = layer_ops @ math.symplectic_conjugate(gauge_ops).T
-        coefficients = commutators.T.null_space()
-        stabilizers = coefficients @ layer_ops
-        tracked = is_tracked(stabilizers)
-        candidates.extend(
-            (layer, coefficients_row, stabilizer)
-            for coefficients_row, stabilizer in zip(coefficients[tracked], stabilizers[tracked])
+        unsolved &= ~solved
+    selected = [
+        (ll, coefficients, stabilizer)
+        for _, ll, coefficients, stabilizer in sorted(
+            generators, key=lambda generator: generator[0]
         )
+    ]
 
-    # select a maximal set of independent stabilizers, in order of preference
-    detectors = []
-    if candidates:
-        candidate_stabilizers = code.field([stabilizer for *_, stabilizer in candidates])
-        reduced = candidate_stabilizers.T.row_reduce()
+    def get_selected_stabilizers() -> galois.FieldArray:
+        """Stack the stabilizers selected for detectors into a matrix."""
+        stabilizers = code.field([stabilizer for *_, stabilizer in selected])
+        return stabilizers.reshape(-1, 2 * num_qubits).view(code.field)
+
+    # if necessary, add other products of checks in a layer that commute with all checks
+    rank = _get_rank(stabilizer_ops)
+    if _get_rank(get_selected_stabilizers()) < rank:
+        others: list[tuple[int, npt.NDArray[np.uint8], galois.FieldArray]] = []
+        for ll, layer in enumerate(layers):
+            layer_ops = gauge_ops[list(layer)]
+            commutators = layer_ops @ math.symplectic_conjugate(gauge_ops).T
+            coefficients = commutators.T.null_space()
+            stabilizers = coefficients @ layer_ops
+            tracked = is_tracked(stabilizers)
+            others.extend(
+                (ll, coefficients_row.view(np.ndarray).astype(np.uint8), stabilizer)
+                for coefficients_row, stabilizer in zip(coefficients[tracked], stabilizers[tracked])
+            )
+        num_generators = len(selected)
+        candidates = code.field([stabilizer for *_, stabilizer in selected + others])
+        reduced = candidates.reshape(-1, 2 * num_qubits).view(code.field).T.row_reduce()
         independent = math.first_nonzero_cols(reduced[np.any(reduced, axis=1)])
-        for index in independent:
-            layer, coefficients_row, stabilizer = candidates[index]
-            check_ids = tuple(qubit_ids.check[layer[cc]] for cc in np.flatnonzero(coefficients_row))
-            detectors.append(_StabilizerDetector(check_ids, check_ids, stabilizer))
+        selected.extend(
+            others[index - num_generators] for index in independent if index >= num_generators
+        )
 
-    if len(detectors) != np.linalg.matrix_rank(stabilizer_ops):
+    if _get_rank(get_selected_stabilizers()) != rank:
         raise ValueError(
             "The gauge measurement schedule does not determine all "
             + ("" if basis is None else f"{basis}-type ")
             + "stabilizers of the code: products of the checks within single gauge layers must"
             " generate these stabilizers (see SyndromeMeasurementStrategy.get_gauge_layers)"
         )
+
+    def get_check_ids(layer_index: int, coefficients: npt.NDArray[np.integer]) -> tuple[int, ...]:
+        """Identify the check qubits for a product of checks in a layer."""
+        layer = layers[layer_index]
+        return tuple(qubit_ids.check[layer[int(cc)]] for cc in np.flatnonzero(coefficients))
+
+    # represent stabilizers by low-weight products of checks
+    detectors = []
+    layer_coefficients: list[list[npt.NDArray[np.uint8]]] = [[] for _ in layers]
+    for ll, coefficients, stabilizer in selected:
+        coefficients = _reduce_weight(coefficients, layer_relations[ll])
+        layer_coefficients[ll].append(coefficients)
+        check_ids = get_check_ids(ll, coefficients)
+        detectors.append(_StabilizerDetector(check_ids, check_ids, stabilizer))
+
+    # Add detectors for relations among the checks in each layer, except for relations that are
+    # already implied by products of stabilizer detectors in the same layer and round.
+    identity = code.field.Zeros(2 * num_qubits)
+    for ll, (layer, relations) in enumerate(zip(layers, layer_relations)):
+        if not len(relations):
+            continue
+        implied = np.zeros((0, len(layer)), dtype=np.uint8)
+        if layer_coefficients[ll]:
+            coefficients = code.field(np.array(layer_coefficients[ll]))
+            products = coefficients @ gauge_ops[list(layer)]
+            implied = (products.T.null_space() @ coefficients).view(np.ndarray)
+        candidates = code.field(np.vstack([implied, relations]).astype(np.uint8))
+        reduced = candidates.T.row_reduce()
+        independent = math.first_nonzero_cols(reduced[np.any(reduced, axis=1)])
+        for index in independent:
+            if index >= len(implied):
+                check_ids = get_check_ids(ll, relations[index - len(implied)])
+                detectors.append(_StabilizerDetector(check_ids, check_ids, identity, True))
     return detectors
 
 
@@ -735,9 +823,10 @@ def _get_qec_cycle(
         measurement_record.validate_num_measurements(measurement_count)
         repeat_circuit.append("SHIFT_COORDS", [], (1, 0, 0))
         for kk, detector in enumerate(detectors):
+            # relations are deterministic in every round, so they need not compare to the last round
             targets = [
                 measurement_record.get_target_rec(check_id, index)
-                for index in (-1, -2)
+                for index in ((-1,) if detector.is_relation else (-1, -2))
                 for check_id in detector.check_ids
             ]
             repeat_circuit.append("DETECTOR", targets, (0, 0, kk))
@@ -748,3 +837,45 @@ def _get_qec_cycle(
         detector_record.append(round_detector_record, repeat=num_rounds - 1)
 
     return circuit, measurement_record, detector_record
+
+
+def _get_low_weight_basis(vectors: npt.NDArray[np.integer]) -> npt.NDArray[np.uint8]:
+    """Greedily reduce the Hamming weights of a basis of binary vectors.
+
+    Each basis vector is repeatedly replaced by its sum with another basis vector whenever doing so
+    reduces its weight, which preserves the span of the basis.
+    """
+    basis = np.asarray(vectors, dtype=np.uint8) % 2
+    improved = True
+    while improved:
+        improved = False
+        for vv in range(len(basis)):
+            sums = basis ^ basis[vv]
+            weights = np.count_nonzero(sums, axis=1)
+            weights[vv] = basis.shape[1] + 1
+            best = int(np.argmin(weights))
+            if weights[best] < np.count_nonzero(basis[vv]):
+                basis[vv] = sums[best]
+                improved = True
+    return basis
+
+
+def _reduce_weight(
+    vector: npt.NDArray[np.integer], others: npt.NDArray[np.integer]
+) -> npt.NDArray[np.uint8]:
+    """Greedily reduce the Hamming weight of a binary vector by adding other vectors to it."""
+    result = np.asarray(vector, dtype=np.uint8) % 2
+    other_vectors = np.asarray(others, dtype=np.uint8) % 2
+    while len(other_vectors):
+        sums = other_vectors ^ result
+        weights = np.count_nonzero(sums, axis=1)
+        best = int(np.argmin(weights))
+        if weights[best] >= np.count_nonzero(result):
+            break
+        result = sums[best]
+    return result
+
+
+def _get_rank(matrix: galois.FieldArray) -> int:
+    """The rank of a matrix, which may have no rows."""
+    return int(np.linalg.matrix_rank(matrix)) if matrix.size else 0
