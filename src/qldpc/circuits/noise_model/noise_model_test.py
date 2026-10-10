@@ -4,6 +4,7 @@
 
 import copy
 import pickle
+import re
 
 import pytest
 import stim
@@ -13,7 +14,6 @@ from qldpc.circuits.conftest import (
     StimCircuitWrapper,
     circuits_are_equivalent,
     flatten_repeat_blocks,
-    flatten_repeat_blocks_with_seam_ticks,
 )
 from qldpc.circuits.noise_model import ErrorSpec
 
@@ -463,6 +463,65 @@ _FLATTENING_TEST_CIRCUITS = {
         }
         X_ERROR(0.1) 0
     """,
+    "user TICK before noise at the end of a repeat block": """
+        R 0 1
+        TICK
+        REPEAT 2 {
+            H 0
+            TICK
+            X_ERROR(0.1) 1
+        }
+    """,
+    "empty repeat blocks between TICKs": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+        }
+        TICK
+        REPEAT 2 {
+            REPEAT 4 {
+            }
+            TICK
+        }
+        H 0
+        TICK
+        REPEAT 3 {
+            X 1
+            TICK
+            REPEAT 2 {
+            }
+            TICK
+        }
+        M 0 1
+    """,
+    "trailing nested repeat blocks before empty repeat blocks": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            X 1
+            TICK
+            REPEAT 4 {
+                H 0
+                TICK
+            }
+            REPEAT 2 {
+            }
+        }
+        REPEAT 2 {
+        }
+    """,
+    "repeat block before an immune block": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            H 0
+            TICK
+        }
+        REPEAT[__IMMUNE_TO_NOISE__] 2 {
+            X 1
+            TICK
+        }
+    """,
     "trailing ticked repeat block": """
         R 0 1
         TICK
@@ -727,9 +786,12 @@ _FLATTENING_TEST_CIRCUITS = {
 def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks: bool) -> None:
     """Noise is added to repeat blocks as though they were flattened.
 
-    Idle errors are composed into Pauli channels with several nonzero components, whose
-    approximate decomposition into detector error model errors is not compositional, so the idle
-    channels must be identical to those in the flattened circuit.
+    Adding noise and then flattening must give exactly as many TICKs as flattening and then adding
+    noise, and the same detector error model (so the same sampling statistics).  Idle errors are
+    composed into Pauli channels with several nonzero components, whose approximate decomposition
+    into detector error model errors is not compositional, so the idle channels must be identical to
+    those in the flattened circuit.  If adding noise to the flattened circuit fails, then adding
+    noise to the original circuit must fail too.
     """
     circuit = stim.Circuit(_FLATTENING_TEST_CIRCUITS[circuit_name])
     noise_model = circuits.NoiseModel(
@@ -739,16 +801,19 @@ def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks:
         idle_error={"X": 0.005, "Z": 0.007},
         additional_error_waiting_for_m_or_r=0.04,
     )
+    flattened_circuit = flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
+    try:
+        noisy_flattened_circuit = noise_model.noisy_circuit(
+            flattened_circuit, insert_ticks=insert_ticks
+        )
+    except ValueError as error:
+        with pytest.raises(ValueError, match=re.escape(str(error).splitlines()[0])):
+            noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
+        return
     noisy_circuit = noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
-    noisy_flattened_circuit = noise_model.noisy_circuit(
-        flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
-        if insert_ticks
-        else flatten_repeat_blocks_with_seam_ticks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG),
-        insert_ticks=insert_ticks,
-    )
+    assert noisy_circuit.flattened().num_ticks == noisy_flattened_circuit.flattened().num_ticks
     expected = _dem_signature(noisy_flattened_circuit)
     assert _dem_signature(noisy_circuit) == pytest.approx(expected, rel=1e-12, abs=0)
-    assert noisy_circuit.num_ticks == noisy_flattened_circuit.num_ticks
 
 
 def test_repeat_block_edge_cases() -> None:
@@ -769,7 +834,19 @@ def test_repeat_block_edge_cases() -> None:
             DEPOLARIZE1(0.1) 0
         """)
 
-        circuit = stim.Circuit("R 0\nTICK\nREPEAT 3 {\n    H 0\n}")
+        # an empty repeat block does not make a moment
+        circuit = stim.Circuit("H 0\nTICK\nREPEAT 3 {\n}\nTICK\nH 0")
+        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
+            H 0
+            DEPOLARIZE1(0.1) 0
+            REPEAT 3 {
+            }
+            TICK
+            H 0
+            DEPOLARIZE1(0.1) 0
+        """)
+
+        circuit = stim.Circuit("R 0\nTICK\nREPEAT 3 {\n    H 0\n    TICK\n}\nREPEAT 2 {\n}")
         assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
             R 0
             X_ERROR(0.1) 0
@@ -781,7 +858,14 @@ def test_repeat_block_edge_cases() -> None:
             }
             H 0
             DEPOLARIZE1(0.1) 0
+            REPEAT 2 {
+            }
         """)
+
+    # without TICK insertion, iterations of a repeat block without TICKs share a moment
+    circuit = stim.Circuit("R 0\nTICK\nREPEAT 3 {\n    H 0\n}")
+    with pytest.raises(ValueError, match="multiple times without a TICK"):
+        noise_model.noisy_circuit(circuit, insert_ticks=False)
 
 
 def test_aggregated_idle_respects_observable_barrier() -> None:

@@ -8,8 +8,6 @@ from typing import Self
 
 import stim
 
-from qldpc.circuits.noise_model.moments import _gate_qubits
-
 
 class StimCircuitWrapper:
     """A minimal stim-wrapping circuit (like tsim.Circuit) for exercising StimCircuitProtocol.
@@ -61,40 +59,4 @@ def flatten_repeat_blocks(circuit: stim.Circuit, keep_tag: str | None = None) ->
                 flattened += body
         else:
             flattened.append(instruction)
-    return flattened
-
-
-def flatten_repeat_blocks_with_seam_ticks(
-    circuit: stim.Circuit, immune_op_tag: str
-) -> stim.Circuit:
-    """Flatten non-immune repeat blocks, inserting TICKs to prevent qubit reuse across their seams.
-
-    A TICK is inserted wherever a gate would reuse a qubit that was used (since the last TICK)
-    before the boundary of a repeat block or of one of its iterations.
-    """
-    flattened = stim.Circuit()
-    used_qubits: set[int] = set()
-    boundary_qubits: set[int] = set()
-
-    def append(circuit: stim.Circuit) -> None:
-        nonlocal boundary_qubits
-        for op in circuit:
-            if isinstance(op, stim.CircuitRepeatBlock) and immune_op_tag not in op.tag:
-                for _ in range(op.repeat_count):
-                    boundary_qubits = used_qubits.copy()
-                    append(op.body_copy())
-                boundary_qubits = used_qubits.copy()
-                continue
-            if isinstance(op, stim.CircuitRepeatBlock) or op.name == "TICK":
-                used_qubits.clear()
-                boundary_qubits.clear()
-            elif qubits := _gate_qubits(op):
-                if qubits & boundary_qubits:
-                    flattened.append("TICK")
-                    used_qubits.clear()
-                    boundary_qubits.clear()
-                used_qubits.update(qubits)
-            flattened.append(op)
-
-    append(circuit)
     return flattened

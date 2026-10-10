@@ -100,15 +100,14 @@ Per-gate-application noise via a callback (``rule_func``)::
 
 Noise is added moment by moment, where a moment is the time between two TICKs.  ``REPEAT`` blocks
 are treated as though they were flattened, so a moment may span the boundary of a repeat block or of
-its iterations.  With ``insert_ticks=False``, a TICK is nonetheless inserted wherever a qubit would
-be reused across such a boundary.  The noisy circuit keeps repeat blocks compact, but it unrolls
-iterations whose moments or noise differ from those of other iterations; for example, the first
-iteration of a block is unrolled if its first moment merges with operations that precede the block,
-or if a qubit enters the block after a different number of idle moments than it has between
-iterations, and the last iteration of a block at the end of the circuit is unrolled to avoid a
-trailing TICK.  A repeat block tagged with ``immune_op_tag`` is noiseless and is not merged with
-neighboring moments, and a repeat block that contains only annotations and noise (if anything) is
-kept as-is.
+its iterations, and the noisy circuit has exactly as many TICKs as the noisy flattened circuit.  The
+noisy circuit keeps repeat blocks compact, but it unrolls iterations whose moments or noise differ
+from those of other iterations; for example, the first iteration of a block is unrolled if its
+first moment merges with operations that precede the block, or if a qubit enters the block after a
+different number of idle moments than it has between iterations, and the last iteration of a block
+at the end of the circuit is unrolled to avoid a trailing TICK.  A repeat block tagged with
+``immune_op_tag`` is noiseless and is not merged with neighboring moments, and a repeat block that
+contains only annotations and noise (if anything) is kept as-is.
 
 .. rubric:: Idling errors
 

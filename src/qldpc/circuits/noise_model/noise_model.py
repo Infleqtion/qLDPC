@@ -19,6 +19,7 @@ from .channels import PauliChannel, PauliChannelSequence, _repeated_idle_channel
 from .moments import (
     ScheduleItem,
     _categorize_moment_qubits,
+    _EmptyBlocks,
     _GateFreeOps,
     _get_immune_qubits,
     _needs_initial_tick,
@@ -29,7 +30,7 @@ from .moments import (
     _Tick,
     _tick_state_after,
     _TickState,
-    _without_trailing_tick,
+    _without_trailing_block_tick,
 )
 from .operations import (
     ANNOTATION,
@@ -374,17 +375,16 @@ class NoiseModel:
                 An immune-tagged operation is still a real operation for moment accounting; it does
                 not suppress idle noise on unrelated qubits in the same moment.
             insert_ticks: If True, automatically inserts TICK operations to prevent qubit reuse
-                conflicts.  If False, assumes that this preprocessing is not necessary, except that
-                a TICK is inserted wherever a qubit would be reused across the boundary of a repeat
-                block or of its iterations.  In either case, moments are identified as though all
-                repeat blocks (other than those tagged with ``immune_op_tag``) were flattened.
+                conflicts.  If False, assumes that this preprocessing is not necessary.  In either
+                case, moments are identified as though all repeat blocks (other than those tagged
+                with ``immune_op_tag``) were flattened.
 
         Returns:
             The input circuit with added noise.
 
         Raises:
             ValueError: If ``insert_ticks`` is False and a qubit is operated on more than once in a
-                moment, other than across the boundary of a repeat block or of its iterations.
+                moment, including in different iterations of a repeat block without TICKs.
         """
         if immune_op_tag == "":
             raise ValueError("immune_op_tag must be non-empty or None")
@@ -419,7 +419,7 @@ class NoiseModel:
 
         noisy_circuit = stim.Circuit()
         pending_idle_moments: dict[int, int] = {}
-        self._inplace_append_noisy_schedule(
+        tick_state = self._inplace_append_noisy_schedule(
             circuit=noisy_circuit,
             schedule=_schedule_moments(
                 circuit, insert_ticks=insert_ticks, immune_op_tag=immune_op_tag
@@ -431,9 +431,10 @@ class NoiseModel:
             pending_idle_moments=pending_idle_moments,
         )
         self._flush_idle_errors(noisy_circuit, pending_idle_moments)
-        # the last iteration of a repeat block may end with a TICK that nothing needs
-        trimmed_circuit = _without_trailing_tick(noisy_circuit, immune_op_tag)
-        return noisy_circuit if trimmed_circuit is None else trimmed_circuit
+        if tick_state is _TickState.BLOCK_TICK:
+            # the TICK after the last iteration of a repeat block is not needed by anything
+            return _without_trailing_block_tick(noisy_circuit)
+        return noisy_circuit
 
     def _inplace_append_noisy_schedule(
         self,
@@ -479,6 +480,9 @@ class NoiseModel:
                     pending_idle_moments=pending_idle_moments,
                     tick_state=tick_state,
                 )
+                continue
+            if isinstance(item, _EmptyBlocks):
+                circuit.append(item.circuit)
                 continue
 
             if pending_idle_moments:
@@ -611,7 +615,7 @@ class NoiseModel:
         elif end_state is _TickState.MOMENT:
             # the TICK after the last iteration is needed by whatever follows the block, if anything
             noisy_body.append("TICK")
-            tick_state = _TickState.NONE
+            tick_state = _TickState.BLOCK_TICK
         elif tick_before_block:
             # The body ends with gate-free operations, which need a TICK before the next iteration
             # but not necessarily after the last.  The first iteration needs a TICK too, so the TICK

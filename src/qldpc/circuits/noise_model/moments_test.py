@@ -9,14 +9,11 @@ import pytest
 import stim
 
 from qldpc import circuits
-from qldpc.circuits.conftest import (
-    circuits_are_equivalent,
-    flatten_repeat_blocks,
-    flatten_repeat_blocks_with_seam_ticks,
-)
+from qldpc.circuits.conftest import circuits_are_equivalent, flatten_repeat_blocks
 from qldpc.circuits.noise_model.moments import (
     ScheduleItem,
     _categorize_moment_qubits,
+    _EmptyBlocks,
     _GateFreeOps,
     _get_immune_qubits,
     _idle_barrier_qubits,
@@ -29,7 +26,7 @@ from qldpc.circuits.noise_model.moments import (
     _schedule_moments,
     _Tick,
     _TickState,
-    _without_trailing_tick,
+    _without_trailing_block_tick,
 )
 
 
@@ -116,12 +113,8 @@ def test_repeat_blocks() -> None:
         }
     """)
     assert circuits_are_equivalent(noisy_circuit, noise_model.noisy_circuit(circuit))
-    # without TICK insertion, moments are still split where a qubit is reused across iterations
-    assert circuits_are_equivalent(
-        noisy_circuit, noise_model.noisy_circuit(circuit, insert_ticks=False)
-    )
     with pytest.raises(ValueError, match="multiple uses"):
-        noise_model.noisy_circuit(stim.Circuit("REPEAT 3 {\n    H 0 0\n}"), insert_ticks=False)
+        noise_model.noisy_circuit(circuit, insert_ticks=False)
 
     immune_op_tag = "_TEST_"
     circuit = stim.Circuit(f"""
@@ -283,11 +276,7 @@ SCHEDULE_TEST_CIRCUITS = {
 def test_schedule_moments(circuit_name: str, insert_ticks: bool) -> None:
     """Moments are identified as though non-immune repeat blocks were flattened."""
     circuit = stim.Circuit(SCHEDULE_TEST_CIRCUITS[circuit_name])
-    flattened = (
-        flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
-        if insert_ticks
-        else flatten_repeat_blocks_with_seam_ticks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
-    )
+    flattened = flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
     schedule_moments = functools.partial(
         _schedule_moments, insert_ticks=insert_ticks, immune_op_tag=circuits.DEFAULT_IMMUNE_OP_TAG
     )
@@ -410,7 +399,7 @@ def test_schedule_cycle_of_iterations() -> None:
 
 
 def test_schedule_moments_without_boundaries() -> None:
-    """Repeat blocks without gates or TICKs are kept as-is."""
+    """Repeat blocks without gates are kept as-is, and those without TICKs may be rejected."""
     for body in ["X_ERROR(0.1) 0\n    DETECTOR", ""]:
         for repeat_count in [1, 1000]:
             block = stim.CircuitRepeatBlock(repeat_count, stim.Circuit(body))
@@ -421,16 +410,22 @@ def test_schedule_moments_without_boundaries() -> None:
                 schedule = _schedule_moments(circuit, insert_ticks=insert_ticks, immune_op_tag=None)
                 assert schedule == [circuit]
 
-    # a repeat block without TICKs is split into moments where its gates reuse qubits
-    for insert_ticks in [True, False]:
-        assert _schedule_moments(
-            stim.Circuit("H 1\nREPEAT 1000 {\n    H 0\n}"),
-            insert_ticks=insert_ticks,
-            immune_op_tag=None,
-        ) == [
-            stim.Circuit("H 1\nH 0"),
-            _RepeatedMoments(999, (stim.Circuit("H 0"),)),
-        ]
+    circuit = stim.Circuit("H 1\nREPEAT 1000 {\n    H 0\n}")
+    assert _schedule_moments(circuit, insert_ticks=True, immune_op_tag=None) == [
+        stim.Circuit("H 1\nH 0"),
+        _RepeatedMoments(999, (stim.Circuit("H 0"),)),
+    ]
+    with pytest.raises(ValueError, match="multiple uses"):
+        _schedule_moments(circuit, insert_ticks=False, immune_op_tag=None)
+
+    # repeat blocks that are empty when flattened do not make moments
+    circuit = stim.Circuit("REPEAT 2 {\n    REPEAT 3 {\n    }\n    TICK\n}\nH 0\nTICK")
+    repeated_empty_block = stim.Circuit("REPEAT 2 {\n    REPEAT 3 {\n    }\n}")
+    assert _schedule_moments(circuit, insert_ticks=True, immune_op_tag=None) == [
+        _EmptyBlocks(repeated_empty_block),
+        _Tick(),
+        stim.Circuit("H 0"),
+    ]
 
 
 def test_schedule_ticks() -> None:
@@ -458,22 +453,14 @@ def test_schedule_ticks() -> None:
     assert not _needs_initial_tick([h_0], _TickState.GATE_FREE_OPS)
     assert _needs_initial_tick([_RepeatedMoments(2, (h_0,))], _TickState.MOMENT)
 
+    # repeat blocks that are empty when flattened do not affect TICKs
+    empty_blocks = _EmptyBlocks(stim.Circuit("REPEAT 2 {\n}"))
+    assert _needs_initial_tick([empty_blocks, h_0], _TickState.MOMENT)
+    assert not _needs_initial_tick([empty_blocks], _TickState.MOMENT)
 
-def test_without_trailing_tick() -> None:
-    """A trailing TICK is removed, unrolling the last iteration of a repeat block if necessary."""
-    immune_op_tag = "_TEST_"
-    assert _without_trailing_tick(stim.Circuit("H 0\nTICK\nX_ERROR(0.1) 0"), None) == stim.Circuit(
-        "H 0\nX_ERROR(0.1) 0"
-    )
-    for circuit in [
-        "H 0",
-        "H 0\nTICK\nDETECTOR",
-        "X_ERROR(0.1) 0",
-        f"REPEAT['{immune_op_tag}'] 2 {{\n    H 0\n    TICK\n}}",
-        "REPEAT 2 {\n    TICK\n    H 0\n}",
-    ]:
-        assert _without_trailing_tick(stim.Circuit(circuit), immune_op_tag) is None
 
+def test_without_trailing_block_tick() -> None:
+    """The TICK at the end of the last repeat block is removed, unrolling its last iteration."""
     for repeat_count, expected in [
         (3, "REPEAT[tag] 2 {\n    H 0\n    TICK\n}\nH 0\nX_ERROR(0.1) 0"),
         (2, "H 0\nTICK\nH 0\nX_ERROR(0.1) 0"),
@@ -481,16 +468,29 @@ def test_without_trailing_tick() -> None:
     ]:
         circuit = stim.Circuit(f"REPEAT[tag] {repeat_count} {{\n    H 0\n    TICK\n}}")
         circuit.append("X_ERROR", [0], 0.1)
-        assert _without_trailing_tick(circuit, immune_op_tag) == stim.Circuit(expected)
+        assert _without_trailing_block_tick(circuit) == stim.Circuit(expected)
 
-    # nested repeat blocks
-    circuit = stim.Circuit(
-        "REPEAT 2 {\n    X 1\n    TICK\n    REPEAT 3 {\n        H 0\n        TICK\n    }\n}"
-    )
-    trimmed = _without_trailing_tick(circuit, immune_op_tag)
-    assert trimmed is not None
+    # nested repeat blocks, followed by repeat blocks that are empty when flattened
+    circuit = stim.Circuit("""
+        REPEAT 2 {
+            X 1
+            TICK
+            REPEAT 3 {
+                H 0
+                TICK
+            }
+            REPEAT 2 {
+            }
+        }
+        REPEAT 4 {
+            REPEAT 5 {
+            }
+        }
+    """)
+    trimmed = _without_trailing_block_tick(circuit)
     assert trimmed.num_ticks == circuit.num_ticks - 1
-    assert trimmed.flattened() == circuit.flattened()[:-1]
+    flattened = circuit.flattened()
+    assert trimmed.flattened() == flattened[:-1]
 
 
 def test_fold_preserves_tags() -> None:
