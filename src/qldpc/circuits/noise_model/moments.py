@@ -487,14 +487,23 @@ def _close_gate_free_moment(moment: stim.Circuit) -> tuple[list[ScheduleItem], s
 
     A moment without gates receives no noise, so splitting it off as ``_GateFreeOps`` does not
     change the noise of the moment that it would otherwise merge into.  A moment that is empty when
-    flattened is split off as ``_EmptyBlocks``.
+    flattened is split off as ``_EmptyBlocks``.  A moment that ends with a correlated error (``E``
+    or ``ELSE_CORRELATED_ERROR``) is not split off, since the next moment may continue its chain of
+    correlated errors, which idle errors must not interrupt.
 
     Returns:
         The split-off operations (if any), and the moment that remains open.
     """
-    if moment and all(
-        isinstance(op, stim.CircuitRepeatBlock) or op_type(op.name) in (ANNOTATION, NOISE)
-        for op in moment
+    if (
+        moment
+        and all(
+            isinstance(op, stim.CircuitRepeatBlock) or op_type(op.name) in (ANNOTATION, NOISE)
+            for op in moment
+        )
+        and not (
+            isinstance(moment[-1], stim.CircuitInstruction)
+            and moment[-1].name in ("E", "ELSE_CORRELATED_ERROR")
+        )
     ):
         item = _as_schedule_item(moment)
         return [item if isinstance(item, _EmptyBlocks) else _GateFreeOps(moment)], stim.Circuit()

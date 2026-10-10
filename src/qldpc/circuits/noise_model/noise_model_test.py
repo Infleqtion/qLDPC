@@ -463,6 +463,21 @@ _FLATTENING_TEST_CIRCUITS = {
         }
         X_ERROR(0.1) 0
     """,
+    "correlated error chain across a seam": """
+        R 0 1 2
+        TICK
+        REPEAT 2 {
+            H 0
+            TICK
+            E(0.1) X1
+        }
+        ELSE_CORRELATED_ERROR(0.2) X2
+        H 0
+        TICK
+        M 1 2
+        DETECTOR rec[-1]
+        DETECTOR rec[-2]
+    """,
     "user TICK before noise at the end of a repeat block": """
         R 0 1
         TICK
