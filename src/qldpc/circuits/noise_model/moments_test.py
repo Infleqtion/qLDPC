@@ -9,7 +9,11 @@ import pytest
 import stim
 
 from qldpc import circuits
-from qldpc.circuits.conftest import circuits_are_equivalent, flatten_repeat_blocks
+from qldpc.circuits.conftest import (
+    circuits_are_equivalent,
+    flatten_repeat_blocks,
+    flatten_repeat_blocks_with_seam_ticks,
+)
 from qldpc.circuits.noise_model.moments import (
     ScheduleItem,
     _categorize_moment_qubits,
@@ -25,6 +29,7 @@ from qldpc.circuits.noise_model.moments import (
     _schedule_moments,
     _Tick,
     _TickState,
+    _without_trailing_tick,
 )
 
 
@@ -111,8 +116,12 @@ def test_repeat_blocks() -> None:
         }
     """)
     assert circuits_are_equivalent(noisy_circuit, noise_model.noisy_circuit(circuit))
+    # without TICK insertion, moments are still split where a qubit is reused across iterations
+    assert circuits_are_equivalent(
+        noisy_circuit, noise_model.noisy_circuit(circuit, insert_ticks=False)
+    )
     with pytest.raises(ValueError, match="multiple uses"):
-        noise_model.noisy_circuit(circuit, insert_ticks=False)
+        noise_model.noisy_circuit(stim.Circuit("REPEAT 3 {\n    H 0 0\n}"), insert_ticks=False)
 
     immune_op_tag = "_TEST_"
     circuit = stim.Circuit(f"""
@@ -196,6 +205,21 @@ SCHEDULE_TEST_CIRCUITS = {
     "unticked seams": "R 0 1 2\nREPEAT 3 {\n    H 0\n    TICK\n    X 1\n}\nH 2",
     "leading tick": "R 0 1\nTICK\nREPEAT 4 {\n    TICK\n    H 0\n    TICK\n    X 1\n}\nTICK\nM 0",
     "gate seams": "H 1\nREPEAT 5 {\n    CX 0 1 1 2\n    H 3\n}\nX 2",
+    "block boundary reuse": """
+        R 0 1 2
+        TICK
+        H 0
+        REPEAT 3 {
+            X 0
+            H 1
+            REPEAT 2 {
+                Y 1 2
+            }
+        }
+        X 2
+        M 0
+    """,
+    "reuse within iteration": "R 0\nTICK\nREPEAT 3 {\n    H 0\n    X 0\n}",
     "cycle of iterations": "REPEAT 10 {\n    H 0\n    CX 1 2\n    H 1\n}\nH 2",
     "nested": """
         R 0 1 2
@@ -259,7 +283,11 @@ SCHEDULE_TEST_CIRCUITS = {
 def test_schedule_moments(circuit_name: str, insert_ticks: bool) -> None:
     """Moments are identified as though non-immune repeat blocks were flattened."""
     circuit = stim.Circuit(SCHEDULE_TEST_CIRCUITS[circuit_name])
-    flattened = flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
+    flattened = (
+        flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
+        if insert_ticks
+        else flatten_repeat_blocks_with_seam_ticks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
+    )
     schedule_moments = functools.partial(
         _schedule_moments, insert_ticks=insert_ticks, immune_op_tag=circuits.DEFAULT_IMMUNE_OP_TAG
     )
@@ -382,19 +410,27 @@ def test_schedule_cycle_of_iterations() -> None:
 
 
 def test_schedule_moments_without_boundaries() -> None:
-    """Repeat blocks without moment boundaries stay compact or are rejected."""
-    circuit = stim.Circuit("H 0\nREPEAT 1000 {\n    X_ERROR(0.1) 0\n    DETECTOR\n}\nH 1")
-    expected = stim.Circuit("H 0")
-    expected.append(circuit[1])
-    expected.append("H", [1])
+    """Repeat blocks without gates or TICKs are kept as-is."""
+    for body in ["X_ERROR(0.1) 0\n    DETECTOR", ""]:
+        for repeat_count in [1, 1000]:
+            block = stim.CircuitRepeatBlock(repeat_count, stim.Circuit(body))
+            circuit = stim.Circuit("H 0")
+            circuit.append(block)
+            circuit.append("H", [1])
+            for insert_ticks in [True, False]:
+                schedule = _schedule_moments(circuit, insert_ticks=insert_ticks, immune_op_tag=None)
+                assert schedule == [circuit]
+
+    # a repeat block without TICKs is split into moments where its gates reuse qubits
     for insert_ticks in [True, False]:
-        assert _schedule_moments(circuit, insert_ticks=insert_ticks, immune_op_tag=None) == [
-            expected
+        assert _schedule_moments(
+            stim.Circuit("H 1\nREPEAT 1000 {\n    H 0\n}"),
+            insert_ticks=insert_ticks,
+            immune_op_tag=None,
+        ) == [
+            stim.Circuit("H 1\nH 0"),
+            _RepeatedMoments(999, (stim.Circuit("H 0"),)),
         ]
-    with pytest.raises(ValueError, match="multiple uses"):
-        _schedule_moments(
-            stim.Circuit("REPEAT 2 {\n    H 0\n}"), insert_ticks=False, immune_op_tag=None
-        )
 
 
 def test_schedule_ticks() -> None:
@@ -421,6 +457,40 @@ def test_schedule_ticks() -> None:
     assert _needs_initial_tick([_Tick(), h_0], _TickState.GATE_FREE_OPS)
     assert not _needs_initial_tick([h_0], _TickState.GATE_FREE_OPS)
     assert _needs_initial_tick([_RepeatedMoments(2, (h_0,))], _TickState.MOMENT)
+
+
+def test_without_trailing_tick() -> None:
+    """A trailing TICK is removed, unrolling the last iteration of a repeat block if necessary."""
+    immune_op_tag = "_TEST_"
+    assert _without_trailing_tick(stim.Circuit("H 0\nTICK\nX_ERROR(0.1) 0"), None) == stim.Circuit(
+        "H 0\nX_ERROR(0.1) 0"
+    )
+    for circuit in [
+        "H 0",
+        "H 0\nTICK\nDETECTOR",
+        "X_ERROR(0.1) 0",
+        f"REPEAT['{immune_op_tag}'] 2 {{\n    H 0\n    TICK\n}}",
+        "REPEAT 2 {\n    TICK\n    H 0\n}",
+    ]:
+        assert _without_trailing_tick(stim.Circuit(circuit), immune_op_tag) is None
+
+    for repeat_count, expected in [
+        (3, "REPEAT[tag] 2 {\n    H 0\n    TICK\n}\nH 0\nX_ERROR(0.1) 0"),
+        (2, "H 0\nTICK\nH 0\nX_ERROR(0.1) 0"),
+        (1, "H 0\nX_ERROR(0.1) 0"),
+    ]:
+        circuit = stim.Circuit(f"REPEAT[tag] {repeat_count} {{\n    H 0\n    TICK\n}}")
+        circuit.append("X_ERROR", [0], 0.1)
+        assert _without_trailing_tick(circuit, immune_op_tag) == stim.Circuit(expected)
+
+    # nested repeat blocks
+    circuit = stim.Circuit(
+        "REPEAT 2 {\n    X 1\n    TICK\n    REPEAT 3 {\n        H 0\n        TICK\n    }\n}"
+    )
+    trimmed = _without_trailing_tick(circuit, immune_op_tag)
+    assert trimmed is not None
+    assert trimmed.num_ticks == circuit.num_ticks - 1
+    assert trimmed.flattened() == circuit.flattened()[:-1]
 
 
 def test_fold_preserves_tags() -> None:

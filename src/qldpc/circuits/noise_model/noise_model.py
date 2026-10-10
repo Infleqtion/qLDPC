@@ -29,6 +29,7 @@ from .moments import (
     _Tick,
     _tick_state_after,
     _TickState,
+    _without_trailing_tick,
 )
 from .operations import (
     ANNOTATION,
@@ -373,16 +374,17 @@ class NoiseModel:
                 An immune-tagged operation is still a real operation for moment accounting; it does
                 not suppress idle noise on unrelated qubits in the same moment.
             insert_ticks: If True, automatically inserts TICK operations to prevent qubit reuse
-                conflicts.  If False, assumes that this preprocessing is not necessary.  In either
-                case, moments are identified as though all repeat blocks (other than those tagged
-                with ``immune_op_tag``) were flattened.
+                conflicts.  If False, assumes that this preprocessing is not necessary, except that
+                a TICK is inserted wherever a qubit would be reused across the boundary of a repeat
+                block or of its iterations.  In either case, moments are identified as though all
+                repeat blocks (other than those tagged with ``immune_op_tag``) were flattened.
 
         Returns:
             The input circuit with added noise.
 
         Raises:
             ValueError: If ``insert_ticks`` is False and a qubit is operated on more than once in a
-                moment, including in different iterations of a repeat block without TICKs.
+                moment, other than across the boundary of a repeat block or of its iterations.
         """
         if immune_op_tag == "":
             raise ValueError("immune_op_tag must be non-empty or None")
@@ -429,7 +431,9 @@ class NoiseModel:
             pending_idle_moments=pending_idle_moments,
         )
         self._flush_idle_errors(noisy_circuit, pending_idle_moments)
-        return noisy_circuit
+        # the last iteration of a repeat block may end with a TICK that nothing needs
+        trimmed_circuit = _without_trailing_tick(noisy_circuit, immune_op_tag)
+        return noisy_circuit if trimmed_circuit is None else trimmed_circuit
 
     def _inplace_append_noisy_schedule(
         self,

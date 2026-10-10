@@ -13,6 +13,7 @@ from qldpc.circuits.conftest import (
     StimCircuitWrapper,
     circuits_are_equivalent,
     flatten_repeat_blocks,
+    flatten_repeat_blocks_with_seam_ticks,
 )
 from qldpc.circuits.noise_model import ErrorSpec
 
@@ -435,6 +436,60 @@ def test_aggregated_idle_matches_per_moment(
 
 _FLATTENING_TEST_CIRCUITS = {
     **_AGGREGATION_TEST_CIRCUITS,
+    "unticked body": """
+        R 0 1 2
+        TICK
+        X 0
+        REPEAT 3 {
+            CX 0 1
+            X 2
+        }
+        X 2
+        TICK
+        M 0 1 2
+        DETECTOR rec[-1]
+        DETECTOR rec[-2]
+        DETECTOR rec[-3]
+    """,
+    "trailing repeat block": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            X 1
+            TICK
+            REPEAT 4 {
+                H 0
+            }
+        }
+        X_ERROR(0.1) 0
+    """,
+    "trailing ticked repeat block": """
+        R 0 1
+        TICK
+        REPEAT 3 {
+            H 0
+            TICK
+            CX 0 1
+            TICK
+        }
+    """,
+    "gate-free repeat blocks": """
+        R 0 1
+        REPEAT 3 {
+        }
+        TICK
+        H 0
+        REPEAT 2 {
+            X_ERROR(0.1) 1
+            REPEAT 1 {
+            }
+        }
+        TICK
+        M 0 1
+        REPEAT 1 {
+            DETECTOR rec[-1]
+        }
+    """,
     "unticked seams": """
         R 0 1 2
         TICK
@@ -686,11 +741,47 @@ def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks:
     )
     noisy_circuit = noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
     noisy_flattened_circuit = noise_model.noisy_circuit(
-        flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG), insert_ticks=insert_ticks
+        flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
+        if insert_ticks
+        else flatten_repeat_blocks_with_seam_ticks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG),
+        insert_ticks=insert_ticks,
     )
     expected = _dem_signature(noisy_flattened_circuit)
     assert _dem_signature(noisy_circuit) == pytest.approx(expected, rel=1e-12, abs=0)
     assert noisy_circuit.num_ticks == noisy_flattened_circuit.num_ticks
+
+
+def test_repeat_block_edge_cases() -> None:
+    """Gate-free repeat blocks are kept, and noisy circuits do not end with a TICK."""
+    noise_model = circuits.DepolarizingNoiseModel(0.1)
+    for insert_ticks in [True, False]:
+        circuit = stim.Circuit("H 0\nREPEAT 3 {\n}\nTICK\nH 0\nREPEAT 2 {\n    DETECTOR\n}")
+        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
+            H 0
+            REPEAT 3 {
+            }
+            DEPOLARIZE1(0.1) 0
+            TICK
+            H 0
+            REPEAT 2 {
+                DETECTOR
+            }
+            DEPOLARIZE1(0.1) 0
+        """)
+
+        circuit = stim.Circuit("R 0\nTICK\nREPEAT 3 {\n    H 0\n}")
+        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
+            R 0
+            X_ERROR(0.1) 0
+            TICK
+            REPEAT 2 {
+                H 0
+                DEPOLARIZE1(0.1) 0
+                TICK
+            }
+            H 0
+            DEPOLARIZE1(0.1) 0
+        """)
 
 
 def test_aggregated_idle_respects_observable_barrier() -> None:
