@@ -19,7 +19,6 @@ from .channels import PauliChannel, PauliChannelSequence, _repeated_idle_channel
 from .moments import (
     ScheduleItem,
     _categorize_moment_qubits,
-    _EmptyBlocks,
     _GateFreeOps,
     _get_immune_qubits,
     _needs_initial_tick,
@@ -480,9 +479,6 @@ class NoiseModel:
                     pending_idle_moments=pending_idle_moments,
                     tick_state=tick_state,
                 )
-                continue
-            if isinstance(item, _EmptyBlocks):
-                circuit.append(item.circuit)
                 continue
 
             if pending_idle_moments:

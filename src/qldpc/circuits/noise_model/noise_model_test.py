@@ -832,14 +832,26 @@ def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks:
 
 
 def test_repeat_block_edge_cases() -> None:
-    """Gate-free repeat blocks are kept, and noisy circuits do not end with a TICK."""
+    """Empty repeat blocks are dropped, gate-free ones are kept, and noise ends without a TICK."""
     noise_model = circuits.DepolarizingNoiseModel(0.1)
     for insert_ticks in [True, False]:
-        circuit = stim.Circuit("H 0\nREPEAT 3 {\n}\nTICK\nH 0\nREPEAT 2 {\n    DETECTOR\n}")
-        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
+        circuit = stim.Circuit("""
             H 0
             REPEAT 3 {
             }
+            TICK
+            H 0
+            REPEAT 2 {
+                DETECTOR
+            }
+            TICK
+            REPEAT 3 {
+            }
+            TICK
+            H 0
+        """)
+        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
+            H 0
             DEPOLARIZE1(0.1) 0
             TICK
             H 0
@@ -847,15 +859,6 @@ def test_repeat_block_edge_cases() -> None:
                 DETECTOR
             }
             DEPOLARIZE1(0.1) 0
-        """)
-
-        # an empty repeat block does not make a moment
-        circuit = stim.Circuit("H 0\nTICK\nREPEAT 3 {\n}\nTICK\nH 0")
-        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
-            H 0
-            DEPOLARIZE1(0.1) 0
-            REPEAT 3 {
-            }
             TICK
             H 0
             DEPOLARIZE1(0.1) 0
@@ -873,8 +876,6 @@ def test_repeat_block_edge_cases() -> None:
             }
             H 0
             DEPOLARIZE1(0.1) 0
-            REPEAT 2 {
-            }
         """)
 
     # without TICK insertion, iterations of a repeat block without TICKs share a moment

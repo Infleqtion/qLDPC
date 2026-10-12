@@ -107,8 +107,8 @@ example, the first iteration of a block is unrolled if its first moment merges w
 precede the block, or if a qubit enters the block after a different number of idle moments than it
 has between iterations.  The last iteration of a block is unrolled if a TICK is needed between
 iterations but not after the last one.  A repeat block tagged with ``immune_op_tag`` is noiseless
-and is not merged with neighboring moments, and a repeat block that contains only annotations and
-noise (if anything) is kept as-is.
+and is not merged with neighboring moments, a repeat block that contains only annotations and noise
+is kept as-is, and a repeat block that is empty when flattened is dropped.
 
 .. rubric:: Idling errors
 
