@@ -2,8 +2,10 @@
 
 """Unit tests for noise_model.py."""
 
+import collections
 import copy
 import pickle
+import random
 import re
 
 import pytest
@@ -287,7 +289,9 @@ def test_aggregated_idle_depolarization(probability: float, moments: int) -> Non
 
 def _dem_signature(circuit: stim.Circuit) -> dict[frozenset[str], float]:
     """Map each set of flipped detectors/observables to its total (XOR-combined) probability."""
-    dem = circuit.detector_error_model(approximate_disjoint_errors=True, flatten_loops=True)
+    dem = circuit.detector_error_model(
+        approximate_disjoint_errors=True, allow_gauge_detectors=True, flatten_loops=True
+    )
     signature: dict[frozenset[str], float] = {}
     for instruction in dem.flattened():
         if instruction.type == "error":
@@ -436,6 +440,78 @@ def test_aggregated_idle_matches_per_moment(
 
 _FLATTENING_TEST_CIRCUITS = {
     **_AGGREGATION_TEST_CIRCUITS,
+    "ticked": "R 0 1\nTICK\nREPEAT 3 {\n    H 0\n    TICK\n    X 1\n    TICK\n}\nM 0 1",
+    "unticked seams at the end": "R 0 1 2\nREPEAT 3 {\n    H 0\n    TICK\n    X 1\n}\nH 2",
+    "leading tick": "R 0 1\nTICK\nREPEAT 4 {\n    TICK\n    H 0\n    TICK\n    X 1\n}\nTICK\nM 0",
+    "gate seams": "H 1\nREPEAT 5 {\n    CX 0 1 1 2\n    H 3\n}\nX 2",
+    "repeat block of TICKs": "H 0\nTICK\nDETECTOR\nREPEAT 5 {\n    TICK\n}\nH 0",
+    "block boundary reuse": """
+        R 0 1 2
+        TICK
+        H 0
+        REPEAT 3 {
+            X 0
+            H 1
+            REPEAT 2 {
+                Y 1 2
+            }
+        }
+        X 2
+        M 0
+    """,
+    "reuse within iteration": "R 0\nTICK\nREPEAT 3 {\n    H 0\n    X 0\n}",
+    "cycle of iterations": "REPEAT 10 {\n    H 0\n    CX 1 2\n    H 1\n}\nH 2",
+    "nested without ticks between iterations": """
+        R 0 1 2
+        REPEAT 3 {
+            H 0
+            REPEAT 4 {
+                X 1
+                TICK
+                H 2
+            }
+            DETECTOR
+        }
+        M 0 1 2
+    """,
+    "annotations": """
+        M 0
+        REPEAT 3 {
+            DETECTOR rec[-1]
+            SHIFT_COORDS(1)
+        }
+        H 0
+        REPEAT 2 {
+            X_ERROR(0.1) 1
+        }
+        TICK
+        REPEAT 2 {
+            REPEAT 1 {
+                H 1
+            }
+        }
+        TICK
+        SHIFT_COORDS(1)
+    """,
+    "nested large": """
+        REPEAT 5 {
+            TICK
+            REPEAT 6 {
+                H 0
+                TICK
+            }
+            X 1
+            OBSERVABLE_INCLUDE(0) Z2
+        }
+    """,
+    "immune": """
+        H 0
+        REPEAT[__IMMUNE_TO_NOISE__] 3 {
+            H 0
+            H 0
+        }
+        H 0
+    """,
     "unticked body": """
         R 0 1 2
         TICK
@@ -799,16 +875,31 @@ _FLATTENING_TEST_CIRCUITS = {
 @pytest.mark.parametrize("circuit_name", sorted(_FLATTENING_TEST_CIRCUITS))
 @pytest.mark.parametrize("insert_ticks", [True, False])
 def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks: bool) -> None:
-    """Noise is added to repeat blocks as though they were flattened.
+    """Noise is added to repeat blocks as though they were flattened."""
+    circuit = stim.Circuit(_FLATTENING_TEST_CIRCUITS[circuit_name])
+    _assert_noise_commutes_with_flattening(circuit, insert_ticks=insert_ticks)
+
+
+def test_random_repeat_blocks_match_flattened_circuits() -> None:
+    """Noise is added to random circuits with repeat blocks as though they were flattened."""
+    rng = random.Random(0)
+    for _ in range(100):
+        circuit = _random_circuit(rng)
+        for insert_ticks in [True, False]:
+            _assert_noise_commutes_with_flattening(circuit, insert_ticks=insert_ticks)
+
+
+def _assert_noise_commutes_with_flattening(circuit: stim.Circuit, *, insert_ticks: bool) -> None:
+    """Adding noise to a circuit is equivalent to adding noise to its flattened circuit.
 
     Adding noise and then flattening must give exactly as many TICKs as flattening and then adding
-    noise, and the same detector error model (so the same sampling statistics).  Idle errors are
-    composed into Pauli channels with several nonzero components, whose approximate decomposition
-    into detector error model errors is not compositional, so the idle channels must be identical to
-    those in the flattened circuit.  If adding noise to the flattened circuit fails, then adding
-    noise to the original circuit must fail too.
+    noise, the same noise channels on each qubit, and the same detector error model (so the same
+    sampling statistics).  Idle errors are composed into Pauli channels with several nonzero
+    components, whose approximate decomposition into detector error model errors is not
+    compositional, so the idle channels must be identical to those in the flattened circuit.  If
+    adding noise to the flattened circuit fails, then adding noise to the original circuit must fail
+    too.  Repeat blocks that are immune to noise are not flattened.
     """
-    circuit = stim.Circuit(_FLATTENING_TEST_CIRCUITS[circuit_name])
     noise_model = circuits.NoiseModel(
         clifford_1q_error=0.01,
         clifford_2q_error=0.02,
@@ -827,8 +918,72 @@ def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks:
         return
     noisy_circuit = noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
     assert noisy_circuit.flattened().num_ticks == noisy_flattened_circuit.flattened().num_ticks
+    assert _noise_channels(noisy_circuit) == _noise_channels(noisy_flattened_circuit)
     expected = _dem_signature(noisy_flattened_circuit)
     assert _dem_signature(noisy_circuit) == pytest.approx(expected, rel=1e-12, abs=0)
+
+
+def _noise_channels(circuit: stim.Circuit) -> collections.Counter[tuple[str, str]]:
+    """Count the noise channels (other than measurement errors) on each target of a circuit."""
+    channels: collections.Counter[tuple[str, str]] = collections.Counter()
+    for op in circuit.flattened():
+        gate_data = stim.gate_data(op.name)
+        if gate_data.is_noisy_gate and not gate_data.produces_measurements:
+            targets = op.targets_copy()
+            width = 2 if gate_data.is_two_qubit_gate else 1
+            for start in range(0, len(targets), width):
+                args = ", ".join(f"{arg:.12g}" for arg in op.gate_args_copy())
+                channels[f"{op.name}({args})", str(targets[start : start + width])] += 1
+    return channels
+
+
+def _random_circuit(rng: random.Random, num_qubits: int = 3) -> stim.Circuit:
+    """A random circuit with nested repeat blocks, mixing TICKs, gates, measurements, and noise."""
+
+    def random_body(depth: int) -> stim.Circuit:
+        body = stim.Circuit()
+        for _ in range(rng.randint(0, 5)):
+            qubit = rng.randrange(num_qubits)
+            choice = rng.random()
+            if choice < 0.2:
+                body.append("TICK")
+            elif choice < 0.4:
+                body.append(rng.choice(["H", "X", "S"]), [qubit])
+            elif choice < 0.5:
+                body.append("CX", rng.sample(range(num_qubits), 2))
+            elif choice < 0.6:
+                body.append("MR", [qubit])
+                body.append("DETECTOR", [stim.target_rec(-1)])
+            elif choice < 0.65:
+                body.append("I", [qubit])
+            elif choice < 0.7:
+                body.append("SHIFT_COORDS", [], [1])
+            elif choice < 0.75:
+                body.append("X_ERROR", [qubit], 0.01)
+            elif choice < 0.8:
+                body.append("H", [qubit], tag=circuits.DEFAULT_IMMUNE_OP_TAG)
+            elif choice < 0.85:
+                body.append(stim.CircuitRepeatBlock(rng.choice([1, 2]), stim.Circuit()))
+            elif depth < 3:
+                tag = rng.choice(["", "", "tag", circuits.DEFAULT_IMMUNE_OP_TAG])
+                repeat_count = rng.choice([1, 2, 3, 5])
+                body.append(stim.CircuitRepeatBlock(repeat_count, random_body(depth + 1), tag=tag))
+        return body
+
+    circuit = stim.Circuit()
+    circuit.append("R", range(num_qubits))
+    if rng.random() < 0.5:
+        circuit.append("TICK")
+    circuit += random_body(0)
+    if rng.random() < 0.5:
+        circuit.append("TICK")
+        circuit.append("M", range(num_qubits))
+        for qubit in range(num_qubits):
+            circuit.append("DETECTOR", [stim.target_rec(-1 - qubit)])
+    if rng.random() < 0.5:
+        # end with a repeat block
+        circuit.append(stim.CircuitRepeatBlock(rng.choice([2, 3]), random_body(1)))
+    return circuit
 
 
 def test_repeat_block_edge_cases() -> None:

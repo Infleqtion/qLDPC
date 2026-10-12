@@ -3,13 +3,12 @@
 """Unit tests for moments.py."""
 
 import functools
-from collections.abc import Iterable, Iterator
 
 import pytest
 import stim
 
 from qldpc import circuits
-from qldpc.circuits.conftest import circuits_are_equivalent, flatten_repeat_blocks
+from qldpc.circuits.conftest import circuits_are_equivalent
 from qldpc.circuits.noise_model.moments import (
     ScheduleItem,
     _categorize_moment_qubits,
@@ -156,161 +155,16 @@ def test_moment_qubits() -> None:
     assert _idle_barrier_qubits(circuit) == {3, 4}
 
 
-def _unroll(schedule: Iterable[ScheduleItem]) -> Iterator[ScheduleItem]:
-    """Unroll the repeated moments of a moment schedule."""
-    for item in schedule:
-        if isinstance(item, _RepeatedMoments):
-            for _ in range(item.repeat_count):
-                yield from _unroll(item.body)
-        else:
-            yield item
-
-
-def _expand(schedule: list[ScheduleItem]) -> list[stim.Circuit | stim.CircuitRepeatBlock]:
-    """Expand a moment schedule into the moments and immune repeat blocks of a flattened circuit."""
-    expanded: list[stim.Circuit | stim.CircuitRepeatBlock] = []
-    gate_free = stim.Circuit()  # operations that merge into the next moment, if there is one
-
-    def close_gate_free() -> None:
-        nonlocal gate_free
-        if gate_free:
-            expanded.append(gate_free)
-            gate_free = stim.Circuit()
-
-    for item in _unroll(schedule):
-        if isinstance(item, _Tick):
-            close_gate_free()
-        elif isinstance(item, stim.CircuitRepeatBlock):
-            close_gate_free()
-            expanded.append(item)
-        elif isinstance(item, _GateFreeOps):
-            gate_free += flatten_repeat_blocks(item.circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
-        else:
-            expanded.append(gate_free + flatten_repeat_blocks(item, circuits.DEFAULT_IMMUNE_OP_TAG))
-            gate_free = stim.Circuit()
-    close_gate_free()
-    return expanded
-
-
-SCHEDULE_TEST_CIRCUITS = {
-    "ticked": "R 0 1\nTICK\nREPEAT 3 {\n    H 0\n    TICK\n    X 1\n    TICK\n}\nM 0 1",
-    "unticked seams": "R 0 1 2\nREPEAT 3 {\n    H 0\n    TICK\n    X 1\n}\nH 2",
-    "leading tick": "R 0 1\nTICK\nREPEAT 4 {\n    TICK\n    H 0\n    TICK\n    X 1\n}\nTICK\nM 0",
-    "gate seams": "H 1\nREPEAT 5 {\n    CX 0 1 1 2\n    H 3\n}\nX 2",
-    "block boundary reuse": """
-        R 0 1 2
-        TICK
-        H 0
-        REPEAT 3 {
-            X 0
-            H 1
-            REPEAT 2 {
-                Y 1 2
-            }
-        }
-        X 2
-        M 0
-    """,
-    "reuse within iteration": "R 0\nTICK\nREPEAT 3 {\n    H 0\n    X 0\n}",
-    "cycle of iterations": "REPEAT 10 {\n    H 0\n    CX 1 2\n    H 1\n}\nH 2",
-    "nested": """
-        R 0 1 2
-        REPEAT 3 {
-            H 0
-            REPEAT 4 {
-                X 1
-                TICK
-                H 2
-            }
-            DETECTOR rec[-1]
-        }
-        M 0 1 2
-    """,
-    "annotations": """
-        M 0
-        REPEAT 3 {
-            DETECTOR rec[-1]
-            SHIFT_COORDS(1)
-        }
-        H 0
-        REPEAT 2 {
-            X_ERROR(0.1) 1
-        }
-        TICK
-        REPEAT 2 {
-            REPEAT 1 {
-                H 1
-            }
-        }
-        TICK
-        SHIFT_COORDS(1)
-    """,
-    "nested large": """
-        REPEAT 5 {
-            TICK
-            REPEAT 6 {
-                H 0
-                TICK
-            }
-            X 1
-            OBSERVABLE_INCLUDE(0) Z2
-        }
-    """,
-    "immune": """
-        H 0
-        REPEAT[__IMMUNE_TO_NOISE__] 3 {
-            H 0
-            H 0
-        }
-        H 0
-    """,
-    "surface code": str(
-        stim.Circuit.generated("surface_code:rotated_memory_x", distance=3, rounds=5)
-    ),
-}
-
-
-@pytest.mark.parametrize("circuit_name", sorted(SCHEDULE_TEST_CIRCUITS))
-@pytest.mark.parametrize("insert_ticks", [True, False])
-def test_schedule_moments(circuit_name: str, insert_ticks: bool) -> None:
-    """Moments are identified as though non-immune repeat blocks were flattened."""
-    circuit = stim.Circuit(SCHEDULE_TEST_CIRCUITS[circuit_name])
-    flattened = flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
-    schedule_moments = functools.partial(
-        _schedule_moments, insert_ticks=insert_ticks, immune_op_tag=circuits.DEFAULT_IMMUNE_OP_TAG
-    )
-    expected = schedule_moments(flattened)
-    assert not any(isinstance(item, _RepeatedMoments) for item in expected)
-    if not _is_valid(expected):
-        with pytest.raises(ValueError, match="multiple uses"):
-            _is_valid(schedule_moments(circuit), raise_error=True)
-        return
-    schedule = schedule_moments(circuit)
-    assert _expand(schedule) == _expand(expected)
-
-
-def _is_valid(schedule: list[ScheduleItem], *, raise_error: bool = False) -> bool:
-    """Are qubits used at most once per moment of a moment schedule?"""
-    try:
-        for item in _expand(schedule):
-            if isinstance(item, stim.Circuit):
-                _categorize_moment_qubits(list(item))
-    except ValueError:
-        if raise_error:
-            raise
-        return False
-    return True
-
-
 def test_schedule_moments_size() -> None:
     """Iterations of a repeat block are unrolled only when necessary."""
     schedule_moments = functools.partial(
         _schedule_moments, insert_ticks=True, immune_op_tag=circuits.DEFAULT_IMMUNE_OP_TAG
     )
 
-    # a single gate per iteration
+    # a single gate per iteration, where the last moment is left open for subsequent operations
     assert schedule_moments(stim.Circuit("REPEAT 1000 {\n    H 0\n}")) == [
-        _RepeatedMoments(1000, (stim.Circuit("H 0"),))
+        _RepeatedMoments(999, (stim.Circuit("H 0"),)),
+        stim.Circuit("H 0"),
     ]
 
     # moments without gates do not prevent the identification of repeated moments
@@ -411,7 +265,8 @@ def test_schedule_moments_without_boundaries() -> None:
     circuit = stim.Circuit("H 1\nREPEAT 1000 {\n    H 0\n}")
     assert _schedule_moments(circuit, insert_ticks=True, immune_op_tag=None) == [
         stim.Circuit("H 1\nH 0"),
-        _RepeatedMoments(999, (stim.Circuit("H 0"),)),
+        _RepeatedMoments(998, (stim.Circuit("H 0"),)),
+        stim.Circuit("H 0"),
     ]
     with pytest.raises(ValueError, match="multiple uses"):
         _schedule_moments(circuit, insert_ticks=False, immune_op_tag=None)
@@ -450,7 +305,6 @@ def test_schedule_ticks() -> None:
         _Tick(),
         stim.Circuit("H 0"),
     ]
-    assert _expand(schedule_moments(circuit)) == _expand(schedule_moments(circuit.flattened()))
 
     # a TICK ends preceding gate-free operations, but is itself not preceded by a TICK
     h_0 = stim.Circuit("H 0")
@@ -489,8 +343,8 @@ def test_without_trailing_block_tick() -> None:
     assert trimmed.flattened() == flattened[:-2] + flattened[-1:]
 
 
-def test_fold_preserves_tags() -> None:
-    """Moments are not folded into a tagged repeat block."""
+def test_schedule_preserves_tags() -> None:
+    """Repeated moments keep the tag of their repeat block."""
     circuit = stim.Circuit("""
         H 0
         TICK
@@ -505,6 +359,3 @@ def test_fold_preserves_tags() -> None:
         _RepeatedMoments(3, (stim.Circuit("H 0"),), "my_tag"),
         stim.Circuit("H 1"),
     ]
-    assert _schedule_moments(
-        stim.Circuit(str(circuit).replace("[my_tag]", "")), insert_ticks=True, immune_op_tag=None
-    ) == [_RepeatedMoments(4, (stim.Circuit("H 0"),)), stim.Circuit("H 1")]
