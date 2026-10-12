@@ -2200,6 +2200,7 @@ class BPCode(CSSCode):
     ) -> None:
         self.code_a = ClassicalCode(code_a, field)
         self.code_b = ClassicalCode(code_b, field)
+        # the transposed chain complex of code_b has bits in degree 0 and checks in degree 1
         self.chain = ChainComplex.balanced_product(
             ChainComplex([self.code_a.matrix]),
             ChainComplex([self.code_b.matrix]).T,
