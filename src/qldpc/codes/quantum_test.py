@@ -966,16 +966,27 @@ def test_balanced_product_code() -> None:
     assert np.array_equal(code.matrix_x, hgp_code.matrix_x)
     assert np.array_equal(code.matrix_z, hgp_code.matrix_z)
 
-    # reproduce the [[12, 2, 3]] code in Example 1 of arXiv:2505.13679v2, up to qudit order
-    seed = codes.RingCode(6).matrix
-    perm_rows = np.linalg.matrix_power(np.roll(np.eye(6, dtype=int), 1, axis=1), 2)
-    perm_cols = perm_rows.T
-    code = codes.BPCode.from_seed(seed, np.argmax(perm_rows, axis=1), np.argmax(perm_cols, axis=1))
-    matrix_x = np.hstack([seed.T, np.eye(6, dtype=int) + perm_cols]).view(code.field)
-    matrix_z = np.hstack([np.eye(6, dtype=int) + perm_rows, seed]).view(code.field)
-    qudit_order = [*range(6, 12), *np.argmax(perm_cols, axis=0)]
-    assert np.array_equal(code.matrix_x[:, qudit_order].row_space(), matrix_x.row_space())
-    assert np.array_equal(code.matrix_z[:, qudit_order].row_space(), matrix_z.row_space())
+    # reproduce the [[12, 2, 3]] code in Example 1 of arXiv:2505.13679v2, finding its symmetry
+    ring_seed = codes.RingCode(6).matrix
+    [(ring_perm_rows, ring_perm_cols)] = codes.BPCode.get_seed_permutations(ring_seed, 3)
+    code = codes.BPCode.from_seed(ring_seed, ring_perm_rows, ring_perm_cols)
+    assert code.get_code_params() == (12, 2, 3)
+
+    # over GF(2), from_seed constructs the code in Definition 1 of arXiv:2505.13679v2, up to qudit
+    # order, even if the permutations of the seed matrix have orbits of different lengths
+    for seed, perm_rows, perm_cols in [
+        (ring_seed.view(np.ndarray), ring_perm_rows, ring_perm_cols),
+        (np.array([[1, 0, 1, 0], [0, 1, 1, 0], [0, 0, 1, 1]]), [1, 0, 2], [1, 0, 2, 3]),
+    ]:
+        num_checks, num_bits = seed.shape
+        mat_rows = abstract.GroupMember(perm_rows, size=num_checks).to_matrix()
+        mat_cols = abstract.GroupMember(perm_cols, size=num_bits).to_matrix()
+        code = codes.BPCode.from_seed(seed, perm_rows, perm_cols)
+        matrix_x = code.field(np.hstack([seed.T, np.eye(num_bits, dtype=int) + mat_cols]) % 2)
+        matrix_z = code.field(np.hstack([np.eye(num_checks, dtype=int) + mat_rows, seed]) % 2)
+        qudit_order = [*range(num_bits, num_bits + num_checks), *np.argsort(perm_cols)]
+        assert np.array_equal(code.matrix_x[:, qudit_order].row_space(), matrix_x.row_space())
+        assert np.array_equal(code.matrix_z[:, qudit_order].row_space(), matrix_z.row_space())
 
 
 def test_quantum_tanner(pytestconfig: pytest.Config) -> None:

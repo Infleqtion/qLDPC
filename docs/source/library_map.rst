@@ -100,18 +100,20 @@ A ``RingArray`` is a matrix over a group algebra whose entries can be lifted to 
 Balanced products
 ~~~~~~~~~~~~~~~~~
 
-``ChainComplex.balanced_product`` takes the quotient of the tensor product of two chain complexes
-that identifies basis elements related by pairs of symmetries of these complexes. ``BPCode`` is the
-CSS code obtained in this way from two classical codes. Without symmetries, it is a hypergraph
-product code, and if the symmetries generate a group that acts freely, it is a lifted product code.
-For example, the following constructs the ``[[12, 2, 3]]`` code in Example 1 of `arXiv:2505.13679
-<https://arxiv.org/abs/2505.13679>`_ from a 6-cycle with an order-3 symmetry:
+``ChainComplex.balanced_product`` takes the quotient of the tensor product of two chain complexes that identifies basis elements related by pairs of symmetries of these complexes.
+``BPCode`` is the CSS code obtained in this way from two classical codes.
+Without symmetries, it is a hypergraph product code, and if the symmetries generate a group that acts freely, it is a lifted product code.
+For example, the following constructs the ``[[12, 2, 3]]`` code in Example 1 of `arXiv:2505.13679 <https://arxiv.org/abs/2505.13679>`_ from a 6-cycle with an order-3 symmetry:
 
 .. code-block:: python
 
    from qldpc.codes import BPCode, RingCode
 
    code = BPCode.from_seed(RingCode(6).matrix, [2, 3, 4, 5, 0, 1], [4, 5, 0, 1, 2, 3])
+
+Symmetries of a parity check matrix are automorphisms of its Tanner graph, which ``ClassicalCode.get_matrix_automorphism_group`` computes with the optional ``pybliss`` package.
+Install it with ``python -m pip install 'qldpc[bliss]'``.
+``BPCode.get_seed_permutations`` uses these automorphisms to find the permutations that ``BPCode.from_seed`` needs, such as those in the example above.
 
 What each package does
 ----------------------

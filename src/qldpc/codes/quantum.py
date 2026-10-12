@@ -2128,6 +2128,41 @@ class BPCode(CSSCode):
     symmetries generate a group that acts freely on both codes, a balanced product code is a lifted
     product code (see :class:`LPCode`).
 
+    For example, the following constructs the ``[[360, 26, 5]]`` code in Example 2 of
+    https://arxiv.org/abs/2505.13679 from the Lubotzky-Phillips-Sarnak expander graph ``X^{3,5}``,
+    whose vertices are elements of ``PGL(2, 5)``.  Finding a symmetry of its incidence matrix
+    requires the optional ``pybliss`` package (see :meth:`get_seed_permutations`).
+
+    .. code-block:: python
+
+        import itertools
+        import numpy as np
+        from qldpc import codes
+
+        # representative of a 2 × 2 matrix in PGL(2, 5), whose first nonzero entry is 1
+        def normalize(matrix):
+            entries = np.ravel(matrix) % 5
+            return tuple(entries * pow(int(entries[entries != 0][0]), -1, 5) % 5)
+
+        vertices = {
+            normalize(entries)
+            for entries in itertools.product(range(5), repeat=4)
+            if (entries[0] * entries[3] - entries[1] * entries[2]) % 5
+        }
+        generators = np.array(
+            [[[2, -3], [-1, -2]], [[2, -1], [-3, -2]], [[2, 3], [1, -2]], [[2, 1], [3, -2]]]
+        )
+        edges = {
+            frozenset([vertex, normalize(generator @ np.reshape(vertex, (2, 2)))])
+            for vertex in vertices
+            for generator in generators
+        }
+        incidence = [[int(vertex in edge) for edge in edges] for vertex in vertices]
+
+        perm_rows, perm_cols = codes.BPCode.get_seed_permutations(incidence, 5)[0]
+        code = codes.BPCode.from_seed(incidence, perm_rows, perm_cols)
+        assert code.get_code_params() == (360, 26, 5)
+
     Args:
         code_a: The first classical code.
         code_b: The second classical code.
@@ -2183,9 +2218,9 @@ class BPCode(CSSCode):
         ``R @ seed_matrix == seed_matrix @ C.T``.  If ``l`` is the least common multiple of the
         orders of ``R`` and ``C``, this method constructs the balanced product of the parity check
         matrix of a length-``l`` cycle graph with the seed matrix, pairing a cyclic shift of the
-        cycle graph with ``(R^{-1}, C)``.  If all orbits of ``R`` and ``C`` have length ``l``, the
-        result is the code in Definition 1 of https://arxiv.org/abs/2505.13679, up to a permutation
-        of qudits.
+        cycle graph with ``(R^{-1}, C)``.  Over GF(2), the result is the code in Definition 1 of
+        https://arxiv.org/abs/2505.13679, up to a permutation of qudits.  Candidate permutations can
+        be found with :meth:`get_seed_permutations`.
         """
         seed = ClassicalCode(seed_matrix, field)
         perm_rows = abstract.GroupMember(list(perm_rows), size=seed.num_checks)
@@ -2198,6 +2233,35 @@ class BPCode(CSSCode):
             [(shift, shift)],
             [((perm_rows**-1).array_form, perm_cols.array_form)],
         )
+
+    @staticmethod
+    def get_seed_permutations(
+        seed_matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]],
+        order: int,
+        field: int | type[galois.FieldArray] | None = None,
+    ) -> list[tuple[list[int], list[int]]]:
+        """Find permutations ``(perm_rows, perm_cols)`` of a seed matrix for :meth:`from_seed`.
+
+        This method finds the automorphisms of order ``order`` of the seed matrix (see
+        :meth:`ClassicalCode.get_matrix_automorphism_group`), and returns the arguments
+        ``(perm_rows, perm_cols)`` of :meth:`from_seed` for one automorphism in each conjugacy
+        class.  Conjugate automorphisms yield equal codes, up to a permutation of qudits.  This
+        method enumerates the automorphism group of the seed matrix, which can take a long time if
+        the group is large.  Computing automorphisms requires the optional ``pybliss`` package,
+        which can be installed with ``pip install 'qldpc[bliss]'``.
+        """
+        seed = ClassicalCode(seed_matrix, field)
+        group = seed.get_matrix_automorphism_group()
+        permutations = []
+        for conjugacy_class in group.to_sympy().conjugacy_classes():
+            member = min(conjugacy_class, key=lambda member: member.array_form)
+            if member.order() == order:
+                # an automorphism satisfies seed[p_rows][:, p_cols] == seed, or equivalently
+                # R @ seed == seed @ C.T with perm_rows = p_rows and perm_cols = p_cols**-1
+                perm_rows = member.array_form[: seed.num_checks]
+                perm_cols = np.argsort(member.array_form[seed.num_checks :]).tolist()
+                permutations.append((perm_rows, perm_cols))
+        return permutations
 
 
 ####################################################################################################
