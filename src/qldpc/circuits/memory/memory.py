@@ -134,7 +134,9 @@ def get_memory_experiment(
     A ValueError is raised if the gauge measurement schedule does not make that possible.  If the
     checks in a layer are linearly dependent, products of these checks that equal the identity
     operator have deterministic values in every round, so additional detectors compare the outcomes
-    of these products within each round.
+    of these products within each round.  If stabilizers are products of many checks, a single
+    fault can flip many detectors, in which case the detector error model of the circuit may not be
+    decomposable into graphlike errors (as required, for example, by matching decoders).
 
     Qubits and detectors are assigned coordinates as follows:
 
