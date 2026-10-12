@@ -204,6 +204,32 @@ def test_schedule_moments_size() -> None:
         stim.Circuit("M 0\nX 1"),
     ]
 
+    # all iterations are unrolled if they end before their moments repeat
+    circuit = stim.Circuit("H 0\nREPEAT 2 {\n    TICK\n    M 0\n}")
+    assert schedule_moments(circuit) == [
+        stim.Circuit("H 0"),
+        stim.Circuit("M 0"),
+        stim.Circuit("M 0"),
+    ]
+
+    # an inner repeat block that is reached twice with the same open moment is scheduled once
+    circuit = stim.Circuit("""
+        H 1
+        REPEAT 3 {
+            REPEAT 2 {
+                H 0
+                TICK
+            }
+            X 1
+        }
+    """)
+    assert schedule_moments(circuit) == [
+        stim.Circuit("H 1\nH 0"),
+        stim.Circuit("H 0"),
+        _RepeatedMoments(2, (stim.Circuit("X 1\nH 0"), stim.Circuit("H 0"))),
+        stim.Circuit("X 1"),
+    ]
+
 
 def test_schedule_barrier_qubits() -> None:
     """Idle errors are not deferred past operations on their qubits in any scheduled item."""
@@ -223,6 +249,10 @@ def test_schedule_barrier_qubits() -> None:
     assert isinstance(schedule[1], _RepeatedMoments)
     assert _schedule_barrier_qubits(schedule[:1]) == {0}
     assert _schedule_barrier_qubits(schedule[1:]) == {2}
+
+    # operations without gates may still depend on the state of qubits
+    gate_free_ops = _GateFreeOps(stim.Circuit("DETECTOR(0)\nOBSERVABLE_INCLUDE(0) Z1"))
+    assert _schedule_barrier_qubits([gate_free_ops]) == {1}
 
 
 def test_schedule_cycle_of_iterations() -> None:
