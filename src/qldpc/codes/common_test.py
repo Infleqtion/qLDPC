@@ -299,6 +299,7 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
 
 def test_matrix_automorphism_group() -> None:
     """Automorphisms of parity check matrices, which permute checks and bits separately."""
+    pytest.importorskip("pybliss")
     assert codes.RingCode(6).get_matrix_automorphism_group().order == 12
     assert codes.HammingCode(3).get_matrix_automorphism_group().order == 6
     group = codes.ClassicalCode([[1, 1, 0], [0, 1, 1], [0, 0, 1]]).get_matrix_automorphism_group()

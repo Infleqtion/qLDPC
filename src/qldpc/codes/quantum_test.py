@@ -966,16 +966,10 @@ def test_balanced_product_code() -> None:
     assert np.array_equal(code.matrix_x, hgp_code.matrix_x)
     assert np.array_equal(code.matrix_z, hgp_code.matrix_z)
 
-    # reproduce the [[12, 2, 3]] code in Example 1 of arXiv:2505.13679v2, finding its symmetry
-    ring_seed = codes.RingCode(6).matrix
-    [(ring_perm_rows, ring_perm_cols)] = codes.BPCode.get_seed_permutations(ring_seed, 3)
-    code = codes.BPCode.from_seed(ring_seed, ring_perm_rows, ring_perm_cols)
-    assert code.get_code_params() == (12, 2, 3)
-
     # over GF(2), from_seed constructs the code in Definition 1 of arXiv:2505.13679v2, up to qudit
     # order, even if the permutations of the seed matrix have orbits of different lengths
     for seed, perm_rows, perm_cols in [
-        (ring_seed.view(np.ndarray), ring_perm_rows, ring_perm_cols),
+        (codes.RingCode(6).matrix.view(np.ndarray), [2, 3, 4, 5, 0, 1], [4, 5, 0, 1, 2, 3]),
         (np.array([[1, 0, 1, 0], [0, 1, 1, 0], [0, 0, 1, 1]]), [1, 0, 2], [1, 0, 2, 3]),
     ]:
         num_checks, num_bits = seed.shape
@@ -987,6 +981,14 @@ def test_balanced_product_code() -> None:
         qudit_order = [*range(num_bits, num_bits + num_checks), *np.argsort(perm_cols)]
         assert np.array_equal(code.matrix_x[:, qudit_order].row_space(), matrix_x.row_space())
         assert np.array_equal(code.matrix_z[:, qudit_order].row_space(), matrix_z.row_space())
+
+
+def test_balanced_product_seed_permutations() -> None:
+    """Find the symmetry of the [[12, 2, 3]] code in Example 1 of arXiv:2505.13679v2."""
+    pytest.importorskip("pybliss")
+    seed = codes.RingCode(6).matrix
+    [(perm_rows, perm_cols)] = codes.BPCode.get_seed_permutations(seed, 3)
+    assert codes.BPCode.from_seed(seed, perm_rows, perm_cols).get_code_params() == (12, 2, 3)
 
 
 def test_quantum_tanner(pytestconfig: pytest.Config) -> None:
