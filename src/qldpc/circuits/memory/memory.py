@@ -123,20 +123,22 @@ def get_memory_experiment(
     supported on the data qubits alone.
 
     For a subsystem code, the parity checks of the code are gauge operators that need not commute,
-    so each round of QEC measures one layer of mutually commuting checks at a time, in the order
-    set by ``syndrome_measurement_strategy.get_gauge_layers(code)`` (by default, all X-type checks
-    and then all Z-type checks of a CSS code).  Individual gauge measurement outcomes may then be
-    random, but any product of checks in a single layer that is a stabilizer of the code has a
-    deterministic value.  Detectors therefore track such products of checks, rather than individual
-    checks.  Every (basis-type) stabilizer generator in ``code.get_stabilizer_ops()`` that is a
-    product of checks in a single layer gets a detector, even if these generators are redundant,
-    and other products are added as necessary to generate all (basis-type) stabilizers of the code.
-    A ValueError is raised if the gauge measurement schedule does not make that possible.  If the
-    checks in a layer are linearly dependent, products of these checks that equal the identity
-    operator have deterministic values in every round, so additional detectors compare the outcomes
-    of these products within each round.  If stabilizers are products of many checks, a single
-    fault can flip many detectors, in which case the detector error model of the circuit may not be
-    decomposable into graphlike errors (as required, for example, by matching decoders).
+    so each round of QEC measures one layer of mutually commuting checks at a time, in the order set
+    by ``syndrome_measurement_strategy.get_gauge_layers(code)`` (by default, all X-type checks and
+    then all Z-type checks of a CSS code).  Operations of consecutive layers on disjoint qubits may
+    nonetheless share moments (see SyndromeMeasurementStrategy.get_subsystem_circuit).  Individual
+    gauge measurement outcomes may then be random, but any product of checks in a single layer that
+    is a stabilizer of the code has a deterministic value.  Detectors therefore track such products
+    of checks, rather than individual checks.  Every (basis-type) stabilizer generator in
+    ``code.get_stabilizer_ops()`` that is a product of checks in a single layer gets a detector,
+    even if these generators are redundant, and other products are added as necessary to generate
+    all (basis-type) stabilizers of the code.  A ValueError is raised if the gauge measurement
+    schedule does not make that possible.  If the checks in a layer are linearly dependent, products
+    of these checks that equal the identity operator have deterministic values in every round, so
+    additional detectors compare the outcomes of these products within each round.  If stabilizers
+    are products of many checks, a single fault can flip many detectors, in which case the detector
+    error model of the circuit may not be decomposable into graphlike errors (as required, for
+    example, by matching decoders).
 
     Qubits and detectors are assigned coordinates as follows:
 

@@ -10,6 +10,7 @@ import stim
 import sympy
 
 from qldpc import circuits, codes, math
+from qldpc.circuits.memory import syndrome_measurement
 from qldpc.objects import Pauli
 
 # default strategy used by the validity-checking helper below
@@ -127,15 +128,13 @@ def test_subsystem_circuit(pytestconfig: pytest.Config) -> None:
         for target in instruction.targets_copy()
     ]
     assert measured_qubits == list(qubit_ids.checks_x + qubit_ids.checks_z)
-    names = [instruction.name for instruction in circuit if instruction.name != "TICK"]
-    assert [name for nn, name in enumerate(names) if name not in names[nn + 1 : nn + 2]] == [
-        "RX",
-        "CX",
-        "MX",
-        "RX",
-        "CZ",
-        "MX",
-    ]
+    gates_on_data: dict[int, list[str]] = {qubit: [] for qubit in qubit_ids.data}
+    for instruction in circuit:
+        if instruction.name in ["CX", "CZ"]:
+            for _check, data in instruction.target_groups():
+                gates_on_data[data.value].append(instruction.name)
+    for gates in gates_on_data.values():
+        assert gates == sorted(gates)  # every CX (X-type layer) precedes every CZ (Z-type layer)
     assert record == circuits.MeasurementRecord(
         {check_id: [mm] for mm, check_id in enumerate(measured_qubits)}
     )
@@ -157,6 +156,66 @@ def test_subsystem_circuit(pytestconfig: pytest.Config) -> None:
 
     with pytest.raises(ValueError, match="record contains"):
         BadStrategy().get_subsystem_circuit(codes.BaconShorCode(2))
+
+
+def test_subsystem_circuit_scheduling(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Consecutive gauge layers share moments without changing the action of the circuit."""
+    code = codes.BaconShorCode(3)
+    noise_model = circuits.DepolarizingNoiseModel(1e-3)
+    scheduled = circuits.get_memory_experiment(code, None, num_rounds=2, noise_model=noise_model)
+    monkeypatch.setattr(syndrome_measurement, "_schedule_as_soon_as_possible", stim.Circuit.copy)
+    sequential = circuits.get_memory_experiment(code, None, num_rounds=2, noise_model=noise_model)
+    assert scheduled.num_ticks < sequential.num_ticks
+    assert get_error_mechanisms(scheduled) == pytest.approx(get_error_mechanisms(sequential))
+
+
+def get_error_mechanisms(circuit: stim.Circuit) -> dict[str, float]:
+    """Map the symptoms of each error mechanism in a circuit to its probability."""
+    return {
+        " ".join(
+            sorted(str(target) for target in instruction.targets_copy())
+        ): instruction.args_copy()[0]
+        for instruction in circuit.detector_error_model().flattened()
+        if instruction.type == "error"
+    }
+
+
+def test_schedule_as_soon_as_possible() -> None:
+    """Operations move to the earliest moment that preserves their order on each qubit."""
+    # gates move earlier, but measurements stay in order
+    circuit = stim.Circuit(
+        "R 0 1 2\nTICK\nCX 0 1\nTICK\nCX 0 1\nTICK\nH[tag] 2\nTICK\nM 1\nM 2\nTICK"
+    )
+    scheduled = syndrome_measurement._schedule_as_soon_as_possible(circuit)
+    assert scheduled == stim.Circuit(
+        "R 0 1 2\nTICK\nCX 0 1\nH[tag] 2\nTICK\nCX 0 1\nTICK\nM 1 2\nTICK"
+    )
+
+    # broadcast gates are split into individual gate applications
+    for before, after in [
+        ("H 0\nTICK\nH 0 1", "H 0 1\nTICK\nH 0"),
+        ("CX 0 1\nTICK\nCX 0 1 2 3", "CX 0 1 2 3\nTICK\nCX 0 1"),
+    ]:
+        assert syndrome_measurement._schedule_as_soon_as_possible(
+            stim.Circuit(before)
+        ) == stim.Circuit(after)
+
+    # multi-qubit products move together, and trailing TICKs are only kept if present
+    circuit = stim.Circuit("MPP X0*X1 Z2\nTICK\nH 3")
+    assert syndrome_measurement._schedule_as_soon_as_possible(circuit) == stim.Circuit(
+        "MPP X0*X1 Z2\nH 3"
+    )
+    assert syndrome_measurement._schedule_as_soon_as_possible(stim.Circuit()) == stim.Circuit()
+
+    # circuits with other instructions are not rescheduled
+    for text in [
+        "H 0\nTICK\nX_ERROR(0.1) 1",
+        "M 0\nTICK\nDETECTOR rec[-1]",
+        "M 0\nTICK\nCX rec[-1] 1",
+        "H 0\nTICK\nREPEAT 2 {\n    H 1\n}",
+    ]:
+        circuit = stim.Circuit(text)
+        assert syndrome_measurement._schedule_as_soon_as_possible(circuit) == circuit
 
 
 def syndrome_measurement_is_valid(

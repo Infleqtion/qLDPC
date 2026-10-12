@@ -118,9 +118,17 @@ class SyndromeMeasurementStrategy(abc.ABC):
         """Construct a circuit that measures the checks of a code one commuting layer at a time.
 
         The checks in each layer define a stabilizer code, whose checks are measured with
-        self.get_circuit.  The circuits for different layers are applied sequentially, so the
-        measurement of one layer completes before the measurement of the next layer begins.  This
-        method thereby supports subsystem codes, whose (gauge) checks need not commute.
+        self.get_circuit.  The circuits for different layers are applied sequentially, so every
+        operation of one layer on a qubit precedes every operation of the next layer on that qubit.
+        This method thereby supports subsystem codes, whose (gauge) checks need not commute.
+
+        To reduce circuit depth, every operation of the combined circuit then moves to the earliest
+        moment that preserves the sequence of operations on each qubit and the order of all
+        measurements.  Operations of consecutive layers can thereby share moments if they address
+        disjoint qubits.  For example, the check qubits of one layer can be reset, and the first
+        gates of that layer can be applied to data qubits that the previous layer is done with,
+        while the previous layer is still in progress.  This rescheduling only applies if the
+        circuits of all layers consist of unitary gates, resets, and measurements on qubits.
 
         Since self.get_circuit only sees the stabilizer code defined by one layer at a time, any
         code-specific scheduling (such as a code's custom get_syndrome_subgraphs) or optimization
@@ -166,7 +174,7 @@ class SyndromeMeasurementStrategy(abc.ABC):
             layer_record.validate_num_measurements(layer_circuit.num_measurements)
             circuit += layer_circuit
             measurement_record.append(layer_record)
-        return circuit, measurement_record
+        return _schedule_as_soon_as_possible(circuit), measurement_record
 
 
 def validate_gauge_layers(code: codes.QuditCode, layers: Sequence[Sequence[int]]) -> None:
@@ -337,3 +345,89 @@ class EdgeColoringXZ(EdgeColoring):
 
         qubit_ids = validate_syndrome_qubit_ids(code, qubit_ids)
         return self._get_circuit_from_subgraphs(qubit_ids, (code.graph_x, code.graph_z))
+
+
+####################################################################################################
+# private helper functions
+
+
+def _schedule_as_soon_as_possible(circuit: stim.Circuit) -> stim.Circuit:
+    """Move every operation in a circuit to the earliest possible moment.
+
+    Each operation (one application of a gate to its targets) moves to the moment after the last
+    preceding operation that addresses one of its qubits.  The sequence of operations on each qubit
+    is therefore unchanged.  Measurements additionally keep their order in the measurement record.
+    Reordering operations on disjoint qubits does not change the action of a circuit, so the
+    rescheduled circuit is equivalent to the original circuit, but may have fewer moments.
+
+    Circuits that contain anything other than unitary gates, resets, and measurements on qubits (and
+    TICK instructions that separate moments) are returned unchanged.
+    """
+    instructions = list(circuit)
+    if not all(_can_reschedule(instruction) for instruction in instructions):
+        return circuit.copy()
+
+    moments: list[list[stim.CircuitInstruction]] = []
+    next_free_moment: dict[int, int] = collections.defaultdict(int)
+    last_measurement_moment = 0
+    for instruction in instructions:
+        assert isinstance(instruction, stim.CircuitInstruction)
+        if instruction.name == "TICK":
+            continue
+        gate_data = stim.gate_data(instruction.name)
+        for targets in _split_targets(instruction, gate_data):
+            qubits = [target.qubit_value for target in targets if target.qubit_value is not None]
+            moment = max((next_free_moment[qubit] for qubit in qubits), default=0)
+            if gate_data.produces_measurements:
+                moment = last_measurement_moment = max(moment, last_measurement_moment)
+            moments.extend([] for _ in range(moment + 1 - len(moments)))
+            moments[moment].append(
+                stim.CircuitInstruction(
+                    instruction.name, targets, instruction.gate_args_copy(), tag=instruction.tag
+                )
+            )
+            for qubit in qubits:
+                next_free_moment[qubit] = moment + 1
+
+    scheduled_circuit = stim.Circuit()
+    for mm, moment_instructions in enumerate(moments):
+        if mm:
+            scheduled_circuit.append("TICK")
+        for instruction in moment_instructions:
+            scheduled_circuit.append(instruction)
+    if (
+        instructions
+        and isinstance(instructions[-1], stim.CircuitInstruction)
+        and (instructions[-1].name == "TICK")
+    ):
+        scheduled_circuit.append("TICK")
+    return scheduled_circuit
+
+
+def _can_reschedule(instruction: stim.CircuitInstruction | stim.CircuitRepeatBlock) -> bool:
+    """Can _schedule_as_soon_as_possible move this instruction without changing its action?"""
+    if isinstance(instruction, stim.CircuitRepeatBlock):
+        return False
+    if instruction.name == "TICK":
+        return True
+    gate_data = stim.gate_data(instruction.name)
+    return (
+        (gate_data.is_unitary or gate_data.is_reset or gate_data.produces_measurements)
+        and bool(instruction.targets_copy())
+        and all(
+            target.qubit_value is not None or target.is_combiner
+            for target in instruction.targets_copy()
+        )
+    )
+
+
+def _split_targets(
+    instruction: stim.CircuitInstruction, gate_data: stim.GateData
+) -> list[list[stim.GateTarget]]:
+    """Split the targets of an instruction into the targets of individual gate applications."""
+    targets = instruction.targets_copy()
+    if gate_data.is_single_qubit_gate:
+        return [[target] for target in targets]
+    if gate_data.is_two_qubit_gate:
+        return [targets[tt : tt + 2] for tt in range(0, len(targets), 2)]
+    return [targets]
