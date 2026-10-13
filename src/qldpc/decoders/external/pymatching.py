@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 
 ####################################################################################################
-# Public decoder and specifications
+# public decoder and specifications
 
 
 class MatchingObservableDecoder(ObservableDecoder):
@@ -268,7 +268,7 @@ Use native observable decoding for those models.
 
 
 ####################################################################################################
-# Private matching helpers
+# private matching helpers
 
 
 def _build_matching(
@@ -359,7 +359,7 @@ def _splits_errors(
 
 
 ####################################################################################################
-# Lazy backend class
+# lazy backend class
 #
 # Matching is an error decoder only when it has no faults matrix.  Create that protocol-compatible
 # subclass on first use instead of importing PyMatching during every qldpc import.

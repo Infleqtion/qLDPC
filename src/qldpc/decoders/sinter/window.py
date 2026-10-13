@@ -454,7 +454,7 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
 
 
 ####################################################################################################
-# Helper methods
+# helper methods
 
 
 def _time_coordinate(dem_coords: dict[int, list[float]]) -> int:

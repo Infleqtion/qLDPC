@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 ####################################################################################################
-# Detailed decode results
+# detailed decode results
 
 
 @dataclass(frozen=True, eq=False)
@@ -45,7 +45,7 @@ class ObservableDecodeResult:
 
 
 ####################################################################################################
-# Decoder protocols
+# decoder protocols
 
 
 @runtime_checkable
@@ -116,7 +116,7 @@ class BatchObservableDecoder(ObservableDecoder, Protocol):
 
 
 ####################################################################################################
-# Detailed decoder protocols
+# detailed decoder protocols
 
 
 @runtime_checkable
@@ -168,7 +168,7 @@ class SupportsDecode(Protocol):
 
 
 ####################################################################################################
-# Coercion into error decoders
+# coercion into error decoders
 
 
 def as_error_decoder(decoder: object, source: str = "A decoder") -> ErrorDecoder:
@@ -239,7 +239,7 @@ class WrappedErrorDecoder(ErrorDecoder):
 
 
 ####################################################################################################
-# Batch decoding
+# batch decoding
 
 
 def batch_decode_errors(

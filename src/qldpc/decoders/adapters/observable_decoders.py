@@ -13,7 +13,7 @@ import numpy.typing as npt
 from ..protocols import ErrorDecoder, ObservableDecoder
 
 ####################################################################################################
-# Observable decoder adapters
+# observable decoder adapters
 
 
 class ErrorsToFieldObservablesDecoder(ObservableDecoder):
@@ -98,7 +98,7 @@ class BitPackedObservableDecoder(ObservableDecoder):
 
 
 ####################################################################################################
-# Validation helpers
+# validation helpers
 
 
 def validate_observable_decoder(decoder: object, source: str) -> ObservableDecoder:

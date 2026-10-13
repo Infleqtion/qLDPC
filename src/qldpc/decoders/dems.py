@@ -21,7 +21,7 @@ HashableType = TypeVar("HashableType", bound=Hashable)
 
 
 ####################################################################################################
-# Detector error model arrays
+# detector error model arrays
 
 
 class DetectorErrorModelArrays:
@@ -503,7 +503,7 @@ class DetectorErrorModelArrays:
 
 
 ####################################################################################################
-# Circuit errors
+# circuit errors
 
 
 @dataclasses.dataclass(frozen=True, init=False)
@@ -544,7 +544,7 @@ CircuitError = tuple[float, frozenset[FlipPattern]]
 
 
 ####################################################################################################
-# Private helpers
+# private helpers
 
 
 def _validate_decompositions(

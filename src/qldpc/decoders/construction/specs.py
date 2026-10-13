@@ -43,7 +43,7 @@ PcmOrDem: TypeAlias = IntegerArray | stim.DetectorErrorModel
 
 
 ####################################################################################################
-# Decoder specifications
+# decoder specifications
 
 
 @dataclasses.dataclass(frozen=True, slots=True, eq=False, repr=False)
@@ -226,7 +226,7 @@ def observable_decoder_spec(
 
 
 ####################################################################################################
-# Decoder inputs
+# decoder inputs
 
 
 class ErrorDecoderConstructor(Protocol):
@@ -276,7 +276,7 @@ DecoderInput: TypeAlias = ErrorDecoderInput | DeferredDecoderInput | ObservableD
 
 
 ####################################################################################################
-# Private helpers
+# private helpers
 
 
 def _set_helper_metadata(

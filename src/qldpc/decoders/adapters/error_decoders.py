@@ -22,7 +22,7 @@ from ..protocols import (
 )
 
 ####################################################################################################
-# Observable prediction from inferred errors
+# observable prediction from inferred errors
 
 
 class ErrorsToObservablesDecoder(ObservableDecoder):
@@ -72,7 +72,7 @@ class _DetailedErrorsToObservablesDecoder(ErrorsToObservablesDecoder):
 
 
 ####################################################################################################
-# Error-mechanism alignment
+# error-mechanism alignment
 
 
 class ExpandedErrorDecoder(BatchErrorDecoder):

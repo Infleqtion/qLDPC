@@ -47,7 +47,7 @@ _DecoderT = TypeVar("_DecoderT")
 
 
 ####################################################################################################
-# Legacy keyword-based compatibility
+# legacy keyword-based compatibility
 
 
 def _call_with_flat_backend_options(
@@ -149,7 +149,7 @@ def decode_observables(
 
 
 ####################################################################################################
-# Deprecated per-decoder builders
+# deprecated per-decoder builders
 
 
 def get_decoder_bp_osd(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> ErrorDecoder:
@@ -208,7 +208,7 @@ def get_decoder_rbp(
 
 
 ####################################################################################################
-# Deprecated resolution functions
+# deprecated resolution functions
 
 
 def resolve_decoder(
@@ -310,7 +310,7 @@ def get_legacy_decoder_migration_message(
 
 
 ####################################################################################################
-# Legacy translation and message helpers
+# legacy translation and message helpers
 
 
 _LEGACY_HELPER_NAMES = {

@@ -25,7 +25,7 @@ from ..dems import DetectorErrorModelArrays
 from ..protocols import ObservableDecoder, ObservableDecodeResult
 
 ####################################################################################################
-# Public decoder and specifications
+# public decoder and specifications
 
 
 class FrontierObservableDecoder(ObservableDecoder):
@@ -236,7 +236,7 @@ Returns:
 
 
 ####################################################################################################
-# Private builder helpers
+# private builder helpers
 
 # PyPI rejects direct-URL dependencies, so frontier cannot be a qldpc extra.
 _INSTALL_COMMAND = (

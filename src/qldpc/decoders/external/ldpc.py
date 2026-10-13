@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 
 ####################################################################################################
-# Decoder specifications
+# decoder specifications
 
 
 @_erasure_bit_support("BP_OSD", supported=False)
@@ -361,7 +361,7 @@ Returns:
 
 
 ####################################################################################################
-# Private input helpers
+# private input helpers
 
 # Options that ldpc.BpLsdDecoder reads, other than those listed by _get_decoder_bp_lsd, including
 # osd_method and osd_order, which it accepts as aliases of lsd_method and lsd_order.  Unlike the
@@ -403,7 +403,7 @@ def _to_ldpc_inputs(
 
 
 ####################################################################################################
-# Lazy backend classes
+# lazy backend classes
 #
 # These classes cannot be declared at module scope without importing ldpc during every qldpc import.
 # Create them together on first use, then cache them as ordinary module globals so introspection,

@@ -37,7 +37,7 @@ _ErrorChannel: TypeAlias = float | npt.NDArray[np.floating] | Sequence[float] | 
 
 
 ####################################################################################################
-# Erasure signaling
+# erasure signaling
 
 
 def get_error_and_erasure(
@@ -71,7 +71,7 @@ def with_erasure_bits(
 
 
 ####################################################################################################
-# Private builder helpers
+# private builder helpers
 
 
 def _erasure_bit_support(
@@ -167,7 +167,7 @@ def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -
 
 
 ####################################################################################################
-# Deprecated compatibility helpers
+# deprecated compatibility helpers
 
 
 def _deprecate_error_rate_option(

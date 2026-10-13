@@ -34,7 +34,7 @@ from ..protocols import (
 )
 
 ####################################################################################################
-# Public decoder and specifications
+# public decoder and specifications
 
 
 TesseractDetectorOrderMethod = Literal["bfs", "index", "coordinate"]
@@ -384,7 +384,7 @@ def tesseract_preset(
 
 
 ####################################################################################################
-# Private builder helpers
+# private builder helpers
 
 
 def _get_tesseract() -> Any:

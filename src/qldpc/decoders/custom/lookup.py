@@ -34,7 +34,7 @@ _ErrorChannel: TypeAlias = npt.NDArray[np.floating] | Sequence[float] | _ErrorLo
 
 
 ####################################################################################################
-# Lookup decoders
+# lookup decoders
 
 
 class _LookupDecoderBase:
@@ -643,7 +643,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
 
 
 ####################################################################################################
-# Weighted lookup decoders
+# weighted lookup decoders
 
 
 class _WeightedLookupDecoderBase(_LookupDecoderBase):
@@ -891,7 +891,7 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
 
 
 ####################################################################################################
-# Decoder specifications
+# decoder specifications
 
 
 @_erasure_bit_support("lookup", supported=True)
@@ -961,7 +961,7 @@ observable output contract.
 
 
 ####################################################################################################
-# Lookup-table construction
+# lookup-table construction
 
 
 def _organize_lookup_table_initialization_data(
@@ -1187,7 +1187,7 @@ def _build_error_log_probability(
 
 
 ####################################################################################################
-# Supporting objects
+# supporting objects
 
 
 class _FieldVectorPacker:
@@ -1254,7 +1254,7 @@ def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
 
 
 ####################################################################################################
-# Deprecated compatibility helpers
+# deprecated compatibility helpers
 
 
 def _warn_deprecated_observable_prediction(enabled: bool, advice: str) -> None:

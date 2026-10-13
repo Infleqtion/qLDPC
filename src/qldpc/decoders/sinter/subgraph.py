@@ -219,7 +219,7 @@ class CompiledSubgraphDecoder(CompiledSinterDecoder):
 
 
 ####################################################################################################
-# Helper methods
+# helper methods
 
 
 def _warn_about_subgraph_partition(

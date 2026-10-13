@@ -35,7 +35,7 @@ __all__ = [
 ]
 
 ####################################################################################################
-# Deprecated compatibility aliases
+# deprecated compatibility aliases
 
 DEPRECATED_ALIASES = {
     "Decoder": ErrorDecoder,
