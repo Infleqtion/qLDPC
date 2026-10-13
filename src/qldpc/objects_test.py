@@ -223,7 +223,7 @@ def assert_valid_balanced_product(
     projections = []
     for degree in range(tensor.num_links + 1):
         blocks = []
-        for deg_a, deg_b in objects.ChainComplex._get_degree_pairs(chain_a, chain_b, degree):
+        for deg_a, deg_b in objects._get_degree_pairs(chain_a, chain_b, degree):
             shape = (chain_a.dim(deg_a), chain_b.dim(deg_b))
             perms = [
                 comb.Permutation(

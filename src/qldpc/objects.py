@@ -487,16 +487,6 @@ class ChainComplex:
         return self.ops[degree - 1]
 
     @staticmethod
-    def _get_degree_pairs(
-        chain_a: ChainComplex, chain_b: ChainComplex, degree: int
-    ) -> Iterator[tuple[int, int]]:
-        """Yield pairs of chain degrees that add up to a total degree."""
-        min_deg_a = max(degree - chain_b.num_links, 0)
-        max_deg_a = min(chain_a.num_links, degree)
-        for deg_a in range(max_deg_a, min_deg_a - 1, -1):
-            yield deg_a, degree - deg_a
-
-    @staticmethod
     def tensor_product(
         chain_a: ChainComplex | npt.NDArray[np.int_] | abstract.RingArray,
         chain_b: ChainComplex | npt.NDArray[np.int_] | abstract.RingArray,
@@ -537,7 +527,7 @@ class ChainComplex:
             )
 
         chain_field = chain_a.field
-        get_degree_pairs = functools.partial(ChainComplex._get_degree_pairs, chain_a, chain_b)
+        get_degree_pairs = functools.partial(_get_degree_pairs, chain_a, chain_b)
 
         def get_block_index(deg_a: int, deg_b: int) -> int:
             """Index of the "sector" with the given degrees in the direct sum of two chains."""
@@ -627,7 +617,7 @@ class ChainComplex:
         for degree in range(chain_a.num_links + chain_b.num_links + 1):
             sector_labels = {}
             dim = 0
-            for deg_a, deg_b in ChainComplex._get_degree_pairs(chain_a, chain_b, degree):
+            for deg_a, deg_b in _get_degree_pairs(chain_a, chain_b, degree):
                 labels = _get_diagonal_orbits(
                     (chain_a.dim(deg_a), chain_b.dim(deg_b)),
                     [(perm_a[deg_a], perm_b[deg_b]) for perm_a, perm_b in zip(perms_a, perms_b)],
@@ -671,6 +661,16 @@ class ChainComplex:
             if not np.array_equal(op[perms[degree - 1]][:, perms[degree]], op):
                 raise ValueError(f"The boundary operator on degree {degree} is not symmetric")
         return perms
+
+
+def _get_degree_pairs(
+    chain_a: ChainComplex, chain_b: ChainComplex, degree: int
+) -> Iterator[tuple[int, int]]:
+    """Yield pairs of chain degrees that add up to a total degree."""
+    min_deg_a = max(degree - chain_b.num_links, 0)
+    max_deg_a = min(chain_a.num_links, degree)
+    for deg_a in range(max_deg_a, min_deg_a - 1, -1):
+        yield deg_a, degree - deg_a
 
 
 def _get_diagonal_orbits(
