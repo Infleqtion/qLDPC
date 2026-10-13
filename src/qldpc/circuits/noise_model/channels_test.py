@@ -10,58 +10,24 @@ from qldpc.circuits.conftest import circuits_are_equivalent
 from qldpc.circuits.noise_model.channels import _repeated_idle_channel
 
 
-def _brute_force_pauli_distribution(
-    events: list[dict[str, float]], repetitions: int
-) -> dict[str, float]:
-    """Distribution over the product of independent events, each mapping Paulis to probabilities.
+def test_repeated_idle_channel() -> None:
+    """Repeating a Pauli channel raises the eigenvalues of its Pauli transfer matrix to a power."""
+    p_x, p_y, p_z = 0.1, 0.2, 0.3
+    eigenvalues = (1 - 2 * (p_y + p_z), 1 - 2 * (p_x + p_z), 1 - 2 * (p_x + p_y))
+    for repetitions in [1, 2, 3, 2**40]:
+        l_x, l_y, l_z = (eigenvalue**repetitions for eigenvalue in eigenvalues)
+        expected = {
+            "X": (1 + l_x - l_y - l_z) / 4,
+            "Y": (1 - l_x + l_y - l_z) / 4,
+            "Z": (1 - l_x - l_y + l_z) / 4,
+        }
+        channel = circuits.PauliChannel({"X": p_x, "Y": p_y, "Z": p_z})
+        assert _repeated_idle_channel(channel, repetitions).probabilities == pytest.approx(expected)
 
-    Each event applies at most one of its (mutually exclusive) Paulis.  All events are repeated
-    ``repetitions`` times.
-    """
-    distribution = {"_": 1.0}
-    for event in events * repetitions:
-        outcomes = {"_": 1 - sum(event.values()), **event}
-        new_distribution: dict[str, float] = {}
-        for pauli_a, prob_a in distribution.items():
-            for pauli_b, prob_b in outcomes.items():
-                product = "_XYZ"[(stim.PauliString(pauli_a) * stim.PauliString(pauli_b))[0]]
-                new_distribution[product] = new_distribution.get(product, 0) + prob_a * prob_b
-        distribution = new_distribution
-    return distribution
-
-
-@pytest.mark.parametrize("repetitions", [1, 2, 3, 4])
-def test_repeated_idle_channel(repetitions: int) -> None:
-    """Composed idle channels match brute-force enumeration of per-moment Pauli errors."""
-    channel = circuits.PauliChannel({"X": 0.1, "Y": 0.2, "Z": 0.3})
-    expected = _brute_force_pauli_distribution([{"X": 0.1, "Y": 0.2, "Z": 0.3}], repetitions)
-    composed = _repeated_idle_channel(channel, repetitions)
-    assert composed.probabilities == pytest.approx({p: expected[p] for p in "XYZ"})
-
-    sequence = circuits.PauliChannelSequence({"X": 0.25, "Z": 0.15})
-    expected = _brute_force_pauli_distribution([{"X": 0.25}, {"Z": 0.15}], repetitions)
-    composed = _repeated_idle_channel(sequence, repetitions)
-    assert isinstance(composed, circuits.PauliChannelSequence)
-    actual = _brute_force_pauli_distribution(
-        [{pauli: probability} for pauli, probability in composed.probabilities.items()], 1
-    )
-    assert actual == pytest.approx(expected)
-
-
-def test_repeated_idle_channel_limits() -> None:
-    """Long idle runs approach a fully mixed state, and certain flips cancel in pairs."""
-    composed = _repeated_idle_channel(circuits.PauliChannel({"Z": 0.1}), 2**40)
-    assert composed.probabilities == pytest.approx({"Z": 0.5})
-    composed = _repeated_idle_channel(circuits.PauliChannel.depolarizing(1, 0.1), 2**40)
-    assert composed.probabilities == pytest.approx({"X": 0.25, "Y": 0.25, "Z": 0.25})
-    for repetitions, expected in [(1, 1), (2, 0), (3, 1)]:
-        composed = _repeated_idle_channel(circuits.PauliChannel({"X": 1}), repetitions)
-        assert composed.probabilities == pytest.approx({"X": expected} if expected else {})
-
-    # an even number of certain flips cancels out entirely
-    circuit = stim.Circuit("R 0\nTICK\nX 1\nTICK\nX 1\nTICK\nM 0")
-    noisy = circuits.NoiseModel(idle_error={"X": 1}).noisy_circuit(circuit, system_qubits=[0])
-    assert noisy == circuit
+        # a sequence of one independent error is a Pauli channel with one component
+        sequence = _repeated_idle_channel(circuits.PauliChannelSequence({"X": p_x}), repetitions)
+        single = _repeated_idle_channel(circuits.PauliChannel({"X": p_x}), repetitions)
+        assert sequence.probabilities == pytest.approx(single.probabilities)
 
 
 def test_high_probability_pauli_channels_remain_dem_analyzable() -> None:

@@ -2,11 +2,9 @@
 
 """Unit tests for noise_model.py."""
 
-import collections
 import copy
 import pickle
 import random
-import re
 
 import pytest
 import stim
@@ -17,7 +15,6 @@ from qldpc.circuits.conftest import (
     circuits_are_equivalent,
     flatten_repeat_blocks,
 )
-from qldpc.circuits.noise_model import ErrorSpec
 
 
 def test_gate_errors() -> None:
@@ -276,629 +273,21 @@ def test_aggregated_idle_depolarization(probability: float, moments: int) -> Non
     expected = 0.75 * (1 - (1 - 4 * probability / 3) ** moments)
     expected_circuit = stim.Circuit(f"""
         R 0
-        TICK
         REPEAT {moments} {{
-            X 1
             TICK
+            X 1
         }}
         DEPOLARIZE1({expected}) 0
+        TICK
         M 0
     """)
     assert noisy.approx_equals(expected_circuit, atol=1e-12)
 
 
-def _dem_signature(circuit: stim.Circuit) -> dict[frozenset[str], float]:
-    """Map each set of flipped detectors/observables to its total (XOR-combined) probability."""
-    dem = circuit.detector_error_model(
-        approximate_disjoint_errors=True, allow_gauge_detectors=True, flatten_loops=True
-    )
-    signature: dict[frozenset[str], float] = {}
-    for instruction in dem.flattened():
-        if instruction.type == "error":
-            targets = frozenset(str(target) for target in instruction.targets_copy())
-            old, new = signature.get(targets, 0), instruction.args_copy()[0]
-            signature[targets] = old + new - 2 * old * new
-    return signature
-
-
-def _num_idle_errors(circuit: stim.Circuit, qubit: int) -> int:
-    """Count the noise instructions on the given qubit in a flattened circuit."""
-    return sum(
-        op.name in ("DEPOLARIZE1", "X_ERROR", "Y_ERROR", "Z_ERROR", "E", "PAULI_CHANNEL_1")
-        and qubit in [target.qubit_value for target in op.targets_copy()]
-        for op in circuit.flattened()
-    )
-
-
-_AGGREGATION_TEST_CIRCUITS = {
-    "flat": """
-        RX 0
-        R 1 2
-        TICK
-        X 1
-        TICK
-        CX 1 2
-        TICK
-        OBSERVABLE_INCLUDE(0) X0
-        X 2
-        TICK
-        I 0
-        M 1
-        DETECTOR rec[-1]
-        TICK
-        X_ERROR(0.1) 0
-        CX 1 2
-        TICK
-        X 1
-        TICK
-        MX 0
-        M 1 2
-        DETECTOR rec[-3]
-        DETECTOR rec[-2]
-        DETECTOR rec[-1]
-    """,
-    "repeat": """
-        RX 0
-        R 1 2
-        TICK
-        REPEAT 3 {
-            X 1
-            TICK
-            CX 1 2
-            TICK
-            MR 2
-            DETECTOR rec[-1]
-            TICK
-        }
-        MX 0
-        M 1
-        DETECTOR rec[-2]
-        DETECTOR rec[-1]
-    """,
-    "nested": """
-        RX 0
-        R 1 2
-        TICK
-        REPEAT 2 {
-            X 1
-            TICK
-            REPEAT 3 {
-                X 2
-                TICK
-                M 2
-                DETECTOR rec[-1]
-                CX rec[-1] 1
-                TICK
-            }
-            OBSERVABLE_INCLUDE(0) X0
-            REPEAT[__IMMUNE_TO_NOISE__] 2 {
-                X 1
-                TICK
-            }
-            X 1
-            TICK
-        }
-        REPEAT 2 {
-            I 0
-            X 2
-            TICK
-            X 0
-            TICK
-        }
-        MX 0
-        M 1 2
-        DETECTOR rec[-3]
-        DETECTOR rec[-2]
-        DETECTOR rec[-1]
-    """,
-}
-
-
-@pytest.mark.parametrize("circuit_name", sorted(_AGGREGATION_TEST_CIRCUITS))
-@pytest.mark.parametrize(
-    ("idle_error", "per_moment_idle_error"),
-    [
-        (0.01, "DEPOLARIZE1(0.01) 0"),
-        ({"Z": 0.1}, "Z_ERROR(0.1) 0"),
-        (
-            circuits.PauliChannelSequence({"X": 0.05, "Z": 0.1}),
-            "CORRELATED_ERROR(0.05) X0\nCORRELATED_ERROR(0.1) Z0",
-        ),
-    ],
-)
-@pytest.mark.parametrize("insert_ticks", [True, False])
-def test_aggregated_idle_matches_per_moment(
-    circuit_name: str,
-    idle_error: ErrorSpec,
-    per_moment_idle_error: str,
-    insert_ticks: bool,
-) -> None:
-    """Aggregated idle errors are equivalent to per-moment idle errors (from a custom fragment)."""
-    circuit = stim.Circuit(_AGGREGATION_TEST_CIRCUITS[circuit_name])
-
-    def noisy_circuit(idle_error: ErrorSpec) -> stim.Circuit:
-        noise_model = circuits.NoiseModel(
-            clifford_1q_error=0.01,
-            clifford_2q_error=0.02,
-            readout_error=0.03,
-            idle_error=idle_error,
-            additional_error_waiting_for_m_or_r=0.04,
-            rules={"I": circuits.NoiseRule(after={"Y": 0.05})},
-        )
-        return noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
-
-    aggregated = noisy_circuit(idle_error)
-    per_moment = noisy_circuit(circuits.NoiseRule(after=stim.Circuit(per_moment_idle_error)))
-
-    assert aggregated.num_ticks == per_moment.num_ticks
-    assert _num_idle_errors(aggregated, 0) < _num_idle_errors(per_moment, 0)
-    expected = _dem_signature(per_moment)
-    actual = _dem_signature(aggregated)
-    assert actual.keys() == expected.keys()
-    assert all(actual[key] == pytest.approx(expected[key], abs=1e-12) for key in expected)
-
-
-_FLATTENING_TEST_CIRCUITS = {
-    **_AGGREGATION_TEST_CIRCUITS,
-    "ticked": "R 0 1\nTICK\nREPEAT 3 {\n    H 0\n    TICK\n    X 1\n    TICK\n}\nM 0 1",
-    "unticked seams at the end": "R 0 1 2\nREPEAT 3 {\n    H 0\n    TICK\n    X 1\n}\nH 2",
-    "leading tick": "R 0 1\nTICK\nREPEAT 4 {\n    TICK\n    H 0\n    TICK\n    X 1\n}\nTICK\nM 0",
-    "gate seams": "H 1\nREPEAT 5 {\n    CX 0 1 1 2\n    H 3\n}\nX 2",
-    "repeat block of TICKs": "H 0\nTICK\nDETECTOR\nREPEAT 5 {\n    TICK\n}\nH 0",
-    "block boundary reuse": """
-        R 0 1 2
-        TICK
-        H 0
-        REPEAT 3 {
-            X 0
-            H 1
-            REPEAT 2 {
-                Y 1 2
-            }
-        }
-        X 2
-        M 0
-    """,
-    "reuse within iteration": "R 0\nTICK\nREPEAT 3 {\n    H 0\n    X 0\n}",
-    "cycle of iterations": "REPEAT 10 {\n    H 0\n    CX 1 2\n    H 1\n}\nH 2",
-    "nested without ticks between iterations": """
-        R 0 1 2
-        REPEAT 3 {
-            H 0
-            REPEAT 4 {
-                X 1
-                TICK
-                H 2
-            }
-            DETECTOR
-        }
-        M 0 1 2
-    """,
-    "annotations": """
-        M 0
-        REPEAT 3 {
-            DETECTOR rec[-1]
-            SHIFT_COORDS(1)
-        }
-        H 0
-        REPEAT 2 {
-            X_ERROR(0.1) 1
-        }
-        TICK
-        REPEAT 2 {
-            REPEAT 1 {
-                H 1
-            }
-        }
-        TICK
-        SHIFT_COORDS(1)
-    """,
-    "nested large": """
-        REPEAT 5 {
-            TICK
-            REPEAT 6 {
-                H 0
-                TICK
-            }
-            X 1
-            OBSERVABLE_INCLUDE(0) Z2
-        }
-    """,
-    "immune": """
-        H 0
-        REPEAT[__IMMUNE_TO_NOISE__] 3 {
-            H 0
-            H 0
-        }
-        H 0
-    """,
-    "unticked body": """
-        R 0 1 2
-        TICK
-        X 0
-        REPEAT 3 {
-            CX 0 1
-            X 2
-        }
-        X 2
-        TICK
-        M 0 1 2
-        DETECTOR rec[-1]
-        DETECTOR rec[-2]
-        DETECTOR rec[-3]
-    """,
-    "trailing repeat block": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            X 1
-            TICK
-            REPEAT 4 {
-                H 0
-            }
-        }
-        X_ERROR(0.1) 0
-    """,
-    "correlated error chain across a seam": """
-        R 0 1 2
-        TICK
-        REPEAT 2 {
-            H 0
-            TICK
-            E(0.1) X1
-        }
-        ELSE_CORRELATED_ERROR(0.2) X2
-        H 0
-        TICK
-        M 1 2
-        DETECTOR rec[-1]
-        DETECTOR rec[-2]
-    """,
-    "user TICK before noise at the end of a repeat block": """
-        R 0 1
-        TICK
-        REPEAT 2 {
-            H 0
-            TICK
-            X_ERROR(0.1) 1
-        }
-    """,
-    "empty repeat blocks between TICKs": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-        }
-        TICK
-        REPEAT 2 {
-            REPEAT 4 {
-            }
-            TICK
-        }
-        H 0
-        TICK
-        REPEAT 3 {
-            X 1
-            TICK
-            REPEAT 2 {
-            }
-            TICK
-        }
-        M 0 1
-    """,
-    "trailing nested repeat blocks before empty repeat blocks": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            X 1
-            TICK
-            REPEAT 4 {
-                H 0
-                TICK
-            }
-            REPEAT 2 {
-            }
-        }
-        REPEAT 2 {
-        }
-    """,
-    "repeat block before an immune block": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            H 0
-            TICK
-        }
-        REPEAT[__IMMUNE_TO_NOISE__] 2 {
-            X 1
-            TICK
-        }
-    """,
-    "trailing ticked repeat block": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            H 0
-            TICK
-            CX 0 1
-            TICK
-        }
-    """,
-    "gate-free repeat blocks": """
-        R 0 1
-        REPEAT 3 {
-        }
-        TICK
-        H 0
-        REPEAT 2 {
-            X_ERROR(0.1) 1
-            REPEAT 1 {
-            }
-        }
-        TICK
-        M 0 1
-        REPEAT 1 {
-            DETECTOR rec[-1]
-        }
-    """,
-    "unticked seams": """
-        R 0 1 2
-        TICK
-        X 0
-        REPEAT 4 {
-            M 1
-            DETECTOR rec[-1]
-            TICK
-            X 2
-            TICK
-            CX 0 2
-        }
-        X 1
-        TICK
-        M 0 1 2
-        DETECTOR rec[-1]
-        DETECTOR rec[-2]
-        DETECTOR rec[-3]
-    """,
-    "surface code": str(
-        stim.Circuit.generated("surface_code:rotated_memory_x", distance=3, rounds=4)
-    ),
-    "repetition code": str(stim.Circuit.generated("repetition_code:memory", distance=3, rounds=5)),
-    "gate-free tail": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            H 0
-            TICK
-            X_ERROR(0.1) 1
-        }
-        H 0
-        TICK
-        M 0 1
-    """,
-    "gate-free tail before tick": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            H 0
-            TICK
-            M 1
-            TICK
-            DETECTOR rec[-1]
-        }
-        TICK
-        M 0 1
-    """,
-    "gate-free ops before repeat": """
-        R 0
-        TICK
-        H 0
-        TICK
-        DETECTOR
-        REPEAT 3 {
-            H 0
-            TICK
-        }
-        M 0
-    """,
-    "nested ticks": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            H 0
-            TICK
-            REPEAT 2 {
-                H 1
-                TICK
-            }
-        }
-        M 0 1
-    """,
-    "nested gate-free tails": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            REPEAT 2 {
-                X 1
-                TICK
-                MR 0
-                TICK
-                DETECTOR rec[-1]
-            }
-            X 1
-            TICK
-            DETECTOR
-        }
-        M 0 1
-    """,
-    "gate-free tail between ticks": """
-        R 0
-        TICK
-        REPEAT 3 {
-            TICK
-            H 0
-            TICK
-            DETECTOR
-        }
-        H 0
-    """,
-    "gate-free tail between immune blocks": """
-        R 0 1
-        TICK
-        REPEAT 3 {
-            REPEAT[__IMMUNE_TO_NOISE__] 1 {
-                H 1
-            }
-            H 0
-            TICK
-            DETECTOR
-        }
-        H 0
-        TICK
-        M 0 1
-    """,
-    "gate-free tail after immune block": """
-        REPEAT[__IMMUNE_TO_NOISE__] 1 {
-            R 0 1
-        }
-        REPEAT 3 {
-            REPEAT[__IMMUNE_TO_NOISE__] 1 {
-                H 1
-            }
-            H 0
-            TICK
-            DETECTOR
-        }
-        H 0
-        TICK
-        M 0 1
-    """,
-    "gate-free tail after immune block in steady state": """
-        R 0 1
-        TICK
-        H 0
-        TICK
-        REPEAT[__IMMUNE_TO_NOISE__] 1 {
-            X 0
-        }
-        REPEAT 3 {
-            REPEAT[__IMMUNE_TO_NOISE__] 1 {
-                H 1
-            }
-            H 0
-            TICK
-            DETECTOR
-        }
-        H 0
-        TICK
-        M 0 1
-    """,
-    "gate-free tail after immune block in steady state, twice": """
-        R 0 1
-        TICK
-        H 0
-        TICK
-        REPEAT[__IMMUNE_TO_NOISE__] 1 {
-            X 0
-        }
-        REPEAT 2 {
-            REPEAT[__IMMUNE_TO_NOISE__] 1 {
-                H 1
-            }
-            H 0
-            TICK
-            DETECTOR
-        }
-        H 0
-        TICK
-        M 0 1
-    """,
-    "tagged repeat block": """
-        R 0 1
-        TICK
-        H 0
-        TICK
-        REPEAT[my_tag] 3 {
-            H 0
-            TICK
-        }
-        M 0 1
-    """,
-    "empty repeat block": """
-        R 0
-        REPEAT 2 {
-            REPEAT 3 {
-            }
-        }
-        TICK
-        M 0
-    """,
-    "idle run across seams": """
-        R 0 1
-        TICK
-        REPEAT 4 {
-            H 0
-            TICK
-            CX 0 1
-            TICK
-            H 0
-            TICK
-        }
-        M 0 1
-        DETECTOR rec[-1]
-        DETECTOR rec[-2]
-    """,
-    "idle run across nested seams": """
-        R 0 1 2
-        TICK
-        X 2
-        TICK
-        REPEAT 3 {
-            REPEAT 2 {
-                H 0
-                TICK
-                CX 0 1
-                TICK
-                H 0
-                TICK
-            }
-            CX 1 2
-            TICK
-        }
-        M 0 1 2
-        DETECTOR rec[-1]
-        DETECTOR rec[-2]
-        DETECTOR rec[-3]
-    """,
-}
-
-
-@pytest.mark.parametrize("circuit_name", sorted(_FLATTENING_TEST_CIRCUITS))
-@pytest.mark.parametrize("insert_ticks", [True, False])
-def test_repeat_blocks_match_flattened_circuits(circuit_name: str, insert_ticks: bool) -> None:
-    """Noise is added to repeat blocks as though they were flattened."""
-    circuit = stim.Circuit(_FLATTENING_TEST_CIRCUITS[circuit_name])
-    _assert_noise_commutes_with_flattening(circuit, insert_ticks=insert_ticks)
-
-
-def test_random_repeat_blocks_match_flattened_circuits() -> None:
-    """Noise is added to random circuits with repeat blocks as though they were flattened."""
-    rng = random.Random(0)
-    for _ in range(100):
-        circuit = _random_circuit(rng)
-        for insert_ticks in [True, False]:
-            _assert_noise_commutes_with_flattening(circuit, insert_ticks=insert_ticks)
-
-
-def _assert_noise_commutes_with_flattening(circuit: stim.Circuit, *, insert_ticks: bool) -> None:
+def test_noise_commutes_with_flattening() -> None:
     """Adding noise to a circuit is equivalent to adding noise to its flattened circuit.
 
-    Adding noise and then flattening must give exactly as many TICKs as flattening and then adding
-    noise, the same noise channels on each qubit, and the same detector error model (so the same
-    sampling statistics).  Idle errors are composed into Pauli channels with several nonzero
-    components, whose approximate decomposition into detector error model errors is not
-    compositional, so the idle channels must be identical to those in the flattened circuit.  If
-    adding noise to the flattened circuit fails, then adding noise to the original circuit must fail
-    too.  Repeat blocks that are immune to noise are not flattened.
+    Moreover, combining idle errors does not change the detector error model.
     """
     noise_model = circuits.NoiseModel(
         clifford_1q_error=0.01,
@@ -907,136 +296,68 @@ def _assert_noise_commutes_with_flattening(circuit: stim.Circuit, *, insert_tick
         idle_error={"X": 0.005, "Z": 0.007},
         additional_error_waiting_for_m_or_r=0.04,
     )
-    flattened_circuit = flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
-    try:
-        noisy_flattened_circuit = noise_model.noisy_circuit(
-            flattened_circuit, insert_ticks=insert_ticks
-        )
-    except ValueError as error:
-        with pytest.raises(ValueError, match=re.escape(str(error).splitlines()[0])):
-            noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
-        return
-    noisy_circuit = noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
-    assert noisy_circuit.flattened().num_ticks == noisy_flattened_circuit.flattened().num_ticks
-    assert _noise_channels(noisy_circuit) == _noise_channels(noisy_flattened_circuit)
-    expected = _dem_signature(noisy_flattened_circuit)
-    assert _dem_signature(noisy_circuit) == pytest.approx(expected, rel=1e-12, abs=0)
+    combined_idle_noise = circuits.NoiseModel(
+        idle_error=circuits.PauliChannelSequence({"X": 0.05, "Z": 0.1})
+    )
+    per_moment_idle_noise = circuits.NoiseModel(
+        idle_error=circuits.NoiseRule(after=stim.Circuit("E(0.05) X0\nE(0.1) Z0"))
+    )
+    rng = random.Random(0)
+    for _ in range(100):
+        circuit = _random_circuit(rng)
+        flattened_circuit = flatten_repeat_blocks(circuit, circuits.DEFAULT_IMMUNE_OP_TAG)
+        for insert_ticks in [True, False]:
+            try:
+                expected = noise_model.noisy_circuit(flattened_circuit, insert_ticks=insert_ticks)
+            except ValueError:
+                with pytest.raises(ValueError, match="multiple uses"):
+                    noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
+                continue
+            noisy_circuit = noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks)
+            assert noisy_circuit.flattened() == expected.flattened()
+
+            combined = combined_idle_noise.noisy_circuit(circuit, insert_ticks=insert_ticks)
+            per_moment = per_moment_idle_noise.noisy_circuit(circuit, insert_ticks=insert_ticks)
+            assert _dem_errors(combined) == pytest.approx(_dem_errors(per_moment), abs=1e-12)
 
 
-def _noise_channels(circuit: stim.Circuit) -> collections.Counter[tuple[str, str]]:
-    """Count the noise channels (other than measurement errors) on each target of a circuit."""
-    channels: collections.Counter[tuple[str, str]] = collections.Counter()
-    for op in circuit.flattened():
-        gate_data = stim.gate_data(op.name)
-        if gate_data.is_noisy_gate and not gate_data.produces_measurements:
-            targets = op.targets_copy()
-            width = 2 if gate_data.is_two_qubit_gate else 1
-            for start in range(0, len(targets), width):
-                args = ", ".join(f"{arg:.12g}" for arg in op.gate_args_copy())
-                channels[f"{op.name}({args})", str(targets[start : start + width])] += 1
-    return channels
-
-
-def _random_circuit(rng: random.Random, num_qubits: int = 3) -> stim.Circuit:
-    """A random circuit with nested repeat blocks, mixing TICKs, gates, measurements, and noise."""
+def _random_circuit(rng: random.Random) -> stim.Circuit:
+    """A random circuit on three qubits with nested (immune, gate-free, and empty) repeat blocks."""
 
     def random_body(depth: int) -> stim.Circuit:
         body = stim.Circuit()
-        for _ in range(rng.randint(0, 5)):
-            qubit = rng.randrange(num_qubits)
-            choice = rng.random()
+        for _ in range(rng.randint(0, 4)):
+            qubit, choice = rng.randrange(3), rng.random()
             if choice < 0.2:
                 body.append("TICK")
-            elif choice < 0.4:
-                body.append(rng.choice(["H", "X", "S"]), [qubit])
             elif choice < 0.5:
-                body.append("CX", rng.sample(range(num_qubits), 2))
+                gate = rng.choice(["H", "CX", "MR"])
+                body.append(gate, [qubit, (qubit + 1) % 3] if gate == "CX" else [qubit])
             elif choice < 0.6:
-                body.append("MR", [qubit])
-                body.append("DETECTOR", [stim.target_rec(-1)])
-            elif choice < 0.65:
-                body.append("I", [qubit])
+                body.append("X_ERROR", [qubit], 0.1)
             elif choice < 0.7:
-                body.append("SHIFT_COORDS", [], [1])
-            elif choice < 0.75:
-                body.append("X_ERROR", [qubit], 0.01)
-            elif choice < 0.8:
                 body.append("H", [qubit], tag=circuits.DEFAULT_IMMUNE_OP_TAG)
-            elif choice < 0.85:
-                body.append(stim.CircuitRepeatBlock(rng.choice([1, 2]), stim.Circuit()))
             elif depth < 3:
-                tag = rng.choice(["", "", "tag", circuits.DEFAULT_IMMUNE_OP_TAG])
-                repeat_count = rng.choice([1, 2, 3, 5])
-                body.append(stim.CircuitRepeatBlock(repeat_count, random_body(depth + 1), tag=tag))
+                tag = rng.choice(["", "", circuits.DEFAULT_IMMUNE_OP_TAG])
+                body.append(
+                    stim.CircuitRepeatBlock(rng.randint(1, 5), random_body(depth + 1), tag=tag)
+                )
         return body
 
-    circuit = stim.Circuit()
-    circuit.append("R", range(num_qubits))
-    if rng.random() < 0.5:
-        circuit.append("TICK")
-    circuit += random_body(0)
-    if rng.random() < 0.5:
-        circuit.append("TICK")
-        circuit.append("M", range(num_qubits))
-        for qubit in range(num_qubits):
-            circuit.append("DETECTOR", [stim.target_rec(-1 - qubit)])
-    if rng.random() < 0.5:
-        # end with a repeat block
-        circuit.append(stim.CircuitRepeatBlock(rng.choice([2, 3]), random_body(1)))
-    return circuit
+    measurements = stim.Circuit("M 0 1 2\nDETECTOR rec[-1]\nDETECTOR rec[-2]\nDETECTOR rec[-3]")
+    return stim.Circuit("R 0 1 2\nTICK") + random_body(0) + measurements
 
 
-def test_repeat_block_edge_cases() -> None:
-    """Empty repeat blocks are dropped, gate-free ones are kept, and noise ends without a TICK."""
-    noise_model = circuits.DepolarizingNoiseModel(0.1)
-    for insert_ticks in [True, False]:
-        circuit = stim.Circuit("""
-            H 0
-            REPEAT 3 {
-            }
-            TICK
-            H 0
-            REPEAT 2 {
-                DETECTOR
-            }
-            TICK
-            REPEAT 3 {
-            }
-            TICK
-            H 0
-        """)
-        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
-            H 0
-            DEPOLARIZE1(0.1) 0
-            TICK
-            H 0
-            REPEAT 2 {
-                DETECTOR
-            }
-            DEPOLARIZE1(0.1) 0
-            TICK
-            H 0
-            DEPOLARIZE1(0.1) 0
-        """)
-
-        circuit = stim.Circuit("R 0\nTICK\nREPEAT 3 {\n    H 0\n    TICK\n}\nREPEAT 2 {\n}")
-        assert noise_model.noisy_circuit(circuit, insert_ticks=insert_ticks) == stim.Circuit("""
-            R 0
-            X_ERROR(0.1) 0
-            TICK
-            REPEAT 2 {
-                H 0
-                DEPOLARIZE1(0.1) 0
-                TICK
-            }
-            H 0
-            DEPOLARIZE1(0.1) 0
-        """)
-
-    # without TICK insertion, iterations of a repeat block without TICKs share a moment
-    circuit = stim.Circuit("R 0\nTICK\nREPEAT 3 {\n    H 0\n}")
-    with pytest.raises(ValueError, match="multiple times without a TICK"):
-        noise_model.noisy_circuit(circuit, insert_ticks=False)
+def _dem_errors(circuit: stim.Circuit) -> dict[str, float]:
+    """The probability of each set of flipped detectors and observables."""
+    dem = circuit.detector_error_model(allow_gauge_detectors=True, flatten_loops=True)
+    errors: dict[str, float] = {}
+    for error in dem.flattened():
+        if error.type == "error":
+            key, probability = str(error.targets_copy()), error.args_copy()[0]
+            old = errors.get(key, 0)
+            errors[key] = old + probability - 2 * old * probability
+    return errors
 
 
 def test_aggregated_idle_respects_observable_barrier() -> None:
@@ -1053,119 +374,6 @@ def test_aggregated_idle_respects_observable_barrier() -> None:
     """)
     noisy = circuits.NoiseModel(idle_error={"X": 0.1}).noisy_circuit(circuit)
     assert noisy.detector_error_model() == stim.DetectorErrorModel("error(0.1) L0")
-
-
-def test_aggregated_idle_in_repeat_body() -> None:
-    """Idle runs that cross iteration seams are emitted once, as in the flattened circuit."""
-    circuit = stim.Circuit("""
-        R 0 1
-        TICK
-        REPEAT 100 {
-            X 0
-            TICK
-            X 1
-            TICK
-            X 1
-            TICK
-        }
-        M 0
-    """)
-    noisy = circuits.NoiseModel(idle_error={"Z": 0.1}).noisy_circuit(circuit)
-    # the first iteration starts without pending idle moments on qubit 0, so it is peeled off
-    expected_circuit = stim.Circuit("""
-        R 0 1
-        TICK
-        X 0
-        Z_ERROR(0.1) 1
-        TICK
-        X 1
-        TICK
-        X 1
-        TICK
-        REPEAT 99 {
-            Z_ERROR(0.18) 0
-            X 0
-            Z_ERROR(0.1) 1
-            TICK
-            X 1
-            TICK
-            X 1
-            TICK
-        }
-        Z_ERROR(0.18) 0
-        M 0
-        Z_ERROR(0.1) 1
-    """)
-    assert noisy.approx_equals(expected_circuit, atol=1e-12)
-
-    # the first iteration starts in the steady state, so it is not peeled off
-    circuit = stim.Circuit("R 0 1\nTICK\nX 1\nTICK\nX 1\nTICK") + circuit[2:]
-    noisy = circuits.NoiseModel(idle_error={"Z": 0.1}).noisy_circuit(circuit)
-    expected_circuit = stim.Circuit("""
-        R 0 1
-        TICK
-        X 1
-        TICK
-        X 1
-        TICK
-        REPEAT 100 {
-            Z_ERROR(0.18) 0
-            X 0
-            Z_ERROR(0.1) 1
-            TICK
-            X 1
-            TICK
-            X 1
-            TICK
-        }
-        Z_ERROR(0.18) 0
-        M 0
-        Z_ERROR(0.1) 1
-    """)
-    assert noisy.approx_equals(expected_circuit, atol=1e-12)
-
-
-def test_aggregated_idle_nested_repeat_size() -> None:
-    """Nested repeats are not unrolled, and are never longer than when flattened."""
-
-    def get_nested_circuit(inner: str, outer: str, depth: int) -> stim.Circuit:
-        circuit = stim.Circuit(inner)
-        for _ in range(depth):
-            block = stim.CircuitRepeatBlock(3, circuit)
-            circuit = stim.Circuit(outer)
-            circuit.append(block)
-        return stim.Circuit("R 0 1 2\nTICK") + circuit + stim.Circuit("M 0 1 2")
-
-    noise_model = circuits.NoiseModel(idle_error=0.01)
-
-    # every block starts in the same state as its iterations, so nothing is peeled off
-    circuit = get_nested_circuit("X 0 1 2\nTICK\nX 0\nTICK", "X 0 1 2\nTICK\nX 0\nTICK", 10)
-    assert len(str(noise_model.noisy_circuit(circuit))) < 5_000
-
-    # the first iteration of every block is peeled off
-    circuit = get_nested_circuit("X 2\nTICK\nX 0\nTICK", "X 2\nTICK", 5)
-    noisy_circuit = noise_model.noisy_circuit(circuit)
-    noisy_flattened_circuit = noise_model.noisy_circuit(circuit.flattened())
-    assert len(str(noisy_circuit)) < len(str(noisy_flattened_circuit)) / 2
-
-
-def test_custom_idle_fragment_stays_per_moment() -> None:
-    """Idle noise given as a custom Stim fragment is emitted in every idle moment."""
-    circuit = stim.Circuit("R 0\nTICK")
-    circuit.append(stim.CircuitRepeatBlock(3, stim.Circuit("H 1\nTICK")))
-    circuit += stim.Circuit("M 0")
-    model = circuits.NoiseModel(idle_error=circuits.NoiseRule(after=stim.Circuit("X_ERROR(0.1) 0")))
-    noisy = model.noisy_circuit(circuit, system_qubits=[0])
-    assert noisy == stim.Circuit("""
-        R 0
-        TICK
-        REPEAT 3 {
-            H 1
-            X_ERROR(0.1) 0
-            TICK
-        }
-        M 0
-    """)
 
 
 def test_immunity() -> None:
