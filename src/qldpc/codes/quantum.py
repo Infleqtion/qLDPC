@@ -2593,15 +2593,6 @@ class QTCode(CSSCode):
 # surface code and friends
 
 
-def _get_check_pauli(row: int, col: int) -> PauliXZ:
-    """What type of stabilizer does the check at the given coordinates measure?
-
-    Checks of a rotated surface or toric code alternate between X and Z type in a checkerboard
-    pattern, so the type is fixed by the parity of the sum of the coordinates.
-    """
-    return Pauli.X if (row + col) % 2 == 0 else Pauli.Z
-
-
 class SurfaceCode(CSSCode):
     """The one and only!
 
@@ -3098,3 +3089,16 @@ class T4Code(CSSCode):
         return self._ones_vec(
             self.num_faces, [top_face, back_face, left_face], [bottom_face, front_face, right_face]
         )
+
+
+####################################################################################################
+# helper methods
+
+
+def _get_check_pauli(row: int, col: int) -> PauliXZ:
+    """What type of stabilizer does the check at the given coordinates measure?
+
+    Checks of a rotated surface or toric code alternate between X and Z type in a checkerboard
+    pattern, so the type is fixed by the parity of the sum of the coordinates.
+    """
+    return Pauli.X if (row + col) % 2 == 0 else Pauli.Z
