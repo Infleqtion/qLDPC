@@ -122,13 +122,20 @@ class SyndromeMeasurementStrategy(abc.ABC):
         operation of one layer on a qubit precedes every operation of the next layer on that qubit.
         This method thereby supports subsystem codes, whose (gauge) checks need not commute.
 
-        To reduce circuit depth, every operation of the combined circuit then moves to the earliest
-        moment that preserves the sequence of operations on each qubit and the order of all
-        measurements.  Operations of consecutive layers can thereby share moments if they address
-        disjoint qubits.  For example, the check qubits of one layer can be reset, and the first
-        gates of that layer can be applied to data qubits that the previous layer is done with,
-        while the previous layer is still in progress.  This rescheduling only applies if the
-        circuits of all layers consist of unitary gates, resets, and measurements on qubits.
+        Every operation of the combined circuit then moves to the earliest moment (block of
+        operations between TICK instructions) that preserves the sequence of operations on each
+        qubit and the order of all measurements.  Operations of consecutive layers can thereby share
+        moments if they address disjoint qubits.  For example, the check qubits of one layer can be
+        reset, and the first gates of that layer can be applied to data qubits that the previous
+        layer is done with, while the previous layer is still in progress.  This rescheduling only
+        applies if the circuits of all layers consist of unitary gates, resets, and measurements on
+        qubits.
+
+        Rescheduling does not change the action of the circuit, and Stim attaches no meaning to
+        moments.  However, noise models that act on each moment, such as models with idle errors
+        (see NoiseModel), add fewer errors to a circuit with fewer moments.  Treating moments as
+        time steps assumes that every operation takes the same amount of time, and that resets and
+        measurements can occur at the same time as gates on other qubits.
 
         Since self.get_circuit only sees the stabilizer code defined by one layer at a time, any
         code-specific scheduling (such as a code's custom get_syndrome_subgraphs) or optimization

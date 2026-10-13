@@ -225,7 +225,7 @@ Build and simulate a memory circuit
 
 Memory experiments also accept subsystem codes.
 Each round measures commuting layers of gauge checks in sequence (by default, all X-type and then all Z-type checks of a CSS code), and detectors track products of gauge outcomes within one layer that equal stabilizers.
-Operations of consecutive layers on disjoint qubits share moments to reduce circuit depth.
+Operations of consecutive layers on disjoint qubits share TICK-separated moments, which reduces the errors added by noise models with idle errors.
 Products that equal the identity, which arise from redundant gauge generators, get detectors in every round.
 
 Circuit utilities reject nonbinary codes.
