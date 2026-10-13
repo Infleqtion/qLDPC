@@ -33,6 +33,7 @@ from ..protocols import (
     ObservableDecodeResult,
 )
 
+####################################################################################################
 # Public decoder and specifications
 
 
@@ -382,6 +383,7 @@ def tesseract_preset(
     )
 
 
+####################################################################################################
 # Private builder helpers
 
 

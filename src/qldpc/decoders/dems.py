@@ -20,6 +20,7 @@ import stim
 HashableType = TypeVar("HashableType", bound=Hashable)
 
 
+####################################################################################################
 # Detector error model arrays
 
 
@@ -501,6 +502,7 @@ class DetectorErrorModelArrays:
         return detector_flip_matrix.tocsc(), observable_flip_matrix.tocsc(), error_probs
 
 
+####################################################################################################
 # Circuit errors
 
 
@@ -541,6 +543,7 @@ class FlipPattern:
 CircuitError = tuple[float, frozenset[FlipPattern]]
 
 
+####################################################################################################
 # Private helpers
 
 

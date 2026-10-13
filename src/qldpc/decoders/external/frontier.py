@@ -24,6 +24,7 @@ from ..construction.specs import observable_decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ObservableDecoder, ObservableDecodeResult
 
+####################################################################################################
 # Public decoder and specifications
 
 
@@ -234,6 +235,7 @@ Returns:
 )
 
 
+####################################################################################################
 # Private builder helpers
 
 # PyPI rejects direct-URL dependencies, so frontier cannot be a qldpc extra.

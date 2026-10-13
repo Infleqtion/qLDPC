@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     class BeliefFindDecoder(ldpc.BeliefFindDecoder, ErrorDecoder): ...
 
 
+####################################################################################################
 # Decoder specifications
 
 
@@ -359,6 +360,7 @@ Returns:
 )
 
 
+####################################################################################################
 # Private input helpers
 
 # Options that ldpc.BpLsdDecoder reads, other than those listed by _get_decoder_bp_lsd, including
@@ -400,6 +402,7 @@ def _to_ldpc_inputs(
     return pcm, list(normalized_error_channel)
 
 
+####################################################################################################
 # Lazy backend classes
 #
 # These classes cannot be declared at module scope without importing ldpc during every qldpc import.

@@ -36,6 +36,7 @@ _Decoder = TypeVar("_Decoder", bound=ErrorDecoder)
 _ErrorChannel: TypeAlias = float | npt.NDArray[np.floating] | Sequence[float] | None
 
 
+####################################################################################################
 # Erasure signaling
 
 
@@ -69,6 +70,7 @@ def with_erasure_bits(
     return np.hstack([errors, flags])
 
 
+####################################################################################################
 # Private builder helpers
 
 
@@ -164,6 +166,7 @@ def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -
         )
 
 
+####################################################################################################
 # Deprecated compatibility helpers
 
 

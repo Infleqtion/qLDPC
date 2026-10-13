@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     class Matching(pymatching.Matching, BatchErrorDecoder): ...
 
 
+####################################################################################################
 # Public decoder and specifications
 
 
@@ -266,6 +267,7 @@ Use native observable decoding for those models.
 )
 
 
+####################################################################################################
 # Private matching helpers
 
 
@@ -356,6 +358,7 @@ def _splits_errors(
     )
 
 
+####################################################################################################
 # Lazy backend class
 #
 # Matching is an error decoder only when it has no faults matrix.  Create that protocol-compatible

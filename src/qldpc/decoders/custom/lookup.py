@@ -33,6 +33,7 @@ _ErrorLogProbability: TypeAlias = Callable[[_ErrorVector], float]
 _ErrorChannel: TypeAlias = npt.NDArray[np.floating] | Sequence[float] | _ErrorLogProbability | None
 
 
+####################################################################################################
 # Lookup decoders
 
 
@@ -641,6 +642,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
         return np.column_stack([packed_predictions[:, :num_observable_bytes], erased])
 
 
+####################################################################################################
 # Weighted lookup decoders
 
 
@@ -888,6 +890,7 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
         )
 
 
+####################################################################################################
 # Decoder specifications
 
 
@@ -957,6 +960,7 @@ observable output contract.
 )
 
 
+####################################################################################################
 # Lookup-table construction
 
 
@@ -1182,6 +1186,7 @@ def _build_error_log_probability(
     return error_log_probability
 
 
+####################################################################################################
 # Supporting objects
 
 
@@ -1248,6 +1253,7 @@ def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
     return int(np.count_nonzero(error))
 
 
+####################################################################################################
 # Deprecated compatibility helpers
 
 

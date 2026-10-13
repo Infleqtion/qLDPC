@@ -12,6 +12,7 @@ import numpy.typing as npt
 
 from ..protocols import ErrorDecoder, ObservableDecoder
 
+####################################################################################################
 # Observable decoder adapters
 
 
@@ -96,6 +97,7 @@ class BitPackedObservableDecoder(ObservableDecoder):
         return np.append(flips, np.uint8(erased))
 
 
+####################################################################################################
 # Validation helpers
 
 

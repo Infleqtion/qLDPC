@@ -23,6 +23,7 @@ from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import BatchErrorDecoder, ErrorDecodeResult, ObservableDecodeResult
 
+####################################################################################################
 # Public decoder and specifications
 
 
@@ -654,6 +655,7 @@ Returns:
 )
 
 
+####################################################################################################
 # Private builder helpers
 
 

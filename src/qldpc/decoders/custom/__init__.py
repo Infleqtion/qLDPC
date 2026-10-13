@@ -34,6 +34,7 @@ __all__ = [
     "WeightedObservableLookupDecoder",
 ]
 
+####################################################################################################
 # Deprecated compatibility aliases
 
 DEPRECATED_ALIASES = {

@@ -10,6 +10,7 @@ from typing import Any, Protocol, runtime_checkable
 import numpy as np
 import numpy.typing as npt
 
+####################################################################################################
 # Detailed decode results
 
 
@@ -43,6 +44,7 @@ class ObservableDecodeResult:
     diagnostics: dict[str, object] = field(default_factory=dict)
 
 
+####################################################################################################
 # Decoder protocols
 
 
@@ -113,6 +115,7 @@ class BatchObservableDecoder(ObservableDecoder, Protocol):
         """Decode a batch of error syndromes, one per row, and return predicted observable flips."""
 
 
+####################################################################################################
 # Detailed decoder protocols
 
 
@@ -164,6 +167,7 @@ class SupportsDecode(Protocol):
         """Decode an error syndrome and return an inferred error."""
 
 
+####################################################################################################
 # Coercion into error decoders
 
 
@@ -234,6 +238,7 @@ class WrappedErrorDecoder(ErrorDecoder):
     decode = decode_errors
 
 
+####################################################################################################
 # Batch decoding
 
 
