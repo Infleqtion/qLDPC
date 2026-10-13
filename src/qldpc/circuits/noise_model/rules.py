@@ -16,6 +16,9 @@ from ..common import StimCircuitLike, with_remapped_qubits
 from .channels import AbstractPauliChannel, PauliChannel
 from .operations import JUST_MEASURE_OPS, JUST_RESET_OPS, MEASURE_AND_RESET_OPS, NOISE, op_type
 
+####################################################################################################
+# noise rules
+
 
 class NoiseRule:
     """Describes how to add noise to an operation.
@@ -199,6 +202,10 @@ class NoiseRule:
 # uniform depolarizing channel, a Mapping is auto-wrapped as a `PauliChannel`, and an
 # `AbstractPauliChannel` / `NoiseRule` is used directly.
 ErrorSpec: TypeAlias = float | Mapping[str, float] | AbstractPauliChannel | NoiseRule
+
+
+####################################################################################################
+# helper methods
 
 
 def _validate_after_circuit(after_circuit: stim.Circuit) -> None:

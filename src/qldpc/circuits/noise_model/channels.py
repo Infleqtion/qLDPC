@@ -18,6 +18,9 @@ import stim
 
 from ..common import StimCircuitLike
 
+####################################################################################################
+# Pauli channels
+
 
 class AbstractPauliChannel(abc.ABC):
     """Base class for sparse Pauli channels.
@@ -414,6 +417,9 @@ class PauliChannelSequence(AbstractPauliChannel):
             circuit.append("CORRELATED_ERROR", pauli_targets, [prob], tag=tag)
         return circuit
 
+
+####################################################################################################
+# helper methods
 
 # Floating-point tolerance used for probability comparisons throughout this module.  Small enough to
 # catch real bugs, large enough to absorb the ~O(n * eps) drift that accumulates when summing or

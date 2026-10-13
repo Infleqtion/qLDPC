@@ -52,6 +52,9 @@ from .rules import (
     _validate_rule_for_arity,
 )
 
+####################################################################################################
+# primary methods and classes: as_noiseless_circuit and NoiseModel
+
 
 def as_noiseless_circuit(circuit: StimCircuitLike) -> StimCircuitLike:
     """Wrap a circuit in a one-repetition block tagged immune to :class:`NoiseModel`."""
@@ -580,6 +583,10 @@ class NoiseModel:
             rule.emit_after(circuit, targets, context="idle qubits")
 
 
+####################################################################################################
+# built-in noise models
+
+
 class DepolarizingNoiseModel(NoiseModel):
     """Creates a near-standard circuit depolarizing noise model.
 
@@ -636,6 +643,10 @@ class SI1000NoiseModel(NoiseModel):
             idle_error=p / 10,
             additional_error_waiting_for_m_or_r=2 * p,
         )
+
+
+####################################################################################################
+# helper methods
 
 
 class _NoisyCircuitBuilder:

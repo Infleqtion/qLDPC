@@ -12,6 +12,9 @@ import re
 
 import stim
 
+####################################################################################################
+# global constants and instruction classification
+
 DEFAULT_IMMUNE_OP_TAG = "__IMMUNE_TO_NOISE__"
 DEFAULT_IMMUNE_QUBIT_TAG = "__IMMUNE_QUBIT_TO_NOISE__"
 
@@ -99,6 +102,10 @@ COLLAPSING_OPS = JUST_MEASURE_OPS | JUST_RESET_OPS | MEASURE_AND_RESET_OPS
 # the output circuit and receive the model's idle noise; explicit rules may add marker-specific
 # noise.
 IDLE_OPS = frozenset({"I", "II"})
+
+
+####################################################################################################
+# helper methods
 
 
 def _get_gate_aliases(op: stim.CircuitInstruction) -> tuple[str, ...]:
