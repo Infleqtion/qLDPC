@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for moments.py."""
+"""Unit tests for _moments.py."""
 
 import pytest
 import stim
 
 from qldpc import circuits
 from qldpc.circuits.conftest import circuits_are_equivalent
-from qldpc.circuits.noise_model.moments import (
+from qldpc.circuits.noise_model._moments import (
     _categorize_moment_qubits,
     _get_immune_qubits,
     _idle_barrier_qubits,

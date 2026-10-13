@@ -151,6 +151,7 @@ from .noise_model import (
     DepolarizingNoiseModel,
     NoiseModel,
     SI1000NoiseModel,
+    as_noiseless_circuit,
 )
 from .operations import (
     ALL_STIM_GATE_NAMES,
@@ -173,7 +174,6 @@ from .operations import (
     MEASURE_RESET_1Q,
     NOISE,
     UNSUPPORTED,
-    as_noiseless_circuit,
     op_type,
 )
 from .rules import (

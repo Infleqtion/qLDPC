@@ -5,8 +5,6 @@
 import pytest
 import stim
 
-from qldpc import circuits
-from qldpc.circuits.conftest import StimCircuitWrapper
 from qldpc.circuits.noise_model import operations
 from qldpc.circuits.noise_model.operations import (
     _canonical_rule_key,
@@ -33,20 +31,6 @@ def test_op_type() -> None:
         operations.JUST_MEASURE_OPS | operations.JUST_RESET_OPS | operations.MEASURE_AND_RESET_OPS
     )
     assert {"M", "MZ", "MPP", "MXX"} <= operations.JUST_MEASURE_OPS
-
-
-def test_as_noiseless_circuit() -> None:
-    """Circuits are wrapped (once) in a block that is immune to noise."""
-    circuit = stim.Circuit("H 0\nTICK\nCX 0 1")
-    noiseless = circuits.as_noiseless_circuit(circuit)
-    expected = stim.Circuit()
-    expected.append(stim.CircuitRepeatBlock(1, circuit, tag=circuits.DEFAULT_IMMUNE_OP_TAG))
-    assert noiseless == expected
-    assert circuits.as_noiseless_circuit(noiseless) == noiseless
-    assert circuits.DepolarizingNoiseModel(0.1).noisy_circuit(noiseless) == noiseless
-
-    wrapped = circuits.as_noiseless_circuit(StimCircuitWrapper(circuit))
-    assert isinstance(wrapped, StimCircuitWrapper) and wrapped.stim_circuit == expected
 
 
 def test_gate_aliases() -> None:

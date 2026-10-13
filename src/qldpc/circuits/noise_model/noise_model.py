@@ -15,14 +15,14 @@ import stim
 from qldpc._util import format_docstring
 
 from ..common import StimCircuitLike
-from .channels import PauliChannel, PauliChannelSequence, _repeated_idle_channel
-from .moments import (
+from ._moments import (
     _categorize_moment_qubits,
     _gate_qubits,
     _get_immune_qubits,
     _idle_barrier_qubits,
     _split_targets_if_needed,
 )
+from .channels import PauliChannel, PauliChannelSequence, _repeated_idle_channel
 from .operations import (
     ANNOTATION,
     CLIFFORD_1Q,
@@ -51,6 +51,26 @@ from .rules import (
     _validate_custom_rule,
     _validate_rule_for_arity,
 )
+
+
+def as_noiseless_circuit(circuit: StimCircuitLike) -> StimCircuitLike:
+    """Wrap a circuit in a one-repetition block tagged immune to :class:`NoiseModel`."""
+    if (
+        len(circuit) == 1
+        and isinstance(circuit[0], stim.CircuitRepeatBlock)
+        and DEFAULT_IMMUNE_OP_TAG in circuit[0].tag
+    ):
+        return circuit
+    # Read the circuit's operations into a stim.Circuit body (the repeat block requires a
+    # stim.Circuit).  Iterating by index works for a stim.Circuit and any stim-wrapping circuit.
+    body = stim.Circuit()
+    for index in range(len(circuit)):
+        body.append(circuit[index])
+
+    block = stim.CircuitRepeatBlock(repeat_count=1, body=body, tag=DEFAULT_IMMUNE_OP_TAG)
+    noiseless_circuit = type(circuit)()
+    noiseless_circuit.append(block)
+    return noiseless_circuit
 
 
 class NoiseModel:

@@ -12,46 +12,20 @@ import re
 
 import stim
 
-from ..common import StimCircuitLike
-
 DEFAULT_IMMUNE_OP_TAG = "__IMMUNE_TO_NOISE__"
-
-
 DEFAULT_IMMUNE_QUBIT_TAG = "__IMMUNE_QUBIT_TO_NOISE__"
 
-
 CLIFFORD_1Q = "C1"
-
-
 CLIFFORD_2Q = "C2"
-
-
 CLIFFORD_PP = "CPP"
-
-
 JUST_MEASURE_1Q = "M1"
-
-
 JUST_MEASURE_2Q = "M2"
-
-
 JUST_MEASURE_PP = "MPP"
-
-
 JUST_RESET_1Q = "R1"
-
-
 MEASURE_RESET_1Q = "MR1"
-
-
 ANNOTATION = "info"
-
-
 NOISE = "!?"
-
-
 UNSUPPORTED = "unsupported"
-
 
 # The op-type categories that name a genuine noisy gate (as opposed to pure-noise, annotation, or
 # unsupported instructions).  These are the operations a user-provided ``rule_func`` is consulted
@@ -110,49 +84,21 @@ def op_type(op_name: str) -> str:
 # All canonical + alias names stim knows about, plus their aliases (so lookups by any name work).
 ALL_STIM_GATE_NAMES = frozenset(alias for gd in stim.gate_data().values() for alias in gd.aliases)
 
-
 JUST_MEASURE_OPS = frozenset(
     name
     for name in ALL_STIM_GATE_NAMES
     if op_type(name) in (JUST_MEASURE_1Q, JUST_MEASURE_2Q, JUST_MEASURE_PP)
 )
-
-
 JUST_RESET_OPS = frozenset(name for name in ALL_STIM_GATE_NAMES if op_type(name) == JUST_RESET_1Q)
-
-
 MEASURE_AND_RESET_OPS = frozenset(
     name for name in ALL_STIM_GATE_NAMES if op_type(name) == MEASURE_RESET_1Q
 )
-
-
 COLLAPSING_OPS = JUST_MEASURE_OPS | JUST_RESET_OPS | MEASURE_AND_RESET_OPS
-
 
 # Stim's explicit idle markers describe waiting, rather than noisy Clifford gates.  They remain in
 # the output circuit and receive the model's idle noise; explicit rules may add marker-specific
 # noise.
 IDLE_OPS = frozenset({"I", "II"})
-
-
-def as_noiseless_circuit(circuit: StimCircuitLike) -> StimCircuitLike:
-    """Wrap a circuit in a one-repetition block tagged immune to :class:`NoiseModel`."""
-    if (
-        len(circuit) == 1
-        and isinstance(circuit[0], stim.CircuitRepeatBlock)
-        and DEFAULT_IMMUNE_OP_TAG in circuit[0].tag
-    ):
-        return circuit
-    # Read the circuit's operations into a stim.Circuit body (the repeat block requires a
-    # stim.Circuit).  Iterating by index works for a stim.Circuit and any stim-wrapping circuit.
-    body = stim.Circuit()
-    for index in range(len(circuit)):
-        body.append(circuit[index])
-
-    block = stim.CircuitRepeatBlock(repeat_count=1, body=body, tag=DEFAULT_IMMUNE_OP_TAG)
-    noiseless_circuit = type(circuit)()
-    noiseless_circuit.append(block)
-    return noiseless_circuit
 
 
 def _get_gate_aliases(op: stim.CircuitInstruction) -> tuple[str, ...]:

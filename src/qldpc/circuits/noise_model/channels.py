@@ -23,8 +23,8 @@ class AbstractPauliChannel(abc.ABC):
     """Base class for sparse Pauli channels.
 
     Every ``AbstractPauliChannel`` maps non-identity Pauli strings (over the alphabet
-    ``{I, X, Y, Z}``) to their probabilities.  The interpretation of those probabilities generally
-    depends on the ``AbstractPauliChannel`` subclass.
+    ``{I, X, Y, Z}``) to their probabilities.  The interpretation of those probabilities depends on
+    the ``AbstractPauliChannel`` subclass.
 
     Subclasses of ``AbstractPauliChannel`` are required to define a ``.to_circuit`` method.
     """
@@ -163,9 +163,9 @@ class PauliChannel(AbstractPauliChannel):
     """A sparse multi-qubit Pauli channel.
 
     Maps non-identity Pauli strings (over the alphabet ``{I, X, Y, Z}``) to their probabilities.
-    The strings name mutually-exclusive outcomes: exactly one Pauli (possibly the identity) is
-    applied.  The all-identity string is implicit; its probability is ``1 - sum(others)``, so the
-    listed probabilities must sum to at most 1.
+    The strings name mutually exclusive outcomes: this channel applies exactly one Pauli string
+    (possibly the identity).  The all-identity string is implicit; its probability is
+    ``1 - sum(others)``, so the listed probabilities must sum to at most 1.
     """
 
     def __init__(
@@ -234,7 +234,7 @@ class PauliChannel(AbstractPauliChannel):
 
         Returns:
             A ``PauliChannel`` on the same qubits as ``self``.  If no strings survive, the returned
-            channel is empty but still reports ``num_qubits == self.num_qubits``.
+                channel is empty but still reports ``num_qubits == self.num_qubits``.
 
         Raises:
             ValueError: If any index is outside ``[0, num_qubits)``.
