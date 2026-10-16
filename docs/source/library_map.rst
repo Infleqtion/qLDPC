@@ -115,7 +115,7 @@ What each package does
      - Decoder protocol and adapters; lookup, ILP, BP-family, Frontier, MWPM, Relay-BP, detector-error-model, Sinter, and windowed decoding support.
      - :doc:`logical-error-rate examples <examples/index>` and :doc:`decoders API <autoapi/qldpc/decoders/index>`.
    * - ``qldpc.circuits``
-     - Qubit-only Stim circuits, memory experiments, state-preparation diagnostics, encoders, noise models, scheduling, and transversal operations.
+     - Qubit-only Stim circuits, fault-distance certification, memory experiments, state-preparation diagnostics, encoding circuits, noise models, scheduling, and transversal operations.
      - :doc:`noise models <examples/noise_models>`, :doc:`transversal gates <examples/transversal_gates>`, and :doc:`circuits API <autoapi/qldpc/circuits/index>`.
    * - ``qldpc.abstract``
      - Groups, group rings, lifted matrices, Howell-form linear algebra, and Wedderburn--Artin tools.
