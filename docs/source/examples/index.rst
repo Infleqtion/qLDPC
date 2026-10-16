@@ -39,7 +39,7 @@ The numbered notebooks build conceptually on one another, but none relies on fil
    logical_error_rates/3_quantum_memory_combined
    logical_error_rates/4_sliding_window_decoding
    logical_error_rates/5_state_preparation
-   logical_error_rates/6_knill_qec
+   logical_error_rates/6_steane_qec
    logical_error_rates/7_individual_observables
    logical_error_rates/8_certifying_fault_distance
 
