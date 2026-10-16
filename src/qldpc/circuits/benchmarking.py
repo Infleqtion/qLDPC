@@ -12,7 +12,7 @@ import numpy.typing as npt
 import sinter
 import stim
 
-from qldpc import codes, decoders, math
+from qldpc import circuits, codes, decoders, math
 from qldpc.objects import Pauli
 
 from .bookkeeping import DetectorRecord, QubitIDs
@@ -390,8 +390,10 @@ def get_logical_error_and_discard_rate(
 # circuit fault distance
 
 
-def get_fault_distance(circuit: stim.Circuit) -> int | float:
-    r"""Compute the exact fault distance of a noisy circuit using the Brouwer-Zimmermann algorithm.
+def get_fault_distance(
+    circuit: stim.Circuit, *, method: circuits.DistanceMethod = "brouwer_zimmermann"
+) -> int | float:
+    r"""Compute the exact fault distance of a noisy circuit.
 
     Consider a noisy Stim circuit annotated with detectors and logical observables.  Calling
     ``circuit.detector_error_model()`` converts it into a detector error model (DEM).  The DEM lists
@@ -430,12 +432,13 @@ def get_fault_distance(circuit: stim.Circuit) -> int | float:
     with no observable effect, which we declare trivial errors.  The remaining nontrivial Z-logical
     operators have zero syndrome but flip an observable.
 
-    Thus the Z distance of :math:`C` is exactly the circuit fault distance.  The artificial Z label
-    does not restrict the underlying circuit faults to physical Z errors.  The exact
-    Brouwer-Zimmermann search can be expensive for larger circuits.
+    Thus the Z-distance of :math:`C` is exactly the circuit fault distance.  The artificial Z label
+    does not restrict the underlying circuit faults to physical Z errors.  The exact code distance
+    calculation can be expensive for larger circuits.
 
     Args:
         circuit: A noisy Stim circuit annotated with detectors and logical observables.
+        method: The method used to compute the Z-distance of an auxiliary fault code.
 
     Returns:
         The minimum number of DEM fault mechanisms causing an undetected observable flip, or np.nan
@@ -446,7 +449,7 @@ def get_fault_distance(circuit: stim.Circuit) -> int | float:
     observables = galois.GF2(dem_arrays.observable_flip_matrix.toarray())
     harmless_faults = galois.GF2(np.vstack([detectors, observables])).null_space()
     fault_code = codes.CSSCode(detectors, harmless_faults)
-    return fault_code.get_distance_exact(Pauli.Z, method="brouwer_zimmermann")
+    return fault_code.get_distance_exact(Pauli.Z, method=method)
 
 
 ####################################################################################################
