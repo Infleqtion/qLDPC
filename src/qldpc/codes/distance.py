@@ -673,6 +673,10 @@ def _prepare_brouwer_zimmermann_search(
         )
         return min(best, distance)
 
+    # XOR preserves even parity, so this entire ambient space has even Hamming weight.
+    if np.all(np.count_nonzero(basis, axis=1) % 2 == 0):
+        weight_divisor = math.lcm(weight_divisor, 2)
+
     information_sets = _get_information_set_generators(basis, labels)
     weight_func, _ = _get_hamming_weight_fn()
     # Systematic rows are all coefficient-weight-one candidates.
