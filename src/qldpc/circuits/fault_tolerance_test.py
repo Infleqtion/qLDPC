@@ -4,7 +4,9 @@
 
 from __future__ import annotations
 
+import inspect
 import itertools
+from typing import Literal
 from unittest import mock
 
 import numpy as np
@@ -31,7 +33,10 @@ def _exhaustive(flags: list[int], syndromes: list[int], n: int, budget: int) -> 
 
 
 @pytest.mark.parametrize("force_prefix", [False, True])
-def test_random_maps(force_prefix: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("weight", ["pauli", "css"])
+def test_random_maps(
+    force_prefix: bool, weight: Literal["pauli", "css"], monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Minimal-dependency search agrees with all accepted patterns, including flag cancellation."""
     monkeypatch.setattr(fault_tolerance, "_use_prefix_search", mock.Mock(return_value=force_prefix))
     rng = np.random.default_rng(612)
@@ -44,7 +49,7 @@ def test_random_maps(force_prefix: bool, monkeypatch: pytest.MonkeyPatch) -> Non
                 for budget in (1, 2, 3, 5):
                     stats = circuits.StatePrepSpreadStatistics()
                     failure = fault_tolerance._certify_maps(
-                        flags, syndromes, PauliCosetSearch(matrix), budget, stats
+                        flags, syndromes, PauliCosetSearch(matrix, weight=weight), budget, stats
                     )
                     assert (failure is None) == _exhaustive(flags, syndromes, n, budget)
                     if failure is not None:
@@ -286,7 +291,7 @@ def test_dependency_reductions() -> None:
 
 
 def test_steane_mixed_pauli_witness() -> None:
-    """An algebraic one-fault witness refutes the full criterion despite the pure-Z result."""
+    """Steane passes CSS spread despite failing the stronger physical-support criterion."""
     ideal = stim.Circuit("""
         H 0 2 4
         CX 0 3 2 1 4 5
@@ -299,7 +304,7 @@ def test_steane_mixed_pauli_witness() -> None:
     """)
     circuit = circuits.DepolarizingNoiseModel(1e-3).noisy_circuit(ideal)
     result = circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(7), max_faults=3, post_select=[0]
+        circuit, output_qubits=range(7), max_faults=3, post_select=[0], css_weight=False
     )
     failure = result.counterexample
     assert not result.certified and failure is not None
@@ -325,6 +330,173 @@ def test_steane_mixed_pauli_witness() -> None:
     ]
     targets = errors[failure.fault_indices[0]].targets_copy()
     assert {target.val for target in targets} == {1, 2, 4}
+    css = circuits.certify_state_prep_spread(
+        circuit, output_qubits=range(7), max_faults=3, post_select=[0]
+    )
+    assert css.certified and css.css_weight is True
+    assert result.css_weight is False
+    assert css.statistics.minimal_candidates == 31 + 465
+    assert (
+        tuple(int(not stim.PauliString("X_Z____").commutes(gg)) for gg in stabilizers)
+        == failure.output_syndrome
+    )
+    # Z0 Z1 Z2 is a full prepared-state stabilizer, so Y0 Z1 and X0 Z2 agree up to phase.
+    simulator = stim.TableauSimulator()
+    simulator.do(ideal)
+    assert simulator.peek_observable_expectation(stim.PauliString("ZZZ____")) == 1
+
+
+@pytest.mark.parametrize("css_weight", [None, True, False])
+def test_state_selection_and_overrides(css_weight: bool | None) -> None:
+    """Automatic physical-basis state detection, not an unsupplied code, chooses the metric."""
+    circuit = stim.Circuit("I 0\nH 1\nCORRELATED_ERROR(0.01) X0 Z1")
+    result = circuits.certify_state_prep_spread(
+        circuit, output_qubits=[0, 1], max_faults=3, css_weight=css_weight
+    )
+    assert result.certified is (css_weight is not False)
+    assert result.css_weight is (css_weight is not False)
+    graph = stim.Circuit("H 0 1\nCZ 0 1\nCORRELATED_ERROR(0.001) X0 X1")
+    result = circuits.certify_state_prep_spread(
+        graph, output_qubits=[0, 1], max_faults=3, css_weight=css_weight
+    )
+    assert result.certified and result.css_weight is (css_weight is True)
+    parameters = inspect.signature(circuits.certify_state_prep_spread).parameters
+    assert "code" not in parameters and "weight" not in parameters
+    assert parameters["css_weight"].default is None
+
+
+def test_css_row_space_not_individual_generators(monkeypatch: pytest.MonkeyPatch) -> None:
+    """All supplied rows mix X and Z, but their row space is the CSS state |+00>."""
+    generators = [stim.PauliString(gg) for gg in ("XZ_", "X_Z", "XZZ")]
+    monkeypatch.setattr(fault_tolerance, "get_state_stabilizers", lambda *args: generators)
+    result = circuits.certify_state_prep_spread(
+        stim.Circuit("H 0\nI 1 2\nCORRELATED_ERROR(0.001) Z0 X1"),
+        output_qubits=range(3),
+        max_faults=1,
+    )
+    assert result.certified and result.css_weight is True
+    assert all(np.any(gg.to_numpy()[0]) and np.any(gg.to_numpy()[1]) for gg in generators)
+
+
+@pytest.mark.parametrize("css_weight", [None, True, False])
+def test_css_code_non_css_logical_state(css_weight: bool | None) -> None:
+    """A CSS repetition code can prepare logical Y; never require a CSS complete state."""
+    result = circuits.certify_state_prep_spread(
+        stim.Circuit("H 0\nS 0\nCX 0 1 0 2\nDEPOLARIZE1(0.001) 0 1 2"),
+        output_qubits=range(3),
+        max_faults=3,
+        css_weight=css_weight,
+    )
+    assert result.certified and result.css_weight is (css_weight is True)
+    assert any("Y" in gg for gg in result.target_stabilizers)
+
+
+def test_non_css_override_minimizes_jointly() -> None:
+    """Each graph-state sector can vanish separately, but no joint CSS-weight-one word exists."""
+    result = circuits.certify_state_prep_spread(
+        stim.Circuit("H 0 1 2 3\nCZ 0 1 1 2 2 3\nCORRELATED_ERROR(0.001) Z0 Z1 Z2 Z3"),
+        output_qubits=range(4),
+        max_faults=1,
+        css_weight=True,
+    )
+    assert not result.certified and result.css_weight is True
+    assert result.counterexample is not None
+    assert result.counterexample.effective_weight_lower_bound == 2
+
+
+@pytest.mark.parametrize("css_weight", [False, True])
+@pytest.mark.parametrize("sector", [3, 4])
+@pytest.mark.parametrize("prefix", [False, True])
+def test_multi_flag_joint_sector_triples(
+    css_weight: bool, sector: int, prefix: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """True 01/10/11 dependencies have CSS weight sector, physical weight twice sector."""
+    monkeypatch.setattr(fault_tolerance, "_use_prefix_search", mock.Mock(return_value=prefix))
+    n = 2 * sector
+    circuit = stim.Circuit()
+    circuit.append("H", range(sector, n))
+    circuit.append("CORRELATED_ERROR", [stim.target_x(n)], 0.001)
+    circuit.append("CORRELATED_ERROR", [stim.target_x(n + 1)], 0.001)
+    targets = [stim.target_x(jj) for jj in range(sector)]
+    targets += [stim.target_z(jj) for jj in range(sector, n)]
+    circuit.append("CORRELATED_ERROR", targets + [stim.target_x(n), stim.target_x(n + 1)], 0.001)
+    circuit.append("M", [n, n + 1])
+    circuit.append("DETECTOR", [stim.target_rec(-2)])
+    circuit.append("DETECTOR", [stim.target_rec(-1)])
+    result = circuits.certify_state_prep_spread(
+        circuit, output_qubits=range(n), post_select=[0, 1], max_faults=3, css_weight=css_weight
+    )
+    minimum = sector if css_weight else n
+    assert result.certified == (minimum <= 3)
+    assert result.statistics.flag_rank == 2 and result.css_weight is css_weight
+    assert result.statistics.search_method == (
+        "independent_prefix" if prefix else "brouwer_zimmermann"
+    )
+    if not result.certified:
+        failure = result.counterexample
+        assert failure is not None and failure.fault_count == 3
+        assert 3 < failure.effective_weight_lower_bound <= minimum
+
+
+@pytest.mark.parametrize("rank", [12, 65])
+@pytest.mark.parametrize("order", [3, 4])
+@pytest.mark.parametrize("css_weight", [False, True])
+@pytest.mark.parametrize("prefix", [False, True])
+@pytest.mark.parametrize("extra_weight", [0, 1])
+def test_many_flags_finite_budget(
+    rank: int,
+    order: int,
+    css_weight: bool,
+    prefix: bool,
+    extra_weight: int,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rank far exceeds budget; the sole accepted dependency is a genuine triple or quadruple."""
+    monkeypatch.setattr(fault_tolerance, "_use_prefix_search", mock.Mock(return_value=prefix))
+    sector = order + extra_weight
+    n = 2 * sector
+    circuit = stim.Circuit()
+    circuit.append("H", range(sector, n))
+    for bit in range(rank):
+        circuit.append("CORRELATED_ERROR", [stim.target_x(n + bit)], 0.001)
+    targets = [stim.target_x(jj) for jj in range(sector)]
+    targets += [stim.target_z(jj) for jj in range(sector, n)]
+    targets += [stim.target_x(n + bit) for bit in range(order - 1)]
+    circuit.append("CORRELATED_ERROR", targets, 0.001)
+    circuit.append("M", range(n, n + rank))
+    for bit in range(rank):
+        circuit.append("DETECTOR", [stim.target_rec(bit - rank)])
+    for budget in (order - 1, order):
+        result = circuits.certify_state_prep_spread(
+            circuit,
+            output_qubits=range(n),
+            post_select=range(rank),
+            max_faults=budget,
+            css_weight=css_weight,
+        )
+        minimum = sector if css_weight else n
+        assert result.certified is (budget < order or minimum <= order)
+        assert result.css_weight is css_weight
+        assert result.statistics.flag_rank == rank > budget
+        assert result.statistics.effective_budget == budget
+        assert result.statistics.search_method == (
+            "independent_prefix" if prefix else "brouwer_zimmermann"
+        )
+        if budget < order:
+            assert result.statistics.minimal_candidates == 0
+        else:
+            assert 1 <= result.statistics.minimal_candidates <= order
+        if result.counterexample is not None:
+            assert result.counterexample.fault_count == order
+            assert order < result.counterexample.effective_weight_lower_bound <= minimum
+
+
+@pytest.mark.parametrize("css_weight", ["css", "pauli", "", 0, 1, [], np.bool_(True)])
+def test_invalid_weight_override(css_weight: bool) -> None:
+    with pytest.raises(ValueError, match="css_weight"):
+        circuits.certify_state_prep_spread(
+            stim.Circuit("I 0"), output_qubits=[0], max_faults=1, css_weight=css_weight
+        )
 
 
 def test_ghz_global_counterexample_bound() -> None:

@@ -336,7 +336,7 @@ class BoundedKernelSearch:
 
 @dataclass(frozen=True)
 class PauliWeightDecision:
-    """A checked coset representative or an exact effective-weight lower bound.
+    """A checked coset representative or a global lower bound in the oracle's fixed metric.
 
     ``representative`` packs X in the low ``n`` bits and Z in the next ``n`` bits.
     It is not asserted to be a minimum representative.  If ``within_bound`` is False,
@@ -350,32 +350,50 @@ class PauliWeightDecision:
 
 
 class PauliCosetSearch:
-    """Amortized exact physical-weight threshold oracle for a pure stabilizer state.
+    """Amortized exact joint error-weight oracle for a pure stabilizer state.
 
     Args:
         stabilizers: An independent commuting binary ``n x 2n`` matrix in ``[X|Z]`` order.
+        weight: Fixed metric: ``"pauli"`` counts physical support, while ``"css"`` counts
+            ``max(|x|, |z|)`` in the supplied physical frame.  Minimize jointly over one coset
+            representative, including when the complete state stabilizers are non-CSS.
         cache_size: Maximum number of cached syndrome decisions (at least one).
         batch_size: Maximum coefficient supports in a packed affine BZ batch.
 
     The full syndrome identifies a Pauli coset because a maximal isotropic space equals its
-    symplectic orthogonal.  The embedding ``(x|z) -> (x|z|x+z)`` doubles physical weight, including
-    Y.  For each information-set basis, zero the affine offset on its pivots by adding rows.
+    symplectic orthogonal.  Physical weight uses the embedding ``(x|z) -> (x|z|x+z)``, whose
+    Hamming weight is twice physical weight, including Y.  CSS weight uses ``[X|Z]`` directly:
+    its Hamming weight is at most twice ``max(|x|, |z|)``.
+    For each information-set basis, zero the affine offset on its pivots by adding rows.
     Pivot coordinates then equal coefficient bits.  The same disjoint-set coverage bound as
     :class:`BoundedKernelSearch` applies, starting at coefficient weight zero.  Absence of a
-    threshold witness is reported only after all visited weights and the unseen-word bound
-    exceed twice the threshold.  If ``v`` is the minimum visited embedded weight and ``L`` bounds
-    unseen embedded words, the whole coset has physical weight at least ``ceil(min(v, L) / 2)``.
-    The unseen-word bound alone is not a global coset bound.
+    threshold witness is reported only after all visited metric weights and the unseen metric
+    bound exceed the threshold.  If ``v`` is the minimum visited metric weight and ``L`` bounds
+    unseen binary Hamming weights, the global metric bound is ``min(v, ceil(L / 2))``.
+    Exhausting all coefficients gives the exact visited minimum.  An unseen-word bound alone
+    is never published as a global coset bound.
 
     Elimination is performed once.  Information sets are prepared lazily, at most once.
-    The only unconditional syndrome table contains identity and single-qubit Paulis.
+    The unconditional syndrome tables have linear size: identity and single-qubit Paulis.
+    A CSS-weight-one representative may be ``X_i Z_j`` on distinct qubits.  Per-query matching
+    of X-single and Z-single syndromes checks all such representatives in linear work without
+    a quadratic table.  Absence from that complete search, not just physical singles, proves
+    a CSS lower bound two.
     The bounded cache stores checked upper bounds and proved lower bounds; eviction changes only
     runtime, never correctness.  No heuristic or probabilistic negative decision is used.
     """
 
     def __init__(
-        self, stabilizers: npt.ArrayLike, *, cache_size: int = 4096, batch_size: int = 4096
+        self,
+        stabilizers: npt.ArrayLike,
+        *,
+        weight: Literal["pauli", "css"] = "pauli",
+        cache_size: int = 4096,
+        batch_size: int = 4096,
     ) -> None:
+        if weight not in ("pauli", "css"):
+            raise ValueError("weight must be 'pauli' or 'css'")
+        self._weight_metric = weight
         _assert_binary(stabilizers, "stabilizers")
         matrix = _as_binary_matrix(stabilizers)
         self.num_qubits = len(matrix)
@@ -393,7 +411,15 @@ class PauliCosetSearch:
         inverse[:, pivots] = labels.T
         self._inverse = tuple(_binary_row_int(row) for row in inverse)
         self._checks = tuple(_binary_row_int(row) for row in checks)
-        self._embedded = _symplectic_to_hamming(matrix)
+        self._embedded = _symplectic_to_hamming(matrix) if weight == "pauli" else matrix.copy()
+        mask = (1 << n) - 1
+        self._sector_masks = tuple(
+            np.array(
+                [(sector >> (64 * jj)) & ((1 << 64) - 1) for jj in range((2 * n + 63) // 64)],
+                dtype=np.uint64,
+            )
+            for sector in (mask, mask << n)
+        )
         self._information_sets: list[
             tuple[npt.NDArray[np.uint64], tuple[int, ...], tuple[int, ...]]
         ] = []
@@ -407,9 +433,21 @@ class PauliCosetSearch:
         self.coefficient_depth = 0
         self._cache: dict[int, PauliWeightDecision] = {}
         self._singles = {0: 0}
+        self._x_singles = {0: 0}
+        self._z_singles = {0: 0}
         for qubit in range(n):
-            for pauli in (1 << qubit, 1 << (qubit + n), (1 << qubit) | (1 << (qubit + n))):
-                self._singles.setdefault(self.syndrome(pauli), pauli)
+            x, z = 1 << qubit, 1 << (qubit + n)
+            sx, sz = self.syndrome(x), self.syndrome(z)
+            self._x_singles.setdefault(sx, x)
+            self._z_singles.setdefault(sz, z)
+            self._singles.setdefault(sx, x)
+            self._singles.setdefault(sz, z)
+            self._singles.setdefault(sx ^ sz, x ^ z)
+
+    @property
+    def weight(self) -> Literal["pauli", "css"]:
+        """The read-only metric shared by all witnesses, bounds, and cache entries."""
+        return self._weight_metric
 
     def syndrome(self, pauli: int) -> int:
         """Compute the complete stabilizer syndrome of a packed symplectic Pauli."""
@@ -428,8 +466,8 @@ class PauliCosetSearch:
                 return PauliWeightDecision(
                     upper <= max_weight, known.representative, known.lower_bound
                 )
-        if syndrome in self._singles:
-            pauli = self._singles[syndrome]
+        pauli = self._weight_one_representative(syndrome)
+        if pauli is not None:
             decision = PauliWeightDecision(
                 self._weight(pauli) <= max_weight, pauli, int(bool(syndrome))
             )
@@ -445,8 +483,34 @@ class PauliCosetSearch:
     def _representative(self, syndrome: int) -> int:
         return _xor_selected(self._inverse, syndrome)
 
+    def _weight_one_representative(self, syndrome: int) -> int | None:
+        if syndrome in self._singles:
+            return self._singles[syndrome]
+        if self.weight == "css":
+            for sx, x in self._x_singles.items():
+                z = self._z_singles.get(syndrome ^ sx)
+                if z is not None:
+                    return x ^ z
+        return None
+
     def _weight(self, pauli: int) -> int:
-        return ((pauli | (pauli >> self.num_qubits)) & ((1 << self.num_qubits) - 1)).bit_count()
+        mask = (1 << self.num_qubits) - 1
+        x, z = pauli & mask, (pauli >> self.num_qubits) & mask
+        return max(x.bit_count(), z.bit_count()) if self.weight == "css" else (x | z).bit_count()
+
+    def _candidate_weights(
+        self,
+        candidates: npt.NDArray[np.uint64],
+        weight_func: Callable[..., npt.NDArray[np.uint64]],
+    ) -> npt.NDArray[np.uint64]:
+        if self.weight == "pauli":
+            return _get_packed_row_weights(candidates, weight_func) // 2
+        return np.maximum(
+            *(
+                _get_packed_row_weights(candidates & mask, weight_func)
+                for mask in self._sector_masks
+            )
+        )
 
     def _search(self, syndrome: int, threshold: int) -> PauliWeightDecision:
         if not self._information_sets:
@@ -466,7 +530,7 @@ class PauliCosetSearch:
         n = self.num_qubits
         x = pauli & ((1 << n) - 1)
         z = pauli >> n
-        embedded = x | (z << n) | ((x ^ z) << (2 * n))
+        embedded = pauli if self.weight == "css" else x | (z << n) | ((x ^ z) << (2 * n))
         offsets: list[npt.NDArray[np.uint64]] = []
         for packed, rows, pivots in self._information_sets:
             offset_word = embedded
@@ -480,7 +544,7 @@ class PauliCosetSearch:
                 )
             )
         weight_func, _ = _get_hamming_weight_fn()
-        visited_min = 2 * n + 1
+        visited_min = n + 1
         best_pauli = pauli
         depth = 0
         while True:
@@ -493,8 +557,8 @@ class PauliCosetSearch:
                 for supports in supports_iter:
                     candidates = np.bitwise_xor.reduce(packed[supports], axis=1) ^ offset
                     self.generated += len(supports)
-                    weights = _get_packed_row_weights(candidates, weight_func)
-                    good = np.flatnonzero(weights <= 2 * threshold)
+                    weights = self._candidate_weights(candidates, weight_func)
+                    good = np.flatnonzero(weights <= threshold)
                     if len(good):
                         word = _packed_row_int(candidates[good[0]])
                         representative = word & ((1 << (2 * n)) - 1)
@@ -505,10 +569,13 @@ class PauliCosetSearch:
                         word = _packed_row_int(candidates[int(weights.argmin())])
                         best_pauli = word & ((1 << (2 * n)) - 1)
             self.coefficient_depth = max(self.coefficient_depth, depth)
-            unseen_lower = sum(max(0, depth + 1 - (n - rank)) for rank in self.ranks)
-            if unseen_lower > 2 * threshold:
+            unseen_hamming = sum(max(0, depth + 1 - (n - rank)) for rank in self.ranks)
+            unseen_lower = (unseen_hamming + 1) // 2
+            if depth == n:
+                return PauliWeightDecision(False, best_pauli, visited_min)
+            if unseen_lower > threshold:
                 global_lower = min(visited_min, unseen_lower)
-                return PauliWeightDecision(False, best_pauli, (global_lower + 1) // 2)
+                return PauliWeightDecision(False, best_pauli, global_lower)
             depth += 1
 
 

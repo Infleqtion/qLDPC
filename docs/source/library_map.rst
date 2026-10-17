@@ -230,23 +230,35 @@ For sliding-window decoding, detector coordinates are only a heuristic source of
 Certify resource-state preparation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``circuits.certify_state_prep_spread(noisy_circuit, output_qubits=..., max_faults=..., post_select=...)`` checks a sufficient bounded-spread property of a definite pure Clifford output.
-For every accepted binary DEM pattern through the requested budget, it proves that the output error is equivalent on the complete prepared state to a Pauli of weight no greater than that pattern's own fault count.
-Y counts as one affected qubit, and logical stabilizers fixing the intended state are included.
+``circuits.certify_state_prep_spread(noisy_circuit, output_qubits=..., max_faults=..., post_select=..., css_weight=None)`` checks a sufficient bounded-spread property of a definite pure Clifford output.
+For every accepted binary DEM pattern through the requested budget, it proves that the output error is equivalent on the complete prepared state to a Pauli of chosen weight no greater than that pattern's own fault count.
+Physical weight (``css_weight=False``) counts affected qubits, with Y counting once; CSS-sector weight (``css_weight=True``) is ``max(|x|, |z|)``.
+Both minimize jointly over one representative, including logical stabilizers fixing the intended state.
+With ``css_weight=None``, the complete prepared-state stabilizer row space selects CSS weight exactly when its pure-X and pure-Z intersections span that space in the physical output basis.
+This is independent of the chosen generators, not a local-Clifford equivalence test.
+For a complete rank-n space W, these intersections have dimensions ``n - rank(W_Z)`` and ``n - rank(W_X)``; their sum must equal n.
+This detects state equivalences, not downstream compatibility.
+A CSS code may prepare a non-CSS logical stabilizer state, so its application may need an explicit True override.
+Explicit overrides are available in either direction, and ``result.css_weight`` records the resolved boolean.
+No code argument is required or accepted.
 Only the explicitly selected actual detectors reject a pattern; noiseless final state diagnostics are not rejection tests.
 The result includes its undecomposed diagnostic DEM and, on failure, original mechanism indices, a complete output syndrome, and a proved effective-weight lower bound.
 
 The implementation combines minimal accepted dependencies, joint-symptom compression, adaptive independent-prefix closure or packed bounded Brouwer--Zimmermann coverage, and a reusable affine Pauli-coset oracle.
-The affine oracle combines the minimum visited weight with the bound on unseen words before publishing a global coset lower bound.
+The fixed-metric affine oracle combines the visited metric minimum with an unseen metric lower bound before publishing a global coset bound.
+CSS search uses joint ``[X|Z]`` cosets and the bound ``max(|x|,|z|) >= ceil((|x|+|z|)/2)``.
+Linear-size X/Z single-syndrome tables test all CSS-weight-one ``X_i Z_j`` representatives without a quadratic table.
 Independent-prefix closure hashes the last column of each minimal dependence from its independent prefix, while preserving the general BZ path where multiple information sets are stronger.
 High-rate searches with independent distinct flag types reduce to equal-flag pairs for every budget.
+Flag rank may exceed the fault budget: the search stops at ``min(max_faults, rank(P) + 1)`` and never builds a table of all flag syndromes.
 Its support-count crossover affects performance only, and the result statistics identify the selected search and its work.
 ``codes.distance.BoundedKernelSearch`` and ``codes.distance.PauliCosetSearch`` are reusable qualified interfaces for these exact searches.
 The search remains exponential in general, and small or output-dense instances need not improve over simpler enumeration.
 Mixed outputs, random post-selected branches, and nondeterministic existing annotations are rejected rather than guessed.
 The certificate concerns unit-cost independent binary DEM mechanisms, not mutually exclusive physical gate alternatives or acceptance probabilities.
-It supports distance preservation only when downstream gadgets have the corresponding fault-tolerant input-error and propagation guarantees; it does not verify an arbitrary downstream algorithm.
-See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` for a mixed-Pauli Steane counterexample and the distinction from undetected logical fault distance.
+It supports distance preservation only when downstream gadgets have the corresponding fault-tolerant input-error and propagation guarantees; CSS-sector use additionally requires suitable sector-preserving operations.
+It does not verify arbitrary Clifford composition, a decoder, or the code's correction radius.
+See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` for the distinction between the Steane preparation's physical-support failure and its passing CSS-sector criterion, plus a multi-flag accepted-triple example.
 
 Build a lifted construction
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

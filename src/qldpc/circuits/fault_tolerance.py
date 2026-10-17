@@ -4,7 +4,6 @@
 
 from __future__ import annotations
 
-import itertools
 import math
 import numbers
 import time
@@ -71,9 +70,7 @@ class StatePrepSpreadStatistics:
     coefficient_depth: int = 0
     setup_seconds: float = 0
     search_seconds: float = 0
-    search_method: Literal["singletons", "pairs", "brouwer_zimmermann", "independent_prefix"] = (
-        "singletons"
-    )
+    search_method: Literal["singletons", "brouwer_zimmermann", "independent_prefix"] = "singletons"
     prefix_extensions: int = 0
     independent_prefixes: int = 0
 
@@ -83,7 +80,9 @@ class StatePrepSpreadCertificate:
     """Completed bounded-spread decision, including the exact model and witness frame.
 
     ``certified`` means every accepted pattern of one through ``max_faults`` unit-cost binary
-    DEM mechanisms has effective output Pauli weight no greater than its own fault count.
+    DEM mechanisms has effective output error weight no greater than its own fault count.
+    ``css_weight`` records the resolved metric: True for CSS-sector weight, False for physical
+    Pauli support.
     A negative decision always includes a counterexample.  No incomplete search returns a result.
     """
 
@@ -94,6 +93,7 @@ class StatePrepSpreadCertificate:
     detector_error_model: stim.DetectorErrorModel
     counterexample: StatePrepSpreadCounterexample | None
     statistics: StatePrepSpreadStatistics
+    css_weight: bool = False
 
 
 def certify_state_prep_spread(
@@ -102,14 +102,18 @@ def certify_state_prep_spread(
     output_qubits: Sequence[int],
     max_faults: int,
     post_select: Collection[int] = (),
+    css_weight: bool | None = None,
 ) -> StatePrepSpreadCertificate:
-    r"""Exactly certify bounded Pauli spread of an already noisy Clifford preparation.
+    r"""Exactly certify bounded error spread of an already noisy Clifford preparation.
 
     For the complete pure output-state stabilizers, let ``S`` map DEM faults to their state
     syndrome, ``P`` map them to the selected actual rejection detectors, and ``mu(s)`` be the
-    minimum physical Pauli weight with syndrome ``s``.  The certificate proves
+    minimum chosen weight with syndrome ``s``, jointly over a single representative.
+    The certificate proves
     ``mu(S f) <= |f|`` whenever ``P f = 0`` and ``1 <= |f| <= max_faults``.
-    A Y affects one physical qubit.  Logical stabilizers fixing the prepared state are included.
+    Physical weight counts ``|support(x) union support(z)|``, with Y affecting one qubit.
+    CSS weight counts ``max(|x|, |z|)``, in the supplied physical frame.
+    Logical stabilizers fixing the prepared state are included.
 
     Args:
         circuit: An already noisy Stim Clifford circuit, starting in Stim's all-zero state.
@@ -117,6 +121,10 @@ def certify_state_prep_spread(
         max_faults: Required positive integer unit-cost DEM fault budget.
         post_select: Indices of actual circuit detectors whose *events* must vanish relative to
             their deterministic ideal reference.  Appended output diagnostics are not rejected.
+        css_weight: True selects CSS-sector weight; False selects physical Pauli support.
+            None selects CSS weight exactly when the complete prepared-state stabilizer row
+            space has a pure-X/pure-Z decomposition in the physical output basis.
+            The resolved boolean is returned in the certificate.
 
     Returns:
         A complete certificate or a concrete accepted counterexample with an exact effective-
@@ -132,6 +140,15 @@ def certify_state_prep_spread(
     unselected ones (Stim's exact DEM validation enforces this conservative restriction).
     Intrinsically random post-selected branches are not supported.  Stabilizer signs and physical
     frames are preserved; the appended measurements are noiseless.
+    Automatic selection is independent of the chosen stabilizer generators, but not of the
+    physical Pauli basis: it does not use local-Clifford equivalence.
+    For the complete rank-n row space W, the pure-X and pure-Z intersections have dimensions
+    ``n - rank(W_Z)`` and ``n - rank(W_X)``.
+    They span W exactly when their dimension sum is n.
+    This detects state equivalences, not compatibility with an unspecified downstream protocol.
+    A CSS code may prepare a non-CSS logical stabilizer state, requiring an explicit True
+    override for its sector-wise application.
+    Both metrics always minimize jointly, never by separately minimizing the X and Z projections.
 
     The model is independent binary DEM mechanisms, not mutually exclusive alternatives at
     physical gate locations.  Stim's disjoint-channel probability approximation is enabled only
@@ -140,11 +157,12 @@ def certify_state_prep_spread(
 
     Proof of the outer reduction: equal complete syndromes differ by a state stabilizer because
     the stabilizer space is maximal isotropic.  Minimum representative weight is subadditive,
-    since product support is contained in the union.  Every accepted nonzero pattern partitions
+    since each sector's product support is contained in its union, and
+    ``max(a+c,b+d) <= max(a,b)+max(c,d)``.  Every accepted nonzero pattern partitions
     into support-disjoint minimal accepted patterns: remove a proper accepted subset and repeat.
     Thus it suffices to check minimal patterns.  For accepted support J, minimality is equivalent
     to ``nullity(P[:, J]) = 1``, so ``|J| <= rank(P) + 1``.  A flag-free column occurs only as a
-    singleton; a rank-one nonzero flag map needs only pairs.  General dependencies use packed BZ
+    singleton.  General dependencies use packed BZ
     coverage or canonical independent-prefix closure, independently of the nonlinear spread
     predicate.  A minimal sorted dependence has an independent prefix and a last column equal
     to the prefix XOR.  Conversely, an independent prefix plus that closing column has nullity
@@ -167,11 +185,16 @@ def certify_state_prep_spread(
     :class:`qldpc.codes.distance.PauliCosetSearch`.
 
     This sufficient *resource-state* property composes with downstream gadgets that propagate
-    each input Pauli of weight r and additional faults into errors within the appropriate
-    r-plus-fault budget (or correct them).  No arbitrary downstream algorithm, acceptance
+    each input error of the selected weight r and additional faults within the corresponding
+    r-plus-fault budget (or correct them).  CSS-sector use requires suitable sector-preserving
+    downstream operations; a general Clifford can mix sectors.  An explicit CSS override on a
+    non-CSS application is the caller's responsibility, not an automatic correction theorem.
+    No arbitrary downstream algorithm, acceptance
     probability, or necessary-and-sufficient fault-tolerance criterion is certified here.
     """
     start = time.perf_counter()
+    if css_weight is not None and not isinstance(css_weight, bool):
+        raise ValueError("css_weight must be a bool or None")
     if (
         isinstance(max_faults, bool)
         or not isinstance(max_faults, numbers.Integral)
@@ -185,6 +208,10 @@ def certify_state_prep_spread(
     stabilizers = get_state_stabilizers(circuit, qubits)
     if len(stabilizers) != len(qubits):
         raise ValueError("Selected outputs must have a definite pure, complete stabilizer state")
+    matrix = np.array(
+        [np.concatenate(stabilizer.to_numpy()) for stabilizer in stabilizers], dtype=np.uint8
+    )
+    resolved_css_weight = _is_css_state(matrix) if css_weight is None else css_weight
     diagnostics = get_pauli_product_measurements(stabilizers, qubits=qubits)
     for jj in range(len(stabilizers)):
         diagnostics.append("DETECTOR", [stim.target_rec(jj - len(stabilizers))])
@@ -208,10 +235,7 @@ def certify_state_prep_spread(
                     syndrome ^= 1 << (detector - circuit.num_detectors)
         flags.append(flag)
         syndromes.append(syndrome)
-    matrix = np.array(
-        [np.concatenate(stabilizer.to_numpy()) for stabilizer in stabilizers], dtype=np.uint8
-    )
-    oracle = PauliCosetSearch(matrix)
+    oracle = PauliCosetSearch(matrix, weight="css" if resolved_css_weight else "pauli")
     statistics = StatePrepSpreadStatistics(mechanisms=len(flags))
     statistics.setup_seconds = time.perf_counter() - start
     counterexample = _certify_maps(flags, syndromes, oracle, int(max_faults), statistics)
@@ -223,7 +247,18 @@ def certify_state_prep_spread(
         dem,
         counterexample,
         statistics,
+        resolved_css_weight,
     )
+
+
+def _is_css_state(stabilizers: np.ndarray[tuple[int, ...], np.dtype[np.uint8]]) -> bool:
+    """Test pure-sector intersection dimensions of an already complete rank-n row space."""
+    n = len(stabilizers)
+    ranks = [
+        _binary_rank([int.from_bytes(np.packbits(row).tobytes(), "little") for row in sector])
+        for sector in (stabilizers[:, :n], stabilizers[:, n:])
+    ]
+    return sum(ranks) == n
 
 
 def _validate_indices(
@@ -285,15 +320,6 @@ def _certify_maps(
                 remaining.append((flag, syndrome, original))
         limit = statistics.effective_budget
         if limit < 2 or not remaining:
-            return None
-        if statistics.flag_rank == 1:
-            statistics.search_method = "pairs"
-            for left, right in itertools.combinations(remaining, 2):
-                statistics.generated += 1
-                statistics.bounded_candidates += 1
-                failure = check((left[2], right[2]), left[1] ^ right[1])
-                if failure is not None:
-                    return failure
             return None
         independent_flags = (
             len(remaining) > 2 * statistics.flag_rank
