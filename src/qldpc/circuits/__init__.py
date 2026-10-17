@@ -1,6 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .benchmarking import (
+    StatePrepSpreadCertificate,
+    StatePrepSpreadCounterexample,
+    StatePrepSpreadStatistics,
+    certify_state_prep_spread,
     get_fault_distance,
     get_logical_error_and_discard_rate,
     get_state_prep_diagnostic_circuit,
@@ -29,12 +33,6 @@ from .encoding import (
     get_logical_tableau,
     get_state_stabilizers,
     restrict_tableau,
-)
-from .fault_tolerance import (
-    StatePrepSpreadCertificate,
-    StatePrepSpreadCounterexample,
-    StatePrepSpreadStatistics,
-    certify_state_prep_spread,
 )
 from .memory import (
     AlphaSyndrome,
