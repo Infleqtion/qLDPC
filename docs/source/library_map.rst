@@ -64,9 +64,16 @@ Both methods return once an observed upper bound is at most ``cutoff``; the defa
 Classical distance is the minimum Hamming weight of a nonzero codeword.
 CSS codes support separate X and Z distances as well as their minimum.
 Stabilizer and subsystem codes use the minimum Pauli weight of a nontrivial logical operator.
-The implementations follow `Algorithm 994 <https://arxiv.org/abs/1603.06757>`_ and its `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_, with some minor optimizations.
-These include batched combination enumeration with implicit pivot weights, improved disjoint information-set packing and pruning of unhelpful partial sets, and fallback to exhaustive enumeration when estimated cheaper.
-The search also defers logical-nontriviality checks until a candidate could improve the bound, shares upper bounds between CSS sectors, and strengthens stopping certificates for even-weight ambient spaces.
+A Brouwer--Zimmermann search forms candidate vectors by XORing generator rows and seeks the lightest one that is a nonzero codeword or a nontrivial logical operator.
+qLDPC's Brouwer--Zimmermann implementation follows `Algorithm 994 <https://arxiv.org/abs/1603.06757>`_ and its `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_, with some minor optimizations.
+
+* Candidates are evaluated in batches.
+* Contributions to a candidate's weight that are already known are not recalculated.
+* The search tries different choices of coordinates to obtain stronger lower bounds and omits searches that do not help certify the result.
+* Exhaustive enumeration is used instead when doing so is estimated to be cheaper.
+* When computing the overall distance of a CSS code, the X and Z searches share the lightest logical-operator weight found so far.
+* A candidate is checked for nontrivial logical action only if its weight could improve the current bound.
+* If all vectors in the search space have even weight, rounding the lower bound up to an even value can allow the search to stop sooner.
 
 Distance bounds
 ~~~~~~~~~~~~~~~
