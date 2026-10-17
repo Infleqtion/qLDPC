@@ -11,8 +11,141 @@ from unittest import mock
 import numpy as np
 import numpy.typing as npt
 import pytest
+import stim
 
 import qldpc
+
+
+def test_bounded_kernel_search() -> None:
+    """Independent enumeration checks coverage, nonlinear filtering, and both storage paths."""
+    rng = np.random.default_rng(431)
+    for width in range(1, 10):
+        for height in (0, 1, width // 2, width, width + 1):
+            checks = rng.integers(2, size=(height, width), dtype=np.uint8)
+            for budget in (1, 3, width):
+                search = qldpc.codes.distance.BoundedKernelSearch(checks, budget, batch_size=2)
+                actual = set(search.words())
+                expected = {
+                    word
+                    for word in range(1, 1 << width)
+                    if word.bit_count() <= budget
+                    and not np.any(checks @ [(word >> jj) & 1 for jj in range(width)] % 2)
+                }
+                assert actual == expected
+                # Harmless initial rows must not create an eligible-word upper bound.
+                assert {word for word in actual if word % 3 == 0} == {
+                    word for word in expected if word % 3 == 0
+                }
+    with pytest.raises(ValueError, match="nonnegative"):
+        qldpc.codes.distance.BoundedKernelSearch([[1]], -1)
+    with pytest.raises(ValueError, match="positive"):
+        qldpc.codes.distance.BoundedKernelSearch([[1]], 1, batch_size=0)
+
+
+def test_bounded_kernel_information_bound() -> None:
+    """Disjoint full information sets certify all repetition words at coefficient depth one."""
+    checks = np.zeros((12, 16), dtype=np.uint8)
+    for jj in range(12):
+        checks[jj, jj % 4] = checks[jj, jj + 4] = 1
+    search = qldpc.codes.distance.BoundedKernelSearch(checks, 3)
+    assert list(search.words()) == []
+    assert search.ranks == (4, 4, 4, 4)
+    assert search.coefficient_depth == 1
+    assert search.lower_bound == 8
+    assert search.generated == 16 < sum(1 for _ in itertools.combinations(range(16), 3))
+    # Check packing across multiple 64-bit words without dense high-rate generators.
+    search = qldpc.codes.distance.BoundedKernelSearch(np.ones((1, 130), dtype=int), 2)
+    assert len(set(search.words())) == 130 * 129 // 2
+
+
+def test_pauli_coset_search_exhaustive() -> None:
+    """Compare every small syndrome and threshold with independent stabilizer multiplication."""
+    rng = np.random.default_rng(182)
+    for n in range(1, 7):
+        circuit = stim.Circuit()
+        circuit.append("H", range(n))
+        for jj, kk in itertools.combinations(range(n), 2):
+            if rng.integers(2):
+                circuit.append("CZ", [jj, kk])
+        circuit.append("S", range(n))
+        generators = stim.Tableau.from_circuit(circuit).to_stabilizers()
+        matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
+        oracle = qldpc.codes.distance.PauliCosetSearch(matrix, cache_size=2, batch_size=2)
+        minimum = [n + 1] * (1 << n)
+        for pauli in itertools.product(range(4), repeat=n):
+            string = stim.PauliString(pauli)
+            syndrome = sum((not string.commutes(gg)) << jj for jj, gg in enumerate(generators))
+            minimum[syndrome] = min(minimum[syndrome], string.weight)
+        for syndrome, weight in enumerate(minimum):
+            for threshold in (n, 0, 1, 2, 3, 0, n):
+                decision = oracle.decide(syndrome, threshold)
+                assert decision.within_bound == (weight <= threshold)
+                assert oracle.syndrome(decision.representative) == syndrome
+                assert decision.lower_bound <= weight
+                if decision.within_bound:
+                    string = decision.representative
+                    assert ((string | (string >> n)) & ((1 << n) - 1)).bit_count() <= threshold
+                else:
+                    assert decision.lower_bound > threshold
+        assert oracle.preparations <= 1
+        assert len(oracle._cache) <= 2
+        assert oracle.cache_hits
+
+
+def test_pauli_coset_bounds_and_validation() -> None:
+    """Affine zero coefficients, exact negatives, cached thresholds, and Y weight."""
+    matrix = np.hstack([np.zeros((5, 5), dtype=np.uint8), np.eye(5, dtype=np.uint8)])
+    oracle = qldpc.codes.distance.PauliCosetSearch(matrix, batch_size=3)
+    assert not oracle.decide(3, 1).within_bound
+    assert not oracle.decide(31, 2).within_bound
+    assert oracle.preparations == 1
+    assert not oracle.decide(31, 3).within_bound
+    assert oracle.decide(31, 5).within_bound
+    assert oracle.preparations == 1
+    assert oracle.decide(0, 0).representative == 0
+    y_state = qldpc.codes.distance.PauliCosetSearch([[1, 1]])
+    assert y_state.decide(1, 1).within_bound
+    for invalid_matrix, match in (
+        ([[1]], "complete"),
+        ([[0, 0]], "independent"),
+        ([[1, 0, 0, 0], [0, 0, 1, 0]], "commute"),
+    ):
+        with pytest.raises(ValueError, match=match):
+            qldpc.codes.distance.PauliCosetSearch(invalid_matrix)
+    with pytest.raises(ValueError, match="positive"):
+        qldpc.codes.distance.PauliCosetSearch([[1, 0]], cache_size=0)
+    with pytest.raises(ValueError, match="range"):
+        oracle.decide(32, 2)
+    with pytest.raises(ValueError, match="negative"):
+        oracle.decide(0, -1)
+
+
+def test_affine_partial_information_set() -> None:
+    """A partial pivot set proves absence after depth one when full sets alone cannot."""
+    circuit = stim.Circuit("""
+        H 0 1 2 3 4 5 6 7
+        CZ 0 1 0 6 0 7 1 2 1 7 2 6 2 7 4 5 4 6 5 7 6 7
+    """)
+    generators = stim.Tableau.from_circuit(circuit).to_stabilizers()
+    matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
+    oracle = qldpc.codes.distance.PauliCosetSearch(matrix)
+    decision = oracle.decide(11, 2)
+    assert not decision.within_bound and decision.lower_bound == 3
+    assert oracle.ranks == (8, 8, 7)
+    assert oracle.coefficient_depth == 1
+    representative = stim.PauliString.from_numpy(
+        xs=np.array([(decision.representative >> jj) & 1 for jj in range(8)], dtype=bool),
+        zs=np.array([(decision.representative >> (jj + 8)) & 1 for jj in range(8)], dtype=bool),
+    )
+    assert sum((not representative.commutes(gg)) << jj for jj, gg in enumerate(generators)) == 11
+    minimum = 8
+    for mask in range(256):
+        candidate = representative.copy()
+        for jj, generator in enumerate(generators):
+            if (mask >> jj) & 1:
+                candidate *= generator
+        minimum = min(minimum, candidate.weight)
+    assert minimum == 3
 
 
 def _bitwise_count(

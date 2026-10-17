@@ -227,6 +227,23 @@ Circuit utilities reject nonbinary codes.
 Encoding circuits are not fault-tolerant, and transversal-gate searches can be exponential.
 For sliding-window decoding, detector coordinates are only a heuristic source of time; pass ``detector_to_time`` when a model uses another convention.
 
+Certify resource-state preparation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``circuits.certify_state_prep_spread(noisy_circuit, output_qubits=..., max_faults=..., post_select=...)`` checks a sufficient bounded-spread property of a definite pure Clifford output.
+For every accepted binary DEM pattern through the requested budget, it proves that the output error is equivalent on the complete prepared state to a Pauli of weight no greater than that pattern's own fault count.
+Y counts as one affected qubit, and logical stabilizers fixing the intended state are included.
+Only the explicitly selected actual detectors reject a pattern; noiseless final state diagnostics are not rejection tests.
+The result includes its undecomposed diagnostic DEM and, on failure, original mechanism indices, a complete output syndrome, and a proved effective-weight lower bound.
+
+The implementation combines minimal accepted dependencies, joint-symptom compression, packed bounded Brouwer--Zimmermann coverage, and a reusable affine Pauli-coset oracle.
+``codes.distance.BoundedKernelSearch`` and ``codes.distance.PauliCosetSearch`` are reusable qualified interfaces for these exact searches.
+The search remains exponential in general; low flag rank and very small instances can favor simpler enumeration.
+Mixed outputs, random post-selected branches, and nondeterministic existing annotations are rejected rather than guessed.
+The certificate concerns unit-cost independent binary DEM mechanisms, not mutually exclusive physical gate alternatives or acceptance probabilities.
+It supports distance preservation only when downstream gadgets have the corresponding fault-tolerant input-error and propagation guarantees; it does not verify an arbitrary downstream algorithm.
+See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` for a mixed-Pauli Steane counterexample and the distinction from undetected logical fault distance.
+
 Build a lifted construction
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

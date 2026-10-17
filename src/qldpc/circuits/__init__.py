@@ -30,6 +30,12 @@ from .encoding import (
     get_state_stabilizers,
     restrict_tableau,
 )
+from .fault_tolerance import (
+    StatePrepSpreadCertificate,
+    StatePrepSpreadCounterexample,
+    StatePrepSpreadStatistics,
+    certify_state_prep_spread,
+)
 from .memory import (
     AlphaSyndrome,
     EdgeColoring,
@@ -81,10 +87,14 @@ __all__ = [
     "QubitIDs",
     "Record",
     "SI1000NoiseModel",
+    "StatePrepSpreadCertificate",
+    "StatePrepSpreadCounterexample",
+    "StatePrepSpreadStatistics",
     "StimCircuitLike",
     "StimCircuitProtocol",
     "SyndromeMeasurementStrategy",
     "as_noiseless_circuit",
+    "certify_state_prep_spread",
     "get_encoder_and_decoder",
     "get_encoding_circuit",
     "get_encoding_tableau",
