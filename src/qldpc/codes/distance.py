@@ -265,6 +265,7 @@ class BoundedKernelSearch:
     than ``a`` bits, of which at most ``k-r`` lie outside that set's pivots.  The pivot sets are
     disjoint, so their bounds add.  Enumeration stops only when this bound exceeds ``max_weight``
     or all coefficients have been exhausted.  Filtering yielded words cannot weaken this proof.
+    The ``lower_bound`` attribute bounds unseen words only, not the minimum over all kernel words.
 
     When the kernel dimension exceeds the check rank, store only the pivot-coordinate parts of
     the systematic generators, not a quadratic-size dense kernel matrix.  Coefficient support
@@ -339,7 +340,8 @@ class PauliWeightDecision:
 
     ``representative`` packs X in the low ``n`` bits and Z in the next ``n`` bits.
     It is not asserted to be a minimum representative.  If ``within_bound`` is False,
-    ``lower_bound`` strictly exceeds the queried threshold.
+    ``lower_bound`` strictly exceeds the queried threshold.  In every decision it bounds the
+    minimum of the entire coset, so it remains valid when reused at a different threshold.
     """
 
     within_bound: bool
@@ -360,7 +362,10 @@ class PauliCosetSearch:
     Y.  For each information-set basis, zero the affine offset on its pivots by adding rows.
     Pivot coordinates then equal coefficient bits.  The same disjoint-set coverage bound as
     :class:`BoundedKernelSearch` applies, starting at coefficient weight zero.  Absence of a
-    threshold witness is reported only when that lower bound exceeds twice the threshold.
+    threshold witness is reported only after all visited weights and the unseen-word bound
+    exceed twice the threshold.  If ``v`` is the minimum visited embedded weight and ``L`` bounds
+    unseen embedded words, the whole coset has physical weight at least ``ceil(min(v, L) / 2)``.
+    The unseen-word bound alone is not a global coset bound.
 
     Elimination is performed once.  Information sets are prepared lazily, at most once.
     The only unconditional syndrome table contains identity and single-qubit Paulis.
@@ -475,6 +480,8 @@ class PauliCosetSearch:
                 )
             )
         weight_func, _ = _get_hamming_weight_fn()
+        visited_min = 2 * n + 1
+        best_pauli = pauli
         depth = 0
         while True:
             for (packed, _, _), offset in zip(self._information_sets, offsets, strict=True):
@@ -492,10 +499,16 @@ class PauliCosetSearch:
                         word = _packed_row_int(candidates[good[0]])
                         representative = word & ((1 << (2 * n)) - 1)
                         return PauliWeightDecision(True, representative, 2)
+                    batch_min = int(weights.min())
+                    if batch_min < visited_min:
+                        visited_min = batch_min
+                        word = _packed_row_int(candidates[int(weights.argmin())])
+                        best_pauli = word & ((1 << (2 * n)) - 1)
             self.coefficient_depth = max(self.coefficient_depth, depth)
-            lower = sum(max(0, depth + 1 - (n - rank)) for rank in self.ranks)
-            if lower > 2 * threshold:
-                return PauliWeightDecision(False, pauli, (lower + 1) // 2)
+            unseen_lower = sum(max(0, depth + 1 - (n - rank)) for rank in self.ranks)
+            if unseen_lower > 2 * threshold:
+                global_lower = min(visited_min, unseen_lower)
+                return PauliWeightDecision(False, best_pauli, (global_lower + 1) // 2)
             depth += 1
 
 
@@ -768,7 +781,7 @@ def _get_packed_row_weights(
 
 @dataclass
 class _BrouwerZimmermannSearch:
-    """State for one resumable Brouwer-Zimmermann search."""
+    """Resumable BZ state: witness upper bound ``best`` and unseen-word bound ``lower_bound``."""
 
     packed_sets: list[
         tuple[
@@ -856,7 +869,7 @@ def _get_brouwer_zimmermann_lower_bound(
     completed_weight: int,
     weight_divisor: int,
 ) -> int:
-    """Lower-bound distance after searching through one coefficient weight."""
+    """Bound unseen-word weights after exhausting a coefficient depth, not global distance."""
     lower_bound = sum(max(0, completed_weight + 1 - (dimension - rank)) for rank in ranks)
     if weight_divisor > 1:
         lower_bound += (-lower_bound) % weight_divisor

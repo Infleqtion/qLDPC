@@ -146,6 +146,60 @@ def test_steane_mixed_pauli_witness() -> None:
     assert {target.val for target in targets} == {1, 2, 4}
 
 
+def test_ghz_global_counterexample_bound() -> None:
+    """An accepted triple affects four GHZ blocks, proving effective weight exactly four."""
+    circuit = stim.Circuit()
+    for block in range(0, 12, 3):
+        circuit.append("H", [block])
+        circuit.append("CX", [block, block + 1, block, block + 2])
+    circuit.append("CORRELATED_ERROR", [stim.target_x(12)], 0.001)
+    circuit.append("CORRELATED_ERROR", [stim.target_x(13)], 0.001)
+    circuit.append(
+        "CORRELATED_ERROR",
+        [stim.target_x(jj) for jj in (2, 5, 8, 11, 12, 13)],
+        0.001,
+    )
+    circuit.append("M", [12, 13])
+    circuit.append("DETECTOR", [stim.target_rec(-2)])
+    circuit.append("DETECTOR", [stim.target_rec(-1)])
+    assert circuits.certify_state_prep_spread(
+        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=2
+    ).certified
+    certificate = circuits.certify_state_prep_spread(
+        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=3
+    )
+    failure = certificate.counterexample
+    assert not certificate.certified and failure is not None
+    assert failure.fault_indices == (0, 1, 2)
+    assert failure.effective_weight_lower_bound == 4
+    witness = stim.PauliString("__X__X__X__X")
+    generators = [stim.PauliString(gg) for gg in certificate.target_stabilizers]
+    assert tuple(int(not witness.commutes(gg)) for gg in generators) == failure.output_syndrome
+    # Every block has a nonzero local syndrome, so a representative must touch all four.
+    for block in range(4):
+        local = stim.PauliString("_" * (3 * block) + "Z_Z" + "_" * (9 - 3 * block))
+        assert not witness.commutes(local)
+    assert witness.weight == 4
+    representative = stim.PauliString(failure.output_pauli)
+    assert representative.weight == 4
+    assert (
+        tuple(int(not representative.commutes(gg)) for gg in generators) == failure.output_syndrome
+    )
+    errors = [
+        instruction
+        for instruction in certificate.detector_error_model
+        if instruction.type == "error"
+    ]
+    acceptance: set[int] = set()
+    for index in failure.fault_indices:
+        acceptance.symmetric_difference_update(
+            target.val
+            for target in errors[index].targets_copy()
+            if target.is_relative_detector_id() and target.val < 2
+        )
+    assert acceptance == set()
+
+
 @pytest.mark.parametrize("pauli", ["X", "Y", "Z"])
 def test_non_css_signed_frame(pauli: str) -> None:
     """Signed non-CSS state, reordered physical outputs, correlated mechanisms, and ideal signs."""

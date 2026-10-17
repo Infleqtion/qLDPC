@@ -53,6 +53,8 @@ def test_bounded_kernel_information_bound() -> None:
     assert search.coefficient_depth == 1
     assert search.lower_bound == 8
     assert search.generated == 16 < sum(1 for _ in itertools.combinations(range(16), 3))
+    wider = qldpc.codes.distance.BoundedKernelSearch(checks, 4)
+    assert min(word.bit_count() for word in wider.words()) == 4 < wider.lower_bound
     # Check packing across multiple 64-bit words without dense high-rate generators.
     search = qldpc.codes.distance.BoundedKernelSearch(np.ones((1, 130), dtype=int), 2)
     assert len(set(search.words())) == 130 * 129 // 2
@@ -146,6 +148,80 @@ def test_affine_partial_information_set() -> None:
                 candidate *= generator
         minimum = min(minimum, candidate.weight)
     assert minimum == 3
+
+
+@pytest.mark.parametrize("batch_size", [1, 7, 4096])
+def test_affine_global_bound_and_cache(batch_size: int) -> None:
+    """Four nonzero GHZ-block syndromes need exactly four qubits, not unseen bound five."""
+    generators = [
+        stim.PauliString("_" * (3 * block) + local + "_" * (9 - 3 * block))
+        for block in range(4)
+        for local in ("XXX", "Z_Z", "_ZZ")
+    ]
+    witness = stim.PauliString("__X__X__X__X")
+    syndrome = sum((not witness.commutes(gg)) << jj for jj, gg in enumerate(generators))
+    assert syndrome == 3510 and witness.weight == 4
+    # Each disjoint block has a nonzero syndrome, requiring at least one affected qubit.
+    assert all((syndrome >> (3 * block)) & 7 for block in range(4))
+    matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
+    oracle = qldpc.codes.distance.PauliCosetSearch(matrix, batch_size=batch_size)
+    negative = oracle.decide(syndrome, 3)
+    assert not negative.within_bound
+    assert negative.lower_bound == 4
+    assert oracle.ranks == (12, 12, 12) and oracle.coefficient_depth == 2
+    generated = oracle.generated
+    at_minimum = oracle.decide(syndrome, 4)
+    assert at_minimum.within_bound and at_minimum.lower_bound <= 4
+    assert oracle.generated == generated
+    assert oracle.syndrome(at_minimum.representative) == syndrome
+    fresh = qldpc.codes.distance.PauliCosetSearch(matrix).decide(syndrome, 4)
+    assert fresh.within_bound and fresh.lower_bound <= 4
+
+
+@pytest.mark.parametrize("cache_size", [1, 2, 4096])
+def test_affine_query_order_boundaries(cache_size: int) -> None:
+    """Global bounds stay valid across threshold equality, query order, and cache eviction."""
+    generators = [
+        stim.PauliString("_" * (3 * block) + local + "_" * (9 - 3 * block))
+        for block in range(4)
+        for local in ("XXX", "Z_Z", "_ZZ")
+    ]
+    matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
+    # The eight local syndromes have one-qubit representatives I,Z0,X0,Y0,X1,Y1,X2,Y2.
+    local_representatives = ("___", "Z__", "X__", "Y__", "_X_", "_Y_", "__X", "__Y")
+    rng = np.random.default_rng(713)
+    local_syndromes: list[tuple[int, ...]] = [(0, 0, 0, 0), (6, 6, 6, 6)]
+    local_syndromes += [tuple(map(int, row)) for row in rng.integers(8, size=(24, 4))]
+    for reverse in (False, True):
+        oracle = qldpc.codes.distance.PauliCosetSearch(matrix, cache_size=cache_size)
+        for local in local_syndromes:
+            syndrome = sum(value << (3 * block) for block, value in enumerate(local))
+            minimum = sum(value != 0 for value in local)
+            witness = stim.PauliString("".join(local_representatives[value] for value in local))
+            assert witness.weight == minimum
+            assert (
+                sum((not witness.commutes(gg)) << jj for jj, gg in enumerate(generators))
+                == syndrome
+            )
+            thresholds = (max(0, minimum - 1), minimum, minimum + 1, 0, minimum)
+            for threshold in reversed(thresholds) if reverse else thresholds:
+                decision = oracle.decide(syndrome, threshold)
+                assert decision.within_bound == (minimum <= threshold)
+                assert 0 <= decision.lower_bound <= minimum
+                assert oracle.syndrome(decision.representative) == syndrome
+                pauli = decision.representative
+                weight = ((pauli | (pauli >> 12)) & ((1 << 12) - 1)).bit_count()
+                assert weight >= minimum
+                if decision.within_bound:
+                    assert weight <= threshold
+                else:
+                    assert threshold < decision.lower_bound
+            # Eviction must only cause recomputation, never a different mathematical decision.
+            oracle.decide(syndrome ^ 1, 12)
+            oracle.decide(syndrome ^ 2, 12)
+            decision = oracle.decide(syndrome, minimum)
+            assert decision.within_bound and decision.lower_bound <= minimum
+        assert len(oracle._cache) <= cache_size
 
 
 def _bitwise_count(
@@ -647,6 +723,16 @@ def test_brouwer_zimmermann_information_set_search() -> None:
 
     # Row reduction exposes a weight-one generator, which is returned before any search.
     assert qldpc.codes.get_distance_classical([[1, 1, 0], [0, 1, 1], [1, 1, 1]], cutoff=1) == 1
+
+    # Unseen coverage eight certifies a visited weight-four word; it is not the distance.
+    repetition_blocks = np.tile(np.eye(4, dtype=np.uint8), (1, 4))
+    assert qldpc.codes.get_distance_classical(repetition_blocks, cutoff=0) == 4
+    assert (
+        qldpc.codes.distance._get_brouwer_zimmermann_lower_bound(
+            4, [4, 4, 4, 4], completed_weight=1, weight_divisor=1
+        )
+        == 8
+    )
 
 
 @pytest.mark.usefixtures("force_information_sets")

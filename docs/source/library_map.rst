@@ -237,6 +237,7 @@ Only the explicitly selected actual detectors reject a pattern; noiseless final 
 The result includes its undecomposed diagnostic DEM and, on failure, original mechanism indices, a complete output syndrome, and a proved effective-weight lower bound.
 
 The implementation combines minimal accepted dependencies, joint-symptom compression, packed bounded Brouwer--Zimmermann coverage, and a reusable affine Pauli-coset oracle.
+The affine oracle combines the minimum visited weight with the bound on unseen words before publishing a global coset lower bound.
 ``codes.distance.BoundedKernelSearch`` and ``codes.distance.PauliCosetSearch`` are reusable qualified interfaces for these exact searches.
 The search remains exponential in general; low flag rank and very small instances can favor simpler enumeration.
 Mixed outputs, random post-selected branches, and nondeterministic existing annotations are rejected rather than guessed.
