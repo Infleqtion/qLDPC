@@ -67,7 +67,9 @@ Stabilizer and subsystem codes use the minimum Pauli weight of a nontrivial logi
 A Brouwer--Zimmermann search forms candidate vectors by XORing generator rows and seeks the lightest one that is a nonzero codeword or a nontrivial logical operator.
 qLDPC's Brouwer--Zimmermann implementation follows `Algorithm 994 <https://arxiv.org/abs/1603.06757>`_ and its `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_, with some minor optimizations.
 
-* Candidates are evaluated in batches.
+* Candidates are evaluated serially by a lazy-compiled Numba kernel that reuses XORs of increasing row prefixes.
+  BZ's ``block_size`` controls how many supports are visited before returning to Python, capped at ``2**15`` for interruption opportunities.
+  Setting ``NUMBA_DISABLE_JIT=1`` before import runs the same evaluator as Python for debugging, without a second implementation.
 * Contributions to a candidate's weight that are already known are not recalculated.
 * The search tries different choices of coordinates to obtain stronger lower bounds and omits searches that do not help certify the result.
 * Exhaustive enumeration is used instead when doing so is estimated to be cheaper.

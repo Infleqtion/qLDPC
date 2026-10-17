@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterator
+from typing import Any
 from unittest import mock
 
 import numpy as np
@@ -266,28 +267,107 @@ def test_binary_row_reduction_and_information_sets() -> None:
     assert [rank for _, _, rank, _ in information_sets] == [3, 3]
 
 
-def test_fixed_weight_supports() -> None:
-    """Batched combinadic unranking enumerates every fixed-weight support."""
-    for dimension in range(1, 8):
+@pytest.mark.parametrize("interpreted", [False, True])
+def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
+    """Chunk resumption visits every support once, preserving prefixes, pivots and wide labels."""
+    scan = qldpc.codes.distance._scan_brouwer_zimmermann
+    if interpreted:
+        scan = getattr(scan, "py_func", scan)
+    rng = np.random.default_rng(120)
+    for dimension in range(1, 7):
+        generators = rng.integers(0, 2**64, (3, dimension, 5), dtype=np.uint64)
+        labels = np.zeros((3, dimension, 2), dtype=np.uint64)
+        labels[1:, :, 1] = rng.integers(0, 2, (2, dimension), dtype=np.uint64)
+        ranks = np.array([dimension, dimension // 2, 0], dtype=np.int64)
+        widths = np.array([5, 2, 1], dtype=np.int64)
+        label_widths = np.array([0, 2, 2], dtype=np.int64)
         for weight in range(1, dimension + 1):
-            actual = qldpc.codes.distance._iter_fixed_weight_supports(
-                dimension,
-                weight,
-                batch_size=3,
+            support = np.zeros(weight, dtype=np.int64)
+            prefixes = np.zeros((weight + 1, 3, 5), dtype=np.uint64)
+            depth, best, expected = 0, 1000, 1000
+            for indices in itertools.combinations(range(dimension), weight):
+                for index in range(3):
+                    words = np.bitwise_xor.reduce(generators[index, indices, : widths[index]])
+                    eligible = not label_widths[index] or np.any(
+                        np.bitwise_xor.reduce(labels[index, indices], axis=0)
+                    )
+                    candidate = sum(int(word).bit_count() for word in words)
+                    candidate += sum(row < ranks[index] for row in indices)
+                    if eligible:
+                        expected = min(expected, candidate)
+                best, depth, visited = scan(
+                    generators,
+                    labels,
+                    ranks,
+                    widths,
+                    label_widths,
+                    support,
+                    prefixes,
+                    depth,
+                    best,
+                    0,
+                    1,
+                )
+                assert visited == 1 and best == expected
+                assert isinstance(best, (int, np.int64))
+                # The leaf index has already advanced in preparation for the next chunk.
+                np.testing.assert_array_equal(support[:-1], indices[:-1])
+                assert support[-1] == indices[-1] + 1
+                for index in range(3):
+                    np.testing.assert_array_equal(
+                        prefixes[weight, index, : widths[index]],
+                        np.bitwise_xor.reduce(generators[index, indices, : widths[index]]),
+                    )
+            best, depth, visited = scan(
+                generators,
+                labels,
+                ranks,
+                widths,
+                label_widths,
+                support,
+                prefixes,
+                depth,
+                best,
+                0,
+                1,
             )
-            actual_supports = {tuple(support) for batch in actual for support in batch}
-            expected_supports = set(itertools.combinations(range(dimension), weight))
-            assert actual_supports == expected_supports
+            assert (best, depth, visited) == (expected, -1, 0)
 
-    with mock.patch(
-        "qldpc.codes.distance.math.comb",
-        return_value=np.iinfo(np.int64).max + 1,
-    ):
-        batches = qldpc.codes.distance._iter_fixed_weight_supports(3, 2, batch_size=2)
-        assert [batch.tolist() for batch in batches] == [
-            [[0, 1], [0, 2]],
-            [[1, 2]],
-        ]
+    # No global binomial count is needed, even for a layer larger than int64.
+    generators = np.zeros((1, 68, 0), dtype=np.uint64)
+    labels = np.zeros((1, 68, 2), dtype=np.uint64)
+    zeros = np.zeros(1, dtype=np.int64)
+    support = np.zeros(34, dtype=np.int64)
+    prefixes = np.zeros((35, 1, 0), dtype=np.uint64)
+    best, depth, visited = scan(
+        generators,
+        labels,
+        zeros,
+        zeros,
+        zeros + 2,
+        support,
+        prefixes,
+        0,
+        2**53 + 1,
+        0,
+        3,
+    )
+    assert best == 2**53 + 1 and depth == 33 and visited == 3
+    assert support[-1] == 36
+    with pytest.raises(IndexError):
+        scan(
+            np.ones((1, 2, 1), dtype=np.uint64),
+            labels[:, :2],
+            zeros,
+            zeros + 1,
+            zeros + 2,
+            np.zeros(1, dtype=np.int64),
+            np.zeros((1, 1, 1), dtype=np.uint64),
+            0,
+            1000,
+            0,
+            1,
+        )
 
 
 def test_select_brouwer_zimmermann_information_sets() -> None:
@@ -322,19 +402,32 @@ def test_select_brouwer_zimmermann_information_sets() -> None:
 
 def test_brouwer_zimmermann_search_state() -> None:
     """A search state handles partial pivots, quotient labels, cutoffs, and completed work."""
-    weight_func, _ = qldpc.codes.distance._get_hamming_weight_fn()
     search = qldpc.codes.distance._BrouwerZimmermannSearch(
-        [(np.array([[3], [2]], dtype=np.uint64), np.ones((2, 1), dtype=np.uint64), 0)],
-        weight_func,
-        dimension=2,
+        np.array([[[3], [2]]], dtype=np.uint64),
+        np.ones((1, 2, 1), dtype=np.uint64),
+        np.array([0], dtype=np.int64),
+        np.array([1], dtype=np.int64),
+        np.array([1], dtype=np.int64),
         cutoff=1,
-        batch_size=2,
+        batch_size=1,
         weight_divisor=1,
         best=3,
         lower_bound=0,
     )
+    with (
+        mock.patch("qldpc.codes.distance._scan_brouwer_zimmermann", side_effect=KeyboardInterrupt),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        search.advance()
+    assert (search.lower_bound, search.next_weight) == (0, 1)
     assert search.advance() == 1
+    assert (search.lower_bound, search.next_weight) == (0, 1)
     assert search.advance() == 1
+    search.cutoff = -(2**100)
+    assert search.advance() == 1
+    assert (search.lower_bound, search.next_weight) == (0, 2)
+    assert search.advance() == 1
+    assert (search.lower_bound, search.next_weight) == (1, 3)
 
 
 def test_brouwer_zimmermann_setup_dispatches() -> None:
@@ -594,6 +687,13 @@ def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
     """BZ saves enumeration for Hamming(5) and its even-weight extension."""
     generators = qldpc.codes.HammingCode(5).generator
     num_candidates = 0
+    original_scan = qldpc.codes.distance._scan_brouwer_zimmermann
+
+    def counting_scan(*args: Any) -> tuple[int, int, int]:
+        nonlocal num_candidates
+        best, depth, visited = original_scan(*args)
+        num_candidates += visited * len(args[2])
+        return best, depth, visited
 
     def counting_weight(
         arr: npt.NDArray[np.uint64],
@@ -604,8 +704,11 @@ def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
         num_candidates += len(arr)
         return qldpc.codes.distance._hamming_weight(arr, buf=buf, out=out)
 
-    with mock.patch(
-        "qldpc.codes.distance._get_hamming_weight_fn", return_value=(counting_weight, 1)
+    with (
+        mock.patch(
+            "qldpc.codes.distance._get_hamming_weight_fn", return_value=(counting_weight, 1)
+        ),
+        mock.patch("qldpc.codes.distance._scan_brouwer_zimmermann", side_effect=counting_scan),
     ):
         assert qldpc.codes.get_distance_classical(generators, cutoff=0) == 3
         assert 1000 * num_candidates < 2 ** len(generators)
