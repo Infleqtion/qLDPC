@@ -591,7 +591,7 @@ def test_brouwer_zimmermann_special_inputs() -> None:
 
 
 def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
-    """BZ evaluates far fewer than the 2**26 - 1 nonzero codewords of Hamming(5)."""
+    """BZ saves enumeration for Hamming(5) and its even-weight extension."""
     generators = qldpc.codes.HammingCode(5).generator
     num_candidates = 0
 
@@ -608,7 +608,11 @@ def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
         "qldpc.codes.distance._get_hamming_weight_fn", return_value=(counting_weight, 1)
     ):
         assert qldpc.codes.get_distance_classical(generators, cutoff=0) == 3
-    assert 1000 * num_candidates < 2 ** len(generators)
+        assert 1000 * num_candidates < 2 ** len(generators)
+        extended = np.column_stack([generators, generators.sum(axis=1)])
+        num_candidates = 0
+        assert qldpc.codes.get_distance_classical(extended, cutoff=0) == 4
+    assert num_candidates < len(generators) ** 2
 
 
 @pytest.mark.parametrize("block_size", range(1, 14))

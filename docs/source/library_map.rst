@@ -64,7 +64,9 @@ Both methods return once an observed upper bound is at most ``cutoff``; the defa
 Classical distance is the minimum Hamming weight of a nonzero codeword.
 CSS codes support separate X and Z distances as well as their minimum.
 Stabilizer and subsystem codes use the minimum Pauli weight of a nontrivial logical operator.
-The implementations follow `Algorithm 994 <https://arxiv.org/abs/1603.06757>`_ and its `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_.
+The implementations follow `Algorithm 994 <https://arxiv.org/abs/1603.06757>`_ and its `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_, with some minor optimizations.
+These include batched combination enumeration with implicit pivot weights, improved disjoint information-set packing and pruning of unhelpful partial sets, and fallback to exhaustive enumeration when estimated cheaper.
+The search also defers logical-nontriviality checks until a candidate could improve the bound, shares upper bounds between CSS sectors, and strengthens stopping certificates for even-weight ambient spaces.
 
 Distance bounds
 ~~~~~~~~~~~~~~~
