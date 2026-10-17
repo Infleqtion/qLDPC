@@ -5,10 +5,13 @@
 from __future__ import annotations
 
 import itertools
+import math
 import numbers
 import time
-from collections.abc import Collection, Sequence
+from bisect import bisect_left
+from collections.abc import Collection, Iterator, Sequence
 from dataclasses import dataclass
+from typing import Literal
 
 import numpy as np
 import stim
@@ -44,7 +47,13 @@ class StatePrepSpreadCounterexample:
 
 @dataclass
 class StatePrepSpreadStatistics:
-    """Deterministic work counters and wall-clock setup/search costs (in seconds)."""
+    """Deterministic work counters and wall-clock setup/search costs (in seconds).
+
+    For independent-prefix search, ``generated`` counts attempted prefix extensions plus emitted
+    closing supports.  ``prefix_extensions`` includes attempts pruned by dependence, whereas
+    ``independent_prefixes`` counts prefixes that survive.  Neither counts full fault combinations
+    through the original budget.
+    """
 
     mechanisms: int = 0
     distinct_symptoms: int = 0
@@ -62,6 +71,11 @@ class StatePrepSpreadStatistics:
     coefficient_depth: int = 0
     setup_seconds: float = 0
     search_seconds: float = 0
+    search_method: Literal["singletons", "pairs", "brouwer_zimmermann", "independent_prefix"] = (
+        "singletons"
+    )
+    prefix_extensions: int = 0
+    independent_prefixes: int = 0
 
 
 @dataclass(frozen=True)
@@ -131,7 +145,19 @@ def certify_state_prep_spread(
     Thus it suffices to check minimal patterns.  For accepted support J, minimality is equivalent
     to ``nullity(P[:, J]) = 1``, so ``|J| <= rank(P) + 1``.  A flag-free column occurs only as a
     singleton; a rank-one nonzero flag map needs only pairs.  General dependencies use packed BZ
-    coverage, independently of the nonlinear spread predicate.
+    coverage or canonical independent-prefix closure, independently of the nonlinear spread
+    predicate.  A minimal sorted dependence has an independent prefix and a last column equal
+    to the prefix XOR.  Conversely, an independent prefix plus that closing column has nullity
+    one.  Requiring the closing index to exceed the prefix indices generates each minimal support
+    exactly once.  Dependent prefixes cannot belong to any minimal support and are pruned.
+    If the distinct nonzero flag types are independent, acceptance requires even multiplicity
+    of each type, so all minimal patterns are equal-flag pairs regardless of the requested budget.
+
+    High-rate independent flag types use the proved pair-only bound directly.  Otherwise a
+    measured support-count crossover selects high-rate prefix closure when BZ coefficient
+    supports sufficiently outnumber possible prefix extensions.  The disjoint-information-set BZ
+    path is retained elsewhere.  The heuristic selects between two complete exact searches; it is
+    not part of the proof and is not a universal runtime guarantee.
 
     Identical joint (flag, state-syndrome) columns may be merged: remove cancelling pairs from
     any pattern, preserving symptoms while decreasing weight.  A violation reduces to a
@@ -261,6 +287,7 @@ def _certify_maps(
         if limit < 2 or not remaining:
             return None
         if statistics.flag_rank == 1:
+            statistics.search_method = "pairs"
             for left, right in itertools.combinations(remaining, 2):
                 statistics.generated += 1
                 statistics.bounded_candidates += 1
@@ -268,6 +295,23 @@ def _certify_maps(
                 if failure is not None:
                     return failure
             return None
+        independent_flags = (
+            len(remaining) > 2 * statistics.flag_rank
+            and len({flag for flag, _, _ in remaining}) == statistics.flag_rank
+        )
+        if _use_prefix_search(
+            len(remaining), statistics.flag_rank, limit, independent_flags=independent_flags
+        ):
+            statistics.search_method = "independent_prefix"
+            if independent_flags:
+                limit = statistics.effective_budget = 2
+            for indices, syndrome in _iter_minimal_patterns(remaining, limit, statistics):
+                statistics.bounded_candidates += 1
+                failure = check(indices, syndrome)
+                if failure is not None:
+                    return failure
+            return None
+        statistics.search_method = "brouwer_zimmermann"
         checks = np.array(
             [
                 [(flag >> jj) & 1 for flag, _, _ in remaining]
@@ -302,6 +346,74 @@ def _certify_maps(
     statistics.inner_ranks = oracle.ranks
     statistics.search_seconds = time.perf_counter() - start
     return failure
+
+
+def _use_prefix_search(
+    num_columns: int, rank: int, budget: int, *, independent_flags: bool = False
+) -> bool:
+    """Choose high-rate prefix closure by pair-only structure or measured support counts."""
+    dimension = num_columns - rank
+    if budget < 2 or dimension <= rank:
+        return False
+    if independent_flags:
+        return True
+    coefficient_count = sum(
+        math.comb(dimension, depth) for depth in range(1, min(dimension, budget) + 1)
+    )
+    prefix_count = sum(
+        math.comb(num_columns, depth) for depth in range(1, min(num_columns, budget - 1) + 1)
+    )
+    return coefficient_count >= 1024 and coefficient_count >= 2 * prefix_count
+
+
+def _iter_minimal_patterns(
+    mechanisms: Sequence[tuple[int, int, int]],
+    budget: int,
+    statistics: StatePrepSpreadStatistics,
+) -> Iterator[tuple[tuple[int, ...], int]]:
+    """Yield minimal patterns of nonzero-flag (flag, syndrome, original-index) columns.
+
+    Prefixes are independent and increasing in *internal* column order, not necessarily original
+    DEM order.  The largest internal index is the unique closing column.  Carrying its prefix XOR
+    and state syndrome avoids a full word reconstruction or repeated output-map multiplication.
+    """
+    groups: dict[int, list[int]] = {}
+    for index, (flag, _, _) in enumerate(mechanisms):
+        groups.setdefault(flag, []).append(index)
+
+    def visit(
+        support: tuple[int, ...],
+        start: int,
+        flag_sum: int,
+        syndrome: int,
+        basis: tuple[int, ...],
+    ) -> Iterator[tuple[tuple[int, ...], int]]:
+        if support:
+            statistics.independent_prefixes += 1
+            matches = groups.get(flag_sum, [])
+            for position in range(bisect_left(matches, start), len(matches)):
+                _, closing_syndrome, original = mechanisms[matches[position]]
+                statistics.generated += 1
+                yield support + (original,), syndrome ^ closing_syndrome
+        if len(support) >= budget - 1:
+            return
+        for index in range(start, len(mechanisms)):
+            statistics.generated += 1
+            statistics.prefix_extensions += 1
+            flag, column_syndrome, original = mechanisms[index]
+            reduced = flag
+            for row in basis:
+                reduced = min(reduced, reduced ^ row)
+            if reduced:
+                yield from visit(
+                    support + (original,),
+                    index + 1,
+                    flag_sum ^ flag,
+                    syndrome ^ column_syndrome,
+                    tuple(sorted((*basis, reduced), reverse=True)),
+                )
+
+    yield from visit((), 0, 0, 0, ())
 
 
 def _binary_rank(columns: Sequence[int]) -> int:

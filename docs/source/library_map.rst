@@ -236,10 +236,13 @@ Y counts as one affected qubit, and logical stabilizers fixing the intended stat
 Only the explicitly selected actual detectors reject a pattern; noiseless final state diagnostics are not rejection tests.
 The result includes its undecomposed diagnostic DEM and, on failure, original mechanism indices, a complete output syndrome, and a proved effective-weight lower bound.
 
-The implementation combines minimal accepted dependencies, joint-symptom compression, packed bounded Brouwer--Zimmermann coverage, and a reusable affine Pauli-coset oracle.
+The implementation combines minimal accepted dependencies, joint-symptom compression, adaptive independent-prefix closure or packed bounded Brouwer--Zimmermann coverage, and a reusable affine Pauli-coset oracle.
 The affine oracle combines the minimum visited weight with the bound on unseen words before publishing a global coset lower bound.
+Independent-prefix closure hashes the last column of each minimal dependence from its independent prefix, while preserving the general BZ path where multiple information sets are stronger.
+High-rate searches with independent distinct flag types reduce to equal-flag pairs for every budget.
+Its support-count crossover affects performance only, and the result statistics identify the selected search and its work.
 ``codes.distance.BoundedKernelSearch`` and ``codes.distance.PauliCosetSearch`` are reusable qualified interfaces for these exact searches.
-The search remains exponential in general; low flag rank and very small instances can favor simpler enumeration.
+The search remains exponential in general, and small or output-dense instances need not improve over simpler enumeration.
 Mixed outputs, random post-selected branches, and nondeterministic existing annotations are rejected rather than guessed.
 The certificate concerns unit-cost independent binary DEM mechanisms, not mutually exclusive physical gate alternatives or acceptance probabilities.
 It supports distance preservation only when downstream gadgets have the corresponding fault-tolerant input-error and propagation guarantees; it does not verify an arbitrary downstream algorithm.

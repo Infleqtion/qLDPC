@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 import itertools
+from unittest import mock
 
 import numpy as np
 import pytest
 import stim
 
 from qldpc import circuits
-from qldpc.codes.distance import PauliCosetSearch
+from qldpc.codes.distance import BoundedKernelSearch, PauliCosetSearch
 
 from . import fault_tolerance
 
@@ -29,8 +30,10 @@ def _exhaustive(flags: list[int], syndromes: list[int], n: int, budget: int) -> 
     return True
 
 
-def test_random_maps() -> None:
+@pytest.mark.parametrize("force_prefix", [False, True])
+def test_random_maps(force_prefix: bool, monkeypatch: pytest.MonkeyPatch) -> None:
     """Minimal-dependency search agrees with all accepted patterns, including flag cancellation."""
+    monkeypatch.setattr(fault_tolerance, "_use_prefix_search", mock.Mock(return_value=force_prefix))
     rng = np.random.default_rng(612)
     for n in (3, 5):
         matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
@@ -70,6 +73,184 @@ def test_random_maps() -> None:
                             )
                             == syndrome
                         )
+
+
+def test_minimal_prefix_oracle() -> None:
+    """Independent accepted-subset enumeration checks canonical closure and original-ID mapping."""
+    rng = np.random.default_rng(518)
+    for width in range(10):
+        for flag_bits in range(1, 5):
+            flags = list(map(int, rng.integers(1, 1 << flag_bits, size=width)))
+            syndromes = list(map(int, rng.integers(16, size=width)))
+            originals = list(map(int, rng.permutation(np.arange(width) * 7 + 100)))
+            mechanisms = list(zip(flags, syndromes, originals, strict=True))
+            for budget in range(1, 6):
+                expected: dict[tuple[int, ...], int] = {}
+                accepted: list[int] = []
+                for size in range(1, min(width, budget) + 1):
+                    for support in itertools.combinations(range(width), size):
+                        flag = syndrome = 0
+                        for jj in support:
+                            flag ^= flags[jj]
+                            syndrome ^= syndromes[jj]
+                        if flag:
+                            continue
+                        word = sum(1 << jj for jj in support)
+                        if not any(previous & word == previous for previous in accepted):
+                            expected[tuple(originals[jj] for jj in support)] = syndrome
+                        accepted.append(word)
+                stats = circuits.StatePrepSpreadStatistics()
+                actual = list(fault_tolerance._iter_minimal_patterns(mechanisms, budget, stats))
+                assert dict(actual) == expected
+                assert len(actual) == len(expected)
+                assert stats.generated == stats.prefix_extensions + len(actual)
+                assert stats.independent_prefixes <= stats.prefix_extensions
+
+
+def test_minimal_prefix_is_not_full_kernel() -> None:
+    """The separate minimal search must not weaken the full-kernel iterator's contract."""
+    flags = [1, 2, 3, 4, 8, 12]
+    mechanisms = [(flag, 1, jj) for jj, flag in enumerate(flags)]
+    stats = circuits.StatePrepSpreadStatistics()
+    minimal = list(fault_tolerance._iter_minimal_patterns(mechanisms, 6, stats))
+    assert {support for support, _ in minimal} == {(0, 1, 2), (3, 4, 5)}
+    checks = np.array([[(flag >> jj) & 1 for flag in flags] for jj in range(4)], dtype=int)
+    assert set(BoundedKernelSearch(checks, 6).words()) == {0b000111, 0b111000, 0b111111}
+    wide = [(1 << 80, 1, 90), (1 << 130, 2, 10), ((1 << 80) ^ (1 << 130), 4, 50)]
+    assert list(fault_tolerance._iter_minimal_patterns(wide, 3, stats)) == [((90, 10, 50), 7)]
+
+
+@pytest.mark.parametrize(
+    "columns,rank,budget,expected",
+    [
+        (45, 4, 3, True),
+        (93, 5, 2, True),
+        (381, 7, 3, True),
+        (21, 3, 4, True),
+        (30, 4, 5, True),
+        (35, 5, 5, True),
+        (21, 3, 2, False),
+        (21, 3, 3, False),
+        (24, 16, 3, False),
+        (41, 20, 3, False),
+        (49, 24, 3, True),
+        (100, 3, 1, False),
+    ],
+)
+def test_prefix_crossover(columns: int, rank: int, budget: int, expected: bool) -> None:
+    assert fault_tolerance._use_prefix_search(columns, rank, budget) == expected
+    assert fault_tolerance._use_prefix_search(columns, rank, budget, independent_flags=True) == (
+        budget >= 2 and columns > 2 * rank
+    )
+
+
+@pytest.mark.parametrize("damaging", [False, True])
+def test_adaptive_prefix_circuit(damaging: bool) -> None:
+    """Real compiled DEMs use canonical closure, retain fault costs, and expose valid witnesses."""
+    circuit = stim.Circuit()
+    circuit.append("I", range(9))
+    for flag in range(1, 16):
+        for syndrome in (3, 5, 6):
+            targets = [stim.target_x(jj) for jj in range(3) if (syndrome >> jj) & 1]
+            targets += [stim.target_x(5 + jj) for jj in range(4) if (flag >> jj) & 1]
+            circuit.append("CORRELATED_ERROR", targets, 0.001)
+    if damaging:
+        circuit.append("CORRELATED_ERROR", [stim.target_x(jj) for jj in (3, 4, 5)], 0.001)
+    circuit += stim.Circuit("H 0 1 2\nS 0 2\nX 0")
+    circuit.append("M", range(5, 9))
+    for jj in range(4):
+        circuit.append("DETECTOR", [stim.target_rec(jj - 4)])
+    result = circuits.certify_state_prep_spread(
+        circuit, output_qubits=[2, 0, 4, 1, 3], post_select=range(4), max_faults=3
+    )
+    assert result.certified != damaging
+    assert any("Y" in gg for gg in result.target_stabilizers)
+    assert any(gg.startswith("-") for gg in result.target_stabilizers)
+    stats = result.statistics
+    assert stats.search_method == "independent_prefix" and stats.outer_ranks == ()
+    failure = result.counterexample
+    if damaging:
+        assert failure is not None and failure.fault_count in (2, 3)
+        assert failure.fault_count < failure.effective_weight_lower_bound <= 4
+        errors = [
+            instruction
+            for instruction in result.detector_error_model
+            if instruction.type == "error"
+        ]
+        events: set[int] = set()
+        for jj in failure.fault_indices:
+            events.symmetric_difference_update(target.val for target in errors[jj].targets_copy())
+        assert not events.intersection(range(4))
+        generators = [stim.PauliString(gg) for gg in result.target_stabilizers]
+        representative = stim.PauliString(failure.output_pauli)
+        assert (
+            tuple(int(not representative.commutes(gg)) for gg in generators)
+            == failure.output_syndrome
+        )
+        assert sum(failure.output_syndrome) == 4
+    else:
+        # Even-parity three-bit syndromes have weight <=2; no singleton is accepted.
+        assert failure is None
+        assert stats.prefix_extensions == 1035 and stats.independent_prefixes == 990
+        assert stats.generated == 2025
+        assert stats.generated < 11521
+        assert stats.minimal_candidates == 990
+
+
+def test_adaptive_retains_strong_information_sets() -> None:
+    """Low-rate accepted codes keep the original multiple-information-set path."""
+    flags = [
+        flag
+        for group in range(8)
+        for flag in (1 << (2 * group), 1 << (2 * group + 1), 3 << (2 * group))
+    ]
+    n = 5
+    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
+    stats = circuits.StatePrepSpreadStatistics()
+    with mock.patch.object(
+        fault_tolerance, "_iter_minimal_patterns", side_effect=AssertionError("Wrong search")
+    ):
+        assert (
+            fault_tolerance._certify_maps(flags, [3, 6, 28] * 8, PauliCosetSearch(matrix), 3, stats)
+            is None
+        )
+    assert stats.search_method == "brouwer_zimmermann"
+    assert stats.outer_ranks == (8, 8, 8) and stats.coefficient_depth == 1
+    assert stats.generated == 24 and stats.prefix_extensions == 0
+
+
+@pytest.mark.parametrize("budget", [2, 3, 6, 30])
+def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
+    """Acceptance has even multiplicity in each independent flag type at every budget."""
+    flags = [flag for flag in (3, 5, 8, 16, 1 << 130) for _ in range(3)]
+    n = 3
+    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
+    stats = circuits.StatePrepSpreadStatistics()
+    assert (
+        fault_tolerance._certify_maps(flags, [3, 5, 6] * 5, PauliCosetSearch(matrix), budget, stats)
+        is None
+    )
+    assert stats.flag_rank == 5 and stats.effective_budget == 2
+    assert stats.search_method == "independent_prefix"
+    assert stats.prefix_extensions == stats.independent_prefixes == 15
+    assert stats.minimal_candidates == 15 and stats.generated == 30
+    assert _exhaustive(flags, [3, 5, 6] * 5, n, budget)
+
+
+def test_independent_flag_types_failure() -> None:
+    """Pair-only reduction still returns a genuine accepted violation with original IDs."""
+    flags = [flag for flag in (3, 5, 8) for _ in range(3)]
+    n = 4
+    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
+    stats = circuits.StatePrepSpreadStatistics()
+    failure = fault_tolerance._certify_maps(
+        flags, [1, 14, 0, 1, 2, 3, 1, 2, 3], PauliCosetSearch(matrix), 7, stats
+    )
+    assert failure is not None and failure.fault_count == 2
+    assert failure.fault_indices == (0, 1)
+    assert 2 < failure.effective_weight_lower_bound <= 4
+    assert failure.output_syndrome == (1, 1, 1, 1)
+    assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
 
 
 def test_dependency_reductions() -> None:
