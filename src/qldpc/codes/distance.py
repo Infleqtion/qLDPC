@@ -14,11 +14,6 @@ import numpy.typing as npt
 from numba import njit
 from numba.extending import register_jitable
 
-_MASK55 = np.uint64(0x5555555555555555)
-_MASK33 = np.uint64(0x3333333333333333)
-_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
-_MASK01 = np.uint64(0x0101010101010101)
-
 DistanceBackend = Literal["auto", "decoder", "gap", "sqetch"]
 DistanceMethod = Literal["brouwer_zimmermann", "brute_force"]
 
@@ -245,6 +240,10 @@ def get_distance_css_brouwer_zimmermann(
 
 ####################################################################################################
 # helper methods
+
+_MASK55 = np.uint64(0x5555555555555555)
+_MASK33 = np.uint64(0x3333333333333333)
+_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
 
 
 def _assert_binary(vectors: npt.ArrayLike, name: str) -> None:
@@ -1095,6 +1094,8 @@ def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
 
 ####################################################################################################
 # numpy < 2.0 does not provide np.bitwise_count; the methods below provide a fallback
+
+_MASK01 = np.uint64(0x0101010101010101)
 
 
 def _hamming_weight(
