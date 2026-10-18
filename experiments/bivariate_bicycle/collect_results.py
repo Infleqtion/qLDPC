@@ -5,8 +5,8 @@
 
 This script reads the disk cache written by run_search.py, and saves every code whose figure of
 merit r = k d^2 / n exceeds 1 (the bound satisfied by 2D topological codes such as the toric code)
-to a data file (by default, codes.csv in this directory).  Only results computed with --num-trials
-distance trials are exported.
+to codes.csv in --results-dir (by default, results/codes.csv in this directory).  Only results
+computed with --num-trials distance trials are exported.
 
 Example:
     python experiments/bivariate_bicycle/collect_results.py
@@ -15,15 +15,14 @@ Example:
 from __future__ import annotations
 
 import argparse
-import pathlib
 
 import diskcache
 import numpy as np
-from run_search import CACHE_NAME, NUM_TRIALS, add_cache_dir_argument
+from run_search import CACHE_NAME, NUM_TRIALS, add_results_dir_argument
 
 import qldpc.cache
 
-SAVE_PATH = pathlib.Path(__file__).parent / "codes.csv"  # default path of the exported data file
+OUTPUT_NAME = "codes.csv"  # name of the exported data file in the results directory
 
 # format of each row in the exported data file
 ROW_FORMAT = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f"
@@ -35,15 +34,16 @@ ROW_FORMAT = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f"
 def main() -> None:
     """Export bivariate bicycle codes that outperform the toric code to a data file."""
     args = parse_args()
-    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=args.cache_dir)
+    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=args.results_dir)
     data = get_code_data(cache, args.num_trials)
     if not data:
         print(f"No cached codes with r > 1 were found for --num-trials {args.num_trials}")
 
     # reshape the data to have one column per field, even if there are no rows
     rows = np.array(data, dtype=float).reshape(-1, ROW_FORMAT.count("%"))
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    np.savetxt(args.output, rows, header=get_header(args.num_trials), fmt=ROW_FORMAT)
+    output = args.results_dir / OUTPUT_NAME
+    np.savetxt(output, rows, header=get_header(args.num_trials), fmt=ROW_FORMAT)
+    print(f"Wrote {len(data)} codes to {output}")
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,18 +58,12 @@ def parse_args() -> argparse.Namespace:
         help="number of distance trials used by the search results to export"
         " (default: %(default)s)",
     )
-    add_cache_dir_argument(parser)
-    parser.add_argument(
-        "--output",
-        type=pathlib.Path,
-        default=SAVE_PATH,
-        help="path of the data file to write (default: codes.csv beside this script)",
-    )
+    add_results_dir_argument(parser)
     args = parser.parse_args()
     if args.num_trials < 1:
         parser.error("--num-trials must be positive")
-    if not (args.cache_dir / CACHE_NAME).is_dir():
-        parser.error(f"no search-results cache {CACHE_NAME} found in {args.cache_dir}")
+    if not (args.results_dir / CACHE_NAME).is_dir():
+        parser.error(f"no search-results cache found in {args.results_dir}")
     return args
 
 

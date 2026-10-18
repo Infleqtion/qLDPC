@@ -27,7 +27,7 @@ from qldpc import abstract, codes
 def main() -> None:
     """Check that all saved quantum Tanner codes can be regenerated from their seeds."""
     args = parse_args()
-    paths = search.get_saved_code_paths(args.save_dir)
+    paths = search.get_saved_code_paths(args.results_dir / search.CODES_NAME)
 
     mismatched_paths = []
     for index, path in enumerate(paths, start=1):
@@ -47,7 +47,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    search.add_save_dir_argument(parser)
+    search.add_results_dir_argument(parser)
     return parser.parse_args()
 
 

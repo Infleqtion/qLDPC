@@ -20,10 +20,12 @@ first one, so a logical error is a flip of that observable.
 
 Raw Sinter progress is saved to a resumable file, and aggregate results are written to a CSV file
 together with their provenance: the Git state of this repository, the decoder, and the collection
-request.  See README.md in this directory for example commands and details on resuming.
+request.  By default, both files are written to --results-dir (results/ in this directory) as
+{preset}_{run_id}_progress.csv and {preset}.csv.  See README.md in this directory for example
+commands and details on resuming.
 
 Example:
-    python experiments/lattice_surgery/collect_ler.py --preset bb72 --output bb72_results.csv
+    python experiments/lattice_surgery/collect_ler.py --preset bb72
 """
 
 from __future__ import annotations
@@ -56,6 +58,8 @@ from qldpc.experimental.surgery import (
 from qldpc.objects import Pauli
 
 Preset = Literal["bb72", "bb18", "steane-joint"]
+
+RESULTS_DIR = Path(__file__).parent / "results"  # default directory of all results
 
 # default physical error rates to sample for each preset
 DEFAULT_P_VALUES: dict[Preset, tuple[float, ...]] = {
@@ -138,7 +142,9 @@ def main() -> None:
     provenance = {**task_definition, "run_id": run_id}
     tasks = get_tasks(get_experiments(preset), p_values, provenance)
 
-    resume = args.resume or Path(__file__).with_name(f"{preset}_{run_id}_progress.csv")
+    resume = args.resume or args.results_dir / f"{preset}_{run_id}_progress.csv"
+    output = args.output or args.results_dir / f"{preset}.csv"
+    resume.parent.mkdir(parents=True, exist_ok=True)
     stats = sinter.collect(
         tasks=tasks,
         decoders=["custom"],
@@ -158,8 +164,8 @@ def main() -> None:
         "max_errors": args.max_errors,
         "workers": args.workers,
     }
-    write_aggregate_csv(args.output, preset, stats, collection_request)
-    print(f"Wrote {len(stats)} aggregate rows to {args.output}")
+    write_aggregate_csv(output, preset, stats, collection_request)
+    print(f"Wrote {len(stats)} aggregate rows to {output}")
     print(f"Raw resumable progress remains in {resume}")
 
 
@@ -199,16 +205,23 @@ def parse_args() -> argparse.Namespace:
         help="number of parallel Sinter workers (default: %(default)s)",
     )
     parser.add_argument(
+        "--results-dir",
+        type=Path,
+        default=RESULTS_DIR,
+        help="directory of progress and aggregate CSV files"
+        " (default: the 'results' directory beside this script)",
+    )
+    parser.add_argument(
         "--resume",
         type=Path,
         help="Sinter progress file to resume from and append to"
-        " (default: a run-specific file beside this script)",
+        " (default: {preset}_{run_id}_progress.csv in the results directory)",
     )
     parser.add_argument(
         "--output",
         type=Path,
-        required=True,
-        help="path of the aggregate CSV file to write",
+        help="path of the aggregate CSV file to write"
+        " (default: {preset}.csv in the results directory)",
     )
     args = parser.parse_args()
     if args.p_values is not None and not all(0 <= p <= 1 for p in args.p_values):

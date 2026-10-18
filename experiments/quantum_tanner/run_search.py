@@ -8,13 +8,14 @@ group of order at most --max-order, as indexed by the GAP SmallGroups library, a
 base code in BASE_CODE_IDS.  For each group and base code, it draws --num-samples codes with
 deterministic seeds (or one code, if the base code has as many bits as the group has elements),
 upper-bounds their code distances by minimizing over --num-trials randomized trials, and saves each
-code with its parameters to a text file in --save-dir.  Codes that already
-have a saved file are skipped (even if that file used a different --num-trials) unless --overwrite
-is passed, so an interrupted search resumes where it left off.
+code with its parameters to a text file in the "codes" subdirectory of --results-dir (by default,
+results/codes in this directory).  Codes that already have a saved file are skipped (even if that
+file used a different --num-trials) unless --overwrite is passed, so an interrupted search resumes
+where it left off.
 
-Afterwards, collect_results.py gathers the parameters of saved codes into a local database, and
-verify_codes.py checks that every saved code can be reproduced from its seed.  Both scripts rely on
-the file-naming and file-header helpers in this module.
+Afterwards, collect_results.py summarizes the parameters of saved codes in a CSV file in the same
+results directory, and verify_codes.py checks that every saved code can be reproduced from its
+seed.  Both scripts rely on the file-naming and file-header helpers in this module.
 
 Example:
     python experiments/quantum_tanner/run_search.py --max-order 6 --workers 8
@@ -35,7 +36,8 @@ from collections.abc import Hashable, Iterator
 
 from qldpc import abstract, codes
 
-SAVE_DIR = pathlib.Path(__file__).parent / "codes"  # default directory for saved codes
+RESULTS_DIR = pathlib.Path(__file__).parent / "results"  # default directory of all results
+CODES_NAME = "codes"  # subdirectory of the results directory that holds saved codes
 
 # default search settings
 MAX_ORDER = 10  # consider all finite groups up to this order
@@ -82,7 +84,7 @@ def main() -> None:
                         sample,
                         num_samples,
                         args.num_trials,
-                        save_dir=args.save_dir,
+                        codes_dir=args.results_dir / CODES_NAME,
                         identify_completion_text=args.workers > 1,
                         override_existing_data=args.overwrite,
                     )
@@ -125,7 +127,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="regenerate and overwrite codes that already have a saved file",
     )
-    add_save_dir_argument(parser)
+    add_results_dir_argument(parser)
     args = parser.parse_args()
     for name in ["max_order", "num_samples", "num_trials", "workers"]:
         if getattr(args, name) < 1:
@@ -133,13 +135,14 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def add_save_dir_argument(parser: argparse.ArgumentParser) -> None:
-    """Add the --save-dir option, which is shared by all quantum Tanner code scripts."""
+def add_results_dir_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the --results-dir option, which is shared by all quantum Tanner code scripts."""
     parser.add_argument(
-        "--save-dir",
+        "--results-dir",
         type=pathlib.Path,
-        default=SAVE_DIR,
-        help="directory of saved codes (default: the 'codes' directory beside this script)",
+        default=RESULTS_DIR,
+        help="directory of saved codes and their summary"
+        " (default: the 'results' directory beside this script)",
     )
 
 
@@ -156,7 +159,7 @@ def run_and_save(
     num_samples: int = NUM_SAMPLES,
     num_trials: int = NUM_TRIALS,
     *,
-    save_dir: pathlib.Path = SAVE_DIR,
+    codes_dir: pathlib.Path = RESULTS_DIR / CODES_NAME,
     identify_completion_text: bool = False,
     override_existing_data: bool = False,
     silent: bool = False,
@@ -179,7 +182,7 @@ def run_and_save(
         sample: The index of this code among random samples with the same group and base code.
         num_samples: The total number of samples per group and base code, used to report progress.
         num_trials: The number of randomized trials for upper-bounding the code distance.
-        save_dir: The directory in which to save the code.
+        codes_dir: The directory in which to save the code.
         identify_completion_text: If True, identify this job when printing its results, which helps
             to attribute results when many jobs run in parallel.
         override_existing_data: If True, regenerate and save codes that already have a saved file.
@@ -191,7 +194,7 @@ def run_and_save(
         return
 
     seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
-    path = get_code_path(save_dir, group_order, group_index, base_code_id, seed)
+    path = get_code_path(codes_dir, group_order, group_index, base_code_id, seed)
 
     if path.is_file() and not override_existing_data:
         # we already have the data for this code, so there is nothing to do
@@ -292,7 +295,7 @@ def get_mittal_code(length: int) -> codes.ClassicalCode:
 
 
 def get_code_path(
-    save_dir: pathlib.Path,
+    codes_dir: pathlib.Path,
     group_order: int,
     group_index: int,
     base_code_id: str,
@@ -301,7 +304,7 @@ def get_code_path(
     """Get the path of the file that saves a random quantum Tanner code.
 
     Args:
-        save_dir: The directory of saved codes.
+        codes_dir: The directory of saved codes.
         group_order: The order of the group that defines the code.
         group_index: The index of the group in the SmallGroups library.
         base_code_id: An identifier of the base code; see get_base_code.
@@ -311,24 +314,24 @@ def get_code_path(
         The path of the file, which parse_code_path inverts.
     """
     group_id = get_group_id(group_order, group_index)
-    return save_dir / f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
+    return codes_dir / f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
 
 
-def get_saved_code_paths(save_dir: pathlib.Path) -> list[pathlib.Path]:
+def get_saved_code_paths(codes_dir: pathlib.Path) -> list[pathlib.Path]:
     """Get the paths of all saved quantum Tanner codes in a directory, in sorted order.
 
     Args:
-        save_dir: The directory of saved codes.
+        codes_dir: The directory of saved codes.
 
     Returns:
-        The paths of all files in save_dir whose names have the form written by get_code_path.
+        The paths of all files in codes_dir whose names have the form written by get_code_path.
 
     Raises:
-        FileNotFoundError: If there are no saved codes in save_dir.
+        FileNotFoundError: If there are no saved codes in codes_dir.
     """
-    paths = sorted(save_dir.glob("qtcode_*.txt"))
+    paths = sorted(codes_dir.glob("qtcode_*.txt"))
     if not paths:
-        raise FileNotFoundError(f"No saved quantum Tanner codes found in {save_dir}")
+        raise FileNotFoundError(f"No saved quantum Tanner codes found in {codes_dir}")
     return paths
 
 

@@ -20,43 +20,40 @@ python experiments/lattice_surgery/collect_ler.py \
     --max-shots 1000 \
     --max-errors 10 \
     --workers 2 \
-    --resume /tmp/ler/progress.csv \
-    --output /tmp/ler/results.csv
+    --results-dir /tmp/ler
 ```
 
-Publication-scale examples, which write aggregate CSV files to a directory outside the repository:
+Publication-scale examples, which write their results to `experiments/lattice_surgery/results/`:
 
 ```bash
 python experiments/lattice_surgery/collect_ler.py \
     --preset bb72 \
     --max-shots 1000000 \
     --max-errors 100 \
-    --workers 8 \
-    --output ~/qldpc-ler/bb72_results.csv
+    --workers 8
 
 python experiments/lattice_surgery/collect_ler.py \
     --preset bb18 \
     --max-shots 10000 \
     --max-errors 100 \
-    --workers 8 \
-    --output ~/qldpc-ler/bb18_results.csv
+    --workers 8
 
 python experiments/lattice_surgery/collect_ler.py \
     --preset steane-joint \
     --max-shots 1000000 \
     --max-errors 200 \
-    --workers 8 \
-    --output ~/qldpc-ler/steane_joint_results.csv
+    --workers 8
 ```
 
-Each preset writes raw Sinter progress to a run-specific file beside the script unless `--resume` is supplied.
-Progress files are ignored by Git and may be resumed after interruption.
+By default, each run writes raw Sinter progress to `results/{preset}_{run_id}_progress.csv` and its logical error rates to `results/{preset}.csv`, where `results/` is the `--results-dir` (by default, the `results` directory beside the script, which Git ignores).
+Pass `--resume` or `--output` to choose either file individually.
+An interrupted run resumes from its progress file.
 Task identity depends on the preset, tracked Git state, decoder settings, experiment kind, physical-error value, and round count.
 Any commit or uncommitted edit to tracked files therefore starts new tasks from scratch, even with the same `--resume` file, so finish a run before changing tracked files.
 Collection limits and worker count do not change task identity, so they may be adjusted when resuming.
 Unrelated untracked files do not invalidate a resume.
 
-The requested `--output` is a small aggregate CSV with one row per task and the following columns:
+The aggregate CSV file has one row per task and the following columns:
 
 | Column | Meaning |
 | --- | --- |

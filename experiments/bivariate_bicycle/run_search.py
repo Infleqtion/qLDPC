@@ -18,9 +18,10 @@ equivalent to others by symmetry, or that reduce a polynomial to a monomial, are
 remaining code with an encoding rate of at least --min-rate, the code distance is upper-bounded by
 minimizing over --num-trials randomized trials.
 
-Results are saved to a disk cache (by default, .code_cache in this directory) keyed by (dims,
-exponents, num_trials), so an interrupted search resumes where it left off.  Afterwards,
-collect_results.py exports the best codes found to a data file.
+Results are saved to a disk cache in the "cache" subdirectory of --results-dir (by default,
+results/cache in this directory), keyed by (dims, exponents, num_trials), so an interrupted search
+resumes where it left off.  Afterwards, collect_results.py exports the best codes found to a CSV
+file in the same results directory.
 
 Example:
     python experiments/bivariate_bicycle/run_search.py 12 --workers 8
@@ -42,8 +43,8 @@ from sympy.abc import x, y
 import qldpc
 import qldpc.cache
 
-CACHE_DIR = pathlib.Path(__file__).parent  # default directory of the search-results cache
-CACHE_NAME = ".code_cache"  # name of the search-results cache
+RESULTS_DIR = pathlib.Path(__file__).parent / "results"  # default directory of all results
+CACHE_NAME = "cache"  # subdirectory of the results directory that holds the search-results cache
 
 # default search settings
 MIN_ORDER = 3  # minimum cyclic group order
@@ -58,7 +59,7 @@ NUM_WORKERS = max(1, (os.cpu_count() or 1) - 2)  # number of parallel jobs
 def main() -> None:
     """Search over bivariate bicycle codes in parallel, saving results to a disk cache."""
     args = parse_args()
-    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=args.cache_dir)
+    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=args.results_dir)
     with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as executor:
         futures = [
             executor.submit(run_and_save, dims, exponents, args.min_rate, args.num_trials, cache)
@@ -98,7 +99,7 @@ def parse_args() -> argparse.Namespace:
         default=NUM_WORKERS,
         help="number of parallel jobs (default: %(default)s)",
     )
-    add_cache_dir_argument(parser)
+    add_results_dir_argument(parser)
     args = parser.parse_args()
     if args.min_order < 1:
         parser.error("--min-order must be positive")
@@ -113,14 +114,14 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def add_cache_dir_argument(parser: argparse.ArgumentParser) -> None:
-    """Add the --cache-dir option, which is shared by all bivariate bicycle code scripts."""
+def add_results_dir_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the --results-dir option, which is shared by all bivariate bicycle code scripts."""
     parser.add_argument(
-        "--cache-dir",
+        "--results-dir",
         type=pathlib.Path,
-        default=CACHE_DIR,
-        help=f"directory of the search-results cache {CACHE_NAME}"
-        " (default: the directory of this script)",
+        default=RESULTS_DIR,
+        help="directory of the search-results cache and exported codes"
+        " (default: the 'results' directory beside this script)",
     )
 
 
