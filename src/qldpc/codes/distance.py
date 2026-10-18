@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Methods for computing the (exact) distance of error-correcting codes."""
+"""Methods for computing the (exact) distance of error-correcting codes.
+
+See ``brouwer_zimmermann.md`` beside this source module for the BZ algorithm and invariants.
+"""
 
 from __future__ import annotations
 
@@ -52,6 +55,7 @@ def get_distance_classical(
     Args:
         generators: The generator matrix of the classical code whose distance we want to compute.
             Brouwer-Zimmermann mode reduces redundant rows to an independent basis.
+            With ``method="brute_force"``, the rows must instead be linearly independent.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
         block_size: Batch size exponent.  BZ returns to Python after at most
             ``2**min(block_size, 15)`` supports; brute force vectorizes ``2**block_size`` values.
@@ -542,7 +546,7 @@ def _get_packed_row_weights(
 class _BrouwerZimmermannSearch:
     """State for one resumable Brouwer-Zimmermann search.
 
-    ``max_coverage`` bounds the number of pivot blocks containing any physical coordinate.
+    ``max_coverage`` bounds the number of pivot blocks containing any Hamming coordinate.
     Disjoint information sets have coverage one.
     """
 
@@ -630,16 +634,15 @@ def _get_brouwer_zimmermann_lower_bound(
     weight_divisor: int,
     max_coverage: int = 1,
 ) -> int:
-    """Bound the Hamming weight of eligible words not covered by the completed layers.
+    """Bound the Hamming weight of unsearched eligible words.
 
-    Every systematic basis must have been searched through ``completed_weight``.
-    The bound applies only to unsearched words, not to witnesses already found.
+    Search every systematic basis through ``completed_weight`` before using this bound.
+    It does not bound the weights of witnesses already found.
     """
-    # In an unsearched word, a rank-r pivot block has at least
-    # max(0, completed_weight + 1 - (dimension - r)) nonzero pivot columns.
+    # Rank deficiency limits how many selected rows can have zero pivot support.
     lower_bound = sum(max(0, completed_weight + 1 - (dimension - rank)) for rank in ranks)
 
-    # Each physical coordinate contributes to at most max_coverage blocks, so divide and round up.
+    # Correct for repeated Hamming coordinates by dividing occupancy and rounding up.
     lower_bound = (lower_bound + max_coverage - 1) // max_coverage
     if weight_divisor > 1:
         # Every candidate Hamming weight is a multiple of weight_divisor, so the bound can round up.
@@ -703,11 +706,11 @@ def _get_overlapping_information_sets(
     max_sets: int = 8,
     minimum_work: int = 100_000,
 ) -> tuple[list[_InformationSet], int] | None:
-    """Find a cheaper full-set family and its maximum coordinate coverage.
+    """Look for a lower-work replacement for disjoint information sets.
 
-    The input contains disjoint full or partial sets for one independent binary basis.
-    Proposed families contain only full sets, with quotient labels transformed alongside rows.
-    Return ``None`` to retain the input family when no cheaper replacement is found.
+    ``information_sets`` contains full or partial sets for one independent binary basis.
+    A replacement contains only full sets, with quotient labels transformed alongside rows.
+    Return a lower-work family and its maximum Hamming-coordinate coverage, or ``None``.
     """
     # Start from full blocks; skip complete packings and families already at the size limit.
     dimension = len(basis)
@@ -716,7 +719,7 @@ def _get_overlapping_information_sets(
     if not full_sets or len(full_sets) >= max_sets or len(full_sets) * dimension == len(columns):
         return None
 
-    # Avoid construction for cheap searches, using the same work estimate as exhaustive dispatch.
+    # Skip family construction when the existing search is already cheap.
     best_work = _get_brouwer_zimmermann_work(
         dimension,
         [item.rank for item in information_sets],
@@ -726,7 +729,7 @@ def _get_overlapping_information_sets(
     if best_work < minimum_work:
         return None
 
-    # Even ideal families repeat some coordinate ceil(count * dimension / width) times.
+    # With m full sets, some column has coverage at least ceil(m * dimension / len(columns)).
     optimistic_work = min(
         _get_brouwer_zimmermann_work(
             dimension,
@@ -740,7 +743,7 @@ def _get_overlapping_information_sets(
     if optimistic_work >= best_work:
         return None
 
-    # Track pivot loads and distinct sets, with fixed-seed tie-breaking for reproducibility.
+    # Track coverage and distinct sets; fixed-seed tie-breaking keeps choices reproducible.
     loads = np.bincount(
         np.concatenate([item.pivots for item in full_sets]), minlength=basis.shape[1]
     )
@@ -749,12 +752,12 @@ def _get_overlapping_information_sets(
     best_sets = None
     best_coverage = 1
     for _ in range(2 * (max_sets - len(full_sets))):
-        # Prioritize least-covered coordinates and transform quotient labels with the new basis.
+        # Prefer less-used columns; transform quotient labels with each candidate basis.
         order = columns[np.lexsort((rng.random(len(columns)), loads[columns]))]
         generators, transformed_labels, pivots = _row_reduce_binary(basis, labels, columns=order)
         assert len(pivots) == dimension
 
-        # Skip duplicate pivot sets to keep the bounded search focused on new bases.
+        # Do not add duplicate sets; their row reductions still count against the attempt limit.
         signature = tuple(sorted(pivots.tolist()))
         if signature in seen:
             continue
@@ -763,7 +766,7 @@ def _get_overlapping_information_sets(
         loads[pivots] += 1
         max_coverage = int(loads.max())
 
-        # Retain the cheapest prefix, stopping once no permitted family could improve its work.
+        # Keep improvements; stop at the set limit or when the optimistic work bound is attained.
         work = _get_brouwer_zimmermann_work(
             dimension,
             [dimension] * len(full_sets),
@@ -856,7 +859,7 @@ def _prepare_brouwer_zimmermann_search(
     if overlapping is not None:
         information_sets, max_coverage = overlapping
 
-        # New systematic rows can expose lighter witnesses without further enumeration.
+        # Check the replacement rows for lighter witnesses before scanning combinations.
         for information_set in information_sets:
             best = min(
                 best,
@@ -867,7 +870,7 @@ def _prepare_brouwer_zimmermann_search(
         if best <= cutoff:
             return best
 
-        # Recompute the local certificate using the replacement family's actual coverage.
+        # Recompute the bound for the replacement ranks and coordinate multiplicity.
         ranks = [item.rank for item in information_sets]
         lower_bound = _get_brouwer_zimmermann_lower_bound(
             dimension,
@@ -996,7 +999,8 @@ def _get_distance_brouwer_zimmermann(
 ) -> int:
     """Compute an exact nested-code distance with the Brouwer-Zimmermann algorithm.
 
-    The information-set lower bound follows Algorithm 1 of https://arxiv.org/abs/1603.06757.
+    The disjoint and rank-deficient bound follows Algorithm 1 of https://arxiv.org/abs/1603.06757.
+    The overlapping-set extension divides pivot occupancy by the maximum coordinate coverage.
     Nonzero ``labels`` identify rows outside an excluded subcode; transforming them alongside the
     generators makes the upper-bound search exact for logical operators modulo stabilizers.
     """

@@ -742,7 +742,7 @@ def test_brouwer_zimmermann_overlap_certificates() -> None:
         == 3
     )
 
-    # Give each basis row a distinct label so its transformed coefficients remain observable.
+    # Label each row separately so its row operations can be checked.
     basis = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
     basis = helpers._get_independent_rows(basis)
     labels = np.eye(len(basis), dtype=np.uint8)
@@ -758,14 +758,14 @@ def test_brouwer_zimmermann_overlap_certificates() -> None:
     loads = np.bincount(np.concatenate([item.pivots for item in family]), minlength=basis.shape[1])
     assert coverage == loads.max() and coverage > 1
 
-    # This fixture reaches ideal coverage without duplicate attempts or unused extra bases.
+    # Stop once this fixture reaches ideal coverage; no extra bases should be built.
     assert reduce.call_count == len(family) - 1
     for item in family:
         assert item.labels is not None
         np.testing.assert_array_equal(item.generators, item.labels @ basis % 2)
         np.testing.assert_array_equal(item.generators[:, item.pivots], np.eye(len(basis)))
 
-    # Exhaust all words still unsearched in every basis and check their physical-weight bound.
+    # Check the Hamming-weight bound for every word still unsearched in all bases.
     for bits in itertools.product((0, 1), repeat=len(basis)):
         word = np.asarray(bits) @ basis % 2
         for completed in (1, 2):
@@ -833,7 +833,7 @@ def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
 
 
 def test_brouwer_zimmermann_overlap_qc() -> None:
-    """The default selector must certify QC64 with substantially less enumeration."""
+    """Default overlap selection must reduce QC64 X-sector enumeration."""
     code = qldpc.codes.QCCode(
         {x: 4, y: 4, z: 2},
         1 + x + y + x * y * z,
@@ -856,7 +856,7 @@ def test_brouwer_zimmermann_overlap_qc() -> None:
 
 @pytest.mark.usefixtures("force_information_sets")
 def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
-    """A real overlap search improves its row witnesses and matches exhaustive distance."""
+    """Compare witness-improving overlap enumeration with an exhaustive quotient oracle."""
     helpers = qldpc.codes.distance
 
     # Shorten a systematic BCH(31,21) basis to [26,16] and isolate a one-bit quotient.
@@ -869,7 +869,7 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
         logicals, stabilizers, homogeneous=True, cutoff=0, method="brute_force"
     )
 
-    # Keep real family construction but bypass its large-work threshold for this small oracle.
+    # Lower only the work threshold so this small oracle exercises production family construction.
     original = helpers._get_overlapping_information_sets
 
     def select(
