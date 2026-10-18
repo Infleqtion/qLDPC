@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 
-"""Brute-force search for bivariate bicycle codes.
+"""Brute-force search for bivariate bicycle codes with toric layouts.
 
 This script enumerates the bivariate bicycle codes of arXiv:2308.07915 with generating polynomials
 
@@ -9,7 +9,11 @@ This script enumerates the bivariate bicycle codes of arXiv:2308.07915 with gene
     B = 1 + y + x**bx * y**by,
 
 where x and y generate cyclic groups of orders dim_x and dim_y, for a given torus width dim_x and
-every height dim_y with --min-order <= dim_y <= dim_x.  Exponents (ax, ay, bx, by) that are
+every height dim_y with --min-order <= dim_y <= dim_x.  The terms 1 + x and 1 + y give these codes
+a manifestly toric layout on a dim_x-by-dim_y torus, in which each check acts on four neighboring
+data qubits (as in the toric code) and two other data qubits.  Every bivariate bicycle code with a
+toric layout and three terms per polynomial is equivalent to a code of this form; see
+qldpc.codes.BBCode.get_equivalent_toric_layout_code_data.  Exponents (ax, ay, bx, by) that are
 equivalent to others by symmetry, or that reduce a polynomial to a monomial, are skipped.  For every
 remaining code with an encoding rate of at least --min-rate, the code distance is upper-bounded by
 minimizing over --num-trials randomized trials.

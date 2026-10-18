@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 
-"""Export bivariate bicycle code search results to a data file.
+"""Export the results of a search for bivariate bicycle codes with toric layouts to a data file.
 
 This script reads the disk cache written by run_search.py, and saves every code whose figure of
 merit r = k d^2 / n exceeds 1 (the bound satisfied by 2D topological codes such as the toric code)

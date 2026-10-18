@@ -5,7 +5,7 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 
 | Directory | What it does | Entry points |
 | --- | --- | --- |
-| [`bivariate_bicycle/`](bivariate_bicycle/) | Brute-force search for bivariate bicycle codes | `run_search.py`, then `collect_results.py` |
+| [`bivariate_bicycle/`](bivariate_bicycle/) | Brute-force search for bivariate bicycle codes with toric layouts | `run_search.py`, then `collect_results.py` |
 | [`quantum_tanner/`](quantum_tanner/) | Randomized search for quantum Tanner codes | `run_randomized_search.py`, then `collect_results.py` and `verify_codes.py` |
 | [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory | `collect_ler.py` |
 
@@ -19,7 +19,11 @@ The aggregate CSV file of `lattice_surgery/collect_ler.py` is instead written to
 
 ## Bivariate bicycle codes
 
-[`bivariate_bicycle/`](bivariate_bicycle/) performs a brute-force search over the bivariate bicycle codes of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) with generating polynomials `A = 1 + x + x^ax y^ay` and `B = 1 + y + x^bx y^by`.
+[`bivariate_bicycle/`](bivariate_bicycle/) performs a brute-force search for bivariate bicycle codes of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) with toric layouts.
+In a toric layout, qubits and checks sit on a periodic two-dimensional lattice, and four of the six data qubits addressed by each check are its neighbors on that lattice, as in the toric code; the remaining two connections may be nonlocal.
+A bivariate bicycle code has a manifestly toric layout if its generating polynomials have the form `A = 1 + x + ...` and `B = 1 + y + ...`, where `x` and `y` generate cyclic groups whose orders are the width and height of the torus.
+The search therefore covers codes with generating polynomials `A = 1 + x + x^ax y^ay` and `B = 1 + y + x^bx y^by`.
+Every bivariate bicycle code with a toric layout and three terms per polynomial is equivalent to a code of this form; see `BBCode.get_equivalent_toric_layout_code_data` and the [bivariate bicycle notebook](../examples/bivariate_bicycle_codes.ipynb).
 
 1. `run_search.py DIM_X` searches over every torus with width `DIM_X` and height between `--min-order` and `DIM_X`, skipping codes that are equivalent by symmetry or whose generating polynomials reduce to monomials.
    It saves code parameters `(n, k, d)` to the disk cache `bivariate_bicycle/.code_cache`, and resumes from that cache if interrupted.
