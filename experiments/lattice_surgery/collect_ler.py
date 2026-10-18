@@ -15,8 +15,8 @@ rates p:
   one Steane code (9 rounds).
 
 Every preset decodes with belief propagation plus localized statistics decoding (BP+LSD; see
-DECODERS).  Every circuit may track several logical observables, but each task keeps only the first
-one, so a logical error is a flip of that observable.
+DECODER_OPTIONS).  Every circuit may track several logical observables, but each task keeps only the
+first one, so a logical error is a flip of that observable.
 
 Raw Sinter progress is saved to a resumable file, and aggregate results are written to a CSV file
 together with their provenance: the Git state of this repository, the decoder, and the collection
@@ -37,7 +37,7 @@ import os
 import subprocess
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Any, Literal, get_args
 
 import numpy as np
 import sinter
@@ -64,18 +64,18 @@ DEFAULT_P_VALUES: dict[Preset, tuple[float, ...]] = {
     "steane-joint": (0.0002, 0.0004, 0.0008),
 }
 
-# decoder for each preset
-DECODERS: dict[Preset, decoders.DecoderSpec[decoders.ErrorDecoder]] = {
-    "bb72": decoders.bp_lsd(max_iter=20, bp_method="ms", lsd_method="LSD_CS", lsd_order=5),
-    "bb18": decoders.bp_lsd(
-        max_iter=100,
-        bp_method="ms",
-        ms_scaling_factor=0.0,
-        schedule="serial",
-        lsd_method="LSD_E",
-        lsd_order=5,
-    ),
-    "steane-joint": decoders.bp_lsd(max_iter=20, bp_method="ms", lsd_method="LSD_CS", lsd_order=5),
+# options of the BP+LSD decoder (decoders.bp_lsd) for each preset
+DECODER_OPTIONS: dict[Preset, dict[str, Any]] = {
+    "bb72": {"max_iter": 20, "bp_method": "ms", "lsd_method": "LSD_CS", "lsd_order": 5},
+    "bb18": {
+        "max_iter": 100,
+        "bp_method": "ms",
+        "ms_scaling_factor": 0.0,
+        "schedule": "serial",
+        "lsd_method": "LSD_E",
+        "lsd_order": 5,
+    },
+    "steane-joint": {"max_iter": 20, "bp_method": "ms", "lsd_method": "LSD_CS", "lsd_order": 5},
 }
 
 # Support of the weight-20 logical operator measured by the bb18 preset: a logical Z operator of
@@ -129,11 +129,11 @@ def main() -> None:
     args = parse_args()
     preset: Preset = args.preset
     p_values = tuple(args.p_values or DEFAULT_P_VALUES[preset])
-    decoder = DECODERS[preset]
+    decoder_settings = {"decoder": "bp_lsd", **DECODER_OPTIONS[preset]}
 
     # Identify tasks by everything that determines their circuits and decoder, but not by collection
     # limits, which may therefore change when resuming.
-    task_definition = {"preset": preset, "git_state": get_git_state(), "decoder": repr(decoder)}
+    task_definition = {"preset": preset, "git_state": get_git_state(), "decoder": decoder_settings}
     run_id = hashlib.sha256(json.dumps(task_definition, sort_keys=True).encode()).hexdigest()[:16]
     provenance = {**task_definition, "run_id": run_id}
     tasks = get_tasks(get_experiments(preset), p_values, provenance)
@@ -142,7 +142,7 @@ def main() -> None:
     stats = sinter.collect(
         tasks=tasks,
         decoders=["custom"],
-        custom_decoders={"custom": decoders.SinterDecoder(decoder=decoder)},
+        custom_decoders={"custom": get_sinter_decoder(preset)},
         num_workers=args.workers,
         max_shots=args.max_shots,
         max_errors=args.max_errors,
@@ -355,6 +355,11 @@ def get_tasks(
     return tasks
 
 
+def get_sinter_decoder(preset: Preset) -> decoders.SinterDecoder:
+    """Get the Sinter decoder of a preset: BP+LSD with options DECODER_OPTIONS[preset]."""
+    return decoders.SinterDecoder(decoder=decoders.bp_lsd(**DECODER_OPTIONS[preset]))
+
+
 ####################################################################################################
 # outputs
 
@@ -414,7 +419,7 @@ def write_aggregate_csv(
                     "discards": stat.discards,
                     "seconds": stat.seconds,
                     "git_state": metadata["git_state"],
-                    "decoder_settings": metadata["decoder"],
+                    "decoder_settings": json.dumps(metadata["decoder"], sort_keys=True),
                     "collection_request": json.dumps(collection_request, sort_keys=True),
                 }
             )

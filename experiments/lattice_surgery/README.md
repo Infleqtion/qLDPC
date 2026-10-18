@@ -8,10 +8,10 @@ The [lattice-surgery notebook](../../examples/experimental/lattice_surgery.ipynb
 Use `collect_ler.py` for publication-scale data.
 
 Each preset samples a lattice-surgery experiment and a quantum memory baseline under circuit-level depolarizing noise without idling errors, and decodes with BP+LSD.
-The module docstring of `collect_ler.py` describes the presets, and its `DECODERS` dictionary sets the decoder options of each preset.
+The module docstring of `collect_ler.py` describes the presets, and its `DECODER_OPTIONS` dictionary sets the decoder options of each preset.
 Run `python experiments/lattice_surgery/collect_ler.py --help` to see all options.
 
-To try the script cheaply first, write a small run to a scratch directory; this takes about a minute:
+To try the script cheaply first, write a small run to a scratch directory; this takes under a minute:
 
 ```bash
 python experiments/lattice_surgery/collect_ler.py \
@@ -24,7 +24,7 @@ python experiments/lattice_surgery/collect_ler.py \
     --output /tmp/ler/results.csv
 ```
 
-Publication-scale examples:
+Publication-scale examples, which write aggregate CSV files to the current directory:
 
 ```bash
 python experiments/lattice_surgery/collect_ler.py \
@@ -52,7 +52,7 @@ python experiments/lattice_surgery/collect_ler.py \
 Each preset writes raw Sinter progress to a run-specific file beside the script unless `--resume` is supplied.
 Progress files are ignored by Git and may be resumed after interruption.
 Task identity depends on the preset, tracked Git state, decoder settings, experiment kind, physical-error value, and round count.
-Any commit or uncommitted edit to tracked files changes the Git state, and therefore the name of the default progress file, so pass `--resume` explicitly to continue a run across such changes.
+Any commit or uncommitted edit to tracked files therefore starts new tasks from scratch, even with the same `--resume` file, so finish a run before changing tracked files.
 Collection limits and worker count do not change task identity, so they may be adjusted when resuming.
 Unrelated untracked files do not invalidate a resume.
 
@@ -67,7 +67,7 @@ The requested `--output` is a small aggregate CSV with one row per task and the 
 | `shots`, `errors`, `discards` | Sinter's counts of sampled shots, logical errors, and discarded shots |
 | `seconds` | The CPU time spent sampling and decoding |
 | `git_state` | The Git commit that produced the data, with a digest of any uncommitted changes |
-| `decoder_settings` | The decoder specification, such as `decoders.bp_lsd(...)` |
+| `decoder_settings` | A JSON object with the decoder name (`bp_lsd`) and its options |
 | `collection_request` | The p-values, shot and error limits, and worker count of the request |
 
 The logical error rate of a row is `errors / (shots - discards)`.

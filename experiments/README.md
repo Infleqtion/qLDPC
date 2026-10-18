@@ -11,7 +11,7 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 
 Each script documents its method, outputs, and options in its module docstring; run it with `--help` to see them.
 The quantum Tanner search requires [GAP](https://www.gap-system.org) for its groups (the SmallGroups library) and some base codes (the GUAVA package).
-Both code searches estimate distances with GAP's QDistRnd package when GAP is available, and with a decoder-based method otherwise.
+Both code searches bound distances with the default backend of `get_distance_bound`, which uses `sqetch` if installed, then GAP's QDistRnd package if available, and a decoder-based method otherwise.
 See the [GAP integration](../README.md#gap-integration) section of the main README to set up GAP, for example with `pip install 'qldpc[gap]'`.
 Commands below are written relative to the repository root.
 Caches, search results, and progress files are saved beside the scripts by default, where Git ignores them.
@@ -69,7 +69,16 @@ python experiments/quantum_tanner/verify_codes.py --save-dir /tmp/qtcodes
 With default settings, the search covers the 18 groups of order at most 10, with up to 100 random codes per group and base code (only one if the base code has as many bits as the group has elements), which amounts to roughly 11,000 saved codes.
 Each code requires a randomized distance estimate with `--num-trials` trials, so a full search can take many CPU-hours.
 Distances `d` are upper bounds, and `d` is `nan` for codes with no logical qubits.
-To read collected results, open the cache with `qldpc.cache.get_disk_cache(".code_cache", cache_dir=CACHE_DIR)`, where `CACHE_DIR` is the `--cache-dir` of `collect_results.py`, and iterate over its keys.
+To read collected results, open the cache in the `--cache-dir` of `collect_results.py`:
+
+```python
+import qldpc.cache
+
+cache = qldpc.cache.get_disk_cache(".code_cache", cache_dir="experiments/quantum_tanner")
+for group_order, group_index, base_code_id in cache.iterkeys():
+    for n, k, d, num_trials, stabilizer_weight in cache[group_order, group_index, base_code_id]:
+        ...
+```
 Pass the same `--save-dir` to all three scripts when saving codes to a nondefault directory, and pass `--cache-dir` to `collect_results.py` to keep its cache out of the repository.
 Verification requires `codes.QTCode.random` to sample the same code for the same seed, so codes saved with a different version of `qldpc` may fail verification.
 

@@ -37,8 +37,13 @@ def main() -> None:
     args = parse_args()
     cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=args.cache_dir)
     data = get_code_data(cache, args.num_trials)
+    if not data:
+        print(f"No cached codes with r > 1 were found for --num-trials {args.num_trials}")
+
+    # reshape the data to have one column per field, even if there are no rows
+    rows = np.array(data, dtype=float).reshape(-1, ROW_FORMAT.count("%"))
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    np.savetxt(args.output, data, header=get_header(args.num_trials), fmt=ROW_FORMAT)
+    np.savetxt(args.output, rows, header=get_header(args.num_trials), fmt=ROW_FORMAT)
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,6 +68,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.num_trials < 1:
         parser.error("--num-trials must be positive")
+    if not (args.cache_dir / CACHE_NAME).is_dir():
+        parser.error(f"no search-results cache {CACHE_NAME} found in {args.cache_dir}")
     return args
 
 
