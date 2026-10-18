@@ -341,9 +341,16 @@ def get_tasks(
     p_values: tuple[float, ...],
     provenance: Mapping[str, object],
 ) -> list[sinter.Task]:
-    """Get one Sinter task per physical error rate and experiment, with provenance metadata.
+    """Get Sinter tasks for every experiment at every physical error rate.
 
-    Each task keeps only the first observable of its experiment's circuit.
+    Args:
+        experiments: The experiments to sample.
+        p_values: The physical error rates of circuit-level depolarizing noise.
+        provenance: Metadata that identifies this run, which is added to every task.
+
+    Returns:
+        One task per physical error rate and experiment, which keeps only the first observable of
+        the experiment's circuit.
     """
     tasks = []
     for p in p_values:
@@ -372,7 +379,16 @@ def get_stats_for_run(
     run_id: str,
     requested_tasks: set[tuple[object, object, object]],
 ) -> list[sinter.TaskStats]:
-    """Keep the statistics of this run's requested tasks, ignoring other rows of a resume file."""
+    """Keep the statistics of requested tasks of this run, ignoring other rows of a resume file.
+
+    Args:
+        stats: The statistics collected by Sinter, which include all rows of the resume file.
+        run_id: The identifier of this run's task definition.
+        requested_tasks: The keys (see get_task_key) of the tasks requested by this run.
+
+    Returns:
+        The statistics of the requested tasks of this run.
+    """
     return [
         stat
         for stat in stats
@@ -388,7 +404,14 @@ def write_aggregate_csv(
     stats: list[sinter.TaskStats],
     collection_request: Mapping[str, object],
 ) -> None:
-    """Write collected statistics and their provenance to a CSV file with columns CSV_FIELDS."""
+    """Write collected statistics and their provenance to a CSV file with columns CSV_FIELDS.
+
+    Args:
+        path: The path of the CSV file.
+        preset: The preset that produced the statistics.
+        stats: The statistics to write, with one row per task.
+        collection_request: The settings with which statistics were collected.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as output_file:
         writer = csv.DictWriter(output_file, fieldnames=CSV_FIELDS)

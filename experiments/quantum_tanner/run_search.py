@@ -179,14 +179,26 @@ def run_and_save(
     """Generate a random quantum Tanner code, compute its parameters, and save it to a text file.
 
     The random seed for the code is a deterministic hash of the group, base code, and sample index,
-    so rerunning this function with the same inputs reproduces the same code.  Codes that already
-    have a saved file are skipped unless override_existing_data is True.  If
-    identify_completion_text is True, printed results identify their job, which helps when many jobs
-    run in parallel.
+    so rerunning this function with the same inputs reproduces the same code.
 
     The multiprocessing module (which calls this method) is unable to properly handle SymPy
     PermutationGroup objects, so we have to construct groups here from their order and index.
     Passing ClassicalCode objects seems to be fine, though.
+
+    Args:
+        group_order: The order of the group that defines the code.
+        group_index: The index of the group among those of the same order in the SmallGroups
+            library.
+        base_code: The classical code that defines local constraints of the code.
+        base_code_id: An identifier of the base code; see get_base_code.
+        sample: The index of this code among random samples with the same group and base code.
+        num_samples: The total number of samples per group and base code, used to report progress.
+        num_trials: The number of randomized trials for upper-bounding the code distance.
+        codes_dir: The directory in which to save the code.
+        identify_completion_text: If True, identify this job when printing its results, which helps
+            to attribute results when many jobs run in parallel.
+        override_existing_data: If True, regenerate and save codes that already have a saved file.
+        silent: If True, do not print progress.
     """
     if group_order < base_code.num_bits:
         # No subset of this group can be large enough to have as many elements as there are bits in
