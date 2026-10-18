@@ -3,9 +3,9 @@
 
 """Verify the reproducibility of saved quantum Tanner codes.
 
-This script regenerates every code saved by run_randomized_search.py from the group, base code, and
-seed in its file name, and checks that the regenerated code equals the saved code.  It reports every
-code that fails this check, and exits with an error if there are any.
+This script regenerates every code saved by run_search.py from the group, base code, and seed in its
+file name, and checks that the regenerated code equals the saved code.  It reports every code that
+fails this check, and exits with an error if there are any.
 
 Example:
     python experiments/quantum_tanner/verify_codes.py
@@ -16,7 +16,7 @@ from __future__ import annotations
 import argparse
 import pathlib
 
-import run_randomized_search as search
+import run_search as search
 
 from qldpc import abstract, codes
 
@@ -59,7 +59,7 @@ def is_reproducible(path: pathlib.Path) -> bool:
     """Does regenerating a saved quantum Tanner code from its seed reproduce the saved code?
 
     Args:
-        path: The path of a file written by run_randomized_search.run_and_save.
+        path: The path of a file written by run_search.run_and_save.
 
     Returns:
         True if the regenerated code equals the saved code, and False otherwise.

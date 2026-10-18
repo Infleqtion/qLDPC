@@ -6,7 +6,7 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 | Directory | What it does | Entry points |
 | --- | --- | --- |
 | [`bivariate_bicycle/`](bivariate_bicycle/) | Brute-force search for bivariate bicycle codes with toric layouts | `run_search.py`, then `collect_results.py` |
-| [`quantum_tanner/`](quantum_tanner/) | Randomized search for quantum Tanner codes | `run_randomized_search.py`, then `collect_results.py` and `verify_codes.py` |
+| [`quantum_tanner/`](quantum_tanner/) | Randomized search for quantum Tanner codes | `run_search.py`, then `collect_results.py` and `verify_codes.py` |
 | [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory | `collect_ler.py` |
 
 Each script's module docstring summarizes its method and outputs; run it with `--help` to see its options.
@@ -49,7 +49,7 @@ python experiments/bivariate_bicycle/collect_results.py --num-trials 10 --cache-
 
 [`quantum_tanner/`](quantum_tanner/) performs a randomized search over quantum Tanner codes built from small finite groups and small classical base codes.
 
-1. `run_randomized_search.py` samples codes for every group of order at most `--max-order` and every base code in `BASE_CODE_IDS`, and saves each code to a text file in `quantum_tanner/codes/`.
+1. `run_search.py` samples codes for every group of order at most `--max-order` and every base code in `BASE_CODE_IDS`, and saves each code to a text file in `quantum_tanner/codes/`.
    Groups with fewer elements than a base code has bits are skipped for that base code, because they cannot define a quantum Tanner code with it.
    File names identify the group, base code, and random seed of each code.
    Codes that already have a file are skipped, even if that file used a different `--num-trials`, unless `--overwrite` is passed.
@@ -59,7 +59,7 @@ python experiments/bivariate_bicycle/collect_results.py --num-trials 10 --cache-
 3. `verify_codes.py` checks that regenerating every saved code from its seed reproduces that code.
 
 ```bash
-python experiments/quantum_tanner/run_randomized_search.py --workers 8
+python experiments/quantum_tanner/run_search.py --workers 8
 python experiments/quantum_tanner/collect_results.py
 python experiments/quantum_tanner/verify_codes.py
 ```
@@ -67,7 +67,7 @@ python experiments/quantum_tanner/verify_codes.py
 To try the pipeline cheaply first, write a small search to a scratch directory:
 
 ```bash
-python experiments/quantum_tanner/run_randomized_search.py --max-order 6 --num-samples 2 --num-trials 10 --save-dir /tmp/qtcodes
+python experiments/quantum_tanner/run_search.py --max-order 6 --num-samples 2 --num-trials 10 --save-dir /tmp/qtcodes
 python experiments/quantum_tanner/collect_results.py --save-dir /tmp/qtcodes --cache-dir /tmp/qtcodes
 python experiments/quantum_tanner/verify_codes.py --save-dir /tmp/qtcodes
 ```

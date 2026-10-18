@@ -3,8 +3,8 @@
 
 """Collect quantum Tanner code search results into a local database.
 
-This script reads the files of codes saved by run_randomized_search.py, and stores their parameters
-in a disk cache (by default, .code_cache in this directory).  Each cache entry is keyed by
+This script reads the files of codes saved by run_search.py, and stores their parameters in a disk
+cache (by default, .code_cache in this directory).  Each cache entry is keyed by
 (group_order, group_index, base_code_id), and holds a list with one tuple
 (n, k, d, num_trials, stabilizer_weight) per saved code.  Codes with no logical qubits are skipped.
 
@@ -18,7 +18,7 @@ import argparse
 import collections
 import pathlib
 
-import run_randomized_search as search
+import run_search as search
 
 import qldpc.cache
 

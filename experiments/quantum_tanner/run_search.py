@@ -17,7 +17,7 @@ verify_codes.py checks that every saved code can be reproduced from its seed.  B
 the file-naming and file-header helpers in this module.
 
 Example:
-    python experiments/quantum_tanner/run_randomized_search.py --max-order 6 --workers 8
+    python experiments/quantum_tanner/run_search.py --max-order 6 --workers 8
 """
 
 from __future__ import annotations
