@@ -24,7 +24,7 @@ python experiments/lattice_surgery/collect_ler.py \
     --output /tmp/ler/results.csv
 ```
 
-Publication-scale examples, which write aggregate CSV files to the current directory:
+Publication-scale examples, which write aggregate CSV files to a directory outside the repository:
 
 ```bash
 python experiments/lattice_surgery/collect_ler.py \
@@ -32,21 +32,21 @@ python experiments/lattice_surgery/collect_ler.py \
     --max-shots 1000000 \
     --max-errors 100 \
     --workers 8 \
-    --output bb72_results.csv
+    --output ~/qldpc-ler/bb72_results.csv
 
 python experiments/lattice_surgery/collect_ler.py \
     --preset bb18 \
     --max-shots 10000 \
     --max-errors 100 \
     --workers 8 \
-    --output bb18_results.csv
+    --output ~/qldpc-ler/bb18_results.csv
 
 python experiments/lattice_surgery/collect_ler.py \
     --preset steane-joint \
     --max-shots 1000000 \
     --max-errors 200 \
     --workers 8 \
-    --output steane_joint_results.csv
+    --output ~/qldpc-ler/steane_joint_results.csv
 ```
 
 Each preset writes raw Sinter progress to a run-specific file beside the script unless `--resume` is supplied.
