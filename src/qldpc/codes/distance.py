@@ -8,15 +8,12 @@ import itertools
 import math
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
-
-_MASK55 = np.uint64(0x5555555555555555)
-_MASK33 = np.uint64(0x3333333333333333)
-_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
-_MASK01 = np.uint64(0x0101010101010101)
+from numba import njit
+from numba.extending import register_jitable
 
 DistanceBackend = Literal["auto", "decoder", "gap", "sqetch"]
 DistanceMethod = Literal["brouwer_zimmermann", "brute_force"]
@@ -57,7 +54,8 @@ def get_distance_classical(
         generators: The generator matrix of the classical code whose distance we want to compute.
             Brouwer-Zimmermann mode reduces redundant rows to an independent basis.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
-        block_size: Vectorize distance calculations over batches of size ``2**block_size``.
+        block_size: Batch size exponent.  BZ returns to Python after at most
+            ``2**min(block_size, 15)`` supports; brute force vectorizes ``2**block_size`` values.
         method: Exact-distance method.  ``"brouwer_zimmermann"`` (default) enumerates fixed-weight
             combinations in several information-set bases and stops once its lower and upper bounds
             meet.  ``"brute_force"`` enumerates every nonzero codeword.
@@ -108,7 +106,8 @@ def get_distance_quantum(
             reduces redundant rows and excludes the stabilizer row space from candidate witnesses.
         stabilizers: A matrix whose rows represent stabilizers of the code.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
-        block_size: Vectorize distance calculations over batches of size ``2**block_size``.
+        block_size: Batch size exponent.  BZ returns to Python after at most
+            ``2**min(block_size, 15)`` supports; brute force vectorizes ``2**block_size`` values.
         homogeneous: If True, all Pauli strings (represented by rows of logical_ops and stabilizers)
             are assumed to have the same homogeneous (X or Z) type.  If False, Pauli strings may
             have mixed (X, Y, or Z) support on different qubits.
@@ -203,7 +202,7 @@ def get_distance_css_brouwer_zimmermann(
         sectors: Logical operators and stabilizers for every sector to search.  All operators use
             homogeneous binary support vectors rather than symplectic vectors.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
-        block_size: Vectorize distance calculations over batches of size ``2**block_size``.
+        block_size: Batch size exponent, as in :func:`get_distance_quantum`.
         upper_bound: Weight of a known logical operator from an omitted sector, if any.  The result
             is the minimum of this bound and the distances of the supplied sectors.
 
@@ -242,6 +241,19 @@ def get_distance_css_brouwer_zimmermann(
 
 ####################################################################################################
 # helper methods
+
+_MASK55 = np.uint64(0x5555555555555555)
+_MASK33 = np.uint64(0x3333333333333333)
+_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
+
+
+class _InformationSet(NamedTuple):
+    """Generators, labels, rank, and pivot columns for one systematic column block."""
+
+    generators: npt.NDArray[np.uint8]
+    labels: npt.NDArray[np.uint8] | None
+    rank: int
+    pivots: npt.NDArray[np.int_]
 
 
 ####################################################################################################
@@ -712,14 +724,7 @@ def _get_nested_code_basis(
 def _get_information_set_generators(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
-) -> list[
-    tuple[
-        npt.NDArray[np.uint8],
-        npt.NDArray[np.uint8] | None,
-        int,
-        npt.NDArray[np.int_],
-    ]
-]:
+) -> list[_InformationSet]:
     """Construct a large deterministic packing of disjoint information sets."""
     nonzero_columns = np.flatnonzero(np.any(basis, axis=0))
     best = _get_information_set_generators_for_columns(
@@ -753,27 +758,13 @@ def _get_information_set_generators_for_columns(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
     columns: npt.NDArray[np.int_],
-) -> list[
-    tuple[
-        npt.NDArray[np.uint8],
-        npt.NDArray[np.uint8] | None,
-        int,
-        npt.NDArray[np.int_],
-    ]
-]:
+) -> list[_InformationSet]:
     """Construct disjoint information sets in a specified column order."""
     dimension = len(basis)
     active_columns = columns
     working = basis
     working_labels = labels
-    information_sets: list[
-        tuple[
-            npt.NDArray[np.uint8],
-            npt.NDArray[np.uint8] | None,
-            int,
-            npt.NDArray[np.int_],
-        ]
-    ] = []
+    information_sets: list[_InformationSet] = []
 
     while len(active_columns):
         working, working_labels, pivots = _row_reduce_binary(
@@ -781,7 +772,7 @@ def _get_information_set_generators_for_columns(
         )
         rank = len(pivots)
         assert rank
-        information_sets.append((working, working_labels, rank, pivots))
+        information_sets.append(_InformationSet(working, working_labels, rank, pivots))
         if rank < dimension:
             break
 
@@ -797,7 +788,11 @@ def _get_information_set_generators_for_columns(
 def _iter_fixed_weight_supports(
     dimension: int, weight: int, batch_size: int
 ) -> Iterator[npt.NDArray[np.int_]]:
-    """Yield batches of row-index combinations with a fixed Hamming weight."""
+    """Yield coefficient supports for witness enumeration and affine-coset decisions.
+
+    Unlike the compiled distance minimizer, these consumers need the individual supports and
+    candidate words, including words that do not improve a distance upper bound.
+    """
     num_supports = math.comb(dimension, weight)
     max_rank = np.iinfo(np.int64).max
     if num_supports <= max_rank:
@@ -837,6 +832,109 @@ def _iter_fixed_weight_supports(
         yield flat_batch.reshape(-1, weight)
 
 
+@register_jitable(inline="always")
+def _popcount_word(value: np.uint64) -> np.int64:
+    """Count one unsigned word, returning a signed weight without overflow."""
+    value = value - ((value >> np.uint64(1)) & _MASK55)
+    value = (value & _MASK33) + ((value >> np.uint64(2)) & _MASK33)
+    value = (value + (value >> np.uint64(4))) & _MASK0F
+    value = value + (value >> np.uint64(8))
+    value = value + (value >> np.uint64(16))
+    value = value + (value >> np.uint64(32))
+    return np.int64(value & np.uint64(127))
+
+
+@njit(boundscheck=True, cache=True)
+def _scan_brouwer_zimmermann(
+    generators: npt.NDArray[np.uint64],
+    labels: npt.NDArray[np.uint64],
+    ranks: npt.NDArray[np.int64],
+    widths: npt.NDArray[np.int64],
+    label_widths: npt.NDArray[np.int64],
+    support: npt.NDArray[np.int64],
+    prefixes: npt.NDArray[np.uint64],
+    depth: int,
+    best: int,
+    cutoff: int,
+    batch_size: int,
+) -> tuple[int, int, int]:
+    """Scan one bounded chunk of coefficient supports for Brouwer-Zimmermann search.
+
+    Args:
+        generators: Packed information-set rows after pivot columns have been deleted.
+        labels: Packed quotient labels whose nonzero XOR marks eligible candidates.
+        ranks: Rank of each information-set block before pivot columns were deleted.
+        widths: Number of packed generator words used by each information-set block.
+        label_widths: Number of packed label words used by each information-set block.
+        support: Mutable row indices for the current coefficient support.
+        prefixes: Mutable prefix XORs for every support depth and information-set block.
+        depth: Current support-tree depth, or ``-1`` when the coefficient layer is complete.
+        best: Current upper bound; only strictly lighter eligible candidates replace it.
+        cutoff: Weight threshold that stops this chunk once ``best <= cutoff``.
+        batch_size: Maximum number of complete supports visited by this chunk.
+
+    Returns:
+        Updated ``best``, updated ``depth``, and number of complete supports visited.
+    """
+    dimension = generators.shape[1]
+    weight = len(support)
+    visited = 0
+    while depth >= 0:
+        # Backtrack once the row at this depth leaves too few rows to complete the support.
+        if support[depth] > dimension - weight + depth:
+            depth -= 1
+            if depth >= 0:
+                support[depth] += 1
+            continue
+
+        # Extend the prefix XOR by the row selected at this depth, in every information set.
+        row = support[depth]
+        for set_index in range(len(ranks)):
+            for word in range(widths[set_index]):
+                prefixes[depth + 1, set_index, word] = (
+                    prefixes[depth, set_index, word] ^ generators[set_index, row, word]
+                )
+
+        # Descend until every row of the support has been selected.
+        if depth + 1 < weight:
+            depth += 1
+            support[depth] = row + 1
+            continue
+
+        # Evaluate the completed support in each information set.
+        for set_index in range(len(ranks)):
+            # Each selected row whose pivot column was deleted contributes one to the Hamming
+            # weight; packed words hold the remaining columns.
+            candidate_weight = np.int64(weight) if ranks[set_index] == dimension else np.int64(0)
+            if ranks[set_index] != dimension:
+                for selected in range(weight):
+                    if support[selected] < ranks[set_index]:
+                        candidate_weight += 1
+            for word in range(widths[set_index]):
+                candidate_weight += _popcount_word(prefixes[weight, set_index, word])
+            if candidate_weight >= best:
+                continue
+
+            # A candidate is eligible when no subcode is excluded or its quotient label is nonzero.
+            eligible = label_widths[set_index] == 0
+            for word in range(label_widths[set_index]):
+                combined = labels[set_index, support[0], word]
+                for selected in range(1, weight):
+                    combined ^= labels[set_index, support[selected], word]
+                if combined:
+                    eligible = True
+                    break
+            if eligible:
+                best = int(candidate_weight)
+
+        # Move to the next support, returning at the cutoff or at the end of this chunk.
+        visited += 1
+        support[depth] += 1
+        if best <= cutoff or visited >= batch_size:
+            return best, depth, visited
+    return best, depth, visited
+
+
 def _get_packed_row_weights(
     rows: npt.NDArray[np.uint64],
     weight_func: Callable[..., npt.NDArray[np.uint64]],
@@ -850,21 +948,22 @@ def _get_packed_row_weights(
 class _BrouwerZimmermannSearch:
     """Resumable BZ state: witness upper bound ``best`` and unseen-word bound ``lower_bound``."""
 
-    packed_sets: list[
-        tuple[
-            npt.NDArray[np.uint64],
-            npt.NDArray[np.uint64] | None,
-            int,
-        ]
-    ]
-    weight_func: Callable[..., npt.NDArray[np.uint64]]
-    dimension: int
+    generators: npt.NDArray[np.uint64]
+    labels: npt.NDArray[np.uint64]
+    ranks: npt.NDArray[np.int64]
+    widths: npt.NDArray[np.int64]
+    label_widths: npt.NDArray[np.int64]
     cutoff: int
     batch_size: int
     weight_divisor: int
     best: int
     lower_bound: int
     next_weight: int = 1
+
+    @property
+    def dimension(self) -> int:
+        """Number of basis rows searched."""
+        return self.generators.shape[1]
 
     @property
     def finished(self) -> bool:
@@ -884,44 +983,38 @@ class _BrouwerZimmermannSearch:
         if self.finished:
             return self.best
 
+        # Start a fresh enumeration of all supports with this coefficient weight.
         weight = self.next_weight
-        for supports in _iter_fixed_weight_supports(self.dimension, weight, self.batch_size):
-            for generators, set_labels, rank in self.packed_sets:
-                # Packed rows omit pivots, whose weight follows directly from the support.
-                pivot_weights: int | npt.NDArray[np.uint64]
-                if rank == self.dimension:
-                    pivot_weights = weight
-                else:
-                    pivot_weights = np.asarray(
-                        np.count_nonzero(supports < rank, axis=1),
-                        dtype=np.uint64,
-                    )
-                words = np.bitwise_xor.reduce(generators[supports], axis=1)
-                weights = _get_packed_row_weights(words, self.weight_func)
-                weights += pivot_weights
-                lighter = weights < self.best
-                if not np.any(lighter):
-                    continue
-                if set_labels is not None:
-                    # Quotient labels matter only for candidates that can improve the bound.
-                    combined_labels = np.bitwise_xor.reduce(
-                        set_labels[supports[lighter]],
-                        axis=1,
-                    )
-                    eligible = np.any(combined_labels, axis=1)
-                    if not np.any(eligible):
-                        continue
-                    lighter_weights = weights[lighter][eligible]
-                else:
-                    lighter_weights = weights[lighter]
-                self.best = int(lighter_weights.min())
-                if self.best <= self.cutoff:
-                    return self.best
+        support = np.zeros(weight, dtype=np.int64)
+        prefixes = np.zeros(
+            (weight + 1, len(self.ranks), self.generators.shape[2]), dtype=np.uint64
+        )
+        depth = 0
+        # Any negative Python cutoff disables early exit; keep its native value in int64 range.
+        cutoff = max(-1, self.cutoff)
 
-        ranks = [rank for _, _, rank in self.packed_sets]
+        # Scan in chunks, returning early once the upper bound reaches the cutoff.
+        while depth >= 0:
+            self.best, depth, _ = _scan_brouwer_zimmermann(
+                self.generators,
+                self.labels,
+                self.ranks,
+                self.widths,
+                self.label_widths,
+                support,
+                prefixes,
+                depth,
+                self.best,
+                cutoff,
+                self.batch_size,
+            )
+            if self.best <= self.cutoff:
+                return self.best
+
+        # The layer is complete, so update the lower bound and move on to the next weight.
         self.lower_bound = _get_brouwer_zimmermann_lower_bound(
             self.dimension,
-            ranks,
+            self.ranks.tolist(),
             completed_weight=weight,
             weight_divisor=self.weight_divisor,
         )
@@ -937,8 +1030,13 @@ def _get_brouwer_zimmermann_lower_bound(
     weight_divisor: int,
 ) -> int:
     """Bound unseen-word weights after exhausting a coefficient depth, not global distance."""
+    # This generalizes Algorithm 1 to disjoint systematic blocks: after coefficient supports
+    # through completed_weight, a block of rank r forces
+    # max(0, completed_weight + 1 - (dimension - r)) nonzero pivot columns.
+    # Disjoint blocks add those pivot-column Hamming-weight units.
     lower_bound = sum(max(0, completed_weight + 1 - (dimension - rank)) for rank in ranks)
     if weight_divisor > 1:
+        # Every candidate Hamming weight is a multiple of weight_divisor, so the bound can round up.
         lower_bound += (-lower_bound) % weight_divisor
     return lower_bound
 
@@ -955,26 +1053,12 @@ def _get_brouwer_zimmermann_initial_upper_bound(
 
 
 def _select_brouwer_zimmermann_information_sets(
-    information_sets: Sequence[
-        tuple[
-            npt.NDArray[np.uint8],
-            npt.NDArray[np.uint8] | None,
-            int,
-            npt.NDArray[np.int_],
-        ]
-    ],
+    information_sets: Sequence[_InformationSet],
     *,
     dimension: int,
     upper_bound: int,
     weight_divisor: int,
-) -> list[
-    tuple[
-        npt.NDArray[np.uint8],
-        npt.NDArray[np.uint8] | None,
-        int,
-        npt.NDArray[np.int_],
-    ]
-]:
+) -> list[_InformationSet]:
     """Retain partial sets that can strengthen certification of the current upper bound."""
     num_full_sets = sum(rank == dimension for _, _, rank, _ in information_sets)
     if not num_full_sets:
@@ -994,6 +1078,7 @@ def _select_brouwer_zimmermann_information_sets(
         ),
         dimension + 1,
     )
+    # A dropped partial set adds zero lower-bound units until full sets certify the upper bound.
     return [
         information_set
         for information_set in information_sets
@@ -1010,18 +1095,13 @@ def _prepare_brouwer_zimmermann_search(
     block_size: int,
     weight_divisor: int,
     upper_bound: int,
+    initial_upper_bound: int | None = None,
 ) -> int | _BrouwerZimmermannSearch:
     """Prepare one BZ search, or return immediately when another route is cheaper."""
     dimension = len(basis)
     eligible = np.ones(dimension, dtype=bool) if labels is None else np.any(labels, axis=1)
-    best = min(
-        upper_bound,
-        _get_brouwer_zimmermann_initial_upper_bound(basis, labels),
-    )
-    if best <= cutoff:
-        return best
 
-    if _exhaustive_is_cheaper(dimension, basis.shape[1]):
+    def brute_force_distance() -> int:
         distance = _get_distance_quantum_brute_force(
             basis[eligible],
             basis[~eligible],
@@ -1030,6 +1110,20 @@ def _prepare_brouwer_zimmermann_search(
             homogeneous=True,
         )
         return min(best, distance)
+
+    best = min(
+        upper_bound,
+        (
+            _get_brouwer_zimmermann_initial_upper_bound(basis, labels)
+            if initial_upper_bound is None
+            else initial_upper_bound
+        ),
+    )
+    if best <= cutoff:
+        return best
+
+    if _exhaustive_is_cheaper(dimension, basis.shape[1]):
+        return brute_force_distance()
 
     # XOR preserves even parity, so this entire ambient space has even Hamming weight.
     if np.all(np.count_nonzero(basis, axis=1) % 2 == 0):
@@ -1074,30 +1168,48 @@ def _prepare_brouwer_zimmermann_search(
         upper_bound=best,
         weight_divisor=weight_divisor,
     ):
-        distance = _get_distance_quantum_brute_force(
-            basis[eligible],
-            basis[~eligible],
-            cutoff=cutoff,
-            block_size=block_size,
-            homogeneous=True,
-        )
-        return min(best, distance)
+        return brute_force_distance()
 
     # Remove systematic pivots; advance() restores their known weight arithmetically.
     packed_sets = [
         (
-            _rows_to_ints(np.delete(generators, pivots, axis=1), dtype=np.uint64),
-            None if set_labels is None else _rows_to_ints(set_labels, dtype=np.uint64),
-            rank,
+            _rows_to_ints(
+                np.delete(information_set.generators, information_set.pivots, axis=1),
+                dtype=np.uint64,
+            ),
+            None
+            if information_set.labels is None
+            else _rows_to_ints(information_set.labels, dtype=np.uint64),
+            information_set.rank,
         )
-        for generators, set_labels, rank, pivots in information_sets
+        for information_set in information_sets
     ]
+
+    # Zero-pad every set to common word widths, so the Numba kernel receives single arrays.
+    widths = np.array([rows.shape[1] for rows, _, _ in packed_sets], dtype=np.int64)
+    label_widths = np.array(
+        [0 if labels is None else labels.shape[1] for _, labels, _ in packed_sets],
+        dtype=np.int64,
+    )
+    packed_generators = np.zeros(
+        (len(ranks), dimension, int(widths.max(initial=0))), dtype=np.uint64
+    )
+    packed_labels = np.zeros(
+        (len(ranks), dimension, int(label_widths.max(initial=0))), dtype=np.uint64
+    )
+    for index, (rows, packed_set_labels, _) in enumerate(packed_sets):
+        packed_generators[index, :, : widths[index]] = rows
+        if packed_set_labels is not None:
+            packed_labels[index, :, : label_widths[index]] = packed_set_labels
+
     return _BrouwerZimmermannSearch(
-        packed_sets,
-        weight_func,
-        dimension,
+        packed_generators,
+        packed_labels,
+        np.array(ranks, dtype=np.int64),
+        widths,
+        label_widths,
         cutoff,
-        1 << block_size,
+        1 << min(block_size, 15),
         weight_divisor,
         best,
         lower_bound,
@@ -1113,13 +1225,16 @@ def _get_distance_brouwer_zimmermann_many(
     weight_divisor: int = 1,
     upper_bound: int | None = None,
 ) -> int:
-    """Search nested codes in step while sharing their best upper bound."""
+    """Advance nested-code searches round-robin while sharing their best upper bound."""
+    initial_upper_bounds = [
+        _get_brouwer_zimmermann_initial_upper_bound(basis, labels) for basis, labels in problems
+    ]
     best = min(
-        *(_get_brouwer_zimmermann_initial_upper_bound(basis, labels) for basis, labels in problems),
+        *initial_upper_bounds,
         math.inf if upper_bound is None else upper_bound,
     )
     searches: list[_BrouwerZimmermannSearch] = []
-    for basis, labels in problems:
+    for (basis, labels), initial_upper_bound in zip(problems, initial_upper_bounds, strict=True):
         prepared = _prepare_brouwer_zimmermann_search(
             basis,
             labels,
@@ -1127,6 +1242,7 @@ def _get_distance_brouwer_zimmermann_many(
             block_size=block_size,
             weight_divisor=weight_divisor,
             upper_bound=int(best),
+            initial_upper_bound=initial_upper_bound,
         )
         if isinstance(prepared, int):
             best = min(best, prepared)
@@ -1192,19 +1308,27 @@ def _brute_force_is_cheaper(
 ) -> bool:
     """Estimate whether exhaustive nested-code enumeration will outperform BZ.
 
-    The BZ estimate conservatively assumes that the search must certify the current upper bound.
-    Empirically, the vectorized exhaustive kernel is about 20 times cheaper per candidate than the
-    fixed-weight BZ enumerator on moderately sized quantum codes.
+    The BZ estimate pessimistically assumes that the search must certify the current upper bound,
+    whereas lighter witnesses usually end the search sooner.  Although the vectorized exhaustive
+    kernel is a few times cheaper per candidate than the serial Numba BZ kernel, whole-search
+    timings near this boundary favor BZ until the exhaustive count reaches roughly the estimated BZ
+    count, so the two counts are compared directly.
     """
     bz_candidates = 0
     for weight in range(1, dimension + 1):
         bz_candidates += len(ranks) * math.comb(dimension, weight)
-        lower_bound = sum(max(0, weight + 1 - (dimension - rank)) for rank in ranks)
-        lower_bound += (-lower_bound) % weight_divisor
-        if lower_bound >= upper_bound:
+        if (
+            _get_brouwer_zimmermann_lower_bound(
+                dimension,
+                ranks,
+                completed_weight=weight,
+                weight_divisor=weight_divisor,
+            )
+            >= upper_bound
+        ):
             break
     exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
-    return exhaustive_candidates <= 20 * bz_candidates
+    return exhaustive_candidates <= bz_candidates
 
 
 def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
@@ -1403,6 +1527,8 @@ def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
 
 ####################################################################################################
 # numpy < 2.0 does not provide np.bitwise_count; the methods below provide a fallback
+
+_MASK01 = np.uint64(0x0101010101010101)
 
 
 def _hamming_weight(
