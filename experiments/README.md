@@ -10,7 +10,7 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 | [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory (experimental; see the [warning](#lattice-surgery)) | `collect_ler.py` |
 
 Each script's module docstring summarizes its method and outputs; run it with `--help` to see its options.
-The quantum Tanner search requires [GAP](https://www.gap-system.org) for its groups (the SmallGroups library) and some base codes (the GUAVA package).
+The quantum Tanner `run_search.py` and `verify_codes.py` require [GAP](https://www.gap-system.org) for their groups (the SmallGroups library) and Cordaro–Wagner base codes (the GUAVA package), whereas `collect_results.py` only reads saved files.
 Both code searches bound distances with the default backend of `get_distance_bound`, which uses `sqetch` if installed, then GAP's QDistRnd package if available, and a decoder-based method otherwise.
 See the [GAP integration](../README.md#gap-integration) section of the main README to set up GAP, for example with `pip install 'qldpc[gap]'`.
 Commands below are written relative to the repository root.
@@ -25,7 +25,19 @@ Each results directory holds a CSV summary, together with the resumable intermed
 | --- | --- | --- |
 | Bivariate bicycle | `results/cache/`: disk cache of code parameters | `results/codes.csv`: codes with `k d^2 / n > 1` |
 | Quantum Tanner | `results/codes/`: one text file per saved code | `results/codes.csv`: parameters of every saved code with `k > 0` |
-| Lattice surgery | `results/{preset}_{run_id}_progress.csv`: Sinter progress | `results/{preset}.csv`: logical error rates of a preset |
+| Lattice surgery | `results/{preset}_{run_id}_progress.csv`: Sinter progress | `results/{preset}.csv`: sample counts, from which logical error rates follow |
+
+Earlier versions of these scripts saved results beside the scripts instead, where Git no longer ignores them.
+To keep using such results, move them into the new layout:
+
+```bash
+mkdir -p experiments/bivariate_bicycle/results experiments/quantum_tanner/results
+mv experiments/bivariate_bicycle/.code_cache experiments/bivariate_bicycle/results/cache
+mv experiments/bivariate_bicycle/codes.csv experiments/bivariate_bicycle/results/codes.csv
+mv experiments/quantum_tanner/codes experiments/quantum_tanner/results/codes
+```
+
+Then rerun `quantum_tanner/collect_results.py` to write `results/codes.csv`, which supersedes the old `quantum_tanner/.code_cache` directory, and delete that directory.
 
 ## Bivariate bicycle codes
 
@@ -95,6 +107,6 @@ Verification requires `codes.QTCode.random` to sample the same code for the same
 > Validate results independently, and pin the `qldpc` version if you depend on them.
 
 [`lattice_surgery/`](lattice_surgery/) samples logical error rates of the experimental lattice-surgery constructions in `qldpc.experimental.surgery`, and of quantum memory baselines, with [Sinter](https://pypi.org/project/sinter/).
-`collect_ler.py --preset PRESET` runs one of the presets `bb72`, `bb18`, or `steane-joint`, and writes its logical error rates to `results/{preset}.csv`.
+`collect_ler.py --preset PRESET` runs one of the presets `bb72`, `bb18`, or `steane-joint`, and writes aggregate sample counts, from which its logical error rates follow, to `results/{preset}.csv`.
 Collection is resumable, and some presets take hours to days at publication scale.
 See the [lattice-surgery README](lattice_surgery/README.md) for example commands, provenance tracking, and costs.

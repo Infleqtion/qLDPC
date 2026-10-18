@@ -12,7 +12,7 @@ Each preset samples a lattice-surgery experiment and a quantum memory baseline u
 The module docstring of `collect_ler.py` describes the presets, and its `DECODER_OPTIONS` dictionary sets the decoder options of each preset.
 Run `python experiments/lattice_surgery/collect_ler.py --help` to see all options.
 
-To try the script cheaply first, write a small run to a scratch directory; this takes under a minute:
+To try the script cheaply first, write a small run to a scratch directory; this usually takes under a minute:
 
 ```bash
 python experiments/lattice_surgery/collect_ler.py \
@@ -46,7 +46,7 @@ python experiments/lattice_surgery/collect_ler.py \
     --workers 8
 ```
 
-By default, each run writes raw Sinter progress to `results/{preset}_{run_id}_progress.csv` and its logical error rates to `results/{preset}.csv`, where `results/` is the `--results-dir` (by default, the `results` directory beside the script, which Git ignores).
+By default, each run writes raw Sinter progress to `results/{preset}_{run_id}_progress.csv` and aggregate sample counts to `results/{preset}.csv`, where `results/` is the `--results-dir` (by default, the `results` directory beside the script, which Git ignores).
 Pass `--resume` or `--output` to choose either file individually.
 An interrupted run resumes from its progress file.
 Task identity depends on the preset, tracked Git state, decoder settings, experiment kind, physical-error value, and round count.
