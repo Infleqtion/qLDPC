@@ -1,11 +1,17 @@
-# Code searches
+# Experiments
 
-The scripts in [`bivariate_bicycle/`](bivariate_bicycle/) and [`quantum_tanner/`](quantum_tanner/) search for quantum codes with good parameters.
-They are research scripts rather than part of the installed `qldpc` package, and the test suite does not cover them.
+This directory holds research scripts that use `qldpc`.
+They are not part of the installed `qldpc` package, and the test suite does not cover them.
+
+| Directory | What it does | Entry points |
+| --- | --- | --- |
+| [`bivariate_bicycle/`](bivariate_bicycle/) | Brute-force search for bivariate bicycle codes | `run_search.py`, then `collect_results.py` |
+| [`quantum_tanner/`](quantum_tanner/) | Randomized search for quantum Tanner codes | `run_randomized_search.py`, then `collect_results.py` and `verify_codes.py` |
+| [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory | `collect_ler.py` |
+
 Each script documents its method, outputs, and options in its module docstring; run it with `--help` to see them.
-
 Commands below are written relative to the repository root.
-Search results and caches are saved beside the scripts, where Git ignores them.
+Results, caches, and progress files are saved beside the scripts by default, where Git ignores them.
 
 ## Bivariate bicycle codes
 
@@ -43,3 +49,10 @@ With default settings, the search covers the 18 groups of order at most 10, with
 Each code requires a randomized distance estimate with `--num-trials` trials.
 Pass the same `--save-dir` to all three scripts when saving codes to a nondefault directory.
 Verification requires `codes.QTCode.random` to sample the same code for the same seed, so codes saved with a different version of `qldpc` may fail verification.
+
+## Lattice surgery
+
+[`lattice_surgery/`](lattice_surgery/) samples logical error rates of the experimental lattice-surgery constructions in `qldpc.experimental.surgery`, and of quantum memory baselines, with [Sinter](https://pypi.org/project/sinter/).
+`collect_ler.py --preset PRESET` runs one of the presets `bb72`, `bb18`, or `steane-joint`, and writes an aggregate CSV file to `--output`.
+Collection is resumable, and some presets take hours to days at publication scale.
+See the [lattice-surgery README](lattice_surgery/README.md) for example commands, provenance tracking, and costs.
