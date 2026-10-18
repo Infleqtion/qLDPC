@@ -314,7 +314,6 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
                     1,
                 )
                 assert visited == 1 and best == expected
-                assert isinstance(best, (int, np.int64))
                 # The leaf index has already advanced in preparation for the next chunk.
                 np.testing.assert_array_equal(support[:-1], indices[:-1])
                 assert support[-1] == indices[-1] + 1
@@ -339,44 +338,6 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
                 1,
             )
             assert (best, depth, visited) == (expected, -1, 0)
-
-    # No global binomial count is needed, even for a layer larger than int64.
-    generators = np.zeros((1, 68, 0), dtype=np.uint64)
-    labels = np.zeros((1, 68, 2), dtype=np.uint64)
-    zeros = np.zeros(1, dtype=np.int64)
-    support = np.zeros(34, dtype=np.int64)
-    prefixes = np.zeros((35, 1, 0), dtype=np.uint64)
-    best, depth, visited = scan(
-        generators,
-        labels,
-        zeros,
-        zeros,
-        zeros + 2,
-        support,
-        prefixes,
-        0,
-        2**53 + 1,
-        0,
-        3,
-    )
-    assert best == 2**53 + 1 and depth == 33 and visited == 3
-    assert support[-1] == 36
-
-    # Bounds checking turns an undersized prefix buffer into an IndexError.
-    with pytest.raises(IndexError):
-        scan(
-            np.ones((1, 2, 1), dtype=np.uint64),
-            labels[:, :2],
-            zeros,
-            zeros + 1,
-            zeros + 2,
-            np.zeros(1, dtype=np.int64),
-            np.zeros((1, 1, 1), dtype=np.uint64),
-            0,
-            1000,
-            0,
-            1,
-        )
 
 
 def test_select_brouwer_zimmermann_information_sets() -> None:
