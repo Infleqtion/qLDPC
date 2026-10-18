@@ -149,13 +149,8 @@ def get_search_space(
 ) -> Iterator[tuple[int, int, codes.ClassicalCode, str, int, int]]:
     """Iterate over the random quantum Tanner codes to sample.
 
-    Args:
-        max_order: The maximum order of a group that defines a code.
-        num_samples: The number of random codes per choice of group and base code.
-
-    Yields:
-        The order and SmallGroups index of a group, a base code and its identifier, the index of a
-        random sample, and the total number of samples for this group and base code.
+    Yields tuples (group_order, group_index, base_code, base_code_id, sample, num_samples), where
+    num_samples is the number of samples for this group and base code.
     """
     base_codes = list(get_base_codes())
     for group_order, group_index in get_small_groups(max_order):
@@ -184,26 +179,14 @@ def run_and_save(
     """Generate a random quantum Tanner code, compute its parameters, and save it to a text file.
 
     The random seed for the code is a deterministic hash of the group, base code, and sample index,
-    so rerunning this function with the same inputs reproduces the same code.
+    so rerunning this function with the same inputs reproduces the same code.  Codes that already
+    have a saved file are skipped unless override_existing_data is True.  If
+    identify_completion_text is True, printed results identify their job, which helps when many jobs
+    run in parallel.
 
     The multiprocessing module (which calls this method) is unable to properly handle SymPy
     PermutationGroup objects, so we have to construct groups here from their order and index.
     Passing ClassicalCode objects seems to be fine, though.
-
-    Args:
-        group_order: The order of the group that defines the code.
-        group_index: The index of the group among those of the same order in the SmallGroups
-            library.
-        base_code: The classical code that defines local constraints of the code.
-        base_code_id: An identifier of the base code; see get_base_code.
-        sample: The index of this code among random samples with the same group and base code.
-        num_samples: The total number of samples per group and base code, used to report progress.
-        num_trials: The number of randomized trials for upper-bounding the code distance.
-        codes_dir: The directory in which to save the code.
-        identify_completion_text: If True, identify this job when printing its results, which helps
-            to attribute results when many jobs run in parallel.
-        override_existing_data: If True, regenerate and save codes that already have a saved file.
-        silent: If True, do not print progress.
     """
     if group_order < base_code.num_bits:
         # No subset of this group can be large enough to have as many elements as there are bits in
@@ -239,15 +222,7 @@ def run_and_save(
 
 
 def get_small_groups(max_order: int = MAX_ORDER) -> Iterator[tuple[int, int]]:
-    """Iterate over all finite groups up to a given order.
-
-    Args:
-        max_order: The maximum group order.
-
-    Yields:
-        The order of each group, and its index among groups of the same order in the SmallGroups
-        library.
-    """
+    """Iterate over (order, index) for all groups in the SmallGroups library up to a given order."""
     for order in range(1, max_order + 1):
         for index in range(1, abstract.SmallGroup.number(order) + 1):
             yield order, index
@@ -265,16 +240,10 @@ def get_base_codes() -> Iterator[tuple[codes.ClassicalCode, str]]:
 
 @functools.cache
 def get_base_code(base_code_id: str) -> codes.ClassicalCode:
-    """Construct a classical base code from its identifier.
+    """Construct a classical base code from an identifier of the form "{family}-{parameter}".
 
-    Args:
-        base_code_id: An identifier of the form "{family}-{parameter}", where the family is one of
-            - "Hamming", in which case the parameter is the rank of the Hamming code,
-            - "CordaroWagner", in which case the parameter is the block length, or
-            - "Mittal", in which case the parameter is the block length.
-
-    Returns:
-        The identified classical code.
+    The family is "Hamming", with the rank of the code as its parameter, or "CordaroWagner" or
+    "Mittal", with the block length of the code as its parameter.
     """
     family, parameter = base_code_id.split("-")
     if family == "Hamming":
@@ -318,33 +287,15 @@ def get_code_path(
     base_code_id: str,
     seed: int,
 ) -> pathlib.Path:
-    """Get the path of the file that saves a random quantum Tanner code.
-
-    Args:
-        codes_dir: The directory of saved codes.
-        group_order: The order of the group that defines the code.
-        group_index: The index of the group in the SmallGroups library.
-        base_code_id: An identifier of the base code; see get_base_code.
-        seed: The random seed used to construct the code.
-
-    Returns:
-        The path of the file, which parse_code_path inverts.
-    """
+    """Get the path of the file that saves a quantum Tanner code; see parse_code_path."""
     group_id = get_group_id(group_order, group_index)
     return codes_dir / f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
 
 
 def get_saved_code_paths(codes_dir: pathlib.Path) -> list[pathlib.Path]:
-    """Get the paths of all saved quantum Tanner codes in a directory, in sorted order.
+    """Get the sorted paths of all saved quantum Tanner codes in a directory.
 
-    Args:
-        codes_dir: The directory of saved codes.
-
-    Returns:
-        The paths of all files in codes_dir whose names have the form written by get_code_path.
-
-    Raises:
-        FileNotFoundError: If there are no saved codes in codes_dir.
+    Raises a FileNotFoundError if there are none.
     """
     paths = sorted(codes_dir.glob("qtcode_*.txt"))
     if not paths:
@@ -353,14 +304,7 @@ def get_saved_code_paths(codes_dir: pathlib.Path) -> list[pathlib.Path]:
 
 
 def parse_code_path(path: pathlib.Path) -> tuple[int, int, str, int]:
-    """Identify the group, base code, and seed of a quantum Tanner code from the path of its file.
-
-    Args:
-        path: The path of a file written by run_and_save.
-
-    Returns:
-        The group order, group index, base code identifier, and seed used to construct the code.
-    """
+    """Get the group order, group index, base code ID, and seed of a saved code from its path."""
     match = re.fullmatch(r"qtcode_SmallGroup-(\d+)-(\d+)_([A-Za-z]+-\d+)_s(\d+)\.txt", path.name)
     if match is None:
         raise ValueError(f"Unrecognized quantum Tanner code file name: {path}")
@@ -376,16 +320,7 @@ def get_group_id(group_order: int, group_index: int) -> str:
 def get_code_header(
     num_trials: int, code_params: tuple[int, int, int | float], weight: int
 ) -> list[str]:
-    """Get the header lines that describe a saved quantum Tanner code; see read_code_header.
-
-    Args:
-        num_trials: The number of randomized trials used to bound the code distance.
-        code_params: The parameters (n, k, d) of the code.
-        weight: The maximum weight of a stabilizer of the code.
-
-    Returns:
-        A list of header lines.
-    """
+    """Get the header lines of a saved quantum Tanner code file; see read_code_header."""
     return [
         f"distance trials: {num_trials}",
         f"code parameters: {code_params}",
@@ -394,14 +329,10 @@ def get_code_header(
 
 
 def read_code_header(path: pathlib.Path) -> tuple[int, tuple[int, int, int | float], int]:
-    """Read the header written by get_code_header from the file of a saved quantum Tanner code.
+    """Read the header of a saved quantum Tanner code file; see get_code_header.
 
-    Args:
-        path: The path of a file written by run_and_save.
-
-    Returns:
-        The number of distance trials, the code parameters (n, k, d), and the stabilizer weight.  If
-        the code has no logical qubits, its distance d is nan.
+    Returns the number of distance trials, the code parameters (n, k, d), and the stabilizer weight.
+    The distance d is nan if the code has no logical qubits.
     """
     with open(path) as file:
         num_trials = int(file.readline().split(":")[-1])
@@ -425,32 +356,16 @@ def read_code_header(path: pathlib.Path) -> tuple[int, tuple[int, int, int | flo
 
 
 def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
-    """Get a hash of the given inputs that, unlike the built-in hash, is the same in every session.
-
-    Args:
-        *inputs: The data to hash, whose repr must be deterministic.
-        num_bytes: The number of bytes in the hash.
-
-    Returns:
-        A nonnegative integer with num_bytes bytes.
-    """
+    """Hash inputs by their repr, consistently across Python sessions (unlike the built-in hash)."""
     input_bytes = repr(inputs).encode("utf-8")
     hash_bytes = hashlib.sha256(input_bytes).digest()
     return int.from_bytes(hash_bytes[:num_bytes], byteorder="big", signed=False)
 
 
 def run_jobs(jobs: Iterable[Callable[[], None]], num_workers: int) -> None:
-    """Run jobs in parallel processes, printing the traceback of every job that fails.
+    """Run picklable jobs in parallel processes, submitting a few at a time to bound memory use.
 
-    Jobs are submitted a few at a time, so that memory use does not grow with the number of jobs.
-
-    Args:
-        jobs: The jobs to run, which must be picklable, such as functools.partial objects that wrap
-            module-level functions.
-        num_workers: The number of parallel processes.
-
-    Raises:
-        RuntimeError: If any job failed.
+    Prints the traceback of every job that fails, and raises a RuntimeError at the end if any did.
     """
     max_pending_jobs = 4 * num_workers
     num_jobs = num_failures = 0

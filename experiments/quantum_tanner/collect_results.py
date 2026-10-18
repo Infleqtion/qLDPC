@@ -72,14 +72,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def get_code_data(codes_dir: pathlib.Path) -> list[tuple[int | str, ...]]:
-    """Collect the parameters of saved quantum Tanner codes.
+    """Collect the parameters of saved quantum Tanner codes with k > 0.
 
-    Args:
-        codes_dir: The directory of saved codes.
-
-    Returns:
-        One row with the fields in CSV_FIELDS per saved code that has k > 0, sorted by group, base
-        code, and seed.
+    Returns one row with the fields in CSV_FIELDS per code, sorted by group, base code, and seed.
     """
     rows: list[tuple[int | str, ...]] = []
     for path in search.get_saved_code_paths(codes_dir):

@@ -56,14 +56,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def is_reproducible(path: pathlib.Path) -> bool:
-    """Does regenerating a saved quantum Tanner code from its seed reproduce the saved code?
-
-    Args:
-        path: The path of a file written by run_search.run_and_save.
-
-    Returns:
-        True if the regenerated code equals the saved code, and False otherwise.
-    """
+    """Does regenerating a saved quantum Tanner code from its seed reproduce the saved code?"""
     group_order, group_index, base_code_id, seed = search.parse_code_path(path)
     group = abstract.SmallGroup(group_order, group_index)
     base_code = search.get_base_code(base_code_id)

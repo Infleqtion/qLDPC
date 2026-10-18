@@ -74,12 +74,8 @@ def parse_args() -> argparse.Namespace:
 def get_code_data(cache: diskcache.Cache, num_trials: int) -> list[tuple[int | float, ...]]:
     """Collect the parameters of cached bivariate bicycle codes with figure of merit r > 1.
 
-    Args:
-        cache: The cache written by run_search.py.
-        num_trials: Only collect codes whose distance was bounded with this many trials.
-
-    Returns:
-        One row (Rx, Ry, ax, ay, bx, by, n, k, d, r) per code, in the format of the data file.
+    Only codes whose distance was bounded with num_trials trials are collected.  Returns one row
+    (Rx, Ry, ax, ay, bx, by, n, k, d, r) of the data file per code.
     """
     data: list[tuple[int | float, ...]] = []
     last_print_val = -1
@@ -109,14 +105,7 @@ def get_code_data(cache: diskcache.Cache, num_trials: int) -> list[tuple[int | f
 
 
 def get_header(num_trials: int) -> str:
-    """Get the header of the exported data file.
-
-    Args:
-        num_trials: The number of trials used to bound code distances.
-
-    Returns:
-        A multi-line header that describes the data file.
-    """
+    """Get the header of the exported data file."""
     return "\n".join(
         [
             "AUTHOR: Michael A. Perlin, 2024",
