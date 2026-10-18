@@ -21,7 +21,7 @@ from ..common import (
 )
 from ..encoding import get_logical_state_stabilizers, get_state_stabilizers
 from ..noise_model import DepolarizingNoiseModel, NoiseModel, as_noiseless_circuit
-from ._postselection import _get_postselection_masks
+from .common import _get_postselection_masks
 
 ####################################################################################################
 # state preparation diagnostics and sampling tasks

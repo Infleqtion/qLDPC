@@ -16,7 +16,7 @@ import stim
 from qldpc import circuits
 from qldpc.codes.distance import BoundedKernelSearch, PauliCosetSearch
 
-from . import state_prep_spread
+from . import state_prep_certification
 
 
 def _exhaustive(flags: list[int], syndromes: list[int], n: int, budget: int) -> bool:
@@ -39,7 +39,7 @@ def test_random_maps(
 ) -> None:
     """Minimal-dependency search agrees with all accepted patterns, including flag cancellation."""
     monkeypatch.setattr(
-        state_prep_spread, "_use_prefix_search", mock.Mock(return_value=force_prefix)
+        state_prep_certification, "_use_prefix_search", mock.Mock(return_value=force_prefix)
     )
     rng = np.random.default_rng(612)
     for n in (3, 5):
@@ -50,7 +50,7 @@ def test_random_maps(
                 syndromes = list(map(int, rng.integers(1 << n, size=8)))
                 for budget in (1, 2, 3, 5):
                     stats = circuits.StatePrepSpreadStatistics()
-                    failure = state_prep_spread._certify_maps(
+                    failure = state_prep_certification._certify_maps(
                         flags, syndromes, PauliCosetSearch(matrix, weight=weight), budget, stats
                     )
                     assert (failure is None) == _exhaustive(flags, syndromes, n, budget)
@@ -107,7 +107,9 @@ def test_minimal_prefix_oracle() -> None:
                             expected[tuple(originals[jj] for jj in support)] = syndrome
                         accepted.append(word)
                 stats = circuits.StatePrepSpreadStatistics()
-                actual = list(state_prep_spread._iter_minimal_patterns(mechanisms, budget, stats))
+                actual = list(
+                    state_prep_certification._iter_minimal_patterns(mechanisms, budget, stats)
+                )
                 assert dict(actual) == expected
                 assert len(actual) == len(expected)
                 assert stats.generated == stats.prefix_extensions + len(actual)
@@ -119,12 +121,14 @@ def test_minimal_prefix_is_not_full_kernel() -> None:
     flags = [1, 2, 3, 4, 8, 12]
     mechanisms = [(flag, 1, jj) for jj, flag in enumerate(flags)]
     stats = circuits.StatePrepSpreadStatistics()
-    minimal = list(state_prep_spread._iter_minimal_patterns(mechanisms, 6, stats))
+    minimal = list(state_prep_certification._iter_minimal_patterns(mechanisms, 6, stats))
     assert {support for support, _ in minimal} == {(0, 1, 2), (3, 4, 5)}
     checks = np.array([[(flag >> jj) & 1 for flag in flags] for jj in range(4)], dtype=int)
     assert set(BoundedKernelSearch(checks, 6).words()) == {0b000111, 0b111000, 0b111111}
     wide = [(1 << 80, 1, 90), (1 << 130, 2, 10), ((1 << 80) ^ (1 << 130), 4, 50)]
-    assert list(state_prep_spread._iter_minimal_patterns(wide, 3, stats)) == [((90, 10, 50), 7)]
+    assert list(state_prep_certification._iter_minimal_patterns(wide, 3, stats)) == [
+        ((90, 10, 50), 7)
+    ]
 
 
 @pytest.mark.parametrize(
@@ -145,10 +149,10 @@ def test_minimal_prefix_is_not_full_kernel() -> None:
     ],
 )
 def test_prefix_crossover(columns: int, rank: int, budget: int, expected: bool) -> None:
-    assert state_prep_spread._use_prefix_search(columns, rank, budget) == expected
-    assert state_prep_spread._use_prefix_search(columns, rank, budget, independent_flags=True) == (
-        budget >= 2 and columns > 2 * rank
-    )
+    assert state_prep_certification._use_prefix_search(columns, rank, budget) == expected
+    assert state_prep_certification._use_prefix_search(
+        columns, rank, budget, independent_flags=True
+    ) == (budget >= 2 and columns > 2 * rank)
 
 
 @pytest.mark.parametrize("damaging", [False, True])
@@ -215,10 +219,12 @@ def test_adaptive_retains_strong_information_sets() -> None:
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
     stats = circuits.StatePrepSpreadStatistics()
     with mock.patch.object(
-        state_prep_spread, "_iter_minimal_patterns", side_effect=AssertionError("Wrong search")
+        state_prep_certification,
+        "_iter_minimal_patterns",
+        side_effect=AssertionError("Wrong search"),
     ):
         assert (
-            state_prep_spread._certify_maps(
+            state_prep_certification._certify_maps(
                 flags, [3, 6, 28] * 8, PauliCosetSearch(matrix), 3, stats
             )
             is None
@@ -236,7 +242,7 @@ def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
     stats = circuits.StatePrepSpreadStatistics()
     assert (
-        state_prep_spread._certify_maps(
+        state_prep_certification._certify_maps(
             flags, [3, 5, 6] * 5, PauliCosetSearch(matrix), budget, stats
         )
         is None
@@ -254,7 +260,7 @@ def test_independent_flag_types_failure() -> None:
     n = 4
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
     stats = circuits.StatePrepSpreadStatistics()
-    failure = state_prep_spread._certify_maps(
+    failure = state_prep_certification._certify_maps(
         flags, [1, 14, 0, 1, 2, 3, 1, 2, 3], PauliCosetSearch(matrix), 7, stats
     )
     assert failure is not None and failure.fault_count == 2
@@ -279,7 +285,7 @@ def test_dependency_reductions() -> None:
         ([0, 0], [0, 0], 4, True),
     ):
         stats = circuits.StatePrepSpreadStatistics()
-        result = state_prep_spread._certify_maps(
+        result = state_prep_certification._certify_maps(
             flags, syndromes, PauliCosetSearch(matrix), budget, stats
         )
         assert (result is None) == expected
@@ -290,7 +296,7 @@ def test_dependency_reductions() -> None:
     flags = [1, 2, 4, 3, 5]
     syndromes = [0, 0, 0, 7, 56]
     for budget in (3, 4):
-        result = state_prep_spread._certify_maps(
+        result = state_prep_certification._certify_maps(
             flags, syndromes, PauliCosetSearch(matrix), budget, circuits.StatePrepSpreadStatistics()
         )
         assert (result is None) == (budget == 3)
@@ -374,7 +380,7 @@ def test_state_selection_and_overrides(css_weight: bool | None) -> None:
 def test_css_row_space_not_individual_generators(monkeypatch: pytest.MonkeyPatch) -> None:
     """All supplied rows mix X and Z, but their row space is the CSS state |+00>."""
     generators = [stim.PauliString(gg) for gg in ("XZ_", "X_Z", "XZZ")]
-    monkeypatch.setattr(state_prep_spread, "get_state_stabilizers", lambda *args: generators)
+    monkeypatch.setattr(state_prep_certification, "get_state_stabilizers", lambda *args: generators)
     result = circuits.certify_state_prep_spread(
         stim.Circuit("H 0\nI 1 2\nCORRELATED_ERROR(0.001) Z0 X1"),
         output_qubits=range(3),
@@ -417,7 +423,9 @@ def test_multi_flag_joint_sector_triples(
     css_weight: bool, sector: int, prefix: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """True 01/10/11 dependencies have CSS weight sector, physical weight twice sector."""
-    monkeypatch.setattr(state_prep_spread, "_use_prefix_search", mock.Mock(return_value=prefix))
+    monkeypatch.setattr(
+        state_prep_certification, "_use_prefix_search", mock.Mock(return_value=prefix)
+    )
     n = 2 * sector
     circuit = stim.Circuit()
     circuit.append("H", range(sector, n))
@@ -458,7 +466,9 @@ def test_many_flags_finite_budget(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Rank far exceeds budget; the sole accepted dependency is a genuine triple or quadruple."""
-    monkeypatch.setattr(state_prep_spread, "_use_prefix_search", mock.Mock(return_value=prefix))
+    monkeypatch.setattr(
+        state_prep_certification, "_use_prefix_search", mock.Mock(return_value=prefix)
+    )
     sector = order + extra_weight
     n = 2 * sector
     circuit = stim.Circuit()

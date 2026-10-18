@@ -237,10 +237,10 @@ Encoding circuits are not fault-tolerant, and transversal-gate searches can be e
 For sliding-window decoding, detector coordinates are only a heuristic source of time; pass ``detector_to_time`` when a model uses another convention.
 
 Circuit benchmarking is organized under ``circuits.benchmarking``.
-The ``state_prep`` module keeps ideal diagnostics and Sinter task construction together, while ``logical_error_rates`` handles sampled error and discard rates.
-The exact calculations live separately in ``fault_distance`` and ``state_prep_spread``.
+The ``state_prep_diagnostics`` module keeps ideal diagnostics and Sinter task construction together.
+The ``state_prep_certification`` module certifies exact bounded-spread properties of a prepared state.
+The ``common`` module contains generic circuit fault-distance and sampled error-rate calculations, with shared post-selection support.
 Their public entry points remain available from both ``circuits.benchmarking`` and ``circuits``.
-The former ``circuits.fault_tolerance`` import path is a deprecated alias for ``circuits.benchmarking.state_prep_spread``.
 
 Certify resource-state preparation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

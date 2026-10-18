@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for state-preparation diagnostics and sampling tasks."""
+"""Tests for state-preparation diagnostics and Sinter task construction."""
 
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact bounded-spread certificates for pure Clifford state preparation."""
+"""Exact certification of pure Clifford state preparation."""
 
 from __future__ import annotations
 
