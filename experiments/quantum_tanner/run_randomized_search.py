@@ -80,7 +80,7 @@ def main() -> None:
                         base_code,
                         base_code_id,
                         sample,
-                        args.num_samples,
+                        num_samples,
                         args.num_trials,
                         save_dir=args.save_dir,
                         identify_completion_text=args.workers > 1,
