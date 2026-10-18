@@ -1,46 +1,79 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 
-"""Script to collect search results into a local database."""
+"""Collect quantum Tanner code search results into a local database.
+
+This script reads the files of codes saved by run_randomized_search.py, and stores their parameters
+in a disk cache (.code_cache in this directory).  Each cache entry is keyed by
+(group_order, group_index, base_code_id), and holds a list with one tuple
+(n, k, d, num_trials, stabilizer_weight) per saved code.  Codes with no logical qubits are skipped.
+
+Example:
+    python experiments/quantum_tanner/collect_results.py
+"""
 
 from __future__ import annotations
 
-import ast
-import glob
-import os
+import argparse
+import collections
+import pathlib
 
 import run_randomized_search as search
 
 import qldpc.cache
 
-# identify where codes are saved
-file_dir = os.path.dirname(__file__)
-save_dir = os.path.join(file_dir, "codes")
+CACHE_DIR = pathlib.Path(__file__).parent  # directory of the database
+CACHE_NAME = ".code_cache"  # name of the database
 
-# initialize database
-cache = qldpc.cache.get_disk_cache(".code_cache", cache_dir=file_dir)
+####################################################################################################
+# command-line interface
 
-# loop over all groups and base codes
-for group_order, group_index in search.get_small_groups(search.MAX_ORDER):
-    group_id = f"SmallGroup-{group_order}-{group_index}"
-    for _, base_code in search.get_base_codes():
-        paths = f"{save_dir}/qtcode_{group_id}_{base_code}_s*.txt"
 
-        # collect all data for into a list
-        data = []
-        for path in glob.glob(paths):
-            seed = path.split("_")[-1].removesuffix(".txt")[1:]
-            with open(path, "r") as file:
-                num_trials = ast.literal_eval(file.readline().split(":")[-1])
-                param_text = file.readline().split(":")[-1]
-                if "0, nan)" in param_text:
-                    # this is a trivial code, we can ignore it
-                    continue
-                params = ast.literal_eval(param_text)
-                weight = ast.literal_eval(file.readline().split(":")[-1])
+def main() -> None:
+    """Collect the parameters of saved quantum Tanner codes into a database."""
+    args = parse_args()
+    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
+    for key, data in get_code_data(args.save_dir).items():
+        cache[key] = data
 
-            data.append((*params, num_trials, weight))
 
-        if data:
-            # save data to the database
-            cache[group_order, group_index, base_code] = data
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    search.add_save_dir_argument(parser)
+    return parser.parse_args()
+
+
+####################################################################################################
+# data collection
+
+
+def get_code_data(
+    save_dir: pathlib.Path,
+) -> dict[tuple[int, int, str], list[tuple[int | float, ...]]]:
+    """Collect the parameters of saved quantum Tanner codes, grouped by group and base code.
+
+    Args:
+        save_dir: The directory of saved codes.
+
+    Returns:
+        A dictionary that maps (group_order, group_index, base_code_id) to a list of tuples
+        (n, k, d, num_trials, stabilizer_weight), with one tuple per saved code that has k > 0.
+    """
+    data = collections.defaultdict(list)
+    for path in sorted(save_dir.glob("qtcode_*.txt")):
+        group_order, group_index, base_code_id, _ = search.parse_code_path(path)
+        num_trials, code_params, weight = search.read_code_header(path)
+
+        # this code has no logical qubits, so we can ignore it
+        if code_params[1] == 0:
+            continue
+
+        data[group_order, group_index, base_code_id].append((*code_params, num_trials, weight))
+    return dict(data)
+
+
+if __name__ == "__main__":
+    main()

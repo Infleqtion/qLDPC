@@ -1,66 +1,141 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: Apache-2.0
 
-"""Script to perform a randomized search for quantum Tanner codes."""
+"""Randomized search for quantum Tanner codes.
+
+This script samples random quantum Tanner codes (qldpc.codes.QTCode.random) built from every finite
+group of order at most --max-order, as indexed by the GAP SmallGroups library, and every classical
+base code in BASE_CODE_IDS.  For each group and base code, it draws --num-samples codes with
+deterministic seeds, upper-bounds their code distances by minimizing over --num-trials randomized
+trials, and saves each code with its parameters to a text file in --save-dir.  Codes that already
+have a saved file are skipped, so an interrupted search resumes where it left off.
+
+Afterwards, collect_results.py gathers the parameters of saved codes into a local database, and
+verify_codes.py checks that every saved code can be reproduced from its seed.  Both scripts rely on
+the file-naming and file-header helpers in this module.
+
+Example:
+    python experiments/quantum_tanner/run_randomized_search.py --max-order 6 --workers 8
+"""
 
 from __future__ import annotations
 
+import argparse
 import concurrent.futures
+import functools
 import hashlib
+import math
 import os
+import pathlib
+import re
+import traceback
 from collections.abc import Hashable, Iterator
 
 from qldpc import abstract, codes
 
-SAVE_DIR = os.path.join(os.path.dirname(__file__), "codes")
+SAVE_DIR = pathlib.Path(__file__).parent / "codes"  # default directory for saved codes
+
+# default search settings
 MAX_ORDER = 10  # consider all finite groups up to this order
-NUM_SAMPLES = 100  # per choice of group and subcode
+NUM_SAMPLES = 100  # per choice of group and base code
 NUM_TRIALS = 1000  # for code distance calculations
+NUM_WORKERS = max(1, (os.cpu_count() or 1) - 2)  # number of parallel jobs
+
+# identifiers of the classical base codes to search over; see get_base_code
+BASE_CODE_IDS = (
+    "Hamming-2",
+    "Hamming-3",
+    "CordaroWagner-3",
+    "CordaroWagner-4",
+    "CordaroWagner-5",
+    "CordaroWagner-6",
+    "Mittal-4",
+    "Mittal-5",
+    "Mittal-6",
+)
+
+####################################################################################################
+# command-line interface
 
 
-def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
-    """Get a deterministic hash from the given inputs."""
-    input_bytes = repr(inputs).encode("utf-8")
-    hash_bytes = hashlib.sha256(input_bytes).digest()
-    return int.from_bytes(hash_bytes[:num_bytes], byteorder="big", signed=False)
+def main() -> None:
+    """Sample random quantum Tanner codes in parallel, saving each code to a file."""
+    args = parse_args()
+    base_codes = list(get_base_codes())
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as executor:
+        futures = []
+        for group_order, group_index in get_small_groups(args.max_order):
+            for base_code, base_code_id in base_codes:
+                # If the base code has as many bits as the group has elements, there is only one
+                # random quantum Tanner code, namely the one with subset_a = subset_b = group.
+                num_samples = 1 if base_code.num_bits == group_order else args.num_samples
+                for sample in range(num_samples):
+                    future = executor.submit(
+                        run_and_save,
+                        group_order,
+                        group_index,
+                        base_code,
+                        base_code_id,
+                        sample,
+                        args.num_samples,
+                        args.num_trials,
+                        save_dir=args.save_dir,
+                        identify_completion_text=args.workers > 1,
+                    )
+                    futures.append(future)
+        wait_for_jobs(futures)
 
 
-def get_small_groups(max_order: int = MAX_ORDER) -> Iterator[tuple[int, int]]:
-    """Finite groups by order and index."""
-    for order in range(1, max_order + 1):
-        for index in range(1, abstract.SmallGroup.number(order) + 1):
-            yield order, index
+def parse_args() -> argparse.Namespace:
+    """Parse and validate command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    parser.add_argument(
+        "--max-order",
+        type=int,
+        default=MAX_ORDER,
+        help="consider all finite groups up to this order (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--num-samples",
+        type=int,
+        default=NUM_SAMPLES,
+        help="number of random codes per choice of group and base code (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--num-trials",
+        type=int,
+        default=NUM_TRIALS,
+        help="number of randomized trials for upper-bounding code distances (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=NUM_WORKERS,
+        help="number of parallel jobs (default: %(default)s)",
+    )
+    add_save_dir_argument(parser)
+    args = parser.parse_args()
+    for name in ["max_order", "num_samples", "num_trials", "workers"]:
+        if getattr(args, name) < 1:
+            parser.error(f"--{name.replace('_', '-')} must be positive")
+    return args
 
 
-def get_cordaro_wagner_code(length: int) -> codes.ClassicalCode:
-    """Cordaro Wagner code with a given block length."""
-    return codes.ClassicalCode.from_name(f"CordaroWagnerCode({length})")
+def add_save_dir_argument(parser: argparse.ArgumentParser) -> None:
+    """Add the --save-dir option, which is shared by all quantum Tanner code scripts."""
+    parser.add_argument(
+        "--save-dir",
+        type=pathlib.Path,
+        default=SAVE_DIR,
+        help="directory of saved codes (default: the 'codes' directory beside this script)",
+    )
 
 
-def get_mittal_code(length: int) -> codes.ClassicalCode:
-    """Modified Hammming code of a given block length."""
-    name = "MittalCode"
-    full_code = codes.HammingCode(3)
-    if length == 4:
-        code = full_code.shortened([2, 3]).punctured([4])
-    elif length == 5:
-        code = full_code.shortened([2, 3])
-    elif length == 6:
-        code = full_code.shortened([3])
-    else:
-        raise ValueError(f"Unrecognized length for {name}: {length}")
-    code._name = name
-    return code
-
-
-def get_base_codes() -> Iterator[tuple[codes.ClassicalCode, str]]:
-    """Iterator over classical codes and their identifiers."""
-    for nn in [2, 3]:
-        yield codes.HammingCode(nn), f"Hamming-{nn}"
-    for nn in [3, 4, 5, 6]:
-        yield get_cordaro_wagner_code(nn), f"CordaroWagner-{nn}"
-    for nn in [4, 5, 6]:
-        yield get_mittal_code(nn), f"Mittal-{nn}"
+####################################################################################################
+# code search
 
 
 def run_and_save(
@@ -72,33 +147,49 @@ def run_and_save(
     num_samples: int = NUM_SAMPLES,
     num_trials: int = NUM_TRIALS,
     *,
-    save_dir: str = SAVE_DIR,
+    save_dir: pathlib.Path = SAVE_DIR,
     identify_completion_text: bool = False,
     override_existing_data: bool = False,
     silent: bool = False,
 ) -> None:
-    """Generate a random quantum Tanner code, compute its distance, and save it to a text file.
+    """Generate a random quantum Tanner code, compute its parameters, and save it to a text file.
+
+    The random seed for the code is a deterministic hash of the group, base code, and sample index,
+    so rerunning this function with the same inputs reproduces the same code.
 
     The multiprocessing module (which calls this method) is unable to properly handle SymPy
     PermutationGroup objects, so we have to construct groups here from their order and index.
     Passing ClassicalCode objects seems to be fine, though.
+
+    Args:
+        group_order: The order of the group that defines the code.
+        group_index: The index of the group among those of the same order in the SmallGroups
+            library.
+        base_code: The classical code that defines local constraints of the code.
+        base_code_id: An identifier of the base code; see get_base_code.
+        sample: The index of this code among random samples with the same group and base code.
+        num_samples: The total number of samples per group and base code, used to report progress.
+        num_trials: The number of randomized trials for upper-bounding the code distance.
+        save_dir: The directory in which to save the code.
+        identify_completion_text: If True, identify this job when printing its results, which helps
+            to attribute results when many jobs run in parallel.
+        override_existing_data: If True, regenerate and save codes that already have a saved file.
+        silent: If True, do not print progress.
     """
     if group_order < base_code.num_bits:
         # No subset of this group can be large enough to have as many elements as there are bits in
         # the base code, so random quantum Tanner codes with the given input data do not exist.
         return
 
-    group_id = f"SmallGroup-{group_order}-{group_index}"
     seed = get_deterministic_hash(group_order, group_index, base_code.matrix.tobytes(), sample)
-    file = f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
-    path = os.path.join(save_dir, file)
+    path = get_code_path(save_dir, group_order, group_index, base_code_id, seed)
 
-    if os.path.isfile(path) and not override_existing_data:
+    if path.is_file() and not override_existing_data:
         # we already have the data for this code, so there is nothing to do
         return
 
+    job_id = f"{get_group_id(group_order, group_index)} {base_code_id} {sample}/{num_samples}"
     if not silent:
-        job_id = f"{group_id} {base_code_id} {sample}/{num_samples}"
         print(job_id)
 
     # construct a random code and compute its parameters
@@ -108,12 +199,7 @@ def run_and_save(
     weight = code.get_weight()
 
     # save code and computed parameters
-    headers = [
-        f"distance trials: {num_trials}",
-        f"code parameters: {code_params}",
-        f"stabilizer weight: {weight}",
-    ]
-    code.save(path, *headers)
+    code.save(str(path), *get_code_header(num_trials, code_params, weight))
 
     if not silent:
         completion_text = " "
@@ -123,27 +209,206 @@ def run_and_save(
         print(completion_text)
 
 
+def get_small_groups(max_order: int = MAX_ORDER) -> Iterator[tuple[int, int]]:
+    """Iterate over all finite groups up to a given order.
+
+    Args:
+        max_order: The maximum group order.
+
+    Yields:
+        The order of each group, and its index among groups of the same order in the SmallGroups
+        library.
+    """
+    for order in range(1, max_order + 1):
+        for index in range(1, abstract.SmallGroup.number(order) + 1):
+            yield order, index
+
+
+####################################################################################################
+# base codes
+
+
+def get_base_codes() -> Iterator[tuple[codes.ClassicalCode, str]]:
+    """Iterate over the classical base codes in BASE_CODE_IDS, and their identifiers."""
+    for base_code_id in BASE_CODE_IDS:
+        yield get_base_code(base_code_id), base_code_id
+
+
+@functools.cache
+def get_base_code(base_code_id: str) -> codes.ClassicalCode:
+    """Construct a classical base code from its identifier.
+
+    Args:
+        base_code_id: An identifier of the form "{family}-{parameter}", where the family is one of
+            - "Hamming", in which case the parameter is the rank of the Hamming code,
+            - "CordaroWagner", in which case the parameter is the block length, or
+            - "Mittal", in which case the parameter is the block length.
+
+    Returns:
+        The identified classical code.
+    """
+    family, parameter = base_code_id.split("-")
+    if family == "Hamming":
+        return codes.HammingCode(int(parameter))
+    if family == "CordaroWagner":
+        return get_cordaro_wagner_code(int(parameter))
+    if family == "Mittal":
+        return get_mittal_code(int(parameter))
+    raise ValueError(f"Base code not recognized: {base_code_id}")
+
+
+def get_cordaro_wagner_code(length: int) -> codes.ClassicalCode:
+    """Get the Cordaro-Wagner code with a given block length, as constructed by GUAVA."""
+    return codes.ClassicalCode.from_name(f"CordaroWagnerCode({length})")
+
+
+def get_mittal_code(length: int) -> codes.ClassicalCode:
+    """Get a modified [7, 4] Hamming code with a given block length (4, 5, or 6).
+
+    Lengths 6 and 5 are obtained by shortening the Hamming code, and length 4 is obtained by further
+    puncturing the length-5 code.
+    """
+    full_code = codes.HammingCode(3)
+    if length == 4:
+        return full_code.shortened([2, 3]).punctured([4])
+    if length == 5:
+        return full_code.shortened([2, 3])
+    if length == 6:
+        return full_code.shortened([3])
+    raise ValueError(f"Unrecognized length for a Mittal code: {length}")
+
+
+####################################################################################################
+# saved code files
+
+
+def get_code_path(
+    save_dir: pathlib.Path,
+    group_order: int,
+    group_index: int,
+    base_code_id: str,
+    seed: int,
+) -> pathlib.Path:
+    """Get the path of the file that saves a random quantum Tanner code.
+
+    Args:
+        save_dir: The directory of saved codes.
+        group_order: The order of the group that defines the code.
+        group_index: The index of the group in the SmallGroups library.
+        base_code_id: An identifier of the base code; see get_base_code.
+        seed: The random seed used to construct the code.
+
+    Returns:
+        The path of the file, which parse_code_path inverts.
+    """
+    group_id = get_group_id(group_order, group_index)
+    return save_dir / f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
+
+
+def parse_code_path(path: pathlib.Path) -> tuple[int, int, str, int]:
+    """Identify the group, base code, and seed of a quantum Tanner code from the path of its file.
+
+    Args:
+        path: The path of a file written by run_and_save.
+
+    Returns:
+        The group order, group index, base code identifier, and seed used to construct the code.
+    """
+    match = re.fullmatch(r"qtcode_SmallGroup-(\d+)-(\d+)_([A-Za-z]+-\d+)_s(\d+)\.txt", path.name)
+    if match is None:
+        raise ValueError(f"Unrecognized quantum Tanner code file name: {path}")
+    group_order, group_index, base_code_id, seed = match.groups()
+    return int(group_order), int(group_index), base_code_id, int(seed)
+
+
+def get_group_id(group_order: int, group_index: int) -> str:
+    """Get an identifier for a group in the SmallGroups library."""
+    return f"SmallGroup-{group_order}-{group_index}"
+
+
+def get_code_header(
+    num_trials: int, code_params: tuple[int, int, int | float], weight: int
+) -> list[str]:
+    """Get the header lines that describe a saved quantum Tanner code; see read_code_header.
+
+    Args:
+        num_trials: The number of randomized trials used to bound the code distance.
+        code_params: The parameters (n, k, d) of the code.
+        weight: The maximum weight of a stabilizer of the code.
+
+    Returns:
+        A list of header lines.
+    """
+    return [
+        f"distance trials: {num_trials}",
+        f"code parameters: {code_params}",
+        f"stabilizer weight: {weight}",
+    ]
+
+
+def read_code_header(path: pathlib.Path) -> tuple[int, tuple[int, int, int | float], int]:
+    """Read the header written by get_code_header from the file of a saved quantum Tanner code.
+
+    Args:
+        path: The path of a file written by run_and_save.
+
+    Returns:
+        The number of distance trials, the code parameters (n, k, d), and the stabilizer weight.  If
+        the code has no logical qubits, its distance d is nan.
+    """
+    with open(path) as file:
+        num_trials = int(file.readline().split(":")[-1])
+        param_text = file.readline().split(":")[-1]
+        weight = int(file.readline().split(":")[-1])
+
+    # parse code parameters written as "(n, k, d)", where d is nan if k = 0
+    num_qudits, dimension, distance = (
+        float(value) for value in param_text.strip(" ()\n").split(",")
+    )
+    code_params = (
+        int(num_qudits),
+        int(dimension),
+        distance if math.isnan(distance) else int(distance),
+    )
+    return num_trials, code_params, weight
+
+
+####################################################################################################
+# helper functions
+
+
+def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
+    """Get a hash of the given inputs that, unlike the built-in hash, is the same in every session.
+
+    Args:
+        *inputs: The data to hash, whose repr must be deterministic.
+        num_bytes: The number of bytes in the hash.
+
+    Returns:
+        A nonnegative integer with num_bytes bytes.
+    """
+    input_bytes = repr(inputs).encode("utf-8")
+    hash_bytes = hashlib.sha256(input_bytes).digest()
+    return int.from_bytes(hash_bytes[:num_bytes], byteorder="big", signed=False)
+
+
+def wait_for_jobs(futures: list[concurrent.futures.Future[None]]) -> None:
+    """Wait for parallel jobs to finish, printing the traceback of every job that fails.
+
+    Args:
+        futures: The jobs to wait for.
+
+    Raises:
+        RuntimeError: If any job failed.
+    """
+    num_failures = 0
+    for future in concurrent.futures.as_completed(futures):
+        if (exception := future.exception()) is not None:
+            num_failures += 1
+            traceback.print_exception(exception)
+    if num_failures:
+        raise RuntimeError(f"{num_failures} of {len(futures)} jobs failed")
+
+
 if __name__ == "__main__":
-    max_concurrent_jobs = num_cpus - 2 if (num_cpus := os.cpu_count()) else 1
-
-    # run multiple jobs in parallel
-    with concurrent.futures.ProcessPoolExecutor(max_workers=max_concurrent_jobs) as executor:
-        # iterate over all combinations of group, base code, and sample index
-        for group_order, group_index in get_small_groups():
-            for base_code, base_code_id in get_base_codes():
-                for sample in range(NUM_SAMPLES):
-                    # submit this job to the job queue
-                    executor.submit(
-                        run_and_save,
-                        group_order,
-                        group_index,
-                        base_code,
-                        base_code_id,
-                        sample,
-                        identify_completion_text=max_concurrent_jobs > 1,
-                    )
-
-                    if base_code.num_bits == group_order:
-                        # There is only one instance of this random quantum Tanner code, namely the
-                        # one in which subset_a = subset_b = group, so we only need one sample.
-                        break
+    main()
