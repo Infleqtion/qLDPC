@@ -3,7 +3,6 @@ notes.txt
 
 # experiment results
 experiments/*/results
-.code_cache
 
 # python cache
 __pycache__
