@@ -21,7 +21,7 @@ Circuit tools currently only support qubit codes.
 - **Use the algebra that modern constructions need.**
   qLDPC includes finite groups, group rings, lifted matrices, Cayley complexes, chain complexes, and optional GAP integration.
 - **Steal from the examples.**
-  The notebooks progress from the basics to circuit-level logical error rates, custom noise, transversal gates, and lattice surgery, which is experimental and still pending expert review (see Limitations and caveats below).
+  The notebooks progress from the basics of code construction to the specification of custom noise models and calculation of circuit-level logical error rates.
 - **Go beyond binary.**
   Many constructions and core algorithms work over arbitrary prime-power finite fields, not just qubits.
 
@@ -172,7 +172,7 @@ This README focuses on getting started and finding the right documentation.
   When a method returns a bound rather than an exact distance, its docstring explains what kind of bound it is.
 - Features that use GAP may start subprocesses, use local disk caches, access online resources, or ask for manual input or permission to install a package.
 - Everything under `qldpc.experimental` has an unstable public API and may change without deprecation.
-- Lattice-surgery support in `qldpc.experimental.surgery` is experimental and unstable, and its implementation is still pending independent expert review.
+- Lattice-surgery support in `qldpc.experimental.surgery` is experimental and unstable, and its implementation is still pending careful expert review.
   Validate its results independently, and pin the qLDPC version if you depend on it.
 
 ## 📚 Documentation and support
