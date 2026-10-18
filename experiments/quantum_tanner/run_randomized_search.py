@@ -6,9 +6,11 @@
 This script samples random quantum Tanner codes (qldpc.codes.QTCode.random) built from every finite
 group of order at most --max-order, as indexed by the GAP SmallGroups library, and every classical
 base code in BASE_CODE_IDS.  For each group and base code, it draws --num-samples codes with
-deterministic seeds, upper-bounds their code distances by minimizing over --num-trials randomized
-trials, and saves each code with its parameters to a text file in --save-dir.  Codes that already
-have a saved file are skipped, so an interrupted search resumes where it left off.
+deterministic seeds (or one code, if the base code has as many bits as the group has elements),
+upper-bounds their code distances by minimizing over --num-trials randomized trials, and saves each
+code with its parameters to a text file in --save-dir.  Codes that already
+have a saved file are skipped (even if that file used a different --num-trials) unless --overwrite
+is passed, so an interrupted search resumes where it left off.
 
 Afterwards, collect_results.py gathers the parameters of saved codes into a local database, and
 verify_codes.py checks that every saved code can be reproduced from its seed.  Both scripts rely on
@@ -82,6 +84,7 @@ def main() -> None:
                         args.num_trials,
                         save_dir=args.save_dir,
                         identify_completion_text=args.workers > 1,
+                        override_existing_data=args.overwrite,
                     )
                     futures.append(future)
         wait_for_jobs(futures)
@@ -102,7 +105,8 @@ def parse_args() -> argparse.Namespace:
         "--num-samples",
         type=int,
         default=NUM_SAMPLES,
-        help="number of random codes per choice of group and base code (default: %(default)s)",
+        help="number of random codes per choice of group and base code, or one code if the base"
+        " code has as many bits as the group has elements (default: %(default)s)",
     )
     parser.add_argument(
         "--num-trials",
@@ -115,6 +119,11 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=NUM_WORKERS,
         help="number of parallel jobs (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="regenerate and overwrite codes that already have a saved file",
     )
     add_save_dir_argument(parser)
     args = parser.parse_args()
@@ -303,6 +312,24 @@ def get_code_path(
     """
     group_id = get_group_id(group_order, group_index)
     return save_dir / f"qtcode_{group_id}_{base_code_id}_s{seed}.txt"
+
+
+def get_saved_code_paths(save_dir: pathlib.Path) -> list[pathlib.Path]:
+    """Get the paths of all saved quantum Tanner codes in a directory, in sorted order.
+
+    Args:
+        save_dir: The directory of saved codes.
+
+    Returns:
+        The paths of all files in save_dir whose names have the form written by get_code_path.
+
+    Raises:
+        FileNotFoundError: If there are no saved codes in save_dir.
+    """
+    paths = sorted(save_dir.glob("qtcode_*.txt"))
+    if not paths:
+        raise FileNotFoundError(f"No saved quantum Tanner codes found in {save_dir}")
+    return paths
 
 
 def parse_code_path(path: pathlib.Path) -> tuple[int, int, str, int]:

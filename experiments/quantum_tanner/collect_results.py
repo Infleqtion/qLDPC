@@ -69,7 +69,7 @@ def get_code_data(
         (n, k, d, num_trials, stabilizer_weight), with one tuple per saved code that has k > 0.
     """
     data = collections.defaultdict(list)
-    for path in sorted(save_dir.glob("qtcode_*.txt")):
+    for path in search.get_saved_code_paths(save_dir):
         group_order, group_index, base_code_id, _ = search.parse_code_path(path)
         num_trials, code_params, weight = search.read_code_header(path)
 

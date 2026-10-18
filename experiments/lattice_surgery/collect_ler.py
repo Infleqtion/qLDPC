@@ -4,7 +4,8 @@
 """Collect publication-scale lattice-surgery logical error rates.
 
 Each preset compares a lattice-surgery experiment against a quantum memory baseline, sampling both
-with Sinter under circuit-level depolarizing noise at several physical error rates p:
+with Sinter under circuit-level depolarizing noise (without idling errors) at several physical error
+rates p:
 - bb72: measure a logical X operator of the [[72, 12, 6]] bivariate bicycle code (9 rounds), versus
   memory of the same code (9 rounds).
 - bb18: measure a weight-20 logical operator of the [[248, 10]] bivariate bicycle code bb_18 of Cain

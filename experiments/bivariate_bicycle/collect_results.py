@@ -37,6 +37,7 @@ def main() -> None:
     args = parse_args()
     cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=args.cache_dir)
     data = get_code_data(cache, args.num_trials)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     np.savetxt(args.output, data, header=get_header(args.num_trials), fmt=ROW_FORMAT)
 
 
@@ -125,7 +126,8 @@ def get_header(num_trials: int) -> str:
             "code parameters [[n, k, d]] indicate",
             "    n = number of physical qubits",
             "    k = number of logical qubits",
-            "    d = upper bound on the code distance (minimal weight of a nontrivial logical operator)",
+            "    d = upper bound on the code distance"
+            + " (minimal weight of a nontrivial logical operator)",
             "code distance is estimated by the method of arXiv:2308.07915,"
             + f" minimizing over {num_trials} trials",
             "the last column reports r = k d^2 / n",

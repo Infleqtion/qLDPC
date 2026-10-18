@@ -10,6 +10,9 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 | [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory | `collect_ler.py` |
 
 Each script documents its method, outputs, and options in its module docstring; run it with `--help` to see them.
+The quantum Tanner search requires [GAP](https://www.gap-system.org) for its groups (the SmallGroups library) and some base codes (the GUAVA package).
+Both code searches estimate distances with GAP's QDistRnd package when GAP is available, and with a decoder-based method otherwise.
+See the [GAP integration](../README.md#gap-integration) section of the main README to set up GAP, for example with `pip install 'qldpc[gap]'`.
 Commands below are written relative to the repository root.
 Caches, search results, and progress files are saved beside the scripts by default, where Git ignores them.
 The aggregate CSV file of `lattice_surgery/collect_ler.py` is instead written to the path given by `--output`.
@@ -42,8 +45,10 @@ python experiments/bivariate_bicycle/collect_results.py --num-trials 10 --cache-
 [`quantum_tanner/`](quantum_tanner/) performs a randomized search over quantum Tanner codes built from small finite groups and small classical base codes.
 
 1. `run_randomized_search.py` samples codes for every group of order at most `--max-order` and every base code in `BASE_CODE_IDS`, and saves each code to a text file in `quantum_tanner/codes/`.
-   File names identify the group, base code, and random seed of each code, and codes that already have a file are skipped.
+   File names identify the group, base code, and random seed of each code.
+   Codes that already have a file are skipped, even if that file used a different `--num-trials`, unless `--overwrite` is passed.
 2. `collect_results.py` gathers the parameters of saved codes into the disk cache `quantum_tanner/.code_cache`.
+   It adds or updates an entry for every group and base code with saved codes, but does not remove entries for codes that were deleted; use a fresh `--cache-dir` to start over.
    Each entry maps `(group_order, group_index, base_code_id)` to a list of tuples `(n, k, d, num_trials, stabilizer_weight)`, with one tuple per saved code that has `k > 0`.
 3. `verify_codes.py` checks that regenerating every saved code from its seed reproduces that code.
 
@@ -61,7 +66,7 @@ python experiments/quantum_tanner/collect_results.py --save-dir /tmp/qtcodes --c
 python experiments/quantum_tanner/verify_codes.py --save-dir /tmp/qtcodes
 ```
 
-With default settings, the search covers the 18 groups of order at most 10, with up to 100 random codes per group and base code, which amounts to roughly 11,000 saved codes.
+With default settings, the search covers the 18 groups of order at most 10, with up to 100 random codes per group and base code (only one if the base code has as many bits as the group has elements), which amounts to roughly 11,000 saved codes.
 Each code requires a randomized distance estimate with `--num-trials` trials, so a full search can take many CPU-hours.
 Distances `d` are upper bounds, and `d` is `nan` for codes with no logical qubits.
 To read collected results, open the cache with `qldpc.cache.get_disk_cache(".code_cache", cache_dir=CACHE_DIR)`, where `CACHE_DIR` is the `--cache-dir` of `collect_results.py`, and iterate over its keys.

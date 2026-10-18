@@ -27,7 +27,7 @@ from qldpc import abstract, codes
 def main() -> None:
     """Check that all saved quantum Tanner codes can be regenerated from their seeds."""
     args = parse_args()
-    paths = sorted(args.save_dir.glob("qtcode_*.txt"))
+    paths = search.get_saved_code_paths(args.save_dir)
 
     mismatched_paths = []
     for index, path in enumerate(paths, start=1):

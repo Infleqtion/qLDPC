@@ -4,10 +4,27 @@
 Specifically, the current implementation has not yet received independent expert review, and its API and behavior may change without notice.
 Validate results independently and pin the `qldpc` version if you depend on it.
 
-The documentation notebook intentionally uses small Monte Carlo budgets so it can run end to end in under ten minutes.
+The [lattice-surgery notebook](../../examples/experimental/lattice_surgery.ipynb) intentionally uses small Monte Carlo budgets so it can run end to end in under ten minutes.
 Use `collect_ler.py` for publication-scale data.
 
-Examples:
+Each preset samples a lattice-surgery experiment and a quantum memory baseline under circuit-level depolarizing noise without idling errors, and decodes with BP+LSD.
+The module docstring of `collect_ler.py` describes the presets, and its `DECODERS` dictionary sets the decoder options of each preset.
+Run `python experiments/lattice_surgery/collect_ler.py --help` to see all options.
+
+To try the script cheaply first, write a small run to a scratch directory; this takes about a minute:
+
+```bash
+python experiments/lattice_surgery/collect_ler.py \
+    --preset steane-joint \
+    --p-values 0.002 \
+    --max-shots 1000 \
+    --max-errors 10 \
+    --workers 2 \
+    --resume /tmp/ler/progress.csv \
+    --output /tmp/ler/results.csv
+```
+
+Publication-scale examples:
 
 ```bash
 python experiments/lattice_surgery/collect_ler.py \
@@ -45,7 +62,7 @@ The requested `--output` is a small aggregate CSV with one row per task and the 
 | --- | --- |
 | `preset` | The `--preset` that produced the row |
 | `kind` | The experiment: `surgery` or `memory` (`joint_surgery` or `single_memory` for `steane-joint`) |
-| `p` | The physical error rate of circuit-level depolarizing noise |
+| `p` | The physical error rate of circuit-level depolarizing noise (without idling errors) |
 | `rounds` | The number of syndrome measurement rounds |
 | `shots`, `errors`, `discards` | Sinter's counts of sampled shots, logical errors, and discarded shots |
 | `seconds` | The CPU time spent sampling and decoding |
