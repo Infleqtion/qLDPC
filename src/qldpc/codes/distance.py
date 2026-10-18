@@ -476,22 +476,30 @@ def _scan_brouwer_zimmermann(
     weight = len(support)
     visited = 0
     while depth >= 0:
+        # Backtrack once the row at this depth leaves too few rows to complete the support.
         if support[depth] > dimension - weight + depth:
             depth -= 1
             if depth >= 0:
                 support[depth] += 1
             continue
+
+        # Extend the prefix XOR by the row selected at this depth, in every information set.
         row = support[depth]
         for set_index in range(len(ranks)):
             for word in range(widths[set_index]):
                 prefixes[depth + 1, set_index, word] = (
                     prefixes[depth, set_index, word] ^ generators[set_index, row, word]
                 )
+
+        # Descend until every row of the support has been selected.
         if depth + 1 < weight:
             depth += 1
             support[depth] = row + 1
             continue
+
+        # Evaluate the completed support in each information set.
         for set_index in range(len(ranks)):
+            # Each selected pivot row adds one; the packed words hold the non-pivot columns.
             candidate_weight = np.int64(weight) if ranks[set_index] == dimension else np.int64(0)
             if ranks[set_index] != dimension:
                 for selected in range(weight):
@@ -501,6 +509,8 @@ def _scan_brouwer_zimmermann(
                 candidate_weight += _popcount_word(prefixes[weight, set_index, word])
             if candidate_weight >= best:
                 continue
+
+            # Accept a lighter candidate if the set has no labels or its combined label is nonzero.
             eligible = label_widths[set_index] == 0
             for word in range(label_widths[set_index]):
                 combined = labels[set_index, support[0], word]
@@ -511,6 +521,8 @@ def _scan_brouwer_zimmermann(
                     break
             if eligible:
                 best = int(candidate_weight)
+
+        # Move to the next support, returning at the cutoff or at the end of this chunk.
         visited += 1
         support[depth] += 1
         if best <= cutoff or visited >= batch_size:
@@ -566,6 +578,7 @@ class _BrouwerZimmermannSearch:
         if self.finished:
             return self.best
 
+        # Start a fresh enumeration of all supports with this coefficient weight.
         weight = self.next_weight
         support = np.zeros(weight, dtype=np.int64)
         prefixes = np.zeros(
@@ -574,6 +587,8 @@ class _BrouwerZimmermannSearch:
         depth = 0
         # Any negative Python cutoff disables early exit; keep its native value in int64 range.
         cutoff = max(-1, self.cutoff)
+
+        # Scan in chunks, returning early once the upper bound reaches the cutoff.
         while depth >= 0:
             self.best, depth, _ = _scan_brouwer_zimmermann(
                 self.generators,
@@ -591,6 +606,7 @@ class _BrouwerZimmermannSearch:
             if self.best <= self.cutoff:
                 return self.best
 
+        # The layer is complete, so update the lower bound and move on to the next weight.
         self.lower_bound = _get_brouwer_zimmermann_lower_bound(
             self.dimension,
             self.ranks.tolist(),
@@ -764,6 +780,8 @@ def _prepare_brouwer_zimmermann_search(
         )
         for generators, set_labels, rank, pivots in information_sets
     ]
+
+    # Zero-pad every set to common word widths, so the Numba kernel receives single arrays.
     widths = np.array([rows.shape[1] for rows, _, _ in packed_sets], dtype=np.int64)
     label_widths = np.array(
         [0 if labels is None else labels.shape[1] for _, labels, _ in packed_sets],
@@ -779,6 +797,7 @@ def _prepare_brouwer_zimmermann_search(
         packed_generators[index, :, : widths[index]] = rows
         if packed_set_labels is not None:
             packed_labels[index, :, : label_widths[index]] = packed_set_labels
+
     return _BrouwerZimmermannSearch(
         packed_generators,
         packed_labels,

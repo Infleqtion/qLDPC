@@ -274,6 +274,8 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
     if interpreted:
         scan = getattr(scan, "py_func", scan)
     rng = np.random.default_rng(120)
+
+    # Use sets of full, partial, and zero rank; sets 1 and 2 have labels only in their second word.
     for dimension in range(1, 7):
         generators = rng.integers(0, 2**64, (3, dimension, 5), dtype=np.uint64)
         labels = np.zeros((3, dimension, 2), dtype=np.uint64)
@@ -286,6 +288,7 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
             prefixes = np.zeros((weight + 1, 3, 5), dtype=np.uint64)
             depth, best, expected = 0, 1000, 1000
             for indices in itertools.combinations(range(dimension), weight):
+                # Update the expected running minimum directly from this support.
                 for index in range(3):
                     words = np.bitwise_xor.reduce(generators[index, indices, : widths[index]])
                     eligible = not label_widths[index] or np.any(
@@ -295,6 +298,8 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
                     candidate += sum(row < ranks[index] for row in indices)
                     if eligible:
                         expected = min(expected, candidate)
+
+                # Scan exactly one support, then compare the running minimum and kernel state.
                 best, depth, visited = scan(
                     generators,
                     labels,
@@ -318,6 +323,8 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
                         prefixes[weight, index, : widths[index]],
                         np.bitwise_xor.reduce(generators[index, indices, : widths[index]]),
                     )
+
+            # Once every support has been visited, one more call reports completion.
             best, depth, visited = scan(
                 generators,
                 labels,
@@ -354,6 +361,8 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
     )
     assert best == 2**53 + 1 and depth == 33 and visited == 3
     assert support[-1] == 36
+
+    # Bounds checking turns an undersized prefix buffer into an IndexError.
     with pytest.raises(IndexError):
         scan(
             np.ones((1, 2, 1), dtype=np.uint64),
@@ -402,6 +411,7 @@ def test_select_brouwer_zimmermann_information_sets() -> None:
 
 def test_brouwer_zimmermann_search_state() -> None:
     """A search state handles partial pivots, quotient labels, cutoffs, and completed work."""
+    # One rank-0 information set with rows of weight 2 and 1, both outside the excluded subcode.
     search = qldpc.codes.distance._BrouwerZimmermannSearch(
         np.array([[[3], [2]]], dtype=np.uint64),
         np.ones((1, 2, 1), dtype=np.uint64),
@@ -414,15 +424,21 @@ def test_brouwer_zimmermann_search_state() -> None:
         best=3,
         lower_bound=0,
     )
+
+    # An interrupted layer leaves the certificate untouched.
     with (
         mock.patch("qldpc.codes.distance._scan_brouwer_zimmermann", side_effect=KeyboardInterrupt),
         pytest.raises(KeyboardInterrupt),
     ):
         search.advance()
     assert (search.lower_bound, search.next_weight) == (0, 1)
+
+    # Reaching the cutoff returns before the layer is finalized, and later calls do no work.
     assert search.advance() == 1
     assert (search.lower_bound, search.next_weight) == (0, 1)
     assert search.advance() == 1
+
+    # Without an effective cutoff, each call completes and finalizes one layer.
     search.cutoff = -(2**100)
     assert search.advance() == 1
     assert (search.lower_bound, search.next_weight) == (0, 2)
