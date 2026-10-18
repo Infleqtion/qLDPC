@@ -9,7 +9,7 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 | [`quantum_tanner/`](quantum_tanner/) | Randomized search for quantum Tanner codes | `run_randomized_search.py`, then `collect_results.py` and `verify_codes.py` |
 | [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory | `collect_ler.py` |
 
-Each script documents its method, outputs, and options in its module docstring; run it with `--help` to see them.
+Each script's module docstring summarizes its method and outputs; run it with `--help` to see its options.
 The quantum Tanner search requires [GAP](https://www.gap-system.org) for its groups (the SmallGroups library) and some base codes (the GUAVA package).
 Both code searches bound distances with the default backend of `get_distance_bound`, which uses `sqetch` if installed, then GAP's QDistRnd package if available, and a decoder-based method otherwise.
 See the [GAP integration](../README.md#gap-integration) section of the main README to set up GAP, for example with `pip install 'qldpc[gap]'`.
@@ -21,7 +21,7 @@ The aggregate CSV file of `lattice_surgery/collect_ler.py` is instead written to
 
 [`bivariate_bicycle/`](bivariate_bicycle/) performs a brute-force search over the bivariate bicycle codes of [arXiv:2308.07915](https://arxiv.org/abs/2308.07915) with generating polynomials `A = 1 + x + x^ax y^ay` and `B = 1 + y + x^bx y^by`.
 
-1. `run_search.py DIM_X` searches over every torus with width `DIM_X` and height between `--min-order` and `DIM_X`, skipping codes that are equivalent by symmetry.
+1. `run_search.py DIM_X` searches over every torus with width `DIM_X` and height between `--min-order` and `DIM_X`, skipping codes that are equivalent by symmetry or whose generating polynomials reduce to monomials.
    It saves code parameters `(n, k, d)` to the disk cache `bivariate_bicycle/.code_cache`, and resumes from that cache if interrupted.
    To save time, codes with an encoding rate `k / n` below `--min-rate` are saved as `(n, k, None)`, without computing their distance.
 2. `collect_results.py` exports every cached code with `r = k d^2 / n > 1` to `bivariate_bicycle/codes.csv`, with one row `Rx, Ry, ax, ay, bx, by, n, k, d, r` per code, where `Rx` and `Ry` are the orders of `x` and `y`.
