@@ -68,6 +68,8 @@ qLDPC adds some minor optimizations:
 * Candidates are evaluated by a compiled Numba kernel that reuses XORs of shared row prefixes.
 * Contributions to a candidate's weight that are already known are not recalculated.
 * The search tries different choices of coordinates to obtain stronger lower bounds and omits searches that do not help certify the result.
+* Overlapping information sets are used when a bounded coverage-balanced search predicts less enumeration work.
+  Their lower bound accounts for repeated coordinates instead of treating overlapping blocks as disjoint.
 * Exhaustive enumeration is used instead when doing so is estimated to be cheaper.
 * When computing the overall distance of a CSS code, the X and Z searches share the lightest logical-operator weight found so far.
 * A candidate is checked for nontrivial logical action only if its weight could improve the current bound.

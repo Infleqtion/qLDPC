@@ -12,6 +12,7 @@ from unittest import mock
 import numpy as np
 import numpy.typing as npt
 import pytest
+from sympy.abc import x, y, z
 
 import qldpc
 
@@ -343,6 +344,42 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
             )
             assert (best, depth, visited) == (expected, -1, 0)
 
+    # No global binomial count is needed, even for a layer larger than int64.
+    generators = np.zeros((1, 68, 0), dtype=np.uint64)
+    labels = np.zeros((1, 68, 2), dtype=np.uint64)
+    zeros = np.zeros(1, dtype=np.int64)
+    support = np.zeros(34, dtype=np.int64)
+    prefixes = np.zeros((35, 1, 0), dtype=np.uint64)
+    best, depth, visited = scan(
+        generators,
+        labels,
+        zeros,
+        zeros,
+        zeros + 2,
+        support,
+        prefixes,
+        0,
+        2**53 + 1,
+        0,
+        3,
+    )
+    assert best == 2**53 + 1 and depth == 33 and visited == 3
+    assert support[-1] == 36
+    with pytest.raises(IndexError):
+        scan(
+            np.ones((1, 2, 1), dtype=np.uint64),
+            labels[:, :2],
+            zeros,
+            zeros + 1,
+            zeros + 2,
+            np.zeros(1, dtype=np.int64),
+            np.zeros((1, 1, 1), dtype=np.uint64),
+            0,
+            1000,
+            0,
+            1,
+        )
+
 
 def test_select_brouwer_zimmermann_information_sets() -> None:
     """Partial sets are retained only when they strengthen the active certificate."""
@@ -427,7 +464,7 @@ def test_brouwer_zimmermann_setup_dispatches() -> None:
         ],
         dtype=np.uint8,
     )
-    information_set = [(basis, None, 3, np.array([0, 1, 2]))]
+    information_set = [qldpc.codes.distance._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
     with (
         mock.patch("qldpc.codes.distance._exhaustive_is_cheaper", return_value=False),
         mock.patch(
@@ -711,6 +748,144 @@ def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
         num_candidates = 0
         assert qldpc.codes.get_distance_classical(extended, cutoff=0) == 4
     assert num_candidates < len(generators) ** 2
+
+
+def test_brouwer_zimmermann_overlap_certificates() -> None:
+    helpers = qldpc.codes.distance
+    assert (
+        helpers._get_brouwer_zimmermann_lower_bound(
+            41, [41] * 3, completed_weight=4, weight_divisor=2, max_coverage=2
+        )
+        == 8
+    )
+    assert (
+        helpers._get_brouwer_zimmermann_lower_bound(
+            3, [3] * 4, completed_weight=2, weight_divisor=1, max_coverage=4
+        )
+        == 3
+    )
+    basis = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
+    basis = helpers._get_independent_rows(basis)
+    labels = np.eye(len(basis), dtype=np.uint8)
+    information_sets = helpers._get_information_set_generators(basis, labels)
+    selected = helpers._get_overlapping_information_sets(
+        basis, labels, information_sets, upper_bound=3, weight_divisor=1, minimum_work=0
+    )
+    assert selected is not None
+    family, coverage = selected
+    loads = np.bincount(np.concatenate([item.pivots for item in family]), minlength=basis.shape[1])
+    assert coverage == loads.max() == 3 and len(family) == 4
+    for item in family:
+        assert item.labels is not None
+        np.testing.assert_array_equal(item.generators, item.labels @ basis % 2)
+        np.testing.assert_array_equal(item.generators[:, item.pivots], np.eye(len(basis)))
+    for bits in itertools.product((0, 1), repeat=len(basis)):
+        word = np.asarray(bits) @ basis % 2
+        for completed in (1, 2):
+            if all(np.count_nonzero(word[item.pivots]) > completed for item in family):
+                assert np.count_nonzero(word) >= helpers._get_brouwer_zimmermann_lower_bound(
+                    len(basis),
+                    [item.rank for item in family],
+                    completed_weight=completed,
+                    weight_divisor=1,
+                    max_coverage=coverage,
+                )
+
+
+def test_brouwer_zimmermann_overlap_setup_guards() -> None:
+    helpers = qldpc.codes.distance
+    basis = np.hstack([np.eye(25, dtype=np.uint8)] * 4)
+    information_sets = helpers._get_information_set_generators(basis, None)
+    for sets in ([], information_sets * 2, information_sets):
+        assert (
+            helpers._get_overlapping_information_sets(
+                basis, None, sets, upper_bound=26, weight_divisor=1
+            )
+            is None
+        )
+    shortened = basis[:, :-1]
+    assert (
+        helpers._get_overlapping_information_sets(
+            shortened,
+            None,
+            helpers._get_information_set_generators(shortened, None),
+            upper_bound=26,
+            weight_divisor=1,
+        )
+        is None
+    )
+    small = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
+    assert (
+        helpers._get_overlapping_information_sets(
+            small,
+            None,
+            helpers._get_information_set_generators(small, None),
+            upper_bound=3,
+            weight_divisor=1,
+        )
+        is None
+    )
+    basis = basis[:, :40]
+    first = helpers._get_information_set_generators(basis, None)[0]
+    with mock.patch.object(
+        helpers,
+        "_row_reduce_binary",
+        return_value=(first.generators, first.labels, first.pivots),
+    ) as reduction:
+        assert (
+            helpers._get_overlapping_information_sets(
+                basis, None, [first], upper_bound=8, weight_divisor=1
+            )
+            is None
+        )
+    assert reduction.call_count == 14
+
+
+@pytest.mark.parametrize("cutoff", [0, 2])
+def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
+    helpers = qldpc.codes.distance
+    basis = np.array([[1, 0, 1, 1], [0, 1, 1, 1]], dtype=np.uint8)
+    generators, labels, pivots = helpers._row_reduce_binary(basis, columns=np.array([0, 2]))
+    original = helpers._InformationSet(basis, None, 2, np.array([0, 1]))
+    alternative = helpers._InformationSet(generators, labels, 2, pivots)
+    with (
+        mock.patch.object(helpers, "_exhaustive_is_cheaper", return_value=False),
+        mock.patch.object(helpers, "_get_information_set_generators", return_value=[original]),
+        mock.patch.object(
+            helpers, "_get_overlapping_information_sets", return_value=([alternative], 1)
+        ),
+        mock.patch.object(helpers, "_brute_force_is_cheaper", side_effect=AssertionError),
+    ):
+        assert qldpc.codes.get_distance_classical(basis, cutoff=cutoff) == 2
+
+
+def test_brouwer_zimmermann_overlap_qc() -> None:
+    code = qldpc.codes.QCCode(
+        {x: 4, y: 4, z: 2},
+        1 + x + y + x * y * z,
+        1 + x * y + x**2 * y**3 * z + x**3 * y**2,
+    )
+    helpers = qldpc.codes.distance
+    original_scan = helpers._scan_brouwer_zimmermann
+    for pauli in ("X", "Z"):
+        evaluated = 0
+
+        def scan(*args: Any) -> tuple[int, int, int]:
+            nonlocal evaluated
+            best, depth, visited = original_scan(*args)
+            evaluated += visited * len(args[2])
+            return best, depth, visited
+
+        with mock.patch.object(helpers, "_scan_brouwer_zimmermann", side_effect=scan):
+            assert code.forget_distance().get_distance_exact(pauli, cutoff=0) == 8
+        assert evaluated == 338250
+    logicals = np.asarray(code.get_logical_ops("X"), dtype=np.uint8)
+    stabilizers = np.asarray(code.get_stabilizer_ops("X", canonicalized=True), dtype=np.uint8)
+    odd = np.zeros((1, len(code)), dtype=np.uint8)
+    odd[0, :7] = 1
+    sectors = [(logicals, stabilizers), (odd, np.zeros((0, len(code)), dtype=np.uint8))]
+    for problems in (sectors, sectors[::-1]):
+        assert qldpc.codes.get_distance_css_brouwer_zimmermann(problems, cutoff=0) == 7
 
 
 @pytest.mark.parametrize("block_size", [1, 3, 13])

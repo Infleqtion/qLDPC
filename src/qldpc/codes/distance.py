@@ -553,6 +553,7 @@ class _BrouwerZimmermannSearch:
     best: int
     lower_bound: int
     next_weight: int = 1
+    max_coverage: int = 1
 
     @property
     def dimension(self) -> int:
@@ -611,6 +612,7 @@ class _BrouwerZimmermannSearch:
             self.ranks.tolist(),
             completed_weight=weight,
             weight_divisor=self.weight_divisor,
+            max_coverage=self.max_coverage,
         )
         self.next_weight += 1
         return self.best
@@ -622,13 +624,15 @@ def _get_brouwer_zimmermann_lower_bound(
     *,
     completed_weight: int,
     weight_divisor: int,
+    max_coverage: int = 1,
 ) -> int:
     """Lower-bound distance after searching through one coefficient weight."""
-    # This generalizes Algorithm 1 to disjoint systematic blocks: after coefficient supports
+    # This generalizes Algorithm 1 to systematic pivot blocks: after coefficient supports
     # through completed_weight, a block of rank r forces
     # max(0, completed_weight + 1 - (dimension - r)) nonzero pivot columns.
-    # Disjoint blocks add those pivot-column Hamming-weight units.
+    # A physical coordinate contributes to at most max_coverage pivot blocks.
     lower_bound = sum(max(0, completed_weight + 1 - (dimension - rank)) for rank in ranks)
+    lower_bound = (lower_bound + max_coverage - 1) // max_coverage
     if weight_divisor > 1:
         # Every candidate Hamming weight is a multiple of weight_divisor, so the bound can round up.
         lower_bound += (-lower_bound) % weight_divisor
@@ -681,6 +685,77 @@ def _select_brouwer_zimmermann_information_sets(
     ]
 
 
+def _get_overlapping_information_sets(
+    basis: npt.NDArray[np.uint8],
+    labels: npt.NDArray[np.uint8] | None,
+    information_sets: list[_InformationSet],
+    *,
+    upper_bound: int,
+    weight_divisor: int,
+    max_sets: int = 8,
+    minimum_work: int = 100_000,
+) -> tuple[list[_InformationSet], int] | None:
+    """Select bounded coverage-balanced full sets only when they reduce estimated work."""
+    dimension = len(basis)
+    full_sets = [item for item in information_sets if item.rank == dimension]
+    columns = np.flatnonzero(np.any(basis, axis=0))
+    if not full_sets or len(full_sets) >= max_sets or len(full_sets) * dimension == len(columns):
+        return None
+    best_work = _get_brouwer_zimmermann_work(
+        dimension,
+        [item.rank for item in information_sets],
+        upper_bound=upper_bound,
+        weight_divisor=weight_divisor,
+    )
+    # Family construction is not worthwhile for already cheap enumerations.
+    if best_work < minimum_work:
+        return None
+    # Incidences force C >= ceil(m * dimension / width), even for an ideal family.
+    optimistic_work = min(
+        _get_brouwer_zimmermann_work(
+            dimension,
+            [dimension] * count,
+            upper_bound=upper_bound,
+            weight_divisor=weight_divisor,
+            max_coverage=(count * dimension + len(columns) - 1) // len(columns),
+        )
+        for count in range(1, max_sets + 1)
+    )
+    if optimistic_work >= best_work:
+        return None
+
+    loads = np.bincount(
+        np.concatenate([item.pivots for item in full_sets]), minlength=basis.shape[1]
+    )
+    seen = {tuple(sorted(item.pivots.tolist())) for item in full_sets}
+    rng = np.random.default_rng(0)
+    best_sets = None
+    best_coverage = 1
+    for _ in range(2 * (max_sets - len(full_sets))):
+        order = columns[np.lexsort((rng.random(len(columns)), loads[columns]))]
+        generators, transformed_labels, pivots = _row_reduce_binary(basis, labels, columns=order)
+        assert len(pivots) == dimension
+        signature = tuple(sorted(pivots.tolist()))
+        if signature in seen:
+            continue
+        seen.add(signature)
+        full_sets.append(_InformationSet(generators, transformed_labels, dimension, pivots))
+        loads[pivots] += 1
+        max_coverage = int(loads.max())
+        work = _get_brouwer_zimmermann_work(
+            dimension,
+            [dimension] * len(full_sets),
+            upper_bound=upper_bound,
+            weight_divisor=weight_divisor,
+            max_coverage=max_coverage,
+        )
+        if work < best_work:
+            best_sets, best_coverage, best_work = full_sets.copy(), max_coverage, work
+        if len(full_sets) == max_sets:
+            break
+    return None if best_sets is None else (best_sets, best_coverage)
+
+
 def _prepare_brouwer_zimmermann_search(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
@@ -724,17 +799,9 @@ def _prepare_brouwer_zimmermann_search(
         weight_divisor = math.lcm(weight_divisor, 2)
 
     information_sets = _get_information_set_generators(basis, labels)
-    weight_func, _ = _get_hamming_weight_fn()
     # Systematic rows are all coefficient-weight-one candidates.
     for generators, set_labels, _, _ in information_sets:
-        eligible_rows = (
-            np.ones(dimension, dtype=bool) if set_labels is None else np.any(set_labels, axis=1)
-        )
-        packed_generators = _rows_to_ints(generators[eligible_rows], dtype=np.uint64)
-        best = min(
-            best,
-            int(_get_packed_row_weights(packed_generators, weight_func).min()),
-        )
+        best = min(best, _get_brouwer_zimmermann_initial_upper_bound(generators, set_labels))
     if best <= cutoff:
         return best
 
@@ -755,12 +822,43 @@ def _prepare_brouwer_zimmermann_search(
     if lower_bound >= best:
         return best
 
+    max_coverage = 1
+    overlapping = _get_overlapping_information_sets(
+        basis,
+        labels,
+        information_sets,
+        upper_bound=best,
+        weight_divisor=weight_divisor,
+    )
+    if overlapping is not None:
+        information_sets, max_coverage = overlapping
+        for information_set in information_sets:
+            best = min(
+                best,
+                _get_brouwer_zimmermann_initial_upper_bound(
+                    information_set.generators, information_set.labels
+                ),
+            )
+        if best <= cutoff:
+            return best
+        ranks = [item.rank for item in information_sets]
+        lower_bound = _get_brouwer_zimmermann_lower_bound(
+            dimension,
+            ranks,
+            completed_weight=completed_weight,
+            weight_divisor=weight_divisor,
+            max_coverage=max_coverage,
+        )
+        if lower_bound >= best:
+            return best
+
     if _brute_force_is_cheaper(
         dimension=dimension,
         num_logical_rows=int(np.count_nonzero(eligible)),
         ranks=ranks,
         upper_bound=best,
         weight_divisor=weight_divisor,
+        max_coverage=max_coverage,
     ):
         return brute_force_distance()
 
@@ -808,6 +906,7 @@ def _prepare_brouwer_zimmermann_search(
         best,
         lower_bound,
         completed_weight + 1,
+        max_coverage,
     )
 
 
@@ -899,6 +998,7 @@ def _brute_force_is_cheaper(
     ranks: list[int],
     upper_bound: int,
     weight_divisor: int,
+    max_coverage: int = 1,
 ) -> bool:
     """Estimate whether exhaustive nested-code enumeration will outperform BZ.
 
@@ -908,21 +1008,41 @@ def _brute_force_is_cheaper(
     timings near this boundary favor BZ until the exhaustive count reaches roughly the estimated BZ
     count, so the two counts are compared directly.
     """
-    bz_candidates = 0
+    bz_candidates = _get_brouwer_zimmermann_work(
+        dimension,
+        ranks,
+        upper_bound=upper_bound,
+        weight_divisor=weight_divisor,
+        max_coverage=max_coverage,
+    )
+    exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
+    return exhaustive_candidates <= bz_candidates
+
+
+def _get_brouwer_zimmermann_work(
+    dimension: int,
+    ranks: list[int],
+    *,
+    upper_bound: int,
+    weight_divisor: int,
+    max_coverage: int = 1,
+) -> int:
+    """Estimate candidate/set evaluations, including systematic rows, to certify a witness."""
+    candidates = 0
     for weight in range(1, dimension + 1):
-        bz_candidates += len(ranks) * math.comb(dimension, weight)
+        candidates += len(ranks) * math.comb(dimension, weight)
         if (
             _get_brouwer_zimmermann_lower_bound(
                 dimension,
                 ranks,
                 completed_weight=weight,
                 weight_divisor=weight_divisor,
+                max_coverage=max_coverage,
             )
             >= upper_bound
         ):
             break
-    exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
-    return exhaustive_candidates <= bz_candidates
+    return candidates
 
 
 def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
