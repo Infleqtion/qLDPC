@@ -882,9 +882,11 @@ def _brute_force_is_cheaper(
 ) -> bool:
     """Estimate whether exhaustive nested-code enumeration will outperform BZ.
 
-    The BZ estimate conservatively assumes that the search must certify the current upper bound.
-    The historical cost model assigns the vectorized exhaustive kernel a 20-fold advantage per
-    candidate.  This conservative dispatch heuristic is unchanged by native BZ acceleration.
+    The BZ estimate pessimistically assumes that the search must certify the current upper bound,
+    whereas lighter witnesses usually end the search sooner.  Although the vectorized exhaustive
+    kernel is a few times cheaper per candidate than the serial Numba BZ kernel, whole-search
+    timings near this boundary favor BZ until the exhaustive count reaches roughly the estimated BZ
+    count, so the two counts are compared directly.
     """
     bz_candidates = 0
     for weight in range(1, dimension + 1):
@@ -894,7 +896,7 @@ def _brute_force_is_cheaper(
         if lower_bound >= upper_bound:
             break
     exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
-    return exhaustive_candidates <= 20 * bz_candidates
+    return exhaustive_candidates <= bz_candidates
 
 
 def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:

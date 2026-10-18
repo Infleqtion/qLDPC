@@ -637,6 +637,9 @@ def test_brouwer_zimmermann_exhaustive_dispatch() -> None:
     assert qldpc.codes.distance._exhaustive_is_cheaper(21, 4000)
     assert not qldpc.codes.distance._exhaustive_is_cheaper(21, 22)
     assert qldpc.codes.distance._brute_force_is_cheaper(
+        dimension=4, num_logical_rows=2, ranks=[4], upper_bound=4, weight_divisor=1
+    )
+    assert not qldpc.codes.distance._brute_force_is_cheaper(
         dimension=4, num_logical_rows=4, ranks=[4], upper_bound=4, weight_divisor=1
     )
     assert not qldpc.codes.distance._brute_force_is_cheaper(
