@@ -1,8 +1,9 @@
 # Offline lattice-surgery LER experiments
 
-*DISCLAIMER*: Lattice surgery support in `qldpc` is experimental.
-Specifically, the current implementation has not yet received independent expert review, and its API and behavior may change without notice.
-Validate results independently and pin the `qldpc` version if you depend on it.
+> [!WARNING]
+> Lattice-surgery support in `qldpc` (`qldpc.experimental.surgery`) is experimental and unstable, and its implementation is still pending careful expert review.
+> Its API and behavior may change without notice or deprecation.
+> Validate results independently, and pin the `qldpc` version if you depend on them.
 
 The [lattice-surgery notebook](../../examples/experimental/lattice_surgery.ipynb) intentionally uses small Monte Carlo budgets so it can run end to end in under ten minutes.
 Use `collect_ler.py` for publication-scale data.

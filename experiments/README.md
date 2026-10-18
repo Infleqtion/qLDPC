@@ -7,7 +7,7 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 | --- | --- | --- |
 | [`bivariate_bicycle/`](bivariate_bicycle/) | Brute-force search for bivariate bicycle codes with toric layouts | `run_search.py`, then `collect_results.py` |
 | [`quantum_tanner/`](quantum_tanner/) | Randomized search for quantum Tanner codes | `run_search.py`, then `collect_results.py` and `verify_codes.py` |
-| [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory | `collect_ler.py` |
+| [`lattice_surgery/`](lattice_surgery/) | Logical error rates of lattice-surgery gadgets versus quantum memory (experimental; see the [warning](#lattice-surgery)) | `collect_ler.py` |
 
 Each script's module docstring summarizes its method and outputs; run it with `--help` to see its options.
 The quantum Tanner search requires [GAP](https://www.gap-system.org) for its groups (the SmallGroups library) and some base codes (the GUAVA package).
@@ -88,6 +88,11 @@ Saved code files record `d` as `nan` for codes with no logical qubits, and `coll
 Verification requires `codes.QTCode.random` to sample the same code for the same seed, so codes saved with a different version of `qldpc` may fail verification.
 
 ## Lattice surgery
+
+> [!WARNING]
+> Lattice-surgery support in `qldpc` (`qldpc.experimental.surgery`) is experimental and unstable, and its implementation is still pending careful expert review.
+> Its API and behavior may change without notice or deprecation.
+> Validate results independently, and pin the `qldpc` version if you depend on them.
 
 [`lattice_surgery/`](lattice_surgery/) samples logical error rates of the experimental lattice-surgery constructions in `qldpc.experimental.surgery`, and of quantum memory baselines, with [Sinter](https://pypi.org/project/sinter/).
 `collect_ler.py --preset PRESET` runs one of the presets `bb72`, `bb18`, or `steane-joint`, and writes its logical error rates to `results/{preset}.csv`.
