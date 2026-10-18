@@ -32,7 +32,7 @@ import os
 import pathlib
 import re
 import traceback
-from collections.abc import Hashable, Iterator
+from collections.abc import Callable, Hashable, Iterable, Iterator
 
 from qldpc import abstract, codes
 
@@ -66,30 +66,28 @@ def main() -> None:
     """Sample random quantum Tanner codes in parallel, saving each code to a file."""
     args = parse_args()
     base_codes = list(get_base_codes())
-
-    with concurrent.futures.ProcessPoolExecutor(max_workers=args.workers) as executor:
-        futures = []
-        for group_order, group_index in get_small_groups(args.max_order):
-            for base_code, base_code_id in base_codes:
-                # If the base code has as many bits as the group has elements, there is only one
-                # random quantum Tanner code, namely the one with subset_a = subset_b = group.
-                num_samples = 1 if base_code.num_bits == group_order else args.num_samples
-                for sample in range(num_samples):
-                    future = executor.submit(
-                        run_and_save,
-                        group_order,
-                        group_index,
-                        base_code,
-                        base_code_id,
-                        sample,
-                        num_samples,
-                        args.num_trials,
-                        codes_dir=args.results_dir / CODES_NAME,
-                        identify_completion_text=args.workers > 1,
-                        override_existing_data=args.overwrite,
-                    )
-                    futures.append(future)
-        wait_for_jobs(futures)
+    jobs = []
+    for group_order, group_index in get_small_groups(args.max_order):
+        for base_code, base_code_id in base_codes:
+            # If the base code has as many bits as the group has elements, there is only one random
+            # quantum Tanner code, namely the one with subset_a = subset_b = group.
+            num_samples = 1 if base_code.num_bits == group_order else args.num_samples
+            for sample in range(num_samples):
+                job = functools.partial(
+                    run_and_save,
+                    group_order,
+                    group_index,
+                    base_code,
+                    base_code_id,
+                    sample,
+                    num_samples,
+                    args.num_trials,
+                    codes_dir=args.results_dir / CODES_NAME,
+                    identify_completion_text=args.workers > 1,
+                    override_existing_data=args.overwrite,
+                )
+                jobs.append(job)
+    run_jobs(jobs, args.workers)
 
 
 def parse_args() -> argparse.Namespace:
@@ -422,22 +420,43 @@ def get_deterministic_hash(*inputs: Hashable, num_bytes: int = 4) -> int:
     return int.from_bytes(hash_bytes[:num_bytes], byteorder="big", signed=False)
 
 
-def wait_for_jobs(futures: list[concurrent.futures.Future[None]]) -> None:
-    """Wait for parallel jobs to finish, printing the traceback of every job that fails.
+def run_jobs(jobs: Iterable[Callable[[], None]], num_workers: int) -> None:
+    """Run jobs in parallel processes, printing the traceback of every job that fails.
+
+    Jobs are submitted a few at a time, so that memory use does not grow with the number of jobs.
 
     Args:
-        futures: The jobs to wait for.
+        jobs: The jobs to run, which must be picklable, such as functools.partial objects that wrap
+            module-level functions.
+        num_workers: The number of parallel processes.
 
     Raises:
         RuntimeError: If any job failed.
     """
-    num_failures = 0
-    for future in concurrent.futures.as_completed(futures):
-        if (exception := future.exception()) is not None:
-            num_failures += 1
-            traceback.print_exception(exception)
+    max_pending_jobs = 4 * num_workers
+    num_jobs = num_failures = 0
+    pending: set[concurrent.futures.Future[None]] = set()
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers) as executor:
+        for job in jobs:
+            while len(pending) >= max_pending_jobs:
+                done, pending = concurrent.futures.wait(
+                    pending, return_when=concurrent.futures.FIRST_COMPLETED
+                )
+                num_failures += sum(report_failure(future) for future in done)
+            pending.add(executor.submit(job))
+            num_jobs += 1
+        remaining = concurrent.futures.as_completed(pending)
+        num_failures += sum(report_failure(future) for future in remaining)
     if num_failures:
-        raise RuntimeError(f"{num_failures} of {len(futures)} jobs failed")
+        raise RuntimeError(f"{num_failures} of {num_jobs} jobs failed")
+
+
+def report_failure(future: concurrent.futures.Future[None]) -> bool:
+    """Print the traceback of a finished job if it failed, and return whether it failed."""
+    if (exception := future.exception()) is not None:
+        traceback.print_exception(exception)
+        return True
+    return False
 
 
 if __name__ == "__main__":
