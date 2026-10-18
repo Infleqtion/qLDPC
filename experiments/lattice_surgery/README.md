@@ -34,11 +34,26 @@ python experiments/lattice_surgery/collect_ler.py \
 
 Each preset writes raw Sinter progress to a run-specific file beside the script unless `--resume` is supplied.
 Progress files are ignored by Git and may be resumed after interruption.
-Task identity depends on the preset, tracked Git state, decoder settings, physical-error value, and round count.
+Task identity depends on the preset, tracked Git state, decoder settings, experiment kind, physical-error value, and round count.
+Any commit or uncommitted edit to tracked files changes the Git state, and therefore the name of the default progress file, so pass `--resume` explicitly to continue a run across such changes.
 Collection limits and worker count do not change task identity, so they may be adjusted when resuming.
 Unrelated untracked files do not invalidate a resume.
 
-The requested `--output` is a small aggregate CSV with the producing Git state, decoder settings, and the collection request that produced the aggregate.
+The requested `--output` is a small aggregate CSV with one row per task and the following columns:
+
+| Column | Meaning |
+| --- | --- |
+| `preset` | The `--preset` that produced the row |
+| `kind` | The experiment: `surgery` or `memory` (`joint_surgery` or `single_memory` for `steane-joint`) |
+| `p` | The physical error rate of circuit-level depolarizing noise |
+| `rounds` | The number of syndrome measurement rounds |
+| `shots`, `errors`, `discards` | Sinter's counts of sampled shots, logical errors, and discarded shots |
+| `seconds` | The CPU time spent sampling and decoding |
+| `git_state` | The Git commit that produced the data, with a digest of any uncommitted changes |
+| `decoder_settings` | The decoder specification, such as `decoders.bp_lsd(...)` |
+| `collection_request` | The p-values, shot and error limits, and worker count of the request |
+
+The logical error rate of a row is `errors / (shots - discards)`.
 Rows for other p-values or legacy metadata in a shared resume file are not exported.
 For `bb18`, surgery uses 15 rounds while memory uses 9.
 The `rounds` column records that asymmetry; compare total failure probabilities with that distinction in mind, or normalize each curve to a per-cycle rate before plotting.

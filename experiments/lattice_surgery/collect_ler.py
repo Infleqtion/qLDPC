@@ -13,7 +13,9 @@ with Sinter under circuit-level depolarizing noise at several physical error rat
 - steane-joint: jointly measure logical Z operators of two Steane codes (9 rounds), versus memory of
   one Steane code (9 rounds).
 
-Every preset decodes with BP+LSD (see DECODERS), and every task keeps only its first observable.
+Every preset decodes with belief propagation plus localized statistics decoding (BP+LSD; see
+DECODERS).  Every circuit may track several logical observables, but each task keeps only the first
+one, so a logical error is a flip of that observable.
 
 Raw Sinter progress is saved to a resumable file, and aggregate results are written to a CSV file
 together with their provenance: the Git state of this repository, the decoder, and the collection
@@ -208,6 +210,8 @@ def parse_args() -> argparse.Namespace:
         help="path of the aggregate CSV file to write",
     )
     args = parser.parse_args()
+    if args.p_values is not None and not all(0 <= p <= 1 for p in args.p_values):
+        parser.error("--p-values must be probabilities between 0 and 1")
     for name in ["max_shots", "max_errors", "workers"]:
         if getattr(args, name) < 1:
             parser.error(f"--{name.replace('_', '-')} must be positive")

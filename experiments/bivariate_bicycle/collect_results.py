@@ -5,8 +5,8 @@
 
 This script reads the disk cache written by run_search.py, and saves every code whose figure of
 merit r = k d^2 / n exceeds 1 (the bound satisfied by 2D topological codes such as the toric code)
-to codes.csv in this directory.  Only results computed with --num-trials distance trials are
-exported.
+to a data file (by default, codes.csv in this directory).  Only results computed with --num-trials
+distance trials are exported.
 
 Example:
     python experiments/bivariate_bicycle/collect_results.py
@@ -19,11 +19,11 @@ import pathlib
 
 import diskcache
 import numpy as np
-from run_search import CACHE_DIR, CACHE_NAME, NUM_TRIALS
+from run_search import CACHE_NAME, NUM_TRIALS, add_cache_dir_argument
 
 import qldpc.cache
 
-SAVE_PATH = pathlib.Path(__file__).parent / "codes.csv"  # path of the exported data file
+SAVE_PATH = pathlib.Path(__file__).parent / "codes.csv"  # default path of the exported data file
 
 # format of each row in the exported data file
 ROW_FORMAT = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f"
@@ -35,13 +35,13 @@ ROW_FORMAT = "%d, %d, %d, %d, %d, %d, %d, %d, %d, %.3f"
 def main() -> None:
     """Export bivariate bicycle codes that outperform the toric code to a data file."""
     args = parse_args()
-    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=CACHE_DIR)
+    cache = qldpc.cache.get_disk_cache(CACHE_NAME, cache_dir=args.cache_dir)
     data = get_code_data(cache, args.num_trials)
-    np.savetxt(SAVE_PATH, data, header=get_header(args.num_trials), fmt=ROW_FORMAT)
+    np.savetxt(args.output, data, header=get_header(args.num_trials), fmt=ROW_FORMAT)
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
+    """Parse and validate command-line arguments."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -52,7 +52,17 @@ def parse_args() -> argparse.Namespace:
         help="number of distance trials used by the search results to export"
         " (default: %(default)s)",
     )
-    return parser.parse_args()
+    add_cache_dir_argument(parser)
+    parser.add_argument(
+        "--output",
+        type=pathlib.Path,
+        default=SAVE_PATH,
+        help="path of the data file to write (default: codes.csv beside this script)",
+    )
+    args = parser.parse_args()
+    if args.num_trials < 1:
+        parser.error("--num-trials must be positive")
+    return args
 
 
 ####################################################################################################
@@ -115,7 +125,7 @@ def get_header(num_trials: int) -> str:
             "code parameters [[n, k, d]] indicate",
             "    n = number of physical qubits",
             "    k = number of logical qubits",
-            "    d = code distance (minimal weight of a nontrivial logical operator)",
+            "    d = upper bound on the code distance (minimal weight of a nontrivial logical operator)",
             "code distance is estimated by the method of arXiv:2308.07915,"
             + f" minimizing over {num_trials} trials",
             "the last column reports r = k d^2 / n",

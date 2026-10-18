@@ -27,11 +27,11 @@ from qldpc import abstract, codes
 def main() -> None:
     """Check that all saved quantum Tanner codes can be regenerated from their seeds."""
     args = parse_args()
-    paths = sorted(args.save_dir.glob("*.txt"))
+    paths = sorted(args.save_dir.glob("qtcode_*.txt"))
 
     mismatched_paths = []
-    for pp, path in enumerate(paths, start=1):
-        print(f"{pp}/{len(paths)}")
+    for index, path in enumerate(paths, start=1):
+        print(f"{index}/{len(paths)}")
         if not is_reproducible(path):
             print(f"  Saved code does not match its regenerated version: {path}")
             mismatched_paths.append(path)

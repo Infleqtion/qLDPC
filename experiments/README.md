@@ -11,7 +11,8 @@ They are not part of the installed `qldpc` package, and the test suite does not 
 
 Each script documents its method, outputs, and options in its module docstring; run it with `--help` to see them.
 Commands below are written relative to the repository root.
-Results, caches, and progress files are saved beside the scripts by default, where Git ignores them.
+Caches, search results, and progress files are saved beside the scripts by default, where Git ignores them.
+The aggregate CSV file of `lattice_surgery/collect_ler.py` is instead written to the path given by `--output`.
 
 ## Bivariate bicycle codes
 
@@ -29,6 +30,12 @@ python experiments/bivariate_bicycle/collect_results.py
 Code distances are upper bounds, each minimized over `--num-trials` randomized trials.
 Before symmetry reduction, each torus height contributes roughly `DIM_X^4` candidate codes, so the cost of a search grows rapidly with `DIM_X`.
 `collect_results.py` only exports results computed with its own `--num-trials`, so pass the same value to both scripts.
+Both scripts accept `--cache-dir` to keep the cache elsewhere, such as in a scratch directory for a quick trial run:
+
+```bash
+python experiments/bivariate_bicycle/run_search.py 6 --num-trials 10 --cache-dir /tmp/bbcodes
+python experiments/bivariate_bicycle/collect_results.py --num-trials 10 --cache-dir /tmp/bbcodes --output /tmp/bbcodes/codes.csv
+```
 
 ## Quantum Tanner codes
 
@@ -37,6 +44,7 @@ Before symmetry reduction, each torus height contributes roughly `DIM_X^4` candi
 1. `run_randomized_search.py` samples codes for every group of order at most `--max-order` and every base code in `BASE_CODE_IDS`, and saves each code to a text file in `quantum_tanner/codes/`.
    File names identify the group, base code, and random seed of each code, and codes that already have a file are skipped.
 2. `collect_results.py` gathers the parameters of saved codes into the disk cache `quantum_tanner/.code_cache`.
+   Each entry maps `(group_order, group_index, base_code_id)` to a list of tuples `(n, k, d, num_trials, stabilizer_weight)`, with one tuple per saved code that has `k > 0`.
 3. `verify_codes.py` checks that regenerating every saved code from its seed reproduces that code.
 
 ```bash
@@ -45,9 +53,19 @@ python experiments/quantum_tanner/collect_results.py
 python experiments/quantum_tanner/verify_codes.py
 ```
 
-With default settings, the search covers the 18 groups of order at most 10, with up to 100 random codes per group and base code.
-Each code requires a randomized distance estimate with `--num-trials` trials.
-Pass the same `--save-dir` to all three scripts when saving codes to a nondefault directory.
+To try the pipeline cheaply first, write a small search to a scratch directory:
+
+```bash
+python experiments/quantum_tanner/run_randomized_search.py --max-order 6 --num-samples 2 --num-trials 10 --save-dir /tmp/qtcodes
+python experiments/quantum_tanner/collect_results.py --save-dir /tmp/qtcodes --cache-dir /tmp/qtcodes
+python experiments/quantum_tanner/verify_codes.py --save-dir /tmp/qtcodes
+```
+
+With default settings, the search covers the 18 groups of order at most 10, with up to 100 random codes per group and base code, which amounts to roughly 11,000 saved codes.
+Each code requires a randomized distance estimate with `--num-trials` trials, so a full search can take many CPU-hours.
+Distances `d` are upper bounds, and `d` is `nan` for codes with no logical qubits.
+To read collected results, open the cache with `qldpc.cache.get_disk_cache(".code_cache", cache_dir=CACHE_DIR)`, where `CACHE_DIR` is the `--cache-dir` of `collect_results.py`, and iterate over its keys.
+Pass the same `--save-dir` to all three scripts when saving codes to a nondefault directory, and pass `--cache-dir` to `collect_results.py` to keep its cache out of the repository.
 Verification requires `codes.QTCode.random` to sample the same code for the same seed, so codes saved with a different version of `qldpc` may fail verification.
 
 ## Lattice surgery
