@@ -12,18 +12,20 @@ Circuit tools currently only support qubit codes.
 
 - **From textbook codes to the research frontier.**
   Build familiar surface, toric, Hamming, and Reed–Muller codes alongside hypergraph-product, lifted-product, bivariate-bicycle, quantum Tanner, SHYPS, GALA, and other modern families.
-- **Go beyond binary.**
-  Many constructions and core algorithms work over arbitrary prime-power finite fields, not just qubits.
+- **Pin down code distance.**
+  Compute exact distances of binary codes with an optimized, compiled Brouwer–Zimmermann search, or bound distances with decoders, QDistRnd, or sqetch.
 - **Ask more of a code than `[[n, k, d]]`.**
-  Work with check matrices, Tanner graphs, canonical logical operators, subsystem gauges, exact distances, upper bounds, and code-capacity error estimates.
+  Work with check matrices, Tanner graphs, canonical logical operators, subsystem gauge operators, and code-capacity error estimates.
 - **Move from codes to circuits.**
   Build memory experiments, encoding circuits, Pauli noise models, state-preparation diagnostics, Sinter decoders, sliding-window decoders, and transversal Clifford searches.
 - **Use the algebra that modern constructions need.**
   qLDPC includes finite groups, group rings, lifted matrices, Cayley complexes, chain complexes, and optional GAP integration.
 - **Steal from the examples.**
   The notebooks progress from the basics to circuit-level logical error rates, custom noise, transversal gates, and experimental lattice surgery.
+- **Go beyond binary.**
+  Many constructions and core algorithms work over arbitrary prime-power finite fields, not just qubits.
 
-qLDPC is still research software, and it is honest about the tradeoffs.
+qLDPC is still research software, and tries to be honest and transparent about tradeoffs.
 Some searches are expensive, some bounds are heuristic, experimental APIs can change, and optional tools may have side effects.
 
 ## 📦 Installation
