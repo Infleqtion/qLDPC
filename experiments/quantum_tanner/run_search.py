@@ -65,28 +65,24 @@ BASE_CODE_IDS = (
 def main() -> None:
     """Sample random quantum Tanner codes in parallel, saving each code to a file."""
     args = parse_args()
-    base_codes = list(get_base_codes())
-    jobs = []
-    for group_order, group_index in get_small_groups(args.max_order):
-        for base_code, base_code_id in base_codes:
-            # If the base code has as many bits as the group has elements, there is only one random
-            # quantum Tanner code, namely the one with subset_a = subset_b = group.
-            num_samples = 1 if base_code.num_bits == group_order else args.num_samples
-            for sample in range(num_samples):
-                job = functools.partial(
-                    run_and_save,
-                    group_order,
-                    group_index,
-                    base_code,
-                    base_code_id,
-                    sample,
-                    num_samples,
-                    args.num_trials,
-                    codes_dir=args.results_dir / CODES_NAME,
-                    identify_completion_text=args.workers > 1,
-                    override_existing_data=args.overwrite,
-                )
-                jobs.append(job)
+    jobs = (
+        functools.partial(
+            run_and_save,
+            group_order,
+            group_index,
+            base_code,
+            base_code_id,
+            sample,
+            num_samples,
+            args.num_trials,
+            codes_dir=args.results_dir / CODES_NAME,
+            identify_completion_text=args.workers > 1,
+            override_existing_data=args.overwrite,
+        )
+        for group_order, group_index, base_code, base_code_id, sample, num_samples in (
+            get_search_space(args.max_order, args.num_samples)
+        )
+    )
     run_jobs(jobs, args.workers)
 
 
@@ -146,6 +142,29 @@ def add_results_dir_argument(parser: argparse.ArgumentParser) -> None:
 
 ####################################################################################################
 # code search
+
+
+def get_search_space(
+    max_order: int, num_samples: int
+) -> Iterator[tuple[int, int, codes.ClassicalCode, str, int, int]]:
+    """Iterate over the random quantum Tanner codes to sample.
+
+    Args:
+        max_order: The maximum order of a group that defines a code.
+        num_samples: The number of random codes per choice of group and base code.
+
+    Yields:
+        The order and SmallGroups index of a group, a base code and its identifier, the index of a
+        random sample, and the total number of samples for this group and base code.
+    """
+    base_codes = list(get_base_codes())
+    for group_order, group_index in get_small_groups(max_order):
+        for base_code, base_code_id in base_codes:
+            # If the base code has as many bits as the group has elements, there is only one random
+            # quantum Tanner code, namely the one with subset_a = subset_b = group.
+            num_code_samples = 1 if base_code.num_bits == group_order else num_samples
+            for sample in range(num_code_samples):
+                yield group_order, group_index, base_code, base_code_id, sample, num_code_samples
 
 
 def run_and_save(
