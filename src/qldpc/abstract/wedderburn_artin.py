@@ -90,7 +90,7 @@ class WedderburnArtinTransformer:
 
             (..., r, c, rb, cb)
 
-            is transposed and reshaped into an array with shape
+        is transposed and reshaped into an array with shape
 
             (..., r * rb, c * cb).
         """
