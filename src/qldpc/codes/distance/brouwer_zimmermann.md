@@ -62,7 +62,6 @@ Let `r = dim(V)` be its number of rows, and let `N` be its number of columns, wh
 For a basis `G` of `V`, a **coefficient vector** `a` is a binary vector of length `r` that selects rows, and `aG` is the XOR of the selected rows.
 The **coefficient weight** of `aG` is `wt(a)`, the number of rows selected.
 Since the rows of `G` are independent, each word of `V` has exactly one coefficient vector `a` in a given basis.
-The coefficient weight of a word generally differs from its Hamming weight `wt(aG)`, and it depends on the choice of basis.
 A **layer** is the set of all words with a given coefficient weight `w`, taken over all choices of `w` rows.
 
 BZ keeps track of two quantities:
