@@ -379,6 +379,12 @@ def test_bivariate_bicycle_codes() -> None:
         code.modular_inverse(basis, 0, 1)
 
 
+def test_gross_codes() -> None:
+    """Named bivariate bicycle codes."""
+    assert codes.GrossCode().get_code_params() == (144, 12, 12)
+    assert codes.TwoGrossCode().get_code_params() == (288, 12, 18)
+
+
 @pytest.mark.parametrize("orders, field", [((3, 3), 2), ((6, 3), 3)])
 def test_bivariate_bicycle_toric_layout_equivalence(orders: tuple[int, int], field: int) -> None:
     """Every reported toric layout is a relabeling of the original Pauli-labelled Tanner graph."""

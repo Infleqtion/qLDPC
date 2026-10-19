@@ -1,6 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Methods for computing the (exact) distance of error-correcting codes."""
+"""Methods for computing the (exact) distance of error-correcting codes.
+
+See ``brouwer_zimmermann.md`` beside this source module for the BZ algorithm and invariants.
+"""
 
 from __future__ import annotations
 
@@ -52,7 +55,7 @@ def get_distance_classical(
 
     Args:
         generators: The generator matrix of the classical code whose distance we want to compute.
-            Brouwer-Zimmermann mode reduces redundant rows to an independent basis.
+            Both methods reduce redundant rows to a linearly independent basis.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
         block_size: Batch size exponent.  BZ returns to Python after at most
             ``2**min(block_size, 15)`` supports; brute force vectorizes ``2**block_size`` values.
@@ -66,11 +69,12 @@ def get_distance_classical(
     """
     validate_distance_method(method)
     _assert_binary(generators, "generators")
+    matrix = _as_binary_matrix(generators)
+    basis = _get_independent_rows(matrix)
+    if not len(basis):
+        return matrix.shape[1]
+
     if method == "brouwer_zimmermann":
-        matrix = _as_binary_matrix(generators)
-        basis = _get_independent_rows(matrix)
-        if not len(basis):
-            return matrix.shape[1]
         return _get_distance_brouwer_zimmermann(
             basis,
             labels=None,
@@ -78,14 +82,13 @@ def get_distance_classical(
             block_size=block_size,
         )
 
-    # Classical brute force is the quantum calculation with no stabilizers.
-    return get_distance_quantum(
-        logical_ops=generators,
-        stabilizers=[],
+    # The reduced classical basis needs no excluded subspace.
+    return _get_distance_quantum_brute_force(
+        basis,
+        np.empty((0, matrix.shape[1]), dtype=np.uint8),
         cutoff=cutoff,
         block_size=block_size,
         homogeneous=True,
-        method=method,
     )
 
 
@@ -101,9 +104,8 @@ def get_distance_quantum(
     """Distance of a binary quantum code.
 
     Args:
-        logical_ops: A matrix whose rows represent logical operators of the code.  These rows must
-            span a complement of the stabilizers in the logical space.  Brouwer-Zimmermann mode
-            reduces redundant rows and excludes the stabilizer row space from candidate witnesses.
+        logical_ops: Rows that generate the logical space together with the stabilizers.
+            Both methods remove redundant rows and exclude the stabilizer row space from witnesses.
         stabilizers: A matrix whose rows represent stabilizers of the code.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
         block_size: Batch size exponent.  BZ returns to Python after at most
@@ -112,9 +114,8 @@ def get_distance_quantum(
             are assumed to have the same homogeneous (X or Z) type.  If False, Pauli strings may
             have mixed (X, Y, or Z) support on different qubits.
         method: Exact-distance method.  ``"brouwer_zimmermann"`` (default) uses an exclusion-aware
-            search over the logical space modulo stabilizers.  ``"brute_force"`` enumerates every
-            stabilizer and nonzero logical combination, and requires those input rows to be linearly
-            independent.
+            search over the logical space modulo stabilizers.  ``"brute_force"`` enumerates eligible
+            words using independent bases constructed internally.
 
     Returns:
         The exact minimum weight of a nontrivial logical operator in ``logical_ops`` modulo
@@ -140,16 +141,17 @@ def get_distance_quantum(
     validate_distance_method(method)
     _assert_binary(logical_ops, "logical_ops")
     _assert_binary(stabilizers, "stabilizers")
-    if method == "brouwer_zimmermann":
-        logical_matrix = _as_binary_matrix(logical_ops)
-        stabilizer_matrix = _as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
-        num_bits = logical_matrix.shape[1]
-        physical_size = num_bits if homogeneous else num_bits // 2
-        if not homogeneous and num_bits % 2:
-            raise ValueError("Symplectic operators must have an even number of columns")
+    logical_matrix = _as_binary_matrix(logical_ops)
+    stabilizer_matrix = _as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
+    num_bits = logical_matrix.shape[1]
+    physical_size = num_bits if homogeneous else num_bits // 2
+    if not homogeneous and num_bits % 2:
+        raise ValueError("Symplectic operators must have an even number of columns")
+    if not len(logical_matrix):
+        return physical_size
 
-        # Exhaustive enumeration of the input rows avoids building the quotient basis and
-        # information sets, but requires the rows to be linearly independent.
+    if method == "brouwer_zimmermann":
+        # Verify independence before bypassing adapted-basis preparation.
         num_rows = len(logical_matrix) + len(stabilizer_matrix)
         if _exhaustive_is_cheaper(num_rows, num_bits) and num_rows == len(
             _get_independent_rows(np.vstack([stabilizer_matrix, logical_matrix]))
@@ -162,31 +164,33 @@ def get_distance_quantum(
                 homogeneous=homogeneous,
             )
 
-        basis, labels = _get_nested_code_basis(logical_matrix, stabilizer_matrix)
-        if labels.shape[1] == 0:
-            return 0 if len(logical_matrix) else physical_size
-
-        divisor = 1
-        if not homogeneous:
-            basis = _symplectic_to_hamming(basis)
-            divisor = 2
-
-        distance = _get_distance_brouwer_zimmermann(
-            basis,
-            labels,
-            cutoff=cutoff * divisor,
+    # Separate an independent excluded basis from a complement representing the quotient.
+    basis, labels = _get_nested_code_basis(logical_matrix, stabilizer_matrix)
+    if labels.shape[1] == 0:
+        return 0
+    if method == "brute_force":
+        num_stabilizers = len(basis) - labels.shape[1]
+        return _get_distance_quantum_brute_force(
+            basis[num_stabilizers:],
+            basis[:num_stabilizers],
+            cutoff=cutoff,
             block_size=block_size,
-            weight_divisor=divisor,
+            homogeneous=homogeneous,
         )
-        return distance // divisor
 
-    return _get_distance_quantum_brute_force(
-        logical_ops,
-        stabilizers,
-        cutoff=cutoff,
+    divisor = 1
+    if not homogeneous:
+        basis = _symplectic_to_hamming(basis)
+        divisor = 2
+
+    distance = _get_distance_brouwer_zimmermann(
+        basis,
+        labels,
+        cutoff=cutoff * divisor,
         block_size=block_size,
-        homogeneous=homogeneous,
+        weight_divisor=divisor,
     )
+    return distance // divisor
 
 
 def get_distance_css_brouwer_zimmermann(
@@ -946,7 +950,12 @@ def _get_packed_row_weights(
 
 @dataclass
 class _BrouwerZimmermannSearch:
-    """Resumable BZ state: witness upper bound ``best`` and unseen-word bound ``lower_bound``."""
+    """State for one resumable Brouwer-Zimmermann search.
+
+    ``best`` is a witness upper bound; ``lower_bound`` bounds only unsearched words.
+    ``max_coverage`` bounds the number of pivot blocks containing any Hamming coordinate.
+    Disjoint information sets have coverage one.
+    """
 
     generators: npt.NDArray[np.uint64]
     labels: npt.NDArray[np.uint64]
@@ -959,6 +968,7 @@ class _BrouwerZimmermannSearch:
     best: int
     lower_bound: int
     next_weight: int = 1
+    max_coverage: int = 1
 
     @property
     def dimension(self) -> int:
@@ -1017,6 +1027,7 @@ class _BrouwerZimmermannSearch:
             self.ranks.tolist(),
             completed_weight=weight,
             weight_divisor=self.weight_divisor,
+            max_coverage=self.max_coverage,
         )
         self.next_weight += 1
         return self.best
@@ -1028,13 +1039,18 @@ def _get_brouwer_zimmermann_lower_bound(
     *,
     completed_weight: int,
     weight_divisor: int,
+    max_coverage: int = 1,
 ) -> int:
-    """Bound unseen-word weights after exhausting a coefficient depth, not global distance."""
-    # This generalizes Algorithm 1 to disjoint systematic blocks: after coefficient supports
-    # through completed_weight, a block of rank r forces
-    # max(0, completed_weight + 1 - (dimension - r)) nonzero pivot columns.
-    # Disjoint blocks add those pivot-column Hamming-weight units.
+    """Bound the Hamming weight of unsearched eligible words.
+
+    Search every systematic basis through ``completed_weight`` before using this bound.
+    It does not bound the weights of witnesses already found.
+    """
+    # Rank deficiency limits how many selected rows can have zero pivot support.
     lower_bound = sum(max(0, completed_weight + 1 - (dimension - rank)) for rank in ranks)
+
+    # Correct for repeated Hamming coordinates by dividing occupancy and rounding up.
+    lower_bound = (lower_bound + max_coverage - 1) // max_coverage
     if weight_divisor > 1:
         # Every candidate Hamming weight is a multiple of weight_divisor, so the bound can round up.
         lower_bound += (-lower_bound) % weight_divisor
@@ -1047,9 +1063,9 @@ def _get_brouwer_zimmermann_initial_upper_bound(
 ) -> int:
     """Return the lightest eligible row in a nested-code basis."""
     weight_func, _ = _get_hamming_weight_fn()
-    packed_basis = _rows_to_ints(basis, dtype=np.uint64)
     eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
-    return int(_get_packed_row_weights(packed_basis[eligible], weight_func).min())
+    packed_basis = _rows_to_ints(basis[eligible], dtype=np.uint64)
+    return int(_get_packed_row_weights(packed_basis, weight_func).min())
 
 
 def _select_brouwer_zimmermann_information_sets(
@@ -1085,6 +1101,91 @@ def _select_brouwer_zimmermann_information_sets(
         if information_set[2] == dimension
         or dimension - information_set[2] < full_set_certifying_weight
     ]
+
+
+def _get_overlapping_information_sets(
+    basis: npt.NDArray[np.uint8],
+    labels: npt.NDArray[np.uint8] | None,
+    information_sets: list[_InformationSet],
+    *,
+    upper_bound: int,
+    weight_divisor: int,
+    max_sets: int = 8,
+    minimum_work: int = 100_000,
+) -> tuple[list[_InformationSet], int] | None:
+    """Look for a lower-work replacement for disjoint information sets.
+
+    ``information_sets`` contains full or partial sets for one independent binary basis.
+    A replacement contains only full sets, with quotient labels transformed alongside rows.
+    Return a lower-work family and its maximum Hamming-coordinate coverage, or ``None``.
+    """
+    # Start from full blocks; skip complete packings and families already at the size limit.
+    dimension = len(basis)
+    full_sets = [item for item in information_sets if item.rank == dimension]
+    columns = np.flatnonzero(np.any(basis, axis=0))
+    if not full_sets or len(full_sets) >= max_sets or len(full_sets) * dimension == len(columns):
+        return None
+
+    # Skip family construction when the existing search is already cheap.
+    best_work = _get_brouwer_zimmermann_work(
+        dimension,
+        [item.rank for item in information_sets],
+        upper_bound=upper_bound,
+        weight_divisor=weight_divisor,
+    )
+    if best_work < minimum_work:
+        return None
+
+    # With m full sets, some column has coverage at least ceil(m * dimension / len(columns)).
+    optimistic_work = min(
+        _get_brouwer_zimmermann_work(
+            dimension,
+            [dimension] * count,
+            upper_bound=upper_bound,
+            weight_divisor=weight_divisor,
+            max_coverage=(count * dimension + len(columns) - 1) // len(columns),
+        )
+        for count in range(1, max_sets + 1)
+    )
+    if optimistic_work >= best_work:
+        return None
+
+    # Track coverage and distinct sets; fixed-seed tie-breaking keeps choices reproducible.
+    loads = np.bincount(
+        np.concatenate([item.pivots for item in full_sets]), minlength=basis.shape[1]
+    )
+    seen = {tuple(sorted(item.pivots.tolist())) for item in full_sets}
+    rng = np.random.default_rng(0)
+    best_sets = None
+    best_coverage = 1
+    for _ in range(2 * (max_sets - len(full_sets))):
+        # Prefer less-used columns; transform quotient labels with each candidate basis.
+        order = columns[np.lexsort((rng.random(len(columns)), loads[columns]))]
+        generators, transformed_labels, pivots = _row_reduce_binary(basis, labels, columns=order)
+        assert len(pivots) == dimension
+
+        # Do not add duplicate sets; their row reductions still count against the attempt limit.
+        signature = tuple(sorted(pivots.tolist()))
+        if signature in seen:
+            continue
+        seen.add(signature)
+        full_sets.append(_InformationSet(generators, transformed_labels, dimension, pivots))
+        loads[pivots] += 1
+        max_coverage = int(loads.max())
+
+        # Keep improvements; stop at the set limit or when the optimistic work bound is attained.
+        work = _get_brouwer_zimmermann_work(
+            dimension,
+            [dimension] * len(full_sets),
+            upper_bound=upper_bound,
+            weight_divisor=weight_divisor,
+            max_coverage=max_coverage,
+        )
+        if work < best_work:
+            best_sets, best_coverage, best_work = full_sets.copy(), max_coverage, work
+        if len(full_sets) == max_sets or best_work <= optimistic_work:
+            break
+    return None if best_sets is None else (best_sets, best_coverage)
 
 
 def _prepare_brouwer_zimmermann_search(
@@ -1130,17 +1231,9 @@ def _prepare_brouwer_zimmermann_search(
         weight_divisor = math.lcm(weight_divisor, 2)
 
     information_sets = _get_information_set_generators(basis, labels)
-    weight_func, _ = _get_hamming_weight_fn()
     # Systematic rows are all coefficient-weight-one candidates.
     for generators, set_labels, _, _ in information_sets:
-        eligible_rows = (
-            np.ones(dimension, dtype=bool) if set_labels is None else np.any(set_labels, axis=1)
-        )
-        packed_generators = _rows_to_ints(generators[eligible_rows], dtype=np.uint64)
-        best = min(
-            best,
-            int(_get_packed_row_weights(packed_generators, weight_func).min()),
-        )
+        best = min(best, _get_brouwer_zimmermann_initial_upper_bound(generators, set_labels))
     if best <= cutoff:
         return best
 
@@ -1161,12 +1254,48 @@ def _prepare_brouwer_zimmermann_search(
     if lower_bound >= best:
         return best
 
+    # Replace disjoint blocks only when overlap predicts less certification work.
+    max_coverage = 1
+    overlapping = _get_overlapping_information_sets(
+        basis,
+        labels,
+        information_sets,
+        upper_bound=best,
+        weight_divisor=weight_divisor,
+    )
+    if overlapping is not None:
+        information_sets, max_coverage = overlapping
+
+        # Check the replacement rows for lighter witnesses before scanning combinations.
+        for information_set in information_sets:
+            best = min(
+                best,
+                _get_brouwer_zimmermann_initial_upper_bound(
+                    information_set.generators, information_set.labels
+                ),
+            )
+        if best <= cutoff:
+            return best
+
+        # Recompute the bound for the replacement ranks and coordinate multiplicity.
+        ranks = [item.rank for item in information_sets]
+        lower_bound = _get_brouwer_zimmermann_lower_bound(
+            dimension,
+            ranks,
+            completed_weight=completed_weight,
+            weight_divisor=weight_divisor,
+            max_coverage=max_coverage,
+        )
+        if lower_bound >= best:
+            return best
+
     if _brute_force_is_cheaper(
         dimension=dimension,
         num_logical_rows=int(np.count_nonzero(eligible)),
         ranks=ranks,
         upper_bound=best,
         weight_divisor=weight_divisor,
+        max_coverage=max_coverage,
     ):
         return brute_force_distance()
 
@@ -1214,6 +1343,7 @@ def _prepare_brouwer_zimmermann_search(
         best,
         lower_bound,
         completed_weight + 1,
+        max_coverage,
     )
 
 
@@ -1276,7 +1406,8 @@ def _get_distance_brouwer_zimmermann(
 ) -> int:
     """Compute an exact nested-code distance with the Brouwer-Zimmermann algorithm.
 
-    The information-set lower bound follows Algorithm 1 of https://arxiv.org/abs/1603.06757.
+    The disjoint and rank-deficient bound follows Algorithm 1 of https://arxiv.org/abs/1603.06757.
+    The overlapping-set extension divides pivot occupancy by the maximum coordinate coverage.
     Nonzero ``labels`` identify rows outside an excluded subcode; transforming them alongside the
     generators makes the upper-bound search exact for logical operators modulo stabilizers.
     """
@@ -1305,6 +1436,7 @@ def _brute_force_is_cheaper(
     ranks: list[int],
     upper_bound: int,
     weight_divisor: int,
+    max_coverage: int = 1,
 ) -> bool:
     """Estimate whether exhaustive nested-code enumeration will outperform BZ.
 
@@ -1314,21 +1446,45 @@ def _brute_force_is_cheaper(
     timings near this boundary favor BZ until the exhaustive count reaches roughly the estimated BZ
     count, so the two counts are compared directly.
     """
-    bz_candidates = 0
+    bz_candidates = _get_brouwer_zimmermann_work(
+        dimension,
+        ranks,
+        upper_bound=upper_bound,
+        weight_divisor=weight_divisor,
+        max_coverage=max_coverage,
+    )
+    exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
+    return exhaustive_candidates <= bz_candidates
+
+
+def _get_brouwer_zimmermann_work(
+    dimension: int,
+    ranks: list[int],
+    *,
+    upper_bound: int,
+    weight_divisor: int,
+    max_coverage: int = 1,
+) -> int:
+    """Estimate candidate/set work needed to certify the current upper bound.
+
+    This pessimistic estimate includes systematic rows (coefficient weight one).
+    It assumes no lighter witness is found before the lower certificate reaches the upper bound.
+    """
+    candidates = 0
     for weight in range(1, dimension + 1):
-        bz_candidates += len(ranks) * math.comb(dimension, weight)
+        candidates += len(ranks) * math.comb(dimension, weight)
         if (
             _get_brouwer_zimmermann_lower_bound(
                 dimension,
                 ranks,
                 completed_weight=weight,
                 weight_divisor=weight_divisor,
+                max_coverage=max_coverage,
             )
             >= upper_bound
         ):
             break
-    exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
-    return exhaustive_candidates <= bz_candidates
+    return candidates
 
 
 def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
@@ -1354,7 +1510,7 @@ def _get_distance_quantum_brute_force(
     block_size: int,
     homogeneous: bool,
 ) -> int:
-    """Brute-force binary quantum distance implementation."""
+    """Enumerate independent logical and excluded bases prepared or verified in this module."""
     num_bits = np.shape(logical_ops)[-1]
 
     if homogeneous:

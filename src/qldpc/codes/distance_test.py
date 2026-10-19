@@ -13,6 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import stim
+from sympy.abc import x, y, z
 
 import qldpc
 
@@ -761,7 +762,7 @@ def test_brouwer_zimmermann_setup_dispatches() -> None:
         ],
         dtype=np.uint8,
     )
-    information_set = [(basis, None, 3, np.array([0, 1, 2]))]
+    information_set = [qldpc.codes.distance._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
     with (
         mock.patch("qldpc.codes.distance._exhaustive_is_cheaper", return_value=False),
         mock.patch(
@@ -1002,6 +1003,15 @@ def test_brouwer_zimmermann_special_inputs() -> None:
         == 4
     )
     assert qldpc.codes.get_distance_quantum([[1, 0]], [[1, 0]], homogeneous=True) == 0
+    methods: tuple[qldpc.codes.DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
+    for method in methods:
+        for stabilizers in ([[1, 0, 0, 0]], [[1, 0, 0, 0]] * 2):
+            assert (
+                qldpc.codes.get_distance_quantum(
+                    np.empty((0, 4), dtype=np.uint8), stabilizers, method=method
+                )
+                == 2
+            )
 
     with pytest.raises(ValueError, match="incompatible widths"):
         qldpc.codes.get_distance_quantum([[1, 0, 0]], [[1, 0]], homogeneous=True)
@@ -1057,6 +1067,175 @@ def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
     assert num_candidates < len(generators) ** 2
 
 
+def test_brouwer_zimmermann_initial_upper_bound_excludes_stabilizers() -> None:
+    """Exclude stabilizer rows before packing candidate witnesses."""
+    helpers = qldpc.codes.distance
+    basis = np.array([[1, 0, 0], [1, 1, 0]], dtype=np.uint8)
+    labels = np.array([[0], [1]], dtype=np.uint8)
+    with mock.patch.object(helpers, "_rows_to_ints", wraps=helpers._rows_to_ints) as pack:
+        assert helpers._get_brouwer_zimmermann_initial_upper_bound(basis, labels) == 2
+    np.testing.assert_array_equal(pack.call_args.args[0], basis[1:])
+
+
+def test_brouwer_zimmermann_overlap_certificates() -> None:
+    """Check pivot coverage and label transformations against exhaustive codeword weights."""
+    helpers = qldpc.codes.distance
+
+    # Label each row separately so its row operations can be checked.
+    basis = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
+    basis = helpers._get_independent_rows(basis)
+    labels = np.eye(len(basis), dtype=np.uint8)
+    information_sets = helpers._get_information_set_generators(basis, labels)
+    with mock.patch.object(
+        helpers, "_row_reduce_binary", wraps=helpers._row_reduce_binary
+    ) as reduce:
+        selected = helpers._get_overlapping_information_sets(
+            basis, labels, information_sets, upper_bound=3, weight_divisor=1, minimum_work=0
+        )
+    assert selected is not None
+    family, coverage = selected
+    loads = np.bincount(np.concatenate([item.pivots for item in family]), minlength=basis.shape[1])
+    assert coverage == loads.max() and coverage > 1
+
+    # Stop once this fixture reaches ideal coverage; no extra bases should be built.
+    assert reduce.call_count == len(family) - 1
+    for item in family:
+        assert item.labels is not None
+        np.testing.assert_array_equal(item.generators, item.labels @ basis % 2)
+        np.testing.assert_array_equal(item.generators[:, item.pivots], np.eye(len(basis)))
+
+    # Check the Hamming-weight bound for every word still unsearched in all bases.
+    for bits in itertools.product((0, 1), repeat=len(basis)):
+        word = np.asarray(bits) @ basis % 2
+        for completed in (1, 2):
+            if all(np.count_nonzero(word[item.pivots]) > completed for item in family):
+                assert np.count_nonzero(word) >= helpers._get_brouwer_zimmermann_lower_bound(
+                    len(basis),
+                    [item.rank for item in family],
+                    completed_weight=completed,
+                    weight_divisor=1,
+                    max_coverage=coverage,
+                )
+
+
+def test_brouwer_zimmermann_overlap_setup_guards() -> None:
+    """Reject unhelpful coverage and terminate repeated attempts at the same pivot set."""
+    helpers = qldpc.codes.distance
+
+    # Nearly complete disjoint coverage leaves no cheaper family within the size budget.
+    basis = np.hstack([np.eye(25, dtype=np.uint8)] * 4)
+    shortened = basis[:, :-1]
+    assert (
+        helpers._get_overlapping_information_sets(
+            shortened,
+            None,
+            helpers._get_information_set_generators(shortened, None),
+            upper_bound=26,
+            weight_divisor=1,
+        )
+        is None
+    )
+
+    # Repeatedly rediscovering the same pivots must terminate without selecting a family.
+    basis = basis[:, :40]
+    first = helpers._get_information_set_generators(basis, None)[0]
+    with mock.patch.object(
+        helpers,
+        "_row_reduce_binary",
+        return_value=(first.generators, first.labels, first.pivots),
+    ):
+        assert (
+            helpers._get_overlapping_information_sets(
+                basis, None, [first], upper_bound=8, weight_divisor=1
+            )
+            is None
+        )
+
+
+@pytest.mark.parametrize("cutoff", [0, 2])
+def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
+    """A replacement basis can meet the cutoff or close the lower bound during setup."""
+    helpers = qldpc.codes.distance
+    basis = np.array([[1, 0, 1, 1], [0, 1, 1, 1]], dtype=np.uint8)
+    generators, labels, pivots = helpers._row_reduce_binary(basis, columns=np.array([0, 2]))
+    original = helpers._InformationSet(basis, None, 2, np.array([0, 1]))
+    alternative = helpers._InformationSet(generators, labels, 2, pivots)
+    with (
+        mock.patch.object(helpers, "_exhaustive_is_cheaper", return_value=False),
+        mock.patch.object(helpers, "_get_information_set_generators", return_value=[original]),
+        mock.patch.object(
+            helpers, "_get_overlapping_information_sets", return_value=([alternative], 1)
+        ),
+        mock.patch.object(helpers, "_brute_force_is_cheaper", side_effect=AssertionError),
+    ):
+        assert qldpc.codes.get_distance_classical(basis, cutoff=cutoff) == 2
+
+
+def test_brouwer_zimmermann_overlap_qc() -> None:
+    """Default overlap selection must reduce QC64 X-sector enumeration."""
+    code = qldpc.codes.QCCode(
+        {x: 4, y: 4, z: 2},
+        1 + x + y + x * y * z,
+        1 + x * y + x**2 * y**3 * z + x**3 * y**2,
+    )
+    helpers = qldpc.codes.distance
+    original_scan = helpers._scan_brouwer_zimmermann
+    evaluated = 0
+
+    def scan(*args: Any) -> tuple[int, int, int]:
+        nonlocal evaluated
+        best, depth, visited = original_scan(*args)
+        evaluated += visited * len(args[2])
+        return best, depth, visited
+
+    with mock.patch.object(helpers, "_scan_brouwer_zimmermann", side_effect=scan):
+        assert code.forget_distance().get_distance_exact("X", cutoff=0) == 8
+    assert 0 < evaluated < 1_000_000
+
+
+@pytest.mark.usefixtures("force_information_sets")
+def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
+    """Compare witness-improving overlap enumeration with an exhaustive quotient oracle."""
+    helpers = qldpc.codes.distance
+
+    # Shorten a systematic BCH(31,21) basis to [26,16] and isolate a one-bit quotient.
+    basis = helpers._get_independent_rows(
+        np.asarray(qldpc.codes.BCHCode(31, 21).generator, dtype=np.uint8)
+    )[5:, 5:]
+    logicals = basis[13:14]
+    stabilizers = np.delete(basis, 13, axis=0)
+    expected = qldpc.codes.get_distance_quantum(
+        logicals, stabilizers, homogeneous=True, cutoff=0, method="brute_force"
+    )
+
+    # Lower only the work threshold so this small oracle exercises production family construction.
+    original = helpers._get_overlapping_information_sets
+
+    def select(
+        *args: Any, **kwargs: Any
+    ) -> tuple[list[qldpc.codes.distance._InformationSet], int] | None:
+        selected = original(*args, **kwargs, minimum_work=0)
+        assert selected is not None and selected[1] > 1
+        assert (
+            min(
+                helpers._get_brouwer_zimmermann_initial_upper_bound(item.generators, item.labels)
+                for item in selected[0]
+            )
+            > expected
+        )
+        return selected
+
+    with mock.patch.object(
+        helpers, "_get_overlapping_information_sets", side_effect=select
+    ) as select_mock:
+        assert (
+            qldpc.codes.get_distance_quantum(logicals, stabilizers, homogeneous=True, cutoff=0)
+            == expected
+            == 5
+        )
+    select_mock.assert_called()
+
+
 @pytest.mark.parametrize("block_size", [1, 3, 13])
 def test_get_distance_classical(block_size: int) -> None:
     """get_distance_classical visits every nontrivial XOR combination of generators exactly once."""
@@ -1077,7 +1256,9 @@ def test_get_distance_classical(block_size: int) -> None:
         "qldpc.codes.distance._get_hamming_weight_fn", return_value=(_mock_hamming_weight, 0)
     ):
         distance = qldpc.codes.distance.get_distance_classical(
-            generators, block_size=block_size, method="brute_force"
+            np.vstack([generators, generators[0], generators[0] ^ generators[1]]),
+            block_size=block_size,
+            method="brute_force",
         )
 
     int_generators = qldpc.codes.distance._rows_to_ints(generators)
@@ -1120,8 +1301,8 @@ def test_get_distance_quantum(block_size: int) -> None:
         "qldpc.codes.distance._get_hamming_weight_fn", return_value=(_mock_hamming_weight, 0)
     ):
         distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops,
-            stabilizers,
+            np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
+            np.vstack([stabilizers, stabilizers[0]]),
             homogeneous=True,
             block_size=block_size,
             method="brute_force",
@@ -1170,8 +1351,8 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
         "qldpc.codes.distance._get_symplectic_weight_fn", return_value=(_mock_symplectic_weight, 0)
     ):
         distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops,
-            stabilizers,
+            np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
+            np.vstack([stabilizers, stabilizers[0]]),
             homogeneous=False,
             block_size=block_size,
             method="brute_force",
@@ -1282,7 +1463,7 @@ def test_cutoff_early_exit() -> None:
     )
 
     # The logical-operator sweep with block_size=1 finds a generator with Hamming weight 1.
-    generators = [[1, 1, 1, 0], [0, 0, 0, 1], [1, 0, 0, 1]]
+    generators = [[1, 0, 1], [0, 1, 0]]
     assert (
         qldpc.codes.distance.get_distance_classical(
             generators, block_size=1, cutoff=1, method="brute_force"
@@ -1291,8 +1472,8 @@ def test_cutoff_early_exit() -> None:
     )
 
     # The stabilizer sweep finds a Hamming-weight-1 operator only after XORing a stabilizer row.
-    logical_ops = [[0, 1, 1, 1, 1]]
-    stabilizers = [[1, 1, 0, 0, 0], [0, 0, 1, 1, 1]]
+    logical_ops = [[0, 0, 1, 1, 1]]
+    stabilizers = [[1, 0, 0, 1, 0], [0, 1, 1, 1, 1]]
     distance = qldpc.codes.distance.get_distance_quantum(
         logical_ops,
         stabilizers,
