@@ -7,6 +7,17 @@ MacWilliams identity then gives the weights of the full normalizer, whose nontri
 set of logical representatives.  Dual enumeration scales with the stabilizer space rather than the
 generally larger logical space.
 
+Let ``B_j(S)`` be the number of words of weight ``j`` in a binary code ``S`` of rank ``r`` on
+``n`` coordinates.  The dual code has ``A_w = 2**(-r) * sum_j B_j(S) * K_w(j)`` words of weight
+``w``, where ``K_w(j)`` is the Krawtchouk polynomial: the coefficient of ``x**w`` in
+``(1 - x)**j * (1 + x)**(n - j)``.  The X normalizer ``ker(H_Z)`` is the dual of the Z stabilizer
+group, and it contains the X stabilizers, so the X-only logical count of weight ``w`` is
+``A_w(ker H_Z) - B_w(row H_X)``, and similarly for Z.
+
+All sums use Python integers, except a native prefix of weights whose partial sums provably fit
+in int64.  The triangle inequality gives ``abs(K_w(j)) <= binomial(n, w)``, and
+``sum_j B_j = 2**r``, so every partial sum is bounded in magnitude by ``2**r * binomial(n, w)``.
+
 References:
 
 - https://en.wikipedia.org/wiki/MacWilliams_identity

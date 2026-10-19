@@ -215,7 +215,8 @@ class CSSLogicalWeightCounter:
         """Find the exact global distance and multiplicities.
 
         ``full_pauli=False`` requests only homogeneous counts and returns count_pauli=None.
-        For a genuinely self-dual code, the full count is three times one sector count.
+        For a genuinely self-dual code, every minimum support is shared by the two sectors, so
+        the full count is three times one sector count.
         Otherwise shortened-space ranks lift distinct minimum pure supports to full Paulis.
         A memory-budget failure raises MemoryError, never a partial count.
         """

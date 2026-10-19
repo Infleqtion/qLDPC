@@ -8,9 +8,10 @@ its combination has the requested physical weight and a nonzero label.
 
 Two enumerators share this contract:
 
-- ``get_bz_supports`` scans coefficient supports over information sets.  It stops only when the
-  Brouwer--Zimmermann unseen-word bound is strictly greater than the requested weight, because
-  counting must also exhaust words whose weight equals the minimum.
+- ``get_bz_supports`` scans coefficient supports over information sets.  The BZ certificate
+  L(t) bounds below the weight of every word not yet examined.  Computing a distance only has to
+  rule out lighter words, so it may stop at L(t) >= U.  Counting must also have examined every
+  word of weight exactly d, so this scan stops only when L(t) > d.
 - ``get_exhaustive_supports`` and ``get_exhaustive_minimum`` walk every combination of a small
   basis in Gray-code order.
 
@@ -317,7 +318,26 @@ def count_minimum_paulis(
     """Count physical Pauli representatives of weight ``minimum``, ignoring phase.
 
     ``supports_x`` and ``supports_z`` are the distinct supports of the minimum X-only and Z-only
-    logical words.  Stabilizers are packed row spaces.  The result is an arbitrary-size integer.
+    logical words (a binary word is determined by its support).  Stabilizers are packed row
+    spaces.  The result is an arbitrary-size integer.
+
+    Why this is exact.  A Pauli operator (x, z) is trivial when x is an X stabilizer and z is a Z
+    stabilizer, and its weight is the size of the union of the supports of x and z.  Let (x, z) be
+    nontrivial of the minimum weight d, and suppose x is not an X stabilizer.  Then x is a
+    nontrivial X logical of weight at most d, so its weight is exactly d, its support T is the
+    support of the whole operator, and z is supported inside T.  The same holds with X and Z
+    exchanged, so every minimum operator has a minimum pure support T in at least one sector.
+
+    * A nonzero stabilizer cannot be supported inside a minimum pure support T: adding it to the
+      logical on T would give a lighter nontrivial logical of the same type.
+    * If T is a minimum support in both sectors, any further word inside T would be a
+      stabilizer, so the only operators on T are X, Z and Y, which contribute 3.
+    * If T is a minimum support only for X, every Z word inside T is a Z stabilizer (otherwise T
+      would also be a Z support), and each one gives a distinct operator (1_T, z).  There are
+      ``2**(rank(H_Z) - rank(H_Z restricted to the complement of T))`` of them, which is one rank
+      query.  The same holds with X and Z exchanged.
+
+    Each minimum operator is therefore counted once, under the support of its logical part.
     """
     width = stabilizers_x.shape[1]
     keys_x, keys_z = get_support_keys(supports_x), get_support_keys(supports_z)
