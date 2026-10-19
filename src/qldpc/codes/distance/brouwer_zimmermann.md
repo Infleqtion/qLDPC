@@ -1,6 +1,6 @@
 # Brouwer-Zimmermann distance searches in qLDPC
 
-[distance.py](distance.py) computes binary code distances using Brouwer-Zimmermann searches or exhaustive enumeration.
+[core.py](core.py) provides the public binary-distance interfaces and dispatches to [brouwer_zimmermann.py](brouwer_zimmermann.py) or [brute_force.py](brute_force.py).
 This guide derives the stopping certificates and explains how the implementation uses them, including quotient labels, overlapping information sets, and packed enumeration.
 
 ## 1. Find a witness, then rule out lighter words
@@ -30,16 +30,16 @@ A BZ call proceeds as follows:
 
 These helpers implement the search:
 
-| Responsibility | Implementation in [distance.py](distance.py) |
+| Responsibility | Implementation |
 | --- | --- |
-| Binary classical, quantum, and joint CSS interfaces | `get_distance_classical`, `get_distance_quantum`, `get_distance_css_brouwer_zimmermann` |
-| Independent bases and logical labels | `_row_reduce_binary`, `_get_nested_code_basis` |
-| Disjoint and overlapping systematic bases | `_get_information_set_generators`, `_get_overlapping_information_sets` |
-| Search preparation and bounds | `_prepare_brouwer_zimmermann_search`, `_get_brouwer_zimmermann_lower_bound` |
-| One search's state and progression | `_BrouwerZimmermannSearch` |
-| Packed candidate enumeration | `_scan_brouwer_zimmermann` |
-| Shared upper bounds across searches | `_get_distance_brouwer_zimmermann_many` |
-| Exhaustive alternatives and their cost estimates | `_exhaustive_is_cheaper`, `_brute_force_is_cheaper`, `_get_distance_quantum_brute_force` |
+| Binary classical, quantum, and joint CSS interfaces | [core.py](core.py): `get_distance_classical`, `get_distance_quantum`, `get_distance_css_brouwer_zimmermann` |
+| Independent bases and logical labels | [_binary.py](_binary.py): `_row_reduce_binary`, `_get_nested_code_basis` |
+| Disjoint and overlapping systematic bases | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_get_information_set_generators`, `_get_overlapping_information_sets` |
+| Search preparation and bounds | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_prepare_brouwer_zimmermann_search`, `_get_brouwer_zimmermann_lower_bound` |
+| One search's state and progression | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_BrouwerZimmermannSearch` |
+| Packed candidate enumeration | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_scan_brouwer_zimmermann` |
+| Shared upper bounds across searches | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_get_distance_brouwer_zimmermann_many` |
+| Exhaustive alternatives and their cost estimates | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_exhaustive_is_cheaper`, `_brute_force_is_cheaper`; [brute_force.py](brute_force.py): `_get_distance_quantum_brute_force` |
 
 ## 2. Binary distance problems
 
@@ -79,7 +79,7 @@ A nonzero vector in `S` is still logically trivial, so minimizing over all nonze
 The search therefore needs a membership test for `S`.
 
 For a binary CSS stabilizer code, the X-sector problem has `V = ker(H_z)` and `S = rowspan(H_x)`, with X and Z interchanged for the other sector.
-Code methods in [common.py](common.py) supply logical and stabilizer generators rather than asking this module to construct those kernels.
+Code methods in [common.py](../common.py) supply logical and stabilizer generators rather than asking this module to construct those kernels.
 For subsystem codes, those callers also include gauge operators in the excluded span.
 The distance helper treats its inputs as nested binary spaces; it does not assume that every supplied excluded generator is a commuting stabilizer.
 
@@ -116,7 +116,7 @@ Failing to transform labels can either accept stabilizers as witnesses or reject
 `_row_reduce_binary` performs these coupled transformations.
 
 `_assert_binary` rejects nonbinary values and nonbinary field types before conversion to binary storage arrays.
-Code methods in [common.py](common.py) use exhaustive field-aware enumeration for nonbinary inputs instead.
+Code methods in [common.py](../common.py) use exhaustive field-aware enumeration for nonbinary inputs instead.
 
 ## 4. Converting general Pauli weight into Hamming weight
 
@@ -327,7 +327,7 @@ Exhaustive enumeration can be selected at three points:
 Both methods accept redundant generators.
 Classical inputs are reduced to an independent basis; explicit quantum brute force uses the adapted basis from section 3, separating the excluded span from independent quotient representatives.
 The direct quantum shortcut verifies independence before bypassing that preparation.
-The private packed enumerator therefore receives independent bases prepared or verified within `distance.py`; independence is not a caller-side precondition.
+The private packed enumerator therefore receives independent bases prepared or verified within [core.py](core.py) and [brouwer_zimmermann.py](brouwer_zimmermann.py); independence is not a caller-side precondition.
 The brute-force implementation uses packed, vectorized blocks and Gray-code updates rather than the BZ coefficient-layer certificate.
 Selecting the public BZ method does not promise that every input will actually run a BZ scan.
 
@@ -403,7 +403,7 @@ That sector only needs to establish that it cannot beat the shared witness.
 It need not establish its own exact distance.
 
 Consequently, the joint result proves the minimum, not necessarily both individual sector distances.
-The code-level cache in [common.py](common.py) records that distinction.
+The code-level cache in [common.py](../common.py) records that distinction.
 A known distance in an omitted sector can also supply an upper bound to the remaining searches.
 In the ordinary binary BZ overall-distance route, an equal-X/Z-distance flag makes the code-level method search just one sector.
 Identical X and Z check matrices establish this equality automatically.
@@ -413,7 +413,7 @@ Explicit brute-force and specialized distance paths can use different routing, e
 
 ## 10. Worked example: certify eight with fewer row combinations
 
-Consider the QC64 input used by `test_brouwer_zimmermann_overlap_qc` in [distance_test.py](distance_test.py).
+Consider the QC64 input used by `test_brouwer_zimmermann_overlap_qc` in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py).
 One CSS sector has 64 coordinates and ambient dimension 41, already supplies a weight-eight witness, and spans only even-weight words.
 Its useful disjoint search has one full information set.
 
@@ -463,7 +463,7 @@ These are explicit return conventions for problems with no eligible words, not w
 
 ### Caches and special constructions
 
-The code-level methods in [common.py](common.py) can return cached parameters or construction-specific formulas without invoking this module.
+The code-level methods in [common.py](../common.py) can return cached parameters or construction-specific formulas without invoking this module.
 Use `forget_distance()` before timing an ordinary public distance call that is meant to recompute the answer.
 It does not remove specialized formulas or disable equal-sector promises.
 Similarly, `method="brute_force"` is not a command to ignore a code object's known-distance cache.
@@ -479,9 +479,7 @@ assert codes.get_distance_classical(generators, cutoff=0) == 2
 
 logicals = np.array([[0, 1, 1]], dtype=int)
 stabilizers = np.array([[1, 1, 0]], dtype=int)
-assert codes.get_distance_quantum(
-    logicals, stabilizers, homogeneous=True, cutoff=0
-) == 2
+assert codes.get_distance_quantum(logicals, stabilizers, homogeneous=True, cutoff=0) == 2
 ```
 
 ### Complexity and unsupported assumptions
@@ -515,22 +513,25 @@ Fixed-seed tie-breaking affects which valid bases are tried, not whether a certi
 - **Make regression tests non-vacuous.**
   Verify that overlap was actually selected and that an independent oracle checks a case where enumeration improves the starting witness.
 
-The [test module](distance_test.py) contains exhaustive small-word certificate checks, logical-label checks, a default-policy QC work-reduction check, and a shortened-BCH quotient whose setup witnesses are heavier than its exhaustive minimum.
+The [BZ test module](brouwer_zimmermann_test.py) contains exhaustive small-word certificate checks, logical-label checks, a default-policy QC work-reduction check, and a shortened-BCH quotient whose setup witnesses are heavier than its exhaustive minimum.
 The last case checks actual witness discovery, not just certification of an already optimal row.
 The repository also requires statement coverage, typing, formatting, lint, and strict documentation validation.
 From the repository root, run:
 
 ```bash
-python -m pytest src/qldpc/codes/distance_test.py -q
-python checks/coverage_.py src/qldpc/codes/distance.py
+python -m pytest src/qldpc/codes/distance/ -q
+python checks/coverage_.py src/qldpc/codes/distance/
 python checks/all_.py
 ```
 
 ## References and further reading
 
-- [distance.py](distance.py): implementation, exact signatures, dispatch conditions, and numerical kernel.
-- [distance_test.py](distance_test.py): executable invariants and independent small-instance oracles.
-- [common.py](common.py): code-level caches, CSS sector routing, and subsystem gauge exclusion.
-- [Library map](../../../docs/source/library_map.rst): package-level introduction to exact distances and bounds.
+- [core.py](core.py): public signatures and dispatch, re-exported by [the package facade](__init__.py).
+- [brouwer_zimmermann.py](brouwer_zimmermann.py): BZ certificates, information sets and numerical kernel.
+- [brute_force.py](brute_force.py): exact exhaustive enumeration.
+- [_binary.py](_binary.py): shared binary algebra, packing and weight functions.
+- [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py) and [core_test.py](core_test.py): executable invariants and independent small-instance oracles.
+- [common.py](../common.py): code-level caches, CSS sector routing, and subsystem gauge exclusion.
+- [Library map](../../../../docs/source/library_map.rst): package-level introduction to exact distances and bounds.
 - [Algorithm 994 paper, v2](https://arxiv.org/abs/1603.06757v2): section 2 and Algorithm 1 give the classical disjoint/rank-deficient certificate and discuss per-basis progress.
 - [Quantum-code adaptation, v2](https://arxiv.org/abs/2408.10743v2): section 2.4 describes the `Saved_isometry` symplectic-to-Hamming construction used here.
