@@ -119,6 +119,8 @@ print("physical qubits:", len(code))
 print("logical qubits:", code.dimension)
 ```
 
+The gross code is also available as the named construction, `codes.GrossCode()`.
+
 ### Go deeper: a subsystem lifted-product code
 
 The next example builds a parity-check matrix over the group algebra `GF(2)[C₅]`, lifts each group-ring entry to a 5×5 binary block, and hands the result to `SLPCode`.
