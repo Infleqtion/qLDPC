@@ -43,15 +43,16 @@ $$
 
 For a quantum code, a nonzero word is not necessarily relevant.
 Let `S` be the span of the stabilizers (or, for a subsystem code, the stabilizers and gauge operators), and let `V` be the span of `S` together with the logical operators.
-Then
+Then, if the code encodes at least one logical qubit (`V ≠ S`),
 
 $$
 d = \min_{v \in V \setminus S} \operatorname{wt}(v).
 $$
 
 Words in `S` act trivially on the encoded information, so they must not count.
-Both cases are instances of one problem: given nested binary spaces `S ⊆ V`, find the lightest word in `V` that is not in `S`.
+Both cases are instances of one problem: given nested binary spaces `S ⊆ V` with `V ≠ S`, find the lightest word in `V` that is not in `S`.
 For a classical code, `S = {0}`.
+When a quantum code has no logical qubits, there is no such word, and the implementation returns a fixed value instead (section 3.6).
 
 A word that is allowed to determine the distance is called **eligible**.
 In the classical case, every nonzero codeword is eligible.
@@ -104,12 +105,13 @@ This gives the fact that BZ relies on:
 
 Different information sets give different bases of the same space.
 The same coefficient vector in two such bases usually describes two different words.
-Some words may be examined in more than one basis, so the number of candidate/set evaluations (candidates counted once for each basis) is not the number of distinct words examined.
+Some words appear in more than one basis.
+The work of a search is therefore measured in **candidate/set evaluations**, which count a word once for each basis in which it is examined, not once per distinct word.
 
 ### 2.4 Rank-deficient blocks
 
-Suppose the space has several bases, built from disjoint blocks of coordinates.
-The last block may have rank `r_i < r`, so it is not an information set.
+Suppose several bases are built one after another, each from a block of coordinates disjoint from the earlier blocks.
+Once the available coordinates run low, the final block may have rank `r_i < r`, so it is not an information set.
 Row reduction on such a block gives a basis of the whole space in which:
 
 - the first `r_i` rows have distinct pivot columns in the block, and
@@ -159,7 +161,8 @@ Algorithm 1 of the [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) giv
 
 ### 3.1 Overview of a search
 
-A call to the BZ method proceeds as follows:
+A call to qLDPC's BZ distance method may return through exhaustive enumeration before any BZ scan runs.
+When a scan does run, the call proceeds as follows:
 
 1. For a quantum problem, `get_distance_quantum` can first choose exhaustive enumeration directly, if the input is small and independent.
 2. Otherwise, the search builds an independent basis of `V`, attaches quotient labels to its rows (section 3.2), and, for general Pauli operators, transforms the rows to Hamming coordinates (section 3.3).
@@ -219,7 +222,7 @@ Then `aM'` is still the label of the word `aG'`.
 Omitting this step would either accept stabilizers as witnesses or reject genuine logical operators.
 `_row_reduce_binary` performs these paired transformations.
 
-The code methods in [common.py](../common.py) supply the stabilizer (and gauge) generators and the logical generators, so this module never computes the kernels that define them.
+The code methods in [common.py](../common.py) supply generators for `S` and for the logical operators, so this module does not derive them.
 This module sees only the nested spaces `S ⊆ V`.
 It does not assume that the generators of `S` are commuting stabilizers.
 
@@ -268,10 +271,10 @@ The direct exhaustive route for quantum problems can use symplectic weight direc
    Each pivot set becomes one block.
    Remove its pivots from the remaining columns, and repeat.
 2. Stop at the first block of rank `r_i < r` (the rank-deficient block of section 2.4), or when no columns remain.
-3. If this does not yield `floor(N_active / r)` full information sets, where `N_active` is the number of nonzero columns, retry with up to eight fixed-seed random column orders.
+3. If this does not yield `floor(n_active / r)` full information sets, where `n_active` is the number of nonzero columns of the basis, retry with up to eight fixed-seed random column orders.
    Keep the family with the lexicographically largest tuple of ranks.
 
-`_select_brouwer_zimmermann_information_sets` then discards any partial block that cannot help before the full blocks would already certify `U`.
+`_select_brouwer_zimmermann_information_sets` then discards any partial block that cannot help when the full blocks alone would already raise the lower certificate to `U`.
 (A block with rank `r_i` has `b_i(t) = 0` until `t + 1 > r - r_i`.)
 
 ### 3.5 Packed enumeration
@@ -298,7 +301,7 @@ For coefficient weight `w`, it visits the same supports as `itertools.combinatio
 It maintains the invariant
 
 ```text
-prefixes[j, set] = XOR of the first j selected rows in that set's basis.
+prefixes[j, set] = XOR of the first j selected rows in that set's packed (pivot-deleted) basis.
 ```
 
 Extending a support by one row then costs one row XOR per basis and packed word, instead of recomputing the whole sum.
@@ -333,11 +336,13 @@ After an interruption, a new `advance()` call restarts the unfinished layer from
 
 | State | Meaning |
 | --- | --- |
-| `generators`, `labels` | Packed systematic bases and their quotient labels |
+| `generators`, `labels` | Packed bases, with pivot columns deleted, and their quotient labels |
 | `ranks`, `widths`, `label_widths` | Pivot rank and true packed widths of each basis |
 | `best` | Lightest witness known, which is the current upper bound |
 | `lower_bound` | Lower certificate from the layers completed so far |
 | `next_weight` | Next coefficient weight to search |
+| `cutoff` | Cutoff that ends the search early (section 3.6) |
+| `batch_size` | Maximum number of supports per kernel call |
 | `weight_divisor` | Proven divisor of every candidate Hamming weight (section 4.2) |
 | `max_coverage` | Maximum number of blocks containing any coordinate (section 4.1) |
 
@@ -366,7 +371,7 @@ These are return conventions for problems with no eligible words, not certificat
 
 ### 4.1 Overlapping information sets
 
-Disjoint blocks are limited by the number of coordinates: at most `floor(N_active / r)` full information sets fit without sharing a coordinate.
+Disjoint blocks are limited by the number of coordinates: at most `floor(n_active / r)` full information sets fit without sharing a coordinate.
 Allowing blocks to overlap permits more bases, at the price of a weaker certificate.
 
 #### The certificate
@@ -411,7 +416,7 @@ It returns either a replacement family of full information sets together with th
 Which family to choose is decided heuristically.
 The certificate for the chosen family uses only verified ranks and actual coordinate counts, so it is sound regardless of the heuristic.
 
-Let `n_active` be the number of columns of the search basis that are not identically zero.
+Here `n_active` is the number of nonzero columns of the basis, as in section 3.4.
 This count includes columns that existing blocks already use, not only the columns that remain uncovered.
 Coverage is counted using the column numbers before each basis removes its pivots for packing.
 
@@ -420,8 +425,9 @@ Family construction has four stages.
 1. **Skip unnecessary work.**
    Return `None` if the disjoint family is already cheap to search, already uses every active column, or is already at the size limit.
 2. **Rule out impossible savings.**
-   `m` full sets contain `m*r` pivot coordinates in total, spread over `n_active` columns, so some column is covered at least `ceil(m*r/n_active)` times.
-   Using that value as `C` gives an optimistic estimate of the work for each `m`.
+   A family of `m` full sets has `m*r` pivot coordinates in total.
+   Spread over `n_active` columns, they force some column to be covered at least `ceil(m*r/n_active)` times.
+   Using that value as `C` gives the most optimistic work estimate for each `m`.
    If even the best optimistic estimate does not improve on the current family's estimated work, return `None`.
 3. **Build coverage-balanced bases.**
    Order columns so that the least-used ones come first, breaking ties with a fixed random seed, then row reduce on that order and transform the labels in parallel.
@@ -512,7 +518,7 @@ $$
 L = \left\lceil \frac{\sum_i b_i(t_i)}{C} \right\rceil.
 $$
 
-Algorithm 994 enumerates the combinations of each basis in turn, and its prose notes that the bound can increase after every basis.
+Algorithm 994 enumerates the combinations of each basis in turn, and the paper's discussion notes that the bound can increase after every basis.
 Its Algorithm 1 nevertheless updates the bound only after all bases complete a layer.
 qLDPC does the same, with one difference in scheduling: it examines each support in every basis before moving to the next support.
 This lets one set of prefix XORs be reused across all bases (section 3.5), and it means that qLDPC tracks a single completed coefficient weight `t` shared by all bases.
