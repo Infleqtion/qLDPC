@@ -158,6 +158,13 @@ The cost of this loop is measured in **candidate/set evaluations**.
 One candidate/set evaluation is the examination of one selection of rows in one basis.
 Searching the `m` search bases through coefficient weight `t` therefore costs `m` times the number of selections of at most `t` rows, which is `m * sum_{w=1}^{t} binom(r, w)`.
 
+### 2.6 Excluding stabilizers
+
+For a quantum code, the lightest word in `V` may lie in `S`.
+Such a word is not eligible, so it must not lower `U`.
+Section 2.1 of [arXiv:2408.10743](https://arxiv.org/abs/2408.10743v2) therefore checks whether a candidate word of weight below `U` lies in `S` before updating `U`.
+The lower certificate of [Section 2.5](#25-the-stopping-certificate) is unchanged, because it bounds all unexamined words, eligible or not.
+
 ## 3. Implementation in qLDPC
 
 ### 3.1 Overview of a search
