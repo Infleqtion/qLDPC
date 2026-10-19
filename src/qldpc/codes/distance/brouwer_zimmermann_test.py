@@ -532,6 +532,10 @@ def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
             return_value=(counting_weight, 1),
         ),
         mock.patch(
+            "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
+            return_value=(counting_weight, 1),
+        ),
+        mock.patch(
             "qldpc.codes.distance.brouwer_zimmermann._scan_brouwer_zimmermann",
             side_effect=counting_scan,
         ),
