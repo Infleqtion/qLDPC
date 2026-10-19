@@ -12,17 +12,13 @@ It has three goals:
 
 Section 5 lists the invariants that a change to the implementation must preserve.
 
-This guide does not cover how code objects choose among distance methods, cache their distances, or expose them to users.
-That behavior is described in the docstrings of the code classes in [common.py](../common.py).
-
-The implementation draws on two papers and one derivation of our own:
+The implementation draws on two papers and a derivation in this guide:
 
 - [Algorithm 994](https://arxiv.org/abs/1603.06757) describes a BZ implementation for classical codes.
   qLDPC follows its stopping criterion for disjoint and rank-deficient information sets.
 - A [paper that adapts BZ to quantum codes](https://arxiv.org/abs/2408.10743) reduces symplectic (Pauli) weight to Hamming weight.
   qLDPC follows this reduction.
 - The stopping criterion for overlapping information sets (section 4.1) is derived in this guide.
-  It is not taken from either paper.
 
 The public interfaces for binary distances live in [core.py](core.py).
 They dispatch either to [brouwer_zimmermann.py](brouwer_zimmermann.py), which implements BZ, or to [brute_force.py](brute_force.py), which enumerates words exhaustively.
@@ -41,7 +37,7 @@ d = \min_{v \in V,\;v \ne 0} \operatorname{wt}(v),
 \qquad V = \operatorname{rowspan}(G).
 $$
 
-For a quantum code, a nonzero word is not necessarily relevant.
+For a quantum code, only some nonzero words matter.
 Let `S` be the span of the stabilizers (or, for a subsystem code, the stabilizers and gauge operators), and let `V` be the span of `S` together with the logical operators.
 Then, if the code encodes at least one logical qubit (`V ≠ S`),
 
@@ -63,7 +59,6 @@ In the nested case, the eligible words are those in `V \ S`.
 Every codeword is a sum of rows of a basis of `V`.
 Throughout this guide, a **basis** is a matrix whose rows are linearly independent and span `V`.
 Let `r = dim(V)` be its number of rows, and let `N` be its number of columns, which is the number of **coordinates** of a word.
-(Here `r` is the dimension of the space being searched, not the number of parity checks.)
 
 For a basis `G`, a **coefficient vector** `a` is a binary vector of length `r` that selects rows, and `aG` is the XOR of the selected rows.
 The **coefficient weight** of `aG` is the number of rows selected.
@@ -106,7 +101,7 @@ This gives the fact that BZ relies on:
 Different information sets give different bases of the same space.
 The same coefficient vector in two such bases usually describes two different words.
 Some words appear in more than one basis.
-The work of a search is therefore measured in **candidate/set evaluations**, which count a word once for each basis in which it is examined, not once per distinct word.
+The work of a search is therefore measured in **candidate/set evaluations**, which count a word once for each basis in which it is examined.
 
 ### 2.4 Rank-deficient blocks
 
@@ -143,8 +138,8 @@ $$
 For `m` full information sets, `L(t) = m(t+1)`.
 
 `L(t)` is the lower certificate.
-It bounds only the words that have not been examined.
-It is **not** necessarily a lower bound on the weight of witnesses that were already found.
+It bounds the weight of the words that have not been examined.
+Witnesses that were already found can be lighter than `L(t)`.
 When `L(t) ≥ U`, no unexamined eligible word is lighter than `U`, which is enough to stop.
 
 BZ is therefore the following loop:
@@ -222,9 +217,7 @@ Then `aM'` is still the label of the word `aG'`.
 Omitting this step would either accept stabilizers as witnesses or reject genuine logical operators.
 `_row_reduce_binary` performs these paired transformations.
 
-The code methods in [common.py](../common.py) supply generators for `S` and for the logical operators, so this module does not derive them.
-This module sees only the nested spaces `S ⊆ V`.
-It does not assume that the generators of `S` are commuting stabilizers.
+The code methods in [common.py](../common.py) supply generators for `S` and for the logical operators, so this module only receives the nested spaces `S ⊆ V`.
 
 `_assert_binary` rejects nonbinary values and field types before they are converted to binary storage arrays.
 This module is binary only.
@@ -234,8 +227,7 @@ This module is binary only.
 An operator that contains only X (or only Z) Pauli operators on `n` qubits is a binary vector of length `n`, and its Hamming weight is its physical weight.
 
 A general Pauli operator is a symplectic row `[x | z]` of length `2n`.
-Its physical weight is the number of qubits on which `x` or `z` is nonzero.
-This is not the Hamming weight of `[x | z]`.
+Its physical weight is the number of qubits on which `x` or `z` is nonzero, which differs from the Hamming weight of `[x | z]`.
 
 `_symplectic_to_hamming` fixes this using the `Saved_isometry` construction from [section 2.4 of the quantum-code adaptation](https://arxiv.org/abs/2408.10743v2):
 
@@ -259,7 +251,7 @@ The labels from section 3.2 remain valid because `T` is linear and injective.
 Every Hamming weight is even, but this does **not** mean that physical Pauli weights are even.
 
 From this point on, a **coordinate** means a coordinate of the binary words that BZ searches.
-For general Pauli problems, these are the `3n` coordinates after the transformation, not the `n` qubits.
+For general Pauli problems, there are `3n` such coordinates after the transformation.
 
 The direct exhaustive route for quantum problems can use symplectic weight directly, without this transformation.
 
@@ -292,7 +284,7 @@ The sum is the Hamming weight of the word.
 
 The arrays of generators and labels are zero-padded to a common number of words across all bases.
 Each basis keeps its true generator width and label width, so padding changes neither weights nor eligibility decisions.
-Weights are accumulated in sufficiently wide integer types, not in narrow per-word population counts.
+Weights are accumulated in sufficiently wide integer types.
 
 #### Enumerating supports and reusing XOR prefixes
 
@@ -325,11 +317,11 @@ Each call to the kernel returns after one of three events:
 - the layer is finished.
 
 The bound is `2**min(block_size, 15)` supports per kernel call.
-Every support is evaluated in every retained basis, so this limit is not a limit on candidate/set evaluations.
+Every support is evaluated in every retained basis, so one kernel call performs up to that many supports times the number of bases candidate/set evaluations.
 
 Within one `advance()` call, the support indices, tree depth, and XOR prefixes persist across kernel calls.
 `_BrouwerZimmermannSearch.advance` updates the lower certificate and increments `next_weight` only after the **whole layer is complete in every retained basis**.
-A cutoff, an exception, or an interruption does not certify an unfinished layer.
+A cutoff, an exception, or an interruption leaves the certificate unchanged.
 After an interruption, a new `advance()` call restarts the unfinished layer from its first support, because the support indices and prefixes were local to the earlier call.
 
 `_BrouwerZimmermannSearch` stores the following state:
@@ -354,7 +346,7 @@ Without an early return caused by a cutoff, a BZ search ends in one of two ways:
 Either way, the result is the exact distance.
 
 With a positive `cutoff`, the search may instead stop as soon as `U` is at most the cutoff.
-The result is then an upper bound that is at or below the cutoff, and it is not necessarily the exact distance.
+The result is then an upper bound that is at or below the cutoff, and it can exceed the exact distance.
 The default `cutoff` of one is still exact for a valid nontrivial binary problem, because a positive distance cannot be less than one.
 Use `cutoff=0` to require a fully certified result.
 
@@ -365,7 +357,7 @@ The module-level interfaces handle empty cases before any enumeration, with the 
 - A quantum problem with no supplied logical rows returns the number of physical qubits.
 - A quantum problem with a nonempty set of logical rows that all lie in the excluded span returns zero.
 
-These are return conventions for problems with no eligible words, not certificates derived from a witness.
+These are fixed return conventions for problems with no eligible words.
 
 ## 4. Improvements in qLDPC
 
@@ -400,14 +392,13 @@ Disjoint blocks are the special case `C = 1`, which recovers section 2.5.
 `_get_brouwer_zimmermann_lower_bound` evaluates this formula with exact integer arithmetic, including the rank-deficient terms `b_i(t)`.
 The selector that builds overlapping families, however, proposes only full information sets.
 
-The [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) mentions overlapping sets in connection with Grassl's work, but it does not give a formulation of an overlapping bound.
+The [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) refers to Grassl's work for overlapping sets, without giving a bound.
 The coverage-divided bound above is derived for qLDPC.
 
 As a small example, take the code generated by `101` and `011`, whose distance is two.
 Each of the three pairs of coordinates is a full information set, so `m = 3`, and each coordinate lies in two of them, so `C = 2`.
 After examining the single rows in all three bases (`t = 1`), the formula gives `ceil(3*2/2) = 3`.
-This does not claim that the distance is three.
-It says that every word of weight below three has already been examined, and the witness of weight two is the lightest one found.
+This means that every word of weight below three has already been examined, so no unexamined word can improve on the weight-two witness.
 
 #### Choosing the family
 
@@ -417,7 +408,7 @@ Which family to choose is decided heuristically.
 The certificate for the chosen family uses only verified ranks and actual coordinate counts, so it is sound regardless of the heuristic.
 
 Here `n_active` is the number of nonzero columns of the basis, as in section 3.4.
-This count includes columns that existing blocks already use, not only the columns that remain uncovered.
+This count includes the columns that existing blocks already use.
 Coverage is counted using the column numbers before each basis removes its pivots for packing.
 
 Family construction has four stages.
@@ -443,11 +434,10 @@ The policy constants are:
 - If construction starts with `m_0` full sets, it makes at most `2*(8 - m_0)` attempts.
 - Stage 1 skips families whose estimated work is below 100,000 candidate/set evaluations.
 
-These are performance choices, not assumptions of the mathematical argument.
+These constants tune performance; the certificate does not depend on them.
 The selection depends only on the basis and its labels, the current upper bound `U`, the fixed constants above, and the disjoint family and weight divisor from preparation.
 The upper bound can come from a row witness, from the other sector of a CSS code (section 4.5), or from a distance that is already known.
-The selection never uses the name of a code family or a stored, construction-specific list of pivots.
-A different valid upper bound can change which family is selected, but it cannot make the resulting certificate unsound.
+A different valid upper bound can change which family is selected, and the certificate is sound for whichever family results.
 
 #### The work estimate
 
@@ -461,8 +451,7 @@ W = m\sum_{w=1}^{t_*} \binom{r}{w}.
 $$
 
 The sum starts at `w = 1`, so it includes the systematic rows.
-This is an estimate of work, not a guarantee on runtime.
-Basis construction, the width of packed words, and early improvements of the witness also affect the actual runtime.
+Actual runtime also depends on basis construction, the width of packed words, and early improvements of the witness.
 
 #### Worked example
 
@@ -491,7 +480,7 @@ This reaches eight directly, even before rounding to an even weight.
 | Three full sets, maximum coverage two | 4 | `3 * sum(comb(41,w) for w in range(2,5)) = 338,250` |
 
 The three-set family needs fewer evaluations because it avoids layers five and six.
-The table does not include the cost of constructing and packing the bases.
+The counts cover only the enumeration; constructing and packing the bases costs extra.
 
 ### 4.2 Rounding the certificate to a proven weight multiple
 
@@ -504,10 +493,10 @@ In qLDPC, `D` comes from two sources:
   The sum of two even-weight words has even weight, so if all basis rows are even, every word in the space is even.
   When this holds, the implementation combines `D = 2` with any existing divisor by taking the least common multiple.
 
-Divisibility must be proven for every word, not only for the basis rows, so rows that individually have weight divisible by four are not enough.
+Divisibility must hold for every word in the space, which is stronger than holding for each basis row.
 For example, `11110` and `01111` each have weight four, but their XOR `10001` has weight two.
 Only the even-weight check above is used.
-This check is a qLDPC addition, not a step from the cited algorithms.
+This check is a qLDPC addition.
 
 ### 4.3 One completed layer for all bases
 
@@ -526,8 +515,7 @@ This lets one set of prefix XORs be reused across all bases (section 3.5), and i
 Separate depths `t_i` would allow a lower certificate to be reached sooner.
 In the worked example of section 4.1, finishing layer four in one basis while the other two stop after layer three gives `ceil((5+4+4)/2) = 7`.
 Rounding up to an even weight gives eight, and this requires only 135,710 candidate/set evaluations after the systematic rows, compared with 338,250 in the table.
-qLDPC does not implement this schedule.
-The table therefore shows the actual work of qLDPC's scan, not the minimum enumeration that those three sets would mathematically require.
+qLDPC's shared schedule does not exploit this, so the table counts the work of qLDPC's actual scan.
 
 ### 4.4 Exhaustive enumeration as an alternative
 
@@ -539,8 +527,7 @@ Exhaustive enumeration can therefore be chosen at three points:
 - After the information sets are built, `_brute_force_is_cheaper` compares the estimated BZ work from section 4.1 with the number of eligible words, `(2**q - 1) * 2**(r-q)`, where `q` is the number of logical rows.
 
 The exhaustive implementation in [brute_force.py](brute_force.py) enumerates words in vectorized, packed blocks and updates them using Gray-code steps.
-It does not use the BZ certificate.
-Consequently, calling the BZ method does not guarantee that a BZ scan actually runs.
+It runs without the BZ certificate.
 
 Neither method requires its caller to supply independent generators.
 Classical inputs are first reduced to an independent basis, quantum brute force uses the adapted basis from section 3.2, and the direct quantum shortcut checks independence before skipping that preparation.
@@ -555,10 +542,8 @@ A witness found in either sector lowers the upper bound `U` used by both.
 Each sector keeps its own information sets, coverage, weight divisor, and lower certificate.
 This matters when the sectors differ.
 For example, a witness of weight seven from one sector caps the other sector's upper bound at seven, even if the other sector contains only even-weight words and so can never have a witness of weight seven.
-That sector only has to prove that it cannot beat the shared witness.
-It does not need to determine its own exact distance.
-
-A joint search therefore proves `min(d_x, d_z)`, but not necessarily each of `d_x` and `d_z`.
+That sector only has to show that it cannot beat the shared witness, so its own exact distance may remain undetermined.
+A joint search therefore determines `min(d_x, d_z)`, while the individual sector distances may remain unknown.
 
 ## 5. Invariants to preserve when modifying the implementation
 
@@ -567,14 +552,14 @@ A joint search therefore proves `min(d_x, d_z)`, but not necessarily each of `d_
 - **Keep coordinates identifiable.**
   Compute pivot coverage before each basis deletes its pivot columns and packs its bits.
 - **Use the correct rank term.**
-  Partial blocks need the rank-deficiency correction `b_i(t)`; the full-set formula `t+1` does not apply to them.
+  Partial blocks contribute `b_i(t)`, which accounts for their rank deficiency, rather than `t+1`.
 - **Count overlap exactly.**
-  Coverage is the actual maximum multiplicity of a coordinate across the blocks, not a count of "independent" bases.
+  Coverage is the actual maximum multiplicity of a coordinate across the blocks.
 - **Advance certificates only after complete work.**
-  A cutoff, exception, or interrupted chunk does not complete a layer.
+  A cutoff, exception, or interrupted chunk leaves its layer incomplete.
 - **Keep bounds in consistent units.**
   General symplectic searches use doubled Hamming weights internally.
-- **Prove divisibility; do not infer it from examples.**
+- **Prove divisibility for the whole space.**
   An even-weight basis proves that the whole space is even.
   Higher divisibility requires a separate proof.
 - **Share upper bounds without sharing certificates.**
