@@ -284,14 +284,6 @@ After all three search bases have been searched through coefficient weight `t = 
 This exceeds the distance, which is allowed because `L(t)` is a statement only about words that have not been examined.
 Every row has weight two, so `U = 2 ≤ L(1)`, and the search stops with distance two.
 
-#### Counting minimum-weight words
-
-Distance only needs a witness of weight `U` once `L(t) >= U`.
-Counting every word of the minimum weight `d` must instead exhaust words of weight exactly `d`, which `L(t) = d` does not rule out.
-The counting collector in [weight_enumerators/supports.py](weight_enumerators/supports.py) therefore stops only when `L(t) > d`, and passes `upper_bound=d+1` to the shared family selector.
-It transforms logical labels with every basis, uses the actual maximum pivot coverage in the bound, and removes duplicate physical supports across bases.
-The selected family and its construction workspace must fit the counter's working-memory budget.
-
 ### 3.2 Rounding the certificate to a proven weight multiple
 
 Suppose that every eligible word has a weight that is a multiple of an integer `D`.
@@ -469,9 +461,7 @@ Heuristic tunables are identified by parameter name so that their current values
 | [core.py](core.py) | Public interfaces, input validation, adapted bases, method selection, and conversion between symplectic and Hamming units | `get_distance_classical`, `get_distance_quantum`, `get_distance_css_brouwer_zimmermann` |
 | [brouwer_zimmermann.py](brouwer_zimmermann.py) | The BZ search: preparation, certificates, scanning, sharing between CSS sectors, and cost models | `_prepare_brouwer_zimmermann_search`, `_BrouwerZimmermannSearch`, `_scan_brouwer_zimmermann`, `_get_distance_brouwer_zimmermann_many` |
 | [brute_force.py](brute_force.py) | Exhaustive enumeration | `_get_distance_quantum_brute_force` |
-| [_binary.py](_binary.py) | Shared binary helpers: row reduction with labels, independent and adapted bases, packing, weight functions, native popcount and trailing-zero primitives, and the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) | `_row_reduce_binary`, `_get_independent_rows`, `_get_nested_code_basis`, `_symplectic_to_hamming` |
-
-[weight_enumerators/](weight_enumerators/) is a separate subpackage that counts minimum-weight logical words exactly, reusing the family selection and certificate of [brouwer_zimmermann.py](brouwer_zimmermann.py) and the packed primitives of [_binary.py](_binary.py).
+| [_binary.py](_binary.py) | Shared binary helpers: row reduction with labels, independent and adapted bases, packing, weight functions, and the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) | `_row_reduce_binary`, `_get_independent_rows`, `_get_nested_code_basis`, `_symplectic_to_hamming` |
 
 [`__init__.py`](__init__.py) exports names from [core.py](core.py).
 [core.py](core.py) calls [brouwer_zimmermann.py](brouwer_zimmermann.py) and [brute_force.py](brute_force.py), and [brouwer_zimmermann.py](brouwer_zimmermann.py) calls [brute_force.py](brute_force.py) for its exhaustive routes.
