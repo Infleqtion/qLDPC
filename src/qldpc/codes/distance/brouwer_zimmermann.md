@@ -45,7 +45,7 @@ $$
 d = \min_{v \in V \setminus S} \operatorname{wt}(v).
 $$
 
-Words in `S` act trivially on the encoded information, so they must not count.
+Words in `S` act trivially on the encoded information, so a word in `S` is not a logical operator and cannot determine the distance.
 Both cases are instances of one problem: given nested binary spaces `S ⊆ V` with `V ≠ S`, find the lightest word in `V` that is not in `S`.
 For a classical code, `S = {0}`.
 When a quantum code has no logical qubits, there is no such word, and the implementation returns a fixed value instead (section 3.6).
