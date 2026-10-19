@@ -538,6 +538,50 @@ def test_all_methods_match_explicit_enumeration_on_random_codes(
         assert counter.get_minimum(method=method) == expected, method
 
 
+def _sparse_css_counter(
+    num_blocks: int, num_frozen: int, seed: int, num_gates: int
+) -> we.CSSLogicalWeightCounter:
+    """Steane blocks and frozen qubits, scrambled by a few CNOTs.
+
+    Unlike dense random codes, these have low-weight stabilizers that fit inside minimum-weight
+    logical supports, which is what makes the opposite-type dressing term of full-Pauli counts
+    nonzero.
+    """
+    code = codes.CSSCode.stack([codes.SteaneCode()] * num_blocks)
+    num_qubits = len(code) + num_frozen
+    checks_x = np.zeros((len(code.matrix_x), num_qubits), dtype=np.uint8)
+    checks_z = np.zeros((len(code.matrix_z) + num_frozen, num_qubits), dtype=np.uint8)
+    checks_x[:, : len(code)] = code.matrix_x
+    checks_z[: len(code.matrix_z), : len(code)] = code.matrix_z
+    checks_z[len(code.matrix_z) :, len(code) :] = np.eye(num_frozen, dtype=np.uint8)
+    counter = we.CSSLogicalWeightCounter(checks_x, checks_z, batch_size=5)
+    rng = np.random.default_rng(seed)
+    for _ in range(num_gates):
+        control, target = map(int, rng.choice(num_qubits, 2, replace=False))
+        counter = counter.conjugated_cnot(control, target)
+    return counter
+
+
+@pytest.mark.parametrize(
+    "num_blocks,num_frozen,seed,num_gates",
+    [(1, 2, 1, 4), (1, 3, 2, 8), (1, 1, 3, 6), (2, 0, 4, 5), (2, 0, 5, 12)],
+)
+def test_all_methods_match_explicit_enumeration_on_sparse_codes(
+    num_blocks: int, num_frozen: int, seed: int, num_gates: int
+) -> None:
+    """Sparse, partially scrambled codes reach the full-Pauli dressing term and ties."""
+    counter = _sparse_css_counter(num_blocks, num_frozen, seed, num_gates)
+    counts_x, counts_z, full = _oracle(counter)
+    minimum = next(
+        weight for weight in range(counter.num_qubits + 1) if counts_x[weight] or counts_z[weight]
+    )
+    expected = we.CSSMinimumLogicalWeights(minimum, counts_x[minimum], counts_z[minimum], full)
+    for method in ("auto", "dual", "brouwer_zimmermann", "brute_force", "collision"):
+        assert counter.get_minimum(method=method) == expected, method
+    # Full Paulis can exceed the X-only and Z-only counts only through mixed representatives.
+    assert expected.count_pauli is not None and expected.count_pauli >= expected.count_x
+
+
 def _collect_scan(scan: Any, rows: Any, tags: Any, weight: int, target: int, batch: int) -> Any:
     """All matches of a resumable coefficient scan, run to completion."""
     support = np.zeros(weight, dtype=np.int64)
@@ -575,22 +619,35 @@ def test_single_word_kernels_match_padded_multiword_kernels(interpreted: bool) -
     np.testing.assert_array_equal(counts[0], counts[1])
 
     # Exhaustive supports and minimum, with a stabilizer subspace spanned by the first rows.
+    # Identity rows give many ties at the minimum, and the target equals the weight of a
+    # stabilizer-only combination, so mishandling either is visible.
     exhaustive = _native(supports._exhaustive_supports, interpreted)
     minimum = _native(supports._scan_exhaustive_minimum, interpreted)
-    for stabilizer_rank in (0, 3):
-        results = []
-        for matrix in (rows, padded):
-            width = matrix.shape[1]
-            output = np.empty((1 << 9, width), dtype=np.uint64)
-            current = np.zeros(width, dtype=np.uint64)
-            count = exhaustive(matrix, current, stabilizer_rank, 1, 1 << 9, 28, output)
-            words = output[:count, 0].tolist()
-            best, tied = minimum(
-                matrix, np.zeros(width, dtype=np.uint64), stabilizer_rank, 1, 1 << 9, 65, output
-            )
-            results.append((words, best, tied, output[:tied, 0].tolist()))
-        assert results[0] == results[1]
-        assert results[0][0] and results[0][2]
+    sparse = np.array([[1 << bit] for bit in range(6)], dtype=np.uint64)
+    for data, target in ((rows, int(rows[0, 0]).bit_count()), (sparse, 2)):
+        for stabilizer_rank in (0, 3):
+            results = []
+            padded_data = np.hstack([data, np.zeros_like(data)])
+            for matrix in (data, padded_data):
+                width = matrix.shape[1]
+                output = np.empty((1 << len(data), width), dtype=np.uint64)
+                current = np.zeros(width, dtype=np.uint64)
+                count = exhaustive(
+                    matrix, current, stabilizer_rank, 1, 1 << len(data), target, output
+                )
+                words = output[:count, 0].tolist()
+                best, tied = minimum(
+                    matrix,
+                    np.zeros(width, dtype=np.uint64),
+                    stabilizer_rank,
+                    1,
+                    1 << len(data),
+                    65,
+                    output,
+                )
+                results.append((words, best, tied, output[:tied, 0].tolist()))
+            assert results[0] == results[1]
+            assert results[0][0] and results[0][2]
 
     # Coefficient-layer scan over sibling leaves, at several batch sizes.
     scan = _native(supports._scan_supports, interpreted)
@@ -605,15 +662,15 @@ def test_single_word_kernels_match_padded_multiword_kernels(interpreted: bool) -
             matched += len(narrow)
         assert matched
 
-    # Opposite-type stabilizer counts on a batch of supports.
+    # Opposite-type stabilizer counts: small stabilizers, so that many masks contain some of them.
     shortened = _native(supports._shortened_histogram, interpreted)
-    stabilizers = rows[:4]
-    masks = rng.integers(0, np.iinfo(np.uint64).max, size=(32, 1), dtype=np.uint64)
-    np.testing.assert_array_equal(
-        shortened(stabilizers, masks, 4),
-        shortened(
-            np.hstack([stabilizers, np.zeros_like(stabilizers)]),
-            np.hstack([masks, np.zeros_like(masks)]),
-            4,
-        ),
+    stabilizers = np.array([[0b0011], [0b0110], [0b1100]], dtype=np.uint64)
+    masks = rng.integers(0, 16, size=(40, 1), dtype=np.uint64)
+    narrow_histogram = shortened(stabilizers, masks, 4)
+    wide_histogram = shortened(
+        np.hstack([stabilizers, np.zeros_like(stabilizers)]),
+        np.hstack([masks, np.zeros_like(masks)]),
+        4,
     )
+    np.testing.assert_array_equal(narrow_histogram, wide_histogram)
+    assert narrow_histogram.sum() == len(masks) and narrow_histogram[1:].sum() > 0
