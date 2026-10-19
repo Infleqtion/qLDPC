@@ -111,6 +111,7 @@ Since `wt(v|_I)` equals the coefficient weight of `v`, such a word `v` satisfies
 
 BZ searches `m` bases `G_1, ..., G_m` of `V`, which we call the **search bases**.
 Each `G_i` is row reduced on a **block** `B_i`, a set of column indices, and the blocks `B_1, ..., B_m` are pairwise disjoint.
+We call such a collection of search bases a **disjoint family of search bases**.
 These blocks are chosen greedily: `B_1` is an information set, `B_2` is an information set among the columns not in `B_1`, and so on, until the remaining columns no longer contain an information set.
 If any columns remain at that point, they form one last block, which has rank less than `r`.
 
@@ -176,11 +177,11 @@ When a scan does run, the call proceeds as follows:
 2. Otherwise, the search builds an independent basis of `V`, attaches quotient labels to its rows ([Section 3.2](#32-quantum-problems-quotient-labels)), and, for general Pauli operators, transforms the rows to Hamming coordinates ([Section 3.3](#33-quantum-problems-pauli-weight-as-hamming-weight)).
 3. The lightest eligible row of that basis gives the initial upper bound `U`.
    Preparation may stop here, either because `U` is at most the `cutoff` ([Section 3.6](#36-exactness-cutoff-and-empty-problems)) or because exhaustive enumeration is estimated to be cheaper ([Section 4.4](#44-exhaustive-enumeration-as-an-alternative)).
-4. The search builds disjoint systematic bases ([Section 3.4](#34-building-disjoint-information-sets)) and checks their eligible rows.
+4. The search builds a disjoint family of search bases ([Section 3.4](#34-building-disjoint-information-sets)) and checks their eligible rows.
    These rows are all the coefficient-weight-one words, so layer one is complete.
 5. Preparation may stop again if the lower certificate already reaches `U`, or if the work estimate favors exhaustive enumeration.
-   It may also replace the disjoint family by an overlapping family ([Section 4.1](#41-overlapping-information-sets)).
-6. Otherwise, the search packs the bases into `uint64` words and scans the layers starting from layer two ([Section 3.5](#35-packed-enumeration)).
+   It may also replace the disjoint family of search bases by an overlapping family of search bases ([Section 4.1](#41-overlapping-information-sets)).
+6. Otherwise, the search packs the search bases into `uint64` words and scans the layers starting from layer two ([Section 3.5](#35-packed-enumeration)).
    It updates the lower certificate only after a whole layer is complete in every basis.
 
 The implementation is organized as follows:
@@ -269,14 +270,14 @@ The direct exhaustive route for quantum problems can use symplectic weight direc
 
 ### 3.4 Building disjoint information sets
 
-`_get_information_set_generators` builds a family of disjoint blocks, using a bounded, deterministic heuristic:
+`_get_information_set_generators` builds a disjoint family of search bases, using a bounded, deterministic heuristic:
 
 1. Row reduce on the nonzero columns, in their natural order.
    Each pivot set becomes one block.
    Remove its pivots from the remaining columns, and repeat.
 2. Stop at the first block of rank `r_i < r` (the rank-deficient block of [Section 2.4](#24-search-bases-and-rank-deficient-blocks)), or when no columns remain.
 3. If this does not yield `floor(n_active / r)` full information sets, where `n_active` is the number of nonzero columns of the basis, retry with up to eight fixed-seed random column orders.
-   Keep the family with the lexicographically largest tuple of ranks.
+   Keep the disjoint family of search bases with the lexicographically largest tuple of ranks.
 
 `_select_brouwer_zimmermann_information_sets` then discards any partial block that cannot help when the full blocks alone would already raise the lower certificate to `U`.
 (A block with rank `r_i` has `b_i(t) = 0` until `t + 1 > r - r_i`.)
@@ -376,7 +377,8 @@ These three return values are fixed conventions for problems that have no eligib
 ### 4.1 Overlapping information sets
 
 Disjoint blocks are limited by the number of columns: at most `floor(n_active / r)` full information sets fit without sharing a column.
-Allowing blocks to overlap permits more bases, at the price of a weaker certificate.
+Allowing blocks to share column indices permits more search bases, at the price of a weaker certificate.
+A collection of search bases whose blocks may share column indices is an **overlapping family of search bases**.
 
 #### The certificate
 
@@ -404,7 +406,7 @@ $$
 
 Disjoint blocks are the special case `C = 1`, which recovers [Section 2.5](#25-the-stopping-certificate).
 `_get_brouwer_zimmermann_lower_bound` evaluates this formula with exact integer arithmetic, including the rank-deficient terms `b_i(t)`.
-The selector that builds overlapping families, however, proposes only full information sets.
+The selector that builds overlapping families of search bases, however, proposes only full information sets.
 
 The [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) refers to Grassl's work for overlapping sets, without giving a bound.
 The coverage-divided bound `L(t)` is derived for qLDPC.
@@ -414,44 +416,44 @@ Each of the three pairs of column indices, `{0,1}`, `{0,2}`, and `{1,2}`, is a f
 After examining the single rows in all three bases (`t = 1`), the formula gives `ceil(3*2/2) = 3`.
 This means that every word of weight below three has already been examined, so no unexamined word can improve on the weight-two witness.
 
-#### Choosing the family
+#### Choosing the overlapping family of search bases
 
-`_get_overlapping_information_sets` starts from the full disjoint blocks that were retained.
-It returns either a replacement family of full information sets together with the family's actual maximum coverage, or `None` to keep the disjoint family.
-Which family to choose is decided heuristically.
-The certificate for the chosen family uses only verified ranks and the actual maximum coverage, so it is sound regardless of the heuristic.
+`_get_overlapping_information_sets` starts from the search bases of the disjoint family whose blocks are information sets.
+It returns either a replacement overlapping family of search bases, all of whose blocks are information sets, together with the actual maximum coverage of that family, or `None` to keep the disjoint family of search bases.
+Which overlapping family to choose is decided heuristically.
+The certificate for the chosen overlapping family uses only verified ranks and the actual maximum coverage, so it is sound regardless of the heuristic.
 
 Here `n_active` is the number of nonzero columns of the basis, as in [Section 3.4](#34-building-disjoint-information-sets).
 This count includes the columns that existing blocks already use.
 Coverage is counted using the original column indices, before each basis removes its pivot columns for packing.
 
-Family construction has four stages.
+Construction of the overlapping family has four stages.
 
 1. **Skip unnecessary work.**
-   Return `None` if the disjoint family is already cheap to search, already uses every active column, or is already at the size limit.
+   Return `None` if the disjoint family of search bases is already cheap to search, already uses every active column, or is already at the size limit.
 2. **Rule out impossible savings.**
-   A family of `m` full sets has `m*r` pivot columns in total, counted with multiplicity.
+   A family of `m` search bases whose blocks are all information sets has `m*r` pivot columns in total, counted with multiplicity.
    Spread over `n_active` columns, they force some column to be covered at least `ceil(m*r/n_active)` times.
    Using that value as `C` gives the most optimistic work estimate for each `m`.
-   If even the best optimistic estimate does not improve on the current family's estimated work, return `None`.
+   If even the best optimistic estimate does not improve on the estimated work of the current disjoint family of search bases, return `None`.
 3. **Build coverage-balanced bases.**
    Order columns so that the least-used ones come first, breaking ties with a fixed random seed, then row reduce on that order and transform the labels in parallel.
    Skip any information set that was already seen.
    Detecting a duplicate still requires the row reduction, so it consumes one attempt from a fixed budget.
-4. **Keep the cheapest family.**
-   After each new information set is added, estimate the work for the family built so far, and remember the best family.
-   Stop when the estimate reaches the optimistic bound from stage 2, or the family reaches the size limit.
+4. **Keep the cheapest overlapping family.**
+   After each new information set is added, estimate the work for the overlapping family built so far, and remember the best one.
+   Stop when the estimate reaches the optimistic bound from stage 2, or the overlapping family reaches the size limit.
 
 The policy constants are:
 
-- A family has at most eight full sets.
+- An overlapping family has at most eight search bases.
 - If construction starts with `m_0` full sets, it makes at most `2*(8 - m_0)` attempts.
-- Stage 1 skips families whose estimated work is below 100,000 candidate/set evaluations.
+- Stage 1 skips families of search bases whose estimated work is below 100,000 candidate/set evaluations.
 
 The choice of these constants affects only performance; the certificate holds for any values.
-The selection depends only on the basis and its labels, the current upper bound `U`, the fixed constants listed here, and the disjoint family and weight divisor from preparation.
+The selection depends only on the basis and its labels, the current upper bound `U`, the fixed constants listed here, and the disjoint family of search bases and weight divisor from preparation.
 The upper bound can come from a row witness, from the other sector of a CSS code ([Section 4.5](#45-sharing-witnesses-between-css-sectors)), or from a distance that is already known.
-A different valid upper bound can change which family is selected, and the certificate is sound for whichever family results.
+A different valid upper bound can change which overlapping family is selected, and the certificate is sound for whichever family results.
 
 #### The work estimate
 
@@ -476,10 +478,10 @@ One CSS sector of that code has these properties:
 - Its setup rows already provide a witness of weight eight (`U = 8`).
 - Every word in it has even weight, which [Section 4.2](#42-rounding-the-certificate-to-a-proven-weight-multiple) uses.
 
-With **one disjoint information set**, `L(t) = t + 1`.
+With a **disjoint family of one search basis** (`m = 1`, `C = 1`), `L(t) = t + 1`.
 The certificate `L(6) = 7` is rounded up to eight by the even-weight divisor, so the search enumerates layers two through six after checking the systematic rows.
 
-With **three overlapping information sets**, a coverage-balanced family can have `m = 3` full sets with maximum coverage `C = 2`.
+With an **overlapping family of three search bases** (`m = 3`), each with an information set as its block, a coverage-balanced choice can have maximum coverage `C = 2`.
 Completing layer four gives
 
 $$
@@ -493,7 +495,7 @@ This reaches eight directly, even before rounding to an even weight.
 | One disjoint set, with even-weight rounding | 6 | `sum(comb(41,w) for w in range(2,7)) = 5,358,536` |
 | Three full sets, maximum coverage two | 4 | `3 * sum(comb(41,w) for w in range(2,5)) = 338,250` |
 
-The three-set family needs fewer evaluations because it avoids layers five and six.
+The overlapping family of three search bases needs fewer evaluations because it avoids layers five and six.
 The counts cover only the enumeration; constructing and packing the bases costs extra.
 
 ### 4.2 Rounding the certificate to a proven weight multiple
@@ -578,7 +580,7 @@ A joint search therefore determines `min(d_x, d_z)`, while the individual sector
 - **Share upper bounds without sharing certificates.**
   The parity, coverage, and completed layers of each sector must remain local to that sector.
 - **Make regression tests non-vacuous.**
-  Verify that an overlapping family was actually selected, and use an independent oracle on a case where enumeration improves the starting witness.
+  Verify that an overlapping family of search bases was actually selected, and use an independent oracle on a case where enumeration improves the starting witness.
 
 ## References
 
