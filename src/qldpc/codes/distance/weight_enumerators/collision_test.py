@@ -11,7 +11,7 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from qldpc.codes.distance import _collision as c
+from . import collision as c
 
 
 def _words(rows: np.ndarray) -> list[int]:

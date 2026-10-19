@@ -20,11 +20,9 @@ import numpy as np
 import pytest
 
 from qldpc import codes
-from qldpc.codes.distance import _weight_dual as dual
-from qldpc.codes.distance import _weight_lifting as lifting
-from qldpc.codes.distance import _weight_supports as supports
-from qldpc.codes.distance import weight_enumerators as we
 
+from . import counter as we
+from . import dual, lifting, supports
 from .conftest import _native
 
 

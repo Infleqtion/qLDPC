@@ -15,7 +15,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from ._binary_numba import popcount_word
+from .._binary_numba import popcount_word
 
 BinaryMatrix = npt.NDArray[np.uint8]
 PackedMatrix = npt.NDArray[np.uint64]

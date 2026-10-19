@@ -10,9 +10,9 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from . import _weight_lifting as lifting
-from ._weight_rows import StorageBudget, pack
+from . import lifting
 from .conftest import _native
+from .rows import StorageBudget, pack
 
 _BUDGET = StorageBudget(limit_bytes=1 << 20, basis_bytes=0, batch_size=2)
 

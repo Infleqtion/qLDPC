@@ -11,9 +11,9 @@ from unittest import mock
 import numpy as np
 import pytest
 
-from . import _weight_dual as dual
-from ._weight_rows import pack
+from . import dual
 from .conftest import _native
+from .rows import pack
 
 
 def _histogram(rows: np.ndarray) -> np.ndarray:

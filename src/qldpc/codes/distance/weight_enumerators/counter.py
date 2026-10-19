@@ -6,14 +6,14 @@ The public entry point is ``CSSLogicalWeightCounter``.  It counts physical repre
 ignoring global phase, rather than equivalence classes modulo stabilizers.  Its backends live in
 sibling modules:
 
-- ``_weight_dual``: stabilizer enumeration and the MacWilliams identity, which enumerate
+- ``dual``: stabilizer enumeration and the MacWilliams identity, which enumerate
   stabilizer words rather than the generally much larger logical space.
-- ``_weight_supports``: minimum-weight supports from Brouwer--Zimmermann information sets or an
+- ``supports``: minimum-weight supports from Brouwer--Zimmermann information sets or an
   exhaustive walk.  BZ enumeration stops only when its unseen-word bound is strictly greater than
   the requested weight.
-- ``_collision``: opt-in discovery of supports by joining physical half-shells.
-- ``_weight_lifting``: lifting of the supports to full physical-Pauli counts.
-- ``_weight_rows``: packed rows, local Clifford transport and storage budgets.
+- ``collision``: opt-in discovery of supports by joining physical half-shells.
+- ``lifting``: lifting of the supports to full physical-Pauli counts.
+- ``rows``: packed rows, local Clifford transport and storage budgets.
 
 References:
 
@@ -33,17 +33,17 @@ from typing import Literal, NamedTuple
 import numpy as np
 import numpy.typing as npt
 
-from . import _binary as binary
-from . import brouwer_zimmermann as bz
-from ._collision import recover_supports
-from ._weight_dual import (
+from .. import _binary as binary
+from .. import brouwer_zimmermann as bz
+from .collision import recover_supports
+from .dual import (
     get_macwilliams_minimum,
     get_macwilliams_spectrum,
     get_stabilizer_histograms,
 )
-from ._weight_lifting import count_minimum_paulis
-from ._weight_rows import BinaryMatrix, PackedMatrix, StorageBudget, pack, transform_rows, unpack
-from ._weight_supports import (
+from .lifting import count_minimum_paulis
+from .rows import BinaryMatrix, PackedMatrix, StorageBudget, pack, transform_rows, unpack
+from .supports import (
     get_bz_supports,
     get_exhaustive_minimum,
     get_exhaustive_supports,

@@ -12,10 +12,10 @@ import pytest
 
 from qldpc import codes
 
-from . import _binary as binary
-from . import _weight_supports as supports
-from ._weight_rows import StorageBudget
+from .. import _binary as binary
+from . import supports
 from .conftest import _get_sector_bases, _native
+from .rows import StorageBudget
 
 _CODE_422 = ([[1] * 4], [[1] * 4])
 _WEIGHT_TWO_WORDS = {3, 5, 6, 9, 10, 12}

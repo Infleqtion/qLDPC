@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from . import _weight_rows as rows
+from . import rows
 from .conftest import _native
 
 

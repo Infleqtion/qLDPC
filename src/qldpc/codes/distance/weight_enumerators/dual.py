@@ -23,7 +23,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from ._binary_numba import popcount_word, trailing_zeros
+from .._binary_numba import popcount_word, trailing_zeros
 
 PackedMatrix = npt.NDArray[np.uint64]
 Histogram = npt.NDArray[np.int64]

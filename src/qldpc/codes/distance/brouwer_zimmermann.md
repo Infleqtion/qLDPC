@@ -271,7 +271,7 @@ The automatic even-row check and the family-selection policy below are qLDPC imp
 It is **not** necessarily a lower bound on the weight of witnesses already found.
 Once `L(t) >= U`, there is no unsearched eligible word lighter than `U`, which is enough to stop.
 
-For exact minimum multiplicity, [_weight_supports.py](_weight_supports.py) must also exhaust words whose weight equals the minimum `d`.
+For exact minimum multiplicity, [weight_enumerators/supports.py](weight_enumerators/supports.py) must also exhaust words whose weight equals the minimum `d`.
 Its support collector stops only when `L(t) > d` and passes `upper_bound=d+1` to the shared family selector.
 It transforms logical labels with every basis, uses the actual maximum pivot coverage in the bound, and removes duplicate physical supports across bases.
 The selected family and its construction workspace must fit the counter's working-memory budget.
