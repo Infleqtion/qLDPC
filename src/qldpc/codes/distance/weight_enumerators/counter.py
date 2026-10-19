@@ -116,8 +116,10 @@ class CSSLogicalWeightCounter:
     Args:
         checks_x: Binary X-stabilizer checks, including optional redundant rows.
         checks_z: Binary Z-stabilizer checks.  The two row spaces must commute.
-        memory_limit_bytes: Conservative working-storage budget for support enumeration.
-            This is not a limit on the interpreter's total resident memory.
+        memory_limit_bytes: Conservative working-storage budget for the logical bases, support
+            enumeration, Pauli lifting and the collision tables.  It does not cover the
+            Brouwer--Zimmermann distance search that precedes support enumeration, or the small
+            tables of the dual route, and it is not a limit on the interpreter's total memory.
         batch_size: Maximum native enumeration chunk, providing interruption opportunities.
 
     Instances own their matrices.  Conjugation returns a new counter without changing the source;

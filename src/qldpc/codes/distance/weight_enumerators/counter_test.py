@@ -12,6 +12,7 @@ import contextlib
 import functools
 import itertools
 import math
+import tracemalloc
 from typing import Any
 from unittest import mock
 
@@ -439,3 +440,180 @@ def test_transform_rows_against_bit_oracle(interpreted: bool, width: int) -> Non
     )
     assert np.array_equal(supports.unpack(result, width), expected)
     assert np.array_equal(packed, before)
+
+
+def _measure_peak(call: Any) -> tuple[bool, int]:
+    """Whether ``call`` fit its budget, and the peak bytes it allocated (NumPy and Python)."""
+    tracemalloc.start()
+    try:
+        call()
+        fits = True
+    except MemoryError:
+        fits = False
+    finally:
+        _, peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+    return fits, peak
+
+
+@pytest.mark.parametrize("num_qubits", [40, 70])
+def test_storage_budget_bounds_measured_allocations(num_qubits: int) -> None:
+    """Whenever a budgeted phase succeeds, its measured peak allocation fits within the limit.
+
+    All-ones checks give the minimum-weight supports of every pair of qubits, so the output is
+    large enough to exhaust a small budget.  The budget covers support enumeration and the
+    collision tables, not the distance search that precedes BZ enumeration, so the BZ route is
+    measured through its support collector alone.
+    """
+    checks = np.ones((1, num_qubits), dtype=np.uint8)
+    reference = we.CSSLogicalWeightCounter(checks, checks)
+    (basis, labels), _ = reference._get_sector_bases()
+    basis_bytes = reference._get_basis_storage()
+
+    def collect_bz(limit: int) -> Any:
+        budget = supports.StorageBudget(limit, basis_bytes, 1 << 12)
+        return lambda: supports.get_bz_supports(basis, labels, 2, budget)
+
+    def count_by_collision(limit: int) -> Any:
+        counter = we.CSSLogicalWeightCounter(
+            checks, checks, memory_limit_bytes=limit, batch_size=1 << 12
+        )
+        return lambda: counter.get_minimum(method="collision")
+
+    for make_call in (collect_bz, count_by_collision):
+        # Exclude compilation and one-time setup from the measurement.
+        make_call(1 << 30)()
+        outcomes = {}
+        for limit in (1 << power for power in range(16, 24)):
+            fits, peak = _measure_peak(make_call(limit))
+            outcomes[limit] = fits
+            if fits:
+                assert peak <= limit, (make_call.__name__, limit, peak)
+        # The sweep must cross the threshold, or it would not test the budget at all.
+        assert not outcomes[1 << 16] and outcomes[1 << 23], (make_call.__name__, outcomes)
+
+
+def _random_css_code(num_qubits: int, num_logicals: int, seed: int) -> tuple[Any, Any]:
+    """A random CSS stabilizer code: a trivial code conjugated by a random invertible matrix."""
+    rng = np.random.default_rng(seed)
+    rank_x = (num_qubits - num_logicals) // 2
+    rank_z = num_qubits - num_logicals - rank_x
+    checks_x = np.zeros((rank_x, num_qubits), dtype=np.uint8)
+    checks_z = np.zeros((rank_z, num_qubits), dtype=np.uint8)
+    for row in range(rank_x):
+        checks_x[row, num_logicals + row] = 1
+    for row in range(rank_z):
+        checks_z[row, num_logicals + rank_x + row] = 1
+    while True:
+        matrix = rng.integers(0, 2, size=(num_qubits, num_qubits), dtype=np.uint8)
+        if np.linalg.matrix_rank(galois.GF2(matrix)) == num_qubits:
+            break
+    inverse = np.array(np.linalg.inv(galois.GF2(matrix)), dtype=np.uint8)
+    return (checks_x @ matrix.T) % 2, (checks_z @ inverse) % 2
+
+
+@pytest.mark.parametrize(
+    "num_qubits,num_logicals,seed",
+    [(8, 2, 1), (9, 1, 2), (10, 3, 3), (11, 2, 4), (12, 4, 5), (12, 1, 6)],
+)
+def test_all_methods_match_explicit_enumeration_on_random_codes(
+    num_qubits: int, num_logicals: int, seed: int
+) -> None:
+    """Five independent algorithms must agree with each other and with explicit enumeration.
+
+    Random codes have unequal sector ranks and unequal X and Z minimum weights, unlike the
+    structured examples elsewhere.  Small batches force the chunked native paths.
+    """
+    checks_x, checks_z = _random_css_code(num_qubits, num_logicals, seed)
+    counter = we.CSSLogicalWeightCounter(checks_x, checks_z, batch_size=7)
+    assert counter.dimension == num_logicals
+    counts_x, counts_z, full = _oracle(counter)
+    minimum = next(
+        weight for weight in range(num_qubits + 1) if counts_x[weight] or counts_z[weight]
+    )
+    expected = we.CSSMinimumLogicalWeights(minimum, counts_x[minimum], counts_z[minimum], full)
+    spectrum = counter.get_spectrum()
+    assert list(spectrum.counts_x) == counts_x and list(spectrum.counts_z) == counts_z
+    for method in ("auto", "dual", "brouwer_zimmermann", "brute_force", "collision"):
+        assert counter.get_minimum(method=method) == expected, method
+
+
+def _collect_scan(scan: Any, rows: Any, tags: Any, weight: int, target: int, batch: int) -> Any:
+    """All matches of a resumable coefficient scan, run to completion."""
+    support = np.zeros(weight, dtype=np.int64)
+    prefixes = np.zeros((weight + 1, rows.shape[1]), dtype=np.uint64)
+    tag_prefixes = np.zeros((weight + 1, tags.shape[1]), dtype=np.uint64)
+    output = np.empty((batch, rows.shape[1]), dtype=np.uint64)
+    found: list[tuple[int, ...]] = []
+    depth = 0
+    while depth >= 0:
+        depth, count = scan(
+            rows, tags, support, prefixes, tag_prefixes, depth, target, batch, output
+        )
+        found.extend(map(tuple, output[:count].tolist()))
+    return found
+
+
+@pytest.mark.parametrize("interpreted", [False, True])
+def test_single_word_kernels_match_padded_multiword_kernels(interpreted: bool) -> None:
+    """Each single-word fast path must agree with its general path on identical data.
+
+    Appending a zero word changes the layout, and so the code path, but not any weight.
+    """
+    rng = np.random.default_rng(5150)
+    rows = rng.integers(0, np.iinfo(np.uint64).max, size=(9, 1), dtype=np.uint64)
+    padded = np.hstack([rows, np.zeros_like(rows)])
+    tags = rng.integers(0, 4, size=(9, 1), dtype=np.uint64)
+    tags[:3] = 0
+
+    # Gray-code histogram of a row space.
+    histogram = _native(dual._histogram_chunk, interpreted)
+    counts = [np.zeros(129, dtype=np.int64) for _ in range(2)]
+    for counted, matrix in zip(counts, (rows, padded)):
+        counted[0] = 1
+        histogram(matrix, np.zeros(matrix.shape[1], dtype=np.uint64), counted, 1, 1 << 9)
+    np.testing.assert_array_equal(counts[0], counts[1])
+
+    # Exhaustive supports and minimum, with a stabilizer subspace spanned by the first rows.
+    exhaustive = _native(supports._exhaustive_supports, interpreted)
+    minimum = _native(supports._scan_exhaustive_minimum, interpreted)
+    for stabilizer_rank in (0, 3):
+        results = []
+        for matrix in (rows, padded):
+            width = matrix.shape[1]
+            output = np.empty((1 << 9, width), dtype=np.uint64)
+            current = np.zeros(width, dtype=np.uint64)
+            count = exhaustive(matrix, current, stabilizer_rank, 1, 1 << 9, 28, output)
+            words = output[:count, 0].tolist()
+            best, tied = minimum(
+                matrix, np.zeros(width, dtype=np.uint64), stabilizer_rank, 1, 1 << 9, 65, output
+            )
+            results.append((words, best, tied, output[:tied, 0].tolist()))
+        assert results[0] == results[1]
+        assert results[0][0] and results[0][2]
+
+    # Coefficient-layer scan over sibling leaves, at several batch sizes.
+    scan = _native(supports._scan_supports, interpreted)
+    single = _native(supports._scan_supports_one, interpreted)
+    with mock.patch.object(supports, "_scan_supports_one", single):
+        matched = 0
+        for weight, target, batch in ((2, 32, 1), (3, 32, 4), (4, 31, 100)):
+            narrow = _collect_scan(scan, rows, tags, weight, target, batch)
+            wide = _collect_scan(scan, padded, tags, weight, target, batch)
+            assert narrow == [(word,) for word, _ in wide]
+            assert all(second == 0 for _, second in wide)
+            matched += len(narrow)
+        assert matched
+
+    # Opposite-type stabilizer counts on a batch of supports.
+    shortened = _native(supports._shortened_histogram, interpreted)
+    stabilizers = rows[:4]
+    masks = rng.integers(0, np.iinfo(np.uint64).max, size=(32, 1), dtype=np.uint64)
+    np.testing.assert_array_equal(
+        shortened(stabilizers, masks, 4),
+        shortened(
+            np.hstack([stabilizers, np.zeros_like(stabilizers)]),
+            np.hstack([masks, np.zeros_like(masks)]),
+            4,
+        ),
+    )
