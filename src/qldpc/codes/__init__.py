@@ -40,6 +40,7 @@ from .quantum import (
     FiveQuditCode,
     GALACode,
     GeneralizedSurfaceCode,
+    GrossCode,
     HGPCode,
     IcebergCode,
     LPCode,
@@ -59,6 +60,7 @@ from .quantum import (
     TetrahedralCode,
     ToricCode,
     TrivialCode,
+    TwoGrossCode,
 )
 
 __all__ = [
@@ -82,6 +84,7 @@ __all__ = [
     "GALACode",
     "GeneralizedSurfaceCode",
     "GolayCode",
+    "GrossCode",
     "HGPCode",
     "HammingCode",
     "IcebergCode",
@@ -109,6 +112,7 @@ __all__ = [
     "TetrahedralCode",
     "ToricCode",
     "TrivialCode",
+    "TwoGrossCode",
     "get_distance_classical",
     "get_distance_css_brouwer_zimmermann",
     "get_distance_quantum",

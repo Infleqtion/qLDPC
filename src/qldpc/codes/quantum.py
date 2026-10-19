@@ -1254,6 +1254,38 @@ class BBCode(QCCode):
         return bool(np.all(reached))
 
 
+class GrossCode(BBCode):
+    """The [[144, 12, 12]] gross bivariate bicycle code.
+
+    References:
+
+    - https://errorcorrectionzoo.org/c/gross
+    - https://arxiv.org/abs/2308.07915
+    - https://arxiv.org/abs/2506.03094
+    """
+
+    def __init__(self) -> None:
+        x, y = sympy.symbols("x y")
+        super().__init__({x: 12, y: 6}, x**3 + y + y**2, y**3 + x + x**2)
+        self._distance_x = self._distance_z = 12
+
+
+class TwoGrossCode(BBCode):
+    """The [[288, 12, 18]] two-gross (or double-gross) bivariate bicycle code.
+
+    References:
+
+    - https://errorcorrectionzoo.org/c/bb288
+    - https://arxiv.org/abs/2308.07915
+    - https://arxiv.org/abs/2506.03094
+    """
+
+    def __init__(self) -> None:
+        x, y = sympy.symbols("x y")
+        super().__init__({x: 12, y: 12}, x**3 + y**2 + y**7, y**3 + x + x**2)
+        self._distance_x = self._distance_z = 18
+
+
 ####################################################################################################
 # hypergraph product code, lifted product code, and their subsystem variants
 
