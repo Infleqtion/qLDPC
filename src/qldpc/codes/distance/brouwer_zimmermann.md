@@ -101,9 +101,9 @@ The number of nonzero coordinates of `v` in `I` is therefore the number of nonze
 
 > For every word `v` in `V`, the number of nonzero coordinates of `v` in `I` equals the coefficient weight of `v` in `G_I`.
 
-The word `v` can also have nonzero coordinates outside `I`, and those do not enter this count.
 For example, take `r = 2` and `I = {0, 1}`, with basis rows `1 0 1 1` and `0 1 1 0`.
-Their XOR is `1 1 0 1`, which selects two rows and has two nonzero coordinates in `I`, along with one outside `I`.
+Row 1 alone has coefficient weight 1 and one nonzero coordinate in `I`.
+The XOR of both rows is `1 1 0 1`, which has coefficient weight 2 and two nonzero coordinates in `I`.
 
 **Searching a basis through weight `t`** means examining every word with coefficient weight at most `t`, that is, every XOR of at most `t` rows of `G_I`.
 By the statement above, a word that is not examined by this search has coefficient weight at least `t+1`.
