@@ -12,6 +12,9 @@ It is organized as follows:
 - [Section 4](#4-guide-to-the-source-code) is a guide to the source code: how the modules are organized, how a computation flows through them, which code names correspond to the concepts of [Section 2](#2-the-brouwer-zimmermann-algorithm) and [Section 3](#3-extensions-and-optimizations), and which behavior spans several files.
 - [Section 5](#5-correctness-requirements) summarizes the correctness requirements that apply when changing the implementation.
 
+Sections [2](#2-the-brouwer-zimmermann-algorithm) and [3](#3-extensions-and-optimizations) have been carefully reviewed to help human readers understand the BZ algorithm and its implementation in qLDPC at a high level.
+Sections [4](#4-guide-to-the-source-code) and [5](#5-correctness-requirements) are highly technical summaries written to help AI agents navigate the BZ implementation in qLDPC.
+
 ## 2. The Brouwer-Zimmermann algorithm
 
 This section describes BZ as presented in [arXiv:1603.06757](https://arxiv.org/abs/1603.06757) and [arXiv:2408.10743](https://arxiv.org/abs/2408.10743).
@@ -444,6 +447,9 @@ The counts cover only enumeration; building and packing the search bases costs e
 
 ## 4. Guide to the source code
 
+**Audience note:** This section is a highly technical summary written to help AI agents navigate the BZ implementation in qLDPC.
+For a carefully reviewed, high-level explanation intended for human readers, see Sections [2](#2-the-brouwer-zimmermann-algorithm) and [3](#3-extensions-and-optimizations).
+
 This section is a guide to the source files in this directory.
 It connects the concepts of Sections [2](#2-the-brouwer-zimmermann-algorithm) and [3](#3-extensions-and-optimizations) to modules, identifiers, and behavior that spans files.
 Heuristic tunables are identified by parameter name so that their current values can be found in the source.
@@ -578,6 +584,9 @@ With an early-exit cutoff above one, a different search order can find a differe
   Each sector keeps its own `lower_bound`, `max_coverage`, and `weight_divisor`.
 
 ## 5. Correctness requirements
+
+**Audience note:** This section is a highly technical summary written to help AI agents navigate the BZ implementation in qLDPC.
+For a carefully reviewed, high-level explanation intended for human readers, see Sections [2](#2-the-brouwer-zimmermann-algorithm) and [3](#3-extensions-and-optimizations).
 
 Changes to the BZ algorithm can use different representations, certificates, and search strategies while preserving the following requirements for the nontrivial problems of [Section 2.1](#21-the-problem).
 
