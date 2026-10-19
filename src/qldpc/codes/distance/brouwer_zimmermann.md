@@ -165,6 +165,33 @@ Such a word is not eligible, so it must not lower `U`.
 Section 2.1 of [arXiv:2408.10743](https://arxiv.org/abs/2408.10743v2) therefore checks whether a candidate word of weight below `U` lies in `S` before updating `U`.
 The lower certificate of [Section 2.5](#25-the-stopping-certificate) is unchanged, because it bounds all unexamined words, eligible or not.
 
+### 2.7 Pauli weight as Hamming weight
+
+An operator that contains only X (or only Z) Pauli operators on `n` qubits is a binary vector of length `n`, and its Hamming weight is its physical weight.
+
+A general Pauli operator is a symplectic row `[x | z]` of length `2n`.
+Its physical weight is the number of qubits on which `x` or `z` is nonzero, which differs from the Hamming weight of `[x | z]`.
+
+To search for the minimum physical weight with a Hamming-weight algorithm, Section 2.4 of [arXiv:2408.10743](https://arxiv.org/abs/2408.10743v2) uses the `Saved_isometry` construction, which follows earlier work of White and Grassl.
+It maps each symplectic row to a binary word of length `3n`:
+
+$$
+T(x,z) = (x \mid z \mid x+z).
+$$
+
+On each qubit, the pair `(x_i, z_i)` is `(0,0)` for the identity, and `(1,0)`, `(0,1)`, or `(1,1)` for a nontrivial Pauli operator.
+The identity contributes Hamming weight zero to `T`, and each nontrivial Pauli operator contributes weight exactly two.
+Hence
+
+$$
+\operatorname{wt}_{H}(T(v)) = 2\operatorname{wt}_{P}(v),
+$$
+
+where `wt_P` is the physical Pauli weight.
+
+BZ therefore searches words with `3n` coordinates, and the quantum distance is half of the minimum Hamming weight that BZ finds.
+Because `T` is linear and injective, it maps the spaces `S ⊆ V` to spaces `T(S) ⊆ T(V)`, and a word of `T(V)` is eligible exactly when its preimage lies outside `S`.
+
 ## 3. Implementation in qLDPC
 
 ### 3.1 Overview of a search
