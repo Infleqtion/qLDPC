@@ -90,12 +90,25 @@ $$
 
 The coordinates in `I` are the **pivot columns** of `G_I`.
 
-For a coefficient vector `a`, the restriction of `aG_I` to `I` is exactly `a`.
-Selecting `w` rows therefore gives a word with exactly `w` nonzero entries on `I`.
-The word may also have nonzero entries outside `I`.
-This gives the fact on which BZ's stopping certificate rests:
+Let `v` be any word in `V`, and let `a` be its coefficient vector in `G_I`, so that `v = aG_I`.
+Restricting `v` to the coordinates in `I` gives `a`, because `G_I` restricts to the identity matrix there:
 
-> If every selection of at most `t` rows of `G_I` has been examined, then every eligible word with at most `t` nonzero coordinates in `I` has been examined.
+$$
+v|_I = a\,G_I[:,I] = a\,I_r = a.
+$$
+
+The number of nonzero coordinates of `v` in `I` is therefore the number of nonzero entries of `a`:
+
+> For every word `v` in `V`, the number of nonzero coordinates of `v` in `I` equals the coefficient weight of `v` in `G_I`.
+
+The word `v` can also have nonzero coordinates outside `I`, and those do not enter this count.
+For example, take `r = 2` and `I = {0, 1}`, with basis rows `1 0 1 1` and `0 1 1 0`.
+Their XOR is `1 1 0 1`, which selects two rows and has two nonzero coordinates in `I`, along with one outside `I`.
+
+**Searching a basis through weight `t`** means examining every word with coefficient weight at most `t`, that is, every XOR of at most `t` rows of `G_I`.
+By the statement above, a word that is not examined by this search has coefficient weight at least `t+1`.
+It therefore has at least `t+1` nonzero coordinates in `I`.
+Section 2.5 uses this consequence to lower-bound the weight of every word that the search has not examined.
 
 Different information sets give different bases of the same space.
 The same coefficient vector in two such bases usually describes two different words.
@@ -124,9 +137,10 @@ For a full information set (`r_i = r`), this is `b_i(t) = t + 1`.
 
 ### 2.5 The stopping certificate
 
-Suppose that every basis has been fully searched through coefficient weight `t`, meaning that every selection of at most `t` rows has been examined in every basis.
-Consider an eligible word `v` that has not been examined.
-In every basis `i`, the word `v` needs at least `t+1` rows, so it has at least `b_i(t)` nonzero coordinates in block `i`.
+Suppose that every basis has been searched through coefficient weight `t`, in the sense of section 2.3.
+Consider an eligible word `v` that was not examined in any basis.
+In each basis `i`, the coefficient weight of `v` is at least `t+1`.
+By section 2.3 (and, for a rank-deficient block, section 2.4), `v` therefore has at least `b_i(t)` nonzero coordinates in block `i`.
 
 If the blocks are disjoint, they share no coordinates, so these counts add up:
 
