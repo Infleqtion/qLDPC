@@ -333,21 +333,21 @@ The search stops after layer four.
 The overlapping family needs fewer evaluations because it avoids layers five and six.
 The counts cover only enumeration; building and packing the search bases costs extra.
 
-## 3. Implementation in qLDPC
+## 4. Implementation in qLDPC
 
-### 3.1 Overview of a search
+### 4.1 Overview of a search
 
-A call to qLDPC's BZ distance method may return through exhaustive enumeration before any BZ scan runs ([Section 4.4](#44-exhaustive-enumeration-as-an-alternative) lists the three points at which this can happen).
+A call to qLDPC's BZ distance method may return through exhaustive enumeration before any BZ scan runs ([Section 4.5](#45-exhaustive-enumeration-as-an-alternative) lists the three points at which this can happen).
 When a scan does run, the call proceeds as follows:
 
-1. The search builds an independent basis of `V`, attaches quotient labels to its rows ([Section 3.2](#32-quantum-problems-quotient-labels)), and, for general Pauli operators, transforms the rows to Hamming coordinates ([Section 3.3](#33-quantum-problems-pauli-weight-as-hamming-weight)).
+1. The search builds an independent basis of `V`, attaches quotient labels to its rows ([Section 4.2](#42-testing-membership-in-s-with-quotient-labels)), and, for general Pauli operators, transforms the rows to Hamming coordinates ([Section 2.7](#27-pauli-weight-as-hamming-weight)).
 2. The lightest eligible row of that basis gives the initial upper bound `U`.
-   Preparation may stop here, either because `U` is at most the `cutoff` ([Section 3.6](#36-exactness-and-cutoff)) or because exhaustive enumeration is estimated to be cheaper ([Section 4.4](#44-exhaustive-enumeration-as-an-alternative)).
-3. The search builds a disjoint family of search bases ([Section 3.4](#34-building-disjoint-information-sets)) and checks their eligible rows.
+   Preparation may stop here, either because `U` is at most a user-provided `cutoff` ([Section 4.6](#46-early-exit-with-a-cutoff)) or because exhaustive enumeration is estimated to be cheaper ([Section 4.5](#45-exhaustive-enumeration-as-an-alternative)).
+3. The search builds a disjoint family of search bases ([Section 4.3](#43-building-search-bases)) and checks their eligible rows.
    These rows are all the coefficient-weight-one words, so layer one is complete.
 4. Preparation may stop again if the lower certificate already reaches `U`, or if the work estimate favors exhaustive enumeration.
-   It may also replace the disjoint family of search bases by an overlapping family of search bases ([Section 4.1](#41-overlapping-information-sets)).
-5. Otherwise, the search packs the search bases into `uint64` words and scans the layers starting from layer two ([Section 3.5](#35-packed-enumeration)).
+   It may also replace the disjoint family of search bases by an overlapping family of search bases ([Section 3.1](#31-overlapping-search-bases)).
+5. Otherwise, the search packs the search bases into `uint64` words and scans the layers starting from layer two ([Section 4.4](#44-packed-enumeration)).
    It updates the lower certificate only after a whole layer is complete in each search basis.
 
 The implementation is organized as follows:
@@ -363,8 +363,9 @@ The implementation is organized as follows:
 | Sharing upper bounds between CSS sectors | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_get_distance_brouwer_zimmermann_many` |
 | Exhaustive alternatives and their cost estimates | [brouwer_zimmermann.py](brouwer_zimmermann.py): `_exhaustive_is_cheaper`, `_brute_force_is_cheaper`; [brute_force.py](brute_force.py): `_get_distance_quantum_brute_force` |
 
-### 3.2 Quantum problems: quotient labels
+### 4.2 Testing membership in `S` with quotient labels
 
+The membership test of [Section 2.6](#26-excluding-stabilizers) is performed with quotient labels, which are a qLDPC implementation choice.
 For the problem of [Section 2.1](#21-the-problem) with nested spaces `S ⊆ V`, `_get_nested_code_basis` builds a basis of `V` that is adapted to `S`.
 Let `s = dim(S)` and `q = dim(V/S)`, so that `r = s + q`.
 The basis has the form
@@ -397,33 +398,9 @@ Then `aM'` is still the label of the word `aG'`.
 Omitting this step would either accept stabilizers as witnesses or reject nontrivial logical operators.
 `_row_reduce_binary` performs these paired transformations.
 
-### 3.3 Quantum problems: Pauli weight as Hamming weight
+### 4.3 Building search bases
 
-An operator that contains only X (or only Z) Pauli operators on `n` qubits is a binary vector of length `n`, and its Hamming weight is its physical weight.
-
-A general Pauli operator is a symplectic row `[x | z]` of length `2n`.
-Its physical weight is the number of qubits on which `x` or `z` is nonzero, which differs from the Hamming weight of `[x | z]`.
-
-`_symplectic_to_hamming` fixes this using the `Saved_isometry` construction from [section 2.4 of the quantum-code adaptation](https://arxiv.org/abs/2408.10743v2):
-
-$$
-T(x,z) = (x \mid z \mid x+z).
-$$
-
-On each qubit, the pair `(x_i, z_i)` is `(0,0)` for the identity, and `(1,0)`, `(0,1)`, or `(1,1)` for a nontrivial Pauli operator.
-The identity contributes Hamming weight zero to `T`, and each nontrivial Pauli operator contributes weight exactly two.
-Hence
-
-$$
-\operatorname{wt}_{H}(T(v)) = 2\operatorname{wt}_{P}(v),
-$$
-
-where `wt_P` is the physical Pauli weight.
-
-BZ therefore searches words with `3n` coordinates, doubles any `cutoff` before comparing, and halves the final result.
-The labels from [Section 3.2](#32-quantum-problems-quotient-labels) remain valid because `T` is linear and injective.
-
-### 3.4 Building disjoint information sets
+#### Disjoint family of search bases
 
 `_get_information_set_generators` builds a disjoint family of search bases, using a bounded, deterministic heuristic:
 
@@ -437,11 +414,66 @@ The labels from [Section 3.2](#32-quantum-problems-quotient-labels) remain valid
 `_select_brouwer_zimmermann_information_sets` then discards any partial block that cannot help when the full blocks alone would already raise the lower certificate to `U`.
 (A block with rank `r_i` has `b_i(t) = 0` until `t + 1 > r - r_i`.)
 
-### 3.5 Packed enumeration
+#### Choosing an overlapping family of search bases
+
+`_get_overlapping_information_sets` starts from the search bases of the disjoint family whose blocks are information sets.
+It returns either a replacement overlapping family of search bases, all of whose blocks are information sets, together with the actual maximum coverage of that family, or `None` to keep the disjoint family of search bases.
+Which overlapping family to choose is decided heuristically.
+The certificate for the chosen overlapping family uses only verified ranks and the actual maximum coverage, so it is sound regardless of the heuristic.
+
+Here `n_active` is the number of nonzero columns of the basis.
+The implementation counts only nonzero columns, because an all-zero column can never be a pivot, so `n_active` plays the role of `N` in [Section 3.1](#31-overlapping-search-bases).
+This count includes the columns that existing blocks already use.
+Coverage is counted using the original column indices, before each basis removes its pivot columns for packing.
+
+Construction of the overlapping family has four stages.
+
+1. **Skip unnecessary work.**
+   Return `None` if the disjoint family of search bases is already cheap to search, already uses every nonzero column, or is already at the size limit.
+2. **Rule out impossible savings.**
+   A family of `m` search bases whose blocks are all information sets has `m*r` pivot columns in total, counted with multiplicity.
+   Spread over `n_active` columns, they force some column to be covered at least `ceil(m*r/n_active)` times.
+   Using that value as `C` gives the most optimistic work estimate for each `m`.
+   If even the best optimistic estimate does not improve on the estimated work of the current disjoint family of search bases, return `None`.
+3. **Build coverage-balanced bases.**
+   Order columns so that the least-used ones come first, breaking ties with a fixed random seed, then row reduce on that order and transform the labels in parallel.
+   Skip any information set that was already seen.
+   Detecting a duplicate still requires the row reduction, so it consumes one attempt from a fixed budget.
+4. **Keep the cheapest overlapping family.**
+   After each new information set is added, estimate the work for the overlapping family built so far, and remember the best one.
+   Stop when the estimate reaches the optimistic bound from stage 2, or the overlapping family reaches the size limit.
+
+The policy constants are:
+
+- An overlapping family has at most eight search bases.
+- If construction starts with `m_0` full sets, it makes at most `2*(8 - m_0)` attempts.
+- Stage 1 skips families of search bases whose estimated work is below 100,000 candidate/set evaluations.
+
+The choice of these constants affects only performance; the certificate holds for any values.
+The selection depends only on the basis and its labels, the current upper bound `U`, the fixed constants listed here, and the disjoint family of search bases and weight divisor from preparation.
+The upper bound can come from a row witness, from the other sector of a CSS code ([Section 3.3](#33-sharing-witnesses-between-css-sectors)), or from a distance that is already known.
+A different valid upper bound can change which overlapping family is selected, and the certificate is sound for whichever family results.
+
+#### The work estimate
+
+`_get_brouwer_zimmermann_work` estimates the number of candidate/set evaluations needed to certify `U`.
+It pessimistically assumes that no lighter witness appears before the certificate reaches `U`.
+Let `m` be the number of bases, and let `t_*` be the smallest layer after which `L` reaches `U`.
+The estimate is
+
+$$
+W = m\sum_{w=1}^{t_*} \binom{r}{w}.
+$$
+
+The sum starts at `w = 1`, so it includes the systematic rows.
+Actual runtime also depends on basis construction, the width of packed words, and early improvements of the witness.
+
+### 4.4 Packed enumeration
 
 #### Reconstructing weights without storing pivots
 
 Preparation removes the pivot columns of each basis before packing the remaining columns into `uint64` words.
+This deletion is a qLDPC implementation choice; packing bits into machine words is also used by [arXiv:1603.06757](https://arxiv.org/abs/1603.06757v2).
 The known contribution of the removed columns to a word's weight is easy to restore:
 
 - For a full information set, a support of `w` rows contributes exactly `w` removed pivot bits.
@@ -453,6 +485,7 @@ The sum is the Hamming weight of the word.
 #### Enumerating supports and reusing XOR prefixes
 
 `_scan_brouwer_zimmermann` describes a candidate by its **support**: the selected row indices in increasing order.
+Reusing partial XOR sums in this way follows the saved-additions idea of [arXiv:1603.06757](https://arxiv.org/abs/1603.06757v2).
 For coefficient weight `w`, it visits the same supports as `itertools.combinations(range(r), w)`.
 It maintains the invariant
 
@@ -489,183 +522,13 @@ After an interruption, a new `advance()` call restarts the unfinished layer from
 | `best` | Lightest witness known, which is the current upper bound |
 | `lower_bound` | Lower certificate from the layers completed so far |
 | `next_weight` | Next coefficient weight to search |
-| `cutoff` | Cutoff that ends the search early ([Section 3.6](#36-exactness-and-cutoff)) |
-| `weight_divisor` | Proven divisor of every candidate Hamming weight ([Section 4.2](#42-rounding-the-certificate-to-a-proven-weight-multiple)) |
-| `max_coverage` | Maximum number of blocks containing any column index ([Section 4.1](#41-overlapping-information-sets)) |
+| `cutoff` | Cutoff that ends the search early ([Section 4.6](#46-early-exit-with-a-cutoff)) |
+| `weight_divisor` | Proven divisor of every candidate Hamming weight ([Section 3.2](#32-rounding-the-certificate-to-a-proven-weight-multiple)) |
+| `max_coverage` | Maximum number of blocks containing any column index ([Section 3.1](#31-overlapping-search-bases)) |
 
 A search is finished when its cutoff is reached, its lower certificate reaches `best`, or every coefficient weight has been enumerated.
 
-### 3.6 Exactness and cutoff
-
-Without an early return caused by a cutoff, a BZ search ends in one of two ways: its certificate reaches `U`, or it exhausts the eligible space.
-Either way, the result is the exact distance.
-
-With a positive `cutoff`, the search may instead stop as soon as `U` is at most the cutoff.
-The result is then an upper bound that is at or below the cutoff, and it can exceed the exact distance.
-The default `cutoff` of one is still exact for a valid nontrivial binary problem, because a positive distance cannot be less than one.
-Use `cutoff=0` to require a fully certified result.
-
-## 4. Improvements in qLDPC
-
-### 4.1 Overlapping information sets
-
-Disjoint blocks are limited by the number of columns: at most `floor(n_active / r)` full information sets fit without sharing a column.
-Allowing blocks to share column indices permits more search bases, at the price of a weaker certificate.
-A collection of search bases whose blocks may share column indices is an **overlapping family of search bases**.
-
-#### The certificate
-
-Let `C` be the **maximum coverage**: the largest number of blocks `B_i` that contain any single column index.
-Let `v` be an eligible word that has not been examined, so that `wt(v|_{B_i}) ≥ b_i(t)` for every `i` ([Section 2.5](#25-the-stopping-certificate)).
-Each nonzero coordinate `j` of `v` contributes to `wt(v|_{B_i})` once for every block `B_i` that contains `j`, which is at most `C` blocks.
-Summing over blocks therefore gives
-
-$$
-\sum_i b_i(t) \le \sum_i \operatorname{wt}(v|_{B_i}) \le C\operatorname{wt}(v).
-$$
-
-This gives the lower certificate
-
-$$
-L(t) =
-\left\lceil \frac{\sum_i b_i(t)}{C} \right\rceil.
-$$
-
-With `m` full information sets, it becomes
-
-$$
-L(t) = \left\lceil \frac{m(t+1)}{C} \right\rceil.
-$$
-
-Disjoint blocks are the special case `C = 1`, which recovers [Section 2.5](#25-the-stopping-certificate).
-`_get_brouwer_zimmermann_lower_bound` evaluates this formula with exact integer arithmetic, including the rank-deficient terms `b_i(t)`.
-The selector that builds overlapping families of search bases, however, proposes only full information sets.
-
-The [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) refers to Grassl's work for overlapping sets, without giving a bound.
-The coverage-divided bound `L(t)` is derived for qLDPC.
-
-As a small example, take the code generated by `101` and `011`, whose distance is two.
-Each of the three pairs of column indices, `{0,1}`, `{0,2}`, and `{1,2}`, is a full information set, so `m = 3`, and each column index lies in two of them, so `C = 2`.
-After examining the single rows in all three bases (`t = 1`), the formula gives `ceil(3*2/2) = 3`.
-This means that every word of weight below three has already been examined, so no unexamined word can improve on the weight-two witness.
-
-#### Choosing the overlapping family of search bases
-
-`_get_overlapping_information_sets` starts from the search bases of the disjoint family whose blocks are information sets.
-It returns either a replacement overlapping family of search bases, all of whose blocks are information sets, together with the actual maximum coverage of that family, or `None` to keep the disjoint family of search bases.
-Which overlapping family to choose is decided heuristically.
-The certificate for the chosen overlapping family uses only verified ranks and the actual maximum coverage, so it is sound regardless of the heuristic.
-
-Here `n_active` is the number of nonzero columns of the basis, as in [Section 3.4](#34-building-disjoint-information-sets).
-This count includes the columns that existing blocks already use.
-Coverage is counted using the original column indices, before each basis removes its pivot columns for packing.
-
-Construction of the overlapping family has four stages.
-
-1. **Skip unnecessary work.**
-   Return `None` if the disjoint family of search bases is already cheap to search, already uses every active column, or is already at the size limit.
-2. **Rule out impossible savings.**
-   A family of `m` search bases whose blocks are all information sets has `m*r` pivot columns in total, counted with multiplicity.
-   Spread over `n_active` columns, they force some column to be covered at least `ceil(m*r/n_active)` times.
-   Using that value as `C` gives the most optimistic work estimate for each `m`.
-   If even the best optimistic estimate does not improve on the estimated work of the current disjoint family of search bases, return `None`.
-3. **Build coverage-balanced bases.**
-   Order columns so that the least-used ones come first, breaking ties with a fixed random seed, then row reduce on that order and transform the labels in parallel.
-   Skip any information set that was already seen.
-   Detecting a duplicate still requires the row reduction, so it consumes one attempt from a fixed budget.
-4. **Keep the cheapest overlapping family.**
-   After each new information set is added, estimate the work for the overlapping family built so far, and remember the best one.
-   Stop when the estimate reaches the optimistic bound from stage 2, or the overlapping family reaches the size limit.
-
-The policy constants are:
-
-- An overlapping family has at most eight search bases.
-- If construction starts with `m_0` full sets, it makes at most `2*(8 - m_0)` attempts.
-- Stage 1 skips families of search bases whose estimated work is below 100,000 candidate/set evaluations.
-
-The choice of these constants affects only performance; the certificate holds for any values.
-The selection depends only on the basis and its labels, the current upper bound `U`, the fixed constants listed here, and the disjoint family of search bases and weight divisor from preparation.
-The upper bound can come from a row witness, from the other sector of a CSS code ([Section 4.5](#45-sharing-witnesses-between-css-sectors)), or from a distance that is already known.
-A different valid upper bound can change which overlapping family is selected, and the certificate is sound for whichever family results.
-
-#### The work estimate
-
-`_get_brouwer_zimmermann_work` estimates the number of candidate/set evaluations needed to certify `U`.
-It pessimistically assumes that no lighter witness appears before the certificate reaches `U`.
-Let `m` be the number of bases, and let `t_*` be the smallest layer after which `L` reaches `U`.
-The estimate is
-
-$$
-W = m\sum_{w=1}^{t_*} \binom{r}{w}.
-$$
-
-The sum starts at `w = 1`, so it includes the systematic rows.
-Actual runtime also depends on basis construction, the width of packed words, and early improvements of the witness.
-
-#### Worked example
-
-This example uses the QC64 input from `test_brouwer_zimmermann_overlap_qc` in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py).
-One CSS sector of that code has these properties:
-
-- It has 64 coordinates and dimension `r = 41`.
-- Its setup rows already provide a witness of weight eight (`U = 8`).
-- Every word in it has even weight, which [Section 4.2](#42-rounding-the-certificate-to-a-proven-weight-multiple) uses.
-
-With a **disjoint family of one search basis** (`m = 1`, `C = 1`), `L(t) = t + 1`.
-The certificate `L(6) = 7` is rounded up to eight by the even-weight divisor, so the search enumerates layers two through six after checking the systematic rows.
-
-With an **overlapping family of three search bases** (`m = 3`), each with an information set as its block, a coverage-balanced choice can have maximum coverage `C = 2`.
-Completing layer four gives
-
-$$
-L(4)=\left\lceil\frac{3(4+1)}{2}\right\rceil=8.
-$$
-
-This reaches eight directly, even before rounding to an even weight.
-
-| Strategy | Last layer | Candidate/set evaluations after the systematic rows |
-| --- | ---: | ---: |
-| One disjoint set, with even-weight rounding | 6 | `sum(comb(41,w) for w in range(2,7)) = 5,358,536` |
-| Three full sets, maximum coverage two | 4 | `3 * sum(comb(41,w) for w in range(2,5)) = 338,250` |
-
-The overlapping family of three search bases needs fewer evaluations because it avoids layers five and six.
-The counts cover only the enumeration; constructing and packing the bases costs extra.
-
-### 4.2 Rounding the certificate to a proven weight multiple
-
-Suppose every candidate has a weight that is a multiple of some integer `D`.
-Then `L` can be rounded up to `D * ceil(L/D)`, the smallest multiple of `D` that is at least `L`.
-In qLDPC, `D` comes from two sources:
-
-- The symplectic transformation of [Section 3.3](#33-quantum-problems-pauli-weight-as-hamming-weight) gives `D = 2`.
-- Preparation also checks whether every row of the search basis has even Hamming weight.
-  The sum of two even-weight words has even weight, so if all basis rows are even, every word in the space is even.
-  When this holds, the implementation combines `D = 2` with any existing divisor by taking the least common multiple.
-
-Divisibility must hold for every word in the space, which is stronger than holding for each basis row.
-For example, `11110` and `01111` each have weight four, but their XOR `10001` has weight two.
-The even-weight check on the basis rows is the only divisibility check that qLDPC performs, and it is a qLDPC addition.
-
-### 4.3 One completed layer for all bases
-
-The bases could in principle be searched to different depths `t_i`.
-The same argument as in [Section 4.1](#41-overlapping-information-sets) then gives
-
-$$
-L = \left\lceil \frac{\sum_i b_i(t_i)}{C} \right\rceil.
-$$
-
-Algorithm 994 enumerates the combinations of each basis in turn, and the paper's discussion notes that the bound can increase after every basis.
-Its Algorithm 1 nevertheless updates the bound only after all bases complete a layer.
-qLDPC does the same, with one difference in scheduling: it examines each support in every basis before moving to the next support.
-This lets one set of prefix XORs be reused across all bases ([Section 3.5](#35-packed-enumeration)), and it means that qLDPC tracks a single completed coefficient weight `t` shared by all bases.
-
-Separate depths `t_i` would allow a lower certificate to be reached sooner.
-In the worked example of [Section 4.1](#41-overlapping-information-sets), finishing layer four in one basis while the other two stop after layer three gives `ceil((5+4+4)/2) = 7`.
-Rounding up to an even weight gives eight, and this requires only 135,710 candidate/set evaluations after the systematic rows, compared with 338,250 in the table.
-qLDPC's shared schedule does not exploit this, so the table counts the work of qLDPC's actual scan.
-
-### 4.4 Exhaustive enumeration as an alternative
+### 4.5 Exhaustive enumeration as an alternative
 
 For small or low-dimensional problems, the setup cost of BZ exceeds the cost of enumerating every word.
 Exhaustive enumeration can therefore be chosen at three points:
@@ -674,26 +537,24 @@ Exhaustive enumeration can therefore be chosen at three points:
   It does so when `_exhaustive_is_cheaper` approves the number of supplied rows (stabilizers and logical operators together) and those rows are linearly independent.
   Dependent rows take the general path through the adapted basis instead.
 - During preparation, `_exhaustive_is_cheaper` can choose exhaustive enumeration when the setup cost of information sets would dominate.
-- After the information sets are built, `_brute_force_is_cheaper` compares the estimated BZ work from [Section 4.1](#41-overlapping-information-sets) with the number of eligible words, `(2**q - 1) * 2**(r-q)`, where `q` is the number of logical rows.
+- After the information sets are built, `_brute_force_is_cheaper` compares the estimated BZ work from [Section 4.3](#the-work-estimate) with the number of eligible words, `(2**q - 1) * 2**(r-q)`, where `q` is the number of logical rows.
 
+Neither [arXiv:1603.06757](https://arxiv.org/abs/1603.06757v2) nor [arXiv:2408.10743](https://arxiv.org/abs/2408.10743v2) describes switching to exhaustive enumeration; it is a qLDPC choice.
 The exhaustive implementation in [brute_force.py](brute_force.py) enumerates words in vectorized, packed blocks and updates them using Gray-code steps.
 This enumeration does not use the BZ certificate.
 
 Callers do not need to supply independent generators.
-Classical inputs are first reduced to an independent basis, and quantum exhaustive enumeration uses either the adapted basis from [Section 3.2](#32-quantum-problems-quotient-labels) or, in the direct case above, supplied rows that were verified to be independent.
+Classical inputs are first reduced to an independent basis, and quantum exhaustive enumeration uses either the adapted basis from [Section 4.2](#42-testing-membership-in-s-with-quotient-labels) or, in the direct case above, supplied rows that were verified to be independent.
 The packed enumerators therefore always receive independent bases, prepared or verified in [core.py](core.py) or [brouwer_zimmermann.py](brouwer_zimmermann.py).
 
-### 4.5 Sharing witnesses between CSS sectors
+### 4.6 Early exit with a cutoff
 
-The distance of a CSS code is `min(d_x, d_z)`, where `d_x` and `d_z` are the distances of the X and Z sectors.
-`_get_distance_brouwer_zimmermann_many` prepares one search per sector and advances them in round-robin order, one layer at a time.
-A witness found in either sector lowers the upper bound `U` used by both.
-
-Each sector keeps its own information sets, coverage, weight divisor, and lower certificate.
-The sectors can differ in these properties.
-For example, a witness of weight seven from one sector caps the other sector's upper bound at seven, even if the other sector contains only even-weight words and so can never have a witness of weight seven.
-That sector only has to show that it cannot beat the shared witness, so its own exact distance may remain undetermined.
-A joint search therefore determines `min(d_x, d_z)`, while the individual sector distances may remain unknown.
+The BZ functions accept a `cutoff`, which is not part of the published algorithm.
+With a positive `cutoff`, the search stops as soon as `U` is at most the cutoff.
+The result is then an upper bound that is at or below the cutoff, and it can exceed the exact distance.
+The default `cutoff` of one still returns the exact distance for a valid nontrivial binary problem, because a positive distance cannot be less than one.
+Use `cutoff=0` to require a certified result.
+For general Pauli problems, the cutoff is doubled before it is compared with Hamming weights, because of the map of [Section 2.7](#27-pauli-weight-as-hamming-weight).
 
 ## 5. Invariants to preserve when modifying the implementation
 
@@ -719,7 +580,7 @@ A joint search therefore determines `min(d_x, d_z)`, while the individual sector
 
 ## References
 
-- [Algorithm 994 paper, v2](https://arxiv.org/abs/1603.06757v2): section 2 and Algorithm 1 give the classical disjoint and rank-deficient bound.
-- [Quantum-code adaptation, v2](https://arxiv.org/abs/2408.10743v2): section 2.4 describes the `Saved_isometry` symplectic-to-Hamming construction.
+- [arXiv:1603.06757v2](https://arxiv.org/abs/1603.06757v2) (Algorithm 1): Section 2 and Algorithm 1 give the classical disjoint and rank-deficient bound.
+- [arXiv:2408.10743v2](https://arxiv.org/abs/2408.10743v2): Section 2.4 describes the `Saved_isometry` symplectic-to-Hamming construction.
 - [core.py](core.py), [brouwer_zimmermann.py](brouwer_zimmermann.py), [brute_force.py](brute_force.py), and [_binary.py](_binary.py): the implementation.
 - [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py) and [core_test.py](core_test.py): executable invariants and independent small-instance oracles.
