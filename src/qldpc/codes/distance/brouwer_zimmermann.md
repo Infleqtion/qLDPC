@@ -48,7 +48,7 @@ $$
 
 The classical and quantum definitions are instances of one problem: given binary spaces `S ⊆ V` with `V ≠ S`, find the lightest word in `V \ S`.
 For a classical code, `V` is the code and `S = {0}`.
-A quantum code with no logical qubits has no such word, and the implementation returns a fixed value instead (section 3.6).
+If no logical operators are supplied, there is no such word, and `get_distance_quantum` returns the number of physical qubits instead (section 3.6).
 
 A word in `V \ S` is called **eligible**, because it can determine the distance.
 For a classical code, the eligible words are the nonzero codewords.
@@ -350,7 +350,7 @@ The default `cutoff` of one is still exact for a valid nontrivial binary problem
 Use `cutoff=0` to require a fully certified result.
 
 The layer-by-layer argument assumes a nonempty basis and at least one eligible word.
-The module-level interfaces handle empty cases before any enumeration, with the following conventions:
+`get_distance_classical` and `get_distance_quantum` in [core.py](core.py) handle empty cases before any enumeration, with the following conventions:
 
 - A classical code of dimension zero returns its block length.
 - A quantum problem with no supplied logical rows returns the number of physical qubits.
