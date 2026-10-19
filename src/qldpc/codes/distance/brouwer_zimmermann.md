@@ -45,7 +45,7 @@ $$
 d = \min_{v \in V \setminus S} \operatorname{wt}(v).
 $$
 
-Words in `S` act trivially on the encoded information, so a word in `S` is not a logical operator and cannot determine the distance.
+Words in `S` act trivially on the encoded information, so a word in `S` is not a nontrivial logical operator and cannot determine the distance.
 Both cases are instances of one problem: given nested binary spaces `S ⊆ V` with `V ≠ S`, find the lightest word in `V` that is not in `S`.
 For a classical code, `S = {0}`.
 When a quantum code has no logical qubits, there is no such word, and the implementation returns a fixed value instead (section 3.6).
@@ -214,7 +214,7 @@ For a classical search there is no excluded subspace, so `labels=None` and every
 Every row operation on `G` must be applied identically to `M`.
 If an invertible row transformation replaces `G` by `G' = EG`, the labels must become `M' = EM`.
 Then `aM'` is still the label of the word `aG'`.
-Omitting this step would either accept stabilizers as witnesses or reject genuine logical operators.
+Omitting this step would either accept stabilizers as witnesses or reject nontrivial logical operators.
 `_row_reduce_binary` performs these paired transformations.
 
 The code methods in [common.py](../common.py) supply generators for `S` and for the logical operators, so this module only receives the nested spaces `S ⊆ V`.
