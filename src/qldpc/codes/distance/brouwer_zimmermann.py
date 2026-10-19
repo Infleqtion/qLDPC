@@ -26,7 +26,7 @@ from ._binary import (
     _row_reduce_binary,
     _rows_to_ints,
 )
-from ._binary_numba import popcount_word as _popcount_word
+from ._binary import popcount_word as _popcount_word
 from .brute_force import (
     _get_distance_quantum_brute_force,
 )

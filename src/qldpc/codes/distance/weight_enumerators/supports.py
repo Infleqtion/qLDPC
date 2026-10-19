@@ -30,7 +30,7 @@ import numpy.typing as npt
 from numba import njit
 
 from .. import brouwer_zimmermann as bz
-from .._binary_numba import popcount_word, trailing_zeros
+from .._binary import popcount_word, trailing_zeros
 from .rows import BinaryMatrix, PackedMatrix, StorageBudget, get_support_keys, pack
 
 _LabeledSet = tuple[BinaryMatrix, BinaryMatrix, int, npt.NDArray[np.int_]]

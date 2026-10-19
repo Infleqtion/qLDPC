@@ -13,7 +13,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from .._binary_numba import trailing_zeros
+from .._binary import trailing_zeros
 from .rows import PackedMatrix, StorageBudget, get_support_keys
 
 ####################################################################################################
