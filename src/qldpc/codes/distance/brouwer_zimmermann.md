@@ -81,68 +81,70 @@ The remaining question is why unexamined words must be heavy, which is the role 
 
 ### 2.3 Systematic bases and information sets
 
-An **information set** is a set `I` of `r` coordinates on which the rows of the basis restrict to a rank-`r` matrix.
+An **information set** is a set `I` of `r` coordinate indices (column indices) such that the columns of the basis indexed by `I` form a rank-`r` matrix.
 Row reduction on `I` produces a **systematic basis** `G_I`, whose restriction to `I` is the identity matrix:
 
 $$
 G_I[:,I] = I_r.
 $$
 
-The coordinates in `I` are the **pivot columns** of `G_I`.
+The columns indexed by `I` are the **pivot columns** of `G_I`.
 
+For a word `v`, write `v|_I` for the restriction of `v` to the coordinates indexed by `I`.
 Let `v` be any word in `V`, and let `a` be its coefficient vector in `G_I`, so that `v = aG_I`.
-Restricting `v` to the coordinates in `I` gives `a`, because `G_I` restricts to the identity matrix there:
+Then `v|_I = a`, because the columns of `G_I` indexed by `I` form the identity matrix:
 
 $$
 v|_I = a\,G_I[:,I] = a\,I_r = a.
 $$
 
-The number of nonzero coordinates of `v` in `I` is therefore the number of nonzero entries of `a`:
+Hence `wt(v|_I) = wt(a)`:
 
-> For every word `v` in `V`, the number of nonzero coordinates of `v` in `I` equals the coefficient weight of `v` in `G_I`.
+> For every word `v` in `V`, the Hamming weight of `v|_I` equals the coefficient weight of `v` in `G_I`.
 
 For example, take a matrix `G` with `r = 2` basis rows `1 0 1 1` and `0 1 1 0`, and let `I = {0, 1}`.
-Row 1 alone has coefficient weight 1 and one nonzero coordinate in `I`.
-The XOR of both rows is `1 1 0 1`, which has coefficient weight 2 and two nonzero coordinates in `I`.
+Row 1 alone has coefficient weight 1, and its restriction to `I` is `1 0`, which has weight 1.
+The XOR of both rows is `1 1 0 1`, which has coefficient weight 2, and its restriction to `I` is `1 1`, which has weight 2.
 
-**Searching a basis through weight `t`** means examining every word with coefficient weight at most `t`, that is, every XOR of at most `t` rows of `G_I`.
+**Searching a basis through weight `t`** means examining every word with coefficient weight at most `t` with respect to `G_I`; that is, every XOR of at most `t` rows of `G_I`.
 Each word in `V` has exactly one coefficient vector in `G_I`, so a word that is not examined by this search has coefficient weight at least `t+1`.
-Since the number of nonzero coordinates of a word in `I` equals its coefficient weight, it has at least `t+1` nonzero coordinates in `I`.
+Since `wt(v|_I)` equals the coefficient weight of `v`, such a word `v` satisfies `wt(v|_I) ≥ t+1`.
 Section 2.5 uses this consequence to lower-bound the weight of every word that the search has not examined.
 
-Different information sets give different bases of the same space.
-The same coefficient vector in two such bases usually describes two different words.
-Some words appear in more than one basis.
-The work of a search is therefore measured in **candidate/set evaluations**, which count a word once for each basis in which it is examined.
+Different information sets give different bases of the same space `V`, so every word of `V` has a coefficient vector in each basis.
+A word `v` can have a different coefficient weight in each basis.
+For example, `v` can have coefficient weight 1 in one basis, where it is a single row, and coefficient weight 3 in another.
+A search that examines all words of coefficient weight at most `t` in several bases may therefore examine the same word `v` more than once.
+The work of such a search is measured in **candidate/set evaluations**: the total number of words examined, counting `v` once for each basis in which it is examined.
 
 ### 2.4 Rank-deficient blocks
 
-Suppose several bases are built one after another, each from a block of coordinates disjoint from the earlier blocks.
-Once the available coordinates run low, the final block may have rank `r_i < r`, so it is not an information set.
+Suppose several bases are built one after another.
+Each basis `i` is row reduced on a **block** `B_i`, a set of column indices disjoint from the earlier blocks.
+Once the available columns run low, the final block may have rank `r_i < r`, so it is not an information set.
 Row reduction on such a block gives a basis of the whole space in which:
 
-- the first `r_i` rows have distinct pivot columns in the block, and
-- the remaining `r - r_i` rows are zero on the block.
+- the first `r_i` rows have distinct pivot columns in `B_i`, and
+- the remaining `r - r_i` rows are zero on the columns indexed by `B_i`.
 
-Suppose a word needs at least `t+1` basis rows.
-At most `r - r_i` of those rows can be zero on the block, so at least `t + 1 - (r - r_i)` of them are pivot rows.
-The word therefore has at least
+Suppose a word `v` has coefficient weight at least `t+1` in this basis.
+At most `r - r_i` of its selected rows can be zero on `B_i`, so at least `t + 1 - (r - r_i)` of them are pivot rows.
+Each pivot row contributes a distinct nonzero coordinate to `v|_{B_i}`, the restriction of `v` to `B_i`, so
 
 $$
-b_i(t) = \max(0,\;t+1-(r-r_i))
+\operatorname{wt}(v|_{B_i}) \ge b_i(t) := \max(0,\;t+1-(r-r_i)).
 $$
 
-nonzero coordinates in the block.
-For a full information set (`r_i = r`), this is `b_i(t) = t + 1`.
+For a full information set (`r_i = r`, `B_i = I`), this is `b_i(t) = t + 1`, matching section 2.3.
 
 ### 2.5 The stopping certificate
 
 Suppose that every basis has been searched through coefficient weight `t`, in the sense of section 2.3.
 Consider an eligible word `v` that was not examined in any basis.
 In each basis `i`, the coefficient weight of `v` is at least `t+1`.
-By section 2.3 (and, for a rank-deficient block, section 2.4), `v` therefore has at least `b_i(t)` nonzero coordinates in block `i`.
+By sections 2.3 and 2.4, `wt(v|_{B_i}) ≥ b_i(t)` for every `i`.
 
-If the blocks are disjoint, they share no coordinates, so these counts add up:
+If the blocks are disjoint, they share no column indices, so these weights add up:
 
 $$
 \operatorname{wt}(v) \ge \sum_i b_i(t) =: L(t).
@@ -348,7 +350,7 @@ After an interruption, a new `advance()` call restarts the unfinished layer from
 | `cutoff` | Cutoff that ends the search early (section 3.6) |
 | `batch_size` | Maximum number of supports per kernel call |
 | `weight_divisor` | Proven divisor of every candidate Hamming weight (section 4.2) |
-| `max_coverage` | Maximum number of blocks containing any coordinate (section 4.1) |
+| `max_coverage` | Maximum number of blocks containing any column index (section 4.1) |
 
 A search is finished when its cutoff is reached, its lower certificate reaches `best`, or every coefficient weight has been enumerated.
 
@@ -375,16 +377,18 @@ These three return values are fixed conventions for problems that have no eligib
 
 ### 4.1 Overlapping information sets
 
-Disjoint blocks are limited by the number of coordinates: at most `floor(n_active / r)` full information sets fit without sharing a coordinate.
+Disjoint blocks are limited by the number of columns: at most `floor(n_active / r)` full information sets fit without sharing a column.
 Allowing blocks to overlap permits more bases, at the price of a weaker certificate.
 
 #### The certificate
 
-Let `C` be the **maximum coverage**: the largest number of blocks that contain any single coordinate.
-When summing `b_i(t)` over blocks, each nonzero coordinate of an unexamined word `v` is counted at most `C` times, so
+Let `C` be the **maximum coverage**: the largest number of blocks `B_i` that contain any single column index.
+Let `v` be an eligible word that has not been examined, so that `wt(v|_{B_i}) ≥ b_i(t)` for every `i` (section 2.5).
+Each nonzero coordinate `j` of `v` contributes to `wt(v|_{B_i})` once for every block `B_i` that contains `j`, which is at most `C` blocks.
+Summing over blocks therefore gives
 
 $$
-\sum_i b_i(t) \le C\operatorname{wt}(v).
+\sum_i b_i(t) \le \sum_i \operatorname{wt}(v|_{B_i}) \le C\operatorname{wt}(v).
 $$
 
 This gives the lower certificate
@@ -408,7 +412,7 @@ The [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) refers to Grassl's
 The coverage-divided bound `L(t)` is derived for qLDPC.
 
 As a small example, take the code generated by `101` and `011`, whose distance is two.
-Each of the three pairs of coordinates is a full information set, so `m = 3`, and each coordinate lies in two of them, so `C = 2`.
+Each of the three pairs of column indices, `{0,1}`, `{0,2}`, and `{1,2}`, is a full information set, so `m = 3`, and each column index lies in two of them, so `C = 2`.
 After examining the single rows in all three bases (`t = 1`), the formula gives `ceil(3*2/2) = 3`.
 This means that every word of weight below three has already been examined, so no unexamined word can improve on the weight-two witness.
 
@@ -417,18 +421,18 @@ This means that every word of weight below three has already been examined, so n
 `_get_overlapping_information_sets` starts from the full disjoint blocks that were retained.
 It returns either a replacement family of full information sets together with the family's actual maximum coverage, or `None` to keep the disjoint family.
 Which family to choose is decided heuristically.
-The certificate for the chosen family uses only verified ranks and actual coordinate counts, so it is sound regardless of the heuristic.
+The certificate for the chosen family uses only verified ranks and the actual maximum coverage, so it is sound regardless of the heuristic.
 
 Here `n_active` is the number of nonzero columns of the basis, as in section 3.4.
 This count includes the columns that existing blocks already use.
-Coverage is counted using the column numbers before each basis removes its pivots for packing.
+Coverage is counted using the original column indices, before each basis removes its pivot columns for packing.
 
 Family construction has four stages.
 
 1. **Skip unnecessary work.**
    Return `None` if the disjoint family is already cheap to search, already uses every active column, or is already at the size limit.
 2. **Rule out impossible savings.**
-   A family of `m` full sets has `m*r` pivot coordinates in total.
+   A family of `m` full sets has `m*r` pivot columns in total, counted with multiplicity.
    Spread over `n_active` columns, they force some column to be covered at least `ceil(m*r/n_active)` times.
    Using that value as `C` gives the most optimistic work estimate for each `m`.
    If even the best optimistic estimate does not improve on the current family's estimated work, return `None`.
@@ -565,7 +569,7 @@ A joint search therefore determines `min(d_x, d_z)`, while the individual sector
 - **Use the correct rank term.**
   Partial blocks contribute `b_i(t)`, which accounts for their rank deficiency, rather than `t+1`.
 - **Count overlap exactly.**
-  Coverage is the actual maximum multiplicity of a coordinate across the blocks.
+  Coverage is the actual maximum number of blocks that contain a single column index.
 - **Advance certificates only after complete work.**
   A cutoff, exception, or interrupted chunk leaves its layer incomplete.
 - **Keep bounds in consistent units.**
