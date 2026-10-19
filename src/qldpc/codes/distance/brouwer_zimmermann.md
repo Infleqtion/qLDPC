@@ -101,13 +101,13 @@ The number of nonzero coordinates of `v` in `I` is therefore the number of nonze
 
 > For every word `v` in `V`, the number of nonzero coordinates of `v` in `I` equals the coefficient weight of `v` in `G_I`.
 
-For example, take `r = 2` and `I = {0, 1}`, with basis rows `1 0 1 1` and `0 1 1 0`.
+For example, take a matrix `G` with `r = 2` basis rows `1 0 1 1` and `0 1 1 0`, and let `I = {0, 1}`.
 Row 1 alone has coefficient weight 1 and one nonzero coordinate in `I`.
 The XOR of both rows is `1 1 0 1`, which has coefficient weight 2 and two nonzero coordinates in `I`.
 
 **Searching a basis through weight `t`** means examining every word with coefficient weight at most `t`, that is, every XOR of at most `t` rows of `G_I`.
-By the statement above, a word that is not examined by this search has coefficient weight at least `t+1`.
-It therefore has at least `t+1` nonzero coordinates in `I`.
+Each word in `V` has exactly one coefficient vector in `G_I`, so a word that is not examined by this search has coefficient weight at least `t+1`.
+By the statement above, it therefore has at least `t+1` nonzero coordinates in `I`.
 Section 2.5 uses this consequence to lower-bound the weight of every word that the search has not examined.
 
 Different information sets give different bases of the same space.
