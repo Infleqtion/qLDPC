@@ -8,7 +8,7 @@ It is written for contributors who need to understand, debug, or modify the BZ c
 It is organized as follows:
 
 - [Section 2](#2-the-brouwer-zimmermann-algorithm) explains the BZ algorithm as published, including its adaptation to quantum codes.
-- [Section 3](#3-extensions-in-qldpc) explains the extensions that qLDPC adds to the published algorithm.
+- [Section 3](#3-extensions-to-bz-in-qldpc) explains the extensions that qLDPC adds to the published algorithm.
 - [Section 4](#4-implementation-in-qldpc) explains how the code in this directory implements the algorithm and the extensions.
 - [Section 5](#5-invariants-to-preserve-when-modifying-the-implementation) lists the invariants that a change to the implementation must preserve.
 
@@ -47,8 +47,9 @@ For a quantum code, they are the nontrivial logical operators.
 ### 2.2 The idea: upper bounds and lower certificates
 
 Every codeword is a sum of rows of a basis of `V`.
-Throughout this guide, a **basis** is a matrix whose rows are linearly independent and span `V`.
-Let `r = dim(V)` be its number of rows, and let `N` be its number of columns, which is the number of **coordinates** of a word.
+Throughout this guide, a **basis** of `V` is a matrix whose rows are linearly independent and span `V`.
+Let `r = dim(V)` be the number of in a basis of `V`, and let `N` be its number of columns, which is the number of **coordinates** of a word.
+A coordinate at which every word of `V` is zero carries no information, so we assume that there are none.
 
 For a basis `G` of `V`, a **coefficient vector** `a` is a binary vector of length `r` that selects rows, and `aG` is the XOR of the selected rows.
 The **coefficient weight** of `aG` is `wt(a)`, the number of rows selected.
@@ -138,9 +139,8 @@ $$
 
 If all `m` blocks are information sets, `L(t) = m(t+1)`.
 
-`L(t)` is the lower certificate.
-It bounds the weight of the words that have not been examined.
-Witnesses that were already found can be lighter than `L(t)`.
+`L(t)` is the lower certificate: every eligible word that has not been examined has weight at least `L(t)`.
+It makes no claim about the words that have been examined, so a witness that was already found can be lighter than `L(t)`, and `L(t)` can exceed the distance.
 When `L(t) ≥ U`, no unexamined eligible word is lighter than `U`, which is enough to stop.
 
 BZ is therefore the following loop:
@@ -152,7 +152,7 @@ BZ is therefore the following loop:
 
 The search always terminates, because after `t = r` every nonzero word has been examined.
 The result is then the exact distance.
-Algorithm 1 of [arXiv:1603.06757](https://arxiv.org/abs/1603.06757v2) gives this loop and this bound for disjoint and rank-deficient blocks.
+Algorithm 1 of [arXiv:1603.06757](https://arxiv.org/abs/1603.06757v2) gives this loop and this certificate for disjoint and rank-deficient blocks.
 
 The cost of this loop is measured in **candidate/set evaluations**.
 One candidate/set evaluation is the examination of one selection of rows in one basis.
@@ -163,7 +163,7 @@ Searching the `m` search bases through coefficient weight `t` therefore costs `m
 For a quantum code, the lightest word in `V` may lie in `S`.
 Such a word is not eligible, so it must not lower `U`.
 Section 2.1 of [arXiv:2408.10743](https://arxiv.org/abs/2408.10743v2) therefore checks whether a candidate word of weight below `U` lies in `S` before updating `U`.
-The lower certificate of [Section 2.5](#25-the-stopping-certificate) is unchanged, because it bounds all unexamined words, eligible or not.
+The lower certificate of [Section 2.5](#25-the-stopping-certificate) is unchanged, because it holds for all unexamined words, eligible or not.
 
 ### 2.7 Pauli weight as Hamming weight
 
@@ -229,6 +229,47 @@ Because its blocks need not be disjoint, such a family is not limited to `floor(
 However, a coordinate that lies in several blocks is counted in several of the terms `b_i(t)`.
 The certificate derived below accounts for this duplication by dividing the sum of the terms by the maximum coverage `C`, defined below.
 For `m` blocks that are information sets, this yields a certificate `L(t)` of about `(m/C)(t+1)`, which exceeds the `k(t+1)` of a disjoint family with `k` information-set blocks whenever `m/C > k`.
+
+#### The certificate
+
+Let `C` be the **maximum coverage** of an overlapping family, which is the largest number of blocks `B_i` that contain any single column index.
+Suppose that each search basis of the family has been searched through coefficient weight `t`, and let `v` be an eligible word that was not examined in any of them.
+As in [Section 2.5](#25-the-stopping-certificate), `wt(v|_{B_i}) ≥ b_i(t)` for every `i`.
+Each nonzero coordinate `j` of `v` is counted in `wt(v|_{B_i})` for every block `B_i` that contains `j`, and there are at most `C` such blocks.
+Summing over blocks therefore gives
+
+$$
+\sum_i b_i(t) \le \sum_i \operatorname{wt}(v|_{B_i}) \le C\operatorname{wt}(v).
+$$
+
+Because `wt(v)` is an integer, this gives the lower certificate
+
+$$
+L(t) =
+\left\lceil \frac{\sum_i b_i(t)}{C} \right\rceil.
+$$
+
+If all `m` blocks are information sets, it becomes
+
+$$
+L(t) = \left\lceil \frac{m(t+1)}{C} \right\rceil.
+$$
+
+A disjoint family is the special case `C = 1`, which recovers [Section 2.5](#25-the-stopping-certificate).
+The formula holds whether or not each block is an information set, through the terms `b_i(t)`.
+
+[arXiv:1603.06757](https://arxiv.org/abs/1603.06757v2) mentions in its Section 2 that overlapping information sets require a different formula for the certificate, citing Grassl, but does not give one.
+The coverage-divided certificate above is derived for qLDPC.
+
+#### A small example
+
+Take the code generated by the rows `101` and `011`, whose distance is two.
+It has `N = 3` coordinates and `r = 2`, so a disjoint family contains at most `floor(3/2) = 1` search basis whose block is an information set.
+An overlapping family can use all three pairs of column indices, `{0,1}`, `{0,2}`, and `{1,2}`, each of which is an information set.
+Then `m = 3`, and each column index lies in two of the blocks, so `C = 2`.
+After all three search bases have been searched through coefficient weight `t = 1`, the formula gives `L(1) = ceil(3*2/2) = 3`.
+This exceeds the distance, which is allowed because `L(t)` is a statement only about words that have not been examined.
+Every row has weight two, so `U = 2 ≤ L(1)`, and the search stops with distance two.
 
 ## 3. Implementation in qLDPC
 
