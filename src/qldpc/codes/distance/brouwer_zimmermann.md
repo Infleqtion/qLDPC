@@ -2,28 +2,19 @@
 
 ## 1. Purpose and scope
 
-This guide explains how qLDPC computes the exact distance of a binary code using the Brouwer-Zimmermann (BZ) algorithm.
+The Brouwer-Zimmermann (BZ) algorithm computes the distance of a classical code ([arXiv:1603.06757](https://arxiv.org/abs/1603.06757)), and has been adapted to quantum codes ([arXiv:2408.10743](https://arxiv.org/abs/2408.10743)).
+This guide explains how qLDPC computes the exact distance of a binary code using BZ.
 It is written for contributors who need to understand, debug, or modify the BZ code in this directory.
-It has three goals:
+It is organized as follows:
 
-- Explain the BZ algorithm itself ([Section 2](#2-the-brouwer-zimmermann-algorithm)).
-- Explain how qLDPC implements it ([Section 3](#3-implementation-in-qldpc)).
-- Explain the improvements that qLDPC adds to the algorithm as published ([Section 4](#4-improvements-in-qldpc)).
-
-[Section 5](#5-invariants-to-preserve-when-modifying-the-implementation) lists the invariants that a change to the implementation must preserve.
-
-The implementation draws on two papers and a derivation in this guide:
-
-- [Algorithm 994](https://arxiv.org/abs/1603.06757) describes a BZ implementation for classical codes.
-  qLDPC follows its stopping criterion for disjoint and rank-deficient information sets.
-- A [paper that adapts BZ to quantum codes](https://arxiv.org/abs/2408.10743) reduces symplectic (Pauli) weight to Hamming weight.
-  qLDPC follows this reduction.
-- The stopping criterion for overlapping information sets ([Section 4.1](#41-overlapping-information-sets)) is derived in this guide.
-
-The public interfaces for binary distances live in [core.py](core.py).
-They dispatch either to [brouwer_zimmermann.py](brouwer_zimmermann.py), which implements BZ, or to [brute_force.py](brute_force.py), which enumerates words exhaustively.
+- [Section 2](#2-the-brouwer-zimmermann-algorithm) explains the BZ algorithm as published, including its adaptation to quantum codes.
+- [Section 3](#3-extensions-in-qldpc) explains the extensions that qLDPC adds to the published algorithm.
+- [Section 4](#4-implementation-in-qldpc) explains how the code in this directory implements the algorithm and the extensions.
+- [Section 5](#5-invariants-to-preserve-when-modifying-the-implementation) lists the invariants that a change to the implementation must preserve.
 
 ## 2. The Brouwer-Zimmermann algorithm
+
+This section describes BZ as presented in [arXiv:1603.06757](https://arxiv.org/abs/1603.06757) and [arXiv:2408.10743](https://arxiv.org/abs/2408.10743).
 
 ### 2.1 The problem
 
@@ -160,7 +151,8 @@ BZ is therefore the following loop:
    Then compute `L(t)`, and stop if `L(t) ≥ U`.
 
 The search always terminates, because after `t = r` every nonzero word has been examined.
-Algorithm 1 of the [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) gives this bound for disjoint and rank-deficient blocks.
+The result is then the exact distance.
+Algorithm 1 of [arXiv:1603.06757](https://arxiv.org/abs/1603.06757v2) gives this loop and this bound for disjoint and rank-deficient blocks.
 
 The cost of this loop is measured in **candidate/set evaluations**.
 One candidate/set evaluation is the examination of one selection of rows in one basis.
