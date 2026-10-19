@@ -54,7 +54,7 @@ Do not copy transient project history, machine-specific paths, or local-session 
 | [`src/qldpc/codes/code_capacity.py`](src/qldpc/codes/code_capacity.py) | Code-capacity detector error models, observable-decoder orchestration, and sector reuse | [`code_capacity_test.py`](src/qldpc/codes/code_capacity_test.py), [`common_test.py`](src/qldpc/codes/common_test.py) |
 | [`src/qldpc/codes/classical.py`](src/qldpc/codes/classical.py) | Classical code families | [`classical_test.py`](src/qldpc/codes/classical_test.py), [`basics.ipynb`](examples/basics.ipynb) |
 | [`src/qldpc/codes/quantum.py`](src/qldpc/codes/quantum.py) | Quantum, CSS, subsystem, product, and geometric code families | [`quantum_test.py`](src/qldpc/codes/quantum_test.py), [`bivariate_bicycle_codes.ipynb`](examples/bivariate_bicycle_codes.ipynb) |
-| [`src/qldpc/codes/distance.py`](src/qldpc/codes/distance.py) | Exact binary classical and quantum distance enumeration | [`distance_test.py`](src/qldpc/codes/distance_test.py) |
+| [`src/qldpc/codes/distance/`](src/qldpc/codes/distance/) | Exact binary classical and quantum distance enumeration | Co-located `*_test.py` files |
 | [`src/qldpc/abstract/`](src/qldpc/abstract/) | Groups, group rings, `RingArray`, semisimple linear algebra, and Wedderburn--Artin transforms | Co-located `*_test.py` files in the same directory |
 | [`src/qldpc/math.py`](src/qldpc/math.py) | Symplectic and finite-field array helpers | [`math_test.py`](src/qldpc/math_test.py) |
 | [`src/qldpc/objects.py`](src/qldpc/objects.py) | Pauli labels, graph nodes, Cayley complexes, and chain complexes | [`objects_test.py`](src/qldpc/objects_test.py) |
@@ -115,7 +115,7 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
   A false promise can make distance results wrong and dependent on which sector was computed first.
 - Built-in families may cache construction- or literature-supplied parameters.
   A test that compares `get_code_params()` only with those same cached values is tautological; use an independent rank, commutation, row-space, or bounded-distance oracle.
-- [`codes/distance.py`](src/qldpc/codes/distance.py) is explicitly binary.
+- [`codes/distance/`](src/qldpc/codes/distance/) is explicitly binary.
   Use field-aware code methods and oracles for nonbinary constructions.
 
 ### Decoders

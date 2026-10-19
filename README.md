@@ -13,7 +13,7 @@ Circuit tools currently only support qubit codes.
 - **From textbook codes to the research frontier.**
   Build familiar surface, toric, Hamming, and Reed–Muller codes alongside hypergraph-product, lifted-product, bivariate-bicycle, quantum Tanner, SHYPS, GALA, and other modern families.
 - **Pin down code distance.**
-  Compute exact distances of binary codes with an optimized, compiled Brouwer–Zimmermann search, or bound distances with decoders, QDistRnd, or sqetch.
+  Compute exact distances of binary codes with an optimized Brouwer–Zimmermann search, or bound code distance using [QDistRnd](https://arxiv.org/abs/2308.15140) or [`sqetch`](https://github.com/a7b/yarn/tree/main/sqetch).
 - **Ask more of a code than `[[n, k, d]]`.**
   Work with check matrices, Tanner graphs, canonical logical operators, subsystem gauge operators, and code-capacity error estimates.
 - **Move from codes to circuits.**

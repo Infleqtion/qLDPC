@@ -110,7 +110,7 @@ def certify_state_prep_spread(
     representative-pattern violation; every such pattern lifts to original indices unchanged.
     All-zero joint columns can likewise be removed.  Only joint symptoms, never output alone,
     are used.  Inner decisions use the reusable exact
-    :class:`qldpc.codes.distance.PauliCosetSearch`.
+    :class:`qldpc.codes.distance.bounded.PauliCosetSearch`.
 
     This sufficient *resource-state* property composes with downstream gadgets that propagate
     each input error of the selected weight r and additional faults within the corresponding
