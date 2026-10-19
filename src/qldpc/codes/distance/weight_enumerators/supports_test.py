@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Independent oracles for exact minimum-support enumeration in one CSS sector."""
+"""Independent oracles for minimum-support enumeration, full-Pauli lifting and packed rows."""
 
 from __future__ import annotations
 
@@ -15,7 +15,7 @@ from qldpc import codes
 from .. import _binary as binary
 from . import supports
 from .conftest import _get_sector_bases, _native
-from .rows import StorageBudget
+from .supports import StorageBudget, pack
 
 _CODE_422 = ([[1] * 4], [[1] * 4])
 _WEIGHT_TWO_WORDS = {3, 5, 6, 9, 10, 12}
@@ -168,22 +168,34 @@ def test_enumerators_agree_on_a_known_code() -> None:
         assert not len(supports.get_exhaustive_supports(basis, labels, 1, budget))
 
 
+def test_scan_without_certificate_still_examines_every_word() -> None:
+    """With a useless lower bound the layers run out, and every word has still been examined."""
+    code = codes.SteaneCode()
+    basis, labels = _get_sector_bases(code.matrix_x, code.matrix_z)[0]
+    budget = _budget(batch_size=5)
+    expected = supports.get_exhaustive_supports(basis, labels, 3, budget)
+    assert len(expected) == 7
+    with mock.patch.object(supports.bz, "_get_brouwer_zimmermann_lower_bound", return_value=0):
+        found = supports.get_bz_supports(basis, labels, 3, budget)
+    assert set(map(int, found[:, 0])) == set(map(int, expected[:, 0])) and len(found) == 7
+
+
 def test_information_sets_packed_once_and_budgeted() -> None:
     basis, labels = _get_sector_bases(*_CODE_422)[0]
     sets = supports.bz._get_information_set_generators(basis, labels)
     selected = supports.bz._select_brouwer_zimmermann_information_sets(
         sets, dimension=len(basis), upper_bound=3, weight_divisor=2
     )
-    with mock.patch.object(supports, "pack", wraps=supports.pack) as pack:
+    with mock.patch.object(supports, "pack", wraps=supports.pack) as spy:
         words = supports.get_bz_supports(basis, labels, 2, _budget())
         assert set(map(int, words[:, 0])) == _WEIGHT_TWO_WORDS
-        assert pack.call_count == 2 * len(selected)
+        assert spy.call_count == 2 * len(selected)
     with (
-        mock.patch.object(supports, "pack", wraps=supports.pack) as pack,
+        mock.patch.object(supports, "pack", wraps=supports.pack) as spy,
         pytest.raises(MemoryError, match="setup"),
     ):
         supports.get_bz_supports(basis, labels, 2, _budget(limit=1))
-    pack.assert_not_called()
+    spy.assert_not_called()
 
 
 @pytest.mark.parametrize("width", [15, 65])
@@ -260,3 +272,149 @@ def test_explicit_memory_and_rank_failures() -> None:
         supports.get_exhaustive_supports(wide, wide_labels, 1, _budget())
     with pytest.raises(OverflowError, match="62"):
         supports.get_exhaustive_minimum(wide, wide_labels, _budget())
+
+
+_BUDGET = StorageBudget(limit_bytes=1 << 20, basis_bytes=0, batch_size=2)
+
+
+@pytest.mark.parametrize("interpreted", [False, True])
+def test_rank_word_integer_oracle(interpreted: bool) -> None:
+    """Exhaust restricted three-row spaces, reusing poisoned scratch across every query."""
+    rank = _native(supports._rank_word, interpreted)
+    scratch = np.full(64, 2**64 - 1, dtype=np.uint64)
+    coordinates = (0, 31, 63)
+    words = [
+        sum(((bits >> jj) & 1) << pos for jj, pos in enumerate(coordinates)) for bits in range(8)
+    ]
+    for triple in itertools.product(words, repeat=3):
+        backing = np.zeros(6, dtype=np.uint64)
+        backing[::2] = triple
+        rows = backing[::2]
+        for mask in words:
+            span = {0}
+            for value in triple:
+                span |= {old ^ (value & mask) for old in span}
+            assert rank(rows, np.uint64(mask), scratch) == len(span).bit_length() - 1
+        np.testing.assert_array_equal(rows, triple)
+    assert rank(np.empty(0, dtype=np.uint64), np.uint64(2**64 - 1), scratch) == 0
+
+
+@pytest.mark.parametrize("interpreted", [False, True])
+def test_shortened_word_span_oracle(interpreted: bool) -> None:
+    """Count contained words independently, including bit 63 and a reused rank buffer."""
+    shortened = _native(supports._shortened_histogram_one, interpreted)
+    rows = np.array([5, 6, 8, 2**63], dtype=np.uint64)
+    span = {0}
+    for value in rows:
+        span |= {old ^ int(value) for old in span}
+    supports_words = np.array(
+        [
+            sum(((bits >> jj) & 1) << pos for jj, pos in enumerate((0, 1, 2, 3, 63)))
+            for bits in range(32)
+        ],
+        dtype=np.uint64,
+    )
+    expected = np.zeros(65, dtype=np.int64)
+    for word in supports_words:
+        inside = sum(value & ~int(word) == 0 for value in span)
+        expected[inside.bit_length() - 1] += 1
+    np.testing.assert_array_equal(shortened(rows, supports_words, 64), expected)
+
+
+@pytest.mark.parametrize("interpreted", [False, True])
+def test_native_rank_and_shortened_corner_cases(interpreted: bool) -> None:
+    rows = np.array([[0, 1], [1, 1]], dtype=np.uint64)
+    shortened = _native(supports._shortened_histogram, interpreted)
+    np.testing.assert_array_equal(
+        shortened(rows, np.array([[1, 0], [0, 1], [1, 1]], dtype=np.uint64), 2),
+        [0, 2, 1],
+    )
+    np.testing.assert_array_equal(
+        shortened(np.array([[3], [4]], dtype=np.uint64), np.array([[3], [7]], dtype=np.uint64), 2),
+        [0, 1, 1],
+    )
+    rank = _native(supports._rank_masked, interpreted)
+    assert rank(np.array([[1], [2], [3]], dtype=np.uint64), np.array([3], dtype=np.uint64)) == 2
+    assert (
+        rank(
+            np.array([[0, 1], [0, 2], [0, 3], [1, 0]], dtype=np.uint64),
+            np.array([2**64 - 1, 2**64 - 1], dtype=np.uint64),
+        )
+        == 3
+    )
+    rank_word = _native(supports._rank_word, interpreted)
+    scratch = np.empty(64, dtype=np.uint64)
+    assert rank_word(np.array([], dtype=np.uint64), np.uint64(3), scratch) == 0
+    assert rank_word(np.array([1], dtype=np.uint64), np.uint64(0), scratch) == 0
+    assert rank_word(np.array([1, 2, 3], dtype=np.uint64), np.uint64(3), scratch) == 2
+
+
+def test_shared_and_dressed_supports() -> None:
+    """A shared support gives X, Z and Y; a one-sided support gains its contained stabilizers."""
+    no_stabilizers = pack(np.empty((0, 4), dtype=np.uint8))
+    shared = pack(np.array([[1, 1, 0, 0]], dtype=np.uint8))
+    nothing = shared[:0]
+    assert (
+        supports.count_minimum_paulis(shared, shared, no_stabilizers, no_stabilizers, 2, _BUDGET)
+        == 3
+    )
+    assert (
+        supports.count_minimum_paulis(shared, nothing, no_stabilizers, no_stabilizers, 2, _BUDGET)
+        == 1
+    )
+
+    # An X-only support {0, 1} containing the Z stabilizer ZZ on those qubits has two dressings.
+    z_stabilizers = pack(np.array([[1, 1, 0, 0]], dtype=np.uint8))
+    assert (
+        supports.count_minimum_paulis(shared, nothing, no_stabilizers, z_stabilizers, 2, _BUDGET)
+        == 2
+    )
+
+
+def test_arbitrary_precision_total_and_batching() -> None:
+    """Dressing counts exponentiate in Python, so totals can exceed any native word."""
+    histogram = np.zeros(81, dtype=np.int64)
+    histogram[80] = 1
+    empty = pack(np.empty((0, 80), dtype=np.uint8))
+    words = np.array([[1, 0]], dtype=np.uint64)
+    with mock.patch.object(supports, "_shortened_histogram", return_value=histogram):
+        assert supports.count_minimum_paulis(words, words[:0], empty, empty, 80, _BUDGET) == 2**80
+
+
+def test_union_storage_is_checked_before_lifting() -> None:
+    small = StorageBudget(limit_bytes=1, basis_bytes=0, batch_size=1)
+    words = np.array([[1]], dtype=np.uint64)
+    empty = np.empty((0, 1), dtype=np.uint64)
+    with pytest.raises(MemoryError, match="union"):
+        supports.count_minimum_paulis(words, empty, empty, empty, 1, small)
+
+
+@pytest.mark.parametrize("width", [1, 63, 64, 65, 129])
+def test_pack_layout_and_round_trip(width: int) -> None:
+    """Coordinate zero is the low bit of word zero, and padding never leaks into unpacking."""
+    matrix = np.random.default_rng(width).integers(0, 2, size=(3, width), dtype=np.uint8)
+    packed = supports.pack(matrix)
+    assert packed.dtype == np.uint64 and packed.shape == (3, (width + 63) // 64)
+    for row, words in zip(matrix, packed):
+        value = sum(int(word) << (64 * jj) for jj, word in enumerate(words))
+        assert value == sum(int(bit) << jj for jj, bit in enumerate(row))
+    assert np.array_equal(supports.unpack(packed, width), matrix)
+    assert supports.unpack(supports.pack(np.empty((0, width), dtype=np.uint8)), width).shape == (
+        0,
+        width,
+    )
+
+
+def test_support_keys_compare_whole_rows() -> None:
+    """Rows that agree in a single word are still distinct keys."""
+    words = np.array([[1, 2], [1, 3], [1, 2]], dtype=np.uint64)
+    keys = supports.get_support_keys(words)
+    assert len(keys) == 3 and keys[0] == keys[2] and keys[0] != keys[1]
+    assert len(np.unique(keys)) == 2
+
+
+def test_storage_budget_reserves_bases_and_allowance() -> None:
+    budget = supports.StorageBudget(limit_bytes=5000, basis_bytes=1000, batch_size=7)
+    assert budget.available() == 5000 - 1000 - 1024
+    assert budget.available(300) == 5000 - 1000 - 300 - 1024
+    assert budget.batch_size == 7

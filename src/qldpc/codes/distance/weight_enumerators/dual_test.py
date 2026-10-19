@@ -13,7 +13,7 @@ import pytest
 
 from . import dual
 from .conftest import _native
-from .rows import pack
+from .supports import pack
 
 
 def _histogram(rows: np.ndarray) -> np.ndarray:

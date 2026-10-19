@@ -9,11 +9,10 @@ sibling modules:
 - ``dual``: stabilizer enumeration and the MacWilliams identity, which enumerate
   stabilizer words rather than the generally much larger logical space.
 - ``supports``: minimum-weight supports from Brouwer--Zimmermann information sets or an
-  exhaustive walk.  BZ enumeration stops only when its unseen-word bound is strictly greater than
-  the requested weight.
+  exhaustive walk, and their lift to full physical-Pauli counts.  BZ enumeration stops only when
+  its unseen-word bound is strictly greater than the requested weight.  This module also defines
+  the packed-row layout and the storage budget shared by all backends.
 - ``collision``: opt-in discovery of supports by joining physical half-shells.
-- ``lifting``: lifting of the supports to full physical-Pauli counts.
-- ``rows``: packed rows, local Clifford transport and storage budgets.
 
 References:
 
@@ -32,24 +31,37 @@ from typing import Literal, NamedTuple
 
 import numpy as np
 import numpy.typing as npt
+from numba import njit
 
 from .. import _binary as binary
 from .. import brouwer_zimmermann as bz
+from .._binary import popcount_word
 from .collision import recover_supports
 from .dual import (
     get_macwilliams_minimum,
     get_macwilliams_spectrum,
     get_stabilizer_histograms,
 )
-from .lifting import count_minimum_paulis
-from .rows import BinaryMatrix, PackedMatrix, StorageBudget, pack, transform_rows, unpack
 from .supports import (
+    BASIS_COPIES,
+    SUPPORT_COPIES,
+    BinaryMatrix,
+    PackedMatrix,
+    StorageBudget,
+    count_minimum_paulis,
     get_bz_supports,
     get_exhaustive_minimum,
     get_exhaustive_supports,
+    pack,
+    unpack,
 )
 
 WeightEnumeratorMethod = Literal["auto", "dual", "brouwer_zimmermann", "brute_force", "collision"]
+
+# The collision maps are the transposed checks and logical complements of both sectors, each
+# packed again; the padding covers rounding of both widths up to whole words.
+_COLLISION_MAP_COPIES = 4
+_COLLISION_MAP_PADDING = 128
 
 
 ####################################################################################################
@@ -379,7 +391,9 @@ class CSSLogicalWeightCounter:
 
         # A complement of H_Z in ker(H_X) pairs nondegenerately with ker(H_Z)/row(H_X).
         # The omitted H_Z rows already annihilate every X normalizer word (and conversely).
-        storage = self._get_basis_storage() + 4 * self.num_qubits * (self.num_qubits + 128)
+        storage = self._get_basis_storage() + _COLLISION_MAP_COPIES * self.num_qubits * (
+            self.num_qubits + _COLLISION_MAP_PADDING
+        )
         if storage > self.memory_limit_bytes:
             raise MemoryError("Collision map setup exceeds memory_limit_bytes")
         maps = (
@@ -407,7 +421,7 @@ class CSSLogicalWeightCounter:
                     *columns[1],
                     weight,
                     memory_limit_bytes=self.memory_limit_bytes,
-                    reserved_bytes=storage + 12 * supports_x.nbytes,
+                    reserved_bytes=storage + SUPPORT_COPIES * supports_x.nbytes,
                     batch_size=self.batch_size,
                 )
             )
@@ -455,7 +469,7 @@ class CSSLogicalWeightCounter:
         dimensions = self.num_qubits - len(self._z)
         if not self._symmetric:
             dimensions += self.num_qubits - len(self._x)
-        return 4 * dimensions * (self.num_qubits + self.dimension)
+        return BASIS_COPIES * dimensions * (self.num_qubits + self.dimension)
 
     def _get_budget(self) -> StorageBudget:
         return StorageBudget(self.memory_limit_bytes, self._get_basis_storage(), self.batch_size)
@@ -505,3 +519,22 @@ def _get_kernel(matrix: BinaryMatrix) -> BinaryMatrix:
     basis[:, free] = np.eye(len(free), dtype=np.uint8)
     basis[:, pivots] = reduced[: len(pivots), free].T
     return basis
+
+
+@njit(cache=True)
+def transform_rows(
+    rows: PackedMatrix, targets: npt.NDArray[np.int64], matrix: npt.NDArray[np.uint64]
+) -> PackedMatrix:
+    """Propagate all packed rows through a small local binary matrix on ordered targets."""
+    result = rows.copy()
+    for index, row in enumerate(rows):
+        # Gather the target bits into one local word, then rewrite each target from its matrix row.
+        local = np.uint64(0)
+        for jj, target in enumerate(targets):
+            local |= ((row[target // 64] >> np.uint64(target % 64)) & np.uint64(1)) << np.uint64(jj)
+        for jj, target in enumerate(targets):
+            mask = np.uint64(1) << np.uint64(target % 64)
+            result[index, target // 64] &= ~mask
+            if popcount_word(local & matrix[jj]) & 1:
+                result[index, target // 64] |= mask
+    return result

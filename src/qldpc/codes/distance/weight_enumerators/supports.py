@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact physical supports of minimum-weight nontrivial logical words in one CSS sector.
+"""Exact physical supports of minimum-weight logical words, and their full-Pauli count.
 
 A sector is described by a basis of the normalizer space together with quotient labels: a label
 is zero precisely for combinations that lie in the stabilizer space.  A support is reported when
 its combination has the requested physical weight and a nonzero label.
 
-Three enumerators share this contract:
+Two enumerators share this contract:
 
 - ``get_bz_supports`` scans coefficient supports over information sets.  It stops only when the
   Brouwer--Zimmermann unseen-word bound is strictly greater than the requested weight, because
@@ -14,9 +14,20 @@ Three enumerators share this contract:
 - ``get_exhaustive_supports`` and ``get_exhaustive_minimum`` walk every combination of a small
   basis in Gray-code order.
 
-All of them return complete packed physical supports as rows of uint64 words, and none of them
-creates one Python object per support.  Storage is checked before allocation, and a failure raises
-``MemoryError`` or ``OverflowError`` rather than returning a partial result.
+(``collision`` is a third, opt-in way to find the same supports.)  All of them return complete
+packed physical supports as rows of uint64 words, and none of them creates one Python object per
+support.  Storage is checked before allocation, and a failure raises ``MemoryError`` or
+``OverflowError`` rather than returning a partial result.
+
+``count_minimum_paulis`` then lifts the X-only and Z-only supports of both sectors to the number
+of physical Pauli operators of minimum weight.  A support shared by both sectors carries an X, a
+Z, and a Y representative.  A support found in only one sector can also be dressed by the
+opposite-type stabilizers that it contains, which is a single rank query per support; see
+``_shortened_histogram``.
+
+A physical coordinate j of a packed row is bit j % 64 of word j // 64, so coordinate zero is the
+low bit.  This differs from the layout used by the distance searches in ``_binary``; do not mix
+the two.
 
 References:
 
@@ -25,15 +36,88 @@ References:
 
 from __future__ import annotations
 
+from typing import NamedTuple
+
 import numpy as np
 import numpy.typing as npt
 from numba import njit
 
 from .. import brouwer_zimmermann as bz
 from .._binary import popcount_word, trailing_zeros
-from .rows import BinaryMatrix, PackedMatrix, StorageBudget, get_support_keys, pack
 
+BinaryMatrix = npt.NDArray[np.uint8]
+PackedMatrix = npt.NDArray[np.uint64]
 _LabeledSet = tuple[BinaryMatrix, BinaryMatrix, int, npt.NDArray[np.int_]]
+
+####################################################################################################
+# storage budget
+
+
+WORD_BYTES = 8
+
+# Working-storage allowances.  Each is a conservative multiple of the bytes of the array it
+# describes, covering the copies and temporaries that exist at the same time.  The budget bounds
+# working arrays only, not the interpreter's or the JIT's resident memory.  A tracemalloc test in
+# counter_test.py checks that measured peaks stay below the limit.
+
+# A basis with its labels, plus the copies made by row reduction and by Clifford transport.
+BASIS_COPIES = 4
+
+# Full copies of a support array alive at once while supports are collected (a bytearray and its
+# bytes copy), deduplicated (a sort), and lifted (intersection and difference temporaries).
+SUPPORT_COPIES = 12
+
+# A native output chunk is charged twice: the chunk itself and its bytes copy in the collector.
+OUTPUT_COPIES = 2
+
+# Small arrays and per-call bookkeeping.
+SLACK_BYTES = 1024
+
+
+class StorageBudget(NamedTuple):
+    """Conservative working-storage limits for one counting call.
+
+    ``basis_bytes`` is the storage already committed to logical bases.
+    """
+
+    limit_bytes: int
+    basis_bytes: int
+    batch_size: int
+
+    def available(self, reserved_bytes: int = 0) -> int:
+        """Bytes left after the bases, ``reserved_bytes`` and a small fixed allowance."""
+        return self.limit_bytes - self.basis_bytes - reserved_bytes - SLACK_BYTES
+
+
+def get_support_bytes(num_supports: int, width: int) -> int:
+    """Bytes charged for retaining ``num_supports`` supports of ``width`` packed words."""
+    return SUPPORT_COPIES * WORD_BYTES * width * num_supports
+
+
+def get_output_row_bytes(width: int) -> int:
+    """Bytes charged for one row of a native output chunk of ``width`` packed words."""
+    return OUTPUT_COPIES * WORD_BYTES * width
+
+
+####################################################################################################
+# packed rows
+
+
+def pack(matrix: BinaryMatrix) -> PackedMatrix:
+    """Pack binary rows into little-endian uint64 words."""
+    padded = np.pad(matrix, ((0, 0), (0, -matrix.shape[1] % 64)))
+    return np.ascontiguousarray(np.packbits(padded, axis=1, bitorder="little").view("<u8"))
+
+
+def unpack(matrix: PackedMatrix, width: int) -> BinaryMatrix:
+    """Inverse of ``pack`` for rows with ``width`` physical coordinates."""
+    return np.unpackbits(matrix.view(np.uint8), axis=1, bitorder="little")[:, :width].copy()
+
+
+def get_support_keys(words: PackedMatrix) -> npt.NDArray[np.void]:
+    """Compare complete packed rows, not individual words or collision-prone hashes."""
+    return words.view(np.dtype((np.void, 8 * words.shape[1]))).reshape(-1)
+
 
 ####################################################################################################
 # BZ support enumeration
@@ -219,6 +303,49 @@ def _check_exhaustive_rank(basis: BinaryMatrix) -> None:
 
 
 ####################################################################################################
+# full-Pauli lifting
+
+
+def count_minimum_paulis(
+    supports_x: PackedMatrix,
+    supports_z: PackedMatrix,
+    stabilizers_x: PackedMatrix,
+    stabilizers_z: PackedMatrix,
+    minimum: int,
+    budget: StorageBudget,
+) -> int:
+    """Count physical Pauli representatives of weight ``minimum``, ignoring phase.
+
+    ``supports_x`` and ``supports_z`` are the distinct supports of the minimum X-only and Z-only
+    logical words.  Stabilizers are packed row spaces.  The result is an arbitrary-size integer.
+    """
+    width = stabilizers_x.shape[1]
+    keys_x, keys_z = get_support_keys(supports_x), get_support_keys(supports_z)
+
+    # A support shared by both sectors carries exactly X, Z and Y words, three in all.
+    shared = np.intersect1d(keys_x, keys_z, assume_unique=True)
+    union_size = len(supports_x) + len(supports_z) - len(shared)
+    if get_support_bytes(union_size, width) + budget.basis_bytes > budget.limit_bytes:
+        raise MemoryError("Full-Pauli support union exceeds memory_limit_bytes")
+    total = 3 * len(shared)
+
+    # An X-only support can be dressed by Z stabilizers contained inside it, and conversely.
+    # This needs one rank query per support, not one per candidate word.
+    for keys, stabilizers in (
+        (np.setdiff1d(keys_x, keys_z, assume_unique=True), stabilizers_z),
+        (np.setdiff1d(keys_z, keys_x, assume_unique=True), stabilizers_x),
+    ):
+        supports = keys.view(np.uint64).reshape(-1, width)
+        for start in range(0, len(supports), budget.batch_size):
+            words = supports[start : start + budget.batch_size]
+            histogram = _shortened_histogram(stabilizers, words, minimum)
+            total += sum(
+                int(count) << exponent for exponent, count in enumerate(histogram) if count
+            )
+    return total
+
+
+####################################################################################################
 # helper methods
 
 
@@ -230,12 +357,13 @@ def _get_support_buffer(
     Returns the output chunk and the number of retained supports that fit in the budget.
     """
     allowance = budget.available(storage)
-    chunk_size = min(budget.batch_size, allowance // max(1, 16 * (width + 1)))
+    # One extra word per row of slack for the chunk's counters and indices.
+    chunk_size = min(budget.batch_size, allowance // get_output_row_bytes(width + 1))
     if max_candidates is not None:
         chunk_size = min(chunk_size, max_candidates)
     if chunk_size < 1:
         raise MemoryError("Support enumeration setup exceeds memory_limit_bytes")
-    return np.empty((chunk_size, width), dtype=np.uint64), allowance // max(1, 96 * width)
+    return np.empty((chunk_size, width), dtype=np.uint64), allowance // get_support_bytes(1, width)
 
 
 def _append_supports(buffer: bytearray, output: PackedMatrix, count: int, max_words: int) -> None:
@@ -261,7 +389,7 @@ def _unique_supports(words: PackedMatrix, num_sets: int) -> PackedMatrix:
 
 
 ####################################################################################################
-# native scans
+# native kernels
 
 
 @njit(cache=True)
@@ -455,3 +583,91 @@ def _scan_exhaustive_minimum(
             output[matched] = current
             matched += 1
     return best, matched
+
+
+@njit(cache=True)
+def _rank_masked(rows: PackedMatrix, mask: npt.NDArray[np.uint64]) -> int:
+    """Rank the restricted row space without unpacking its physical coordinates."""
+    if rows.shape[1] == 1:
+        return _rank_word(rows.reshape(-1), mask[0], np.empty(64, dtype=np.uint64))
+    pivots = np.zeros((64 * rows.shape[1], rows.shape[1]), dtype=np.uint64)
+    current = np.empty(rows.shape[1], dtype=np.uint64)
+    rank = 0
+    for row in range(len(rows)):
+        for word in range(rows.shape[1]):
+            current[word] = rows[row, word] & mask[word]
+        while True:
+            word = 0
+            while word < rows.shape[1] and current[word] == 0:
+                word += 1
+            if word == rows.shape[1]:
+                break
+            pivot = 64 * word + trailing_zeros(current[word])
+            if pivots[pivot, word] == 0:
+                for jj in range(rows.shape[1]):
+                    pivots[pivot, jj] = current[jj]
+                rank += 1
+                break
+            for jj in range(rows.shape[1]):
+                current[jj] ^= pivots[pivot, jj]
+    return rank
+
+
+@njit(cache=True, inline="always")
+def _rank_word(
+    rows: npt.NDArray[np.uint64],
+    mask: np.uint64,
+    pivots: npt.NDArray[np.uint64],
+) -> int:
+    """Use scalar masks and caller-owned scratch space for repeated single-word rank queries."""
+    if not len(rows) or mask == 0:
+        return 0
+    pivots[:] = 0
+    rank = 0
+    # An array iterator would retain/release rows on every inlined support query.
+    for index in range(len(rows)):
+        value = rows[index] & mask
+        while value:
+            pivot = trailing_zeros(value)
+            if pivots[pivot] == 0:
+                pivots[pivot] = value
+                rank += 1
+                break
+            value ^= pivots[pivot]
+    return rank
+
+
+@njit(cache=True)
+def _shortened_histogram(
+    stabilizers: PackedMatrix, supports: PackedMatrix, minimum: int
+) -> npt.NDArray[np.int64]:
+    """Count opposite-type stabilizers contained in minimum supports.
+
+    A minimum X support cannot contain a nonzero X stabilizer: multiplying by it would give a
+    lighter nontrivial logical.  On a support with no minimum Z word, all allowed Z components
+    are therefore Z stabilizers.  Their number is 2**(rank(H_Z)-rank(H_Z[:,outside])).
+    Group dimensions natively and exponentiate in Python to retain arbitrary-size cardinalities.
+    """
+    if stabilizers.shape[1] == 1:
+        return _shortened_histogram_one(stabilizers.reshape(-1), supports.reshape(-1), minimum)
+    histogram = np.zeros(minimum + 1, dtype=np.int64)
+    for support in supports:
+        dimension = len(stabilizers) - _rank_masked(stabilizers, ~support)
+        histogram[dimension] += 1
+    return histogram
+
+
+@njit(cache=True)
+def _shortened_histogram_one(
+    stabilizers: npt.NDArray[np.uint64],
+    supports: npt.NDArray[np.uint64],
+    minimum: int,
+) -> npt.NDArray[np.int64]:
+    """Reuse one pivot buffer; no per-support views, mask vectors, or rank scratch allocations."""
+    histogram = np.zeros(minimum + 1, dtype=np.int64)
+    pivots = np.empty(64, dtype=np.uint64)
+    for support in supports:
+        outside = ~support
+        dimension = len(stabilizers) - _rank_word(stabilizers, outside, pivots)
+        histogram[dimension] += 1
+    return histogram

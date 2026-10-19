@@ -22,7 +22,7 @@ import pytest
 from qldpc import codes
 
 from . import counter as we
-from . import dual, lifting, supports
+from . import dual, supports
 from .conftest import _native
 
 
@@ -68,8 +68,11 @@ def test_random_css_oracles(interpreted: bool) -> None:
             "_scan_supports_one",
             "_exhaustive_supports",
             "_scan_exhaustive_minimum",
+            "_rank_masked",
+            "_rank_word",
+            "_shortened_histogram",
+            "_shortened_histogram_one",
         ),
-        lifting: ("_rank_masked", "_rank_word", "_shortened_histogram", "_shortened_histogram_one"),
         we: ("transform_rows",),
     }
     with contextlib.ExitStack() as stack:
@@ -416,3 +419,23 @@ def test_connected_multiword_surface() -> None:
     assert counter.get_minimum() == we.CSSMinimumLogicalWeights(9, 1556, 1556, 9 * 2**9)
     changed = counter.conjugated_cnot(0, 1)
     assert changed.get_minimum() == we.CSSMinimumLogicalWeights(8, 70, 0, 2**7)
+
+
+@pytest.mark.parametrize("interpreted", [False, True])
+@pytest.mark.parametrize("width", [5, 130])
+def test_transform_rows_against_bit_oracle(interpreted: bool, width: int) -> None:
+    """Targets may straddle word boundaries; untouched coordinates must be preserved."""
+    transform = _native(we.transform_rows, interpreted)
+    rng = np.random.default_rng(width)
+    matrix = rng.integers(0, 2, size=(4, width), dtype=np.uint8)
+    targets = [0, width - 1, width // 2] if width > 64 else [0, 4]
+    local = rng.integers(0, 2, size=(len(targets), len(targets)), dtype=np.uint8)
+    expected = matrix.copy()
+    expected[:, targets] = (matrix[:, targets] @ local.T) % 2
+    packed = supports.pack(matrix)
+    before = packed.copy()
+    result = transform(
+        packed, np.asarray(targets, dtype=np.int64), supports.pack(local)[:, 0].astype(np.uint64)
+    )
+    assert np.array_equal(supports.unpack(result, width), expected)
+    assert np.array_equal(packed, before)

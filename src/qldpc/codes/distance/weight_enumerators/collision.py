@@ -21,9 +21,17 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
+from .supports import WORD_BYTES, get_output_row_bytes, get_support_bytes
+
 PackedMatrix = npt.NDArray[np.uint64]
 IndexArray = npt.NDArray[np.int64]
 _MAX_INDEX = int(np.iinfo(np.intp).max)
+
+# Fixed allowance for small native scratch arrays and bookkeeping.
+_SETUP_SLACK_BYTES = 8192
+
+# Four int64 words of index scratch per coordinate, weight position and shell-row word.
+_INDEX_SCRATCH_BYTES = 32
 
 
 def recover_supports(
@@ -129,26 +137,30 @@ def _plan_storage(
     # All index/count arithmetic above is Python integer arithmetic, before native conversion.
     if max(size, table_size, size * row_words, n * row_words) > _MAX_INDEX // 8:
         raise OverflowError("Collision half-shell exceeds native index/address capacity")
+    # Exact bytes of the shell: each row holds its words, a maximum coordinate and a chain link,
+    # and the hash table holds one head per bucket.  Scratch index arrays are charged generously.
     setup = (
         reserved_bytes
-        + 8192
-        + 8 * (size * (row_words + 2) + table_size)
-        + 32 * (n + weight + row_words)
+        + _SETUP_SLACK_BYTES
+        + WORD_BYTES * (size * (row_words + 2) + table_size)
+        + _INDEX_SCRATCH_BYTES * (n + weight + row_words)
     )
     if setup > _MAX_INDEX:
         raise OverflowError("Collision half-shell setup exceeds native index/address capacity")
     allowance = memory_limit_bytes - setup
     chunk = min(int(batch_size), _MAX_INDEX, math.comb(n, weight))
-    chunk = min(chunk, allowance // max(1, 16 * physical_width))
+    chunk = min(chunk, allowance // get_output_row_bytes(physical_width))
     if chunk < 1:
         raise MemoryError("Collision half-shell setup exceeds memory_limit_bytes")
-    output_bytes = chunk * 8 * physical_width
+    output_bytes = chunk * WORD_BYTES * physical_width
     if setup + output_bytes > _MAX_INDEX:
         raise OverflowError("Collision output chunk exceeds native index/address capacity")
-    max_supports = (allowance - output_bytes) // (96 * physical_width)
+    max_supports = (allowance - output_bytes) // get_support_bytes(1, physical_width)
     if max_supports < 1:
         raise MemoryError("Collision support storage exceeds memory_limit_bytes")
-    max_address_supports = (_MAX_INDEX - setup - output_bytes) // (96 * physical_width)
+    max_address_supports = (_MAX_INDEX - setup - output_bytes) // get_support_bytes(
+        1, physical_width
+    )
     if max_address_supports < 1:
         raise OverflowError("Collision support storage exceeds native index/address capacity")
     return _Plan(
