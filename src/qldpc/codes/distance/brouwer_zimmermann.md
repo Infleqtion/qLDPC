@@ -6,11 +6,11 @@ This guide explains how qLDPC computes the exact distance of a binary code using
 It is written for contributors who need to understand, debug, or modify the BZ code in this directory.
 It has three goals:
 
-- Explain the BZ algorithm itself (section 2).
-- Explain how qLDPC implements it (section 3).
-- Explain the improvements that qLDPC adds to the algorithm as published (section 4).
+- Explain the BZ algorithm itself ([Section 2](#2-the-brouwer-zimmermann-algorithm)).
+- Explain how qLDPC implements it ([Section 3](#3-implementation-in-qldpc)).
+- Explain the improvements that qLDPC adds to the algorithm as published ([Section 4](#4-improvements-in-qldpc)).
 
-Section 5 lists the invariants that a change to the implementation must preserve.
+[Section 5](#5-invariants-to-preserve-when-modifying-the-implementation) lists the invariants that a change to the implementation must preserve.
 
 The implementation draws on two papers and a derivation in this guide:
 
@@ -18,7 +18,7 @@ The implementation draws on two papers and a derivation in this guide:
   qLDPC follows its stopping criterion for disjoint and rank-deficient information sets.
 - A [paper that adapts BZ to quantum codes](https://arxiv.org/abs/2408.10743) reduces symplectic (Pauli) weight to Hamming weight.
   qLDPC follows this reduction.
-- The stopping criterion for overlapping information sets (section 4.1) is derived in this guide.
+- The stopping criterion for overlapping information sets ([Section 4.1](#41-overlapping-information-sets)) is derived in this guide.
 
 The public interfaces for binary distances live in [core.py](core.py).
 They dispatch either to [brouwer_zimmermann.py](brouwer_zimmermann.py), which implements BZ, or to [brute_force.py](brute_force.py), which enumerates words exhaustively.
@@ -105,19 +105,23 @@ Hence `wt(v|_I) = wt(a)`:
 **Searching a basis through weight `t`** means examining every word with coefficient weight at most `t` with respect to `G_I`; that is, every XOR of at most `t` rows of `G_I`.
 Each word in `V` has exactly one coefficient vector in `G_I`, so a word that is not examined by this search has coefficient weight at least `t+1`.
 Since `wt(v|_I)` equals the coefficient weight of `v`, such a word `v` satisfies `wt(v) ≥ wt(v|_I) ≥ t+1`.
-Section 2.5 uses this consequence to lower-bound the weight of every word that the search has not examined.
+[Section 2.5](#25-the-stopping-certificate) uses this consequence to lower-bound the weight of every word that the search has not examined.
 
-### 2.4 Rank-deficient blocks
+### 2.4 Search bases and rank-deficient blocks
 
-Suppose several bases are built one after another.
-Each basis `i` is row reduced on a **block** `B_i`, a set of column indices disjoint from the earlier blocks.
-Once the available columns run low, the final block may have rank `r_i < r`, so it is not an information set.
-Row reduction on such a block gives a basis of the whole space in which:
+BZ searches `m` bases `G_1, ..., G_m` of `V`, which we call the **search bases**.
+Each `G_i` is row reduced on a **block** `B_i`, a set of column indices, and the blocks `B_1, ..., B_m` are pairwise disjoint.
+These blocks are chosen greedily: `B_1` is an information set, `B_2` is an information set among the columns not in `B_1`, and so on, until the remaining columns no longer contain an information set.
+If any columns remain at that point, they form one last block, which has rank less than `r`.
+
+Each block `B_i` that is an information set gives a systematic basis, as in [Section 2.3](#23-systematic-bases-and-information-sets).
+Only the last block, `B_m`, can have rank `r_m < r`, and then it is not an information set.
+In general, if `B_i` has rank `r_i`, row reducing on `B_i` gives a basis `G_i` of the whole space `V` in which:
 
 - the first `r_i` rows have distinct pivot columns in `B_i`, and
 - the remaining `r - r_i` rows are zero on the columns indexed by `B_i`.
 
-Suppose a word `v` has coefficient weight at least `t+1` in this basis.
+Suppose a word `v` has coefficient weight at least `t+1` in `G_i`.
 At most `r - r_i` of its selected rows can be zero on `B_i`, so at least `t + 1 - (r - r_i)` of them are pivot rows.
 Each pivot row contributes a distinct nonzero coordinate to `v|_{B_i}`, the restriction of `v` to `B_i`, so
 
@@ -125,22 +129,22 @@ $$
 \operatorname{wt}(v|_{B_i}) \ge b_i(t) := \max(0,\;t+1-(r-r_i)).
 $$
 
-For a full information set (`r_i = r`, `B_i = I`), this is `b_i(t) = t + 1`, matching section 2.3.
+For a full information set (`r_i = r`, `B_i = I`), this is `b_i(t) = t + 1`, matching [Section 2.3](#23-systematic-bases-and-information-sets).
 
 ### 2.5 The stopping certificate
 
-Suppose that every basis has been searched through coefficient weight `t`, in the sense of section 2.3.
-Consider an eligible word `v` that was not examined in any basis.
-In each basis `i`, the coefficient weight of `v` is at least `t+1`.
-By sections 2.3 and 2.4, `wt(v|_{B_i}) ≥ b_i(t)` for every `i`.
+Suppose that each of the search bases `G_1, ..., G_m` of [Section 2.4](#24-search-bases-and-rank-deficient-blocks) has been searched through coefficient weight `t`, in the sense of [Section 2.3](#23-systematic-bases-and-information-sets).
+Consider an eligible word `v` that was not examined in any of them.
+For each `i`, the coefficient weight of `v` in `G_i` is at least `t+1`.
+By Sections [2.3](#23-systematic-bases-and-information-sets) and [2.4](#24-search-bases-and-rank-deficient-blocks), `wt(v|_{B_i}) ≥ b_i(t)` for every `i`.
 
-If the blocks are disjoint, they share no column indices, so these weights add up:
+Because the blocks are pairwise disjoint, they share no column indices, so these weights add up:
 
 $$
 \operatorname{wt}(v) \ge \sum_i b_i(t) =: L(t).
 $$
 
-For `m` full information sets, `L(t) = m(t+1)`.
+If all `m` blocks are information sets, `L(t) = m(t+1)`.
 
 `L(t)` is the lower certificate.
 It bounds the weight of the words that have not been examined.
@@ -149,9 +153,9 @@ When `L(t) ≥ U`, no unexamined eligible word is lighter than `U`, which is eno
 
 BZ is therefore the following loop:
 
-1. Build several disjoint blocks, and a systematic basis for each.
-2. Find the lightest eligible row among all the bases, which gives an initial `U`.
-3. For `t = 1, 2, ...`, examine every selection of `t` rows in every basis, lowering `U` whenever a lighter eligible word is found.
+1. Build the search bases `G_1, ..., G_m` from disjoint blocks, as in [Section 2.4](#24-search-bases-and-rank-deficient-blocks).
+2. Find the lightest eligible row among the rows of the search bases, which gives an initial `U`.
+3. For `t = 1, 2, ...`, examine every selection of `t` rows in each search basis, lowering `U` whenever a lighter eligible word is found.
    Then compute `L(t)`, and stop if `L(t) ≥ U`.
 
 The search always terminates, because after `t = r` every nonzero word has been examined.
@@ -159,7 +163,7 @@ Algorithm 1 of the [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) giv
 
 The cost of this loop is measured in **candidate/set evaluations**.
 One candidate/set evaluation is the examination of one selection of rows in one basis.
-Searching `m` bases of dimension `r` through coefficient weight `t` therefore costs `m` times the number of selections of at most `t` rows, which is `m * sum_{w=1}^{t} binom(r, w)`.
+Searching the `m` search bases through coefficient weight `t` therefore costs `m` times the number of selections of at most `t` rows, which is `m * sum_{w=1}^{t} binom(r, w)`.
 
 ## 3. Implementation in qLDPC
 
@@ -169,14 +173,14 @@ A call to qLDPC's BZ distance method may return through exhaustive enumeration b
 When a scan does run, the call proceeds as follows:
 
 1. For a quantum problem, `get_distance_quantum` can first choose exhaustive enumeration directly, if the input is small and independent.
-2. Otherwise, the search builds an independent basis of `V`, attaches quotient labels to its rows (section 3.2), and, for general Pauli operators, transforms the rows to Hamming coordinates (section 3.3).
+2. Otherwise, the search builds an independent basis of `V`, attaches quotient labels to its rows ([Section 3.2](#32-quantum-problems-quotient-labels)), and, for general Pauli operators, transforms the rows to Hamming coordinates ([Section 3.3](#33-quantum-problems-pauli-weight-as-hamming-weight)).
 3. The lightest eligible row of that basis gives the initial upper bound `U`.
-   Preparation may stop here, either because `U` is at most the `cutoff` (section 3.6) or because exhaustive enumeration is estimated to be cheaper (section 4.4).
-4. The search builds disjoint systematic bases (section 3.4) and checks their eligible rows.
+   Preparation may stop here, either because `U` is at most the `cutoff` ([Section 3.6](#36-exactness-cutoff-and-empty-problems)) or because exhaustive enumeration is estimated to be cheaper ([Section 4.4](#44-exhaustive-enumeration-as-an-alternative)).
+4. The search builds disjoint systematic bases ([Section 3.4](#34-building-disjoint-information-sets)) and checks their eligible rows.
    These rows are all the coefficient-weight-one words, so layer one is complete.
 5. Preparation may stop again if the lower certificate already reaches `U`, or if the work estimate favors exhaustive enumeration.
-   It may also replace the disjoint family by an overlapping family (section 4.1).
-6. Otherwise, the search packs the bases into `uint64` words and scans the layers starting from layer two (section 3.5).
+   It may also replace the disjoint family by an overlapping family ([Section 4.1](#41-overlapping-information-sets)).
+6. Otherwise, the search packs the bases into `uint64` words and scans the layers starting from layer two ([Section 3.5](#35-packed-enumeration)).
    It updates the lower certificate only after a whole layer is complete in every basis.
 
 The implementation is organized as follows:
@@ -194,7 +198,7 @@ The implementation is organized as follows:
 
 ### 3.2 Quantum problems: quotient labels
 
-For the problem of section 2.1 with nested spaces `S ⊆ V`, `_get_nested_code_basis` builds a basis of `V` that is adapted to `S`.
+For the problem of [Section 2.1](#21-the-problem) with nested spaces `S ⊆ V`, `_get_nested_code_basis` builds a basis of `V` that is adapted to `S`.
 Let `s = dim(S)` and `q = dim(V/S)`, so that `r = s + q`.
 The basis has the form
 
@@ -255,7 +259,7 @@ where `wt_P` is the physical Pauli weight.
 
 BZ therefore runs on words of Hamming length `3n`.
 It doubles any `cutoff` before comparing, and halves the final result.
-The labels from section 3.2 remain valid because `T` is linear and injective.
+The labels from [Section 3.2](#32-quantum-problems-quotient-labels) remain valid because `T` is linear and injective.
 Every Hamming weight is even, but this does **not** mean that physical Pauli weights are even.
 
 From this point on, a **coordinate** means a coordinate of the binary words that BZ searches.
@@ -270,7 +274,7 @@ The direct exhaustive route for quantum problems can use symplectic weight direc
 1. Row reduce on the nonzero columns, in their natural order.
    Each pivot set becomes one block.
    Remove its pivots from the remaining columns, and repeat.
-2. Stop at the first block of rank `r_i < r` (the rank-deficient block of section 2.4), or when no columns remain.
+2. Stop at the first block of rank `r_i < r` (the rank-deficient block of [Section 2.4](#24-search-bases-and-rank-deficient-blocks)), or when no columns remain.
 3. If this does not yield `floor(n_active / r)` full information sets, where `n_active` is the number of nonzero columns of the basis, retry with up to eight fixed-seed random column orders.
    Keep the family with the lexicographically largest tuple of ranks.
 
@@ -341,10 +345,10 @@ After an interruption, a new `advance()` call restarts the unfinished layer from
 | `best` | Lightest witness known, which is the current upper bound |
 | `lower_bound` | Lower certificate from the layers completed so far |
 | `next_weight` | Next coefficient weight to search |
-| `cutoff` | Cutoff that ends the search early (section 3.6) |
+| `cutoff` | Cutoff that ends the search early ([Section 3.6](#36-exactness-cutoff-and-empty-problems)) |
 | `batch_size` | Maximum number of supports per kernel call |
-| `weight_divisor` | Proven divisor of every candidate Hamming weight (section 4.2) |
-| `max_coverage` | Maximum number of blocks containing any column index (section 4.1) |
+| `weight_divisor` | Proven divisor of every candidate Hamming weight ([Section 4.2](#42-rounding-the-certificate-to-a-proven-weight-multiple)) |
+| `max_coverage` | Maximum number of blocks containing any column index ([Section 4.1](#41-overlapping-information-sets)) |
 
 A search is finished when its cutoff is reached, its lower certificate reaches `best`, or every coefficient weight has been enumerated.
 
@@ -377,7 +381,7 @@ Allowing blocks to overlap permits more bases, at the price of a weaker certific
 #### The certificate
 
 Let `C` be the **maximum coverage**: the largest number of blocks `B_i` that contain any single column index.
-Let `v` be an eligible word that has not been examined, so that `wt(v|_{B_i}) ≥ b_i(t)` for every `i` (section 2.5).
+Let `v` be an eligible word that has not been examined, so that `wt(v|_{B_i}) ≥ b_i(t)` for every `i` ([Section 2.5](#25-the-stopping-certificate)).
 Each nonzero coordinate `j` of `v` contributes to `wt(v|_{B_i})` once for every block `B_i` that contains `j`, which is at most `C` blocks.
 Summing over blocks therefore gives
 
@@ -398,7 +402,7 @@ $$
 L(t) = \left\lceil \frac{m(t+1)}{C} \right\rceil.
 $$
 
-Disjoint blocks are the special case `C = 1`, which recovers section 2.5.
+Disjoint blocks are the special case `C = 1`, which recovers [Section 2.5](#25-the-stopping-certificate).
 `_get_brouwer_zimmermann_lower_bound` evaluates this formula with exact integer arithmetic, including the rank-deficient terms `b_i(t)`.
 The selector that builds overlapping families, however, proposes only full information sets.
 
@@ -417,7 +421,7 @@ It returns either a replacement family of full information sets together with th
 Which family to choose is decided heuristically.
 The certificate for the chosen family uses only verified ranks and the actual maximum coverage, so it is sound regardless of the heuristic.
 
-Here `n_active` is the number of nonzero columns of the basis, as in section 3.4.
+Here `n_active` is the number of nonzero columns of the basis, as in [Section 3.4](#34-building-disjoint-information-sets).
 This count includes the columns that existing blocks already use.
 Coverage is counted using the original column indices, before each basis removes its pivot columns for packing.
 
@@ -446,7 +450,7 @@ The policy constants are:
 
 The choice of these constants affects only performance; the certificate holds for any values.
 The selection depends only on the basis and its labels, the current upper bound `U`, the fixed constants listed here, and the disjoint family and weight divisor from preparation.
-The upper bound can come from a row witness, from the other sector of a CSS code (section 4.5), or from a distance that is already known.
+The upper bound can come from a row witness, from the other sector of a CSS code ([Section 4.5](#45-sharing-witnesses-between-css-sectors)), or from a distance that is already known.
 A different valid upper bound can change which family is selected, and the certificate is sound for whichever family results.
 
 #### The work estimate
@@ -470,7 +474,7 @@ One CSS sector of that code has these properties:
 
 - It has 64 coordinates and dimension `r = 41`.
 - Its setup rows already provide a witness of weight eight (`U = 8`).
-- Every word in it has even weight, which section 4.2 uses.
+- Every word in it has even weight, which [Section 4.2](#42-rounding-the-certificate-to-a-proven-weight-multiple) uses.
 
 With **one disjoint information set**, `L(t) = t + 1`.
 The certificate `L(6) = 7` is rounded up to eight by the even-weight divisor, so the search enumerates layers two through six after checking the systematic rows.
@@ -498,7 +502,7 @@ Suppose every candidate has a weight that is a multiple of some integer `D`.
 Then `L` can be rounded up to `D * ceil(L/D)`, the smallest multiple of `D` that is at least `L`.
 In qLDPC, `D` comes from two sources:
 
-- The symplectic transformation of section 3.3 gives `D = 2`.
+- The symplectic transformation of [Section 3.3](#33-quantum-problems-pauli-weight-as-hamming-weight) gives `D = 2`.
 - Preparation also checks whether every row of the search basis has even Hamming weight.
   The sum of two even-weight words has even weight, so if all basis rows are even, every word in the space is even.
   When this holds, the implementation combines `D = 2` with any existing divisor by taking the least common multiple.
@@ -510,7 +514,7 @@ The even-weight check on the basis rows is the only divisibility check that qLDP
 ### 4.3 One completed layer for all bases
 
 The bases could in principle be searched to different depths `t_i`.
-The same argument as in section 4.1 then gives
+The same argument as in [Section 4.1](#41-overlapping-information-sets) then gives
 
 $$
 L = \left\lceil \frac{\sum_i b_i(t_i)}{C} \right\rceil.
@@ -519,10 +523,10 @@ $$
 Algorithm 994 enumerates the combinations of each basis in turn, and the paper's discussion notes that the bound can increase after every basis.
 Its Algorithm 1 nevertheless updates the bound only after all bases complete a layer.
 qLDPC does the same, with one difference in scheduling: it examines each support in every basis before moving to the next support.
-This lets one set of prefix XORs be reused across all bases (section 3.5), and it means that qLDPC tracks a single completed coefficient weight `t` shared by all bases.
+This lets one set of prefix XORs be reused across all bases ([Section 3.5](#35-packed-enumeration)), and it means that qLDPC tracks a single completed coefficient weight `t` shared by all bases.
 
 Separate depths `t_i` would allow a lower certificate to be reached sooner.
-In the worked example of section 4.1, finishing layer four in one basis while the other two stop after layer three gives `ceil((5+4+4)/2) = 7`.
+In the worked example of [Section 4.1](#41-overlapping-information-sets), finishing layer four in one basis while the other two stop after layer three gives `ceil((5+4+4)/2) = 7`.
 Rounding up to an even weight gives eight, and this requires only 135,710 candidate/set evaluations after the systematic rows, compared with 338,250 in the table.
 qLDPC's shared schedule does not exploit this, so the table counts the work of qLDPC's actual scan.
 
@@ -533,13 +537,13 @@ Exhaustive enumeration can therefore be chosen at three points:
 
 - Before building an adapted basis, `get_distance_quantum` can enumerate a small independent quantum input directly.
 - During preparation, `_exhaustive_is_cheaper` can choose exhaustive enumeration when the setup cost of information sets would dominate.
-- After the information sets are built, `_brute_force_is_cheaper` compares the estimated BZ work from section 4.1 with the number of eligible words, `(2**q - 1) * 2**(r-q)`, where `q` is the number of logical rows.
+- After the information sets are built, `_brute_force_is_cheaper` compares the estimated BZ work from [Section 4.1](#41-overlapping-information-sets) with the number of eligible words, `(2**q - 1) * 2**(r-q)`, where `q` is the number of logical rows.
 
 The exhaustive implementation in [brute_force.py](brute_force.py) enumerates words in vectorized, packed blocks and updates them using Gray-code steps.
 This enumeration does not use the BZ certificate.
 
 Neither method requires its caller to supply independent generators.
-Classical inputs are first reduced to an independent basis, quantum brute force uses the adapted basis from section 3.2, and the direct quantum shortcut checks independence before skipping that preparation.
+Classical inputs are first reduced to an independent basis, quantum brute force uses the adapted basis from [Section 3.2](#32-quantum-problems-quotient-labels), and the direct quantum shortcut checks independence before skipping that preparation.
 The packed enumerators therefore always receive independent bases, prepared or verified in [core.py](core.py) or [brouwer_zimmermann.py](brouwer_zimmermann.py).
 
 ### 4.5 Sharing witnesses between CSS sectors
