@@ -464,6 +464,7 @@ Heuristic tunables are identified by parameter name so that their current values
 | [_binary.py](_binary.py) | Shared binary helpers: row reduction with labels, independent and adapted bases, packing, weight functions, and the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) | `_row_reduce_binary`, `_get_independent_rows`, `_get_nested_code_basis`, `_symplectic_to_hamming` |
 
 [`__init__.py`](__init__.py) exports names from [core.py](core.py).
+[weight_enumerators/](weight_enumerators/) is a separate subpackage that counts minimum-weight logical words exactly, and it reuses the family selection and certificate of [brouwer_zimmermann.py](brouwer_zimmermann.py) under the constraint in [Section 5](#5-correctness-requirements).
 [core.py](core.py) calls [brouwer_zimmermann.py](brouwer_zimmermann.py) and [brute_force.py](brute_force.py), and [brouwer_zimmermann.py](brouwer_zimmermann.py) calls [brute_force.py](brute_force.py) for its exhaustive routes.
 All three modules use [_binary.py](_binary.py).
 `get_distance_css_brouwer_zimmermann` builds an adapted basis ([Section 3.4](#34-quotient-labels-for-the-stabilizer-test)) for each nontrivial sector, then passes the resulting problems to `_get_distance_brouwer_zimmermann_many`.
@@ -602,6 +603,10 @@ Changes to the BZ algorithm can use different representations, certificates, and
   Coverage may be conservatively overestimated; underestimating it can make the formula unsound.
   Optional rounding requires a divisor valid for every eligible weight ([Section 3.2](#32-rounding-the-certificate-to-a-proven-weight-multiple)).
   A certificate from another CSS sector needs justification for the sector where it is applied, just as any other certificate does.
+- **Keep the strict certificate available to minimum-weight counting.**
+  [weight_enumerators/supports.py](weight_enumerators/supports.py) reuses `_get_information_set_generators`, `_select_brouwer_zimmermann_information_sets`, `_get_overlapping_information_sets`, and `_get_brouwer_zimmermann_lower_bound` to count every word of the minimum weight `d`.
+  Distance may stop at `L(t) ≥ U`, but counting must also exhaust words of weight exactly `d`, so it stops only at `L(t) > d`, and it passes `upper_bound=d+1` to the selector so that the selector's `≥` test gives that strict certificate.
+  Its bound must use the actual maximum coverage of the family it searches.
 - **Preserve the return contract.**
   Return the exact minimum unless taking an early exit permitted by `cutoff`.
   Such an early exit returns the weight of a known eligible witness, an upper bound between the distance and `cutoff` ([Section 4.5](#45-behavior-spanning-files)).
