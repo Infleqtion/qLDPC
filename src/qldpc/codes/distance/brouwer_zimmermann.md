@@ -37,22 +37,22 @@ d = \min_{v \in V,\;v \ne 0} \operatorname{wt}(v),
 \qquad V = \operatorname{rowspan}(G).
 $$
 
-For a quantum code, only some nonzero words matter.
+For a quantum code, the distance is the smallest weight of a nontrivial logical operator.
 Let `S` be the span of the stabilizers (or, for a subsystem code, the stabilizers and gauge operators), and let `V` be the span of `S` together with the logical operators.
-Then, if the code encodes at least one logical qubit (`V ≠ S`),
+Words in `S` act trivially on the encoded information, so the nontrivial logical operators are the words in `V` that are outside `S`.
+If the code encodes at least one logical qubit (`V ≠ S`), its distance is
 
 $$
 d = \min_{v \in V \setminus S} \operatorname{wt}(v).
 $$
 
-Words in `S` act trivially on the encoded information, so a word in `S` is not a nontrivial logical operator and cannot determine the distance.
-Both cases are instances of one problem: given nested binary spaces `S ⊆ V` with `V ≠ S`, find the lightest word in `V` that is not in `S`.
-For a classical code, `S = {0}`.
-When a quantum code has no logical qubits, there is no such word, and the implementation returns a fixed value instead (section 3.6).
+The classical and quantum definitions are instances of one problem: given binary spaces `S ⊆ V` with `V ≠ S`, find the lightest word in `V \ S`.
+For a classical code, `V` is the code and `S = {0}`.
+A quantum code with no logical qubits has no such word, and the implementation returns a fixed value instead (section 3.6).
 
-A word that is allowed to determine the distance is called **eligible**.
-In the classical case, every nonzero codeword is eligible.
-In the nested case, the eligible words are those in `V \ S`.
+A word in `V \ S` is called **eligible**, because it can determine the distance.
+For a classical code, the eligible words are the nonzero codewords.
+For a quantum code, they are the nontrivial logical operators.
 
 ### 2.2 The idea: upper bounds and lower certificates
 
@@ -62,7 +62,7 @@ Let `r = dim(V)` be its number of rows, and let `N` be its number of columns, wh
 
 For a basis `G`, a **coefficient vector** `a` is a binary vector of length `r` that selects rows, and `aG` is the XOR of the selected rows.
 The **coefficient weight** of `aG` is the number of rows selected.
-It is a different quantity from the Hamming weight of `aG`.
+The coefficient weight of a word generally differs from its Hamming weight.
 A **layer** is the set of all words with a given coefficient weight `w`, taken over all choices of `w` rows.
 
 BZ keeps track of two quantities:
@@ -94,7 +94,7 @@ The coordinates in `I` are the **pivot columns** of `G_I`.
 For a coefficient vector `a`, the restriction of `aG_I` to `I` is exactly `a`.
 Selecting `w` rows therefore gives a word with exactly `w` nonzero entries on `I`.
 The word may also have nonzero entries outside `I`.
-This gives the fact that BZ relies on:
+This gives the fact on which BZ's stopping certificate rests:
 
 > If every selection of at most `t` rows of `G_I` has been examined, then every eligible word with at most `t` nonzero coordinates in `I` has been examined.
 
@@ -185,7 +185,7 @@ The implementation is organized as follows:
 
 ### 3.2 Quantum problems: quotient labels
 
-For the nested problem of section 2.1, `_get_nested_code_basis` builds a basis of `V` that is adapted to `S`.
+For the problem of section 2.1 with nested spaces `S ⊆ V`, `_get_nested_code_basis` builds a basis of `V` that is adapted to `S`.
 Let `s = dim(S)` and `q = dim(V/S)`, so that `r = s + q`.
 The basis has the form
 
@@ -219,8 +219,7 @@ Omitting this step would either accept stabilizers as witnesses or reject nontri
 
 The code methods in [common.py](../common.py) supply generators for `S` and for the logical operators, so this module only receives the nested spaces `S ⊆ V`.
 
-`_assert_binary` rejects nonbinary values and field types before they are converted to binary storage arrays.
-This module is binary only.
+`_assert_binary` rejects nonbinary values and field types before they are converted to binary storage arrays, so the search only ever sees binary data.
 
 ### 3.3 Quantum problems: Pauli weight as Hamming weight
 
@@ -357,7 +356,7 @@ The module-level interfaces handle empty cases before any enumeration, with the 
 - A quantum problem with no supplied logical rows returns the number of physical qubits.
 - A quantum problem with a nonempty set of logical rows that all lie in the excluded span returns zero.
 
-These are fixed return conventions for problems with no eligible words.
+These three return values are fixed conventions for problems that have no eligible words.
 
 ## 4. Improvements in qLDPC
 
@@ -434,7 +433,7 @@ The policy constants are:
 - If construction starts with `m_0` full sets, it makes at most `2*(8 - m_0)` attempts.
 - Stage 1 skips families whose estimated work is below 100,000 candidate/set evaluations.
 
-These constants tune performance; the certificate does not depend on them.
+The choice of these constants affects only performance; the certificate holds for any values.
 The selection depends only on the basis and its labels, the current upper bound `U`, the fixed constants above, and the disjoint family and weight divisor from preparation.
 The upper bound can come from a row witness, from the other sector of a CSS code (section 4.5), or from a distance that is already known.
 A different valid upper bound can change which family is selected, and the certificate is sound for whichever family results.
@@ -495,8 +494,7 @@ In qLDPC, `D` comes from two sources:
 
 Divisibility must hold for every word in the space, which is stronger than holding for each basis row.
 For example, `11110` and `01111` each have weight four, but their XOR `10001` has weight two.
-Only the even-weight check above is used.
-This check is a qLDPC addition.
+The even-weight check above is the only divisibility check that qLDPC performs on the basis, and it is a qLDPC addition.
 
 ### 4.3 One completed layer for all bases
 
@@ -527,7 +525,7 @@ Exhaustive enumeration can therefore be chosen at three points:
 - After the information sets are built, `_brute_force_is_cheaper` compares the estimated BZ work from section 4.1 with the number of eligible words, `(2**q - 1) * 2**(r-q)`, where `q` is the number of logical rows.
 
 The exhaustive implementation in [brute_force.py](brute_force.py) enumerates words in vectorized, packed blocks and updates them using Gray-code steps.
-It runs without the BZ certificate.
+This enumeration does not use the BZ certificate.
 
 Neither method requires its caller to supply independent generators.
 Classical inputs are first reduced to an independent basis, quantum brute force uses the adapted basis from section 3.2, and the direct quantum shortcut checks independence before skipping that preparation.
@@ -540,7 +538,7 @@ The distance of a CSS code is `min(d_x, d_z)`, where `d_x` and `d_z` are the dis
 A witness found in either sector lowers the upper bound `U` used by both.
 
 Each sector keeps its own information sets, coverage, weight divisor, and lower certificate.
-This matters when the sectors differ.
+The sectors can differ in these properties.
 For example, a witness of weight seven from one sector caps the other sector's upper bound at seven, even if the other sector contains only even-weight words and so can never have a witness of weight seven.
 That sector only has to show that it cannot beat the shared witness, so its own exact distance may remain undetermined.
 A joint search therefore determines `min(d_x, d_z)`, while the individual sector distances may remain unknown.
