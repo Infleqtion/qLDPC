@@ -2,7 +2,11 @@
 
 """Exact binary BZ searches using disjoint or overlapping information sets.
 
-See ``brouwer_zimmermann.md`` beside this module for the certificates and invariants.
+The disjoint/rank-deficient certificates follow `Algorithm 994
+<https://arxiv.org/abs/1603.06757>`_; the symplectic reduction follows the
+`quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_. The overlapping-set
+certificate and implementation invariants are derived in ``brouwer_zimmermann.md``
+beside this module.
 """
 
 from __future__ import annotations

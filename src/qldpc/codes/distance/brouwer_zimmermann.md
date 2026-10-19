@@ -1,5 +1,9 @@
 # Brouwer-Zimmermann distance searches in qLDPC
 
+The classical disjoint/rank-deficient certificates follow [Algorithm 994](https://arxiv.org/abs/1603.06757).
+The symplectic-to-Hamming reduction follows its [quantum-code adaptation](https://arxiv.org/abs/2408.10743).
+The coverage-divided overlapping-set certificate is derived here for qLDPC, rather than reproduced from either paper.
+
 [core.py](core.py) provides the public binary-distance interfaces and dispatches to [brouwer_zimmermann.py](brouwer_zimmermann.py) or [brute_force.py](brute_force.py).
 This guide derives the stopping certificates and explains how the implementation uses them, including quotient labels, overlapping information sets, and packed enumeration.
 
