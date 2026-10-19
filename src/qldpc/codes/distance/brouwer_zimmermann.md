@@ -48,7 +48,6 @@ $$
 
 The classical and quantum definitions are instances of one problem: given binary spaces `S ⊆ V` with `V ≠ S`, find the lightest word in `V \ S`.
 For a classical code, `V` is the code and `S = {0}`.
-If no logical operators are supplied, there is no such word, and `get_distance_quantum` returns the number of physical qubits instead (section 3.6).
 
 A word in `V \ S` is called **eligible**, because it can determine the distance.
 For a classical code, the eligible words are the nonzero codewords.
