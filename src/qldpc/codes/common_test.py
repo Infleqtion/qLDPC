@@ -637,7 +637,7 @@ def test_distance_bound_memory() -> None:
 
 
 def test_exact_code_distance_method_api() -> None:
-    """High-level exact-distance methods forward the selected binary method."""
+    """Forward method selections and cache correct distances for redundant generators."""
     classical_code = codes.ClassicalCode(codes.RepetitionCode(3).matrix)
     qudit_code = codes.QuditCode(codes.FiveQubitCode().matrix)
     css_code = codes.QuditCode(codes.SteaneCode().matrix).to_css()
@@ -649,6 +649,12 @@ def test_exact_code_distance_method_api() -> None:
         with unittest.mock.patch(f"qldpc.codes.common.{kernel}", return_value=3) as mock_kernel:
             assert get_distance() == 3
         assert mock_kernel.call_args.kwargs["method"] == "brute_force"
+
+    redundant_code = codes.ClassicalCode([[1, 1, 1]]).set_generator(
+        [[1, 1, 0], [0, 1, 1], [1, 0, 1]]
+    )
+    assert redundant_code.get_distance_exact(method="brute_force", cutoff=0) == 2
+    assert redundant_code.get_distance_if_known() == 2
 
     with pytest.raises(ValueError, match="Unknown distance method"):
         classical_code.get_distance(bound=True, method="other")  # type: ignore[arg-type]

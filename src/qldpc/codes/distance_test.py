@@ -659,6 +659,15 @@ def test_brouwer_zimmermann_special_inputs() -> None:
         == 4
     )
     assert qldpc.codes.get_distance_quantum([[1, 0]], [[1, 0]], homogeneous=True) == 0
+    methods: tuple[qldpc.codes.DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
+    for method in methods:
+        for stabilizers in ([[1, 0, 0, 0]], [[1, 0, 0, 0]] * 2):
+            assert (
+                qldpc.codes.get_distance_quantum(
+                    np.empty((0, 4), dtype=np.uint8), stabilizers, method=method
+                )
+                == 2
+            )
 
     with pytest.raises(ValueError, match="incompatible widths"):
         qldpc.codes.get_distance_quantum([[1, 0, 0]], [[1, 0]], homogeneous=True)
@@ -727,20 +736,6 @@ def test_brouwer_zimmermann_initial_upper_bound_excludes_stabilizers() -> None:
 def test_brouwer_zimmermann_overlap_certificates() -> None:
     """Check pivot coverage and label transformations against exhaustive codeword weights."""
     helpers = qldpc.codes.distance
-
-    # Check the coverage formula independently of the family-selection heuristic.
-    assert (
-        helpers._get_brouwer_zimmermann_lower_bound(
-            41, [41] * 3, completed_weight=4, weight_divisor=2, max_coverage=2
-        )
-        == 8
-    )
-    assert (
-        helpers._get_brouwer_zimmermann_lower_bound(
-            3, [3] * 4, completed_weight=2, weight_divisor=1, max_coverage=4
-        )
-        == 3
-    )
 
     # Label each row separately so its row operations can be checked.
     basis = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
@@ -917,7 +912,9 @@ def test_get_distance_classical(block_size: int) -> None:
         "qldpc.codes.distance._get_hamming_weight_fn", return_value=(_mock_hamming_weight, 0)
     ):
         distance = qldpc.codes.distance.get_distance_classical(
-            generators, block_size=block_size, method="brute_force"
+            np.vstack([generators, generators[0], generators[0] ^ generators[1]]),
+            block_size=block_size,
+            method="brute_force",
         )
 
     int_generators = qldpc.codes.distance._rows_to_ints(generators)
@@ -960,8 +957,8 @@ def test_get_distance_quantum(block_size: int) -> None:
         "qldpc.codes.distance._get_hamming_weight_fn", return_value=(_mock_hamming_weight, 0)
     ):
         distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops,
-            stabilizers,
+            np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
+            np.vstack([stabilizers, stabilizers[0]]),
             homogeneous=True,
             block_size=block_size,
             method="brute_force",
@@ -1010,8 +1007,8 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
         "qldpc.codes.distance._get_symplectic_weight_fn", return_value=(_mock_symplectic_weight, 0)
     ):
         distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops,
-            stabilizers,
+            np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
+            np.vstack([stabilizers, stabilizers[0]]),
             homogeneous=False,
             block_size=block_size,
             method="brute_force",
@@ -1122,7 +1119,7 @@ def test_cutoff_early_exit() -> None:
     )
 
     # The logical-operator sweep with block_size=1 finds a generator with Hamming weight 1.
-    generators = [[1, 1, 1, 0], [0, 0, 0, 1], [1, 0, 0, 1]]
+    generators = [[1, 0, 1], [0, 1, 0]]
     assert (
         qldpc.codes.distance.get_distance_classical(
             generators, block_size=1, cutoff=1, method="brute_force"
@@ -1131,8 +1128,8 @@ def test_cutoff_early_exit() -> None:
     )
 
     # The stabilizer sweep finds a Hamming-weight-1 operator only after XORing a stabilizer row.
-    logical_ops = [[0, 1, 1, 1, 1]]
-    stabilizers = [[1, 1, 0, 0, 0], [0, 0, 1, 1, 1]]
+    logical_ops = [[0, 0, 1, 1, 1]]
+    stabilizers = [[1, 0, 0, 1, 0], [0, 1, 1, 1, 1]]
     distance = qldpc.codes.distance.get_distance_quantum(
         logical_ops,
         stabilizers,

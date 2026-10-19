@@ -56,7 +56,7 @@ d = \min_{v \in V,\;v \ne 0} \operatorname{wt}(v),
 \qquad V = \operatorname{rowspan}(G).
 $$
 
-In BZ mode, `get_distance_classical` removes dependent generator rows.
+`get_distance_classical` removes dependent generator rows before selecting either method.
 The resulting basis has `r = dim(V)` rows and `N` columns.
 Thus `r` is the dimension being searched, not the number of parity checks, and `N` is the Hamming length.
 Enumerating only nonempty selections of independent rows excludes the zero word.
@@ -324,11 +324,10 @@ Exhaustive enumeration can be selected at three points:
 - Preparation can choose exhaustive enumeration when information-set setup would dominate.
 - After constructing information sets, `_brute_force_is_cheaper` can compare estimated BZ work with the eligible exhaustive count `(2**q - 1) * 2**(r-q)`.
 
-When BZ preparation chooses exhaustive enumeration, it uses an independent adapted basis.
-Explicit `method="brute_force"` does not check or remove row dependencies, so classical generators must be independent and quantum logical and stabilizer rows must be jointly independent.
-For example, duplicate classical generator rows can produce a zero XOR from a nonempty coefficient selection and return zero instead of the true nonzero-word minimum.
-Using a code object does not guarantee independence: `ClassicalCode.set_generator` checks rank but can store redundant rows.
-Calling that code object's `get_distance_exact(method="brute_force", cutoff=0)` can return zero and cache it on that object for subsequent distance calls.
+Both methods accept redundant generators.
+Classical inputs are reduced to an independent basis; explicit quantum brute force uses the adapted basis from section 3, separating the excluded span from independent quotient representatives.
+The direct quantum shortcut verifies independence before bypassing that preparation.
+The private packed enumerator therefore receives independent bases prepared or verified within `distance.py`; independence is not a caller-side precondition.
 The brute-force implementation uses packed, vectorized blocks and Gray-code updates rather than the BZ coefficient-layer certificate.
 Selecting the public BZ method does not promise that every input will actually run a BZ scan.
 
@@ -455,11 +454,12 @@ For a valid nontrivial binary problem, the default cutoff of one is still exact 
 Use `cutoff=0` when explicitly requiring a fully certified result rather than an early threshold result.
 Larger cutoffs must not be reported as proving an exact distance merely because the method is called an exact-distance method.
 
-The layer-loop argument assumes a nonempty independent ambient basis and an eligible nontrivial quotient; empty and trivial inputs return earlier.
-For a width-four symplectic input with an empty logical space, direct exhaustive enumeration can return four.
-Duplicating an excluded generator leaves the searched spaces unchanged but can select the adapted-basis path and return two.
-The first fallback counts stored bits; the second counts physical qubits.
-These inconsistent sentinels are not certified distances or stable API conventions.
+The layer-loop argument assumes a nonempty independent ambient basis and an eligible nontrivial quotient.
+The module-level interfaces handle empty spaces before enumeration.
+A zero-dimensional classical space returns its block length.
+For quantum inputs, no supplied logical rows returns the physical qubit count, while a nonempty logical family contained in the excluded span returns zero.
+Both methods use these conventions regardless of redundant excluded rows.
+These are explicit return conventions for problems with no eligible words, not witness-derived distance certificates.
 
 ### Caches and special constructions
 

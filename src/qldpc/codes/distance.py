@@ -54,8 +54,7 @@ def get_distance_classical(
 
     Args:
         generators: The generator matrix of the classical code whose distance we want to compute.
-            Brouwer-Zimmermann mode reduces redundant rows to an independent basis.
-            With ``method="brute_force"``, the rows must instead be linearly independent.
+            Both methods reduce redundant rows to a linearly independent basis.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
         block_size: Batch size exponent.  BZ returns to Python after at most
             ``2**min(block_size, 15)`` supports; brute force vectorizes ``2**block_size`` values.
@@ -69,11 +68,12 @@ def get_distance_classical(
     """
     validate_distance_method(method)
     _assert_binary(generators, "generators")
+    matrix = _as_binary_matrix(generators)
+    basis = _get_independent_rows(matrix)
+    if not len(basis):
+        return matrix.shape[1]
+
     if method == "brouwer_zimmermann":
-        matrix = _as_binary_matrix(generators)
-        basis = _get_independent_rows(matrix)
-        if not len(basis):
-            return matrix.shape[1]
         return _get_distance_brouwer_zimmermann(
             basis,
             labels=None,
@@ -81,14 +81,13 @@ def get_distance_classical(
             block_size=block_size,
         )
 
-    # Classical brute force is the quantum calculation with no stabilizers.
-    return get_distance_quantum(
-        logical_ops=generators,
-        stabilizers=[],
+    # The reduced classical basis needs no excluded subspace.
+    return _get_distance_quantum_brute_force(
+        basis,
+        np.empty((0, matrix.shape[1]), dtype=np.uint8),
         cutoff=cutoff,
         block_size=block_size,
         homogeneous=True,
-        method=method,
     )
 
 
@@ -104,9 +103,8 @@ def get_distance_quantum(
     """Distance of a binary quantum code.
 
     Args:
-        logical_ops: A matrix whose rows represent logical operators of the code.  These rows must
-            span a complement of the stabilizers in the logical space.  Brouwer-Zimmermann mode
-            reduces redundant rows and excludes the stabilizer row space from candidate witnesses.
+        logical_ops: Rows that generate the logical space together with the stabilizers.
+            Both methods remove redundant rows and exclude the stabilizer row space from witnesses.
         stabilizers: A matrix whose rows represent stabilizers of the code.
         cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
         block_size: Batch size exponent.  BZ returns to Python after at most
@@ -115,9 +113,8 @@ def get_distance_quantum(
             are assumed to have the same homogeneous (X or Z) type.  If False, Pauli strings may
             have mixed (X, Y, or Z) support on different qubits.
         method: Exact-distance method.  ``"brouwer_zimmermann"`` (default) uses an exclusion-aware
-            search over the logical space modulo stabilizers.  ``"brute_force"`` enumerates every
-            stabilizer and nonzero logical combination, and requires those input rows to be linearly
-            independent.
+            search over the logical space modulo stabilizers.  ``"brute_force"`` enumerates eligible
+            words using independent bases constructed internally.
 
     Returns:
         The exact minimum weight of a nontrivial logical operator in ``logical_ops`` modulo
@@ -143,16 +140,17 @@ def get_distance_quantum(
     validate_distance_method(method)
     _assert_binary(logical_ops, "logical_ops")
     _assert_binary(stabilizers, "stabilizers")
-    if method == "brouwer_zimmermann":
-        logical_matrix = _as_binary_matrix(logical_ops)
-        stabilizer_matrix = _as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
-        num_bits = logical_matrix.shape[1]
-        physical_size = num_bits if homogeneous else num_bits // 2
-        if not homogeneous and num_bits % 2:
-            raise ValueError("Symplectic operators must have an even number of columns")
+    logical_matrix = _as_binary_matrix(logical_ops)
+    stabilizer_matrix = _as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
+    num_bits = logical_matrix.shape[1]
+    physical_size = num_bits if homogeneous else num_bits // 2
+    if not homogeneous and num_bits % 2:
+        raise ValueError("Symplectic operators must have an even number of columns")
+    if not len(logical_matrix):
+        return physical_size
 
-        # Exhaustive enumeration of the input rows avoids building the quotient basis and
-        # information sets, but requires the rows to be linearly independent.
+    if method == "brouwer_zimmermann":
+        # Verify independence before bypassing adapted-basis preparation.
         num_rows = len(logical_matrix) + len(stabilizer_matrix)
         if _exhaustive_is_cheaper(num_rows, num_bits) and num_rows == len(
             _get_independent_rows(np.vstack([stabilizer_matrix, logical_matrix]))
@@ -165,31 +163,33 @@ def get_distance_quantum(
                 homogeneous=homogeneous,
             )
 
-        basis, labels = _get_nested_code_basis(logical_matrix, stabilizer_matrix)
-        if labels.shape[1] == 0:
-            return 0 if len(logical_matrix) else physical_size
-
-        divisor = 1
-        if not homogeneous:
-            basis = _symplectic_to_hamming(basis)
-            divisor = 2
-
-        distance = _get_distance_brouwer_zimmermann(
-            basis,
-            labels,
-            cutoff=cutoff * divisor,
+    # Separate an independent excluded basis from a complement representing the quotient.
+    basis, labels = _get_nested_code_basis(logical_matrix, stabilizer_matrix)
+    if labels.shape[1] == 0:
+        return 0
+    if method == "brute_force":
+        num_stabilizers = len(basis) - labels.shape[1]
+        return _get_distance_quantum_brute_force(
+            basis[num_stabilizers:],
+            basis[:num_stabilizers],
+            cutoff=cutoff,
             block_size=block_size,
-            weight_divisor=divisor,
+            homogeneous=homogeneous,
         )
-        return distance // divisor
 
-    return _get_distance_quantum_brute_force(
-        logical_ops,
-        stabilizers,
-        cutoff=cutoff,
+    divisor = 1
+    if not homogeneous:
+        basis = _symplectic_to_hamming(basis)
+        divisor = 2
+
+    distance = _get_distance_brouwer_zimmermann(
+        basis,
+        labels,
+        cutoff=cutoff * divisor,
         block_size=block_size,
-        homogeneous=homogeneous,
+        weight_divisor=divisor,
     )
+    return distance // divisor
 
 
 def get_distance_css_brouwer_zimmermann(
@@ -1103,7 +1103,7 @@ def _get_distance_quantum_brute_force(
     block_size: int,
     homogeneous: bool,
 ) -> int:
-    """Brute-force binary quantum distance implementation."""
+    """Enumerate independent logical and excluded bases prepared or verified in this module."""
     num_bits = np.shape(logical_ops)[-1]
 
     if homogeneous:
