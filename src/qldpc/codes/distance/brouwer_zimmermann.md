@@ -170,19 +170,18 @@ Searching the `m` search bases through coefficient weight `t` therefore costs `m
 
 ### 3.1 Overview of a search
 
-A call to qLDPC's BZ distance method may return through exhaustive enumeration before any BZ scan runs.
+A call to qLDPC's BZ distance method may return through exhaustive enumeration before any BZ scan runs ([Section 4.4](#44-exhaustive-enumeration-as-an-alternative) lists the three points at which this can happen).
 When a scan does run, the call proceeds as follows:
 
-1. For a quantum problem, `get_distance_quantum` can first choose exhaustive enumeration directly, if the input is small and independent.
-2. Otherwise, the search builds an independent basis of `V`, attaches quotient labels to its rows ([Section 3.2](#32-quantum-problems-quotient-labels)), and, for general Pauli operators, transforms the rows to Hamming coordinates ([Section 3.3](#33-quantum-problems-pauli-weight-as-hamming-weight)).
-3. The lightest eligible row of that basis gives the initial upper bound `U`.
-   Preparation may stop here, either because `U` is at most the `cutoff` ([Section 3.6](#36-exactness-cutoff-and-empty-problems)) or because exhaustive enumeration is estimated to be cheaper ([Section 4.4](#44-exhaustive-enumeration-as-an-alternative)).
-4. The search builds a disjoint family of search bases ([Section 3.4](#34-building-disjoint-information-sets)) and checks their eligible rows.
+1. The search builds an independent basis of `V`, attaches quotient labels to its rows ([Section 3.2](#32-quantum-problems-quotient-labels)), and, for general Pauli operators, transforms the rows to Hamming coordinates ([Section 3.3](#33-quantum-problems-pauli-weight-as-hamming-weight)).
+2. The lightest eligible row of that basis gives the initial upper bound `U`.
+   Preparation may stop here, either because `U` is at most the `cutoff` ([Section 3.6](#36-exactness-and-cutoff)) or because exhaustive enumeration is estimated to be cheaper ([Section 4.4](#44-exhaustive-enumeration-as-an-alternative)).
+3. The search builds a disjoint family of search bases ([Section 3.4](#34-building-disjoint-information-sets)) and checks their eligible rows.
    These rows are all the coefficient-weight-one words, so layer one is complete.
-5. Preparation may stop again if the lower certificate already reaches `U`, or if the work estimate favors exhaustive enumeration.
+4. Preparation may stop again if the lower certificate already reaches `U`, or if the work estimate favors exhaustive enumeration.
    It may also replace the disjoint family of search bases by an overlapping family of search bases ([Section 4.1](#41-overlapping-information-sets)).
-6. Otherwise, the search packs the search bases into `uint64` words and scans the layers starting from layer two ([Section 3.5](#35-packed-enumeration)).
-   It updates the lower certificate only after a whole layer is complete in every basis.
+5. Otherwise, the search packs the search bases into `uint64` words and scans the layers starting from layer two ([Section 3.5](#35-packed-enumeration)).
+   It updates the lower certificate only after a whole layer is complete in each search basis.
 
 The implementation is organized as follows:
 
@@ -223,17 +222,13 @@ aG \in S \quad\Longleftrightarrow\quad aM = 0.
 $$
 
 A candidate word `aG` is therefore eligible exactly when the XOR of its selected row labels, `aM`, is nonzero.
-For a classical search there is no excluded subspace, so `labels=None` and every nonempty selection is eligible.
+For a classical search there is no excluded subspace, so every nonempty selection is eligible.
 
 Every row operation on `G` must be applied identically to `M`.
 If an invertible row transformation replaces `G` by `G' = EG`, the labels must become `M' = EM`.
 Then `aM'` is still the label of the word `aG'`.
 Omitting this step would either accept stabilizers as witnesses or reject nontrivial logical operators.
 `_row_reduce_binary` performs these paired transformations.
-
-The code methods in [common.py](../common.py) supply generators for `S` and for the logical operators, so this module only receives the nested spaces `S ⊆ V`.
-
-`_assert_binary` rejects nonbinary values and field types before they are converted to binary storage arrays, so the search only ever sees binary data.
 
 ### 3.3 Quantum problems: Pauli weight as Hamming weight
 
@@ -258,15 +253,8 @@ $$
 
 where `wt_P` is the physical Pauli weight.
 
-BZ therefore runs on words of Hamming length `3n`.
-It doubles any `cutoff` before comparing, and halves the final result.
+BZ therefore searches words with `3n` coordinates, doubles any `cutoff` before comparing, and halves the final result.
 The labels from [Section 3.2](#32-quantum-problems-quotient-labels) remain valid because `T` is linear and injective.
-Every Hamming weight is even, but this does **not** mean that physical Pauli weights are even.
-
-From this point on, a **coordinate** means a coordinate of the binary words that BZ searches.
-For general Pauli problems, there are `3n` such coordinates after the transformation.
-
-The direct exhaustive route for quantum problems can use symplectic weight directly, without this transformation.
 
 ### 3.4 Building disjoint information sets
 
@@ -295,10 +283,6 @@ The known contribution of the removed columns to a word's weight is easy to rest
 The scan adds this contribution to the population count of the packed XOR of the remaining columns.
 The sum is the Hamming weight of the word.
 
-The arrays of generators and labels are zero-padded to a common number of words across all bases.
-Each basis keeps its true generator width and label width, so padding changes neither weights nor eligibility decisions.
-Weights are accumulated in sufficiently wide integer types.
-
 #### Enumerating supports and reusing XOR prefixes
 
 `_scan_brouwer_zimmermann` describes a candidate by its **support**: the selected row indices in increasing order.
@@ -322,18 +306,10 @@ For each completed support, and in each basis, it does the following:
 
 #### Chunks, layers, and interruption
 
-The Numba kernel is compiled lazily, cached, and bounds checked.
-Each call to the kernel returns after one of three events:
-
-- a bounded number of complete supports has been visited,
-- the cutoff has been reached, or
-- the layer is finished.
-
-The bound is `2**min(block_size, 15)` supports per kernel call.
-Every support is evaluated in every retained basis, so one kernel call performs up to that many supports times the number of bases candidate/set evaluations.
-
-Within one `advance()` call, the support indices, tree depth, and XOR prefixes persist across kernel calls.
-`_BrouwerZimmermannSearch.advance` updates the lower certificate and increments `next_weight` only after the **whole layer is complete in every retained basis**.
+The scan is compiled with Numba and runs in chunks.
+Each call to the compiled scan returns after a bounded number of complete supports, when the cutoff is reached, or when the layer is finished.
+Within one `advance()` call, the support indices and XOR prefixes persist across these calls.
+`_BrouwerZimmermannSearch.advance` updates the lower certificate and increments `next_weight` only after the **whole layer is complete in each search basis**.
 A cutoff, an exception, or an interruption leaves the certificate unchanged.
 After an interruption, a new `advance()` call restarts the unfinished layer from its first support, because the support indices and prefixes were local to the earlier call.
 
@@ -342,18 +318,17 @@ After an interruption, a new `advance()` call restarts the unfinished layer from
 | State | Meaning |
 | --- | --- |
 | `generators`, `labels` | Packed bases, with pivot columns deleted, and their quotient labels |
-| `ranks`, `widths`, `label_widths` | Pivot rank and true packed widths of each basis |
+| `ranks` | Rank of each basis's block |
 | `best` | Lightest witness known, which is the current upper bound |
 | `lower_bound` | Lower certificate from the layers completed so far |
 | `next_weight` | Next coefficient weight to search |
-| `cutoff` | Cutoff that ends the search early ([Section 3.6](#36-exactness-cutoff-and-empty-problems)) |
-| `batch_size` | Maximum number of supports per kernel call |
+| `cutoff` | Cutoff that ends the search early ([Section 3.6](#36-exactness-and-cutoff)) |
 | `weight_divisor` | Proven divisor of every candidate Hamming weight ([Section 4.2](#42-rounding-the-certificate-to-a-proven-weight-multiple)) |
 | `max_coverage` | Maximum number of blocks containing any column index ([Section 4.1](#41-overlapping-information-sets)) |
 
 A search is finished when its cutoff is reached, its lower certificate reaches `best`, or every coefficient weight has been enumerated.
 
-### 3.6 Exactness, cutoff, and empty problems
+### 3.6 Exactness and cutoff
 
 Without an early return caused by a cutoff, a BZ search ends in one of two ways: its certificate reaches `U`, or it exhausts the eligible space.
 Either way, the result is the exact distance.
@@ -362,15 +337,6 @@ With a positive `cutoff`, the search may instead stop as soon as `U` is at most 
 The result is then an upper bound that is at or below the cutoff, and it can exceed the exact distance.
 The default `cutoff` of one is still exact for a valid nontrivial binary problem, because a positive distance cannot be less than one.
 Use `cutoff=0` to require a fully certified result.
-
-The layer-by-layer argument assumes a nonempty basis and at least one eligible word.
-`get_distance_classical` and `get_distance_quantum` in [core.py](core.py) handle empty cases before any enumeration, with the following conventions:
-
-- A classical code of dimension zero returns its block length.
-- A quantum problem with no supplied logical rows returns the number of physical qubits.
-- A quantum problem with a nonempty set of logical rows that all lie in the excluded span returns zero.
-
-These three return values are fixed conventions for problems that have no eligible words.
 
 ## 4. Improvements in qLDPC
 
@@ -537,15 +503,17 @@ qLDPC's shared schedule does not exploit this, so the table counts the work of q
 For small or low-dimensional problems, the setup cost of BZ exceeds the cost of enumerating every word.
 Exhaustive enumeration can therefore be chosen at three points:
 
-- Before building an adapted basis, `get_distance_quantum` can enumerate a small independent quantum input directly.
+- Before building an adapted basis, `get_distance_quantum` can enumerate directly over the supplied rows.
+  It does so when `_exhaustive_is_cheaper` approves the number of supplied rows (stabilizers and logical operators together) and those rows are linearly independent.
+  Dependent rows take the general path through the adapted basis instead.
 - During preparation, `_exhaustive_is_cheaper` can choose exhaustive enumeration when the setup cost of information sets would dominate.
 - After the information sets are built, `_brute_force_is_cheaper` compares the estimated BZ work from [Section 4.1](#41-overlapping-information-sets) with the number of eligible words, `(2**q - 1) * 2**(r-q)`, where `q` is the number of logical rows.
 
 The exhaustive implementation in [brute_force.py](brute_force.py) enumerates words in vectorized, packed blocks and updates them using Gray-code steps.
 This enumeration does not use the BZ certificate.
 
-Neither method requires its caller to supply independent generators.
-Classical inputs are first reduced to an independent basis, quantum brute force uses the adapted basis from [Section 3.2](#32-quantum-problems-quotient-labels), and the direct quantum shortcut checks independence before skipping that preparation.
+Callers do not need to supply independent generators.
+Classical inputs are first reduced to an independent basis, and quantum exhaustive enumeration uses either the adapted basis from [Section 3.2](#32-quantum-problems-quotient-labels) or, in the direct case above, supplied rows that were verified to be independent.
 The packed enumerators therefore always receive independent bases, prepared or verified in [core.py](core.py) or [brouwer_zimmermann.py](brouwer_zimmermann.py).
 
 ### 4.5 Sharing witnesses between CSS sectors
