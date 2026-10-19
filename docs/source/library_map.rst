@@ -78,8 +78,8 @@ qLDPC adds some minor optimizations:
 Distance-finding methods exit early once an observed upper bound on distance is at most ``cutoff``; the default cutoff of one gives an exact result for nontrivial codes.
 Pass ``method="brute_force"`` to distance-finding methods to instead compute distance via brute-force enumeration.
 
-:class:`qldpc.codes.CSSLogicalWeightCounter <qldpc.codes.distance.weight_enumerators.counter.CSSLogicalWeightCounter>` provides exact binary CSS logical-weight counting, with exponential work and explicit storage limits.
-See its public API docstrings for count conventions and backends.
+For binary CSS stabilizer codes (not subsystem or nonbinary codes), :class:`qldpc.codes.CSSLogicalWeightCounter <qldpc.codes.distance.weight_enumerators.counter.CSSLogicalWeightCounter>` additionally counts logical operators exactly: X-only and Z-only weight spectra, and the number of minimum-weight physical Pauli operators.
+Enumeration is exponential, and the counter raises an error rather than exceeding its memory budget or returning a partial count.
 
 Distance bounds
 ~~~~~~~~~~~~~~~
