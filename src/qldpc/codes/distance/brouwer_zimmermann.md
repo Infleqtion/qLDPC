@@ -271,6 +271,68 @@ After all three search bases have been searched through coefficient weight `t = 
 This exceeds the distance, which is allowed because `L(t)` is a statement only about words that have not been examined.
 Every row has weight two, so `U = 2 ≤ L(1)`, and the search stops with distance two.
 
+### 3.2 Rounding the certificate to a proven weight multiple
+
+Suppose that every eligible word has a weight that is a multiple of an integer `D`.
+An unexamined eligible word then has a weight that is at least `L(t)` and a multiple of `D`, so it has a weight of at least `D * ceil(L(t)/D)`, the smallest multiple of `D` that is at least `L(t)`.
+The certificate can therefore be rounded up to that value.
+
+In qLDPC, `D` comes from two sources:
+
+- For general Pauli problems, the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) doubles every weight, which gives `D = 2`.
+- For any problem, qLDPC checks whether every row of the search basis has even Hamming weight.
+  The XOR of two even-weight words has even weight, so if all rows are even, every word in the space is even.
+  When this holds, `D = 2` is combined with any existing divisor by taking the least common multiple.
+
+Parity is the only property checked in this way, because evenness of the rows carries over to all of their sums.
+A larger divisor does not: the rows `11110` and `01111` each have weight four, but their XOR `10001` has weight two.
+
+### 3.3 Sharing witnesses between CSS sectors
+
+The distance of a CSS code is `min(d_x, d_z)`, where `d_x` and `d_z` are the distances of its X and Z sectors.
+qLDPC runs one BZ search for each sector, and advances the searches in round-robin order, one layer at a time.
+A witness found in either sector is a nontrivial logical operator of the code, so it lowers the upper bound `U` used by both searches.
+
+Each search keeps its own lower certificate, because a certificate bounds only the unexamined words of its own sector.
+The sectors can also differ in their search bases, coverage, and weight divisor.
+For example, suppose that the X sector finds a witness of weight seven, so that `U = 7` for both sectors.
+If the Z sector contains only even-weight words, it can have no witness of weight seven.
+Its search still stops as soon as its own certificate reaches `U = 7`.
+At that point it has shown only that `d_z ≥ 7`, and hence `d_z ≥ 8`, without determining the exact value of `d_z`.
+A joint search therefore determines `min(d_x, d_z)`, while the individual sector distances may remain unknown.
+
+### 3.4 Worked example
+
+This example uses one CSS sector of the QC64 code from the test suite ([brouwer_zimmermann_test.py](brouwer_zimmermann_test.py)).
+The sector has these properties:
+
+- It has 64 coordinates and dimension `r = 41`.
+- The lightest eligible row of its basis has weight eight, so initially `U = 8`.
+- Every word in it has even weight, so `D = 2` ([Section 3.2](#32-rounding-the-certificate-to-a-proven-weight-multiple)).
+
+A disjoint family can contain only `floor(64/41) = 1` search basis whose block is an information set.
+The leftover columns hold a rank-deficient block, which contributes nothing to `L(t)` for `t ≤ 17`.
+Hence `L(t) = t + 1` for `t ≤ 17`, and `L(6) = 7` rounds up to eight.
+The search stops after layer six, so it enumerates layers two through six (layer one consists of the rows already checked).
+
+An overlapping family of `m = 3` search bases, each with an information set as its block, can be chosen with maximum coverage `C = 2`.
+Completing layer four gives
+
+$$
+L(4)=\left\lceil\frac{3(4+1)}{2}\right\rceil=8,
+$$
+
+which reaches eight even before rounding to an even weight.
+The search stops after layer four.
+
+| Family | Last layer | Candidate/set evaluations in layers two and above |
+| --- | ---: | ---: |
+| Disjoint, one search basis | 6 | $\sum_{w=2}^{6}\binom{41}{w} = 5{,}358{,}536$ |
+| Overlapping, three search bases, `C = 2` | 4 | $3\sum_{w=2}^{4}\binom{41}{w} = 338{,}250$ |
+
+The overlapping family needs fewer evaluations because it avoids layers five and six.
+The counts cover only enumeration; building and packing the search bases costs extra.
+
 ## 3. Implementation in qLDPC
 
 ### 3.1 Overview of a search
