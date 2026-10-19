@@ -637,7 +637,7 @@ def test_distance_bound_memory() -> None:
 
 
 def test_exact_code_distance_method_api() -> None:
-    """Forward method selections and cache correct distances for redundant generators."""
+    """High-level exact-distance methods forward the selected binary method."""
     classical_code = codes.ClassicalCode(codes.RepetitionCode(3).matrix)
     qudit_code = codes.QuditCode(codes.FiveQubitCode().matrix)
     css_code = codes.QuditCode(codes.SteaneCode().matrix).to_css()
