@@ -100,22 +100,12 @@ $$
 
 Hence `wt(v|_I) = wt(a)`:
 
-> For every word `v` in `V`, the Hamming weight of `v|_I` equals the coefficient weight of `v` in `G_I`.
-
-For example, take a matrix `G` with `r = 2` basis rows `1 0 1 1` and `0 1 1 0`, and let `I = {0, 1}`.
-Row 1 alone has coefficient weight 1, and its restriction to `I` is `1 0`, which has weight 1.
-The XOR of both rows is `1 1 0 1`, which has coefficient weight 2, and its restriction to `I` is `1 1`, which has weight 2.
+> For every word `v` in `V`, the Hamming weight `wt(v|_I)` equals the coefficient weight of `v` in `G_I`, which is a lower bound for the Hamming weight `wt(v)`.
 
 **Searching a basis through weight `t`** means examining every word with coefficient weight at most `t` with respect to `G_I`; that is, every XOR of at most `t` rows of `G_I`.
 Each word in `V` has exactly one coefficient vector in `G_I`, so a word that is not examined by this search has coefficient weight at least `t+1`.
-Since `wt(v|_I)` equals the coefficient weight of `v`, such a word `v` satisfies `wt(v|_I) ≥ t+1`.
+Since `wt(v|_I)` equals the coefficient weight of `v`, such a word `v` satisfies `wt(v) ≥ wt(v|_I) ≥ t+1`.
 Section 2.5 uses this consequence to lower-bound the weight of every word that the search has not examined.
-
-Different information sets give different bases of the same space `V`, so every word of `V` has a coefficient vector in each basis.
-A word `v` can have a different coefficient weight in each basis.
-For example, `v` can have coefficient weight 1 in one basis, where it is a single row, and coefficient weight 3 in another.
-A search that examines all words of coefficient weight at most `t` in several bases may therefore examine the same word `v` more than once.
-The work of such a search is measured in **candidate/set evaluations**: the total number of words examined, counting `v` once for each basis in which it is examined.
 
 ### 2.4 Rank-deficient blocks
 
@@ -166,6 +156,10 @@ BZ is therefore the following loop:
 
 The search always terminates, because after `t = r` every nonzero word has been examined.
 Algorithm 1 of the [Algorithm 994 paper](https://arxiv.org/abs/1603.06757v2) gives this bound for disjoint and rank-deficient blocks.
+
+The cost of this loop is measured in **candidate/set evaluations**.
+One candidate/set evaluation is the examination of one selection of rows in one basis.
+Searching `m` bases of dimension `r` through coefficient weight `t` therefore costs `m` times the number of selections of at most `t` rows, which is `m * sum_{w=1}^{t} binom(r, w)`.
 
 ## 3. Implementation in qLDPC
 
