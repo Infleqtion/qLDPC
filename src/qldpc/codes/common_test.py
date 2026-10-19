@@ -650,6 +650,12 @@ def test_exact_code_distance_method_api() -> None:
             assert get_distance() == 3
         assert mock_kernel.call_args.kwargs["method"] == "brute_force"
 
+    redundant_code = codes.ClassicalCode([[1, 1, 1]]).set_generator(
+        [[1, 1, 0], [0, 1, 1], [1, 0, 1]]
+    )
+    assert redundant_code.get_distance_exact(method="brute_force", cutoff=0) == 2
+    assert redundant_code.get_distance_if_known() == 2
+
     with pytest.raises(ValueError, match="Unknown distance method"):
         classical_code.get_distance(bound=True, method="other")  # type: ignore[arg-type]
 
