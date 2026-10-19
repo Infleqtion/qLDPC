@@ -2,7 +2,7 @@
 
 """Lift minimum X-only and Z-only supports to the full physical-Pauli multiplicity.
 
-A support shared by both sectors carries an X, a Z and a Y representative.  A support found in
+A support shared by both sectors carries an X, a Z, and a Y representative.  A support found in
 only one sector can also be dressed by the opposite-type stabilizers that it contains, which is a
 single rank query per support; see ``_shortened_histogram``.
 """
