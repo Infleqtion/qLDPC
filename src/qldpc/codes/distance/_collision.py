@@ -15,6 +15,7 @@ Thus the join is valid at any weight, not only a previously certified minimum.
 from __future__ import annotations
 
 import math
+from typing import NamedTuple
 
 import numpy as np
 import numpy.typing as npt
@@ -46,6 +47,47 @@ def recover_supports(
     Setup, complete chunk bytes and growing output must also fit native address capacity.
     The budget bounds working arrays, not the interpreter/JIT's resident memory.
     """
+    _validate_arguments(syndromes, labels, weight, memory_limit_bytes, reserved_bytes, batch_size)
+    plan = _plan_storage(
+        syndromes, labels, int(weight), int(memory_limit_bytes), int(reserved_bytes), batch_size
+    )
+    shell = _build_shell(syndromes, labels, plan)
+    return _query_shell(syndromes, labels, plan, shell)
+
+
+class _Plan(NamedTuple):
+    """Sizes of the half-shell and its output, all checked against the storage budget."""
+
+    weight: int
+    left_size: int
+    right_size: int
+    num_shell_rows: int
+    table_size: int
+    physical_width: int
+    chunk: int
+    max_supports: int
+    max_address_supports: int
+
+
+class _Shell(NamedTuple):
+    """Left half-shell: signatures, labels and physical halves, indexed by hash chains."""
+
+    signatures: PackedMatrix
+    labels: PackedMatrix
+    physical: PackedMatrix
+    maxima: IndexArray
+    links: IndexArray
+    heads: IndexArray
+
+
+def _validate_arguments(
+    syndromes: PackedMatrix,
+    labels: PackedMatrix,
+    weight: int,
+    memory_limit_bytes: int,
+    reserved_bytes: int,
+    batch_size: int,
+) -> None:
     if syndromes.ndim != 2 or labels.ndim != 2:
         raise ValueError("Incompatible collision maps or physical weight")
     n = len(syndromes)
@@ -67,25 +109,35 @@ def recover_supports(
         )
     ):
         raise ValueError("Collision memory and batch limits must be nonnegative integers")
-    weight = int(weight)
+
+
+def _plan_storage(
+    syndromes: PackedMatrix,
+    labels: PackedMatrix,
+    weight: int,
+    memory_limit_bytes: int,
+    reserved_bytes: int,
+    batch_size: int,
+) -> _Plan:
+    """Size every array in Python integers and reject over-budget work before allocating."""
+    n = len(syndromes)
     left_size, right_size = weight // 2, (weight + 1) // 2
     size = math.comb(n, left_size)
     table_size = 1 << (2 * size - 1).bit_length()
     physical_width = (n + 63) // 64
-    signature_width, label_width = syndromes.shape[1], labels.shape[1]
-    row_words = signature_width + label_width + physical_width
+    row_words = syndromes.shape[1] + labels.shape[1] + physical_width
     # All index/count arithmetic above is Python integer arithmetic, before native conversion.
     if max(size, table_size, size * row_words, n * row_words) > _MAX_INDEX // 8:
         raise OverflowError("Collision half-shell exceeds native index/address capacity")
     setup = (
-        int(reserved_bytes)
+        reserved_bytes
         + 8192
         + 8 * (size * (row_words + 2) + table_size)
         + 32 * (n + weight + row_words)
     )
     if setup > _MAX_INDEX:
         raise OverflowError("Collision half-shell setup exceeds native index/address capacity")
-    allowance = int(memory_limit_bytes) - setup
+    allowance = memory_limit_bytes - setup
     chunk = min(int(batch_size), _MAX_INDEX, math.comb(n, weight))
     chunk = min(chunk, allowance // max(1, 16 * physical_width))
     if chunk < 1:
@@ -99,60 +151,61 @@ def recover_supports(
     max_address_supports = (_MAX_INDEX - setup - output_bytes) // (96 * physical_width)
     if max_address_supports < 1:
         raise OverflowError("Collision support storage exceeds native index/address capacity")
-    shell_s = np.empty((size, signature_width), dtype=np.uint64)
-    shell_l = np.empty((size, label_width), dtype=np.uint64)
-    shell_p = np.empty((size, physical_width), dtype=np.uint64)
-    maxima = np.empty(size, dtype=np.int64)
-    links = np.empty(size, dtype=np.int64)
-    heads = np.full(table_size, -1, dtype=np.int64)
-    left = np.arange(left_size, dtype=np.int64)
-    for start in range(0, size, chunk):
-        _build_chunk(
-            syndromes,
-            labels,
-            left,
-            start,
-            min(start + chunk, size),
-            shell_s,
-            shell_l,
-            shell_p,
-            maxima,
-            links,
-            heads,
-        )
-    right = np.arange(right_size, dtype=np.int64)
-    query_s = np.empty(signature_width, dtype=np.uint64)
-    query_l = np.empty(label_width, dtype=np.uint64)
-    output = np.empty((chunk, physical_width), dtype=np.uint64)
+    return _Plan(
+        weight,
+        left_size,
+        right_size,
+        size,
+        table_size,
+        physical_width,
+        chunk,
+        max_supports,
+        max_address_supports,
+    )
+
+
+def _build_shell(syndromes: PackedMatrix, labels: PackedMatrix, plan: _Plan) -> _Shell:
+    """Enumerate every left half-support, in bounded chunks, into a hash-chained table."""
+    size = plan.num_shell_rows
+    shell = _Shell(
+        np.empty((size, syndromes.shape[1]), dtype=np.uint64),
+        np.empty((size, labels.shape[1]), dtype=np.uint64),
+        np.empty((size, plan.physical_width), dtype=np.uint64),
+        np.empty(size, dtype=np.int64),
+        np.empty(size, dtype=np.int64),
+        np.full(plan.table_size, -1, dtype=np.int64),
+    )
+    left = np.arange(plan.left_size, dtype=np.int64)
+    for start in range(0, size, plan.chunk):
+        _build_chunk(syndromes, labels, left, start, min(start + plan.chunk, size), *shell)
+    return shell
+
+
+def _query_shell(
+    syndromes: PackedMatrix, labels: PackedMatrix, plan: _Plan, shell: _Shell
+) -> PackedMatrix:
+    """Join every right half-support against the shell, resuming in bounded work chunks."""
+    right = np.arange(plan.right_size, dtype=np.int64)
+    query_s = np.empty(syndromes.shape[1], dtype=np.uint64)
+    query_l = np.empty(labels.shape[1], dtype=np.uint64)
+    output = np.empty((plan.chunk, plan.physical_width), dtype=np.uint64)
     result = bytearray()
     cursor, done = -2, False
     while not done:
         cursor, done, count, _ = _query_chunk(
-            syndromes,
-            labels,
-            right,
-            query_s,
-            query_l,
-            shell_s,
-            shell_l,
-            shell_p,
-            maxima,
-            links,
-            heads,
-            cursor,
-            chunk,
-            output,
+            syndromes, labels, right, query_s, query_l, *shell, cursor, plan.chunk, output
         )
-        num_supports = len(result) // (8 * physical_width) + count
-        if num_supports > max_supports:
+        # Check the growing output before keeping it, so failures are explicit and never partial.
+        num_supports = len(result) // (8 * plan.physical_width) + count
+        if num_supports > plan.max_supports:
             raise MemoryError("Collision minimum-support output exceeds memory_limit_bytes")
-        if num_supports > max_address_supports:
+        if num_supports > plan.max_address_supports:
             raise OverflowError(
                 "Collision minimum-support output exceeds native index/address capacity"
             )
         if count:
             result.extend(output[:count].tobytes())
-    return np.frombuffer(bytes(result), dtype=np.uint64).reshape(-1, physical_width)
+    return np.frombuffer(bytes(result), dtype=np.uint64).reshape(-1, plan.physical_width)
 
 
 ####################################################################################################

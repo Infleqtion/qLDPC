@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared fixtures and matrix helper for exact-distance dispatch and BZ tests."""
+"""Shared fixtures and helpers for exact-distance dispatch, BZ and weight-enumeration tests."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
+from typing import Any
 from unittest import mock
 
 import numpy as np
@@ -10,6 +11,7 @@ import numpy.typing as npt
 import pytest
 
 from . import _binary as binary
+from .weight_enumerators import CSSLogicalWeightCounter
 
 
 @pytest.fixture
@@ -51,3 +53,15 @@ def _bitwise_count(
         out[indices] = sum(ival >> i & 1 for i in range(nbits))
 
     return out
+
+
+def _native(function: Callable[..., Any], interpreted: bool) -> Any:
+    """Return a jitted function, or its Python implementation to trace and mock-check logic."""
+    return getattr(function, "py_func", function) if interpreted else function
+
+
+def _get_sector_bases(
+    checks_x: npt.ArrayLike, checks_z: npt.ArrayLike, **kwargs: Any
+) -> tuple[tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8]], ...]:
+    """Coefficient bases and quotient labels of the X and Z sectors of a CSS code."""
+    return CSSLogicalWeightCounter(checks_x, checks_z, **kwargs)._get_sector_bases()
