@@ -4,353 +4,119 @@
 
 from __future__ import annotations
 
-import itertools
 from unittest import mock
 
 import numpy as np
-import numpy.typing as npt
 import pytest
 
 import qldpc
 
 from . import _binary as binary
+from .conftest import _bitwise_count, _get_random_full_rank_matrix
 
 
-def _bitwise_count(
-    val: npt.ArrayLike, out: npt.NDArray[np.uint64] | None = None
-) -> npt.NDArray[np.uint64]:
-    """Return reference per-word bit counts for arrays accepted by optimized popcount helpers."""
-    val = np.asarray(val)
-    nbits = 8 * val.itemsize
-
-    if out is None:
-        out = np.empty_like(val)
-
-    for indices in np.ndindex(val.shape):
-        ival = int(val[indices])
-        out[indices] = sum(ival >> i & 1 for i in range(nbits))
-
-    return out
-
-
-def test_hamming_weight() -> None:
-    """Validate _hamming_weight against a simple reference bit-counting implementation."""
-    vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)
-    expected_weights = _bitwise_count(vals)
-
-    weights = binary._hamming_weight(vals)
-    np.testing.assert_array_equal(weights, expected_weights)
-
-    buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = binary._hamming_weight(vals, buf=buf, out=out)
-    np.testing.assert_array_equal(weights, expected_weights)
-    assert out is weights
-
-
-def test_symplectic_weight() -> None:
-    """Validate _symplectic_weight against the reference bit-counting implementation."""
-    vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)
-    weights = binary._symplectic_weight(vals)
-    expected_weights = _bitwise_count((vals | (vals >> np.uint64(1))) & 0x5555555555555555)
-    np.testing.assert_array_equal(weights, expected_weights)
-
-    buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = binary._symplectic_weight(vals, buf=buf, out=out)
-    np.testing.assert_array_equal(weights, expected_weights)
-    assert out is weights
-
-
-def test_get_hamming_weight_fn() -> None:
-    """_get_hamming_weight_fn selects NumPy bitcount when available and the fallback otherwise."""
-    generators = np.random.randint(2, size=(4, 64), dtype=np.uint64)
-    weight_fn, nbuf = binary._get_hamming_weight_fn()
-    weights_default = weight_fn(generators)
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
-        weight_fn, nbuf = binary._get_hamming_weight_fn()
-        assert weight_fn is not binary._hamming_weight
-        assert nbuf == 0
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-        patched.assert_called_once()
-
-    with mock.patch.object(np, "bitwise_count", None, create=True):
-        weight_fn, nbuf = binary._get_hamming_weight_fn()
-        assert weight_fn is binary._hamming_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-
-def test_get_symplectic_weight_fn() -> None:
-    """_get_symplectic_weight_fn uses NumPy bitcount when available and the fallback otherwise."""
-    generators = np.random.randint(2, size=(4, 56), dtype=np.uint64)
-    weight_fn, nbuf = binary._get_symplectic_weight_fn()
-    weights_default = weight_fn(generators)
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    # This branch verifies the NumPy popcount backend for packed symplectic words.
-    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
-        weight_fn, nbuf = binary._get_symplectic_weight_fn()
-        assert weight_fn is not binary._hamming_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-        patched.assert_called_once()
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-    # This branch verifies the fallback popcount backend for packed symplectic words.
-    with mock.patch.object(np, "bitwise_count", None, create=True):
-        weight_fn, nbuf = binary._get_symplectic_weight_fn()
-        assert weight_fn is binary._symplectic_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-
-@pytest.mark.parametrize(
-    "base_val",
-    [1, 2**64 - 1, int(np.random.randint(2**64, dtype=np.uint64)) | 1],
-)
-def test_count_trailing_zeros(base_val: int) -> None:
-    """_count_trailing_zeros(val << i) == i for several base values across all 128 shift amounts."""
-    for i in range(128):
-        assert binary._count_trailing_zeros(base_val << i) == i
-
-
-@pytest.mark.parametrize("width", range(1, 8))
-def test_inplace_rowsum(width: int) -> None:
-    """_inplace_rowsum reduces each row to its sum and stores the result in the first column."""
-    arr = np.random.randint(2**31, size=(10, width), dtype=np.uint64)
-    expected = arr.sum(-1)
-    actual = binary._inplace_rowsum(arr)
-    np.testing.assert_array_equal(actual, expected)
-    np.testing.assert_array_equal(actual, arr[:, 0])
-
-
-def test_rows_to_ints_endianness() -> None:
-    """_rows_to_ints produces the same bit order as np.packbits."""
-    # The packed-row helper stores each row's bits in the same per-byte order as np.packbits.
-    bits = np.random.randint(2, size=(10, 120))
-    ints = binary._rows_to_ints(bits, dtype=np.uint8)
-    assert ints.shape == (10, 15)
-
-    expected = np.packbits(bits).reshape(10, 15)
-    np.testing.assert_array_equal(ints, expected)
-
-
-@pytest.mark.parametrize("dtype", [int, np.uint64, np.uint8, np.int16])
-def test_rows_to_ints(dtype: npt.DTypeLike) -> None:
-    """_rows_to_ints packs binary rows into integer words of the requested dtype."""
-    bits = np.random.randint(2, size=(10, 93))
-    ints = binary._rows_to_ints(bits, dtype=dtype)
-
-    nbits = 8 * np.dtype(dtype).itemsize
-    expected_words_per_row = int(np.ceil(93 / nbits))
-    assert ints.shape == (10, expected_words_per_row)
-    assert ints.dtype == np.dtype(dtype)
-
-    np.testing.assert_array_equal(_bitwise_count(ints).sum(-1), bits.sum(-1))
-
-    for indices in np.ndindex(ints.shape):
-        i = indices[-1] * nbits
-        packed_bits = bits[indices[:-1]][i : i + nbits]
-        bitstr = "".join(map(str, packed_bits))
-        assert np.binary_repr(ints[indices], len(bitstr)) == bitstr
-
-    # The packed-row helper preserves leading array axes while packing the last bit axis.
-    bits = bits.reshape(5, 1, 2, -1)
-    np.testing.assert_array_equal(
-        binary._rows_to_ints(bits, dtype=dtype),
-        ints.reshape(5, 1, 2, -1),
-    )
-
-    # The packed-row helper preserves nonpacked axes when packing a nonfinal bit axis.
-    bits = bits.swapaxes(0, 3)
-    np.testing.assert_array_equal(
-        binary._rows_to_ints(bits, dtype=dtype, axis=0),
-        ints.reshape(5, 1, 2, -1).swapaxes(0, 3),
-    )
-
-    bits = np.zeros((11, 0), dtype=dtype)
-    ints = binary._rows_to_ints(bits, dtype=dtype)
-    np.testing.assert_array_equal(binary._rows_to_ints(bits, dtype=dtype, axis=0), bits)
-
-
-@pytest.mark.parametrize("block_size", [1, 3, 13])
-def test_get_distance_classical(block_size: int) -> None:
-    """get_distance_classical visits every nontrivial XOR combination of generators exactly once."""
-    generators = np.random.randint(2, size=(9, 137))
-
-    # The mocked Hamming-weight function records every packed nonzero generator combination once.
-    observed_bitstrings: list[tuple[int, ...]] = []
-
-    def _mock_hamming_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
-    ) -> npt.NDArray[np.uint64]:
-        observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, buf=buf, out=out)
-
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
-        return_value=(_mock_hamming_weight, 0),
-    ):
-        distance = qldpc.codes.distance.get_distance_classical(
-            np.vstack([generators, generators[0], generators[0] ^ generators[1]]),
-            block_size=block_size,
-            method="brute_force",
+def test_css_brouwer_zimmermann_special_inputs() -> None:
+    """The joint CSS helper handles empty, trivial, and nontrivial quotient sectors."""
+    empty = np.empty((0, 4), dtype=np.uint8)
+    assert (
+        qldpc.codes.get_distance_css_brouwer_zimmermann(
+            [(empty, empty)],
+            cutoff=0,
         )
-
-    int_generators = binary._rows_to_ints(generators)
-    expected_bitstrings = [
-        tuple(np.bitwise_xor.reduce(np.vstack(gens)).tolist())
-        for n in range(1, len(generators) + 1)
-        for gens in itertools.combinations(int_generators, n)
-    ]
-
-    assert len(observed_bitstrings) == len(expected_bitstrings)
-    assert set(observed_bitstrings) == set(expected_bitstrings)
-
-    observed_array = np.array(observed_bitstrings, dtype=np.uint64)
-    expected_distance = _bitwise_count(observed_array).sum(-1).min()
-    assert distance == expected_distance
-
-
-@pytest.mark.parametrize("block_size", [1, 3, 13])
-def test_get_distance_quantum(block_size: int) -> None:
-    """get_distance_quantum visits every stabilizer + logical-op combination exactly once.
-
-    Uses Hamming (homogeneous) weight mode.
-    """
-    stabilizers = np.random.randint(2, size=(8, 97))
-    logical_ops = np.random.randint(2, size=(5, 97))
-
-    # The mocked Hamming-weight function records every nonzero logical combination combined
-    # with every stabilizer combination, including the empty one.
-    observed_bitstrings: list[tuple[int, ...]] = []
-
-    def _mock_hamming_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
-    ) -> npt.NDArray[np.uint64]:
-        observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, buf=buf, out=out)
+        == 4
+    )
+    assert (
+        qldpc.codes.get_distance_css_brouwer_zimmermann(
+            [([[1, 0]], [[1, 0]])],
+            cutoff=0,
+        )
+        == 0
+    )
 
     with mock.patch(
-        "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
-        return_value=(_mock_hamming_weight, 0),
-    ):
-        distance = qldpc.codes.distance.get_distance_quantum(
-            np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
-            np.vstack([stabilizers, stabilizers[0]]),
+        "qldpc.codes.distance.core._get_distance_brouwer_zimmermann_many",
+        return_value=2,
+    ) as mock_search:
+        distance = qldpc.codes.get_distance_css_brouwer_zimmermann(
+            [([[1, 1]], [])],
+            cutoff=0,
+            upper_bound=3,
+        )
+    assert distance == 2
+    assert mock_search.call_args.kwargs["upper_bound"] == 3
+
+
+@pytest.mark.usefixtures("force_information_sets")
+def test_brouwer_zimmermann_information_set_search() -> None:
+    """Information-set search excludes stabilizers, finds logical products, and honors cutoffs."""
+    # The Hamming-weight-one stabilizer is lighter than every logical operator.
+    # With block_size=0, some Brouwer-Zimmermann batches contain only that stabilizer.
+    distance = qldpc.codes.get_distance_quantum(
+        [[1, 1, 1, 1]], [[1, 0, 0, 0]], homogeneous=True, cutoff=0, block_size=0
+    )
+    assert distance == 3
+
+    # The lightest logical operator is the product of both logical generators.
+    distance = qldpc.codes.get_distance_quantum(
+        [[1, 1, 1, 0], [1, 1, 0, 1]], [], homogeneous=True, cutoff=0
+    )
+    assert distance == 2
+
+    # Every generator in every information set has Hamming weight at least three.
+    # Certifying the weight-two codeword requires searching two-generator combinations.
+    generators = [
+        [0, 0, 1, 0, 0, 0, 0, 0, 1, 1],
+        [1, 0, 1, 1, 0, 0, 1, 1, 1, 0],
+        [0, 1, 1, 1, 1, 0, 1, 1, 1, 0],
+        [0, 1, 1, 0, 0, 0, 1, 1, 1, 0],
+        [0, 1, 0, 0, 1, 0, 0, 1, 1, 1],
+    ]
+    assert qldpc.codes.get_distance_classical(generators, cutoff=0) == 2
+
+    # Both reduced generators have Hamming weight three.
+    # Their weight-two sum reaches the distance cutoff.
+    assert qldpc.codes.get_distance_classical([[1, 0, 1, 1], [0, 1, 1, 1]], cutoff=2) == 2
+
+    # Row reduction exposes a Hamming-weight-one generator before any search runs.
+    assert qldpc.codes.get_distance_classical([[1, 1, 0], [0, 1, 1], [1, 1, 1]], cutoff=1) == 1
+
+
+def test_brouwer_zimmermann_special_inputs() -> None:
+    """Brouwer-Zimmermann validates matrix shapes and preserves quotient edge cases."""
+    assert qldpc.codes.get_distance_classical(np.empty((0, 4), dtype=np.uint8), cutoff=0) == 4
+    assert (
+        qldpc.codes.get_distance_quantum(
+            np.empty((0, 4), dtype=np.uint8),
+            np.empty((0, 4), dtype=np.uint8),
             homogeneous=True,
-            block_size=block_size,
-            method="brute_force",
         )
-
-    int_stabilizers = binary._rows_to_ints(stabilizers)
-    int_logical_ops = binary._rows_to_ints(logical_ops)
-    expected_bitstrings = [
-        tuple(np.bitwise_xor.reduce(np.vstack(stabs + ops)).tolist())
-        for ns in range(len(stabilizers) + 1)
-        for stabs in itertools.combinations(int_stabilizers, ns)
-        for nl in range(1, len(logical_ops) + 1)
-        for ops in itertools.combinations(int_logical_ops, nl)
-    ]
-
-    assert len(observed_bitstrings) == len(expected_bitstrings)
-    assert set(observed_bitstrings) == set(expected_bitstrings)
-
-    observed_array = np.array(observed_bitstrings, dtype=np.uint64)
-    expected_distance = _bitwise_count(observed_array).sum(-1).min()
-    assert distance == expected_distance
-
-
-@pytest.mark.parametrize("block_size", [1, 3, 13])
-def test_get_distance_quantum_symplectic(block_size: int) -> None:
-    """get_distance_quantum visits every stabilizer + logical-op combination exactly once.
-
-    Uses symplectic weight mode.
-    """
-    stabilizers = np.random.randint(2, size=(3, 98))
-    logical_ops = np.random.randint(2, size=(5, 98))
-
-    # The mocked symplectic-weight function records every nonzero logical combination combined
-    # with every stabilizer combination, including the empty one.
-    observed_bitstrings: list[tuple[int, ...]] = []
-
-    def _mock_symplectic_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
-    ) -> npt.NDArray[np.uint64]:
-        observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._symplectic_weight(arr, buf=buf, out=out)
-
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_symplectic_weight_fn",
-        return_value=(_mock_symplectic_weight, 0),
-    ):
-        distance = qldpc.codes.distance.get_distance_quantum(
-            np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
-            np.vstack([stabilizers, stabilizers[0]]),
-            homogeneous=False,
-            block_size=block_size,
-            method="brute_force",
-        )
-
-    int_stabilizers = binary._rows_to_ints(binary._riffle(stabilizers))
-    int_logical_ops = binary._rows_to_ints(binary._riffle(logical_ops))
-    expected_bitstrings = np.array(
-        [
-            np.bitwise_xor.reduce(np.vstack(stabs + ops))
-            for ns in range(len(stabilizers) + 1)
-            for stabs in itertools.combinations(int_stabilizers, ns)
-            for nl in range(1, len(logical_ops) + 1)
-            for ops in itertools.combinations(int_logical_ops, nl)
-        ]
+        == 4
     )
+    assert qldpc.codes.get_distance_quantum([[1, 0]], [[1, 0]], homogeneous=True) == 0
+    methods: tuple[qldpc.codes.DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
+    for method in methods:
+        for stabilizers in ([[1, 0, 0, 0]], [[1, 0, 0, 0]] * 2):
+            assert (
+                qldpc.codes.get_distance_quantum(
+                    np.empty((0, 4), dtype=np.uint8), stabilizers, method=method
+                )
+                == 2
+            )
 
-    assert len(observed_bitstrings) == len(expected_bitstrings)
-    assert set(observed_bitstrings) == set(map(tuple, expected_bitstrings))
-
-    vals = (expected_bitstrings | (expected_bitstrings >> 1)) & 0x5555555555555555
-    expected_distance = _bitwise_count(vals).sum(-1).min()
-    assert distance == expected_distance
+    with pytest.raises(ValueError, match="incompatible widths"):
+        qldpc.codes.get_distance_quantum([[1, 0, 0]], [[1, 0]], homogeneous=True)
+    with pytest.raises(ValueError, match="even number of columns"):
+        qldpc.codes.get_distance_quantum([[1, 0, 0]], [], homogeneous=False)
+    with pytest.raises(ValueError, match="even number of columns"):
+        qldpc.codes.get_distance_quantum(
+            np.empty((0, 3), dtype=np.uint8),
+            np.empty((0, 3), dtype=np.uint8),
+            homogeneous=False,
+        )
+    with pytest.raises(ValueError, match="two-dimensional"):
+        qldpc.codes.get_distance_classical(np.zeros((1, 1, 1), dtype=np.uint8))
+    with pytest.raises(ValueError, match="infer the width"):
+        qldpc.codes.get_distance_classical([])
 
 
 def test_get_distance_classical_methods() -> None:
@@ -398,66 +164,6 @@ def test_distance_backend_validation() -> None:
         qldpc.codes.validate_distance_method(method)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="Unknown distance method"):
         qldpc.codes.validate_distance_method("other")  # type: ignore[arg-type]
-
-
-def test_get_distance_empty_stabilizers_symplectic() -> None:
-    """A symplectic-weight distance with no stabilizers returns the min logical operator weight.
-
-    With an empty ``stabilizers`` argument there is nothing to interleave, and the X/Z riffling
-    still handles the empty input.
-    """
-    # The symplectic vector [1, 0 | 0, 0] is an X operator on qubit 0 with symplectic weight 1.
-    distance = qldpc.codes.distance.get_distance_quantum(
-        [[1, 0, 0, 0]], [], homogeneous=False, method="brute_force"
-    )
-    assert distance == 1
-
-
-def test_get_distance_small_block_size() -> None:
-    """A block_size smaller than the packed word count still yields the correct distance.
-
-    When the columns span more than ``64 * (block_size + 1)`` bits, no operators are vectorized and
-    the calculation proceeds by the sequential sweep alone.
-    """
-    generators = np.zeros((2, 200), dtype=np.uint64)
-    generators[0] = 1  # First generator has Hamming weight 200.
-    generators[1, :100] = 1  # Second generator has Hamming weight 100.
-    assert qldpc.codes.distance.get_distance_classical(generators, block_size=1) == 100
-
-
-def test_cutoff_early_exit() -> None:
-    """cutoff makes get_distance_* return early once an operator of weight <= cutoff is found.
-
-    Exercises all three early-exit return paths: the pre-loop vectorized block, the logical-op
-    sweep, and the nested stabilizer sweep.
-    """
-    # The pre-loop vectorized block contains a codeword with Hamming weight 1.
-    assert (
-        qldpc.codes.distance.get_distance_classical([[1, 0, 0, 0]], cutoff=1, method="brute_force")
-        == 1
-    )
-
-    # The logical-operator sweep with block_size=1 finds a generator with Hamming weight 1.
-    generators = [[1, 0, 1], [0, 1, 0]]
-    assert (
-        qldpc.codes.distance.get_distance_classical(
-            generators, block_size=1, cutoff=1, method="brute_force"
-        )
-        == 1
-    )
-
-    # The stabilizer sweep finds a Hamming-weight-1 operator only after XORing a stabilizer row.
-    logical_ops = [[0, 0, 1, 1, 1]]
-    stabilizers = [[1, 0, 0, 1, 0], [0, 1, 1, 1, 1]]
-    distance = qldpc.codes.distance.get_distance_quantum(
-        logical_ops,
-        stabilizers,
-        block_size=1,
-        cutoff=1,
-        homogeneous=True,
-        method="brute_force",
-    )
-    assert distance == 1
 
 
 def test_get_distance_quantum_methods() -> None:
@@ -631,25 +337,28 @@ def test_get_distance_quantum_noncss_codes(
     assert code.get_distance_exact() == expected_distance
 
 
-def test_distance_requires_binary_input() -> None:
-    """Distance calculations reject non-binary input rather than silently truncating it.
+@pytest.mark.usefixtures("force_information_sets")
+def test_brouwer_zimmermann_random_cross_checks() -> None:
+    """Information-set search agrees with exhaustive enumeration on random nested codes."""
+    rng = np.random.default_rng(118)
+    for length in range(5, 10):
+        basis = _get_random_full_rank_matrix(rng, min(5, length - 1), length)
+        expected = qldpc.codes.get_distance_classical(basis, cutoff=0, method="brute_force")
+        assert qldpc.codes.get_distance_classical(basis, cutoff=0) == expected
 
-    The enumeration packs each row into the bits of uint64 words, so a non-binary entry would
-    otherwise be reinterpreted and yield a wrong distance with no indication of a problem.
-    """
-    # A GF(3) generator matrix is rejected because exact distance enumeration supports only GF(2).
-    ternary_code = qldpc.codes.classical.HammingCode(3, 3)
-    with pytest.raises(ValueError, match=r"only support binary codes.*GF\(3\)"):
-        qldpc.codes.distance.get_distance_classical(ternary_code.generator)
-
-    # A plain integer array with a nonbinary entry is rejected by value validation.
-    with pytest.raises(ValueError, match="entries other than 0 and 1"):
-        qldpc.codes.distance.get_distance_classical(np.array([[1, 2, 0], [0, 1, 1]]))
-    with pytest.raises(ValueError, match="entries other than 0 and 1"):
-        qldpc.codes.distance.get_distance_quantum(
-            np.array([[1, 1, 0, 0]]), np.array([[0, 0, 2, 0]]), homogeneous=True
+        stabilizers, logical_ops = basis[:2], basis[2:]
+        expected = qldpc.codes.get_distance_quantum(
+            logical_ops, stabilizers, cutoff=0, homogeneous=True, method="brute_force"
+        )
+        assert (
+            qldpc.codes.get_distance_quantum(logical_ops, stabilizers, cutoff=0, homogeneous=True)
+            == expected
         )
 
-    # A binary generator matrix is accepted with either a plain integer dtype or a GF(2) dtype.
-    assert qldpc.codes.distance.get_distance_classical(np.array([[1, 1, 1]])) == 3
-    assert qldpc.codes.distance.get_distance_classical(qldpc.codes.HammingCode(4).generator) == 3
+    for num_qubits in range(3, 7):
+        basis = _get_random_full_rank_matrix(rng, min(6, 2 * num_qubits - 1), 2 * num_qubits)
+        stabilizers, logical_ops = basis[:2], basis[2:]
+        expected = qldpc.codes.get_distance_quantum(
+            logical_ops, stabilizers, cutoff=0, method="brute_force"
+        )
+        assert qldpc.codes.get_distance_quantum(logical_ops, stabilizers, cutoff=0) == expected

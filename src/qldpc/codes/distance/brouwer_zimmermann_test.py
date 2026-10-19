@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import itertools
-from collections.abc import Iterator
 from typing import Any
 from unittest import mock
 
@@ -18,30 +17,7 @@ import qldpc
 
 from . import _binary as binary
 from . import brouwer_zimmermann as bz
-
-
-def _get_random_full_rank_matrix(
-    rng: np.random.Generator, rows: int, cols: int
-) -> npt.NDArray[np.uint8]:
-    """Return a random full-row-rank binary matrix with the requested row and column counts."""
-    while True:
-        matrix = rng.integers(0, 2, size=(rows, cols), dtype=np.uint8)
-        if len(binary._get_independent_rows(matrix)) == rows:
-            return matrix
-
-
-@pytest.fixture
-def force_information_sets() -> Iterator[None]:
-    """Route Brouwer-Zimmermann searches through information sets instead of exhaustive search."""
-    with (
-        mock.patch.multiple(
-            "qldpc.codes.distance.brouwer_zimmermann",
-            _exhaustive_is_cheaper=mock.Mock(return_value=False),
-            _brute_force_is_cheaper=mock.Mock(return_value=False),
-        ),
-        mock.patch("qldpc.codes.distance.core._exhaustive_is_cheaper", return_value=False),
-    ):
-        yield
+from .conftest import _get_random_full_rank_matrix
 
 
 def test_binary_row_reduction_and_information_sets() -> None:
@@ -285,62 +261,22 @@ def test_brouwer_zimmermann_setup_dispatches() -> None:
     assert distance == 1
 
 
-def test_css_brouwer_zimmermann_special_inputs() -> None:
-    """The joint CSS helper handles empty, trivial, and nontrivial quotient sectors."""
-    empty = np.empty((0, 4), dtype=np.uint8)
+def test_brouwer_zimmermann_setup_cutoffs() -> None:
+    """Preparation can reach the cutoff from initial rows or a newly systematic row."""
+    basis = np.array([[1, 0, 1, 1], [0, 1, 1, 1]], dtype=np.uint8)
     assert (
-        qldpc.codes.get_distance_css_brouwer_zimmermann(
-            [(empty, empty)],
-            cutoff=0,
+        bz._prepare_brouwer_zimmermann_search(
+            basis, None, cutoff=3, block_size=2, weight_divisor=1, upper_bound=4
         )
-        == 4
+        == 3
     )
-    assert (
-        qldpc.codes.get_distance_css_brouwer_zimmermann(
-            [([[1, 0]], [[1, 0]])],
-            cutoff=0,
-        )
-        == 0
-    )
-
-    with mock.patch(
-        "qldpc.codes.distance.core._get_distance_brouwer_zimmermann_many",
-        return_value=2,
-    ) as mock_search:
-        distance = qldpc.codes.get_distance_css_brouwer_zimmermann(
-            [([[1, 1]], [])],
-            cutoff=0,
-            upper_bound=3,
-        )
-    assert distance == 2
-    assert mock_search.call_args.kwargs["upper_bound"] == 3
-
-
-@pytest.mark.usefixtures("force_information_sets")
-def test_brouwer_zimmermann_random_cross_checks() -> None:
-    """Information-set search agrees with exhaustive enumeration on random nested codes."""
-    rng = np.random.default_rng(118)
-    for length in range(5, 10):
-        basis = _get_random_full_rank_matrix(rng, min(5, length - 1), length)
-        expected = qldpc.codes.get_distance_classical(basis, cutoff=0, method="brute_force")
-        assert qldpc.codes.get_distance_classical(basis, cutoff=0) == expected
-
-        stabilizers, logical_ops = basis[:2], basis[2:]
-        expected = qldpc.codes.get_distance_quantum(
-            logical_ops, stabilizers, cutoff=0, homogeneous=True, method="brute_force"
-        )
+    with mock.patch.object(bz, "_exhaustive_is_cheaper", return_value=False):
         assert (
-            qldpc.codes.get_distance_quantum(logical_ops, stabilizers, cutoff=0, homogeneous=True)
-            == expected
+            bz._prepare_brouwer_zimmermann_search(
+                basis, None, cutoff=2, block_size=2, weight_divisor=1, upper_bound=4
+            )
+            == 2
         )
-
-    for num_qubits in range(3, 7):
-        basis = _get_random_full_rank_matrix(rng, min(6, 2 * num_qubits - 1), 2 * num_qubits)
-        stabilizers, logical_ops = basis[:2], basis[2:]
-        expected = qldpc.codes.get_distance_quantum(
-            logical_ops, stabilizers, cutoff=0, method="brute_force"
-        )
-        assert qldpc.codes.get_distance_quantum(logical_ops, stabilizers, cutoff=0) == expected
 
 
 @pytest.mark.usefixtures("force_information_sets")
@@ -374,41 +310,6 @@ def test_brouwer_zimmermann_shared_search() -> None:
         block_size=2,
     )
     assert actual == min(expected_a, expected_b)
-
-
-@pytest.mark.usefixtures("force_information_sets")
-def test_brouwer_zimmermann_information_set_search() -> None:
-    """Information-set search excludes stabilizers, finds logical products, and honors cutoffs."""
-    # The Hamming-weight-one stabilizer is lighter than every logical operator.
-    # With block_size=0, some Brouwer-Zimmermann batches contain only that stabilizer.
-    distance = qldpc.codes.get_distance_quantum(
-        [[1, 1, 1, 1]], [[1, 0, 0, 0]], homogeneous=True, cutoff=0, block_size=0
-    )
-    assert distance == 3
-
-    # The lightest logical operator is the product of both logical generators.
-    distance = qldpc.codes.get_distance_quantum(
-        [[1, 1, 1, 0], [1, 1, 0, 1]], [], homogeneous=True, cutoff=0
-    )
-    assert distance == 2
-
-    # Every generator in every information set has Hamming weight at least three.
-    # Certifying the weight-two codeword requires searching two-generator combinations.
-    generators = [
-        [0, 0, 1, 0, 0, 0, 0, 0, 1, 1],
-        [1, 0, 1, 1, 0, 0, 1, 1, 1, 0],
-        [0, 1, 1, 1, 1, 0, 1, 1, 1, 0],
-        [0, 1, 1, 0, 0, 0, 1, 1, 1, 0],
-        [0, 1, 0, 0, 1, 0, 0, 1, 1, 1],
-    ]
-    assert qldpc.codes.get_distance_classical(generators, cutoff=0) == 2
-
-    # Both reduced generators have Hamming weight three.
-    # Their weight-two sum reaches the distance cutoff.
-    assert qldpc.codes.get_distance_classical([[1, 0, 1, 1], [0, 1, 1, 1]], cutoff=2) == 2
-
-    # Row reduction exposes a Hamming-weight-one generator before any search runs.
-    assert qldpc.codes.get_distance_classical([[1, 1, 0], [0, 1, 1], [1, 1, 1]], cutoff=1) == 1
 
 
 @pytest.mark.usefixtures("force_information_sets")
@@ -462,44 +363,6 @@ def test_brouwer_zimmermann_exhaustive_dispatch() -> None:
         "qldpc.codes.distance.brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
     ):
         assert qldpc.codes.get_distance_classical(qldpc.codes.HammingCode(3).generator) == 3
-
-
-def test_brouwer_zimmermann_special_inputs() -> None:
-    """Brouwer-Zimmermann validates matrix shapes and preserves quotient edge cases."""
-    assert qldpc.codes.get_distance_classical(np.empty((0, 4), dtype=np.uint8), cutoff=0) == 4
-    assert (
-        qldpc.codes.get_distance_quantum(
-            np.empty((0, 4), dtype=np.uint8),
-            np.empty((0, 4), dtype=np.uint8),
-            homogeneous=True,
-        )
-        == 4
-    )
-    assert qldpc.codes.get_distance_quantum([[1, 0]], [[1, 0]], homogeneous=True) == 0
-    methods: tuple[qldpc.codes.DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
-    for method in methods:
-        for stabilizers in ([[1, 0, 0, 0]], [[1, 0, 0, 0]] * 2):
-            assert (
-                qldpc.codes.get_distance_quantum(
-                    np.empty((0, 4), dtype=np.uint8), stabilizers, method=method
-                )
-                == 2
-            )
-
-    with pytest.raises(ValueError, match="incompatible widths"):
-        qldpc.codes.get_distance_quantum([[1, 0, 0]], [[1, 0]], homogeneous=True)
-    with pytest.raises(ValueError, match="even number of columns"):
-        qldpc.codes.get_distance_quantum([[1, 0, 0]], [], homogeneous=False)
-    with pytest.raises(ValueError, match="even number of columns"):
-        qldpc.codes.get_distance_quantum(
-            np.empty((0, 3), dtype=np.uint8),
-            np.empty((0, 3), dtype=np.uint8),
-            homogeneous=False,
-        )
-    with pytest.raises(ValueError, match="two-dimensional"):
-        qldpc.codes.get_distance_classical(np.zeros((1, 1, 1), dtype=np.uint8))
-    with pytest.raises(ValueError, match="infer the width"):
-        qldpc.codes.get_distance_classical([])
 
 
 def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
