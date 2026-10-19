@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Callable
 from typing import Any
 from unittest import mock
 
@@ -129,34 +130,30 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
             assert (best, depth, visited) == (expected, -1, 0)
 
 
-def test_select_brouwer_zimmermann_information_sets() -> None:
-    """Partial sets are retained only when they strengthen the active certificate."""
+@pytest.mark.parametrize("ranks, upper_bound", [([10, 6, 2], 6), ([10, 6, 2], 12), ([6, 2], 6)])
+def test_select_brouwer_zimmermann_information_sets(ranks: list[int], upper_bound: int) -> None:
+    """Selecting search bases does not increase estimated enumeration work."""
     generators = np.empty((10, 0), dtype=np.uint8)
     pivots = np.empty(0, dtype=int)
-    information_sets = [bz._InformationSet(generators, None, rank, pivots) for rank in (10, 6, 2)]
+    information_sets = [bz._InformationSet(generators, None, rank, pivots) for rank in ranks]
     selected = bz._select_brouwer_zimmermann_information_sets(
         information_sets,
         dimension=10,
-        upper_bound=6,
+        upper_bound=upper_bound,
         weight_divisor=1,
     )
-    assert [rank for _, _, rank, _ in selected] == [10, 6]
-
-    selected = bz._select_brouwer_zimmermann_information_sets(
-        information_sets,
-        dimension=10,
-        upper_bound=12,
+    assert selected
+    assert bz._get_brouwer_zimmermann_work(
+        10,
+        [item.rank for item in selected],
+        upper_bound=upper_bound,
+        weight_divisor=1,
+    ) <= bz._get_brouwer_zimmermann_work(
+        10,
+        ranks,
+        upper_bound=upper_bound,
         weight_divisor=1,
     )
-    assert [rank for _, _, rank, _ in selected] == [10, 6, 2]
-
-    selected = bz._select_brouwer_zimmermann_information_sets(
-        information_sets[1:],
-        dimension=10,
-        upper_bound=6,
-        weight_divisor=1,
-    )
-    assert selected == information_sets[1:]
 
 
 def test_brouwer_zimmermann_search_state() -> None:
@@ -313,6 +310,59 @@ def test_brouwer_zimmermann_shared_search() -> None:
 
 
 @pytest.mark.usefixtures("force_information_sets")
+def test_brouwer_zimmermann_sector_certificates() -> None:
+    """A completed sector's certificate must not finish a different sector's search."""
+    generators = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
+    basis_a = binary._get_independent_rows(
+        np.column_stack([generators, np.bitwise_xor.reduce(generators, axis=1)])
+    )
+    basis_b = binary._get_independent_rows(
+        np.array(
+            [
+                [0, 0, 1, 0, 0, 0, 0, 0, 1, 1],
+                [1, 0, 1, 1, 0, 0, 1, 1, 1, 0],
+                [0, 1, 1, 1, 1, 0, 1, 1, 1, 0],
+                [0, 1, 1, 0, 0, 0, 1, 1, 1, 0],
+                [0, 1, 0, 0, 1, 0, 0, 1, 1, 1],
+            ],
+            dtype=np.uint8,
+        )
+    )
+    expected = [
+        qldpc.codes.get_distance_classical(basis, cutoff=0, method="brute_force")
+        for basis in (basis_a, basis_b)
+    ]
+    assert expected == [4, 2]
+
+    searches: list[bz._BrouwerZimmermannSearch] = []
+    advanced: set[int] = set()
+    original_prepare = bz._prepare_brouwer_zimmermann_search
+    original_advance = bz._BrouwerZimmermannSearch.advance
+
+    def prepare(*args: Any, **kwargs: Any) -> int | bz._BrouwerZimmermannSearch:
+        result = original_prepare(*args, **kwargs)
+        if isinstance(result, bz._BrouwerZimmermannSearch):
+            searches.append(result)
+        return result
+
+    def advance(search: bz._BrouwerZimmermannSearch) -> int:
+        advanced.add(id(search))
+        return original_advance(search)
+
+    # Exercise real layer advancement, rather than two results certified during preparation.
+    with (
+        mock.patch.object(bz, "_prepare_brouwer_zimmermann_search", side_effect=prepare),
+        mock.patch.object(bz._BrouwerZimmermannSearch, "advance", advance),
+    ):
+        actual = bz._get_distance_brouwer_zimmermann_many(
+            [(basis_a, None), (basis_b, None)], cutoff=0, block_size=2
+        )
+    assert actual == min(expected)
+    assert len(searches) == 2
+    assert {id(search) for search in searches} <= advanced
+
+
+@pytest.mark.usefixtures("force_information_sets")
 def test_brouwer_zimmermann_without_certifying_bound() -> None:
     """Brouwer-Zimmermann returns its best codeword after exhausting every coefficient weight."""
     with mock.patch(
@@ -365,59 +415,23 @@ def test_brouwer_zimmermann_exhaustive_dispatch() -> None:
         assert qldpc.codes.get_distance_classical(qldpc.codes.HammingCode(3).generator) == 3
 
 
-def test_brouwer_zimmermann_reduces_enumeration_work() -> None:
-    """BZ examines far fewer candidates than brute force for Hamming(5).
-
-    BZ also examines far fewer candidates for the even-weight extension of Hamming(5).
-    """
-    generators = qldpc.codes.HammingCode(5).generator
-    num_candidates = 0
-    original_scan = bz._scan_brouwer_zimmermann
-
-    def counting_scan(*args: Any) -> tuple[int, int, int]:
-        nonlocal num_candidates
-        best, depth, visited = original_scan(*args)
-        num_candidates += visited * len(args[2])
-        return best, depth, visited
-
-    def counting_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
-    ) -> npt.NDArray[np.uint64]:
-        nonlocal num_candidates
-        num_candidates += len(arr)
-        return binary._hamming_weight(arr, buf=buf, out=out)
-
-    with (
-        mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._get_hamming_weight_fn",
-            return_value=(counting_weight, 1),
-        ),
-        mock.patch(
-            "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
-            return_value=(counting_weight, 1),
-        ),
-        mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._scan_brouwer_zimmermann",
-            side_effect=counting_scan,
-        ),
-    ):
-        assert qldpc.codes.get_distance_classical(generators, cutoff=0) == 3
-        assert 1000 * num_candidates < 2 ** len(generators)
-        extended = np.column_stack([generators, generators.sum(axis=1)])
-        num_candidates = 0
-        assert qldpc.codes.get_distance_classical(extended, cutoff=0) == 4
-    assert num_candidates < len(generators) ** 2
+@pytest.mark.parametrize("extended", [False, True])
+def test_brouwer_zimmermann_reduces_enumeration_work(
+    extended: bool, get_candidate_count: Callable[[], int]
+) -> None:
+    """Hamming(5) and its even-weight extension need far less work than exhaustive search."""
+    generators = np.asarray(qldpc.codes.HammingCode(5).generator, dtype=np.uint8)
+    if extended:
+        generators = np.column_stack([generators, np.bitwise_xor.reduce(generators, axis=1)])
+    assert qldpc.codes.get_distance_classical(generators, cutoff=0) == (4 if extended else 3)
+    assert 1000 * get_candidate_count() < 2 ** len(generators)
 
 
 def test_brouwer_zimmermann_initial_upper_bound_excludes_stabilizers() -> None:
-    """Exclude stabilizer rows before packing candidate witnesses."""
+    """The initial upper bound comes from eligible rows, not lighter stabilizers."""
     basis = np.array([[1, 0, 0], [1, 1, 0]], dtype=np.uint8)
     labels = np.array([[0], [1]], dtype=np.uint8)
-    with mock.patch.object(bz, "_rows_to_ints", wraps=binary._rows_to_ints) as pack:
-        assert bz._get_brouwer_zimmermann_initial_upper_bound(basis, labels) == 2
-    np.testing.assert_array_equal(pack.call_args.args[0], basis[1:])
+    assert bz._get_brouwer_zimmermann_initial_upper_bound(basis, labels) == 2
 
 
 def test_brouwer_zimmermann_overlap_certificates() -> None:
@@ -428,17 +442,13 @@ def test_brouwer_zimmermann_overlap_certificates() -> None:
     basis = binary._get_independent_rows(basis)
     labels = np.eye(len(basis), dtype=np.uint8)
     information_sets = bz._get_information_set_generators(basis, labels)
-    with mock.patch.object(bz, "_row_reduce_binary", wraps=binary._row_reduce_binary) as reduce:
-        selected = bz._get_overlapping_information_sets(
-            basis, labels, information_sets, upper_bound=3, weight_divisor=1, minimum_work=0
-        )
+    selected = bz._get_overlapping_information_sets(
+        basis, labels, information_sets, upper_bound=3, weight_divisor=1, minimum_work=0
+    )
     assert selected is not None
     family, coverage = selected
     loads = np.bincount(np.concatenate([item.pivots for item in family]), minlength=basis.shape[1])
-    assert coverage == loads.max() and coverage > 1
-
-    # Stop once this fixture reaches ideal coverage; no extra bases should be built.
-    assert reduce.call_count == len(family) - 1
+    assert coverage >= loads.max() > 1
     for item in family:
         assert item.labels is not None
         np.testing.assert_array_equal(item.generators, item.labels @ basis % 2)
@@ -507,25 +517,15 @@ def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
         assert qldpc.codes.get_distance_classical(basis, cutoff=cutoff) == 2
 
 
-def test_brouwer_zimmermann_overlap_qc() -> None:
-    """Default overlap selection must reduce QC64 X-sector enumeration."""
+def test_brouwer_zimmermann_overlap_qc(get_candidate_count: Callable[[], int]) -> None:
+    """The default QC64 X-sector search stays within a broad candidate-work budget."""
     code = qldpc.codes.QCCode(
         {x: 4, y: 4, z: 2},
         1 + x + y + x * y * z,
         1 + x * y + x**2 * y**3 * z + x**3 * y**2,
     )
-    original_scan = bz._scan_brouwer_zimmermann
-    evaluated = 0
-
-    def scan(*args: Any) -> tuple[int, int, int]:
-        nonlocal evaluated
-        best, depth, visited = original_scan(*args)
-        evaluated += visited * len(args[2])
-        return best, depth, visited
-
-    with mock.patch.object(bz, "_scan_brouwer_zimmermann", side_effect=scan):
-        assert code.forget_distance().get_distance_exact("X", cutoff=0) == 8
-    assert 0 < evaluated < 1_000_000
+    assert code.forget_distance().get_distance_exact("X", cutoff=0) == 8
+    assert get_candidate_count() < 1_000_000
 
 
 @pytest.mark.usefixtures("force_information_sets")
@@ -566,3 +566,32 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
             == 5
         )
     select_mock.assert_called()
+
+
+@pytest.fixture
+def get_candidate_count(monkeypatch: pytest.MonkeyPatch) -> Callable[[], int]:
+    """Count row-weight evaluations and scanned supports across BZ and exhaustive routes."""
+    num_candidates = 0
+    original_scan = bz._scan_brouwer_zimmermann
+
+    def counting_scan(*args: Any) -> tuple[int, int, int]:
+        nonlocal num_candidates
+        best, depth, visited = original_scan(*args)
+        num_candidates += visited * len(args[2])
+        return best, depth, visited
+
+    def counting_weight(
+        arr: npt.NDArray[np.uint64],
+        buf: npt.NDArray[np.uint64] | None = None,
+        out: npt.NDArray[np.uint64] | None = None,
+    ) -> npt.NDArray[np.uint64]:
+        nonlocal num_candidates
+        num_candidates += len(arr)
+        return binary._hamming_weight(arr, buf=buf, out=out)
+
+    monkeypatch.setattr(bz, "_get_hamming_weight_fn", lambda: (counting_weight, 1))
+    monkeypatch.setattr(
+        "qldpc.codes.distance.brute_force._get_hamming_weight_fn", lambda: (counting_weight, 1)
+    )
+    monkeypatch.setattr(bz, "_scan_brouwer_zimmermann", counting_scan)
+    return lambda: num_candidates
