@@ -8,9 +8,9 @@ It is written for contributors who need to understand, debug, or modify the BZ c
 It is organized as follows:
 
 - [Section 2](#2-the-brouwer-zimmermann-algorithm) explains the BZ algorithm as published, including its adaptation to quantum codes.
-- [Section 3](#3-extensions-and-optimizations) explains what qLDPC adds to the published algorithm: extensions that strengthen bounds and optimizations that make the search cheaper to run.
+- [Section 3](#3-extensions-and-optimizations) explains what qLDPC adds to the published algorithm: extensions that strengthen the lower certificate or improve the upper bound, and optimizations that make the search cheaper to run.
 - [Section 4](#4-guide-to-the-source-code) is a guide to the source code: how the modules are organized, how a computation flows through them, which code names correspond to the concepts of [Section 2](#2-the-brouwer-zimmermann-algorithm) and [Section 3](#3-extensions-and-optimizations), and which behavior spans several files.
-- [Section 5](#5-invariants-to-preserve-when-modifying-the-implementation) lists the invariants that a change to the implementation must preserve, together with the tests that guard them.
+- [Section 5](#5-correctness-requirements) summarizes the correctness requirements that apply when changing the implementation.
 
 ## 2. The Brouwer-Zimmermann algorithm
 
@@ -48,7 +48,7 @@ For a quantum code, they are the nontrivial logical operators.
 
 Every codeword is a sum of rows of a basis of `V`.
 Throughout this guide, a **basis** of `V` is a matrix whose rows are linearly independent and span `V`.
-Let `r = dim(V)` be the number of in a basis of `V`, and let `N` be its number of columns, which is the number of **coordinates** of a word.
+Let `r = dim(V)` be the number of rows in a basis of `V`, and let `N` be its number of columns, which is the number of **coordinates** of a word.
 A coordinate at which every word of `V` is zero carries no information, so we assume that there are none.
 
 For a basis `G` of `V`, a **coefficient vector** `a` is a binary vector of length `r` that selects rows, and `aG` is the XOR of the selected rows.
@@ -325,6 +325,7 @@ G = [ s independent rows spanning S                       ]
     [ q independent rows, whose cosets form a basis of V/S ]
 ```
 
+Such a basis, whose first rows span the excluded space `S`, is called an **adapted basis**.
 Each row of `G` is given a binary **label**.
 The labels form a matrix `M` with `r` rows and `q` columns:
 
@@ -368,11 +369,20 @@ For example, take `r = 2` and rows `1 0 | 1 1` and `0 1 | 1 0`, with pivot colum
 The stored rows are `1 1` and `1 0`.
 The support `{0, 1}` gives the stored XOR `0 1`, so the weight is `2 + 1 = 3`, which is the weight of the full word `1 1 0 1`.
 
-Deletion shrinks each row from `ceil(N/64)` to `ceil((N - r)/64)` machine words, so it reduces the XOR and population-count work per candidate by a factor of at most about `N / (N - r)`.
-For the X sector of a CSS code, `r = N - rank(H_z)`, which is typically near `N/2`, so the saving is typically at most about a factor of two.
-The saving only appears when a row would otherwise span more than one machine word, because words are whole.
-For `N ≤ 64`, as in [Section 3.7](#37-worked-example), a row is a single word with or without deletion.
-This is a count of packed words, not a measured speedup, because the label XOR, the comparison with `U`, and the loop overhead do not shrink.
+Let `N_stored` be the number of columns in the stored basis before deletion.
+This equals `N` under the assumption of [Section 2.2](#22-the-idea-upper-bounds-and-lower-certificates), but the implementation also accepts and retains all-zero columns.
+A block of rank `r_i` has `r_i` pivot columns, so deletion shrinks each stored row from `ceil(N_stored/64)` to `ceil((N_stored - r_i)/64)` machine words.
+For an information set, `r_i = r`.
+The saving depends on crossing a 64-bit boundary: if `N_stored ≤ 64` and at least one column remains, a row occupies one word with or without deletion.
+This is the situation in [Section 3.7](#37-worked-example).
+If every column is a pivot column, the stored remainder is empty.
+
+When both widths span many machine words, the ratio of word counts is approximately `N_stored / (N_stored - r_i)`.
+Rounding can make the actual ratio larger or smaller than this approximation.
+For example, deleting 65 pivot columns from a 129-column basis reduces the word count from three to one, a factor of three rather than about two.
+For the X sector of a CSS stabilizer code, `r = N_stored - rank(H_z)`.
+In a balanced code with `rank(H_z)` near `N_stored/2`, the large-width approximation therefore suggests about a factor of two for full blocks.
+These are counts of packed words, not measured speedups: label XORs, comparisons with `U`, and loop overhead do not shrink.
 
 Weights are compared with `U` before labels are examined.
 A candidate whose weight is at least `U` cannot lower `U`, so its label is not examined, and labels are examined only for lighter candidates.
@@ -435,9 +445,8 @@ The counts cover only enumeration; building and packing the search bases costs e
 ## 4. Guide to the source code
 
 This section is a guide to the source files in this directory.
-The source shows the control flow, so this guide lists where to look and what the names mean.
-If this guide and the source disagree, the source is correct.
-Numeric constants are referred to by parameter name, because their values can change.
+It connects the concepts of Sections [2](#2-the-brouwer-zimmermann-algorithm) and [3](#3-extensions-and-optimizations) to modules, identifiers, and behavior that spans files.
+Heuristic tunables are identified by parameter name so that their current values can be found in the source.
 
 ### 4.1 Module map and layering
 
@@ -448,32 +457,47 @@ Numeric constants are referred to by parameter name, because their values can ch
 | [brute_force.py](brute_force.py) | Exhaustive enumeration | `_get_distance_quantum_brute_force` |
 | [_binary.py](_binary.py) | Shared binary helpers: row reduction with labels, independent and adapted bases, packing, weight functions, and the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) | `_row_reduce_binary`, `_get_independent_rows`, `_get_nested_code_basis`, `_symplectic_to_hamming` |
 
-`__init__.py` exports names from `core.py`.
-`core.py` calls `brouwer_zimmermann.py` and `brute_force.py`, and `brouwer_zimmermann.py` calls `brute_force.py` for its exhaustive routes.
-All three modules use `_binary.py`.
-`get_distance_css_brouwer_zimmermann` builds the adapted basis of each sector, then passes every sector to `_get_distance_brouwer_zimmermann_many`.
+[`__init__.py`](__init__.py) exports names from [core.py](core.py).
+[core.py](core.py) calls [brouwer_zimmermann.py](brouwer_zimmermann.py) and [brute_force.py](brute_force.py), and [brouwer_zimmermann.py](brouwer_zimmermann.py) calls [brute_force.py](brute_force.py) for its exhaustive routes.
+All three modules use [_binary.py](_binary.py).
+`get_distance_css_brouwer_zimmermann` builds an adapted basis ([Section 3.4](#34-quotient-labels-for-the-stabilizer-test)) for each nontrivial sector, then passes the resulting problems to `_get_distance_brouwer_zimmermann_many`.
 
 ### 4.2 Flow and exit points
 
-A distance computation can return at the points below, which are listed in the order in which they are reached.
-Rows 4 to 11 apply to each search in turn, and row 13 applies to a joint CSS search.
-Rows 2, 5, and 10 are the three points at which exhaustive enumeration is chosen automatically.
+A public entry point validates inputs and chooses a route.
+For the BZ route, `_get_distance_brouwer_zimmermann_many` prepares each problem and coordinates any searches that remain.
+Preparation either returns a result immediately or produces a `_BrouwerZimmermannSearch` whose `advance` method searches one coefficient layer.
+For a joint CSS search, the coordinator advances the prepared searches in round-robin order and shares the best witness weight.
 
-| # | Stage and location | Returns when |
-| --- | --- | --- |
-| 1 | Trivial input, `core.py` | A classical code has no nonzero generators, a quantum problem has no logical rows, or `V = S` |
-| 2 | Direct exhaustive shortcut, `get_distance_quantum` with `method="brouwer_zimmermann"` | `_exhaustive_is_cheaper` approves the number of supplied rows (stabilizers and logical operators together), and those rows are linearly independent |
-| 3 | `method="brute_force"` | Always, over the independent basis (the adapted basis for a quantum problem) |
-| 4 | Initial row witness, `_prepare_brouwer_zimmermann_search` | `U ≤ cutoff`, where `U` is the lightest eligible row or a bound from another sector |
-| 5 | Exhaustive by size | `_exhaustive_is_cheaper(dimension, length)` approves |
-| 6 | Rows of the disjoint family | `U ≤ cutoff` after checking the rows of every search basis |
-| 7 | Certificate of the disjoint family | `L(1) ≥ U` |
-| 8 | Rows of a replacement overlapping family | `U ≤ cutoff` |
-| 9 | Certificate of a replacement family | `L(1) ≥ U` |
-| 10 | Exhaustive by work, `_brute_force_is_cheaper` | The eligible-word count is at most the estimated BZ work of [Section 3.6](#36-exhaustive-enumeration-as-a-fallback) |
-| 11 | Ready search | Never returns a distance; it returns a `_BrouwerZimmermannSearch` that scans from layer two |
-| 12 | Scan, `_BrouwerZimmermannSearch.advance` | `U ≤ cutoff`, `L ≥ U`, or every layer is enumerated (`next_weight > dimension`) |
-| 13 | `_get_distance_brouwer_zimmermann_many` | The shared best bound is at most `cutoff` after an advance, or no search can advance |
+The tables below index the public routes, the preparation exits, and the subsequent search.
+An integer returned by preparation can incorporate a witness from another sector, so it need not be the exact distance of the sector being prepared.
+
+| Public route in [core.py](core.py) | Outcome |
+| --- | --- |
+| Trivial input | Handles an empty classical code, a quantum problem with no logical rows, or `V = S` using the entry point's return convention |
+| Direct exhaustive shortcut in `get_distance_quantum` with `method="brouwer_zimmermann"` | Runs exhaustive enumeration if `_exhaustive_is_cheaper` approves the number of supplied rows and those rows are linearly independent |
+| `method="brute_force"` | Runs exhaustive enumeration over an independent basis, adapted to `S ⊆ V` for a quantum problem |
+
+`_prepare_brouwer_zimmermann_search` considers the following exits in order:
+
+| Preparation stage | Outcome |
+| --- | --- |
+| Initial row witness | Returns if `U ≤ cutoff`, where `U` includes the lightest eligible row and any supplied bound from another sector |
+| Exhaustive by size | Runs exhaustive enumeration if `_exhaustive_is_cheaper(dimension, length)` approves |
+| Rows of the disjoint family | Returns if checking the rows of every search basis gives `U ≤ cutoff` |
+| Certificate of the disjoint family | Returns if `L(1) ≥ U` |
+| Rows of a replacement overlapping family, if selected | Returns if `U ≤ cutoff` |
+| Certificate of the replacement family | Returns if `L(1) ≥ U` |
+| Exhaustive by work | Runs exhaustive enumeration if `_brute_force_is_cheaper` finds that the eligible-word count is at most the estimated BZ work of [Section 3.6](#36-exhaustive-enumeration-as-a-fallback) |
+| Ready search | Returns a `_BrouwerZimmermannSearch` that scans from layer two |
+
+Exhaustive enumeration is chosen automatically at three points: the direct shortcut, preparation's size check, and preparation's work check.
+
+| Search location | Outcome |
+| --- | --- |
+| `_BrouwerZimmermannSearch.advance` | Returns after one layer, or earlier if `U ≤ cutoff`; a finished search does no further work |
+| `_BrouwerZimmermannSearch.finished` | Marks a search finished if `U ≤ cutoff`, `L ≥ U`, or every layer has been enumerated (`next_weight > dimension`) |
+| `_get_distance_brouwer_zimmermann_many` | Returns the shared best bound when it is at most `cutoff` after an advance, or when no search can advance |
 
 The tests `test_brouwer_zimmermann_setup_dispatches`, `test_brouwer_zimmermann_setup_cutoffs`, `test_brouwer_zimmermann_overlap_setup_certification`, and `test_brouwer_zimmermann_exhaustive_dispatch` exercise these exits.
 
@@ -487,19 +511,27 @@ The tests `test_brouwer_zimmermann_setup_dispatches`, `test_brouwer_zimmermann_s
 | Divisor `D` | `weight_divisor` |
 | Maximum coverage `C` | `max_coverage` |
 | Dimension `r`, block rank `r_i` | `dimension`, `ranks` (`_InformationSet.rank`) |
-| Search basis and its block | `_InformationSet`, with fields `generators`, `labels`, `rank`, and `pivots`; the block is `pivots` |
+| Search basis and its block | `_InformationSet`, with fields `generators`, `labels`, `rank`, and `pivots`; the recorded block is the pivot subset, as explained below |
 | Number of coordinates `N` | The length of `columns` (or `nonzero_columns`), the array of nonzero columns, in the functions that build families of search bases |
+| Stored width `N_stored` | `basis.shape[1]` before pivot deletion, including any all-zero columns |
 | Labels `M` | `labels`, which is `None` for a classical problem |
-| Eligible rows | Rows with nonzero labels |
+| Eligible rows | Every row of a classical basis; rows with nonzero labels for a quantum problem |
 | Support, prefix XORs | `support` and `prefixes` in `advance` and `_scan_brouwer_zimmermann` |
-| Packed storage | `generators` and `labels` of `_BrouwerZimmermannSearch`: `uint64` words with pivot columns deleted, of which `widths` and `label_widths` count the valid words |
+| Packed generators | `generators` of `_BrouwerZimmermannSearch`: `uint64` words after deleting pivot columns; `widths` counts the valid words for each search basis |
+| Packed labels | `labels` of `_BrouwerZimmermannSearch`: `uint64` quotient-label words, without pivot-column deletion; `label_widths` counts the valid words |
 | Chunk | `batch_size`, equal to `1 << min(block_size, 15)` supports |
 | Candidate/set evaluation | The unit counted by `_get_brouwer_zimmermann_work` |
+
+For the rank-deficient remainder of [Section 2.4](#24-search-bases-and-rank-deficient-blocks), the implementation records only the independent pivot columns in `_InformationSet.pivots`.
+The remaining columns of that remainder stay in the generator matrix.
+This smaller block has the same rank and gives the same certificate term `b_i(t)`.
+Coverage and pivot-column deletion both use the recorded pivot subset.
 
 ### 4.4 Heuristics and cost models
 
 The certificate is computed from verified ranks and the actual maximum coverage of whichever family of search bases is chosen.
-No heuristic below can make a result wrong, and the heuristics change only the amount of work.
+The heuristics below change search work while preserving certificate validity.
+With an early-exit cutoff above one, a different search order can find a different first witness at or below the cutoff, while preserving the upper-bound contract of [Section 4.5](#45-behavior-spanning-files).
 
 - **`_get_information_set_generators`** builds the disjoint family greedily in natural column order.
   If that does not reach the maximum number of blocks that are information sets, it tries a small fixed number of fixed-seed random column orders and keeps the family with the lexicographically largest tuple of ranks.
@@ -520,12 +552,15 @@ No heuristic below can make a result wrong, and the heuristics change only the a
 
 - **Cutoff.**
   `get_distance_classical` and `get_distance_quantum` default to `cutoff=1`, and `get_distance_css_brouwer_zimmermann` requires a `cutoff`.
-  A positive `cutoff` returns an upper bound at or below it, which can exceed the exact distance.
+  If a witness reaches `cutoff`, the computation can return its weight immediately as an upper bound, which can exceed the exact distance.
+  Otherwise, the search continues and returns the exact distance, which may be larger than `cutoff`.
   The default of one is still exact for a valid nontrivial binary problem, because a distance is at least one.
   A `cutoff` of zero or less never triggers an early exit for such a problem, and `advance` clamps negative values to `-1` before it calls the compiled scan.
   [Section 4.2](#42-flow-and-exit-points) lists where the `cutoff` is checked.
 - **Units.**
-  On non-homogeneous Pauli input, the BZ route maps rows to Hamming coordinates, doubles `cutoff`, passes `weight_divisor=2`, and halves the result.
+  Homogeneous input represents a pure-X or pure-Z problem with one support bit per qubit.
+  Non-homogeneous input (`homogeneous=False`) uses general symplectic Pauli rows, as in [Section 2.7](#27-pauli-weight-as-hamming-weight).
+  For non-homogeneous input, the BZ route maps rows to Hamming coordinates, doubles `cutoff`, passes `weight_divisor=2`, and halves the result.
   The exhaustive routes inside preparation receive the same Hamming-coordinate basis, so they use the doubled `cutoff`.
   Only the direct shortcut and `method="brute_force"` use native symplectic weights and the original `cutoff`.
 - **Independence.**
@@ -534,46 +569,39 @@ No heuristic below can make a result wrong, and the heuristics change only the a
   The direct shortcut verifies independence itself, so the packed enumerators always receive independent bases.
 - **Resumable layers.**
   The compiled scan returns after at most `batch_size` supports.
-  `advance` keeps `support` and `prefixes` across calls to the compiled scan, and it changes `lower_bound` and `next_weight` only after a layer is complete in every search basis.
-  After an interruption, a new `advance` call restarts that layer from its first support.
+  Within one `advance` call, successive compiled batches reuse the local `support` and `prefixes` arrays.
+  `advance` changes `lower_bound` and `next_weight` only after a layer is complete in every search basis.
+  Aborting `advance`, for example with an exception or a cutoff return, leaves those completed-layer fields unchanged.
+  A subsequent call that is still permitted to advance restarts the unfinished layer from its first support.
 - **CSS sectors.**
   A joint search runs one search per sector in round-robin order and shares the best bound.
   Each sector keeps its own `lower_bound`, `max_coverage`, and `weight_divisor`.
 
-## 5. Invariants to preserve when modifying the implementation
+## 5. Correctness requirements
 
-- **Preserve the searched quotient.**
-  Every row operation on the generators must also be applied to the labels.
-  Guarded by `test_binary_row_reduction_and_information_sets`, `test_brouwer_zimmermann_initial_upper_bound_excludes_stabilizers`, and `test_brouwer_zimmermann_subsystem_code`.
-- **Keep coordinates identifiable.**
-  Compute pivot coverage before each basis deletes its pivot columns and packs its bits.
-  Guarded by `test_brouwer_zimmermann_overlap_certificates`.
-- **Use the correct rank term.**
-  Partial blocks contribute `b_i(t)`, which accounts for their rank deficiency, rather than `t+1`.
-  Guarded by `test_select_brouwer_zimmermann_information_sets` and `test_brouwer_zimmermann_search_state`.
-- **Count overlap exactly.**
-  Coverage is the actual maximum number of blocks that contain a single column index.
-  Guarded by `test_brouwer_zimmermann_overlap_certificates` and `test_brouwer_zimmermann_overlap_setup_guards`, which checks that a repeated pivot set is not added to a family.
-- **Advance certificates only after complete work.**
-  A cutoff, exception, or interrupted chunk leaves its layer incomplete.
-  Guarded by `test_brouwer_zimmermann_search_state`, which checks that an interrupted layer leaves `lower_bound` and `next_weight` unchanged, and by `test_brouwer_zimmermann_scan`.
-- **Search every basis that a certificate uses.**
-  A certificate may use a search basis only through the layers that have been completed in that same basis, including layer one of a replacement overlapping family.
-  Guarded by `test_brouwer_zimmermann_overlap_setup_certification`.
-- **Keep bounds in consistent units.**
-  The non-homogeneous BZ route uses doubled Hamming weights internally, with a doubled cutoff and a halved result.
-  The direct exhaustive route and `method="brute_force"` use native symplectic weights and the original cutoff.
-  Guarded by `test_get_distance_quantum_noncss_codes` and `test_brouwer_zimmermann_random_cross_checks` for the BZ route, and by `test_get_distance_quantum_methods_symplectic` and `test_get_distance_quantum_symplectic` for the native symplectic weights.
-- **Prove divisibility for the whole space.**
-  An even-weight basis proves that the whole space is even.
-  Higher divisibility requires a separate proof.
-  `test_brouwer_zimmermann_reduces_enumeration_work` exercises the even-weight divisor on an even-weight extension of a Hamming code.
-- **Share upper bounds without sharing certificates.**
-  The parity, coverage, and completed layers of each sector must remain local to that sector.
-  Guarded by `test_brouwer_zimmermann_shared_search`, which compares a shared search of two nested codes with exhaustive results.
-- **Make regression tests non-vacuous.**
-  Verify that an overlapping family of search bases was actually selected, and use an independent oracle on a case where enumeration improves the starting witness.
-  Guarded by `test_brouwer_zimmermann_overlap_qc` and `test_brouwer_zimmermann_overlap_improves_quotient_witness`.
+Changes to the BZ algorithm can use different representations, certificates, and search strategies while preserving the following requirements for the nontrivial problems of [Section 2.1](#21-the-problem).
+
+- **Search the intended space and recognize eligible witnesses.**
+  Transformations must preserve `V` and the excluded subspace `S`, or provide an equivalent representation of `V \ S`.
+  With quotient labels, this means preserving the membership test of [Section 3.4](#34-quotient-labels-for-the-stabilizer-test).
+- **Preserve the meaning of weights.**
+  Candidate weights, certificates, cutoffs, and returned results must use consistent units.
+  For the current implementation, this includes restoring the deleted pivot weight ([Section 3.5](#35-packed-enumeration-with-pivot-column-deletion)) and converting between Pauli and Hamming weights ([Section 4.5](#45-behavior-spanning-files)).
+- **Use only justified certificates.**
+  A certificate must hold for every eligible word still unexamined in the search where it is used.
+  The current formula relies on block ranks, overlap coverage, and completed layers (Sections [2.4](#24-search-bases-and-rank-deficient-blocks), [2.5](#25-the-stopping-certificate), and [3.1](#31-overlapping-search-bases)).
+  Coverage may be conservatively overestimated; underestimating it can make the formula unsound.
+  Optional rounding requires a divisor valid for every eligible weight ([Section 3.2](#32-rounding-the-certificate-to-a-proven-weight-multiple)).
+  A certificate from another CSS sector needs justification for the sector where it is applied, just as any other certificate does.
+- **Preserve the return contract.**
+  Return the exact minimum unless taking an early exit permitted by `cutoff`.
+  Such an early exit returns the weight of a known eligible witness, an upper bound between the distance and `cutoff` ([Section 4.5](#45-behavior-spanning-files)).
+
+Representative correctness tests in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py) check certificate validity against exhaustive words (`test_brouwer_zimmermann_overlap_certificates`) and joint-search results with distinct sector certificates (`test_brouwer_zimmermann_sector_certificates`).
+In [core_test.py](core_test.py), `test_brouwer_zimmermann_random_cross_checks` forces the BZ route and compares both homogeneous and general Pauli problems with exhaustive results.
+
+Performance tests also check broad work budgets, and helper tests exercise the current implementation's interfaces.
+Those tests can evolve with the implementation; they do not make a particular information-set family, packing order, or optimization a correctness requirement.
 
 ## References
 
