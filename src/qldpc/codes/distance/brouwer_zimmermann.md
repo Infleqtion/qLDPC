@@ -429,8 +429,18 @@ Omitting this step would either accept stabilizers as witnesses or reject nontri
 3. If the above steps do not yield `floor(n_active / r)` full information sets, where `n_active` is the number of nonzero columns of the basis, retry with up to eight fixed-seed random column orders.
    Keep the disjoint family of search bases with the lexicographically largest tuple of ranks.
 
-`_select_brouwer_zimmermann_information_sets` then discards any partial block that cannot help when the full blocks alone would already raise the lower certificate to `U`.
-(A block with rank `r_i` has `b_i(t) = 0` until `t + 1 > r - r_i`.)
+A search basis whose block is rank deficient (a **partial** search basis) costs as much to enumerate as a full one, but its term `b_i(t)` is zero for small `t`.
+`_select_brouwer_zimmermann_information_sets` therefore removes some partial search bases from the family, so that they are not enumerated or packed.
+It works as follows:
+
+1. Using only the search bases whose blocks are information sets, find the smallest `t_f` for which their certificate `L(t_f)`, after rounding, is at least `U`.
+   Without any partial search basis, the search would stop after layer `t_f`.
+2. Keep a partial search basis only if its term can be nonzero for some `t < t_f`.
+   Its rank deficiency is `d = r - r_i`, and `b_i(t) = max(0, t+1-d)` is zero for `t < d`.
+   So the search basis is kept if `d < t_f`, and removed if `d ≥ t_f`.
+
+A removed search basis cannot raise the certificate before the information-set search bases alone already reach `U`, so removing it does not change the result, and it saves enumeration work.
+If the family has no search basis whose block is an information set, nothing is removed.
 
 #### Choosing an overlapping family of search bases
 
