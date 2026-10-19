@@ -9,6 +9,8 @@ from collections.abc import Callable
 import numpy as np
 import numpy.typing as npt
 
+from ._binary_numba import row_reduce_binary as _native_row_reduce_binary
+
 _MASK55 = np.uint64(0x5555555555555555)
 _MASK33 = np.uint64(0x3333333333333333)
 _MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
@@ -72,34 +74,10 @@ def _row_reduce_binary(
     npt.NDArray[np.int_],
 ]:
     """Row-reduce a binary matrix over selected columns, transforming labels in parallel."""
-    matrix = matrix.copy()
-    labels = None if labels is None else labels.copy()
     columns = np.arange(matrix.shape[1], dtype=int) if columns is None else columns
-    pivots: list[int] = []
-    pivot_row = 0
-
-    for col in columns:
-        candidates = np.flatnonzero(matrix[pivot_row:, col])
-        if not len(candidates):
-            continue
-        source_row = pivot_row + int(candidates[0])
-        if source_row != pivot_row:
-            matrix[[pivot_row, source_row]] = matrix[[source_row, pivot_row]]
-            if labels is not None:
-                labels[[pivot_row, source_row]] = labels[[source_row, pivot_row]]
-
-        rows_to_clear = np.flatnonzero(matrix[:, col])
-        rows_to_clear = rows_to_clear[rows_to_clear != pivot_row]
-        matrix[rows_to_clear] ^= matrix[pivot_row]
-        if labels is not None:
-            labels[rows_to_clear] ^= labels[pivot_row]
-
-        pivots.append(int(col))
-        pivot_row += 1
-        if pivot_row == len(matrix):
-            break
-
-    return matrix, labels, np.asarray(pivots, dtype=int)
+    tags = np.empty((len(matrix), 0), dtype=np.uint8) if labels is None else labels
+    reduced, reduced_tags, pivots = _native_row_reduce_binary(matrix, tags, columns)
+    return reduced, None if labels is None else reduced_tags, pivots
 
 
 def _get_independent_rows(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:

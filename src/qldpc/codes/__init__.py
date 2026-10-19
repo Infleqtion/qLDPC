@@ -29,6 +29,13 @@ from .distance import (
     validate_distance_backend,
     validate_distance_method,
 )
+from .distance.weight_enumerators import (
+    CSSLogicalWeightCounter,
+    CSSLogicalWeightSpectrum,
+    CSSMinimumLogicalWeights,
+    WeightEnumeratorMethod,
+    get_minimum_logical_weights_css,
+)
 from .quantum import (
     BaconShorCode,
     BBCode,
@@ -73,6 +80,9 @@ __all__ = [
     "CHGPCode",
     "CRCode",
     "CSSCode",
+    "CSSLogicalWeightCounter",
+    "CSSLogicalWeightSpectrum",
+    "CSSMinimumLogicalWeights",
     "ClassicalCode",
     "CyclicCode",
     "DistanceBackend",
@@ -113,9 +123,11 @@ __all__ = [
     "ToricCode",
     "TrivialCode",
     "TwoGrossCode",
+    "WeightEnumeratorMethod",
     "get_distance_classical",
     "get_distance_css_brouwer_zimmermann",
     "get_distance_quantum",
+    "get_minimum_logical_weights_css",
     "validate_distance_backend",
     "validate_distance_method",
 ]
