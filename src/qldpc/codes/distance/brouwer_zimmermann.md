@@ -192,6 +192,44 @@ where `wt_P` is the physical Pauli weight.
 BZ therefore searches words with `3n` coordinates, and the quantum distance is half of the minimum Hamming weight that BZ finds.
 Because `T` is linear and injective, it maps the spaces `S ⊆ V` to spaces `T(S) ⊆ T(V)`, and a word of `T(V)` is eligible exactly when its preimage lies outside `S`.
 
+## 3. Extensions to BZ in qLDPC
+
+qLDPC extends the published BZ algorithm in three ways, none of which affects the exactness of the result:
+
+- [Section 3.1](#31-overlapping-search-bases) strengthens the lower certificate by allowing for search bases with overlapping blocks.
+- [Section 3.2](#32-rounding-the-certificate-to-a-proven-weight-multiple) strengthens the lower certificate by rounding it up when the weight of every eligible word is a multiple of some integer.
+- [Section 3.3](#33-sharing-witnesses-between-css-sectors) tightens the upper bound by sharing witnesses between the two sectors of a CSS code.
+
+[Section 3.4](#34-worked-example) illustrates the first two extensions with an example.
+
+### 3.1 Overlapping search bases
+
+#### Motivation
+
+For a disjoint family of search bases, [Section 2.5](#25-the-stopping-certificate) gives the lower certificate as a sum over the search bases:
+
+$$
+L(t) = \sum_i b_i(t).
+$$
+
+The term `b_i(t)` for the search basis `G_i` is at most `t+1`, and it equals `t+1` exactly when the block `B_i` is an information set ([Section 2.4](#24-search-bases-and-rank-deficient-blocks)).
+So `L(t)` grows with the number of search bases whose blocks are information sets.
+
+An information set has `r` column indices, and the blocks of a disjoint family share no column indices.
+A disjoint family therefore has at most `floor(N / r)` blocks that are information sets.
+When `N / r` is not an integer, the remaining coordinates cannot form another information set, so they form at most one rank-deficient block, whose term `b_i(t)` is smaller.
+
+For example, take `N = 64` and `r = 41`.
+A disjoint family has one block that is an information set, with term `b_1(t) = t+1`.
+The other 23 coordinates form a rank-deficient block whose term `b_2(t)` is zero for `t ≤ 17`.
+Hence `L(t) = t+1` for `t ≤ 17`, and the 23 other coordinates do not help the certificate.
+
+An **overlapping family of search bases** is a collection of search bases whose blocks may share column indices.
+Because its blocks need not be disjoint, such a family is not limited to `floor(N / r)` blocks that are information sets.
+However, a coordinate that lies in several blocks is counted in several of the terms `b_i(t)`.
+The certificate derived below accounts for this duplication by dividing the sum of the terms by the maximum coverage `C`, defined below.
+For `m` blocks that are information sets, this yields a certificate `L(t)` of about `(m/C)(t+1)`, which exceeds the `k(t+1)` of a disjoint family with `k` information-set blocks whenever `m/C > k`.
+
 ## 3. Implementation in qLDPC
 
 ### 3.1 Overview of a search
