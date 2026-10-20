@@ -186,6 +186,9 @@ class GroupRing:
 
         See `Idempotent (ring theory)
         <https://en.wikipedia.org/wiki/Idempotent_%28ring_theory%29>`_.
+
+        Unless they are already known, the idempotents are computed with GAP, which may install GAP
+        packages or prompt on standard input; see help(qldpc.external.gap.get_output).
         """
         if not self.is_semisimple:
             raise ValueError("Only semisimple rings have primitive central idempotents")
