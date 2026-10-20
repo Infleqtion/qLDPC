@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .benchmarking import (
+    get_fault_distance,
     get_logical_error_and_discard_rate,
     get_state_prep_diagnostic_circuit,
     get_state_prep_diagnostic_tasks,
@@ -87,6 +88,7 @@ __all__ = [
     "get_encoder_and_decoder",
     "get_encoding_circuit",
     "get_encoding_tableau",
+    "get_fault_distance",
     "get_logical_bell_prep",
     "get_logical_error_and_discard_rate",
     "get_logical_state_stabilizers",
