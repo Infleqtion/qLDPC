@@ -565,7 +565,7 @@ def test_pauli_product_cliffords() -> None:
     circuit = stim.Circuit("""
         SPP X0 X0*Y1*Z2
     """)
-    with pytest.raises(ValueError, match="expects a multiple of 1 qubits"):
+    with pytest.raises(ValueError, match="has arity 1, but"):
         noise_model.noisy_circuit(circuit)
 
     measurement_rule = circuits.NoiseRule(after=circuits.PauliChannel.depolarizing(2, 0.1))
@@ -919,7 +919,7 @@ def test_clifford_nq_error_errors() -> None:
     # at emission by `emit_after`.
     bad_rule = circuits.NoiseRule(after=circuits.PauliChannel({"XY": 0.01}))
     noise_model = circuits.NoiseModel(rules={"SPP": bad_rule})
-    with pytest.raises(ValueError, match="expects a multiple of 2 qubits"):
+    with pytest.raises(ValueError, match="has arity 2, but"):
         noise_model.noisy_circuit(stim.Circuit("SPP X0*Y1*Z2"))
 
     # A 2-qubit `after` broadcast (via a 2q PauliChannel) applied to a wrong-arity gate raises at
@@ -934,7 +934,7 @@ def test_clifford_nq_error_errors() -> None:
             rules={"MXYZ": circuits.NoiseRule(after=circuits.PauliChannel.depolarizing(2, 0.01))}
         )
     # Bare "MPP" / "SPP" remain variable-arity; wrong-arity `after` is caught at emission.
-    with pytest.raises(ValueError, match="expects a multiple of 2 qubits"):
+    with pytest.raises(ValueError, match="has arity 2, but"):
         circuits.NoiseModel(
             rules={"MPP": circuits.NoiseRule(after=circuits.PauliChannel.depolarizing(2, 0.01))}
         ).noisy_circuit(stim.Circuit("MPP X0*Y1*Z2"))
