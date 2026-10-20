@@ -11,10 +11,10 @@ that defaults to the distance ``d``, this module counts:
   mixed operators.  This count is supported only for ``w <= d``, and is zero for ``w < d``.
 
 Counts are of physical operators ignoring phase, not of logical classes.  At the default weight,
-``d`` is the minimum over both sectors, so ``count_x`` or ``count_z`` may be zero.  Counting takes
-exponential time in the worst case, but no method stores one entry per logical word.
+``d`` is the minimum over both sectors, so ``count_x`` or ``count_z`` may be zero.  Counting
+generally takes an exponentially long time.
 
-Each sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
+Each X/Z sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
 ``brouwer_zimmermann.md``).  Words are enumerated in layers over Brouwer--Zimmermann (BZ)
 information sets.  Unlike a distance search, the scan stops only when the BZ lower bound exceeds
 ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several information sets is
