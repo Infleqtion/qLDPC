@@ -408,11 +408,9 @@ def test_conjugation(interpreted: bool) -> None:
     restored = changed.conjugated_cnot(1, 6)
     assert restored.is_self_dual and not restored._self_dual
     with _maybe_interpreted(interpreted):
-        general = counter.conjugated([1, 6], [[1, 0], [1, 1]], [[1, 1], [0, 1]])
-        inferred = counter.conjugated([1, 6], [[1, 0], [1, 1]])
-    for derived in (general, inferred):
-        assert np.array_equal(derived.checks_x, changed.checks_x)
-        assert np.array_equal(derived.checks_z, changed.checks_z)
+        general = counter.conjugated([1, 6], [[1, 0], [1, 1]])
+    assert np.array_equal(general.checks_x, changed.checks_x)
+    assert np.array_equal(general.checks_z, changed.checks_z)
     assert np.array_equal(changed.conjugated_cnot(1, 6).checks_x, before)
     assert changed.count_logicals(full_pauli=True) == changed.count_logicals(
         full_pauli=True, method="brute_force"
@@ -429,31 +427,42 @@ def test_conjugation(interpreted: bool) -> None:
     for targets in ([0, 0], [-1, 2], [0, 7], [0.5, 2], [True, 2], [], list(range(65))):
         invalid_targets: Any = targets
         with pytest.raises(ValueError, match="1 to 64 distinct"):
-            (wide if len(targets) == 65 else counter).conjugated(invalid_targets, [[1]], [[1]])
+            (wide if len(targets) == 65 else counter).conjugated(invalid_targets, [[1]])
     with pytest.raises(ValueError, match="1 to 64 distinct"):
         counter.conjugated_swel(0, 1, 1, 2)
     with pytest.raises(ValueError, match="square"):
-        counter.conjugated([0, 1], [[1]], [[1]])
+        counter.conjugated([0, 1], [[1]])
     with _maybe_interpreted(interpreted):
         with pytest.raises(ValueError, match="invertible"):
             counter.conjugated([0, 1], np.ones((2, 2)))
         for invalid in (2 * np.eye(2), np.full((2, 2), np.nan), galois.GF(3)(np.eye(2, dtype=int))):
             with pytest.raises(ValueError, match="binary"):
-                counter.conjugated([0, 1], invalid, np.eye(2))
-            with pytest.raises(ValueError, match="binary"):
-                counter.conjugated([0, 1], np.eye(2), invalid)
-        # A supplied matrix_z is trusted rather than checked against matrix_x.
-        counter.conjugated([0, 1], np.eye(2), np.ones((2, 2)))
+                counter.conjugated([0, 1], invalid)
 
-        # A computed matrix_z is cached by matrix_x, and the cached copy is read-only.
-        lc._get_dual_local.cache_clear()
-        first = counter.conjugated([1, 6], [[1, 0], [1, 1]])
-        with mock.patch.object(lc, "_row_reduce_binary", side_effect=AssertionError):
-            second = counter.conjugated([2, 3], np.array([[1, 0], [1, 1]]))
-        assert lc._get_dual_local.cache_info().hits == 1
-        assert not lc._get_dual_local((1, 3)).flags.writeable
+        # Validated and packed matrices are cached by the bytes of matrix_x, and are read-only.
+        lc._get_cached_local_matrices.cache_clear()
+        cnot = np.array([[1, 0], [1, 1]])
+        first = counter.conjugated([1, 6], cnot)
+        with mock.patch.object(lc, "_as_local_matrix", side_effect=AssertionError):
+            second = counter.conjugated([2, 3], cnot.tolist())
+        assert lc._get_cached_local_matrices.cache_info().hits == 1
         assert np.array_equal(first.checks_z, changed.checks_z)
         assert second.count_logicals() == counter.conjugated_cnot(2, 3).count_logicals()
+        local_x, local_z = lc._get_local_matrices(cnot, 2)
+        assert not local_x.flags.writeable and not local_z.flags.writeable
+        # Inputs with the same bytes but another shape or field miss the cache and are rejected.
+        identity = np.eye(2, dtype=np.uint8)
+        counter.conjugated([0, 1], identity)
+        with pytest.raises(ValueError, match="square"):
+            counter.conjugated([0, 1], identity.reshape(1, 4))
+        with pytest.raises(ValueError, match="binary"):
+            counter.conjugated([0, 1], galois.GF(3)(identity))
+        # Object arrays are validated before their entries are used as a key.
+        assert counter.conjugated([1, 6], cnot.astype(object)).checks_z.tolist() == (
+            changed.checks_z.tolist()
+        )
+        with pytest.raises(ValueError, match="binary"):
+            counter.conjugated([0, 1], np.array([[2, 0], [0, 1]], dtype=object))
 
 
 @pytest.mark.parametrize("interpreted", [False, True])
@@ -469,11 +478,10 @@ def test_local_matrices_match_matrix_products(interpreted: bool, size: int) -> N
     inverse_transpose = np.asarray(np.linalg.inv(field(local)).T, dtype=int)
     rows = rng.integers(0, 2, (9, 70), dtype=np.uint8)
     positions = np.sort(rng.choice(70, size, replace=False))
-    local_x = lc._pack_local(lc._as_local_matrix(local, size))
-    dual = lc._get_dual_local(tuple(local_x.tolist()))
-    assert np.array_equal(dual, lc._pack_local(lc._as_local_matrix(inverse_transpose, size)))
+    local_x = lc._as_local_matrix(local, size)
+    assert np.array_equal(lc._get_dual_local_matrix(local_x), inverse_transpose)
     with _maybe_interpreted(interpreted):
-        result = lc._apply_local(rows, positions, local_x)
+        result = lc._apply_local(rows, positions, lc._pack_local(local_x))
     expected = rows.astype(int)
     expected[:, positions] = expected[:, positions] @ local.T % 2
     assert np.array_equal(result, expected)
@@ -481,18 +489,11 @@ def test_local_matrices_match_matrix_products(interpreted: bool, size: int) -> N
 
 def test_gate_constants() -> None:
     """The prepacked CNOT and SWEL-preserving matrices match their unpacked forms."""
-    cnot_x = lc._pack_local(lc._as_local_matrix([[1, 0], [1, 1]], 2))
-    swel = lc._pack_local(
-        lc._as_local_matrix([[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]], 4)
-    )
-    expected = (
-        cnot_x,
-        lc._get_dual_local(tuple(cnot_x.tolist())),
-        swel,
-        lc._get_dual_local(tuple(swel.tolist())),
-    )
-    for packed, matrix in zip((*lc._CNOT, *lc._SWEL), expected, strict=True):
-        assert packed.dtype == np.uint64 and np.array_equal(packed, matrix)
+    cnot_x = lc._as_local_matrix([[1, 0], [1, 1]], 2)
+    swel = lc._as_local_matrix([[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]], 4)
+    unpacked = (cnot_x, lc._get_dual_local_matrix(cnot_x), swel, lc._get_dual_local_matrix(swel))
+    for packed, matrix in zip((*lc._CNOT, *lc._SWEL), unpacked, strict=True):
+        assert packed.dtype == np.uint64 and np.array_equal(packed, lc._pack_local(matrix))
     # Conjugation checks identity, not equality, to recognize gates that act identically on X and Z.
     assert lc._SWEL[0] is lc._SWEL[1]
 
@@ -630,7 +631,7 @@ def test_self_dual_codes_share_x_and_z_data() -> None:
     for step in range(6):
         targets = list(map(int, rng.choice(counter.num_qubits, 4, replace=False)))
         if step == 1:
-            counter = counter.conjugated(targets, swel, swel)
+            counter = counter.conjugated(targets, swel)
         elif step == 3:
             counter = counter.conjugated_cnot(*targets[:2])
         else:

@@ -51,7 +51,6 @@ from ._binary import (
     _pack_bits,
     _popcount_word,
     _row_reduce_binary,
-    _unpack_bits,
 )
 from .brouwer_zimmermann import (
     _get_brouwer_zimmermann_lower_bound,
@@ -269,37 +268,27 @@ class CSSLogicalCounter:
             )
         return CSSLogicalCounts(target, count_x, count_z, count_pauli)
 
-    def conjugated(
-        self,
-        targets: Sequence[int],
-        matrix_x: npt.ArrayLike,
-        matrix_z: npt.ArrayLike | None = None,
-    ) -> CSSLogicalCounter:
+    def conjugated(self, targets: Sequence[int], matrix_x: npt.ArrayLike) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a local CSS-preserving Clifford.
+
+        The Clifford maps an X support ``x`` on the targets, as a column vector, to ``matrix_x @ x``
+        and a Z support ``z`` to ``matrix_z @ z``, where ``matrix_z = (matrix_x^-1)^T`` over GF(2)
+        preserves commutation.  The packed matrices are cached by ``matrix_x``, so reusing a gate
+        is cheaper than its first use.
 
         Args:
             targets: Between one and 64 distinct qubit indices on which the Clifford acts, in order.
-            matrix_x: Invertible binary matrix that maps the X support on the targets, as a column
-                vector, to its image.
-            matrix_z: The same for Z supports, which must satisfy ``matrix_x @ matrix_z.T = I`` over
-                GF(2) so that commutation is preserved.  If None (the default), it is computed from
-                ``matrix_x``.  A supplied ``matrix_z`` is trusted, not verified: one that violates
-                this condition gives wrong counts.
+            matrix_x: Invertible binary matrix whose rows and columns are indexed by the targets.
 
         Returns:
             A new counter.  This counter is not modified.
 
         Raises:
-            ValueError: If the targets are invalid, if a matrix is not binary or does not match the
-                number of targets, or if ``matrix_z`` is None and ``matrix_x`` is not invertible.
+            ValueError: If the targets are invalid, or if ``matrix_x`` is not an invertible binary
+                matrix that matches the number of targets.
         """
         positions = self._get_positions(targets)
-        local_x = _pack_local(_as_local_matrix(matrix_x, len(positions)))
-        local_z = (
-            _get_dual_local(tuple(local_x.tolist()))
-            if matrix_z is None
-            else _pack_local(_as_local_matrix(matrix_z, len(positions)))
-        )
+        local_x, local_z = _get_local_matrices(matrix_x, len(positions))
         return self._conjugated(positions, local_x, local_z)
 
     def conjugated_cnot(self, control: int, target: int) -> CSSLogicalCounter:
@@ -590,6 +579,37 @@ _CNOT = (np.array([1, 3], dtype=np.uint64), np.array([3, 2], dtype=np.uint64))
 _SWEL = (np.array([7, 11, 13, 14], dtype=np.uint64),) * 2
 
 
+def _get_local_matrices(
+    matrix_x: npt.ArrayLike, size: int
+) -> tuple[npt.NDArray[np.uint64], npt.NDArray[np.uint64]]:
+    """Packed local matrices for X and Z supports, from a cache keyed by ``matrix_x``."""
+    order = getattr(type(matrix_x), "order", None)
+    local = np.asarray(matrix_x)
+    if local.dtype.kind not in "biuf":
+        # The bytes of other dtypes, such as objects, do not identify their entries.
+        local, order = _as_local_matrix(matrix_x, size), None
+    return _get_cached_local_matrices(size, order, local.shape, local.dtype.str, local.tobytes())
+
+
+@functools.lru_cache(maxsize=1024)
+def _get_cached_local_matrices(
+    size: int, order: int | None, shape: tuple[int, ...], dtype: str, data: bytes
+) -> tuple[npt.NDArray[np.uint64], npt.NDArray[np.uint64]]:
+    """Validate and pack ``matrix_x`` given by its bytes, and the matrix for Z supports.
+
+    Searches apply the same local Cliffords repeatedly, so results are cached.  The key identifies
+    the input completely, including its shape and field, so invalid input never matches a cached
+    entry.  Results are read-only so that callers cannot alter the cache.
+    """
+    if order is not None and order != 2:
+        raise ValueError("Local Clifford matrices must be binary")
+    matrix = _as_local_matrix(np.frombuffer(data, dtype=dtype).reshape(shape), size)
+    local_x, local_z = _pack_local(matrix), _pack_local(_get_dual_local_matrix(matrix))
+    local_x.setflags(write=False)
+    local_z.setflags(write=False)
+    return local_x, local_z
+
+
 def _as_local_matrix(matrix: npt.ArrayLike, size: int) -> _BinaryMatrix:
     """Validate a binary local Clifford matrix that acts on ``size`` targets."""
     order = getattr(type(matrix), "order", None)
@@ -601,23 +621,15 @@ def _as_local_matrix(matrix: npt.ArrayLike, size: int) -> _BinaryMatrix:
     return local.astype(np.uint8)
 
 
-@functools.lru_cache(maxsize=1024)
-def _get_dual_local(local_x: tuple[int, ...]) -> npt.NDArray[np.uint64]:
-    """Packed ``matrix_z`` that satisfies ``matrix_x @ matrix_z.T = I`` over GF(2).
-
-    The argument holds the packed rows of ``matrix_x``.  Results are cached, since searches apply
-    the same local Cliffords repeatedly, and are read-only so that callers cannot alter the cache.
-    """
-    size = len(local_x)
-    matrix_x = _unpack_bits(np.array(local_x, dtype=np.uint64)[:, None], size)
+def _get_dual_local_matrix(matrix_x: _BinaryMatrix) -> _BinaryMatrix:
+    """Return the matrix for Z supports, ``matrix_z``, with ``matrix_x @ matrix_z.T = I``."""
+    size = len(matrix_x)
     # Row reduction finds T with T @ matrix_x = I, so that matrix_z = T.T.
     _, inverse, pivots = _row_reduce_binary(matrix_x, np.eye(size, dtype=np.uint8))
     if len(pivots) < size:
         raise ValueError("Local Clifford matrix_x must be invertible over GF(2)")
     assert inverse is not None
-    local_z = _pack_local(inverse.T.copy())
-    local_z.setflags(write=False)
-    return local_z
+    return inverse.T.copy()
 
 
 def _pack_local(matrix: _BinaryMatrix) -> npt.NDArray[np.uint64]:
