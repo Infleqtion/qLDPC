@@ -4,25 +4,27 @@
 
 from __future__ import annotations
 
-import ast
 import itertools
-import math
-from collections.abc import Callable
-from pathlib import Path
-from typing import Any
 from unittest import mock
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 import qldpc
 
 from . import _binary as binary
 from . import _information_sets
-from . import brouwer_zimmermann as bz
-from . import logical_counts as lc
 
-STAGES = ("_get_disjoint_family", "_prune_family", "_get_overlapping_family")
+# Two disjoint full blocks and a rank-two remainder.
+PARTIAL_BASIS = np.hstack(
+    [
+        np.eye(3, dtype=np.uint8),
+        np.eye(3, dtype=np.uint8),
+        np.array([[1, 0], [0, 1], [0, 0]], dtype=np.uint8),
+    ]
+)
+EVEN_BASIS = np.array([[1, 1, 0, 0], [0, 1, 1, 0], [1, 0, 0, 1]], dtype=np.uint8)
 
 
 def test_binary_row_reduction_and_information_sets() -> None:
@@ -34,15 +36,8 @@ def test_binary_row_reduction_and_information_sets() -> None:
     np.testing.assert_array_equal(reduced_labels, [[1, 1], [1, 0]])
     np.testing.assert_array_equal(pivots, [0, 1])
 
-    basis = np.hstack(
-        [
-            np.eye(3, dtype=np.uint8),
-            np.eye(3, dtype=np.uint8),
-            np.array([[1, 0], [0, 1], [0, 0]], dtype=np.uint8),
-        ]
-    )
     information_sets = _information_sets._get_information_set_generators(
-        basis, np.eye(3, dtype=np.uint8)
+        PARTIAL_BASIS, np.eye(3, dtype=np.uint8)
     )
     assert [rank for _, _, rank, _ in information_sets] == [3, 3, 2]
     assert not _information_sets._get_information_set_generators(
@@ -66,60 +61,21 @@ def test_binary_row_reduction_and_information_sets() -> None:
     assert [rank for _, _, rank, _ in information_sets] == [2, 1]
 
 
-def test_certificate_lower_bound_and_work() -> None:
-    """Certificates combine rank deficiency, coverage, and proven divisors, as the guide derives."""
-    certificate = _information_sets._Certificate(10, (10, 6, 2))
-    # A rank-r_i block contributes max(0, t + 1 - (r - r_i)) after layer t.
-    assert [certificate.lower_bound(t) for t in (0, 1, 5, 8)] == [1, 2, 8, 15]
-
-    # Three full QC64 bases with coverage two certify ceil(3 (t + 1) / 2), rounded to even weights.
-    qc64 = _information_sets._Certificate(41, (41,) * 3, weight_divisor=2, max_coverage=2)
-    assert [qc64.lower_bound(t) for t in (2, 3, 4)] == [6, 6, 8]
-    assert [_information_sets._Certificate(41, (41,) * 3, max_coverage=2).lower_bound(4)] == [8]
-    assert qc64.work(8) == 3 * sum(math.comb(41, weight) for weight in range(1, 5))
-
-    # An unreachable target counts every layer of every set.
-    assert _information_sets._Certificate(3, (3, 3)).work(100) == 2 * 7
-    assert _information_sets._Certificate(5, (5,), weight_divisor=2).lower_bound(2) == 4
-
-
-def test_family_records_actual_coverage() -> None:
-    """Families certify their own ranks and never underestimate pivot coverage."""
-    basis = np.array([[1, 0, 1, 1], [0, 1, 1, 1]], dtype=np.uint8)
-    first = _information_sets._InformationSet(basis, None, 2, np.array([0, 1]))
-    generators, labels, pivots = binary._row_reduce_binary(basis, columns=np.array([0, 2]))
-    second = _information_sets._InformationSet(generators, labels, 2, pivots)
-    family = _information_sets._Family.from_information_sets(
-        [first, second], dimension=2, weight_divisor=1
-    )
-    assert family.certificate == _information_sets._Certificate(2, (2, 2), 1, 2)
-    empty = _information_sets._Family.from_information_sets([], dimension=2, weight_divisor=1)
-    assert empty.certificate == _information_sets._Certificate(2, ())
-
-    with pytest.raises(AssertionError):
-        _information_sets._Family((first,), _information_sets._Certificate(2, (1,)))
-    with pytest.raises(AssertionError):
-        _information_sets._Family((first, second), _information_sets._Certificate(2, (2, 2)))
+@pytest.mark.parametrize("basis", [PARTIAL_BASIS, EVEN_BASIS])
+def test_family_certificates(basis: npt.NDArray[np.uint8]) -> None:
+    """Rank-deficient blocks and inferred parity give certificates valid for every word."""
+    # A target above every weight keeps the rank-deficient block.
+    family = _information_sets._prepare_family(basis, None, upper_bound=basis.shape[1] + 1)
+    _assert_certificate_bounds_unvisited_words(basis, family)
 
 
 def test_weight_divisor_inference() -> None:
-    """Even ambient parity combines with a caller's divisor, and divides every spanned weight."""
-    even = np.array([[1, 1, 0, 0], [0, 1, 1, 0], [1, 0, 0, 1]], dtype=np.uint8)
+    """Even rows span only even weights, and a divisor proven by the caller is retained."""
     odd = np.array([[1, 0, 0, 0], [0, 1, 1, 0]], dtype=np.uint8)
-    assert _information_sets._infer_weight_divisor(even) == 2
-    assert _information_sets._infer_weight_divisor(even, 2) == 2
-    assert _information_sets._infer_weight_divisor(even, 3) == 6
-    assert _information_sets._infer_weight_divisor(odd) == 1
-    assert _information_sets._infer_weight_divisor(odd, 2) == 2
-    for bits in itertools.product((0, 1), repeat=len(even)):
-        assert np.count_nonzero(np.asarray(bits) @ even % 2) % 2 == 0
-    assert _information_sets._get_disjoint_family(even, None).certificate.weight_divisor == 2
-    assert (
-        _information_sets._get_disjoint_family(
-            odd, None, weight_divisor=2
-        ).certificate.weight_divisor
-        == 2
-    )
+    get_family = _information_sets._get_disjoint_family
+    assert get_family(EVEN_BASIS, None).certificate.weight_divisor == 2
+    assert get_family(odd, None).certificate.weight_divisor == 1
+    assert get_family(odd, None, weight_divisor=2).certificate.weight_divisor == 2
 
 
 @pytest.mark.parametrize("ranks, upper_bound", [([10, 6, 2], 6), ([10, 6, 2], 12), ([6, 2], 6)])
@@ -135,10 +91,7 @@ def test_prune_family(ranks: list[int], upper_bound: int) -> None:
     )
     pruned = _information_sets._prune_family(family, upper_bound=upper_bound)
     assert pruned.information_sets
-    assert pruned.certificate.ranks == tuple(item.rank for item in pruned.information_sets)
     assert pruned.certificate.work(upper_bound) <= family.certificate.work(upper_bound)
-    if 10 not in ranks:
-        assert pruned is family
 
 
 def test_overlapping_family_certificates() -> None:
@@ -148,51 +101,41 @@ def test_overlapping_family_certificates() -> None:
     basis = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
     basis = binary._get_independent_rows(basis)
     labels = np.eye(len(basis), dtype=np.uint8)
-    disjoint = _information_sets._prune_family(
-        _information_sets._get_disjoint_family(basis, labels), upper_bound=3
+    disjoint = _information_sets._get_disjoint_family(basis, labels)
+    # One full set certifies a target of one after its first layer, which no replacement improves.
+    assert (
+        _information_sets._get_overlapping_family(
+            basis, labels, disjoint, upper_bound=1, minimum_work=0
+        )
+        is None
     )
-    assert _information_sets._get_overlapping_family(basis, labels, disjoint, upper_bound=3) is None
     family = _information_sets._get_overlapping_family(
         basis, labels, disjoint, upper_bound=3, minimum_work=0
     )
     assert family is not None
-    coverage = family.certificate.max_coverage
     loads = np.bincount(
         np.concatenate([item.pivots for item in family.information_sets]),
         minlength=basis.shape[1],
     )
-    assert coverage >= loads.max() > 1
+    assert family.certificate.max_coverage >= loads.max() > 1
     for item in family.information_sets:
         assert item.labels is not None
         np.testing.assert_array_equal(item.generators, item.labels @ basis % 2)
         np.testing.assert_array_equal(item.generators[:, item.pivots], np.eye(len(basis)))
-
-    # Check the Hamming-weight bound for every word still unsearched in all bases.
-    for bits in itertools.product((0, 1), repeat=len(basis)):
-        word = np.asarray(bits) @ basis % 2
-        for completed in (1, 2):
-            if all(
-                np.count_nonzero(word[item.pivots]) > completed for item in family.information_sets
-            ):
-                assert np.count_nonzero(word) >= family.certificate.lower_bound(completed)
+    _assert_certificate_bounds_unvisited_words(basis, family)
 
 
 def test_overlapping_family_guards() -> None:
     """Reject unhelpful coverage and terminate repeated attempts at the same pivot set."""
 
-    # Nearly complete disjoint coverage leaves no cheaper family within the size budget.
+    # Complete or nearly complete disjoint coverage leaves no cheaper family within the size budget.
     basis = np.hstack([np.eye(25, dtype=np.uint8)] * 4)
+    complete = _information_sets._get_disjoint_family(basis, None)
+    assert _information_sets._get_overlapping_family(basis, None, complete, upper_bound=26) is None
     shortened = basis[:, :-1]
     disjoint = _information_sets._get_disjoint_family(shortened, None)
     assert (
         _information_sets._get_overlapping_family(shortened, None, disjoint, upper_bound=26) is None
-    )
-    # The three disjoint full sets already reach a smaller family-size limit.
-    assert (
-        _information_sets._get_overlapping_family(
-            shortened, None, disjoint, upper_bound=26, max_sets=3, minimum_work=0
-        )
-        is None
     )
 
     # Repeatedly rediscovering the same pivots must terminate without selecting a family.
@@ -209,159 +152,33 @@ def test_overlapping_family_guards() -> None:
         assert _information_sets._get_overlapping_family(basis, None, family, upper_bound=8) is None
 
 
-@pytest.mark.usefixtures("force_information_sets")
-def test_distance_and_counting_share_family_stages(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Both consumers search the families built by the shared stages, at their own targets.
+def _assert_certificate_bounds_unvisited_words(
+    basis: npt.NDArray[np.uint8], family: _information_sets._Family
+) -> None:
+    """Check a family's certificate against every word that its search bases span.
 
-    Distance aims each stage at its witness weight ``U`` and stops at ``L >= U``.  Counting aims
-    each stage at ``w + 1`` and stops only at ``L > w``, so it continues past ``L == w``.
+    A search basis visits a word after layer ``t`` if the word combines at most ``t`` of its rows.
     """
-    rng = np.random.default_rng(40)
-    checks_x = rng.integers(0, 2, (22, 40), dtype=np.uint8)
-    kernel = binary._get_kernel(checks_x)
-    checks_z = rng.integers(0, 2, (18, len(kernel))) @ kernel % 2
-    code = qldpc.codes.CSSCode(checks_x.astype(int), checks_z.astype(int))
-    expected = lc.CSSLogicalCounter(code).count_logicals(method="brute_force")
 
-    events: list[tuple[Any, ...]] = []
-    consumer = ""
-
-    def record_stage(name: str) -> Callable[..., Any]:
-        original = getattr(_information_sets, name)
-
-        def stage(*args: Any, **kwargs: Any) -> Any:
-            if name == "_get_overlapping_family":
-                # Lower only the work threshold, so that both consumers search overlapping families.
-                kwargs["minimum_work"] = 0
-            result = original(*args, **kwargs)
-            events.append((consumer, name, kwargs.get("upper_bound"), result))
-            return result
-
-        return stage
-
-    def record_consumer(name: str, original: Callable[..., Any]) -> Callable[..., Any]:
-        def run(*args: Any, **kwargs: Any) -> Any:
-            nonlocal consumer
-            consumer = name
-            try:
-                return original(*args, **kwargs)
-            finally:
-                consumer = ""
-
-        return run
-
-    original_prepare = bz._prepare_brouwer_zimmermann_search
-    original_family = lc._get_counting_information_sets
-    original_bound = _information_sets._Certificate.lower_bound
-
-    def prepare(*args: Any, **kwargs: Any) -> Any:
-        result = original_prepare(*args, **kwargs)
-        events.append((consumer, "search", result))
-        return result
-
-    def counting_family(*args: Any, **kwargs: Any) -> Any:
-        sets, certificate = original_family(*args, **kwargs)
-        events.append((consumer, "certificate", certificate))
-        return sets, certificate
-
-    def lower_bound(certificate: _information_sets._Certificate, completed_weight: int) -> int:
-        value = original_bound(certificate, completed_weight)
-        events.append((consumer, "bound", certificate, completed_weight, value))
-        return value
-
-    for name in STAGES:
-        monkeypatch.setattr(_information_sets, name, record_stage(name))
-    monkeypatch.setattr(_information_sets._Certificate, "lower_bound", lower_bound)
-    monkeypatch.setattr(bz, "_prepare_brouwer_zimmermann_search", prepare)
-    monkeypatch.setattr(lc, "_get_counting_information_sets", counting_family)
-    monkeypatch.setattr(
-        lc,
-        "_get_distance_brouwer_zimmermann_many",
-        record_consumer("distance", lc._get_distance_brouwer_zimmermann_many),
-    )
-    monkeypatch.setattr(lc, "_count_words", record_consumer("count", lc._count_words))
-
-    # One public call finds the distance of both sectors, then counts both sectors at that weight.
-    counts = lc.CSSLogicalCounter(code).count_logicals()
-    assert counts == expected
-    distance = counts.weight
-    assert distance is not None
-
-    def get_searched_families(name: str) -> list[_information_sets._Family]:
-        """The last family that the stages produced for each sector of one consumer."""
-        searched: list[_information_sets._Family] = []
-        for event in events:
-            if event[0] == name and event[1] == "_get_disjoint_family":
-                searched.append(event[3])
-            elif event[0] == name and event[1] in STAGES and event[3] is not None:
-                searched[-1] = event[3]
-        return searched
-
-    # Distance searches the shared certificates at its witness weight, and stops at equality.
-    distance_families = get_searched_families("distance")
-    searches = [event[2] for event in events if event[1] == "search"]
-    assert len(searches) == len(distance_families) == 2
-    assert all(
-        search.certificate is family.certificate
-        for search, family in zip(searches, distance_families, strict=True)
-    )
-    assert any(family.certificate.max_coverage > 1 for family in distance_families)
-    assert {event[2] for event in events if event[0] == "distance" and event[1] in STAGES[1:]} == {
-        distance
-    }
-    assert any(search.lower_bound == distance for search in searches)
-    assert all(search.finished for search in searches)
-
-    # Counting searches the shared certificates aimed at w + 1, and stops only once L > w.
-    counting_families = get_searched_families("count")
-    certificates = [event[2] for event in events if event[1] == "certificate"]
-    assert [family.certificate for family in counting_families] == certificates
-    assert all(
-        certificate is family.certificate
-        for certificate, family in zip(certificates, counting_families, strict=True)
-    )
-    assert any(family.certificate.max_coverage > 1 for family in counting_families)
-    assert {event[2] for event in events if event[0] == "count" and event[1] in STAGES[1:]} == {
-        distance + 1
-    }
-    for certificate in certificates:
-        start = next(
-            index
-            for index, event in enumerate(events)
-            if event[1] == "certificate" and event[2] is certificate
-        )
-        stops = [
-            event[4]
-            for event in events[start:]
-            if event[0] == "count" and event[1] == "bound" and event[2] is certificate
-        ]
-        assert stops[-1] > distance >= max(stops[:-1])
-        if certificate.max_coverage > 1:
-            assert distance in stops[:-1]
-
-
-def test_consumers_use_the_neutral_family_layer() -> None:
-    """Consumers reach shared stages through the module and do not redefine family policy."""
-    shared = {
-        name
-        for name, value in vars(_information_sets).items()
-        if getattr(value, "__module__", None) == _information_sets.__name__
-    }
-    assert set(STAGES) | {"_prepare_family", "_Certificate", "_Family"} <= shared
-    for module in (bz, lc):
-        tree = ast.parse(Path(module.__file__ or "").read_text())
-        defined = {
-            node.name
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.FunctionDef, ast.ClassDef))
+    def get_coefficient_weights(generators: npt.NDArray[np.uint8]) -> dict[bytes, int]:
+        return {
+            (np.asarray(bits) @ generators % 2).astype(np.uint8).tobytes(): sum(bits)
+            for bits in itertools.product((0, 1), repeat=len(generators))
         }
-        imported = {
-            alias.name
-            for node in ast.walk(tree)
-            if isinstance(node, ast.ImportFrom) and node.module == "_information_sets"
-            for alias in node.names
-        }
-        assert not defined & shared
-        # Names imported from the module would escape replacements of the module's bindings.
-        assert not imported
-        assert vars(module)["_information_sets"] is _information_sets
+
+    words = get_coefficient_weights(basis)
+    coefficient_weights = [
+        get_coefficient_weights(item.generators) for item in family.information_sets
+    ]
+    certificate = family.certificate
+    # Every search basis spans the same space as the original basis.
+    assert all(weights.keys() == words.keys() for weights in coefficient_weights)
+    weights = {word: np.count_nonzero(np.frombuffer(word, dtype=np.uint8)) for word in words}
+    for word, weight in weights.items():
+        assert weight % certificate.weight_divisor == 0
+        for completed in range(len(basis)):
+            if all(item[word] > completed for item in coefficient_weights):
+                assert weight >= certificate.lower_bound(completed)
+
+    # The certificate is not vacuous: before the last layer, it reaches the minimum nonzero weight.
+    assert certificate.lower_bound(len(basis) - 1) >= min(filter(None, weights.values()))

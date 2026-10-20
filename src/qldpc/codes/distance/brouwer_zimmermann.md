@@ -467,7 +467,7 @@ Heuristic tunables are identified by parameter name so that their current values
 [`__init__.py`](__init__.py) exports names from [core.py](core.py) and [logical_counts.py](logical_counts.py).
 [logical_counts.py](logical_counts.py) counts the logical operators of a given weight exactly.
 It builds its families and certificates with the same stages of [_information_sets.py](_information_sets.py) as the distance search, under the constraint in [Section 5](#5-correctness-requirements).
-Both consumers import [_information_sets.py](_information_sets.py) as a module, so a replacement of one of its stages applies to both.
+The family policy lives only in that module, so a change to it applies to both consumers.
 [core.py](core.py) calls [brouwer_zimmermann.py](brouwer_zimmermann.py) and [brute_force.py](brute_force.py), and [brouwer_zimmermann.py](brouwer_zimmermann.py) calls [brute_force.py](brute_force.py) for its exhaustive routes.
 All three modules, and [_information_sets.py](_information_sets.py), use [_binary.py](_binary.py).
 `get_distance_css_brouwer_zimmermann` builds an adapted basis ([Section 3.4](#34-quotient-labels-for-the-stabilizer-test)) for each nontrivial sector, then passes the resulting problems to `_get_distance_brouwer_zimmermann_many`.
@@ -617,8 +617,8 @@ Changes to the BZ algorithm can use different representations, certificates, and
   Return the exact minimum unless taking an early exit permitted by `cutoff`.
   Such an early exit returns the weight of a known eligible witness, an upper bound between the distance and `cutoff` ([Section 4.5](#45-behavior-spanning-files)).
 
-Representative correctness tests check certificate validity against exhaustive words (`test_overlapping_family_certificates` in [_information_sets_test.py](_information_sets_test.py)) and joint-search results with distinct sector certificates (`test_brouwer_zimmermann_sector_certificates` in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py)).
-`test_distance_and_counting_share_family_stages` checks that both consumers search the certificates of the shared stages, aimed at `U` and `w+1` respectively.
+Representative correctness tests check certificate validity against exhaustive words, including rank-deficient blocks, inferred parity, and overlapping coverage (`test_family_certificates` and `test_overlapping_family_certificates` in [_information_sets_test.py](_information_sets_test.py)), and joint-search results with distinct sector certificates (`test_brouwer_zimmermann_sector_certificates` in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py)).
+`test_counting_continues_at_an_equal_lower_bound` in [logical_counts_test.py](logical_counts_test.py) checks the strict counting stop with a count that a stop at `L(t) = w` would miss.
 In [core_test.py](core_test.py), `test_brouwer_zimmermann_random_cross_checks` forces the BZ route and compares both homogeneous and general Pauli problems with exhaustive results.
 
 Performance tests also check broad work budgets, and helper tests exercise the current implementation's interfaces.

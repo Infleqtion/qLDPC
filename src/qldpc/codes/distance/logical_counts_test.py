@@ -169,6 +169,15 @@ def test_counts_match_enumeration(method: DistanceMethod) -> None:
         assert counter.count_logicals(distance, method=method, full_pauli=True) == expected_full
 
 
+def test_counting_continues_at_an_equal_lower_bound() -> None:
+    """With no checks, every one of the three words of weight two is a logical of each type.
+
+    After the first layer, the bound on unvisited words equals two, so the count must continue.
+    """
+    counter = _counter(np.zeros((0, 3)), np.zeros((0, 3)))
+    assert counter.count_logicals(2) == Counts(2, 3, 3, None)
+
+
 @pytest.mark.parametrize("method", METHODS)
 def test_full_pauli_counts_away_from_the_distance(method: DistanceMethod) -> None:
     counter = lc.CSSLogicalCounter(codes.SteaneCode())

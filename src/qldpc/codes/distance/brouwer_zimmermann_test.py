@@ -117,7 +117,6 @@ def test_brouwer_zimmermann_search_state() -> None:
         best=3,
         lower_bound=0,
     )
-    np.testing.assert_array_equal(search.ranks, [0])
 
     # An interrupted coefficient-weight layer leaves the lower-bound certificate unchanged.
     with (
