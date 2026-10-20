@@ -22,28 +22,25 @@ def test_get_distance_classical(block_size: int) -> None:
     """get_distance_classical visits every nontrivial XOR combination of generators exactly once."""
     generators = np.random.randint(2, size=(9, 137))
 
-    # The mocked Hamming-weight function records every packed nonzero generator combination once.
+    # The mocked popcount records every packed nonzero generator combination once.
     observed_bitstrings: list[tuple[int, ...]] = []
 
-    def _mock_hamming_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
+    bitwise_count = np.bitwise_count
+
+    def _mock_bitwise_count(
+        arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, buf=buf, out=out)
+        return bitwise_count(arr, out=out)
 
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
-        return_value=(_mock_hamming_weight, 0),
-    ):
+    with mock.patch.object(np, "bitwise_count", _mock_bitwise_count):
         distance = qldpc.codes.distance.get_distance_classical(
             np.vstack([generators, generators[0], generators[0] ^ generators[1]]),
             block_size=block_size,
             method="brute_force",
         )
 
-    int_generators = binary._rows_to_ints(generators)
+    int_generators = binary._pack_bits(np.asarray(generators, dtype=np.uint8))
     expected_bitstrings = [
         tuple(np.bitwise_xor.reduce(np.vstack(gens)).tolist())
         for n in range(1, len(generators) + 1)
@@ -67,22 +64,19 @@ def test_get_distance_quantum(block_size: int) -> None:
     stabilizers = np.random.randint(2, size=(8, 97))
     logical_ops = np.random.randint(2, size=(5, 97))
 
-    # The mocked Hamming-weight function records every nonzero logical combination combined
+    # The mocked popcount records every nonzero logical combination combined
     # with every stabilizer combination, including the empty one.
     observed_bitstrings: list[tuple[int, ...]] = []
 
-    def _mock_hamming_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
+    bitwise_count = np.bitwise_count
+
+    def _mock_bitwise_count(
+        arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, buf=buf, out=out)
+        return bitwise_count(arr, out=out)
 
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
-        return_value=(_mock_hamming_weight, 0),
-    ):
+    with mock.patch.object(np, "bitwise_count", _mock_bitwise_count):
         distance = qldpc.codes.distance.get_distance_quantum(
             np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
             np.vstack([stabilizers, stabilizers[0]]),
@@ -91,8 +85,8 @@ def test_get_distance_quantum(block_size: int) -> None:
             method="brute_force",
         )
 
-    int_stabilizers = binary._rows_to_ints(stabilizers)
-    int_logical_ops = binary._rows_to_ints(logical_ops)
+    int_stabilizers = binary._pack_bits(np.asarray(stabilizers, dtype=np.uint8))
+    int_logical_ops = binary._pack_bits(np.asarray(logical_ops, dtype=np.uint8))
     expected_bitstrings = [
         tuple(np.bitwise_xor.reduce(np.vstack(stabs + ops)).tolist())
         for ns in range(len(stabilizers) + 1)
@@ -123,17 +117,12 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
     observed_bitstrings: list[tuple[int, ...]] = []
 
     def _mock_symplectic_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
+        arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._symplectic_weight(arr, buf=buf, out=out)
+        return binary._symplectic_weight(arr, out=out)
 
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_symplectic_weight_fn",
-        return_value=(_mock_symplectic_weight, 0),
-    ):
+    with mock.patch("qldpc.codes.distance.brute_force._symplectic_weight", _mock_symplectic_weight):
         distance = qldpc.codes.distance.get_distance_quantum(
             np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
             np.vstack([stabilizers, stabilizers[0]]),
@@ -142,8 +131,8 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
             method="brute_force",
         )
 
-    int_stabilizers = binary._rows_to_ints(binary._riffle(stabilizers))
-    int_logical_ops = binary._rows_to_ints(binary._riffle(logical_ops))
+    int_stabilizers = binary._pack_bits(np.asarray(binary._riffle(stabilizers), dtype=np.uint8))
+    int_logical_ops = binary._pack_bits(np.asarray(binary._riffle(logical_ops), dtype=np.uint8))
     expected_bitstrings = np.array(
         [
             np.bitwise_xor.reduce(np.vstack(stabs + ops))

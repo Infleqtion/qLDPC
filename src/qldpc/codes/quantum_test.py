@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import os
+import random
 import subprocess
 import sys
 import unittest.mock
@@ -480,6 +481,8 @@ def test_quasi_cyclic_codes() -> None:
     assert len(code.symbols) == 3
 
     assert_valid_subgraphs(code)
+    with pytest.raises(ValueError, match="does not use an edge coloration strategy"):
+        code.get_syndrome_subgraphs(strategy="smallest_last")
 
     # a symbol whose cyclic group is trivial acts as the identity, so all of its powers agree
     assert np.array_equal(code.matrix, codes.QCCode([2, 1, 3], x, x * y**2).matrix)
@@ -1093,11 +1096,9 @@ def test_random_quantum_tanner_code_is_reproducible() -> None:
     # reusing one subset for both sides is likewise reproducible
     assert len({matrix_for(seed=7, one_subset=True) for _ in range(3)}) == 1
 
-    # without a seed the code is still drawn at random.  Seeding sympy's own generator, which the
-    # unseeded draw consumes, keeps this check from depending on chance, and restoring it afterwards
-    # keeps the fixed stream out of everything that runs later.
-    with abstract.groups._preserve_sympy_rng():
-        sympy.core.random.seed(0)
+    # without a seed the code is still drawn at random, from SymPy's global generator.  Replacing
+    # that generator with a seeded one for this check keeps it from depending on chance.
+    with unittest.mock.patch.object(sympy.core.random, "rng", random.Random(0)):
         assert len({matrix_for() for _ in range(4)}) > 1
 
     # the code is also independent of the hash seed, which sets the iteration order of the sets of
@@ -1149,7 +1150,7 @@ def test_surface_codes(rows: int = 3, cols: int = 2) -> None:
     assert code.num_qudits == rows * cols + (rows - 1) * (cols - 1)
     with (
         unittest.mock.patch("qldpc.codes.CSSCode.get_distance_if_known", return_value=None),
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
     ):
         assert cols <= code.get_distance(Pauli.X, bound=True) <= len(code)
         assert rows <= code.get_distance(Pauli.Z, bound=True) <= len(code)

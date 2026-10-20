@@ -138,7 +138,7 @@ def test_installed_libgap_import_contract() -> None:
     external.gap._get_output_libgap(  # pragma: no cover - optional dependency
         ("stale_warning_source := [1, 2, 3];;",), libgap
     )
-    with pytest.raises(ValueError) as error:  # pragma: no cover - optional dependency
+    with pytest.raises(external.gap.GAPError) as error:  # pragma: no cover - optional dependency
         external.gap._get_output_libgap(('Error("current failure");;',), libgap)
     assert "current failure" in str(error.value)  # pragma: no cover - optional dependency
     assert "stale_warning_source" not in str(error.value)  # pragma: no cover
@@ -262,7 +262,7 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
         with (
             unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
             unittest.mock.patch("subprocess.run", return_value=get_mock_process("", "error")),
-            pytest.raises(ValueError, match="Error encountered when running GAP"),
+            pytest.raises(external.gap.GAPError, match="Error encountered when running GAP"),
         ):
             assert external.gap.get_output()
 
@@ -270,7 +270,7 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
         with (
             unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
             unittest.mock.patch("subprocess.run", return_value=get_mock_process(returncode=1)),
-            pytest.raises(ValueError, match="Error encountered when running GAP"),
+            pytest.raises(external.gap.GAPError, match="Error encountered when running GAP"),
         ):
             external.gap.get_output()
 
@@ -362,7 +362,7 @@ def test_get_output_libgap() -> None:
             "qldpc.external.gap._get_libgap", return_value=MockLibGap(RuntimeError("bad command"))
         ),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        pytest.raises(ValueError, match="through libgap"),
+        pytest.raises(external.gap.GAPError, match="through libgap"),
     ):
         external.gap.get_output("bad")
 

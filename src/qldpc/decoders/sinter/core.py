@@ -20,7 +20,7 @@ from ..construction.legacy import (
     get_legacy_decoder_migration_message,
     reject_removed_decoder_args,
 )
-from ..construction.resolution import _resolve_observable_decoder, reject_prebuilt_decoder
+from ..construction.resolution import reject_prebuilt_decoder, resolve_observable_decoder
 from ..construction.specs import DecoderSpec, DeferredDecoderInput
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, ObservableDecoder, as_error_decoder
@@ -76,6 +76,12 @@ class SinterDecoder(_SinterDecoder):
                 ``decoder=`` instead.
         """
         reject_removed_decoder_args(decoder_kwargs)
+        if "priors_arg" in decoder_kwargs or "log_likelihood_priors" in decoder_kwargs:
+            raise ValueError(
+                "The 'priors_arg' and 'log_likelihood_priors' arguments to a SinterDecoder are"
+                " DEFUNCT and should no longer be necessary.\nIf you need these arguments restored,"
+                " please open an issue at https://github.com/qLDPCOrg/qLDPC/issues"
+            )
         reject_prebuilt_decoder(decoder, self._prebuilt_decoder_rejection_reason)
         if (
             decompose_errors
@@ -97,12 +103,6 @@ class SinterDecoder(_SinterDecoder):
                 DeprecationWarning,
                 stacklevel=get_external_caller_stacklevel(),
             )
-        if "priors_arg" in decoder_kwargs or "log_likelihood_priors" in decoder_kwargs:
-            raise ValueError(
-                "The 'priors_arg' and 'log_likelihood_priors' arguments to a SinterDecoder are"
-                " DEFUNCT and should no longer be necessary.\nIf you need these arguments restored,"
-                " please open an issue at https://github.com/qLDPCOrg/qLDPC/issues"
-            )
 
     def compile_decoder_for_dem(self, dem: stim.DetectorErrorModel) -> CompiledSinterDecoder:
         """Creates a decoder preconfigured for the given detector error model.
@@ -112,7 +112,7 @@ class SinterDecoder(_SinterDecoder):
         dem_arrays = DetectorErrorModelArrays(
             dem, simplify=self.simplify, decompose_errors=self.decompose_errors
         )
-        observable_decoder = _resolve_observable_decoder(
+        observable_decoder = resolve_observable_decoder(
             dem_arrays.to_dem(),
             self.decoder_input,
             self.decoder_kwargs.copy(),

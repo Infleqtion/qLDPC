@@ -21,8 +21,11 @@ from .common import (
     QuditCode,
 )
 from .distance import (
+    CSSLogicalCounter,
+    CSSLogicalCounts,
     DistanceBackend,
     DistanceMethod,
+    count_logicals_css,
     get_distance_classical,
     get_distance_css_brouwer_zimmermann,
     get_distance_quantum,
@@ -73,6 +76,8 @@ __all__ = [
     "CHGPCode",
     "CRCode",
     "CSSCode",
+    "CSSLogicalCounter",
+    "CSSLogicalCounts",
     "ClassicalCode",
     "CyclicCode",
     "DistanceBackend",
@@ -113,6 +118,7 @@ __all__ = [
     "ToricCode",
     "TrivialCode",
     "TwoGrossCode",
+    "count_logicals_css",
     "get_distance_classical",
     "get_distance_css_brouwer_zimmermann",
     "get_distance_quantum",

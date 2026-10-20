@@ -304,13 +304,13 @@ def test_css_cache_boundaries_and_exhaustion(cache_size: int) -> None:
     assert oracle.decide(31, 5).within_bound
 
 
-def test_css_packed_sectors_and_fallback() -> None:
-    """Unaligned X/Z boundaries and wide counts use actual sector weights, including fallback."""
-    n = 130
+@pytest.mark.parametrize("weight", ["pauli", "css"])
+@pytest.mark.parametrize("n", [130, 257])
+def test_wide_packed_sectors(n: int, weight: Literal["pauli", "css"]) -> None:
+    """Unaligned sector boundaries and weights above 255 retain the actual metric weight."""
     matrix = np.hstack([np.zeros((n, n), dtype=np.uint8), np.eye(n, dtype=np.uint8)])
-    oracle = bounded.PauliCosetSearch(matrix, weight="css")
-    with mock.patch.object(np, "bitwise_count", None, create=True):
-        decision = oracle.decide((1 << n) - 1, n)
+    oracle = bounded.PauliCosetSearch(matrix, weight=weight)
+    decision = oracle.decide((1 << n) - 1, n)
     assert decision.within_bound
     assert oracle._weight(decision.representative) == n
     assert oracle.preparations == 1

@@ -9,11 +9,10 @@ import numpy.typing as npt
 
 from ._binary import (
     _count_trailing_zeros,
-    _get_hamming_weight_fn,
-    _get_symplectic_weight_fn,
     _inplace_rowsum,
+    _pack_bits,
     _riffle,
-    _rows_to_ints,
+    _symplectic_weight,
 )
 
 ####################################################################################################
@@ -31,16 +30,13 @@ def _get_distance_quantum_brute_force(
     """Enumerate independent logical and excluded bases prepared or verified in this module."""
     num_bits = np.shape(logical_ops)[-1]
 
-    if homogeneous:
-        weight_func, num_buffers = _get_hamming_weight_fn()
-    else:
-        weight_func, num_buffers = _get_symplectic_weight_fn()
-
+    weight_func = np.bitwise_count if homogeneous else _symplectic_weight
+    if not homogeneous:
         logical_ops = _riffle(logical_ops)
         stabilizers = _riffle(stabilizers)
 
-    int_logical_ops = _rows_to_ints(logical_ops, dtype=np.uint64)
-    int_stabilizers = _rows_to_ints(stabilizers, dtype=np.uint64)
+    int_logical_ops = _pack_bits(np.asarray(logical_ops, dtype=np.uint8))
+    int_stabilizers = _pack_bits(np.asarray(stabilizers, dtype=np.uint8))
     num_stabilizers = len(int_stabilizers)
 
     # Number of generators to include in the operational array.  Most calculations will then be
@@ -76,10 +72,9 @@ def _get_distance_quantum_brute_force(
     # np.bitwise_count's uint8 result cast to uint64, avoiding the weight-reduction overflow for
     # codes with >= 256 columns (the pre-loop call below casts explicitly for the same reason).
     out = np.empty_like(arrayf)
-    bufs = [np.empty_like(arrayf) for _ in range(num_buffers)]
 
     # Min weight of the block containing logical ops.  Cast to uint64 because np.bitwise_count
-    # (numpy >= 2) returns uint8, which would overflow the reduction below for >= 256 columns.
+    # returns uint8 without ``out=``, which would overflow the reduction below for >= 256 columns.
     weights = np.asarray(weight_func(arrayf[2**num_stabilizers :]), dtype=np.uint64)
     min_weight = _inplace_rowsum(weights).min(initial=num_bits)
     if min_weight <= cutoff:
@@ -95,14 +90,14 @@ def _get_distance_quantum_brute_force(
     # bound is reached (see Returns).
     for li in range(1, 2 ** len(int_logical_ops)):
         arrayf ^= int_logical_ops[_count_trailing_zeros(li)]
-        weights = weight_func(arrayf, *bufs, out=out)
+        weights = weight_func(arrayf, out=out)
         min_weight = _inplace_rowsum(weights).min(initial=min_weight)
         if min_weight <= cutoff:
             return int(min_weight)
 
         for si in range(1, 2 ** len(int_stabilizers)):
             arrayf ^= int_stabilizers[_count_trailing_zeros(si)]
-            weights = weight_func(arrayf, *bufs, out=out)
+            weights = weight_func(arrayf, out=out)
             min_weight = _inplace_rowsum(weights).min(initial=min_weight)
             if min_weight <= cutoff:
                 return int(min_weight)

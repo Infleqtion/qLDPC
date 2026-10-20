@@ -291,6 +291,11 @@ def _build_matching(
         pcm = dem_arrays.detector_flip_matrix
         if decoder_args.get("weights") is not None:
             raise ValueError("Cannot set error weights when initializing a MWPM decoder from a DEM")
+        if decoder_args.get("error_probabilities") is not None:
+            raise ValueError(
+                "Cannot set error probabilities when initializing a MWPM decoder from a DEM, which"
+                " supplies its own"
+            )
         decoder_args["weights"] = np.log((1 - dem_arrays.error_probs) / dem_arrays.error_probs)
         if predict_observables:
             decoder_args["faults_matrix"] = dem_arrays.observable_flip_matrix
@@ -423,8 +428,11 @@ def _get_matching_type() -> type[Any]:
     return _MATCHING_TYPE
 
 
-def __getattr__(name: str) -> Any:
-    """Load the protocol-compatible PyMatching subclass only when requested."""
-    if name != "Matching":
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    return _get_matching_type()
+if not TYPE_CHECKING:
+    # Static type checkers see the backend classes declared above, rather than an Any fallback.
+
+    def __getattr__(name: str) -> Any:
+        """Load the protocol-compatible PyMatching subclass only when requested."""
+        if name != "Matching":
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        return _get_matching_type()

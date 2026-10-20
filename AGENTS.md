@@ -54,7 +54,7 @@ Do not copy transient project history, machine-specific paths, or local-session 
 | [`src/qldpc/codes/code_capacity.py`](src/qldpc/codes/code_capacity.py) | Code-capacity detector error models, observable-decoder orchestration, and sector reuse | [`code_capacity_test.py`](src/qldpc/codes/code_capacity_test.py), [`common_test.py`](src/qldpc/codes/common_test.py) |
 | [`src/qldpc/codes/classical.py`](src/qldpc/codes/classical.py) | Classical code families | [`classical_test.py`](src/qldpc/codes/classical_test.py), [`basics.ipynb`](examples/basics.ipynb) |
 | [`src/qldpc/codes/quantum.py`](src/qldpc/codes/quantum.py) | Quantum, CSS, subsystem, product, and geometric code families | [`quantum_test.py`](src/qldpc/codes/quantum_test.py), [`bivariate_bicycle_codes.ipynb`](examples/bivariate_bicycle_codes.ipynb) |
-| [`src/qldpc/codes/distance/`](src/qldpc/codes/distance/) | Exact binary classical and quantum distance enumeration | Co-located `*_test.py` files |
+| [`src/qldpc/codes/distance/`](src/qldpc/codes/distance/) | Exact binary classical and quantum distance enumeration, and exact counts of CSS logical operators of a given weight ([`logical_counts.py`](src/qldpc/codes/distance/logical_counts.py)) | Co-located `*_test.py` files |
 | [`src/qldpc/abstract/`](src/qldpc/abstract/) | Groups, group rings, `RingArray`, semisimple linear algebra, and Wedderburn--Artin transforms | Co-located `*_test.py` files in the same directory |
 | [`src/qldpc/math.py`](src/qldpc/math.py) | Symplectic and finite-field array helpers | [`math_test.py`](src/qldpc/math_test.py) |
 | [`src/qldpc/objects.py`](src/qldpc/objects.py) | Pauli labels, graph nodes, Cayley complexes, and chain complexes | [`objects_test.py`](src/qldpc/objects_test.py) |
@@ -216,6 +216,7 @@ Follow the [adding a decoder guide](docs/source/adding_decoders.rst) for a custo
 4. When a public limitation changes, update the relevant function or class docstring and every README or guide that repeats it in the same pull request.
 5. Keep one prose sentence per physical source line in `.rst`, `.md`, and Markdown notebook cells.
    Put `First sentence.` and `Second sentence.` on separate source lines; leave code blocks, equations, and table syntax intact.
+   Python comments and docstrings instead use ordinary paragraphs: separate sentences with two spaces and fill lines to the 100-column limit.
 6. Run the strict documentation build before considering the change complete.
 
 ## Validation commands

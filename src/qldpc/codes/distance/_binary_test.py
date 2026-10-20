@@ -5,11 +5,14 @@
 from __future__ import annotations
 
 import itertools
-from unittest import mock
 
+import galois
 import numpy as np
 import numpy.typing as npt
 import pytest
+from llvmlite import ir
+from numba import njit, types
+from numba.core.registry import cpu_target
 
 import qldpc
 
@@ -41,11 +44,16 @@ def test_binary_matrices_and_nested_bases() -> None:
     np.testing.assert_array_equal(tags, [[0], [1]])
 
 
-def test_packed_row_weights_do_not_overflow() -> None:
-    packed = np.full((2, 5), np.iinfo(np.uint64).max, dtype=np.uint64)
-    packed[1, -1] = 0
-    weight_func, _ = binary._get_hamming_weight_fn()
-    np.testing.assert_array_equal(binary._get_packed_row_weights(packed, weight_func), [320, 256])
+@pytest.mark.parametrize("shape", [(0, 4), (3, 7), (5, 5), (4, 70)])
+def test_get_kernel(shape: tuple[int, int]) -> None:
+    """The kernel basis is independent, annihilated by the matrix, and of full nullity."""
+    matrix = np.random.default_rng(shape[1]).integers(0, 2, shape, dtype=np.uint8)
+    matrix[-1:] = matrix[:1]
+    kernel = binary._get_kernel(matrix)
+    rank = len(binary._get_independent_rows(matrix))
+    assert kernel.dtype == np.uint8 and kernel.shape == (shape[1] - rank, shape[1])
+    assert not np.any(matrix.astype(int) @ kernel.T % 2)
+    assert len(binary._get_independent_rows(kernel)) == len(kernel)
 
 
 def test_riffle_and_symplectic_isometry() -> None:
@@ -62,110 +70,18 @@ def test_riffle_and_symplectic_isometry() -> None:
     )
 
 
-def test_hamming_weight() -> None:
-    """Validate _hamming_weight against a simple reference bit-counting implementation."""
-    vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)
-    expected_weights = _bitwise_count(vals)
-
-    weights = binary._hamming_weight(vals)
-    np.testing.assert_array_equal(weights, expected_weights)
-
-    buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = binary._hamming_weight(vals, buf=buf, out=out)
-    np.testing.assert_array_equal(weights, expected_weights)
-    assert out is weights
-
-
 def test_symplectic_weight() -> None:
     """Validate _symplectic_weight against the reference bit-counting implementation."""
     vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)
-    weights = binary._symplectic_weight(vals)
     expected_weights = _bitwise_count((vals | (vals >> np.uint64(1))) & 0x5555555555555555)
+    weights = binary._symplectic_weight(vals)
+    assert weights.dtype == np.uint64
     np.testing.assert_array_equal(weights, expected_weights)
 
-    buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = binary._symplectic_weight(vals, buf=buf, out=out)
+    out = np.random.randint(0, 2**64, size=vals.shape, dtype=vals.dtype)
+    weights = binary._symplectic_weight(vals, out=out)
     np.testing.assert_array_equal(weights, expected_weights)
-    assert out is weights
-
-
-def test_get_hamming_weight_fn() -> None:
-    """_get_hamming_weight_fn selects NumPy bitcount when available and the fallback otherwise."""
-    generators = np.random.randint(2, size=(4, 64), dtype=np.uint64)
-    weight_fn, nbuf = binary._get_hamming_weight_fn()
-    weights_default = weight_fn(generators)
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
-        weight_fn, nbuf = binary._get_hamming_weight_fn()
-        assert weight_fn is not binary._hamming_weight
-        assert nbuf == 0
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-        patched.assert_called_once()
-
-    with mock.patch.object(np, "bitwise_count", None, create=True):
-        weight_fn, nbuf = binary._get_hamming_weight_fn()
-        assert weight_fn is binary._hamming_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-
-def test_get_symplectic_weight_fn() -> None:
-    """_get_symplectic_weight_fn uses NumPy bitcount when available and the fallback otherwise."""
-    generators = np.random.randint(2, size=(4, 56), dtype=np.uint64)
-    weight_fn, nbuf = binary._get_symplectic_weight_fn()
-    weights_default = weight_fn(generators)
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    # This branch verifies the NumPy popcount backend for packed symplectic words.
-    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
-        weight_fn, nbuf = binary._get_symplectic_weight_fn()
-        assert weight_fn is not binary._hamming_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-        patched.assert_called_once()
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-    # This branch verifies the fallback popcount backend for packed symplectic words.
-    with mock.patch.object(np, "bitwise_count", None, create=True):
-        weight_fn, nbuf = binary._get_symplectic_weight_fn()
-        assert weight_fn is binary._symplectic_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
+    assert weights is out
 
 
 @pytest.mark.parametrize(
@@ -186,55 +102,6 @@ def test_inplace_rowsum(width: int) -> None:
     actual = binary._inplace_rowsum(arr)
     np.testing.assert_array_equal(actual, expected)
     np.testing.assert_array_equal(actual, arr[:, 0])
-
-
-def test_rows_to_ints_endianness() -> None:
-    """_rows_to_ints produces the same bit order as np.packbits."""
-    # The packed-row helper stores each row's bits in the same per-byte order as np.packbits.
-    bits = np.random.randint(2, size=(10, 120))
-    ints = binary._rows_to_ints(bits, dtype=np.uint8)
-    assert ints.shape == (10, 15)
-
-    expected = np.packbits(bits).reshape(10, 15)
-    np.testing.assert_array_equal(ints, expected)
-
-
-@pytest.mark.parametrize("dtype", [int, np.uint64, np.uint8, np.int16])
-def test_rows_to_ints(dtype: npt.DTypeLike) -> None:
-    """_rows_to_ints packs binary rows into integer words of the requested dtype."""
-    bits = np.random.randint(2, size=(10, 93))
-    ints = binary._rows_to_ints(bits, dtype=dtype)
-
-    nbits = 8 * np.dtype(dtype).itemsize
-    expected_words_per_row = int(np.ceil(93 / nbits))
-    assert ints.shape == (10, expected_words_per_row)
-    assert ints.dtype == np.dtype(dtype)
-
-    np.testing.assert_array_equal(_bitwise_count(ints).sum(-1), bits.sum(-1))
-
-    for indices in np.ndindex(ints.shape):
-        i = indices[-1] * nbits
-        packed_bits = bits[indices[:-1]][i : i + nbits]
-        bitstr = "".join(map(str, packed_bits))
-        assert np.binary_repr(ints[indices], len(bitstr)) == bitstr
-
-    # The packed-row helper preserves leading array axes while packing the last bit axis.
-    bits = bits.reshape(5, 1, 2, -1)
-    np.testing.assert_array_equal(
-        binary._rows_to_ints(bits, dtype=dtype),
-        ints.reshape(5, 1, 2, -1),
-    )
-
-    # The packed-row helper preserves nonpacked axes when packing a nonfinal bit axis.
-    bits = bits.swapaxes(0, 3)
-    np.testing.assert_array_equal(
-        binary._rows_to_ints(bits, dtype=dtype, axis=0),
-        ints.reshape(5, 1, 2, -1).swapaxes(0, 3),
-    )
-
-    bits = np.zeros((11, 0), dtype=dtype)
-    ints = binary._rows_to_ints(bits, dtype=dtype)
-    np.testing.assert_array_equal(binary._rows_to_ints(bits, dtype=dtype, axis=0), bits)
 
 
 def test_distance_requires_binary_input() -> None:
@@ -259,3 +126,103 @@ def test_distance_requires_binary_input() -> None:
     # A binary generator matrix is accepted with either a plain integer dtype or a GF(2) dtype.
     assert qldpc.codes.distance.get_distance_classical(np.array([[1, 1, 1]])) == 3
     assert qldpc.codes.distance.get_distance_classical(qldpc.codes.HammingCode(4).generator) == 3
+
+
+####################################################################################################
+# native bit counting, packing and row reduction
+
+
+@njit
+def _popcounts(values: npt.NDArray[np.uint64]) -> npt.NDArray[np.int64]:
+    counts = np.empty(len(values), dtype=np.int64)
+    for index, value in enumerate(values):
+        counts[index] = binary._popcount_word(value)
+    return counts
+
+
+def test_popcount_word() -> None:
+    rng = np.random.default_rng(78)
+    values = np.concatenate(
+        [
+            np.array([0, 1, 2**63, 2**64 - 1], dtype=np.uint64),
+            rng.integers(0, 2**64, 100, np.uint64),
+        ]
+    )
+    expected = [int(value).bit_count() for value in values]
+    np.testing.assert_array_equal(_popcounts(values), expected)
+    # The Python implementation calls the Python fallback, and lets coverage trace the helper.
+    np.testing.assert_array_equal(_popcounts.py_func(values), expected)
+
+
+def test_popcount_lowering() -> None:
+    """Exercise the compiler extension directly, since coverage cannot trace compiled code.
+
+    The compiled result itself is checked by ``test_popcount_word``.
+    """
+    typer = binary._type_popcount_word(cpu_target.typing_context)
+    assert typer(types.uint64) == types.int64
+    assert typer(types.int64) is None
+    word = ir.IntType(64)
+    function = ir.Function(ir.Module(), ir.FunctionType(word, [word]), "popcount")
+    builder = ir.IRBuilder(function.append_basic_block())
+    arguments: list[ir.Value] = [function.args[0]]
+    signature = types.int64(types.uint64)
+    lowered = binary._lower_popcount_word(cpu_target.target_context, builder, signature, arguments)
+    assert lowered.type == word
+
+
+@pytest.fixture(params=[False, True], ids=["compiled", "python"])
+def binary_kernels(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run the compiled packing and row-reduction kernels, or their Python versions for coverage."""
+    if request.param:
+        for name in ("_pack_bits", "_unpack_bits", "_row_reduce_packed"):
+            monkeypatch.setattr(binary, name, getattr(binary, name).py_func)
+
+
+@pytest.mark.usefixtures("binary_kernels")
+@pytest.mark.parametrize("width", [0, 64, 65, 130])
+def test_pack_bits(width: int) -> None:
+    """Column j goes to bit j % 64 of word j // 64, and unpacking inverts packing."""
+    matrix = np.random.default_rng(width).integers(0, 2, (3, width), dtype=np.uint8)
+    packed = binary._pack_bits(matrix)
+    for row, words in zip(matrix, packed, strict=True):
+        integer = sum(int(bit) << column for column, bit in enumerate(row))
+        expected = [(integer >> (64 * index)) & (2**64 - 1) for index in range(len(words))]
+        assert words.tolist() == expected
+    np.testing.assert_array_equal(binary._unpack_bits(packed, width), matrix)
+
+
+@pytest.mark.usefixtures("binary_kernels")
+@pytest.mark.parametrize("height, width", [(5, 130), (7, 65), (0, 7), (3, 0)])
+def test_row_reduction_matches_galois(height: int, width: int) -> None:
+    """In the default column order, row reduction gives the reduced row echelon form."""
+    matrix = np.random.default_rng(width).integers(0, 2, (height, width), dtype=np.uint8)
+    reduced, _, _ = binary._row_reduce_binary(matrix)
+    np.testing.assert_array_equal(reduced, galois.GF(2)(matrix).row_reduce())
+
+
+@pytest.mark.usefixtures("binary_kernels")
+@pytest.mark.parametrize("columns", ["subset", "repeated"])
+def test_row_reduction_over_selected_columns(columns: str) -> None:
+    """Pivots come from the selected columns, and labels undergo the same row operations."""
+    rng = np.random.default_rng(65)
+    matrix = rng.integers(0, 2, (7, 65), dtype=np.uint8)
+    labels = np.eye(7, dtype=np.uint8)
+    order = rng.permutation(65)[:30] if columns == "subset" else np.tile(np.arange(65), 2)
+    original_matrix = matrix.copy()
+
+    reduced, transform, pivots = binary._row_reduce_binary(matrix, labels, columns=order)
+    assert transform is not None
+    np.testing.assert_array_equal(transform.astype(int) @ matrix % 2, reduced)
+    rank = len(pivots)
+    assert rank == np.linalg.matrix_rank(galois.GF(2)(matrix[:, np.unique(order)]))
+    assert len(set(pivots.tolist())) == rank and set(pivots.tolist()) <= set(order.tolist())
+    np.testing.assert_array_equal(reduced[:rank][:, pivots], np.eye(rank, dtype=np.uint8))
+    assert not np.any(reduced[rank:][:, order])
+    np.testing.assert_array_equal(matrix, original_matrix)
+
+
+def test_row_reduction_rejects_out_of_range_columns() -> None:
+    for columns in (np.array([-1]), np.array([2])):
+        with pytest.raises(IndexError, match="out of range"):
+            binary._row_reduce_binary(np.eye(2, dtype=np.uint8), columns=columns)

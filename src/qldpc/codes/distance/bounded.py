@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
@@ -16,8 +16,6 @@ import numpy.typing as npt
 from ._binary import (
     _as_binary_matrix,
     _assert_binary,
-    _get_hamming_weight_fn,
-    _get_packed_row_weights,
     _row_reduce_binary,
     _symplectic_to_hamming,
 )
@@ -89,13 +87,12 @@ class BoundedKernelSearch:
 
     def words(self) -> Iterator[int]:
         """Yield bounded-weight words; exhaustion is the coverage certificate."""
-        weight_func, _ = _get_hamming_weight_fn()
         for depth in range(1, min(self.dimension, self.max_weight) + 1):
             for rows, _ in self._sets:
                 for supports in _iter_fixed_weight_supports(self.dimension, depth, self.batch_size):
                     self.generated += len(supports)
                     candidates = np.bitwise_xor.reduce(rows[supports], axis=1)
-                    weights = _get_packed_row_weights(candidates, weight_func)
+                    weights = np.bitwise_count(candidates).sum(axis=-1, dtype=np.uint64)
                     if self._systematic:
                         weights += depth
                     for index in np.flatnonzero(weights <= self.max_weight):
@@ -280,13 +277,12 @@ class PauliCosetSearch:
     def _candidate_weights(
         self,
         candidates: npt.NDArray[np.uint64],
-        weight_func: Callable[..., npt.NDArray[np.uint64]],
     ) -> npt.NDArray[np.uint64]:
         if self.weight == "pauli":
-            return _get_packed_row_weights(candidates, weight_func) // 2
+            return np.bitwise_count(candidates).sum(axis=-1, dtype=np.uint64) // 2
         return np.maximum(
             *(
-                _get_packed_row_weights(candidates & mask, weight_func)
+                np.bitwise_count(candidates & mask).sum(axis=-1, dtype=np.uint64)
                 for mask in self._sector_masks
             )
         )
@@ -322,7 +318,6 @@ class PauliCosetSearch:
                     dtype=np.uint64,
                 )
             )
-        weight_func, _ = _get_hamming_weight_fn()
         visited_min = n + 1
         best_pauli = pauli
         depth = 0
@@ -336,7 +331,7 @@ class PauliCosetSearch:
                 for supports in supports_iter:
                     candidates = np.bitwise_xor.reduce(packed[supports], axis=1) ^ offset
                     self.generated += len(supports)
-                    weights = self._candidate_weights(candidates, weight_func)
+                    weights = self._candidate_weights(candidates)
                     good = np.flatnonzero(weights <= threshold)
                     if len(good):
                         word = _packed_row_int(candidates[good[0]])

@@ -4,9 +4,36 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 
-from qldpc import abstract
+from qldpc import abstract, external
+
+
+@pytest.fixture(autouse=True)
+def isolate_gap_probe_state() -> Iterator[None]:
+    """Reset cached GAP availability probes and backend registries around every test.
+
+    These caches and registries are process-wide, so without a reset, one test's mocked (or real)
+    GAP availability would leak into later tests that run in the same worker process.
+    """
+    _reset_gap_probe_state()
+    yield
+    _reset_gap_probe_state()
+
+
+def _reset_gap_probe_state() -> None:
+    """Clear the GAP availability caches and the libgap/subprocess package registries."""
+    for probe in (
+        external.gap.is_callable,
+        external.gap.is_installed,
+        external.gap._is_gap_executable,
+        external.gap.require_package,
+    ):
+        probe.cache_clear()
+    external.gap._libgap_packages.clear()
+    external.gap._subprocess_packages.clear()
 
 
 @pytest.fixture(scope="session")

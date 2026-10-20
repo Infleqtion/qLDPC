@@ -34,7 +34,7 @@ def test_batch_decoding_by_alias() -> None:
     assert np.array_equal(composite_decoder.decode_batch(syndromes), syndromes)
 
     direct_decoder = decoders.custom.DirectDecoder.from_indirect(old_decoder, matrix)
-    assert np.array_equal(direct_decoder.decode_batch(syndromes), np.zeros_like(syndromes))
+    assert np.array_equal(direct_decoder.correct_batch(syndromes), np.zeros_like(syndromes))
 
 
 def test_composite_erasure() -> None:
@@ -72,10 +72,18 @@ def test_augmented_decoders(toy_problem: ToyProblem) -> None:
     decoder = _get_error_decoder(matrix, decoder=decoders.mwpm())
 
     direct_decoder = decoders.custom.DirectDecoder.from_indirect(decoder, matrix)
-    assert np.array_equal(np.zeros_like(error), direct_decoder.decode(error))
+    assert np.array_equal(np.zeros_like(error), direct_decoder.correct(error))
 
     errors = np.array([error] * 3)
-    assert np.array_equal(np.zeros_like(errors), direct_decoder.decode_batch(errors))
+    assert np.array_equal(np.zeros_like(errors), direct_decoder.correct_batch(errors))
+    unbatched_decoder = decoders.custom.DirectDecoder(direct_decoder.correct)
+    assert np.array_equal(np.zeros_like(errors), unbatched_decoder.correct_batch(errors))
+
+    # a DirectDecoder corrects code words, so it must not pass for a syndrome decoder
+    with pytest.raises(ValueError, match="DEFUNCT"):
+        direct_decoder.decode(error)
+    with pytest.raises(ValueError, match="DEFUNCT"):
+        direct_decoder.decode_batch(errors)
 
     composite_decoder = decoders.custom.CompositeDecoder.from_copies(decoder, syndrome.size, 2)
     composite_error = np.concatenate([error] * 2)
@@ -97,6 +105,6 @@ def test_augmented_decoders(toy_problem: ToyProblem) -> None:
 
     direct_decoder = decoders.custom.DirectDecoder.from_indirect(WideDecoder(), matrix)
     with pytest.raises(ValueError, match="cannot be subtracted"):
-        direct_decoder.decode(error)
+        direct_decoder.correct(error)
     with pytest.raises(ValueError, match="cannot be subtracted"):
-        direct_decoder.decode_batch(errors)
+        direct_decoder.correct_batch(errors)

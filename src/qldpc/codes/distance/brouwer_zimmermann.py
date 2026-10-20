@@ -19,16 +19,11 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 from numba import njit
-from numba.extending import register_jitable
 
 from ._binary import (
-    _MASK0F,
-    _MASK33,
-    _MASK55,
-    _get_hamming_weight_fn,
-    _get_packed_row_weights,
+    _pack_bits,
+    _popcount_word,
     _row_reduce_binary,
-    _rows_to_ints,
 )
 from .brute_force import (
     _get_distance_quantum_brute_force,
@@ -186,18 +181,6 @@ def _get_information_set_generators_for_columns(
         )
 
     return information_sets
-
-
-@register_jitable(inline="always")
-def _popcount_word(value: np.uint64) -> np.int64:
-    """Count one unsigned word, returning a signed weight without overflow."""
-    value = value - ((value >> np.uint64(1)) & _MASK55)
-    value = (value & _MASK33) + ((value >> np.uint64(2)) & _MASK33)
-    value = (value + (value >> np.uint64(4))) & _MASK0F
-    value = value + (value >> np.uint64(8))
-    value = value + (value >> np.uint64(16))
-    value = value + (value >> np.uint64(32))
-    return np.int64(value & np.uint64(127))
 
 
 @njit(boundscheck=True, cache=True)
@@ -404,10 +387,10 @@ def _get_brouwer_zimmermann_initial_upper_bound(
     labels: npt.NDArray[np.uint8] | None,
 ) -> int:
     """Return the lightest eligible row in a nested-code basis."""
-    weight_func, _ = _get_hamming_weight_fn()
     eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
-    packed_basis = _rows_to_ints(basis[eligible], dtype=np.uint64)
-    return int(_get_packed_row_weights(packed_basis, weight_func).min())
+    packed_basis = _pack_bits(basis[eligible])
+    # get row weights, summing in uint64 to avoid overflow in wide rows
+    return int(np.bitwise_count(packed_basis).sum(axis=-1, dtype=np.uint64).min())
 
 
 def _select_brouwer_zimmermann_information_sets(
@@ -644,13 +627,8 @@ def _prepare_brouwer_zimmermann_search(
     # Remove systematic pivots; advance() restores their known weight arithmetically.
     packed_sets = [
         (
-            _rows_to_ints(
-                np.delete(information_set.generators, information_set.pivots, axis=1),
-                dtype=np.uint64,
-            ),
-            None
-            if information_set.labels is None
-            else _rows_to_ints(information_set.labels, dtype=np.uint64),
+            _pack_bits(np.delete(information_set.generators, information_set.pivots, axis=1)),
+            None if information_set.labels is None else _pack_bits(information_set.labels),
             information_set.rank,
         )
         for information_set in information_sets

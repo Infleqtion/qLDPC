@@ -1,0 +1,435 @@
+# SPDX-License-Identifier: Apache-2.0
+
+"""Tests for exact counts of the logical operators of a given weight in binary CSS codes."""
+
+from __future__ import annotations
+
+import functools
+import itertools
+from typing import Any
+
+import galois
+import numpy as np
+import numpy.typing as npt
+import pytest
+
+from qldpc import codes
+from qldpc.objects import Pauli
+
+from . import logical_counts as lc
+from ._binary import _get_independent_rows, _get_kernel
+from .core import DistanceMethod
+
+Counts = lc.CSSLogicalCounts
+METHODS: tuple[DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
+
+
+def _counter(checks_x: npt.ArrayLike, checks_z: npt.ArrayLike) -> lc.CSSLogicalCounter:
+    """A counter for the CSS code with the given binary checks."""
+    code = codes.CSSCode(np.asarray(checks_x, dtype=int), np.asarray(checks_z, dtype=int))
+    return lc.CSSLogicalCounter(code)
+
+
+def _bits(values: list[int], width: int) -> npt.NDArray[np.uint8]:
+    """Binary rows whose bit j is bit j of each integer."""
+    return np.array([[value >> jj & 1 for jj in range(width)] for value in values], dtype=np.uint8)
+
+
+def _random_css_code(
+    rng: np.random.Generator, num_qubits: int, rank_x: int, rank_z: int
+) -> codes.CSSCode:
+    """A random binary CSS stabilizer code: Z checks are random combinations of ker(H_X)."""
+    checks_x = rng.integers(0, 2, (rank_x, num_qubits), dtype=np.uint8)
+    kernel = _get_kernel(checks_x)
+    checks_z = rng.integers(0, 2, (rank_z, len(kernel))) @ kernel % 2
+    return codes.CSSCode(checks_x.astype(int), checks_z.astype(int))
+
+
+def _random_subsystem_code(
+    rng: np.random.Generator, num_qubits: int, *, self_dual: bool = False
+) -> codes.CSSCode:
+    """A random binary CSS subsystem code, optionally with identical X and Z checks."""
+    while True:
+        checks_x = rng.integers(0, 2, (3, num_qubits))
+        checks_z = checks_x if self_dual else rng.integers(0, 2, (3, num_qubits))
+        code = codes.CSSCode(checks_x, checks_z)
+        if code.is_subsystem_code and code.dimension > 0:
+            return code
+
+
+def _frozen(
+    checks_x: npt.ArrayLike, checks_z: npt.ArrayLike, width: int
+) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8]]:
+    """Append qubits fixed in |0> by a Z check each; no logical of minimum weight touches them."""
+    x, z = np.asarray(checks_x, dtype=np.uint8), np.asarray(checks_z, dtype=np.uint8)
+    extra = width - x.shape[1]
+    padded_x = np.pad(x, ((0, 0), (0, extra)))
+    padded_z = np.vstack(
+        [np.pad(z, ((0, 0), (0, extra))), np.hstack([np.zeros((extra, z.shape[1])), np.eye(extra)])]
+    ).astype(np.uint8)
+    return padded_x, padded_z
+
+
+def _span(rows: npt.ArrayLike) -> set[int]:
+    """All combinations of the given binary rows, as integers whose bit j is column j."""
+    words = {0}
+    for row in np.asarray(rows, dtype=int):
+        value = sum(int(bit) << jj for jj, bit in enumerate(row))
+        words |= {word ^ value for word in words}
+    return words
+
+
+def _enumerate(code: codes.CSSCode) -> tuple[list[int], list[int], int, int]:
+    """Count logical operators by enumerating the normalizers, using CSSCode's stabilizers.
+
+    Returns the X-only and Z-only counts at every weight, the distance, and the number of nontrivial
+    logical operators of any type at the distance.
+    """
+    num_qubits = len(code)
+    normalizers = []
+    for stabilizers in (code.get_stabilizer_ops(Pauli.Z), code.get_stabilizer_ops(Pauli.X)):
+        field = galois.GF(2)
+        kernel = field(stabilizers).null_space() if len(stabilizers) else field.Identity(num_qubits)
+        normalizers.append(_span(kernel))
+    normal_x, normal_z = normalizers
+    gauge_x, gauge_z = _span(code.matrix_x), _span(code.matrix_z)
+    counts_x, counts_z = [0] * (num_qubits + 1), [0] * (num_qubits + 1)
+    for word in normal_x - gauge_x:
+        counts_x[word.bit_count()] += 1
+    for word in normal_z - gauge_z:
+        counts_z[word.bit_count()] += 1
+    distance = next(
+        weight for weight in range(1, num_qubits + 1) if counts_x[weight] or counts_z[weight]
+    )
+    full = sum(
+        (word_x | word_z).bit_count() == distance
+        for word_x, word_z in itertools.product(normal_x, normal_z)
+        if word_x not in gauge_x or word_z not in gauge_z
+    )
+    return counts_x, counts_z, distance, full
+
+
+def _expected_at_distance(code: codes.CSSCode) -> lc.CSSLogicalCounts:
+    """Counts at the distance, including full Pauli operators, from an independent enumeration."""
+    counts_x, counts_z, distance, full = _enumerate(code)
+    return Counts(distance, counts_x[distance], counts_z[distance], full)
+
+
+# X checks {0,1,2,3,4} and {2,4}, and Z checks {1,2,3,4} and {0,1}, on five qubits.  By hand, the
+# distance is two, the X-only logicals of weight two are {2,3} and {3,4}, and the Z-only ones are
+# {2,4}, {0,3} and {1,3}.  The Z word {2,4} also supports the X stabilizer {2,4}, so in total there
+# are 2 + 3 + 1 = 6 logical Pauli operators of weight two.
+_HAND_X, _HAND_Z = _bits([31, 20], 5), _bits([30, 3], 5)
+
+
+####################################################################################################
+# counts
+
+
+@pytest.mark.parametrize("method", METHODS)
+def test_known_codes(method: DistanceMethod) -> None:
+    steane = codes.SteaneCode()
+    examples = (
+        (steane.matrix_x, steane.matrix_z, Counts(3, 7, 7, 21)),
+        ([[1, 1, 1, 1]], [[1, 1, 1, 1]], Counts(2, 6, 6, 18)),
+        (_HAND_X, _HAND_Z, Counts(2, 2, 3, 6)),
+        # The Z sector is heavier, so it contributes nothing at the global minimum.
+        ([[1, 1, 0]], [[0, 0, 1]], Counts(1, 2, 0, 2)),
+        (np.zeros((0, 3)), np.zeros((0, 3)), Counts(1, 3, 3, 9)),
+        (np.eye(4), np.zeros((0, 4)), Counts(None, 0, 0, 0)),
+    )
+    for checks_x, checks_z, expected in examples:
+        counter = _counter(checks_x, checks_z)
+        assert counter.count_logicals(full_pauli=True, method=method) == expected
+        assert counter.count_logicals(method=method).count_pauli is None
+    assert lc.count_logicals_css(steane) == Counts(3, 7, 7, None)
+
+
+@pytest.mark.parametrize("method", METHODS)
+def test_counts_match_enumeration(method: DistanceMethod) -> None:
+    """Compare every weight, and full Pauli counts, with an enumeration of both normalizers."""
+    rng = np.random.default_rng(17)
+    examples = [
+        codes.BaconShorCode(3),
+        codes.BaconShorCode(2, 3),
+        *(_random_subsystem_code(rng, num_qubits) for num_qubits in (7, 8, 9, 10)),
+        _random_subsystem_code(rng, 9, self_dual=True),
+        *(_random_css_code(rng, 9, 3, 3) for _ in range(2)),
+    ]
+    for code in examples:
+        counts_x, counts_z, distance, full = _enumerate(code)
+        counter = lc.CSSLogicalCounter(code)
+        assert counter.dimension == code.dimension
+        for weight in range(len(code) + 1):
+            expected = Counts(weight, counts_x[weight], counts_z[weight], None)
+            assert counter.count_logicals(weight, method=method) == expected
+        expected_full = Counts(distance, counts_x[distance], counts_z[distance], full)
+        assert counter.count_logicals(method=method, full_pauli=True) == expected_full
+        assert counter.count_logicals(distance, method=method, full_pauli=True) == expected_full
+
+
+@pytest.mark.parametrize("method", METHODS)
+def test_full_pauli_counts_away_from_the_distance(method: DistanceMethod) -> None:
+    counter = lc.CSSLogicalCounter(codes.SteaneCode())
+    for weight in (0, 2):
+        expected = Counts(weight, 0, 0, 0)
+        assert counter.count_logicals(weight, method=method, full_pauli=True) == expected
+    with pytest.raises(ValueError, match="less than weight 4"):
+        counter.count_logicals(4, method=method, full_pauli=True)
+
+    # XYZI is a logical of weight three in the [[4, 2, 2]] code, but no homogeneous logical is odd.
+    # A frozen qubit adds a Z stabilizer of weight one, which turns each of the six Z logicals of
+    # weight two into one of weight three.
+    counter = _counter(*_frozen([[1, 1, 1, 1]], [[1, 1, 1, 1]], 5))
+    assert counter.count_logicals(3, method=method) == Counts(3, 0, 6, None)
+    with pytest.raises(ValueError, match="less than weight 3"):
+        counter.count_logicals(3, method=method, full_pauli=True)
+
+
+def test_surface_codes() -> None:
+    # Unrotated surface codes have d minimum-weight logicals of each type: straight lines.
+    for distance in (3, 5, 7):
+        counter = lc.CSSLogicalCounter(codes.SurfaceCode(distance, rotated=False))
+        expected = Counts(distance, distance, distance, 2 * distance)
+        assert counter.count_logicals(full_pauli=True) == expected
+    for distance in (3, 4):
+        code = codes.SurfaceCode(distance)
+        counter = lc.CSSLogicalCounter(code)
+        assert counter.count_logicals(full_pauli=True) == _expected_at_distance(code)
+
+
+@pytest.mark.parametrize("width", [5, 64, 65, 129])
+def test_frozen_qubits_preserve_counts(width: int) -> None:
+    """Frozen qubits change the physical width, including across word boundaries, not the counts."""
+    counter = _counter(*_frozen(_HAND_X, _HAND_Z, width))
+    assert counter.count_logicals(full_pauli=True) == Counts(2, 2, 3, 6)
+
+
+@pytest.mark.parametrize("num_qubits, rank_x, rank_z", [(16, 10, 2), (32, 14, 12), (40, 22, 18)])
+def test_methods_agree_on_random_codes(num_qubits: int, rank_x: int, rank_z: int) -> None:
+    """Brute force visits every word once, so it checks the information sets used by BZ."""
+    rng = np.random.default_rng(num_qubits)
+    for _ in range(3):
+        counter = lc.CSSLogicalCounter(_random_css_code(rng, num_qubits, rank_x, rank_z))
+        assert counter.count_logicals(
+            full_pauli=True, method="brouwer_zimmermann"
+        ) == counter.count_logicals(full_pauli=True, method="brute_force")
+
+
+def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Overlapping information sets, which large searches use, still count every word once."""
+    select = functools.partial(lc._get_overlapping_information_sets, minimum_work=0)
+    monkeypatch.setattr(lc, "_get_overlapping_information_sets", select)
+    hamming = np.asarray(codes.HammingCode(4).matrix)
+    rng = np.random.default_rng(5)
+    for code in (
+        _counter(*_frozen(hamming, hamming, 15)).code,
+        _random_css_code(rng, 24, 8, 8),
+    ):
+        counter = lc.CSSLogicalCounter(code)
+        for weight in range(len(code) + 1):
+            expected = counter.count_logicals(weight, method="brute_force")
+            assert counter.count_logicals(weight) == expected
+
+
+def test_dense_eighty_qubits_against_physical_enumeration() -> None:
+    """Enumerate physical supports of weight at most four, independently of the counter."""
+    n, k = 80, 32
+    rng = np.random.default_rng(47)
+    x = np.zeros((24, n), dtype=np.uint8)
+    z = x.copy()
+    x[:, k : k + 24] = np.eye(24, dtype=np.uint8)
+    z[:, k + 24 :] = np.eye(24, dtype=np.uint8)
+    for _ in range(30 * n):
+        control, target = rng.choice(n, 2, replace=False)
+        x[:, target] ^= x[:, control]
+        z[:, control] ^= z[:, target]
+    assert np.mean(np.vstack([x, z])) > 0.4
+    counts = []
+    for stabilizers, checks in ((x, z), (z, x)):
+        pivots: dict[int, int] = {}
+        for row in stabilizers:
+            word = sum(int(bit) << jj for jj, bit in enumerate(row))
+            while word:
+                pivot = word.bit_length() - 1
+                if pivot not in pivots:
+                    pivots[pivot] = word
+                    break
+                word ^= pivots[pivot]
+        columns = [sum(int(bit) << jj for jj, bit in enumerate(col)) for col in checks.T]
+        found = 0
+        for weight in range(1, 5):
+            for positions in itertools.combinations(range(n), weight):
+                if functools.reduce(int.__xor__, (columns[jj] for jj in positions)):
+                    continue
+                reduced = sum(1 << jj for jj in positions)
+                for pivot in sorted(pivots, reverse=True):
+                    if reduced >> pivot & 1:
+                        reduced ^= pivots[pivot]
+                if reduced:
+                    assert weight == 4
+                    found += 1
+        counts.append(found)
+    assert counts == [1, 0]
+    assert _counter(x, z).count_logicals(full_pauli=True) == Counts(4, 1, 0, 1)
+
+
+def test_python_kernels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run the Python versions of the compiled kernels, which coverage can trace."""
+    for name in ("_count_chunk", "_is_owned", "_get_masked_rank", "_apply_local"):
+        monkeypatch.setattr(lc, name, getattr(lc, name).py_func)
+    # Tiny chunks make every scan stop and resume repeatedly.
+    monkeypatch.setattr(lc, "_CHUNK_SIZE", 1)
+    for method in METHODS:
+        counter = _counter(_HAND_X, _HAND_Z)
+        assert counter.count_logicals(full_pauli=True, method=method) == Counts(2, 2, 3, 6)
+        with pytest.raises(ValueError, match="less than weight 3"):
+            counter.count_logicals(3, method=method, full_pauli=True)
+        bacon_shor = codes.BaconShorCode(3)
+        expected = _expected_at_distance(bacon_shor)
+        bacon_shor_counter = lc.CSSLogicalCounter(bacon_shor)
+        assert bacon_shor_counter.count_logicals(full_pauli=True, method=method) == expected
+        stacked = lc.CSSLogicalCounter(codes.CSSCode.stack([codes.SteaneCode()] * 2))
+        assert stacked.count_logicals(method=method) == Counts(3, 14, 14, None)
+        conjugated = counter.conjugated_cnot(0, 3)
+        fresh = _counter(conjugated.checks_x, conjugated.checks_z)
+        assert conjugated.count_logicals(full_pauli=True, method=method) == fresh.count_logicals(
+            full_pauli=True, method=method
+        )
+
+
+####################################################################################################
+# conjugation
+
+
+def test_conjugation() -> None:
+    counter = lc.CSSLogicalCounter(codes.SteaneCode())
+    before = counter.checks_x
+    changed = counter.conjugated_cnot(1, 6)
+    assert np.array_equal(counter.checks_x, before)
+    expected = before.copy()
+    expected[:, 6] ^= expected[:, 1]
+    assert np.array_equal(changed.checks_x, _get_independent_rows(expected))
+    assert counter.is_self_dual and not changed.is_self_dual
+    assert changed.conjugated_cnot(1, 6).is_self_dual
+
+    # General gates agree with the named ones, for any input type.
+    for matrix in ([[1, 0], [1, 1]], np.array([[1, 0], [1, 1]], dtype=object)):
+        general = counter.conjugated([1, 6], matrix)
+        assert np.array_equal(general.checks_x, changed.checks_x)
+        assert np.array_equal(general.checks_z, changed.checks_z)
+    swel = [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]]
+    named = counter.conjugated_swel(0, 2, 3, 5)
+    assert np.array_equal(counter.conjugated([0, 2, 3, 5], swel).checks_x, named.checks_x)
+    assert named.is_self_dual
+
+
+@pytest.mark.parametrize("size", [3, 64])
+def test_conjugation_transforms_checks(size: int) -> None:
+    """X checks transform by the gate, and Z checks by its inverse transpose."""
+    rng = np.random.default_rng(size)
+    field = galois.GF(2)
+    while True:
+        matrix = rng.integers(0, 2, (size, size))
+        if np.linalg.matrix_rank(field(matrix)) == size:
+            break
+    inverse_transpose = np.asarray(np.linalg.inv(field(matrix)).T, dtype=int)
+    counter = lc.CSSLogicalCounter(_random_css_code(rng, 70, 5, 5))
+    targets = sorted(int(target) for target in rng.choice(70, size, replace=False))
+    conjugated = counter.conjugated(targets, matrix)
+    for checks, local, result in (
+        (counter.checks_x, matrix, conjugated.checks_x),
+        (counter.checks_z, inverse_transpose, conjugated.checks_z),
+    ):
+        expected = checks.astype(int)
+        expected[:, targets] = expected[:, targets] @ local.T % 2
+        assert np.array_equal(result, _get_independent_rows(expected.astype(np.uint8)))
+
+
+def test_conjugated_counts_match_enumeration() -> None:
+    """Counters that conjugate an already counted code give the counts of the new code."""
+    rng = np.random.default_rng(29)
+    swel = [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]]
+    for code in (
+        codes.BaconShorCode(3),
+        _random_css_code(rng, 10, 3, 3),
+        codes.CSSCode.stack([codes.SteaneCode()] * 2),
+        _random_subsystem_code(rng, 9, self_dual=True),
+    ):
+        counter = lc.CSSLogicalCounter(code)
+        counter.count_logicals()
+        for step in range(4):
+            targets = [int(target) for target in rng.choice(counter.num_qubits, 4, replace=False)]
+            if step == 0:
+                counter = counter.conjugated_swel(*targets)
+            elif step == 1:
+                counter = counter.conjugated(targets, swel)
+            else:
+                counter = counter.conjugated_cnot(*targets[:2])
+            assert counter.count_logicals(full_pauli=True) == _expected_at_distance(counter.code)
+
+
+####################################################################################################
+# inputs and validation
+
+
+def test_code_and_checks() -> None:
+    steane = codes.SteaneCode()
+    counter = lc.CSSLogicalCounter(steane)
+    assert counter.code is steane
+
+    derived = counter.conjugated_cnot(0, 1)
+    assert isinstance(derived.code, codes.CSSCode)
+    derived_x = _get_independent_rows(derived.code.matrix_x.view(np.ndarray).astype(np.uint8))
+    assert np.array_equal(derived_x, derived.checks_x)
+
+    # Redundant checks are reduced, and the returned checks are copies.
+    redundant = np.vstack([steane.matrix_x, steane.matrix_x, np.zeros((1, 7), dtype=int)])
+    counter = _counter(redundant, steane.matrix_z)
+    assert len(counter.checks_x) == 3 and counter.dimension == 1 and counter.is_self_dual
+    counter.checks_x[:] = 0
+    assert np.any(counter.checks_x)
+
+
+def test_invalid_inputs() -> None:
+    not_css: Any = codes.FiveQubitCode()
+    with pytest.raises(TypeError, match="Expected a CSSCode"):
+        lc.CSSLogicalCounter(not_css)
+    with pytest.raises(ValueError, match="binary"):
+        lc.CSSLogicalCounter(codes.CSSCode([[1, 1]], [[1, 1]], field=3))
+
+    counter = _counter([[0, 0]], [[0, 0]])
+    invalid_method: Any = "unknown"
+    with pytest.raises(ValueError, match="Unknown distance method"):
+        counter.count_logicals(method=invalid_method)
+    for weight in (-1, 3, 1.5, True, "1"):
+        invalid_weight: Any = weight
+        with pytest.raises(ValueError, match="weight must be an integer"):
+            counter.count_logicals(invalid_weight)
+    numpy_weight: Any = np.int64(2)
+    assert counter.count_logicals(numpy_weight) == Counts(2, 1, 1, None)
+
+    steane = lc.CSSLogicalCounter(codes.SteaneCode())
+    wide = _counter(np.zeros((0, 65)), np.zeros((0, 65)))
+    for targets in ([0, 0], [-1, 2], [0, 7], [0.5, 2], [True, 2], [], list(range(65))):
+        invalid_targets: Any = targets
+        with pytest.raises(ValueError, match="1 to 64 distinct"):
+            (wide if len(targets) == 65 else steane).conjugated(invalid_targets, [[1]])
+    with pytest.raises(ValueError, match="1 to 64 distinct"):
+        steane.conjugated_swel(0, 1, 1, 2)
+    identity = np.eye(2, dtype=np.uint8)
+    # A valid gate is accepted, but the same bytes with another shape or field are still rejected.
+    steane.conjugated([0, 1], identity)
+    for matrix in ([[1]], identity.reshape(1, 4)):
+        with pytest.raises(ValueError, match="square"):
+            steane.conjugated([0, 1], matrix)
+    with pytest.raises(ValueError, match="invertible"):
+        steane.conjugated([0, 1], np.ones((2, 2)))
+    for invalid in (
+        2 * identity,
+        np.full((2, 2), np.nan),
+        galois.GF(3)(identity),
+        np.array([[2, 0], [0, 1]], dtype=object),
+    ):
+        with pytest.raises(ValueError, match="binary"):
+            steane.conjugated([0, 1], invalid)

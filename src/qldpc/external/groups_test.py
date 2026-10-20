@@ -113,6 +113,7 @@ def test_maybe_get_generators_from_gap() -> None:
 
     # cannot extract cycle from string
     with (
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.require_package", return_value=None),
         unittest.mock.patch("qldpc.external.gap.get_output", return_value="\n(1, 2a)\n"),
         pytest.raises(ValueError, match="Cannot extract cycle"),
@@ -121,6 +122,7 @@ def test_maybe_get_generators_from_gap() -> None:
 
     # everything works as expected
     with (
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.require_package", return_value=None),
         unittest.mock.patch("qldpc.external.gap.get_output", return_value="\n(1, 2)\n"),
         pytest.warns(UserWarning, match="_TEST_"),
@@ -135,13 +137,17 @@ def test_get_generators() -> None:
         assert external.groups.get_generators(group) == generators
 
     # retrieve from GAP
-    with unittest.mock.patch(
-        "qldpc.external.groups.maybe_get_generators_from_gap", return_value=GENERATORS
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
+        unittest.mock.patch(
+            "qldpc.external.groups.maybe_get_generators_from_gap", return_value=GENERATORS
+        ),
     ):
         assert external.groups.get_generators(GROUP) == GENERATORS
 
     # retrieve from GroupNames.org
     with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch(
             "qldpc.external.groups.maybe_get_generators_from_gap", return_value=None
         ),
@@ -151,8 +157,34 @@ def test_get_generators() -> None:
     ):
         assert external.groups.get_generators(GROUP) == GENERATORS
 
+    # without a callable GAP, try GroupNames.org before the interactive GAP workflow
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch(
+            "qldpc.external.groups.maybe_get_generators_from_gap",
+            side_effect=AssertionError("GAP should not be prompted for"),
+        ),
+        unittest.mock.patch(
+            "qldpc.external.groups.maybe_get_generators_from_groupnames", return_value=GENERATORS
+        ),
+    ):
+        assert external.groups.get_generators(GROUP) == GENERATORS
+
+    # without a callable GAP or GroupNames.org, fall back to the interactive GAP workflow
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch(
+            "qldpc.external.groups.maybe_get_generators_from_gap", return_value=GENERATORS
+        ),
+        unittest.mock.patch(
+            "qldpc.external.groups.maybe_get_generators_from_groupnames", return_value=None
+        ),
+    ):
+        assert external.groups.get_generators(GROUP) == GENERATORS
+
     # fail to retrieve from anywhere :(
     with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
         unittest.mock.patch(
             "qldpc.external.groups.maybe_get_generators_from_gap", return_value=None
         ),
@@ -221,6 +253,7 @@ def test_get_small_group_number() -> None:
     # fail to determine group number: webpage is unreachable
     with (
         unittest.mock.patch("qldpc.external.groups.maybe_get_webpage", return_value=None),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         pytest.raises(ValueError, match="Cannot determine"),
     ):
@@ -231,6 +264,7 @@ def test_get_small_group_number() -> None:
         unittest.mock.patch(
             "qldpc.external.groups.maybe_get_webpage", return_value="<html></html>"
         ),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         pytest.raises(ValueError, match="Cannot determine"),
     ):
@@ -238,15 +272,30 @@ def test_get_small_group_number() -> None:
 
     # retrieve from GAP
     with (
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.require_package", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_output", return_value=str(number)),
     ):
         assert external.groups.get_small_group_number(order) == number
 
-    # retrieve from GroupNames.org
+    # retrieve from GroupNames.org without prompting for manual GAP use
     with (
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch(
+            "qldpc.external.gap.is_installed",
+            side_effect=AssertionError("GAP should not be prompted for"),
+        ),
         unittest.mock.patch("qldpc.external.groups.maybe_get_webpage", return_value=text),
+    ):
+        assert external.groups.get_small_group_number(order) == number
+
+    # fall back to the interactive GAP workflow when GroupNames.org is unreachable
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.groups.maybe_get_webpage", return_value=None),
+        unittest.mock.patch("qldpc.external.gap.require_package", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_output", return_value=str(number)),
     ):
         assert external.groups.get_small_group_number(order) == number
 
@@ -263,7 +312,7 @@ def test_get_small_group_structure() -> None:
 
     # fail to retrieve structure from GAP
     with (
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_output", return_value=""),
         pytest.raises(ValueError, match="Group not recognized"),
     ):
@@ -271,14 +320,18 @@ def test_get_small_group_structure() -> None:
 
     # retrieve structure from GAP
     with (
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_output", return_value=structure),
     ):
         assert external.groups.get_small_group_structure(order, index) == structure
 
-    # GAP is not installed
+    # GAP cannot be called without prompting the user
     with (
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch(
+            "qldpc.external.gap.is_installed",
+            side_effect=AssertionError("GAP should not be prompted for"),
+        ),
     ):
         structure = f"SmallGroup({order},{index})"
         assert external.groups.get_small_group_structure(order, index) == structure

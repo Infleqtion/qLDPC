@@ -74,8 +74,9 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
     def __array_finalize__(self, obj: npt.NDArray[np.object_] | None) -> None:
         """Propagate metadata to newly constructed arrays."""
-        # obj may be None or lack _ring during numpy view construction; _ring is set before use.
-        # Howell-form provenance is intentionally NOT propagated here (see the class attributes).
+        # A view of a plain array (obj without _ring) has no ring until its creator assigns one,
+        # which every .view(RingArray) in this module does immediately.  Howell-form provenance is
+        # intentionally NOT propagated here (see the class attributes).
         self._ring = getattr(obj, "_ring", None)  # type:ignore[assignment]
 
     def _mark_as_hnf(self, *, transformer: WedderburnArtinTransformer | None, right: bool) -> Self:
@@ -91,7 +92,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         types: Iterable[type],
         args: Iterable[Any],
         kwargs: Mapping[str, Any],
-    ) -> RingArray | None:
+    ) -> Any:
         """Intercept array operations to ensure RingArray compatibility."""
         # ``_iter_ring_arrays`` descends into sequence arguments (e.g. the list passed to
         # np.concatenate/np.stack), so RingArrays nested one or more levels deep are still checked

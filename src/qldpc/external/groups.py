@@ -33,19 +33,29 @@ def get_generators(
 ) -> GeneratorsList:
     """Retrieve GAP group generators.
 
-    This function tries a local database, then GAP (a subprocess), then a GroupNames.org web lookup,
-    so it may run GAP and access the network.
+    This function tries a local database, then GAP if it can be called without user interaction,
+    then a GroupNames.org web lookup, and finally the manual copy/paste GAP workflow (which prompts
+    on standard input).  It may therefore run GAP, access the network, and prompt for input.
     """
     # try retrieving a known group
     if generators := KNOWN_GROUPS.get(group):
         return generators
 
-    # try retrieving a group from GAP
-    if generators := maybe_get_generators_from_gap(group, warning=warning_to_raise_if_calling_gap):
+    # try retrieving a group from GAP, if we can do so without prompting the user
+    gap_is_callable = qldpc.external.gap.is_callable()
+    if gap_is_callable and (
+        generators := maybe_get_generators_from_gap(group, warning=warning_to_raise_if_calling_gap)
+    ):
         return generators
 
     # try retrieving a group from GroupNames
     if generators := maybe_get_generators_from_groupnames(group):
+        return generators
+
+    # as a last resort, offer the manual copy/paste GAP workflow
+    if not gap_is_callable and (
+        generators := maybe_get_generators_from_gap(group, warning=warning_to_raise_if_calling_gap)
+    ):
         return generators
 
     message = [
@@ -134,28 +144,31 @@ def get_generators_from_magma(group: str) -> GeneratorsList:
 def get_small_group_number(order: int) -> int:
     """Get the number of 'SmallGroup's of a given order.
 
-    This function uses the GAP SmallGrp package (https://gap-packages.github.io/SmallGrp/) if
-    available, else a GroupNames.org lookup.
+    This function uses the GAP SmallGrp package (https://gap-packages.github.io/SmallGrp/) if GAP
+    can be called without user interaction, else a GroupNames.org lookup, and finally the manual
+    copy/paste GAP workflow (which prompts on standard input).
     """
-    if qldpc.external.gap.is_installed():
-        qldpc.external.gap.require_package("SmallGrp")
-        command = f"Print(NumberSmallGroups({order}));;"
-        return int(qldpc.external.gap.get_output(command))
+    if qldpc.external.gap.is_callable():
+        return _get_small_group_number_from_gap(order)
 
     # get the HTML for the page with all groups
-    page_html = maybe_get_webpage(order)
-    if page_html is None:
-        # we cannot access the webpage
-        raise ValueError("Cannot determine the number of small groups")
+    if (page_html := maybe_get_webpage(order)) is not None:
+        matches = re.findall(rf"<td>{order},([0-9]+)</td>", page_html)
+        if matches:
+            return max(int(match) for match in matches)
 
-    matches = re.findall(rf"<td>{order},([0-9]+)</td>", page_html)
-    if not matches:
-        raise ValueError("Cannot determine the number of small groups")
-    return max(int(match) for match in matches)
+    # as a last resort, offer the manual copy/paste GAP workflow
+    if qldpc.external.gap.is_installed():
+        return _get_small_group_number_from_gap(order)
+    raise ValueError("Cannot determine the number of small groups")
 
 
 def get_small_group_structure(order: int, index: int) -> str:
-    """Get a description of the structure of a SmallGroup from GAP."""
+    """Get a description of the structure of a SmallGroup from GAP.
+
+    If GAP cannot be called without user interaction, return the name of the group,
+    ``f"SmallGroup({order},{index})"``, instead.
+    """
     # Cache manually (not via @use_disk_cache) so the fallback name returned when GAP is unavailable
     # is never cached: only GAP's real StructureDescription (below) is stored.
     key = (order, index)
@@ -165,7 +178,7 @@ def get_small_group_structure(order: int, index: int) -> str:
 
     # try to retrieve the structure from GAP
     name = f"SmallGroup({order},{index})"
-    if qldpc.external.gap.is_installed():
+    if qldpc.external.gap.is_callable():
         qldpc.external.gap.require_package("SmallGrp")
         command = f"Print(StructureDescription({name}));;"
         structure = qldpc.external.gap.get_output(command).strip()
@@ -183,13 +196,14 @@ def get_small_group_structure(order: int, index: int) -> str:
 def maybe_get_generators_from_gap(
     group: str, *, warning: str | None = None
 ) -> GeneratorsList | None:
-    """Retrieve GAP group generators from GAP directly."""
-    try:
-        qldpc.external.gap.require_package("GUAVA")
-    except FileNotFoundError as error:
-        if re.search("GAP 4 .* is not installed", str(error)):
-            return None
-        raise  # pragma: no cover
+    """Retrieve group generators from GAP, or return None if GAP is not available.
+
+    Checking whether GAP is available may prompt on standard input; see
+    help(qldpc.external.gap.is_installed).
+    """
+    if not qldpc.external.gap.is_installed():
+        return None
+    qldpc.external.gap.require_package("GUAVA")
 
     # if provided a warning to raise before calling GAP, raise it now
     if warning is not None:
@@ -259,8 +273,8 @@ def parse_gap_permutations(permutations: str, cycle_sep: str = ",") -> Generator
         cycle_strings = line.strip()[1:-1].split(")(")
         try:
             cycles = [tuple(map(int, cycle.split(cycle_sep))) for cycle in cycle_strings if cycle]
-        except ValueError:
-            raise ValueError(f"Cannot extract cycles from string: {line}")
+        except ValueError as error:
+            raise ValueError(f"Cannot extract cycles from string: {line}") from error
 
         # decrement integers in the cycle by 1 to account for 0-indexing
         cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
@@ -313,8 +327,8 @@ def maybe_get_webpage(order: int) -> str | None:
 def get_primitive_central_idempotents(group: str, field: int) -> IdempotentsList:
     """Get the primitive central idempotents of a group algebra over a finite field.
 
-    This function uses the GAP Wedderga package (https://gap-packages.github.io/wedderga/), run in a
-    subprocess.
+    This function uses the GAP Wedderga package (https://gap-packages.github.io/wedderga/), which it
+    may install, run through qldpc.external.gap.get_output.
 
     Primitive central idempotents of a ring are nonzero elements that:
 
@@ -395,6 +409,13 @@ def get_primitive_central_idempotents(group: str, field: int) -> IdempotentsList
         idempotents.append(tuple(idempotent))
 
     return idempotents
+
+
+def _get_small_group_number_from_gap(order: int) -> int:
+    """Get the number of 'SmallGroup's of a given order from GAP."""
+    qldpc.external.gap.require_package("SmallGrp")
+    command = f"Print(NumberSmallGroups({order}));;"
+    return int(qldpc.external.gap.get_output(command))
 
 
 KNOWN_GROUPS: dict[str, GeneratorsList] = {

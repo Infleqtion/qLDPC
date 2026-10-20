@@ -319,12 +319,12 @@ class NoiseModel:
                         arity = sum(1 for target in op.targets_copy() if not target.is_combiner)
                         if rule.after is not None and rule.after.num_qubits != arity:
                             raise ValueError(
-                                f"This NoiseRule expects a multiple of {rule.after.num_qubits} "
-                                f"qubits but {op.name!r} has {arity} qubit targets"
+                                f"This NoiseRule has arity {rule.after.num_qubits}, but"
+                                f" {op.name!r} has {arity} qubit targets"
                             )
                         if rule.readout_error is not None and op.name not in JUST_MEASURE_OPS:
                             raise ValueError(f"`readout_error` is not valid on {op.name!r}")
-                        if rule.reset_error is not None and op.name not in MEASURE_AND_RESET_OPS:
+                        if rule.reset_error is not None:
                             raise ValueError(f"`reset_error` is not valid on {op.name!r}")
                     return rule
 

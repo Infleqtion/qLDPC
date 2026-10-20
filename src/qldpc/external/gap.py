@@ -22,6 +22,10 @@ import qldpc
 GAP_ROOT = os.path.join(os.path.dirname(os.path.dirname(qldpc.__file__)), "gap")
 
 
+class GAPError(ValueError):
+    """GAP reported an error while evaluating commands."""
+
+
 class _LibGap(Protocol):
     """Subset of the optional ``passagemath-gap`` API used by qLDPC."""
 
@@ -51,18 +55,12 @@ end, [])"""
 
 @functools.cache
 def is_callable() -> bool:
-    """Can we call GAP 4, directly through libgap or from the command line?"""
-    if _get_libgap() is not None:
-        return True
+    """Can we call GAP 4, directly through libgap or from the command line?
 
-    commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n");; QUIT;;']
-    try:
-        result = subprocess.run(commands, capture_output=True, text=True, check=False)
-        version = result.stdout.strip()
-        return bool(version) and bool(re.match(r"4\.\d+\.\d+", version))
-    except FileNotFoundError:
-        pass
-    return False
+    Unlike :func:`is_installed`, this check never prompts for input, so it is safe to use for
+    automatic backend selection and fallbacks.
+    """
+    return _get_libgap() is not None or _is_gap_executable()
 
 
 @functools.cache
@@ -71,7 +69,7 @@ def is_installed() -> bool:
 
     When neither libgap nor the command-line program is available, this function prompts on standard
     input, so it blocks in a non-interactive context (and raises ``EOFError`` if standard input is
-    closed).
+    closed).  Use :func:`is_callable` for a check that never prompts.
     """
     if is_callable():
         return True
@@ -100,11 +98,14 @@ def get_output(*commands: str, use_pipe: bool = False) -> str:
     libgap binding.  Otherwise, when GAP is callable, it runs the commands in a subprocess.
     Finally, it falls back to a manual workflow that prints the commands, copies them to the system
     clipboard, and reads the pasted output from standard input (blocking, and raising ``EOFError``
-    if standard input is closed), caching the result to disk.
+    if standard input is closed), caching the result to disk.  Once :func:`require_package` has
+    fallen back from libgap to the GAP executable, every later call in the process uses the
+    executable.
 
     Raises:
         FileNotFoundError: If GAP 4 is not installed.
-        ValueError: If GAP reports an error (a nonzero exit code or output on standard error).
+        GAPError: If GAP reports an error: through libgap, or with a nonzero exit code or output on
+            standard error from the GAP executable.
     """
     if not is_installed():
         raise FileNotFoundError("GAP 4 is required to proceed, but is not installed")
@@ -181,6 +182,7 @@ def require_package(name: str, repo: str | None = None) -> bool:
             package name for PackageManager or f"https://github.com/gap-packages/{name}" for Git.
 
     Raises:
+        EOFError: If a missing package needs confirmation to install, but standard input is closed.
         ModuleNotFoundError: If the package is missing and GAP cannot be called to install it.
         ValueError: If the user declines to install a missing package, or the installation fails.
 
@@ -304,7 +306,7 @@ def _get_output_libgap(commands: Sequence[str], libgap: _LibGap) -> str:
         result = libgap.eval(direct_command)
         libgap.eval(_RESET_LIBGAP_ERROR_OUTPUT)
     except Exception as error:
-        raise ValueError(
+        raise GAPError(
             "Error encountered when running GAP through libgap\n\n"
             f"{error}\n\nGAP command:\n{' '.join(commands)}"
         ) from error
@@ -339,7 +341,7 @@ def _get_output_subprocess(commands: Sequence[str], use_pipe: bool = False) -> s
         if result.stderr:
             parts.append(result.stderr)
         parts.append(f"GAP command:\n{' '.join(commands)}")
-        raise ValueError("\n\n".join(parts))
+        raise GAPError("\n\n".join(parts))
     return result.stdout
 
 
