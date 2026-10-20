@@ -37,21 +37,21 @@ class _BoundedKernelSearch:
         max_weight: Only yield nonzero words of at most this Hamming weight.
         batch_size: Maximum number of coefficient supports processed together.
 
-    Words are Python integers, with column zero in the least significant bit.  A word can be
-    yielded repeatedly in different information sets; consumers may apply arbitrary predicates.
-    No eligible-word upper bound or ordinary distance-search fallback is used.
+    Words are Python integers, with column zero in the least significant bit.  A word can be yielded
+    repeatedly in different information sets; consumers may apply arbitrary predicates.  No
+    eligible-word upper bound or ordinary distance-search fallback is used.
 
     After coefficient weights through ``a`` in dimension ``k``, an unseen word has weight at least
     ``sum(max(0, a + 1 - (k - r)) for r in ranks)``: its coefficient vector in each basis has more
     than ``a`` bits, of which at most ``k-r`` lie outside that set's pivots.  The pivot sets are
-    disjoint, so their bounds add.  Enumeration stops only when this bound exceeds ``max_weight``
-    or all coefficients have been exhausted.  Filtering yielded words cannot weaken this proof.
-    The ``lower_bound`` attribute bounds unseen words only, not the minimum over all kernel words.
+    disjoint, so their bounds add.  Enumeration stops only when this bound exceeds ``max_weight`` or
+    all coefficients have been exhausted.  Filtering yielded words cannot weaken this proof.  The
+    ``lower_bound`` attribute bounds unseen words only, not the minimum over all kernel words.
 
-    When the kernel dimension exceeds the check rank, store only the pivot-coordinate parts of
-    the systematic generators, not a quadratic-size dense kernel matrix.  Coefficient support
-    supplies the free coordinates and their exact weight.  In the lower-rate case, reuse the
-    distance implementation's disjoint information-set construction.
+    When the kernel dimension exceeds the check rank, store only the pivot-coordinate parts of the
+    systematic generators, not a quadratic-size dense kernel matrix.  Coefficient support supplies
+    the free coordinates and their exact weight.  In the lower-rate case, reuse the distance
+    implementation's disjoint information-set construction.
     """
 
     def __init__(self, checks: npt.ArrayLike, max_weight: int, *, batch_size: int = 4096) -> None:
@@ -116,10 +116,10 @@ class _BoundedKernelSearch:
 class _PauliWeightDecision:
     """A checked coset representative or a global lower bound in the oracle's fixed metric.
 
-    ``representative`` packs X in the low ``n`` bits and Z in the next ``n`` bits.
-    It is not asserted to be a minimum representative.  If ``within_bound`` is False,
-    ``lower_bound`` strictly exceeds the queried threshold.  In every decision it bounds the
-    minimum of the entire coset, so it remains valid when reused at a different threshold.
+    ``representative`` packs X in the low ``n`` bits and Z in the next ``n`` bits.  It is not
+    asserted to be a minimum representative.  If ``within_bound`` is False, ``lower_bound`` strictly
+    exceeds the queried threshold.  In every decision it bounds the minimum of the entire coset, so
+    it remains valid when reused at a different threshold.
     """
 
     within_bound: bool
@@ -139,27 +139,25 @@ class _PauliCosetSearch:
         batch_size: Maximum coefficient supports in a packed affine BZ batch.
 
     The full syndrome identifies a Pauli coset because a maximal isotropic space equals its
-    symplectic orthogonal.  Physical weight uses the embedding ``(x|z) -> (x|z|x+z)``, whose
-    Hamming weight is twice physical weight, including Y.  CSS weight uses ``[X|Z]`` directly:
-    its Hamming weight is at most twice ``max(|x|, |z|)``.
-    For each information-set basis, zero the affine offset on its pivots by adding rows.
-    Pivot coordinates then equal coefficient bits.  The same disjoint-set coverage bound as
-    :class:`_BoundedKernelSearch` applies, starting at coefficient weight zero.  Absence of a
-    threshold witness is reported only after all visited metric weights and the unseen metric
-    bound exceed the threshold.  If ``v`` is the minimum visited metric weight and ``L`` bounds
-    unseen binary Hamming weights, the global metric bound is ``min(v, ceil(L / 2))``.
-    Exhausting all coefficients gives the exact visited minimum.  An unseen-word bound alone
-    is never published as a global coset bound.
+    symplectic orthogonal.  Physical weight uses the embedding ``(x|z) -> (x|z|x+z)``, whose Hamming
+    weight is twice physical weight, including Y.  CSS weight uses ``[X|Z]`` directly: its Hamming
+    weight is at most twice ``max(|x|, |z|)``.  For each information-set basis, zero the affine
+    offset on its pivots by adding rows.  Pivot coordinates then equal coefficient bits.  The same
+    disjoint-set coverage bound as :class:`_BoundedKernelSearch` applies, starting at coefficient
+    weight zero.  Absence of a threshold witness is reported only after all visited metric weights
+    and the unseen metric bound exceed the threshold.  If ``v`` is the minimum visited metric weight
+    and ``L`` bounds unseen binary Hamming weights, the global metric bound is
+    ``min(v, ceil(L / 2))``.  Exhausting all coefficients gives the exact visited minimum.  An
+    unseen-word bound alone is never published as a global coset bound.
 
-    Elimination is performed once.  Information sets are prepared lazily, at most once.
-    The unconditional syndrome tables have linear size: identity and single-qubit Paulis.
-    A CSS-weight-one representative may be ``X_i Z_j`` on distinct qubits.  Per-query matching
-    of X-single and Z-single syndromes checks all such representatives in linear work without
-    a quadratic table.  Absence from that complete search, not just physical singles, proves
-    a CSS lower bound two.
-    The bounded cache stores checked upper bounds and proved lower bounds.  A recomputed decision
-    is merged into its entry, so a proved bound is never lost.  Eviction changes only runtime,
-    never correctness.  No heuristic or probabilistic negative decision is used.
+    Elimination is performed once.  Information sets are prepared lazily, at most once.  The
+    unconditional syndrome tables have linear size: identity and single-qubit Paulis.  A
+    CSS-weight-one representative may be ``X_i Z_j`` on distinct qubits.  Per-query matching of
+    X-single and Z-single syndromes checks all such representatives in linear work without a
+    quadratic table.  Absence from that complete search, not just physical singles, proves a CSS
+    lower bound two.  The bounded cache stores checked upper bounds and proved lower bounds.  A
+    recomputed decision is merged into its entry, so a proved bound is never lost.  Eviction changes
+    only runtime, never correctness.  No heuristic or probabilistic negative decision is used.
     """
 
     def __init__(

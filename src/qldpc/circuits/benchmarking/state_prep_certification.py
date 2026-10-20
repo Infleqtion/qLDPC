@@ -33,8 +33,8 @@ Two complete searches enumerate the remaining minimal patterns.  Brouwer--Zimmer
 visits every word of ``ker(P)`` through a weight bound, regardless of the nonlinear spread
 predicate, and a rank test discards non-minimal words.  Independent-prefix closure instead extends
 increasing prefixes of independent columns.  A minimal dependence, sorted by column index, is an
-independent prefix plus a last column equal to the XOR of the prefix, and conversely.  Requiring
-the closing index to exceed the prefix indices generates each minimal support exactly once, and a
+independent prefix plus a last column equal to the XOR of the prefix, and conversely.  Requiring the
+closing index to exceed the prefix indices generates each minimal support exactly once, and a
 dependent prefix cannot lie in any minimal support.  A cost heuristic chooses between the two
 searches; it does not affect correctness and is not a universal runtime guarantee.
 
@@ -75,39 +75,37 @@ def certify_state_prep_spread(
 
     For the complete pure output-state stabilizers, let ``S`` map DEM faults to their state
     syndrome, ``P`` map them to the selected actual rejection detectors, and ``mu(s)`` be the
-    minimum chosen weight with syndrome ``s``, jointly over a single representative.
-    The certificate proves ``mu(S f) <= |f|`` whenever ``P f = 0`` and ``1 <= |f| <= max_faults``.
-    Physical weight counts ``|support(x) union support(z)|``, with Y affecting one qubit.
-    CSS weight counts ``max(|x|, |z|)``, in the supplied physical frame.
-    Both metrics always minimize jointly over one representative, never by separately minimizing
-    the X and Z projections.  Logical stabilizers fixing the prepared state are included.
+    minimum chosen weight with syndrome ``s``, jointly over a single representative.  The
+    certificate proves ``mu(S f) <= |f|`` whenever ``P f = 0`` and ``1 <= |f| <= max_faults``.
+    Physical weight counts ``|support(x) union support(z)|``, with Y affecting one qubit.  CSS
+    weight counts ``max(|x|, |z|)``, in the supplied physical frame.  Both metrics always minimize
+    jointly over one representative, never by separately minimizing the X and Z projections.
+    Logical stabilizers fixing the prepared state are included.
 
     The selected output must be a definite pure stabilizer state independent of random measurement
     branches.  All existing detector and observable annotations must be deterministic, including
     unselected ones (Stim's exact DEM validation enforces this conservative restriction).
     Intrinsically random post-selected branches are not supported.  Stabilizer signs and physical
-    frames are preserved; the appended measurements are noiseless.
-    Automatic selection is independent of the chosen stabilizer generators, but not of the
-    physical Pauli basis: it does not use local-Clifford equivalence.
-    For the complete rank-n row space W, the pure-X and pure-Z intersections have dimensions
-    ``n - rank(W_Z)`` and ``n - rank(W_X)``.
-    They span W exactly when their dimension sum is n.
-    This detects state equivalences, not compatibility with an unspecified downstream protocol.
-    A CSS code may prepare a non-CSS logical stabilizer state, requiring an explicit True
-    override for its sector-wise application.
+    frames are preserved; the appended measurements are noiseless.  Automatic selection is
+    independent of the chosen stabilizer generators, but not of the physical Pauli basis: it does
+    not use local-Clifford equivalence.  For the complete rank-n row space W, the pure-X and pure-Z
+    intersections have dimensions ``n - rank(W_Z)`` and ``n - rank(W_X)``.  They span W exactly when
+    their dimension sum is n.  This detects state equivalences, not compatibility with an
+    unspecified downstream protocol.  A CSS code may prepare a non-CSS logical stabilizer state,
+    requiring an explicit True override for its sector-wise application.
 
-    The model is independent binary DEM mechanisms, not mutually exclusive alternatives at
-    physical gate locations.  Stim's disjoint-channel probability approximation is enabled only
-    to obtain those mechanisms; probabilities play no role in the combinatorial proof.
-    Correlated mechanisms are never split.  This is not an exact sampling-distribution claim.
+    The model is independent binary DEM mechanisms, not mutually exclusive alternatives at physical
+    gate locations.  Stim's disjoint-channel probability approximation is enabled only to obtain
+    those mechanisms; probabilities play no role in the combinatorial proof.  Correlated mechanisms
+    are never split.  This is not an exact sampling-distribution claim.
 
-    This sufficient *resource-state* property composes with downstream gadgets that propagate
-    each input error of the selected weight r and additional faults within the corresponding
-    r-plus-fault budget (or correct them).  CSS-sector use requires suitable sector-preserving
-    downstream operations; a general Clifford can mix sectors.  An explicit CSS override on a
-    non-CSS application is the caller's responsibility, not an automatic correction theorem.
-    No arbitrary downstream algorithm, acceptance probability, or necessary-and-sufficient
-    fault-tolerance criterion is certified here.
+    This sufficient *resource-state* property composes with downstream gadgets that propagate each
+    input error of the selected weight r and additional faults within the corresponding r-plus-fault
+    budget (or correct them).  CSS-sector use requires suitable sector-preserving downstream
+    operations; a general Clifford can mix sectors.  An explicit CSS override on a non-CSS
+    application is the caller's responsibility, not an automatic correction theorem.  No arbitrary
+    downstream algorithm, acceptance probability, or necessary-and-sufficient fault-tolerance
+    criterion is certified here.
 
     The search is exact and never samples, but its cost is exponential in general.  See the module
     documentation for the proof and the search strategy.
@@ -118,10 +116,10 @@ def certify_state_prep_spread(
         max_faults: Required positive integer unit-cost DEM fault budget.
         post_select: Indices of actual circuit detectors whose *events* must vanish relative to
             their deterministic ideal reference.  Appended output diagnostics are not rejected.
-        css_weight: True selects CSS-sector weight; False selects physical Pauli support.
-            None selects CSS weight exactly when the complete prepared-state stabilizer row
-            space has a pure-X/pure-Z decomposition in the physical output basis.
-            The resolved boolean is returned in the certificate.
+        css_weight: True selects CSS-sector weight; False selects physical Pauli support.  None
+            selects CSS weight exactly when the complete prepared-state stabilizer row space has a
+            pure-X/pure-Z decomposition in the physical output basis.  The resolved boolean is
+            returned in the certificate.
 
     Returns:
         A certificate recording the decision and the exact model.  A negative decision includes an
@@ -180,13 +178,13 @@ def certify_state_prep_spread(
 class StatePrepSpreadCounterexample:
     """An accepted original-DEM pattern violating the stated bounded-spread criterion.
 
-    ``fault_indices`` index error instructions (not all instructions) in the flattened,
-    undecomposed diagnostic DEM returned in the certificate.  ``output_syndrome`` is ordered
-    like ``target_stabilizers``.  ``effective_weight_lower_bound`` is proved, not estimated.
+    ``fault_indices`` index error instructions (not all instructions) in the flattened, undecomposed
+    diagnostic DEM returned in the certificate.  ``output_syndrome`` is ordered like
+    ``target_stabilizers``.  ``effective_weight_lower_bound`` is proved, not estimated.
     ``output_pauli`` is a syndrome representative, written as a Stim Pauli string such as
     ``+YZ_____`` over the output qubits in the caller's frame.  It is not necessarily a
-    minimum-weight representative or the propagated physical error.
-    This need not be the smallest violating fault order.
+    minimum-weight representative or the propagated physical error.  This need not be the smallest
+    violating fault order.
     """
 
     fault_indices: tuple[int, ...]
@@ -317,8 +315,8 @@ def _get_fault_maps(
 def _is_css_state(stabilizers: np.ndarray[tuple[int, ...], np.dtype[np.uint8]]) -> bool:
     """Test pure-sector intersection dimensions of an already complete rank-n row space."""
     n = len(stabilizers)
-    # The pure-X/Z intersections have dimensions n-rank(W_Z) and n-rank(W_X).
-    # They span W exactly when rank(W_X)+rank(W_Z)=n, regardless of the generator basis.
+    # The pure-X/Z intersections have dimensions n-rank(W_Z) and n-rank(W_X).  They span W exactly
+    # when rank(W_X)+rank(W_Z)=n, regardless of the generator basis.
     ranks = [
         _binary_rank([int.from_bytes(np.packbits(row).tobytes(), "little") for row in sector])
         for sector in (stabilizers[:, :n], stabilizers[:, n:])
@@ -385,8 +383,8 @@ def _search_minimal_patterns(
     if limit < 2 or not remaining:
         return None
 
-    # Independent distinct flag types require even multiplicities, so their minimal supports
-    # are equal-flag pairs.  This reduction applies at any flag rank, not just one flag.
+    # Independent distinct flag types require even multiplicities, so their minimal supports are
+    # equal-flag pairs.  This reduction applies at any flag rank, not just one flag.
     if len({flag for flag, _, _ in remaining}) == statistics.flag_rank:
         limit = statistics.effective_budget = 2
     elif not _use_prefix_search(len(remaining), statistics.flag_rank, limit):
@@ -477,8 +475,8 @@ def _search_bz_patterns(
         for word in outer.words():
             support = tuple(jj for jj in range(len(mechanisms)) if (word >> jj) & 1)
 
-            # BZ emits nonminimal kernel words too.  Nullity one excludes accepted supports
-            # that can be decomposed into smaller, disjoint accepted patterns.
+            # BZ emits nonminimal kernel words too.  Nullity one excludes accepted supports that can
+            # be decomposed into smaller, disjoint accepted patterns.
             if _binary_rank([mechanisms[jj][0] for jj in support]) != len(support) - 1:
                 continue
             syndrome = 0
@@ -501,16 +499,16 @@ def _iter_minimal_patterns(
 ) -> Iterator[tuple[tuple[int, ...], int]]:
     """Yield minimal patterns of nonzero-flag (flag, syndrome, original-index) columns.
 
-    Prefixes are independent and increasing in *internal* column order, not necessarily original
-    DEM order.  The largest internal index is the unique closing column.  Carrying its prefix XOR
-    and state syndrome avoids a full word reconstruction or repeated output-map multiplication.
+    Prefixes are independent and increasing in *internal* column order, not necessarily original DEM
+    order.  The largest internal index is the unique closing column.  Carrying its prefix XOR and
+    state syndrome avoids a full word reconstruction or repeated output-map multiplication.
     """
     groups: dict[int, list[int]] = {}
     for index, (flag, _, _) in enumerate(mechanisms):
         groups.setdefault(flag, []).append(index)
 
-    # Each recursive prefix is independent.  Its full flag XOR is the only possible closing
-    # column; requiring a later closing index emits each minimal dependence exactly once.
+    # Each recursive prefix is independent.  Its full flag XOR is the only possible closing column;
+    # requiring a later closing index emits each minimal dependence exactly once.
     def visit(
         support: tuple[int, ...],
         start: int,
