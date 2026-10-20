@@ -19,14 +19,11 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 from numba import njit
-from numba.extending import register_jitable
 
 from ._binary import (
-    _MASK0F,
-    _MASK33,
-    _MASK55,
     _get_hamming_weight_fn,
     _get_packed_row_weights,
+    _popcount_word,
     _row_reduce_binary,
     _rows_to_ints,
 )
@@ -186,18 +183,6 @@ def _get_information_set_generators_for_columns(
         )
 
     return information_sets
-
-
-@register_jitable(inline="always")
-def _popcount_word(value: np.uint64) -> np.int64:
-    """Count one unsigned word, returning a signed weight without overflow."""
-    value = value - ((value >> np.uint64(1)) & _MASK55)
-    value = (value & _MASK33) + ((value >> np.uint64(2)) & _MASK33)
-    value = (value + (value >> np.uint64(4))) & _MASK0F
-    value = value + (value >> np.uint64(8))
-    value = value + (value >> np.uint64(16))
-    value = value + (value >> np.uint64(32))
-    return np.int64(value & np.uint64(127))
 
 
 @njit(boundscheck=True, cache=True)

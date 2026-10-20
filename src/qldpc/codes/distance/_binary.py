@@ -5,9 +5,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
+from numba import njit, types
+from numba.extending import intrinsic, overload
 
 _MASK55 = np.uint64(0x5555555555555555)
 _MASK33 = np.uint64(0x3333333333333333)
@@ -71,35 +74,19 @@ def _row_reduce_binary(
     npt.NDArray[np.uint8] | None,
     npt.NDArray[np.int_],
 ]:
-    """Row-reduce a binary matrix over selected columns, transforming labels in parallel."""
-    matrix = matrix.copy()
-    labels = None if labels is None else labels.copy()
-    columns = np.arange(matrix.shape[1], dtype=int) if columns is None else columns
-    pivots: list[int] = []
-    pivot_row = 0
+    """Row-reduce a binary matrix over selected columns, transforming labels in parallel.
 
-    for col in columns:
-        candidates = np.flatnonzero(matrix[pivot_row:, col])
-        if not len(candidates):
-            continue
-        source_row = pivot_row + int(candidates[0])
-        if source_row != pivot_row:
-            matrix[[pivot_row, source_row]] = matrix[[source_row, pivot_row]]
-            if labels is not None:
-                labels[[pivot_row, source_row]] = labels[[source_row, pivot_row]]
-
-        rows_to_clear = np.flatnonzero(matrix[:, col])
-        rows_to_clear = rows_to_clear[rows_to_clear != pivot_row]
-        matrix[rows_to_clear] ^= matrix[pivot_row]
-        if labels is not None:
-            labels[rows_to_clear] ^= labels[pivot_row]
-
-        pivots.append(int(col))
-        pivot_row += 1
-        if pivot_row == len(matrix):
-            break
-
-    return matrix, labels, np.asarray(pivots, dtype=int)
+    Pivots are taken in the order of ``columns`` (by default, every column in order), each from the
+    first remaining row with a one in that column, and every other row is cleared in that column.
+    The inputs are not modified.
+    """
+    width = matrix.shape[1]
+    columns = np.arange(width) if columns is None else np.asarray(columns)
+    if len(columns) and (columns.min() < 0 or columns.max() >= width):
+        raise IndexError("Row-reduction columns are out of range")
+    tags = np.empty((len(matrix), 0), dtype=np.uint8) if labels is None else labels
+    reduced, reduced_tags, pivots = _row_reduce_packed(matrix, tags, columns.astype(np.int64))
+    return reduced, None if labels is None else reduced_tags, pivots.astype(int)
 
 
 def _get_independent_rows(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
@@ -233,6 +220,102 @@ def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
     if arr.size == 0:
         return np.empty((0, num_bits), dtype=arr.dtype)  # nothing to riffle (e.g. no stabilizers)
     return np.reshape(arr, (-1, 2, num_bits // 2)).transpose(0, 2, 1).reshape(-1, num_bits)
+
+
+####################################################################################################
+# native bit counting, packing and row reduction
+
+
+def _popcount_word(value: np.uint64) -> np.int64:
+    """Count the set bits of one 64-bit word.
+
+    Compiled code calls LLVM's population-count instruction instead of this Python fallback.
+    """
+    return np.int64(int(value).bit_count())
+
+
+def _ctpop_definition(context: Any, value: Any) -> Any:
+    """Lower a uint64 population count directly to LLVM's ctpop intrinsic."""
+    if value != types.uint64:
+        raise TypeError("Population count requires uint64")
+
+    def emit(context: Any, builder: Any, signature: Any, arguments: Any) -> Any:
+        return builder.ctpop(arguments[0])
+
+    return types.uint64(types.uint64), emit
+
+
+_ctpop = cast(Callable[[np.uint64], np.uint64], intrinsic(_ctpop_definition))
+
+
+@overload(_popcount_word, inline="always")
+def _overload_popcount_word(value: Any) -> Callable[[np.uint64], np.int64]:
+    """Compile ``_popcount_word`` to a single population-count instruction."""
+
+    def implementation(value: Any) -> np.int64:
+        return np.int64(_ctpop(value))
+
+    return implementation
+
+
+@njit(cache=True)
+def _pack_bits(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
+    """Pack binary rows into uint64 words, with column j in bit j % 64 of word j // 64.
+
+    Entries must be 0 or 1.  This layout differs from that of ``_rows_to_ints``, which puts the
+    first column in the most significant bit; do not mix the two.
+    """
+    packed = np.zeros((len(matrix), (matrix.shape[1] + 63) // 64), dtype=np.uint64)
+    for row in range(len(matrix)):
+        for column in range(matrix.shape[1]):
+            if matrix[row, column]:
+                packed[row, column // 64] |= np.uint64(1) << np.uint64(column % 64)
+    return packed
+
+
+@njit(cache=True)
+def _unpack_bits(packed: npt.NDArray[np.uint64], width: int) -> npt.NDArray[np.uint8]:
+    """Inverse of ``_pack_bits`` for rows with ``width`` columns."""
+    matrix = np.empty((len(packed), width), dtype=np.uint8)
+    for row in range(len(packed)):
+        for column in range(width):
+            matrix[row, column] = (packed[row, column // 64] >> np.uint64(column % 64)) & 1
+    return matrix
+
+
+@njit(cache=True)
+def _row_reduce_packed(
+    matrix: npt.NDArray[np.uint8], labels: npt.NDArray[np.uint8], columns: npt.NDArray[np.int64]
+) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8], npt.NDArray[np.int64]]:
+    """Implement ``_row_reduce_binary`` on packed copies, for in-range columns."""
+    rows, tags = _pack_bits(matrix), _pack_bits(labels)
+    num_rows = len(rows)
+    pivots = np.empty(min(num_rows, len(columns)), dtype=np.int64)
+    rank = 0
+    for column in columns:
+        if rank == num_rows:
+            break
+        word = column // 64
+        bit = np.uint64(1) << np.uint64(column % 64)
+        source = rank
+        while source < num_rows and not rows[source, word] & bit:
+            source += 1
+        if source == num_rows:
+            continue
+        if source != rank:
+            for index in range(rows.shape[1]):
+                rows[rank, index], rows[source, index] = rows[source, index], rows[rank, index]
+            for index in range(tags.shape[1]):
+                tags[rank, index], tags[source, index] = tags[source, index], tags[rank, index]
+        for row in range(num_rows):
+            if row != rank and rows[row, word] & bit:
+                for index in range(rows.shape[1]):
+                    rows[row, index] ^= rows[rank, index]
+                for index in range(tags.shape[1]):
+                    tags[row, index] ^= tags[rank, index]
+        pivots[rank] = column
+        rank += 1
+    return _unpack_bits(rows, matrix.shape[1]), _unpack_bits(tags, labels.shape[1]), pivots[:rank]
 
 
 ####################################################################################################

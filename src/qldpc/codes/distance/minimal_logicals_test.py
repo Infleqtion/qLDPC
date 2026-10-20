@@ -22,6 +22,7 @@ from . import minimal_logicals as ml
 from ._binary import (
     _get_independent_rows,
     _get_nested_code_basis,
+    _pack_bits,
     _row_reduce_binary,
 )
 from .brouwer_zimmermann import _InformationSet
@@ -212,7 +213,7 @@ def test_overlapping_information_sets(width: int) -> None:
     coverage = int(np.bincount(np.concatenate([item.pivots for item in family])).max())
     assert coverage > 1
 
-    lift = ml._pack(counter.checks_x)
+    lift = _pack_bits(counter.checks_x)
     with (
         mock.patch.object(ml, "_get_overlapping_information_sets", return_value=(family, coverage)),
         mock.patch.object(
@@ -238,7 +239,7 @@ def test_ownership_breaks_ties_by_layer_then_index(interpreted: bool) -> None:
     generators = np.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=np.uint8)
     other = np.array([[1, 0, 1, 0], [1, 1, 1, 1]], dtype=np.uint8)
     decoders = np.stack([ml._get_decoder(generators), ml._get_decoder(other)])
-    word = ml._pack(np.array([[1, 1, 1, 1]], dtype=np.uint8))[0]
+    word = _pack_bits(np.array([[1, 1, 1, 1]], dtype=np.uint8))[0]
     with _maybe_interpreted(interpreted):
         is_owned = ml._is_owned
         # The first set visits 1111 in layer two, and the second set in layer one.
@@ -269,8 +270,8 @@ def test_masked_rank(interpreted: bool, width: int) -> None:
         for _ in range(20):
             rows = rng.integers(0, 2, (int(rng.integers(0, 6)), width), dtype=np.uint8)
             mask = rng.integers(0, 2, width, dtype=np.uint8).astype(bool)
-            packed_rows = ml._pack(rows)
-            packed_mask = ml._pack(mask[None].astype(np.uint8))[0]
+            packed_rows = _pack_bits(rows)
+            packed_mask = _pack_bits(mask[None].astype(np.uint8))[0]
             scratch = np.empty_like(packed_rows)
             for complement, columns in ((False, mask), (True, ~mask)):
                 expected = (

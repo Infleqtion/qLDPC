@@ -66,6 +66,8 @@ from ._binary import (
     _assert_binary,
     _get_independent_rows,
     _get_nested_code_basis,
+    _pack_bits,
+    _popcount_word,
     _row_reduce_binary,
 )
 from .brouwer_zimmermann import (
@@ -73,7 +75,6 @@ from .brouwer_zimmermann import (
     _get_distance_brouwer_zimmermann_many,
     _get_information_set_generators,
     _get_overlapping_information_sets,
-    _popcount_word,
     _select_brouwer_zimmermann_information_sets,
 )
 from .brute_force import _get_distance_quantum_brute_force
@@ -194,7 +195,7 @@ class CSSLogicalWeightCounter:
 
         # Both sectors weigh their supports against the X checks; see the module docstring.
         lift_rank = len(self._x)
-        lift = _pack(self._x if full_pauli else self._x[:0])
+        lift = _pack_bits(self._x if full_pauli else self._x[:0])
         counts_x = _count_minimal_words(
             *sector_x, distance, method, lift, complement=False, base=distance if full_pauli else 0
         )
@@ -334,8 +335,8 @@ def _count_minimal_words(
     else:
         sets, get_lower_bound = _get_counting_information_sets(basis, labels, weight)
 
-    rows = [_pack(generators) for generators, _ in sets]
-    tags = [_pack(set_labels) for _, set_labels in sets]
+    rows = [_pack_bits(generators) for generators, _ in sets]
+    tags = [_pack_bits(set_labels) for _, set_labels in sets]
     # Ownership compares sets, so a single set needs no decoder.
     decoders = (
         np.stack([_get_decoder(generators) for generators, _ in sets])
@@ -418,14 +419,7 @@ def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:
     assert transform is not None
     decoder = np.zeros((generators.shape[1], size), dtype=np.uint8)
     decoder[pivots] = transform
-    return _pack(decoder.T)
-
-
-def _pack(matrix: _BinaryMatrix) -> _PackedMatrix:
-    """Pack binary rows into uint64 words, with coordinate j in bit j % 64 of word j // 64."""
-    padded = np.pad(matrix, ((0, 0), (0, -matrix.shape[1] % 64)))
-    packed = np.packbits(padded, axis=1, bitorder="little")
-    return np.ascontiguousarray(packed).view("<u8").astype(np.uint64)
+    return _pack_bits(decoder.T)
 
 
 def _get_kernel(matrix: _BinaryMatrix) -> _BinaryMatrix:

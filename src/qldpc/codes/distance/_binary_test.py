@@ -4,12 +4,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import itertools
+from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
 import numpy.typing as npt
 import pytest
+from numba import njit, types
 
 import qldpc
 
@@ -259,3 +262,106 @@ def test_distance_requires_binary_input() -> None:
     # A binary generator matrix is accepted with either a plain integer dtype or a GF(2) dtype.
     assert qldpc.codes.distance.get_distance_classical(np.array([[1, 1, 1]])) == 3
     assert qldpc.codes.distance.get_distance_classical(qldpc.codes.HammingCode(4).generator) == 3
+
+
+####################################################################################################
+# native bit counting, packing and row reduction
+
+
+@njit
+def _popcounts(values: npt.NDArray[np.uint64]) -> npt.NDArray[np.int64]:
+    counts = np.empty(len(values), dtype=np.int64)
+    for index, value in enumerate(values):
+        counts[index] = binary._popcount_word(value)
+    return counts
+
+
+def test_popcount_word() -> None:
+    rng = np.random.default_rng(78)
+    values = np.concatenate(
+        [
+            np.array([0, 1, 2**63, 2**64 - 1], dtype=np.uint64),
+            rng.integers(0, 2**64, 100, np.uint64),
+        ]
+    )
+    expected = [int(value).bit_count() for value in values]
+    np.testing.assert_array_equal(_popcounts(values), expected)
+    assert [binary._popcount_word(value) for value in values] == expected
+
+
+def test_popcount_lowering() -> None:
+    """Exercise the compiler extension directly, since coverage cannot trace compiled code."""
+    with pytest.raises(TypeError, match="uint64"):
+        binary._ctpop_definition(None, types.int64)
+    signature, emit = binary._ctpop_definition(None, types.uint64)
+    assert signature.return_type == types.uint64
+    assert emit(None, SimpleNamespace(ctpop=lambda value: value + 1), None, [6]) == 7
+    with mock.patch.object(binary, "_ctpop", return_value=np.uint64(3)):
+        assert binary._overload_popcount_word(types.uint64)(np.uint64(7)) == 3
+
+
+@pytest.mark.parametrize("interpreted", [False, True])
+def test_row_reduction_matches_dense_elimination(interpreted: bool) -> None:
+    """Compare with byte-valued elimination for partial, repeated and multiword columns."""
+    kernels = ("_pack_bits", "_unpack_bits", "_row_reduce_packed")
+    rng = np.random.default_rng(720)
+    with (
+        mock.patch.multiple(binary, **{name: getattr(binary, name).py_func for name in kernels})
+        if interpreted
+        else contextlib.nullcontext()
+    ):
+        for width in (0, 1, 7, 64, 65, 130):
+            for height in (0, 1, 3, 7):
+                for label_width in (0, 1, 65):
+                    matrix = rng.integers(0, 2, (height, width), dtype=np.uint8)
+                    labels = rng.integers(0, 2, (height, label_width), dtype=np.uint8)
+                    original, original_labels = matrix.copy(), labels.copy()
+                    for columns in (
+                        np.arange(width),
+                        rng.permutation(width)[: width // 2],
+                        np.tile(np.arange(width), 2),
+                    ):
+                        actual = binary._row_reduce_binary(matrix, labels, columns=columns)
+                        expected = _dense_elimination(matrix, labels, columns)
+                        for result, reference in zip(actual, expected, strict=True):
+                            np.testing.assert_array_equal(result, reference)
+                    np.testing.assert_array_equal(matrix, original)
+                    np.testing.assert_array_equal(labels, original_labels)
+                    packed = binary._pack_bits(matrix)
+                    for row in range(height):
+                        integer = sum(int(bit) << column for column, bit in enumerate(matrix[row]))
+                        words = [
+                            (integer >> (64 * word)) & (2**64 - 1)
+                            for word in range(len(packed[row]))
+                        ]
+                        np.testing.assert_array_equal(packed[row], words)
+                    np.testing.assert_array_equal(binary._unpack_bits(packed, width), matrix)
+    for columns in (np.array([-1]), np.array([2])):
+        with pytest.raises(IndexError, match="out of range"):
+            binary._row_reduce_binary(np.eye(2, dtype=np.uint8), columns=columns)
+
+
+def _dense_elimination(
+    matrix: npt.NDArray[np.uint8],
+    labels: npt.NDArray[np.uint8],
+    columns: npt.NDArray[np.int_],
+) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8], npt.NDArray[np.int_]]:
+    """Reference elimination on byte-valued rows."""
+    rows, tags = matrix.copy(), labels.copy()
+    pivots: list[int] = []
+    for column in columns:
+        rank = len(pivots)
+        if rank == len(rows):
+            break
+        choices = np.flatnonzero(rows[rank:, column])
+        if not len(choices):
+            continue
+        source = rank + int(choices[0])
+        rows[[rank, source]] = rows[[source, rank]]
+        tags[[rank, source]] = tags[[source, rank]]
+        for other in range(len(rows)):
+            if other != rank and rows[other, column]:
+                rows[other] ^= rows[rank]
+                tags[other] ^= tags[rank]
+        pivots.append(int(column))
+    return rows, tags, np.array(pivots, dtype=int)
