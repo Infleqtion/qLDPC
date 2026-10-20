@@ -223,7 +223,8 @@ class StatePrepSpreadStatistics:
     effective_budget: int = 0
     """Largest minimal accepted pattern searched.
 
-    This is ``min(max_faults, flag_rank + 1)``, or 2 if the distinct flag columns are independent.
+    This is ``min(max_faults, flag_rank + 1)``, or 2 when independent flagged mechanisms are
+    searched (``max_faults >= 2``).
     """
 
     generated: int = 0
@@ -268,7 +269,7 @@ class StatePrepSpreadStatistics:
     """Seconds spent searching minimal accepted patterns."""
 
     search_method: Literal["singletons", "brouwer_zimmermann", "independent_prefix"] = "singletons"
-    """The search used for patterns with rejection flags (``singletons`` if there are none)."""
+    """The search used for patterns with rejection flags (``singletons`` if none are searched)."""
 
     prefix_extensions: int = 0
     """Prefix extensions attempted by independent-prefix search, including pruned ones."""

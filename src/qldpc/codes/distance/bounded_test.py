@@ -184,7 +184,7 @@ def test_affine_global_bound_and_cache(batch_size: int, weight: Literal["pauli",
     assert at_minimum.within_bound and at_minimum.lower_bound == 4
     assert oracle.generated == generated
     assert oracle.syndrome(at_minimum.representative) == syndrome
-    # The positive decision must not erase the proved bound that already answers threshold three.
+    # A negative threshold-three query is answered from the cached bound without more search.
     hits = oracle.cache_hits
     repeated = oracle.decide(syndrome, 3)
     assert not repeated.within_bound and repeated.lower_bound == 4
