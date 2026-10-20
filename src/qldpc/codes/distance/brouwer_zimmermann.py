@@ -7,7 +7,7 @@ The disjoint/rank-deficient certificates follow `Algorithm 994
 `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_. The overlapping-set
 certificate and implementation invariants are derived in ``brouwer_zimmermann.md``
 beside this module. Information-set families and their certificates are built in
-``_families.py``, which fixed-weight logical counting shares; this module owns witness
+``_information_sets.py``, which fixed-weight logical counting shares; this module owns witness
 discovery, early exits, exhaustive dispatch, and the resumable native scan.
 """
 
@@ -21,7 +21,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from . import _families
+from . import _information_sets
 from ._binary import (
     _pack_bits,
     _popcount_word,
@@ -213,7 +213,7 @@ class _BrouwerZimmermannSearch:
     labels: npt.NDArray[np.uint64]
     widths: npt.NDArray[np.int64]
     label_widths: npt.NDArray[np.int64]
-    certificate: _families._Certificate
+    certificate: _information_sets._Certificate
     cutoff: int
     batch_size: int
     best: int
@@ -306,7 +306,7 @@ def _prepare_brouwer_zimmermann_search(
 ) -> int | _BrouwerZimmermannSearch:
     """Prepare one BZ search, or return immediately when another route is cheaper.
 
-    The family stages of ``_families`` run in order, with distance-specific witness, cutoff,
+    The family stages of ``_information_sets`` run in order, with distance-specific witness, cutoff,
     certificate, and exhaustive exits between them.
     """
     dimension = len(basis)
@@ -337,19 +337,19 @@ def _prepare_brouwer_zimmermann_search(
         return brute_force_distance()
 
     # The disjoint family's certificate also uses any inferred even ambient parity.
-    family = _families._get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
+    family = _information_sets._get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
     best = _get_family_upper_bound(family, best)
     if best <= cutoff:
         return best
 
-    family = _families._prune_family(family, upper_bound=best)
+    family = _information_sets._prune_family(family, upper_bound=best)
     completed_weight = 1 if family.information_sets else 0
     lower_bound = family.certificate.lower_bound(completed_weight)
     if lower_bound >= best:
         return best
 
     # Replace disjoint blocks only when overlap predicts less certification work.
-    overlapping = _families._get_overlapping_family(basis, labels, family, upper_bound=best)
+    overlapping = _information_sets._get_overlapping_family(basis, labels, family, upper_bound=best)
     if overlapping is not None:
         family = overlapping
 
@@ -410,7 +410,7 @@ def _prepare_brouwer_zimmermann_search(
     )
 
 
-def _get_family_upper_bound(family: _families._Family, upper_bound: int) -> int:
+def _get_family_upper_bound(family: _information_sets._Family, upper_bound: int) -> int:
     """Tighten an upper bound with the systematic rows of a family, all layer-one candidates."""
     for information_set in family.information_sets:
         upper_bound = min(
@@ -435,7 +435,7 @@ def _exhaustive_is_cheaper(dimension: int, length: int) -> bool:
 def _brute_force_is_cheaper(
     *,
     num_logical_rows: int,
-    certificate: _families._Certificate,
+    certificate: _information_sets._Certificate,
     upper_bound: int,
 ) -> bool:
     """Estimate whether exhaustive nested-code enumeration will outperform BZ.

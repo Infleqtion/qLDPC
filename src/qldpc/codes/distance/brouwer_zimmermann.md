@@ -460,16 +460,16 @@ Heuristic tunables are identified by parameter name so that their current values
 | --- | --- | --- |
 | [core.py](core.py) | Public interfaces, input validation, adapted bases, method selection, and conversion between symplectic and Hamming units | `get_distance_classical`, `get_distance_quantum`, `get_distance_css_brouwer_zimmermann` |
 | [brouwer_zimmermann.py](brouwer_zimmermann.py) | The BZ distance search: preparation exits, witness discovery, scanning, sharing between CSS sectors, and exhaustive cost models | `_prepare_brouwer_zimmermann_search`, `_BrouwerZimmermannSearch`, `_scan_brouwer_zimmermann`, `_get_distance_brouwer_zimmermann_many` |
-| [_families.py](_families.py) | Families of search bases and their certificates, shared by distance and counting: disjoint packing, pruning, overlapping replacement, parity inference, the lower certificate, and the work estimate | `_get_disjoint_family`, `_prune_family`, `_get_overlapping_family`, `_prepare_family`, `_Family`, `_Certificate` |
+| [_information_sets.py](_information_sets.py) | Families of search bases and their certificates, shared by distance and counting: disjoint packing, pruning, overlapping replacement, parity inference, the lower certificate, and the work estimate | `_get_disjoint_family`, `_prune_family`, `_get_overlapping_family`, `_prepare_family`, `_Family`, `_Certificate` |
 | [brute_force.py](brute_force.py) | Exhaustive enumeration | `_get_distance_quantum_brute_force` |
 | [_binary.py](_binary.py) | Shared binary helpers: row reduction with labels, independent and adapted bases, packing, weight functions, and the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) | `_row_reduce_binary`, `_get_independent_rows`, `_get_nested_code_basis`, `_symplectic_to_hamming` |
 
 [`__init__.py`](__init__.py) exports names from [core.py](core.py) and [logical_counts.py](logical_counts.py).
 [logical_counts.py](logical_counts.py) counts the logical operators of a given weight exactly.
-It builds its families and certificates with the same stages of [_families.py](_families.py) as the distance search, under the constraint in [Section 5](#5-correctness-requirements).
-Both consumers import [_families.py](_families.py) as a module, so a replacement of one of its stages applies to both.
+It builds its families and certificates with the same stages of [_information_sets.py](_information_sets.py) as the distance search, under the constraint in [Section 5](#5-correctness-requirements).
+Both consumers import [_information_sets.py](_information_sets.py) as a module, so a replacement of one of its stages applies to both.
 [core.py](core.py) calls [brouwer_zimmermann.py](brouwer_zimmermann.py) and [brute_force.py](brute_force.py), and [brouwer_zimmermann.py](brouwer_zimmermann.py) calls [brute_force.py](brute_force.py) for its exhaustive routes.
-All three modules, and [_families.py](_families.py), use [_binary.py](_binary.py).
+All three modules, and [_information_sets.py](_information_sets.py), use [_binary.py](_binary.py).
 `get_distance_css_brouwer_zimmermann` builds an adapted basis ([Section 3.4](#34-quotient-labels-for-the-stabilizer-test)) for each nontrivial sector, then passes the resulting problems to `_get_distance_brouwer_zimmermann_many`.
 
 ### 4.2 Flow and exit points
@@ -489,7 +489,7 @@ An integer returned by preparation can incorporate a witness from another sector
 | `method="brute_force"` | Runs exhaustive enumeration over an independent basis, adapted to `S ⊆ V` for a quantum problem |
 
 `_prepare_brouwer_zimmermann_search` considers the following exits in order.
-The disjoint family, its pruning, and any overlapping replacement come from the stages of [_families.py](_families.py); the exits between those stages belong to the distance search.
+The disjoint family, its pruning, and any overlapping replacement come from the stages of [_information_sets.py](_information_sets.py); the exits between those stages belong to the distance search.
 
 | Preparation stage | Outcome |
 | --- | --- |
@@ -610,14 +610,14 @@ Changes to the BZ algorithm can use different representations, certificates, and
   Optional rounding requires a divisor valid for every eligible weight ([Section 3.2](#32-rounding-the-certificate-to-a-proven-weight-multiple)).
   A certificate from another CSS sector needs justification for the sector where it is applied, just as any other certificate does.
 - **Keep the strict certificate available to fixed-weight counting.**
-  [logical_counts.py](logical_counts.py) builds its family with `_prepare_family` of [_families.py](_families.py), which runs the same stages as the distance search, and stops with that family's `_Certificate` to count every word of a target weight `w`, which defaults to the distance.
+  [logical_counts.py](logical_counts.py) builds its family with `_prepare_family` of [_information_sets.py](_information_sets.py), which runs the same stages as the distance search, and stops with that family's `_Certificate` to count every word of a target weight `w`, which defaults to the distance.
   Distance may stop at `L(t) ≥ U`, but counting must also exhaust words of weight exactly `w`, so it stops only at `L(t) > w`.
   Its bound must use the ranks and actual maximum coverage of the family it scans; it passes `upper_bound=w+1` to the family stages only to aim them at that stopping point.
 - **Preserve the return contract.**
   Return the exact minimum unless taking an early exit permitted by `cutoff`.
   Such an early exit returns the weight of a known eligible witness, an upper bound between the distance and `cutoff` ([Section 4.5](#45-behavior-spanning-files)).
 
-Representative correctness tests check certificate validity against exhaustive words (`test_overlapping_family_certificates` in [_families_test.py](_families_test.py)) and joint-search results with distinct sector certificates (`test_brouwer_zimmermann_sector_certificates` in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py)).
+Representative correctness tests check certificate validity against exhaustive words (`test_overlapping_family_certificates` in [_information_sets_test.py](_information_sets_test.py)) and joint-search results with distinct sector certificates (`test_brouwer_zimmermann_sector_certificates` in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py)).
 `test_distance_and_counting_share_family_stages` checks that both consumers search the certificates of the shared stages, aimed at `U` and `w+1` respectively.
 In [core_test.py](core_test.py), `test_brouwer_zimmermann_random_cross_checks` forces the BZ route and compares both homogeneous and general Pauli problems with exhaustive results.
 
@@ -628,5 +628,5 @@ Those tests can evolve with the implementation; they do not make a particular in
 
 - [arXiv:1603.06757v2](https://arxiv.org/abs/1603.06757v2) (Algorithm 1): Section 2 and Algorithm 1 give the classical disjoint and rank-deficient bound.
 - [arXiv:2408.10743v2](https://arxiv.org/abs/2408.10743v2): Section 2.4 describes the `Saved_isometry` symplectic-to-Hamming construction.
-- [core.py](core.py), [brouwer_zimmermann.py](brouwer_zimmermann.py), [_families.py](_families.py), [brute_force.py](brute_force.py), and [_binary.py](_binary.py): the implementation.
-- [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py), [_families_test.py](_families_test.py), and [core_test.py](core_test.py): executable invariants and independent small-instance oracles.
+- [core.py](core.py), [brouwer_zimmermann.py](brouwer_zimmermann.py), [_information_sets.py](_information_sets.py), [brute_force.py](brute_force.py), and [_binary.py](_binary.py): the implementation.
+- [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py), [_information_sets_test.py](_information_sets_test.py), and [core_test.py](core_test.py): executable invariants and independent small-instance oracles.

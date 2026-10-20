@@ -16,13 +16,13 @@ generally takes an exponentially long time.
 
 Each X/Z sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
 ``brouwer_zimmermann.md``).  Words are enumerated in layers over Brouwer--Zimmermann (BZ)
-information sets, whose family and certificate come from the stages in ``_families.py`` that the
-distance search shares.  Unlike a distance search, the scan stops only when the BZ lower bound
-exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several information
-sets is counted by only one of them.  Full Pauli counts are derived from the homogeneous words of
-weight ``d``, with one masked rank per word.  Self-dual codes scan only one sector, and have
-``count_pauli = 3 * count_x``.  Counters for codes conjugated by local CSS-preserving Cliffords
-transform the stored sector bases rather than recomputing them.
+information sets, whose family and certificate come from the stages in ``_information_sets.py``
+that the distance search shares.  Unlike a distance search, the scan stops only when the BZ lower
+bound exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several
+information sets is counted by only one of them.  Full Pauli counts are derived from the
+homogeneous words of weight ``d``, with one masked rank per word.  Self-dual codes scan only one
+sector, and have ``count_pauli = 3 * count_x``.  Counters for codes conjugated by local
+CSS-preserving Cliffords transform the stored sector bases rather than recomputing them.
 
 In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
 ``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
@@ -45,7 +45,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from . import _families
+from . import _information_sets
 from ._binary import (
     _get_independent_rows,
     _get_kernel,
@@ -445,7 +445,7 @@ def _count_words(
     scan also visits every lighter word, so with ``reject_lighter`` it returns None as soon as it
     finds a nontrivial one.
     """
-    certificate: _families._Certificate | None
+    certificate: _information_sets._Certificate | None
     if method == "brute_force":
         sets, certificate = [(basis, labels)], None
     else:
@@ -490,14 +490,14 @@ def _count_words(
 
 def _get_counting_information_sets(
     basis: _BinaryMatrix, labels: _BinaryMatrix, weight: int
-) -> tuple[list[_Sector], _families._Certificate]:
+) -> tuple[list[_Sector], _information_sets._Certificate]:
     """Select BZ information sets that certify every word of the given weight.
 
     Returns the sets and the certificate that bounds the weight of unvisited words after each layer.
     The family stages aim at the counting stop ``L(t) >= weight + 1``; any family gives an exact
     count.
     """
-    family = _families._prepare_family(basis, labels, upper_bound=weight + 1)
+    family = _information_sets._prepare_family(basis, labels, upper_bound=weight + 1)
     sets = []
     for information_set in family.information_sets:
         assert information_set.labels is not None

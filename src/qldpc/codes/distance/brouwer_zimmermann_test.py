@@ -17,7 +17,7 @@ from sympy.abc import x, y, z
 import qldpc
 
 from . import _binary as binary
-from . import _families as families
+from . import _information_sets
 from . import brouwer_zimmermann as bz
 from .conftest import _get_random_full_rank_matrix
 
@@ -111,7 +111,7 @@ def test_brouwer_zimmermann_search_state() -> None:
         np.ones((1, 2, 1), dtype=np.uint64),
         np.array([1], dtype=np.int64),
         np.array([1], dtype=np.int64),
-        families._Certificate(2, (0,)),
+        _information_sets._Certificate(2, (0,)),
         cutoff=1,
         batch_size=1,
         best=3,
@@ -153,13 +153,13 @@ def test_brouwer_zimmermann_setup_dispatches() -> None:
         ],
         dtype=np.uint8,
     )
-    information_set = [families._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
+    information_set = [_information_sets._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
     with (
         mock.patch(
             "qldpc.codes.distance.brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
         ),
         mock.patch(
-            "qldpc.codes.distance._families._get_information_set_generators",
+            "qldpc.codes.distance._information_sets._get_information_set_generators",
             return_value=information_set,
         ),
         mock.patch(
@@ -309,7 +309,7 @@ def test_brouwer_zimmermann_sector_certificates() -> None:
 def test_brouwer_zimmermann_without_certifying_bound() -> None:
     """Brouwer-Zimmermann returns its best codeword after exhausting every coefficient weight."""
     with mock.patch(
-        "qldpc.codes.distance._families._get_information_set_generators", return_value=[]
+        "qldpc.codes.distance._information_sets._get_information_set_generators", return_value=[]
     ):
         assert qldpc.codes.get_distance_classical(np.eye(2, dtype=np.uint8), cutoff=0) == 1
 
@@ -335,13 +335,15 @@ def test_brouwer_zimmermann_exhaustive_dispatch() -> None:
     assert bz._exhaustive_is_cheaper(21, 4000)
     assert not bz._exhaustive_is_cheaper(21, 22)
     assert bz._brute_force_is_cheaper(
-        num_logical_rows=2, certificate=families._Certificate(4, (4,)), upper_bound=4
+        num_logical_rows=2, certificate=_information_sets._Certificate(4, (4,)), upper_bound=4
     )
     assert not bz._brute_force_is_cheaper(
-        num_logical_rows=4, certificate=families._Certificate(4, (4,)), upper_bound=4
+        num_logical_rows=4, certificate=_information_sets._Certificate(4, (4,)), upper_bound=4
     )
     assert not bz._brute_force_is_cheaper(
-        num_logical_rows=20, certificate=families._Certificate(20, (20, 20), 2), upper_bound=3
+        num_logical_rows=20,
+        certificate=_information_sets._Certificate(20, (20, 20), 2),
+        upper_bound=3,
     )
 
     # Dependent logical rows skip the top-level independent-row exhaustive path.
@@ -382,15 +384,17 @@ def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
     """A replacement basis can meet the cutoff or close the lower bound during setup."""
     basis = np.array([[1, 0, 1, 1], [0, 1, 1, 1]], dtype=np.uint8)
     generators, labels, pivots = binary._row_reduce_binary(basis, columns=np.array([0, 2]))
-    original = families._InformationSet(basis, None, 2, np.array([0, 1]))
-    alternative = families._InformationSet(generators, labels, 2, pivots)
+    original = _information_sets._InformationSet(basis, None, 2, np.array([0, 1]))
+    alternative = _information_sets._InformationSet(generators, labels, 2, pivots)
     with (
         mock.patch.object(bz, "_exhaustive_is_cheaper", return_value=False),
-        mock.patch.object(families, "_get_information_set_generators", return_value=[original]),
         mock.patch.object(
-            families,
+            _information_sets, "_get_information_set_generators", return_value=[original]
+        ),
+        mock.patch.object(
+            _information_sets,
             "_get_overlapping_family",
-            return_value=families._Family.from_information_sets(
+            return_value=_information_sets._Family.from_information_sets(
                 [alternative], dimension=2, weight_divisor=1
             ),
         ),
@@ -425,9 +429,9 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
     )
 
     # Lower only the work threshold so this small oracle exercises production family construction.
-    original = families._get_overlapping_family
+    original = _information_sets._get_overlapping_family
 
-    def select(*args: Any, **kwargs: Any) -> families._Family | None:
+    def select(*args: Any, **kwargs: Any) -> _information_sets._Family | None:
         selected = original(*args, **kwargs, minimum_work=0)
         assert selected is not None and selected.certificate.max_coverage > 1
         assert (
@@ -439,7 +443,9 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
         )
         return selected
 
-    with mock.patch.object(families, "_get_overlapping_family", side_effect=select) as select_mock:
+    with mock.patch.object(
+        _information_sets, "_get_overlapping_family", side_effect=select
+    ) as select_mock:
         assert (
             qldpc.codes.get_distance_quantum(logicals, stabilizers, homogeneous=True, cutoff=0)
             == expected
