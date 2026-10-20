@@ -242,7 +242,7 @@ Circuit utilities reject nonbinary codes.
 Encoding circuits are not fault-tolerant, and transversal-gate searches can be exponential.
 For sliding-window decoding, detector coordinates are only a heuristic source of time; pass ``detector_to_time`` when a model uses another convention.
 
-``circuits.benchmarking`` provides sampled logical error rates, state-preparation diagnostics, and exact circuit fault certificates.
+``circuits.benchmarking`` provides sampled logical error rates, state-preparation diagnostics, exact fault distances, and prepared-state spread certificates.
 
 Certify resource-state preparation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
