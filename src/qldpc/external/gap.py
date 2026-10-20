@@ -51,18 +51,12 @@ end, [])"""
 
 @functools.cache
 def is_callable() -> bool:
-    """Can we call GAP 4, directly through libgap or from the command line?"""
-    if _get_libgap() is not None:
-        return True
+    """Can we call GAP 4, directly through libgap or from the command line?
 
-    commands = ["gap", "-q", "-c", r'Print(GAPInfo.Version, "\n");; QUIT;;']
-    try:
-        result = subprocess.run(commands, capture_output=True, text=True, check=False)
-        version = result.stdout.strip()
-        return bool(version) and bool(re.match(r"4\.\d+\.\d+", version))
-    except FileNotFoundError:
-        pass
-    return False
+    Unlike :func:`is_installed`, this check never prompts for input, so it is safe to use for
+    automatic backend selection and fallbacks.
+    """
+    return _get_libgap() is not None or _is_gap_executable()
 
 
 @functools.cache
@@ -71,7 +65,7 @@ def is_installed() -> bool:
 
     When neither libgap nor the command-line program is available, this function prompts on standard
     input, so it blocks in a non-interactive context (and raises ``EOFError`` if standard input is
-    closed).
+    closed).  Use :func:`is_callable` for a check that never prompts.
     """
     if is_callable():
         return True

@@ -468,8 +468,11 @@ def _get_backend_class(name: str) -> type[Any]:
     return _BACKEND_CLASSES[name]
 
 
-def __getattr__(name: str) -> Any:
-    """Load a protocol-compatible ldpc subclass only when requested."""
-    if name not in _BACKEND_CLASS_NAMES:
-        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-    return _get_backend_class(name)
+if not TYPE_CHECKING:
+    # Static type checkers see the backend classes declared above, rather than an Any fallback.
+
+    def __getattr__(name: str) -> Any:
+        """Load a protocol-compatible ldpc subclass only when requested."""
+        if name not in _BACKEND_CLASS_NAMES:
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        return _get_backend_class(name)
