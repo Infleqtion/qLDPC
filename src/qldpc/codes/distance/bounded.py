@@ -16,10 +16,11 @@ import numpy.typing as npt
 from ._binary import (
     _as_binary_matrix,
     _assert_binary,
+    _pack_bits,
     _row_reduce_binary,
     _symplectic_to_hamming,
 )
-from .brouwer_zimmermann import _get_information_set_generators
+from .brouwer_zimmermann import _get_brouwer_zimmermann_lower_bound, _get_information_set_generators
 
 ####################################################################################################
 # bounded kernel and affine Pauli searches
@@ -71,16 +72,14 @@ class BoundedKernelSearch:
         self.ranks: tuple[int, ...]
         if self._systematic:
             self.ranks = (self.dimension,)
-            self._sets = [(_pack_binary_rows_little(pivot_parts), self.dimension)]
+            self._sets = [_pack_bits(pivot_parts)]
         elif self.dimension:
             basis = np.zeros((self.dimension, self.length), dtype=np.uint8)
             basis[:, self._pivots] = pivot_parts
             basis[:, self._free] = np.eye(self.dimension, dtype=np.uint8)
             information_sets = _get_information_set_generators(basis, None)
             self.ranks = tuple(rank for _, _, rank, _ in information_sets)
-            self._sets = [
-                (_pack_binary_rows_little(rows), rank) for rows, _, rank, _ in information_sets
-            ]
+            self._sets = [_pack_bits(rows) for rows, _, _, _ in information_sets]
         else:
             self.ranks = ()
             self._sets = []
@@ -88,7 +87,7 @@ class BoundedKernelSearch:
     def words(self) -> Iterator[int]:
         """Yield bounded-weight words; exhaustion is the coverage certificate."""
         for depth in range(1, min(self.dimension, self.max_weight) + 1):
-            for rows, _ in self._sets:
+            for rows in self._sets:
                 for supports in _iter_fixed_weight_supports(self.dimension, depth, self.batch_size):
                     self.generated += len(supports)
                     candidates = np.bitwise_xor.reduce(rows[supports], axis=1)
@@ -103,8 +102,8 @@ class BoundedKernelSearch:
                             ) | sum(1 << self._free[int(jj)] for jj in supports[index])
                         yield word
             self.coefficient_depth = depth
-            self.lower_bound = sum(
-                max(0, depth + 1 - (self.dimension - rank)) for rank in self.ranks
+            self.lower_bound = _get_brouwer_zimmermann_lower_bound(
+                self.dimension, list(self.ranks), completed_weight=depth, weight_divisor=1
             )
             if self.lower_bound > self.max_weight:
                 return
@@ -155,8 +154,9 @@ class PauliCosetSearch:
     of X-single and Z-single syndromes checks all such representatives in linear work without
     a quadratic table.  Absence from that complete search, not just physical singles, proves
     a CSS lower bound two.
-    The bounded cache stores checked upper bounds and proved lower bounds; eviction changes only
-    runtime, never correctness.  No heuristic or probabilistic negative decision is used.
+    The bounded cache stores checked upper bounds and proved lower bounds.  A recomputed decision
+    is merged into its entry, so a proved bound is never lost.  Eviction changes only runtime,
+    never correctness.  No heuristic or probabilistic negative decision is used.
     """
 
     def __init__(
@@ -251,10 +251,22 @@ class PauliCosetSearch:
             decision = PauliWeightDecision(False, self._representative(syndrome), 2)
         else:
             decision = self._search(syndrome, max_weight)
+        decision = self._merge_decisions(known, decision)
         self._cache[syndrome] = decision
         if len(self._cache) > self.cache_size:
             del self._cache[next(iter(self._cache))]
         return decision
+
+    def _merge_decisions(
+        self, known: PauliWeightDecision | None, found: PauliWeightDecision
+    ) -> PauliWeightDecision:
+        """Keep the lightest checked representative and strongest proved bound for one coset."""
+        if known is None:
+            return found
+        representative = min((known.representative, found.representative), key=self._weight)
+        return PauliWeightDecision(
+            found.within_bound, representative, max(known.lower_bound, found.lower_bound)
+        )
 
     def _representative(self, syndrome: int) -> int:
         return _xor_selected(self._inverse, syndrome)
@@ -294,7 +306,7 @@ class PauliCosetSearch:
             ):
                 self._information_sets.append(
                     (
-                        _pack_binary_rows_little(generators),
+                        _pack_bits(generators),
                         tuple(_binary_row_int(row) for row in generators),
                         tuple(map(int, pivot_columns)),
                     )
@@ -343,7 +355,10 @@ class PauliCosetSearch:
                         word = _packed_row_int(candidates[int(weights.argmin())])
                         best_pauli = word & ((1 << (2 * n)) - 1)
             self.coefficient_depth = max(self.coefficient_depth, depth)
-            unseen_hamming = sum(max(0, depth + 1 - (n - rank)) for rank in self.ranks)
+            unseen_hamming = _get_brouwer_zimmermann_lower_bound(
+                n, list(self.ranks), completed_weight=depth, weight_divisor=1
+            )
+            # Either metric is at least half of the embedded Hamming weight.
             unseen_lower = (unseen_hamming + 1) // 2
             if depth == n:
                 return PauliWeightDecision(False, best_pauli, visited_min)
@@ -406,12 +421,6 @@ def _iter_fixed_weight_supports(
 
 def _binary_row_int(row: npt.NDArray[np.uint8]) -> int:
     return int.from_bytes(np.packbits(row, bitorder="little").tobytes(), "little")
-
-
-def _pack_binary_rows_little(rows: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
-    """Pack with explicit column-to-low-bit order, unlike the older distance-only layout."""
-    padded = np.pad(rows, ((0, 0), (0, -rows.shape[1] % 64)))
-    return np.packbits(padded, axis=1, bitorder="little").view("<u8")
 
 
 def _packed_row_int(row: npt.NDArray[np.uint64]) -> int:

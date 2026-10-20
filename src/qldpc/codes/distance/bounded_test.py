@@ -181,11 +181,62 @@ def test_affine_global_bound_and_cache(batch_size: int, weight: Literal["pauli",
     assert oracle.coefficient_depth == (2 if weight == "pauli" else 5)
     generated = oracle.generated
     at_minimum = oracle.decide(syndrome, 4)
-    assert at_minimum.within_bound and at_minimum.lower_bound <= 4
+    assert at_minimum.within_bound and at_minimum.lower_bound == 4
     assert oracle.generated == generated
     assert oracle.syndrome(at_minimum.representative) == syndrome
+    # The positive decision must not erase the proved bound that already answers threshold three.
+    hits = oracle.cache_hits
+    repeated = oracle.decide(syndrome, 3)
+    assert not repeated.within_bound and repeated.lower_bound == 4
+    assert oracle.cache_hits == hits + 1 and oracle.generated == generated
     fresh = bounded.PauliCosetSearch(matrix, weight=weight).decide(syndrome, 4)
     assert fresh.within_bound and fresh.lower_bound <= 4
+
+
+def test_cache_keeps_proved_bound_after_recompute() -> None:
+    """A positive recompute at a higher threshold must not discard the bound for a lower one."""
+    n = 10
+    # A graph state: each stabilizer is X on one vertex and Z on its neighbors.
+    graph_state = [
+        "X_ZZ__ZZ__",
+        "_X______Z_",
+        "Z_X__Z__Z_",
+        "Z__XZ_ZZ__",
+        "___ZX_ZZ_Z",
+        "__Z__XZ___",
+        "Z__ZZZX_Z_",
+        "Z__ZZ__XZ_",
+        "_ZZ___ZZX_",
+        "____Z____X",
+    ]
+    matrix = np.array(
+        [np.concatenate(stim.PauliString(gg).to_numpy()) for gg in graph_state], dtype=np.uint8
+    )
+    oracle = bounded.PauliCosetSearch(matrix)
+    syndrome = 1019
+
+    # The first search keeps a heavy representative, so only its proved bound answers threshold two.
+    negative = oracle.decide(syndrome, 2)
+    assert not negative.within_bound and negative.lower_bound == 3
+    assert oracle._weight(negative.representative) == 4
+    positive = oracle.decide(syndrome, 3)
+    assert positive.within_bound and positive.lower_bound == 3
+    generated, hits = oracle.generated, oracle.cache_hits
+    repeated = oracle.decide(syndrome, 2)
+    assert not repeated.within_bound and repeated.lower_bound == 3
+    assert oracle.cache_hits == hits + 1 and oracle.generated == generated
+
+    # Brute force over every stabilizer product confirms the exact minimum.
+    rows = [sum(int(bit) << jj for jj, bit in enumerate(row)) for row in matrix]
+    assert oracle.syndrome(positive.representative) == syndrome
+    weights = []
+    for mask in range(1 << n):
+        word = positive.representative
+        for jj, row in enumerate(rows):
+            if (mask >> jj) & 1:
+                word ^= row
+        weights.append(oracle._weight(word))
+    assert min(weights) == 3
 
 
 @pytest.mark.parametrize("cache_size", [1, 2, 4096])
