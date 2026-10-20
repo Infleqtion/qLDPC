@@ -385,6 +385,9 @@ def test_conjugation(interpreted: bool) -> None:
     assert np.array_equal(changed.checks_x, _get_independent_rows(expected))
     assert changed._canonical is not None
     assert counter.is_self_dual and not changed.is_self_dual
+    # A second CNOT restores a self-dual code, which is recognized but no longer shares its data.
+    restored = changed.conjugated_cnot(1, 6)
+    assert restored.is_self_dual and not restored._self_dual
     with _maybe_interpreted(interpreted):
         general = counter.conjugated([1, 6], [[1, 0], [1, 1]], [[1, 1], [0, 1]])
     assert np.array_equal(general.checks_x, changed.checks_x)
@@ -511,11 +514,13 @@ def _enumerate(code: codes.CSSCode) -> tuple[list[int], list[int], int, int]:
     return counts_x, counts_z, distance, full
 
 
-def _random_subsystem_code(rng: np.random.Generator, num_qubits: int) -> codes.CSSCode:
-    """A random binary CSS code whose X and Z checks need not commute."""
+def _random_subsystem_code(
+    rng: np.random.Generator, num_qubits: int, *, self_dual: bool = False
+) -> codes.CSSCode:
+    """A random binary CSS subsystem code, optionally with identical X and Z checks."""
     while True:
         checks_x = rng.integers(0, 2, (3, num_qubits))
-        checks_z = rng.integers(0, 2, (3, num_qubits))
+        checks_z = checks_x if self_dual else rng.integers(0, 2, (3, num_qubits))
         code = codes.CSSCode(checks_x, checks_z)
         if code.is_subsystem_code and code.dimension > 0:
             return code
@@ -530,6 +535,7 @@ def test_counts_match_enumeration(method: lc.LogicalCountMethod) -> None:
         codes.BaconShorCode(2, 3),
         codes.SteaneCode(),
         *(_random_subsystem_code(rng, num_qubits) for num_qubits in (7, 8, 9, 10)),
+        _random_subsystem_code(rng, 9, self_dual=True),
         *(_random_css_code(rng, 9, 3, 3) for _ in range(2)),
     ]
     for code in examples:
@@ -564,6 +570,42 @@ def test_conjugation_carries_sector_bases() -> None:
                 carried = counter.count_logicals(full_pauli=True)
             assert results == [fresh.count_logicals(w) for w in range(fresh.num_qubits + 1)]
             assert carried == fresh.count_logicals(full_pauli=True)
+
+
+def test_self_dual_codes_share_x_and_z_data() -> None:
+    """Gates acting identically on X and Z keep the shared data; a CNOT splits it."""
+    rng = np.random.default_rng(31)
+    swel = np.array([[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]])
+    counter = lc.CSSLogicalCounter(codes.CSSCode.stack([codes.SteaneCode()] * 2))
+    assert counter._self_dual and counter._gauge_z is counter._gauge_x
+    assert counter.conjugated_swel([0, 1, 2, 3])._sectors is None
+    counter.count_logicals()
+    for step in range(6):
+        targets = list(map(int, rng.choice(counter.num_qubits, 4, replace=False)))
+        if step == 1:
+            counter = counter.conjugated(targets, swel, swel)
+        elif step == 3:
+            counter = counter.conjugated_cnot(*targets[:2])
+        else:
+            counter = counter.conjugated_swel(targets)
+        assert counter._sectors is not None
+        shared = counter._sectors[1] is counter._sectors[0]
+        assert shared == counter._self_dual == (step < 3)
+        assert (counter._gauge_z is counter._gauge_x) == shared
+        counts_x, counts_z, distance, full = _enumerate(counter.code)
+        expected = Counts(distance, counts_x[distance], counts_z[distance], full)
+        assert counter.count_logicals(full_pauli=True) == expected
+        assert counter.count_logicals(full_pauli=True, method="brute_force") == expected
+
+    # A self-dual subsystem code shares its stabilizers, which differ from its gauge generators.
+    counter = lc.CSSLogicalCounter(_random_subsystem_code(rng, 9, self_dual=True))
+    counter.count_logicals()
+    for _ in range(3):
+        counter = counter.conjugated_swel(list(map(int, rng.choice(9, 4, replace=False))))
+        assert counter._stabilizers_z is counter._stabilizers_x is not counter._gauge_x
+        counts_x, counts_z, distance, full = _enumerate(counter.code)
+        expected = Counts(distance, counts_x[distance], counts_z[distance], full)
+        assert counter.count_logicals(full_pauli=True) == expected
 
 
 def test_checks_are_copies_in_canonical_form() -> None:

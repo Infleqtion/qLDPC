@@ -55,6 +55,14 @@ nontrivial Z logical with support ``T`` of weight ``d`` that contains ``x``, and
 two cases are disjoint, so ``count_pauli`` sums the first term over X-only words of weight ``d`` and
 the second over Z-only words of weight ``d``, with one masked rank per word.
 
+A self-dual code, whose X and Z checks span the same space, has identical X and Z sectors, so the
+counter stores, conjugates and scans only one of them; gates that act identically on X and Z, such
+as the SWEL-preserving Clifford, keep it self-dual.  Each minimum support ``T`` of a self-dual code
+carries exactly three nontrivial logical operators of weight ``d``, so ``count_pauli`` is
+``3 * count_x``.  A nonzero gauge operator supported in ``T``, added to the logical on ``T``, would
+give a lighter nontrivial logical, so the only Z-type words supported in ``T`` with ``S_X z = 0``
+are zero and the logical on ``T``, and the only X gauge operator supported in ``T`` is zero.
+
 This argument fails above the distance, where the X part of a nontrivial operator can be a lighter
 nontrivial logical whose support does not contain the Z part.  The operator's support then need not
 be the support of any homogeneous logical word of the same weight.  For example, ``XYZI`` is a
@@ -194,7 +202,13 @@ class CSSLogicalCounter:
         checks_z = _as_binary_matrix(matrix_z, num_cols=checks_x.shape[1])
         self._gauge_x = _get_independent_rows(checks_x)
         self._gauge_z = _get_independent_rows(checks_z)
+        # A self-dual code shares one array for each pair of X-type and Z-type data.
+        self._self_dual = np.array_equal(self._gauge_x, self._gauge_z)
+        if self._self_dual:
+            self._gauge_z = self._gauge_x
         self._stabilizers_x, self._stabilizers_z = _get_stabilizers(self._gauge_x, self._gauge_z)
+        if self._self_dual:
+            self._stabilizers_z = self._stabilizers_x
         self.num_qubits = checks_x.shape[1]
         self.dimension = self.num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
         self._sectors: tuple[_Sector, _Sector] | None = None
@@ -228,7 +242,7 @@ class CSSLogicalCounter:
     def is_self_dual(self) -> bool:
         """Whether the X and Z checks span the same row space."""
         canonical_x, canonical_z = self._get_canonical_checks()
-        return np.array_equal(canonical_x, canonical_z)
+        return self._self_dual or np.array_equal(canonical_x, canonical_z)
 
     def count_logicals(
         self,
@@ -272,49 +286,53 @@ class CSSLogicalCounter:
             return CSSLogicalCounts(None if weight is None else int(weight), 0, 0, empty_pauli)
 
         sector_x, sector_z = self._get_sectors()
-        target = int(weight) if weight is not None else _get_distance(sector_x, sector_z, method)
+        # The two sectors of a self-dual code are the same, so one of them suffices.
+        sectors = [sector_x] if self._self_dual else [sector_x, sector_z]
+        target = int(weight) if weight is not None else _get_distance(sectors, method)
 
         # Full Pauli counts weigh X-sector supports against the X stabilizers and Z-sector supports
         # against the X gauge generators, as in the module docstring, and the scans reject any
         # nontrivial word lighter than the target, which would mean that the target exceeds the
         # distance.  Otherwise no rows are weighed and every word adds one to the zeroth exponent.
-        lift_x = _pack_bits(self._stabilizers_x if full_pauli else self._stabilizers_x[:0])
-        lift_z = _pack_bits(self._gauge_x if full_pauli else self._gauge_x[:0])
+        # Self-dual codes need no weighing, since each support carries exactly three.
+        single_scan = self._self_dual
+        weigh = full_pauli and not single_scan
+        lift_x = _pack_bits(self._stabilizers_x if weigh else self._stabilizers_x[:0])
         counts_x = _count_words(
             *sector_x,
             target,
             method,
             lift_x,
             complement=False,
-            base=target if full_pauli else 0,
+            base=target if weigh else 0,
             reject_lighter=full_pauli,
         )
-        counts_z = (
-            None
-            if counts_x is None
-            else _count_words(
+        if single_scan or counts_x is None:
+            counts_z = counts_x
+        else:
+            lift_z = _pack_bits(self._gauge_x if weigh else self._gauge_x[:0])
+            counts_z = _count_words(
                 *sector_z,
                 target,
                 method,
                 lift_z,
                 complement=True,
-                base=len(self._gauge_x) if full_pauli else 0,
+                base=len(self._gauge_x) if weigh else 0,
                 reject_lighter=full_pauli,
             )
-        )
         if counts_x is None or counts_z is None:
             raise ValueError(
                 "Full Pauli operators can be counted only up to the distance, which is less than"
                 f" weight {target}"
             )
-        count_pauli = sum(int(count) << exponent for exponent, count in enumerate(counts_x))
-        count_pauli += sum(int(count) << exponent for exponent, count in enumerate(counts_z))
-        return CSSLogicalCounts(
-            target,
-            int(counts_x.sum()),
-            int(counts_z.sum()),
-            count_pauli if full_pauli else None,
-        )
+        count_x, count_z = int(counts_x.sum()), int(counts_z.sum())
+        count_pauli = None
+        if full_pauli and single_scan:
+            count_pauli = 3 * count_x
+        elif full_pauli:
+            count_pauli = sum(int(count) << exponent for exponent, count in enumerate(counts_x))
+            count_pauli += sum(int(count) << exponent for exponent, count in enumerate(counts_z))
+        return CSSLogicalCounts(target, count_x, count_z, count_pauli)
 
     def conjugated(
         self, targets: Sequence[int], matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike
@@ -394,35 +412,43 @@ class CSSLogicalCounter:
         counter = object.__new__(CSSLogicalCounter)
         counter.num_qubits, counter.dimension = self.num_qubits, self.dimension
         counter._code, counter._canonical = None, None
+        # A gate that acts identically on X and Z keeps a self-dual code self-dual.
+        shared = self._self_dual and (local_x is local_z or np.array_equal(local_x, local_z))
+        counter._self_dual = shared
         counter._gauge_x = _apply_local(self._gauge_x, positions, local_x)
-        counter._gauge_z = _apply_local(self._gauge_z, positions, local_z)
+        counter._gauge_z = (
+            counter._gauge_x if shared else _apply_local(self._gauge_z, positions, local_z)
+        )
         # Stabilizer codes share their gauge and stabilizer arrays.
         counter._stabilizers_x = (
             counter._gauge_x
             if self._stabilizers_x is self._gauge_x
             else _apply_local(self._stabilizers_x, positions, local_x)
         )
-        counter._stabilizers_z = (
-            counter._gauge_z
-            if self._stabilizers_z is self._gauge_z
-            else _apply_local(self._stabilizers_z, positions, local_z)
-        )
+        if self._stabilizers_z is self._gauge_z:
+            counter._stabilizers_z = counter._gauge_z
+        elif shared:
+            counter._stabilizers_z = counter._stabilizers_x
+        else:
+            counter._stabilizers_z = _apply_local(self._stabilizers_z, positions, local_z)
         counter._sectors = None
         if self._sectors is not None:
             (basis_x, labels_x), (basis_z, labels_z) = self._sectors
-            counter._sectors = (
-                (_apply_local(basis_x, positions, local_x), labels_x),
-                (_apply_local(basis_z, positions, local_z), labels_z),
-            )
+            sector_x = (_apply_local(basis_x, positions, local_x), labels_x)
+            sector_z = sector_x if shared else (_apply_local(basis_z, positions, local_z), labels_z)
+            counter._sectors = (sector_x, sector_z)
         return counter
 
     def _get_sectors(self) -> tuple[_Sector, _Sector]:
         """The X and Z sectors: normalizer bases whose first rows span the gauge operators."""
         if self._sectors is None:
-            self._sectors = (
-                _get_nested_code_basis(_get_kernel(self._stabilizers_z), self._gauge_x),
-                _get_nested_code_basis(_get_kernel(self._stabilizers_x), self._gauge_z),
+            sector_x = _get_nested_code_basis(_get_kernel(self._stabilizers_z), self._gauge_x)
+            sector_z = (
+                sector_x
+                if self._self_dual
+                else _get_nested_code_basis(_get_kernel(self._stabilizers_x), self._gauge_z)
             )
+            self._sectors = (sector_x, sector_z)
         return self._sectors
 
     def _get_canonical_checks(self) -> tuple[_BinaryMatrix, _BinaryMatrix]:
@@ -454,13 +480,11 @@ def count_logicals_css(
 # counting words of one weight
 
 
-def _get_distance(sector_x: _Sector, sector_z: _Sector, method: LogicalCountMethod) -> int:
-    """Minimum weight of a nontrivial word in either sector."""
+def _get_distance(sectors: Sequence[_Sector], method: LogicalCountMethod) -> int:
+    """Minimum weight of a nontrivial word in any of the given sectors."""
     if method == "brute_force":
-        return min(_get_brute_force_distance(sector) for sector in (sector_x, sector_z))
-    return _get_distance_brouwer_zimmermann_many(
-        [sector_x, sector_z], cutoff=0, block_size=_BLOCK_SIZE
-    )
+        return min(_get_brute_force_distance(sector) for sector in sectors)
+    return _get_distance_brouwer_zimmermann_many(sectors, cutoff=0, block_size=_BLOCK_SIZE)
 
 
 def _get_brute_force_distance(sector: _Sector) -> int:
@@ -820,4 +844,4 @@ def _get_masked_rank(
 # Packed local matrices of the CNOT (control first) and of the SWEL-preserving Clifford.
 _CNOT = _pack_local_matrices([[1, 0], [1, 1]], [[1, 1], [0, 1]], 2)
 _SWEL_MATRIX = [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]]
-_SWEL = _pack_local_matrices(_SWEL_MATRIX, _SWEL_MATRIX, 4)
+_SWEL = (_pack_local_matrices(_SWEL_MATRIX, _SWEL_MATRIX, 4)[0],) * 2
