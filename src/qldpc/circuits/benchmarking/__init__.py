@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Circuit fault distance, logical error rates, and state-preparation diagnostics."""
+"""Fault distance, logical error rates, and state-preparation diagnostics and certificates."""
 
 from .common import get_fault_distance, get_logical_error_and_discard_rate
 from .state_prep_certification import (
