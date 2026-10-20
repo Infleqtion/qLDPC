@@ -72,6 +72,10 @@ class RelayBPDecoder(BatchErrorDecoder):
 
     If initialized with ``add_erasure_bit=True``, this decoder appends a bit to all decoded errors,
     set to 1 when the error Relay-BP settles on does not reproduce the syndrome and to 0 otherwise.
+
+    Unlike the batch methods of ``relay_bp.ObservableDecoderRunner``, the batch methods of this
+    class show no progress bar by default, since Sinter decoders call them for every batch of shots.
+    Pass ``progress_bar=True`` to show one.
     """
 
     def __init__(
@@ -107,12 +111,7 @@ class RelayBPDecoder(BatchErrorDecoder):
                 relay_bp.  See help(relay_bp.RelayDecoderF32) or https://pypi.org/project/relay-bp/
                 for the options (alpha, alpha_iteration_scaling_factor, gamma0, etc.).
         """
-        try:
-            import relay_bp
-        except ModuleNotFoundError:
-            raise ModuleNotFoundError(
-                "Failed to import relay-bp.  Try installing 'qldpc[relay-bp]'"
-            )
+        relay_bp = _get_relay_bp()
         if not isinstance(name, str) or not hasattr(relay_bp, name):
             raise ValueError(
                 f"Relay-BP decoder name not recognized: {name}\n"
@@ -120,9 +119,8 @@ class RelayBPDecoder(BatchErrorDecoder):
             )
         if isinstance(pcm_or_dem, str):
             raise TypeError(
-                "I think you provided a Relay-BP decoder decoder name in place of a parity check"
-                " matrix.  There was breaking change to this API.  See"
-                " help(qldpc.decoders.external.relay_bp.RelayBPDecoder)"
+                "pcm_or_dem must be a parity-check matrix or detector error model, not a string;"
+                " pass a Relay-BP decoder class name as name= instead"
             )
 
         if isinstance(pcm_or_dem, stim.DetectorErrorModel):
@@ -208,7 +206,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         /,
         detectors: npt.NDArray[np.int_],
         parallel: bool = False,
-        progress_bar: bool = True,
+        progress_bar: bool = False,
         leave_progress_bar_on_finish: bool = False,
     ) -> npt.NDArray[np.int_]:
         """Decode a batch of error syndromes and return inferred errors.
@@ -232,7 +230,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         /,
         detectors: npt.NDArray[np.int_],
         parallel: bool = False,
-        progress_bar: bool = True,
+        progress_bar: bool = False,
         leave_progress_bar_on_finish: bool = False,
     ) -> npt.NDArray[np.int_]:
         """Decode a batch of error syndromes (alias for decode_errors_batch)."""
@@ -309,9 +307,6 @@ class RelayBPDecoder(BatchErrorDecoder):
 
         If initialized with ``add_erasure_bit=True``, append an erasure bit to each prediction that
         is set to 1 when the inferred error does not reproduce the syndrome.
-
-        Unlike relay_bp.ObservableDecoderRunner.decode_observables_batch, this method shows no
-        progress bar by default, since Sinter decoders call it for every batch of shots.
         """
         self._require_observables()
         if len(detectors) == 0:
@@ -659,6 +654,20 @@ Returns:
 # private builder helpers
 
 
+def _get_relay_bp() -> Any:
+    """Import the optional relay-bp package or raise an actionable error."""
+    try:
+        import relay_bp
+    except ModuleNotFoundError as error:
+        if error.name != "relay_bp":
+            raise
+        raise ModuleNotFoundError(
+            "The Relay-BP decoders require the optional 'relay-bp' package.  Install it with"
+            " `pip install 'qldpc[relay-bp]'`"
+        ) from error
+    return relay_bp
+
+
 def _get_relay_decoder(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     *,
@@ -667,7 +676,7 @@ def _get_relay_decoder(
     **decoder_args: Any,
 ) -> RelayBPDecoder:
     """Build a RelayBPDecoder from a class-name prefix and precision."""
-    return _get_decoder_rbp(pcm_or_dem, name=f"{decoder_class_prefix}{precision}", **decoder_args)
+    return RelayBPDecoder(pcm_or_dem, name=f"{decoder_class_prefix}{precision}", **decoder_args)
 
 
 def _as_relay_bp_matrix(matrix: IntegerArray) -> IntegerArray:

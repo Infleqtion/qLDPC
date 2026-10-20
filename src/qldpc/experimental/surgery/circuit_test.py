@@ -1532,10 +1532,13 @@ def test_sliding_window_decoder_windows_a_surgery_circuit_by_round(basis: PauliX
     dem = circuit.detector_error_model(decompose_errors=False)
     round_of = {det: int(coords[0]) for det, coords in dem.get_detector_coordinates().items()}
 
-    decoder = SlidingWindowDecoder(window_size=3, stride=1)
-    decoder.compile_decoder_for_dem(dem)
+    compiled = SlidingWindowDecoder(window_size=3, stride=1).compile_decoder_for_dem(dem)
 
-    spans = [sorted({round_of[det] for det in detection}) for detection, _ in decoder.windows]
+    detectors = np.arange(dem.num_detectors)
+    spans = [
+        sorted({round_of[det] for det in detectors[detection]})
+        for detection in compiled.window_detectors
+    ]
     assert spans == [[0, 1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6]]
 
 
