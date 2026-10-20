@@ -24,7 +24,7 @@ from ..noise_model import DepolarizingNoiseModel, NoiseModel, as_noiseless_circu
 from .common import _get_postselection_masks
 
 ####################################################################################################
-# state preparation diagnostics and sampling tasks
+# state preparation diagnostics
 
 
 @restrict_to_qubits

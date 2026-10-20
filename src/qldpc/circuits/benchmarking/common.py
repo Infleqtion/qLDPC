@@ -214,7 +214,7 @@ def get_logical_error_and_discard_rate(
 
 
 ####################################################################################################
-# shared post-selection helpers
+# helper methods
 
 
 def _get_postselection_masks(
