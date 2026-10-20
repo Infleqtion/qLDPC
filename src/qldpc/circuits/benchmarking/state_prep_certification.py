@@ -46,10 +46,9 @@ from __future__ import annotations
 
 import math
 import numbers
-import time
 from bisect import bisect_left
 from collections.abc import Collection, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
@@ -134,7 +133,6 @@ def certify_state_prep_spread(
         ValueError: For invalid inputs, mixed/incomplete outputs, nondeterministic annotations
             or diagnostics, or unsupported circuit-to-DEM conversion.
     """
-    start = time.perf_counter()
     if css_weight is not None and not isinstance(css_weight, bool):
         raise ValueError("css_weight must be a bool or None")
     if (
@@ -161,7 +159,6 @@ def certify_state_prep_spread(
     # Reuse one prepared coset oracle for every fault pattern and syndrome encountered below.
     oracle = _PauliCosetSearch(matrix, weight="css" if resolved_css_weight else "pauli")
     statistics = StatePrepSpreadStatistics(mechanisms=len(flags))
-    statistics.setup_seconds = time.perf_counter() - start
     counterexample = _certify_maps(flags, syndromes, oracle, int(max_faults), statistics)
     return StatePrepSpreadCertificate(
         counterexample is None,
@@ -205,17 +202,10 @@ class StatePrepSpreadCounterexample:
 
 @dataclass
 class StatePrepSpreadStatistics:
-    """Deterministic work counters and wall-clock costs of one certification.
-
-    Counters tied to one search method keep their default values when another method runs.
-    The wall-clock fields are excluded from equality.
-    """
+    """Deterministic summary of the search effort of one certification."""
 
     mechanisms: int = 0
     """Number of error mechanisms (unit-cost faults) in the diagnostic DEM."""
-
-    distinct_symptoms: int = 0
-    """Number of distinct nonzero joint (flag, output-syndrome) columns after merging."""
 
     flag_rank: int = 0
     """Rank of the selected rejection-flag columns over GF(2)."""
@@ -227,55 +217,19 @@ class StatePrepSpreadStatistics:
     searched (``max_faults >= 2``).
     """
 
-    generated: int = 0
-    """Search work: flag-free singletons, plus BZ coefficient supports or prefix extensions.
-
-    For independent-prefix search it counts attempted prefix extensions (including those pruned by
-    dependence) plus emitted closing supports.  It does not count full fault combinations through
-    the requested budget.
-    """
-
-    bounded_candidates: int = 0
-    """Candidate supports produced by the search before the minimality filter."""
-
-    minimal_candidates: int = 0
-    """Minimal accepted patterns passed to the output-weight oracle."""
-
-    syndrome_queries: int = 0
-    """Number of output-weight decisions requested from the oracle."""
-
-    cache_hits: int = 0
-    """Number of oracle decisions answered from its cache."""
-
-    inner_generated: int = 0
-    """Number of coset candidates the oracle examined."""
-
-    inner_preparations: int = 0
-    """Number of times the oracle prepared its information sets (zero or one)."""
-
-    outer_ranks: tuple[int, ...] = ()
-    """Information-set ranks of the BZ rejection-kernel search; empty for other methods."""
-
-    inner_ranks: tuple[int, ...] = ()
-    """Information-set ranks of the oracle; empty if the oracle never prepared them."""
-
-    coefficient_depth: int = 0
-    """Completed coefficient depth of the BZ rejection-kernel search; zero for other methods."""
-
-    setup_seconds: float = field(default=0.0, compare=False)
-    """Seconds spent compiling the model and preparing the oracle."""
-
-    search_seconds: float = field(default=0.0, compare=False)
-    """Seconds spent searching minimal accepted patterns."""
-
     search_method: Literal["singletons", "brouwer_zimmermann", "independent_prefix"] = "singletons"
     """The search used for patterns with rejection flags (``singletons`` if none are searched)."""
 
-    prefix_extensions: int = 0
-    """Prefix extensions attempted by independent-prefix search, including pruned ones."""
+    generated: int = 0
+    """Search work, whose unit depends on ``search_method``.
 
-    independent_prefixes: int = 0
-    """Independent prefixes surviving in independent-prefix search."""
+    It counts flag-free singletons, plus BZ coefficient supports or, for independent-prefix search,
+    attempted prefix extensions (including those pruned by dependence) and emitted closing supports.
+    It does not count full fault combinations through the requested budget.
+    """
+
+    minimal_candidates: int = 0
+    """Number of minimal accepted patterns whose output weight was decided."""
 
 
 @dataclass(frozen=True)
@@ -395,9 +349,7 @@ def _certify_maps(
     budget: int,
     statistics: StatePrepSpreadStatistics,
 ) -> StatePrepSpreadCounterexample | None:
-    """Compress joint symptoms, search minimal accepted supports, and collect oracle statistics."""
-    start = time.perf_counter()
-
+    """Compress joint symptoms and search the minimal accepted supports."""
     # Equal joint symptoms cancel in pairs without changing acceptance or the output syndrome.
     # Removing those pairs cannot hide a violation; retain original DEM indices for witnesses.
     representatives = {
@@ -405,20 +357,11 @@ def _certify_maps(
         for jj, (flag, syndrome) in enumerate(zip(flags, syndromes, strict=True))
         if flag or syndrome
     }
-    statistics.distinct_symptoms = len(representatives)
     statistics.flag_rank = _binary_rank([flag for flag, _ in representatives])
 
     # A minimal accepted support has nullity one, hence at most rank(P)+1 mechanisms.
     statistics.effective_budget = min(budget, statistics.flag_rank + 1)
-    try:
-        return _search_minimal_patterns(representatives, oracle, statistics)
-    finally:
-        statistics.syndrome_queries = oracle.queries
-        statistics.cache_hits = oracle.cache_hits
-        statistics.inner_generated = oracle.generated
-        statistics.inner_preparations = oracle.preparations
-        statistics.inner_ranks = oracle.ranks
-        statistics.search_seconds = time.perf_counter() - start
+    return _search_minimal_patterns(representatives, oracle, statistics)
 
 
 def _search_minimal_patterns(
@@ -433,7 +376,6 @@ def _search_minimal_patterns(
     for (flag, syndrome), original in representatives.items():
         if flag == 0:
             statistics.generated += 1
-            statistics.bounded_candidates += 1
             failure = _check_fault_pattern((original,), syndrome, oracle, statistics)
             if failure is not None:
                 return failure
@@ -452,7 +394,6 @@ def _search_minimal_patterns(
 
     statistics.search_method = "independent_prefix"
     for indices, syndrome in _iter_minimal_patterns(remaining, limit, statistics):
-        statistics.bounded_candidates += 1
         failure = _check_fault_pattern(indices, syndrome, oracle, statistics)
         if failure is not None:
             return failure
@@ -532,10 +473,8 @@ def _search_bz_patterns(
         dtype=np.uint8,
     )
     outer = _BoundedKernelSearch(checks, budget)
-    statistics.outer_ranks = outer.ranks
     try:
         for word in outer.words():
-            statistics.bounded_candidates += 1
             support = tuple(jj for jj in range(len(mechanisms)) if (word >> jj) & 1)
 
             # BZ emits nonminimal kernel words too.  Nullity one excludes accepted supports
@@ -552,7 +491,6 @@ def _search_bz_patterns(
     finally:
         # Preserve work counts even if a witness ends the search before BZ exhausts its iterator.
         statistics.generated += outer.generated
-        statistics.coefficient_depth = outer.coefficient_depth
     return None
 
 
@@ -581,7 +519,6 @@ def _iter_minimal_patterns(
         basis: tuple[int, ...],
     ) -> Iterator[tuple[tuple[int, ...], int]]:
         if support:
-            statistics.independent_prefixes += 1
             matches = groups.get(flag_sum, [])
             for position in range(bisect_left(matches, start), len(matches)):
                 _, closing_syndrome, original = mechanisms[matches[position]]
@@ -591,7 +528,6 @@ def _iter_minimal_patterns(
             return
         for index in range(start, len(mechanisms)):
             statistics.generated += 1
-            statistics.prefix_extensions += 1
             flag, column_syndrome, original = mechanisms[index]
             # Descending leading bits give an echelon basis.  A zero remainder means the prefix
             # already contains a dependence and cannot extend to a minimal accepted support.

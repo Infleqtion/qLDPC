@@ -112,8 +112,7 @@ def test_minimal_prefix_oracle() -> None:
                 )
                 assert dict(actual) == expected
                 assert len(actual) == len(expected)
-                assert stats.generated == stats.prefix_extensions + len(actual)
-                assert stats.independent_prefixes <= stats.prefix_extensions
+                assert stats.generated >= len(actual)
 
 
 def test_minimal_prefix_is_not_full_kernel() -> None:
@@ -176,7 +175,7 @@ def test_adaptive_prefix_circuit(damaging: bool) -> None:
     assert any("Y" in gg for gg in result.target_stabilizers)
     assert any(gg.startswith("-") for gg in result.target_stabilizers)
     stats = result.statistics
-    assert stats.search_method == "independent_prefix" and stats.outer_ranks == ()
+    assert stats.search_method == "independent_prefix"
     failure = result.counterexample
     if damaging:
         assert failure is not None and failure.fault_count in (2, 3)
@@ -200,9 +199,8 @@ def test_adaptive_prefix_circuit(damaging: bool) -> None:
     else:
         # Even-parity three-bit syndromes have weight <=2; no singleton is accepted.
         assert failure is None
-        assert stats.prefix_extensions == 1035 and stats.independent_prefixes == 990
+        # 1035 prefix extensions plus 990 closing supports, far below the 11521 BZ supports.
         assert stats.generated == 2025
-        assert stats.generated < 11521
         assert stats.minimal_candidates == 990
 
 
@@ -228,8 +226,8 @@ def test_adaptive_retains_strong_information_sets() -> None:
             is None
         )
     assert stats.search_method == "brouwer_zimmermann"
-    assert stats.outer_ranks == (8, 8, 8) and stats.coefficient_depth == 1
-    assert stats.generated == 24 and stats.prefix_extensions == 0
+    # Three information sets, each with eight depth-one coefficient supports.
+    assert stats.generated == 24
 
 
 @pytest.mark.parametrize("budget", [2, 3, 6, 30])
@@ -247,7 +245,6 @@ def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
     )
     assert stats.flag_rank == 5 and stats.effective_budget == 2
     assert stats.search_method == "independent_prefix"
-    assert stats.prefix_extensions == stats.independent_prefixes == 15
     assert stats.minimal_candidates == 15 and stats.generated == 30
     assert _exhaustive(flags, [3, 5, 6] * 5, n, budget)
 
@@ -275,9 +272,7 @@ def test_independent_flag_types_reduce_to_pairs_with_few_columns(
         assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
         if violation is None:
             assert result is None
-            assert stats.prefix_extensions == stats.independent_prefixes == 16
-            assert stats.minimal_candidates == stats.bounded_candidates == 8
-            assert stats.generated == 24
+            assert stats.minimal_candidates == 8 and stats.generated == 24
         else:
             assert result is not None and result.fault_indices == violation
             assert 2 < result.effective_weight_lower_bound
@@ -299,15 +294,14 @@ def test_independent_flag_types_failure() -> None:
     assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
 
 
-def test_statistics_compare_work_not_time() -> None:
-    """Repeated certifications of one circuit are equal even though their timings differ."""
+def test_certificates_are_deterministic() -> None:
+    """Repeated certifications of one circuit are identical, including their search statistics."""
     circuit = stim.Circuit("H 0\nCX 0 1\nDEPOLARIZE2(0.01) 0 1")
     first, second = (
         circuits.certify_state_prep_spread(circuit, output_qubits=[0, 1], max_faults=2)
         for _ in range(2)
     )
-    first.statistics.setup_seconds, first.statistics.search_seconds = 1.0, 2.0
-    assert first.statistics == second.statistics
+    assert first == second
     assert first.statistics.mechanisms > 0
     assert first.statistics != circuits.StatePrepSpreadStatistics()
 
@@ -337,7 +331,7 @@ def test_dependency_reductions() -> None:
         state_prep_certification._certify_maps([0, 0], [0, 0], _PauliCosetSearch(matrix), 4, stats)
         is None
     )
-    assert stats.distinct_symptoms == stats.generated == stats.syndrome_queries == 0
+    assert stats.generated == stats.minimal_candidates == 0
     # Harmless systematic rows do not bound the first violating eligible word.
     n = 6
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])

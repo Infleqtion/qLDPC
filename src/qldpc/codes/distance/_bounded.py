@@ -205,7 +205,6 @@ class _PauliCosetSearch:
         self.ranks: tuple[int, ...] = ()
         self.cache_size = cache_size
         self.batch_size = batch_size
-        self.queries = 0
         self.cache_hits = 0
         self.generated = 0
         self.preparations = 0
@@ -236,7 +235,6 @@ class _PauliCosetSearch:
         """Prove or disprove that this syndrome has a representative within the threshold."""
         if not 0 <= syndrome < 1 << self.num_qubits or max_weight < 0:
             raise ValueError("Syndrome out of range or negative weight threshold")
-        self.queries += 1
         known = self._cache.get(syndrome)
         if known is not None:
             upper = self._weight(known.representative)
