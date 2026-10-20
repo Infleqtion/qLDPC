@@ -581,17 +581,16 @@ def get_candidate_count(monkeypatch: pytest.MonkeyPatch) -> Callable[[], int]:
         return best, depth, visited
 
     def counting_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
+        arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         nonlocal num_candidates
         num_candidates += len(arr)
-        return binary._hamming_weight(arr, buf=buf, out=out)
+        return binary._hamming_weight(arr, out=out)
 
-    monkeypatch.setattr(bz, "_get_hamming_weight_fn", lambda: (counting_weight, 1))
-    monkeypatch.setattr(
-        "qldpc.codes.distance.brute_force._get_hamming_weight_fn", lambda: (counting_weight, 1)
-    )
+    def counting_row_weights(rows: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
+        return counting_weight(rows).sum(axis=-1, dtype=np.uint64)
+
+    monkeypatch.setattr(bz, "_get_packed_row_weights", counting_row_weights)
+    monkeypatch.setattr("qldpc.codes.distance.brute_force._hamming_weight", counting_weight)
     monkeypatch.setattr(bz, "_scan_brouwer_zimmermann", counting_scan)
     return lambda: num_candidates

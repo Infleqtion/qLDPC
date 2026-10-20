@@ -25,7 +25,6 @@ from ._binary import (
     _MASK0F,
     _MASK33,
     _MASK55,
-    _get_hamming_weight_fn,
     _get_packed_row_weights,
     _row_reduce_binary,
     _rows_to_ints,
@@ -404,10 +403,9 @@ def _get_brouwer_zimmermann_initial_upper_bound(
     labels: npt.NDArray[np.uint8] | None,
 ) -> int:
     """Return the lightest eligible row in a nested-code basis."""
-    weight_func, _ = _get_hamming_weight_fn()
     eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
     packed_basis = _rows_to_ints(basis[eligible], dtype=np.uint64)
-    return int(_get_packed_row_weights(packed_basis, weight_func).min())
+    return int(_get_packed_row_weights(packed_basis).min())
 
 
 def _select_brouwer_zimmermann_information_sets(

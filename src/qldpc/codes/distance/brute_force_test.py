@@ -26,17 +26,12 @@ def test_get_distance_classical(block_size: int) -> None:
     observed_bitstrings: list[tuple[int, ...]] = []
 
     def _mock_hamming_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
+        arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, buf=buf, out=out)
+        return binary._hamming_weight(arr, out=out)
 
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
-        return_value=(_mock_hamming_weight, 0),
-    ):
+    with mock.patch("qldpc.codes.distance.brute_force._hamming_weight", _mock_hamming_weight):
         distance = qldpc.codes.distance.get_distance_classical(
             np.vstack([generators, generators[0], generators[0] ^ generators[1]]),
             block_size=block_size,
@@ -72,17 +67,12 @@ def test_get_distance_quantum(block_size: int) -> None:
     observed_bitstrings: list[tuple[int, ...]] = []
 
     def _mock_hamming_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
+        arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, buf=buf, out=out)
+        return binary._hamming_weight(arr, out=out)
 
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_hamming_weight_fn",
-        return_value=(_mock_hamming_weight, 0),
-    ):
+    with mock.patch("qldpc.codes.distance.brute_force._hamming_weight", _mock_hamming_weight):
         distance = qldpc.codes.distance.get_distance_quantum(
             np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
             np.vstack([stabilizers, stabilizers[0]]),
@@ -123,17 +113,12 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
     observed_bitstrings: list[tuple[int, ...]] = []
 
     def _mock_symplectic_weight(
-        arr: npt.NDArray[np.uint64],
-        buf: npt.NDArray[np.uint64] | None = None,
-        out: npt.NDArray[np.uint64] | None = None,
+        arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._symplectic_weight(arr, buf=buf, out=out)
+        return binary._symplectic_weight(arr, out=out)
 
-    with mock.patch(
-        "qldpc.codes.distance.brute_force._get_symplectic_weight_fn",
-        return_value=(_mock_symplectic_weight, 0),
-    ):
+    with mock.patch("qldpc.codes.distance.brute_force._symplectic_weight", _mock_symplectic_weight):
         distance = qldpc.codes.distance.get_distance_quantum(
             np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
             np.vstack([stabilizers, stabilizers[0]]),
