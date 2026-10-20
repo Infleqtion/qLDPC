@@ -196,13 +196,14 @@ def get_small_group_structure(order: int, index: int) -> str:
 def maybe_get_generators_from_gap(
     group: str, *, warning: str | None = None
 ) -> GeneratorsList | None:
-    """Retrieve GAP group generators from GAP directly."""
-    try:
-        qldpc.external.gap.require_package("GUAVA")
-    except FileNotFoundError as error:
-        if re.search("GAP 4 .* is not installed", str(error)):
-            return None
-        raise  # pragma: no cover
+    """Retrieve group generators from GAP, or return None if GAP is not available.
+
+    Checking whether GAP is available may prompt on standard input; see
+    help(qldpc.external.gap.is_installed).
+    """
+    if not qldpc.external.gap.is_installed():
+        return None
+    qldpc.external.gap.require_package("GUAVA")
 
     # if provided a warning to raise before calling GAP, raise it now
     if warning is not None:
@@ -326,8 +327,8 @@ def maybe_get_webpage(order: int) -> str | None:
 def get_primitive_central_idempotents(group: str, field: int) -> IdempotentsList:
     """Get the primitive central idempotents of a group algebra over a finite field.
 
-    This function uses the GAP Wedderga package (https://gap-packages.github.io/wedderga/), run in a
-    subprocess.
+    This function uses the GAP Wedderga package (https://gap-packages.github.io/wedderga/), which it
+    may install, run through qldpc.external.gap.get_output.
 
     Primitive central idempotents of a ring are nonzero elements that:
 

@@ -260,11 +260,8 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
     external.gap.require_package.cache_clear()
     with (
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
-        unittest.mock.patch(
-            "qldpc.external.gap.get_output",
-            side_effect=FileNotFoundError("GAP 4 is required to proceed, but is not installed"),
-        ),
         unittest.mock.patch(
             "qldpc.external.gap.subprocess.run",
             side_effect=AssertionError("GAP executable must not be called by this test"),
@@ -293,6 +290,15 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
                 for member in group.generate():
                     permutation = member.to_matrix().view(code.field)
                     assert not np.any(code.matrix @ permutation @ code.generator.T)
+
+        # if GAP fails to compute an AutomorphismGroup, fall back to a PermutationAutomorphismGroup
+        def get_output(*commands: str) -> str:
+            if "group := AutomorphismGroup(" in " ".join(commands):
+                raise external.gap.GAPError("_TEST_")
+            return "\n(1,2)\n"
+
+        with unittest.mock.patch("qldpc.external.gap.get_output", side_effect=get_output):
+            assert codes.HammingCode(2, field=2).get_automorphism_group().order == 2
 
     # compute an automorphism group with MAGMA
     user_inputs = iter(

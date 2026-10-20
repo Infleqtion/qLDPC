@@ -21,12 +21,12 @@ them.
 
 from __future__ import annotations
 
-import contextlib
 import functools
 import itertools
 import math
 import operator
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from random import Random
 from typing import Any, ClassVar
 
 import galois
@@ -329,18 +329,7 @@ class Group:
 
     def random(self, *, seed: int | None = None) -> GroupMember:
         """A random element this group."""
-        with contextlib.ExitStack() as stack:
-            # A seed reseeds SymPy's global RNG; confine that reseed to this call (SymPy exposes no
-            # per-call random stream) by restoring the RNG state on the way out.
-            if seed is not None:
-                stack.enter_context(_preserve_sympy_rng())
-                sympy.core.random.seed(seed)
-
-            # HACK to circumvent an error thrown by sympy when "unranking" an empty Permutation
-            if self.generators == [GroupMember()]:
-                return self.identity
-
-            return GroupMember.from_sympy(self._group.random())
+        return self._random_member(_get_rng(seed))
 
     def regular_lift(self, member: GroupMember, *, right: bool = False) -> npt.NDArray[np.int_]:
         """Lift a group member to its regular representation.
@@ -562,44 +551,38 @@ class Group:
                 "A random symmetric subset of this group must have a size between 1 and"
                 f" {self.order} (provided: {size})"
             )
-        with contextlib.ExitStack() as stack:
-            # A seed reseeds SymPy's global RNG; confine that reseed to this call (SymPy exposes no
-            # per-call random stream) by restoring the RNG state on the way out.
-            if seed is not None:
-                stack.enter_context(_preserve_sympy_rng())
-                sympy.core.random.seed(seed)
+        rng = _get_rng(seed)
+        singles = set()  # group members equal to their own inverse
+        doubles = set()  # pairs of group members and their inverses
+        while True:  # sounds dangerous, but bear with me...
+            member = self._random_member(rng)
+            if exclude_identity and member == self.identity:
+                continue  # pragma: no cover
 
-            singles = set()  # group members equal to their own inverse
-            doubles = set()  # pairs of group members and their inverses
-            while True:  # sounds dangerous, but bear with me...
-                member = self.random()
-                if exclude_identity and member == self.identity:
-                    continue  # pragma: no cover
+            # always add group members and their inverses
+            if member == ~member:
+                singles.add(member)
+            else:
+                doubles.add(member)
+                doubles.add(~member)
 
-                # always add group members and their inverses
-                if member == ~member:
-                    singles.add(member)
-                else:
-                    doubles.add(member)
-                    doubles.add(~member)
+            # count how many extra group members we have found
+            num_extra = len(singles) + len(doubles) - size
 
-                # count how many extra group members we have found
-                num_extra = len(singles) + len(doubles) - size
+            if not num_extra:
+                # if we have the correct number of group members, we are done
+                return singles | doubles
 
-                if not num_extra:
-                    # if we have the correct number of group members, we are done
-                    return singles | doubles
-
-                elif num_extra > 0 and len(singles):
-                    # we have overshot, so throw away members to get down to the right size
-                    for _ in range(num_extra // 2):
-                        member = sorted(doubles)[sympy.core.random.randint(0, len(doubles) - 1)]
-                        doubles.remove(member)
-                        doubles.remove(~member)
-                    if num_extra % 2:
-                        member = sorted(singles)[sympy.core.random.randint(0, len(singles) - 1)]
-                        singles.remove(member)
-                    return singles | doubles
+            elif num_extra > 0 and len(singles):
+                # we have overshot, so throw away members to get down to the right size
+                for _ in range(num_extra // 2):
+                    member = sorted(doubles)[rng.randint(0, len(doubles) - 1)]
+                    doubles.remove(member)
+                    doubles.remove(~member)
+                if num_extra % 2:
+                    member = sorted(singles)[rng.randint(0, len(singles) - 1)]
+                    singles.remove(member)
+                return singles | doubles
 
     @staticmethod
     def from_name(
@@ -611,6 +594,10 @@ class Group:
         """Retrieve a group from the GAP computer algebra system (CAS).
 
         ... unless ``from_magma=True``, in which case retrieve a group from the MAGMA CAS.
+
+        This may run GAP, install GAP packages, access GroupNames.org, or prompt on standard input;
+        see help(qldpc.external.groups.get_generators) and
+        help(qldpc.external.groups.get_generators_from_magma).
         """
         name = "".join(name.split())  # strip whitespace
         if from_magma:
@@ -642,6 +629,13 @@ class Group:
         for base, exponent in exponents:
             output *= symbols[base] ** exponent
         return output
+
+    def _random_member(self, rng: Random) -> GroupMember:
+        """A random element of this group, drawn with the given random number generator."""
+        # HACK to circumvent an error thrown by sympy when "unranking" an empty Permutation
+        if self.generators == [GroupMember()]:
+            return self.identity
+        return GroupMember.from_sympy(self._group.coset_unrank(rng.randrange(self.order)))
 
 
 class WreathProductGroup(Group):
@@ -940,43 +934,12 @@ class SpecialLinearGroup(Group):
         self._field = resolve_field(field)
 
         if linear_rep:
-            # Construct a linear representation of this group, in which group elements permute
-            # elements of the vector space that the generating matrices act on.
-
-            # identify the target space that group members (as matrices) act on: all nonzero vectors
-            target_space = [
-                self.field(vec).tobytes()
-                for vec in itertools.product(self.field.elements, repeat=self.dimension)
-            ]
-            del target_space[0]  # remove the zero vector
-
-            # identify how the generators permute elements of the target space
-            generators = []
-            for member in self.get_generating_mats(self.dimension, self.field.order):
-                perm = np.empty(len(target_space), dtype=int)
-                for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
-                    next_index = target_space.index(next_vec.view(np.ndarray).tobytes())
-                    perm[index] = next_index
-                generators.append(GroupMember(perm))
-
-            def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-                """Lift a group member to a square matrix.
-
-                Each column is determined by how the matrix acts on a standard basis vector.
-                """
-                cols = []
-                for entry in range(self.dimension):
-                    inp_vec = np.zeros(self.dimension, dtype=np.uint8)
-                    inp_vec[entry] = 1
-                    inp_idx = target_space.index(inp_vec.tobytes())
-                    out_idx = member(inp_idx)
-                    out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
-                    cols.append(out_vec)
-                # stacking the images as rows yields the transpose of the acting matrix; that
-                # transpose (not the matrix itself) is the homomorphism lift(g.h) = lift(g) lift(h)
-                return self.field(np.vstack(cols, dtype=int))
-
+            # represent group members by how they permute the nonzero vectors that matrices act on
+            generators, lift = _get_linear_rep(
+                self.field,
+                self.dimension,
+                self.get_generating_mats(self.dimension, self.field.order),
+            )
             super()._init_from_group(comb.PermutationGroup(generators), lift=lift)
 
         else:
@@ -1074,38 +1037,11 @@ class ProjectiveSpecialLinearGroup(Group):
         if linear_rep:
             # with a trivial center, PSL(d, q) = SL(d, q): represent members by their action on all
             # nonzero vectors, exactly as SpecialLinearGroup does
-            target_space = [
-                self.field(vec).tobytes()
-                for vec in itertools.product(self.field.elements, repeat=self.dimension)
-            ]
-            del target_space[0]  # remove the zero vector
-
-            # identify how the generators permute elements of the target space
-            generators = []
-            for member in SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order):
-                perm = np.empty(len(target_space), dtype=int)
-                for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
-                    next_index = target_space.index(next_vec.view(np.ndarray).tobytes())
-                    perm[index] = next_index
-                generators.append(GroupMember(perm))
-
-            def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-                """Lift a group member to a square matrix.
-
-                Each column is determined by how the matrix acts on a standard basis vector.
-                """
-                cols = []
-                for entry in range(self.dimension):
-                    inp_vec = np.zeros(self.dimension, dtype=np.uint8)
-                    inp_vec[entry] = 1
-                    inp_idx = target_space.index(inp_vec.tobytes())
-                    out_idx = member(inp_idx)
-                    out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
-                    cols.append(out_vec)
-                # see SpecialLinearGroup: the transpose of the acting matrix is the homomorphism
-                return self.field(np.vstack(cols, dtype=int))
-
+            generators, lift = _get_linear_rep(
+                self.field,
+                self.dimension,
+                SpecialLinearGroup.get_generating_mats(self.dimension, self.field.order),
+            )
             super()._init_from_group(comb.PermutationGroup(generators), lift=lift)
 
         else:
@@ -1187,44 +1123,12 @@ class GeneralLinearGroup(Group):
         self._field = resolve_field(field)
 
         if linear_rep:
-            # Construct a linear representation of this group, in which group elements permute
-            # elements of the vector space that the generating matrices act on.
-
-            # identify the target space that group members (as matrices) act on: all nonzero vectors
-            target_space = [
-                self.field(vec).tobytes()
-                for vec in itertools.product(self.field.elements, repeat=self.dimension)
-            ]
-            del target_space[0]  # remove the zero vector
-
-            # identify how the generators permute elements of the target space
-            generators = []
-            for member in self.get_generating_mats(self.dimension, self.field.order):
-                perm = np.empty(len(target_space), dtype=int)
-                for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
-                    next_index = target_space.index(next_vec.view(np.ndarray).tobytes())
-                    perm[index] = next_index
-                generators.append(GroupMember(perm))
-
-            def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-                """Lift a group member to a square matrix.
-
-                Each column is determined by how the matrix acts on a standard basis vector.
-                """
-                cols = []
-                for entry in range(self.dimension):
-                    inp_vec = np.zeros(self.dimension, dtype=np.uint8)
-                    inp_vec[entry] = 1
-                    inp_idx = target_space.index(inp_vec.tobytes())
-                    out_idx = member(inp_idx)
-                    out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
-                    cols.append(out_vec)
-                # Stacking the images as rows yields the transpose of the acting matrix.  That
-                # transpose, not the matrix itself, is the homomorphism
-                # ``lift(g @ h) = lift(g) @ lift(h)``.
-                return self.field(np.vstack(cols, dtype=int))
-
+            # represent group members by how they permute the nonzero vectors that matrices act on
+            generators, lift = _get_linear_rep(
+                self.field,
+                self.dimension,
+                self.get_generating_mats(self.dimension, self.field.order),
+            )
             super()._init_from_group(comb.PermutationGroup(generators), lift=lift)
 
         else:
@@ -1325,38 +1229,11 @@ class ProjectiveGeneralLinearGroup(Group):
         if linear_rep:
             # With a trivial center, ``PGL(d, q) = GL(d, q)``.  Represent members by their action on
             # all nonzero vectors, exactly as ``GeneralLinearGroup`` does.
-            target_space = [
-                self.field(vec).tobytes()
-                for vec in itertools.product(self.field.elements, repeat=self.dimension)
-            ]
-            del target_space[0]  # remove the zero vector
-
-            # identify how the generators permute elements of the target space
-            generators = []
-            for member in GeneralLinearGroup.get_generating_mats(self.dimension, self.field.order):
-                perm = np.empty(len(target_space), dtype=int)
-                for index, vec_bytes in enumerate(target_space):
-                    next_vec = member @ np.frombuffer(vec_bytes, dtype=np.uint8).view(self.field)
-                    next_index = target_space.index(next_vec.view(np.ndarray).tobytes())
-                    perm[index] = next_index
-                generators.append(GroupMember(perm))
-
-            def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-                """Lift a group member to a square matrix.
-
-                Each column is determined by how the matrix acts on a standard basis vector.
-                """
-                cols = []
-                for entry in range(self.dimension):
-                    inp_vec = np.zeros(self.dimension, dtype=np.uint8)
-                    inp_vec[entry] = 1
-                    inp_idx = target_space.index(inp_vec.tobytes())
-                    out_idx = member(inp_idx)
-                    out_vec = np.frombuffer(target_space[out_idx], dtype=np.uint8)
-                    cols.append(out_vec)
-                # see GeneralLinearGroup: the transpose of the acting matrix is the homomorphism
-                return self.field(np.vstack(cols, dtype=int))
-
+            generators, lift = _get_linear_rep(
+                self.field,
+                self.dimension,
+                GeneralLinearGroup.get_generating_mats(self.dimension, self.field.order),
+            )
             super()._init_from_group(comb.PermutationGroup(generators), lift=lift)
 
         else:
@@ -1415,17 +1292,43 @@ PGL = ProjectiveGeneralLinearGroup
 # helper methods
 
 
-@contextlib.contextmanager
-def _preserve_sympy_rng() -> Iterator[None]:
-    """Restore SymPy's global RNG state on exit, so a local reseed leaves other consumers intact.
+def _get_linear_rep(
+    field: type[galois.FieldArray],
+    dimension: int,
+    generating_mats: Iterable[galois.FieldArray],
+) -> tuple[list[GroupMember], Lift]:
+    """Represent a matrix group by how its members permute the nonzero vectors that they act on.
 
-    ``sympy.core.random.seed`` reseeds both the main RNG and the separate "assumptions" RNG, so both
-    are saved and restored.
+    Return the permutations of the generating matrices, and a lift that maps a group member to a
+    matrix.  The lift stacks the images of standard basis vectors as rows, which yields the
+    transpose of the acting matrix.  That transpose, not the matrix itself, is the homomorphism
+    ``lift(g . h) = lift(g) @ lift(h)``.
     """
-    rng_state = sympy.core.random.rng.getstate()
-    assumptions_state = sympy.core.random._assumptions_rng.getstate()
-    try:
-        yield
-    finally:
-        sympy.core.random.rng.setstate(rng_state)
-        sympy.core.random._assumptions_rng.setstate(assumptions_state)
+    vectors = [field(vec).tobytes() for vec in itertools.product(field.elements, repeat=dimension)]
+    del vectors[0]  # remove the zero vector
+    vector_index = {vec_bytes: index for index, vec_bytes in enumerate(vectors)}
+
+    generators = []
+    for mat in generating_mats:
+        perm = [
+            vector_index[(mat @ np.frombuffer(vec_bytes, dtype=np.uint8).view(field)).tobytes()]
+            for vec_bytes in vectors
+        ]
+        generators.append(GroupMember(perm))
+
+    def lift(member: GroupMember) -> npt.NDArray[np.int_]:
+        """Lift a group member to the transpose of the matrix that it represents."""
+        rows = []
+        for entry in range(dimension):
+            basis_vec = np.zeros(dimension, dtype=np.uint8)
+            basis_vec[entry] = 1
+            image_index = member(vector_index[basis_vec.tobytes()])
+            rows.append(np.frombuffer(vectors[image_index], dtype=np.uint8))
+        return field(np.vstack(rows, dtype=int))
+
+    return generators, lift
+
+
+def _get_rng(seed: int | None) -> Random:
+    """A new random number generator with the given seed, or SymPy's global one if seed is None."""
+    return Random(seed) if seed is not None else sympy.core.random.rng

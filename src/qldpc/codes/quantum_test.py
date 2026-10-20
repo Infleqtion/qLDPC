@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import io
 import os
+import random
 import subprocess
 import sys
 import unittest.mock
@@ -1095,11 +1096,9 @@ def test_random_quantum_tanner_code_is_reproducible() -> None:
     # reusing one subset for both sides is likewise reproducible
     assert len({matrix_for(seed=7, one_subset=True) for _ in range(3)}) == 1
 
-    # without a seed the code is still drawn at random.  Seeding sympy's own generator, which the
-    # unseeded draw consumes, keeps this check from depending on chance, and restoring it afterwards
-    # keeps the fixed stream out of everything that runs later.
-    with abstract.groups._preserve_sympy_rng():
-        sympy.core.random.seed(0)
+    # without a seed the code is still drawn at random, from SymPy's global generator.  Replacing
+    # that generator with a seeded one for this check keeps it from depending on chance.
+    with unittest.mock.patch.object(sympy.core.random, "rng", random.Random(0)):
         assert len({matrix_for() for _ in range(4)}) > 1
 
     # the code is also independent of the hash seed, which sets the iteration order of the sets of

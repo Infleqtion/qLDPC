@@ -16,7 +16,7 @@ import stim
 
 from qldpc import codes, math
 
-CircuitOrTableau = TypeVar("CircuitOrTableau", stim.Circuit, stim.Tableau)
+ReturnType = TypeVar("ReturnType")
 Params = ParamSpec("Params")
 
 
@@ -67,12 +67,12 @@ StimCircuitLike = TypeVar("StimCircuitLike", bound=StimCircuitProtocol)
 
 
 def restrict_to_qubits(
-    func: Callable[Params, CircuitOrTableau],
-) -> Callable[Params, CircuitOrTableau]:
+    func: Callable[Params, ReturnType],
+) -> Callable[Params, ReturnType]:
     """Restrict a circuit or tableau constructor to qubit-based codes."""
 
     @functools.wraps(func)
-    def qubit_func(*args: Params.args, **kwargs: Params.kwargs) -> CircuitOrTableau:
+    def qubit_func(*args: Params.args, **kwargs: Params.kwargs) -> ReturnType:
         if any(
             isinstance(arg, codes.QuditCode) and arg.field is not galois.GF2
             for arg in itertools.chain(args, kwargs.values())
