@@ -9,6 +9,7 @@ import collections
 import copy
 import functools
 import itertools
+import numbers
 import operator
 import random
 import warnings
@@ -320,7 +321,7 @@ class ClassicalCode(AbstractCode):
     @functools.cached_property
     def canonicalized(self) -> ClassicalCode:
         """The same code with its parity matrix in reduced row echelon form."""
-        if self._is_canonicalized:  # pragma: no cover
+        if self._is_canonicalized:
             return self
         matrix = self.matrix.row_space()
         code = ClassicalCode(matrix, self.field)
@@ -646,6 +647,7 @@ class ClassicalCode(AbstractCode):
             code, and the best bound is remembered for later calls.
         """
         validate_distance_backend(backend)
+        _validate_num_trials(num_trials)
         if backend not in ("auto", "decoder"):
             raise ValueError(
                 f"The {backend!r} distance backend is only available for CSSCode instances."
@@ -796,9 +798,8 @@ class ClassicalCode(AbstractCode):
         Altogether, we puncture this code by shortening its dual code, applying the shortening steps
         above to the parity check matrix of the code.
         """
-        assert all(0 <= bit < len(self) for bit in bits)
         new_matrix = self.matrix.copy()
-        for bit in sorted(bits, reverse=True):
+        for bit in reversed(_get_sorted_unique_bits(bits, len(self))):
             nonzero_rows = np.flatnonzero(new_matrix[:, bit])
             if nonzero_rows.size:
                 pivot_row, rows_to_reduce = nonzero_rows[0], nonzero_rows[1:]
@@ -831,8 +832,8 @@ class ClassicalCode(AbstractCode):
         Altogether, to shorten this code at the given bits, we remove the corresponding columns from
         its parity check matrix.
         """
-        assert all(0 <= bit < len(self) for bit in bits)
-        new_matrix = np.delete(self.matrix, list(bits), axis=1).view(self.field)
+        bits = _get_sorted_unique_bits(bits, len(self))
+        new_matrix = np.delete(self.matrix, bits, axis=1).view(self.field)
         return ClassicalCode(new_matrix)
 
     def shorten(self, bits: Collection[int]) -> ClassicalCode:
@@ -1017,7 +1018,8 @@ class QuditCode(AbstractCode):
             self._gauge_ops = matrix._gauge_ops
             self._logical_ops = matrix._logical_ops
             self._is_subsystem_code = matrix._is_subsystem_code
-            assert not (matrix._is_subsystem_code and is_subsystem_code is False)
+            if matrix._is_subsystem_code and is_subsystem_code is False:
+                raise ValueError("is_subsystem_code=False contradicts the subsystem code provided")
 
         if is_subsystem_code:
             self._is_subsystem_code = is_subsystem_code
@@ -1055,7 +1057,7 @@ class QuditCode(AbstractCode):
     @functools.cached_property
     def canonicalized(self) -> QuditCode:
         """The same code with its parity matrix in reduced row echelon form."""
-        if self._is_canonicalized:  # pragma: no cover
+        if self._is_canonicalized:
             return self
         is_subsystem_code = self.is_subsystem_code
         matrix = self.matrix.row_space()
@@ -1352,7 +1354,7 @@ class QuditCode(AbstractCode):
         The symplectic argument is provided for compatibility with CSSCode.get_logical_ops, and must
         always be True for a non-CSS code.
         """
-        assert symplectic is True
+        _require_symplectic(symplectic)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
 
         # if requested, retrieve logical operators of one type only
@@ -1731,15 +1733,22 @@ class QuditCode(AbstractCode):
         If ``canonicalized is True``, guarantee that the stabilizer matrix is canonicalized (i.e.,
         row reduced) such that its rows are a minimal generating set for the stabilizer group.
 
+        If a Pauli is provided, return the stabilizer generators whose first nonzero entry lies in
+        the X-type (for Pauli.X) or Z-type (for Pauli.Z) half of their symplectic vectors.  When
+        ``canonicalized is True``, the Pauli.Z generators are therefore exactly the Z-type
+        generators of a canonical generating set, and the Pauli.X generators are the remainder.
+
         The symplectic argument is provided for compatibility with CSSCode.get_stabilizer_ops, and
         must always be True for a non-CSS code.
         """
-        assert symplectic is True
+        _require_symplectic(symplectic)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
 
         # if requested, retrieve stabilizer operators of one type only
         if pauli is not None:
-            stabilizer_ops = self.get_stabilizer_ops()
+            stabilizer_ops = self.get_stabilizer_ops(
+                canonicalized=canonicalized, recompute=recompute
+            )
             pivots_x = math.first_nonzero_cols(stabilizer_ops) < len(self)
             return stabilizer_ops[pivots_x if pauli is Pauli.X else ~pivots_x]
 
@@ -1760,17 +1769,22 @@ class QuditCode(AbstractCode):
         return self._stabilizer_ops
 
     def get_gauge_ops(
-        self, pauli: PauliXZLike | None = None, *, symplectic: bool = True
+        self,
+        pauli: PauliXZLike | None = None,
+        *,
+        recompute: bool = False,
+        symplectic: bool = True,
     ) -> galois.FieldArray:
         """Basis of nontrivial logical Pauli operators for the gauge qudits of this code.
 
         Nontrivial logical Pauli operators for the gauge qudits are organized similarly to the
-        logical Pauli operators computed by QuditCode.get_logical_ops.
+        logical Pauli operators computed by QuditCode.get_logical_ops.  If ``recompute is True``,
+        recompute these operators rather than returning cached values.
 
         The symplectic argument is provided for compatibility with CSSCode.get_gauge_ops, and must
         always be True for a non-CSS code.
         """
-        assert symplectic is True
+        _require_symplectic(symplectic)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
 
         if not self.is_subsystem_code:
@@ -1778,13 +1792,10 @@ class QuditCode(AbstractCode):
 
         # if requested, retrieve gauge operators of one type only
         if pauli is not None:
-            return self.get_gauge_ops().reshape(2, -1, 2 * len(self))[pauli]
+            return self.get_gauge_ops(recompute=recompute).reshape(2, -1, 2 * len(self))[pauli]
 
-        # return gauge operators if known
-        if self._gauge_ops is not None:
-            return self._gauge_ops
-
-        self._gauge_ops = self.dual().get_logical_ops()
+        if self._gauge_ops is None or recompute:
+            self._gauge_ops = self.dual().get_logical_ops(recompute=recompute)
         return self._gauge_ops
 
     def get_destabilizer_ops(
@@ -1806,7 +1817,7 @@ class QuditCode(AbstractCode):
         The symplectic argument is provided for compatibility with CSSCode.get_destabilizer_ops, and
         must always be True for a non-CSS code.
         """
-        assert symplectic is True
+        _require_symplectic(symplectic)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
 
         # if requested, retrieve destabilizer operators of one type only
@@ -2065,6 +2076,7 @@ class QuditCode(AbstractCode):
             remembered for later calls.
         """
         validate_distance_backend(backend)
+        _validate_num_trials(num_trials)
         if backend not in ("auto", "gap"):
             raise ValueError(
                 f"The {backend!r} distance backend is only available for CSSCode instances."
@@ -2725,7 +2737,7 @@ class CSSCode(QuditCode):
     @functools.cached_property
     def canonicalized(self) -> CSSCode:
         """The same code with its parity matrices in reduced row echelon form."""
-        if self._is_canonicalized:  # pragma: no cover
+        if self._is_canonicalized:
             return self
         is_subsystem_code = self.is_subsystem_code
         code = CSSCode(
@@ -3151,7 +3163,7 @@ class CSSCode(QuditCode):
         logical Pauli operators computed by CSSCode.get_logical_ops.
         """
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
-        gauge_ops = QuditCode.get_gauge_ops(self, pauli)
+        gauge_ops = QuditCode.get_gauge_ops(self, pauli, recompute=recompute)
         if symplectic or pauli is None:
             return gauge_ops
         return gauge_ops.reshape(-1, 2, len(self))[:, pauli, :].view(self.field)
@@ -3440,8 +3452,11 @@ class CSSCode(QuditCode):
 
         Set ``backend="gap"`` to use GAP's QDistRnd package or ``backend="sqetch"`` to use the
         optional GPU-accelerated random-ISD estimator.  By default, ``backend="auto"`` chooses the
-        first applicable backend in this order: an installed sqetch for binary CSS codes, available
-        GAP/QDistRnd, then the decoder-based algorithm.
+        first applicable backend in this order: an installed sqetch for binary CSS codes,
+        GAP/QDistRnd if GAP can be called without user interaction, then the decoder-based
+        algorithm.  Automatic selection therefore never prompts on standard input (see
+        :func:`qldpc.external.gap.is_callable`); request ``backend="gap"`` explicitly to use the
+        manual copy/paste GAP workflow.
 
         Args:
             num_trials: Minimize over this many independent upper bounds.  If ``None`` (the
@@ -3470,6 +3485,7 @@ class CSSCode(QuditCode):
             remembered for later calls.
         """
         validate_distance_backend(backend)
+        _validate_num_trials(num_trials)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
         decoders.reject_prebuilt_decoder(decoder, _CSS_DISTANCE_BOUND_REASON)
         if (known_distance := self.get_distance_if_known(pauli)) is not None:
@@ -3669,7 +3685,10 @@ class CSSCode(QuditCode):
             This code, with a reduced logical operator.
         """
         pauli = Pauli.coerce_xz(pauli)
-        assert 0 <= logical_index < self.dimension
+        if not 0 <= logical_index < self.dimension:
+            raise ValueError(
+                f"logical_index must lie in range({self.dimension}) (provided: {logical_index})"
+            )
         decoders.reject_prebuilt_decoder(decoder, _REDUCE_LOGICAL_OP_REASON)
 
         # effective check matrix = syndromes and dual-pauli logical operators
@@ -4124,7 +4143,8 @@ def _as_pauli_bias_zxy(
     """
     if pauli_bias is None:
         return None
-    assert len(pauli_bias) == 3
+    if len(pauli_bias) != 3:
+        raise ValueError(f"pauli_bias must have three entries (provided: {len(pauli_bias)})")
     pauli_bias_zxy = np.array([pauli_bias[2], pauli_bias[0], pauli_bias[1]], dtype=float)
     return pauli_bias_zxy / np.sum(pauli_bias_zxy)
 
@@ -4135,13 +4155,40 @@ def _resolve_distance_backend(
     *,
     is_binary: bool,
 ) -> DistanceBackend:
-    """Resolve the automatic distance-bound backend."""
+    """Resolve the automatic distance-bound backend.
+
+    Automatic selection only uses GAP when it can be called without user interaction, so that the
+    default backend never prompts on standard input.  The manual copy/paste GAP workflow is
+    available by requesting ``backend="gap"`` explicitly.
+    """
     if backend != "auto":
         return backend
 
     options = set(bound_kwargs)
     if is_binary and options <= _SQETCH_DISTANCE_BOUND_KWARGS and external.sqetch.is_installed():
         return "sqetch"
-    if options <= _GAP_DISTANCE_BOUND_KWARGS and external.gap.is_installed():
+    if options <= _GAP_DISTANCE_BOUND_KWARGS and external.gap.is_callable():
         return "gap"
     return "decoder"
+
+
+def _validate_num_trials(num_trials: object) -> None:
+    """Reject a non-integer number of trials, such as a Pauli sector passed positionally."""
+    if num_trials is not None and not isinstance(num_trials, numbers.Integral):
+        raise TypeError(
+            f"num_trials must be an integer or None, not {num_trials!r}; to bound the distance of"
+            " a single Pauli sector, pass it by keyword as pauli=..."
+        )
+
+
+def _get_sorted_unique_bits(bits: Collection[int], num_bits: int) -> list[int]:
+    """Sort and deduplicate bit indices, rejecting any outside of range(num_bits)."""
+    if invalid := sorted({bit for bit in bits if not 0 <= bit < num_bits}):
+        raise ValueError(f"Bit indices must lie in range({num_bits}); invalid indices: {invalid}")
+    return sorted(set(bits))
+
+
+def _require_symplectic(symplectic: bool) -> None:
+    """Reject non-symplectic operator layouts, which only CSS codes support."""
+    if not symplectic:
+        raise ValueError("Non-CSS codes only support symplectic=True; use a CSSCode instead")

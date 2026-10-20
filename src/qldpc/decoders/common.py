@@ -151,10 +151,7 @@ def _get_matrix_error_channel(
 
 
 def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -> None:
-    """Reject explicit error probabilities for a detector error model, which supplies its own.
-
-    A detector error model supplies its own probabilities.
-    """
+    """Reject explicit error probabilities for a detector error model, which supplies its own."""
     options = {"error_channel": error_channel, "error_rate": error_rate}
     if specified := [f"{name}={value!r}" for name, value in options.items() if value is not None]:
         raise ValueError(

@@ -160,7 +160,8 @@ def get_distance_bound(
 
     Note that QDistRnd does not support subsystem codes.  In the case of a CSS code, however, we can
     still compute the Z-distance by promoting all Z-type gauge group generators to stabilizers.
-    ``maxav`` is passed through to QDistRnd as a raw GAP value (default "fail"); see its docs above.
+    ``maxav`` is passed through to QDistRnd as a raw GAP value (default "fail"); see the QDistRnd
+    documentation linked above.
     """
     qldpc.external.gap.require_package("GUAVA")
     qldpc.external.gap.require_package("QDistRnd", "https://github.com/QEC-pages/QDistRnd")
