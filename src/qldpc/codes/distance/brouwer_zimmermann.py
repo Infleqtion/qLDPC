@@ -23,7 +23,6 @@ from numba.extending import register_jitable
 
 from ._binary import (
     _MASK55,
-    _get_packed_row_weights,
     _row_reduce_binary,
     _rows_to_ints,
 )
@@ -407,7 +406,8 @@ def _get_brouwer_zimmermann_initial_upper_bound(
     """Return the lightest eligible row in a nested-code basis."""
     eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
     packed_basis = _rows_to_ints(basis[eligible], dtype=np.uint64)
-    return int(_get_packed_row_weights(packed_basis).min())
+    # np.bitwise_count returns uint8 per word, so sum in uint64 to avoid overflow in wide rows.
+    return int(np.bitwise_count(packed_basis).sum(axis=-1, dtype=np.uint64).min())
 
 
 def _select_brouwer_zimmermann_information_sets(

@@ -151,11 +151,6 @@ def _symplectic_weight(
     return np.bitwise_count(out, out=out)
 
 
-def _get_packed_row_weights(rows: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
-    """Compute Hamming weights of packed binary rows without narrow-integer overflow."""
-    return np.bitwise_count(rows).sum(axis=-1, dtype=np.uint64)
-
-
 ####################################################################################################
 # bit-packing and array helpers
 

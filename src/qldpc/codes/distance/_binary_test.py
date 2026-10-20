@@ -40,12 +40,6 @@ def test_binary_matrices_and_nested_bases() -> None:
     np.testing.assert_array_equal(tags, [[0], [1]])
 
 
-def test_packed_row_weights_do_not_overflow() -> None:
-    packed = np.full((2, 5), np.iinfo(np.uint64).max, dtype=np.uint64)
-    packed[1, -1] = 0
-    np.testing.assert_array_equal(binary._get_packed_row_weights(packed), [320, 256])
-
-
 def test_riffle_and_symplectic_isometry() -> None:
     symplectic = np.array(list(itertools.product((0, 1), repeat=6)), dtype=np.uint8)
     expected = np.stack((symplectic[:, :3], symplectic[:, 3:]), axis=2).reshape(-1, 6)
