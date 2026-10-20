@@ -14,7 +14,7 @@ import pytest
 import stim
 
 from qldpc import circuits
-from qldpc.codes.distance import BoundedKernelSearch, PauliCosetSearch
+from qldpc.codes.distance._bounded import _BoundedKernelSearch, _PauliCosetSearch
 
 from . import state_prep_certification
 
@@ -51,7 +51,7 @@ def test_random_maps(
                 for budget in (1, 2, 3, 5):
                     stats = circuits.StatePrepSpreadStatistics()
                     failure = state_prep_certification._certify_maps(
-                        flags, syndromes, PauliCosetSearch(matrix, weight=weight), budget, stats
+                        flags, syndromes, _PauliCosetSearch(matrix, weight=weight), budget, stats
                     )
                     assert (failure is None) == _exhaustive(flags, syndromes, n, budget)
                     if failure is not None:
@@ -67,7 +67,7 @@ def test_random_maps(
                             (syndrome >> jj) & 1 for jj in range(n)
                         )
                         assert (
-                            PauliCosetSearch(matrix).syndrome(
+                            _PauliCosetSearch(matrix).syndrome(
                                 sum(
                                     int(stim.PauliString(failure.output_pauli)[jj] in (1, 2)) << jj
                                     for jj in range(n)
@@ -124,7 +124,7 @@ def test_minimal_prefix_is_not_full_kernel() -> None:
     minimal = list(state_prep_certification._iter_minimal_patterns(mechanisms, 6, stats))
     assert {support for support, _ in minimal} == {(0, 1, 2), (3, 4, 5)}
     checks = np.array([[(flag >> jj) & 1 for flag in flags] for jj in range(4)], dtype=int)
-    assert set(BoundedKernelSearch(checks, 6).words()) == {0b000111, 0b111000, 0b111111}
+    assert set(_BoundedKernelSearch(checks, 6).words()) == {0b000111, 0b111000, 0b111111}
     wide = [(1 << 80, 1, 90), (1 << 130, 2, 10), ((1 << 80) ^ (1 << 130), 4, 50)]
     assert list(state_prep_certification._iter_minimal_patterns(wide, 3, stats)) == [
         ((90, 10, 50), 7)
@@ -223,7 +223,7 @@ def test_adaptive_retains_strong_information_sets() -> None:
     ):
         assert (
             state_prep_certification._certify_maps(
-                flags, [3, 6, 28] * 8, PauliCosetSearch(matrix), 3, stats
+                flags, [3, 6, 28] * 8, _PauliCosetSearch(matrix), 3, stats
             )
             is None
         )
@@ -241,7 +241,7 @@ def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
     stats = circuits.StatePrepSpreadStatistics()
     assert (
         state_prep_certification._certify_maps(
-            flags, [3, 5, 6] * 5, PauliCosetSearch(matrix), budget, stats
+            flags, [3, 5, 6] * 5, _PauliCosetSearch(matrix), budget, stats
         )
         is None
     )
@@ -268,7 +268,7 @@ def test_independent_flag_types_reduce_to_pairs_with_few_columns(
         ([1, 2] * 7 + [7, 56], (14, 15)),
     ):
         stats = circuits.StatePrepSpreadStatistics()
-        oracle = PauliCosetSearch(matrix, weight=weight)
+        oracle = _PauliCosetSearch(matrix, weight=weight)
         result = state_prep_certification._certify_maps(flags, syndromes, oracle, budget, stats)
         assert (result is None) == _exhaustive(flags, syndromes, n, min(budget, 4))
         assert stats.flag_rank == 8 and len(flags) == 2 * stats.flag_rank
@@ -290,7 +290,7 @@ def test_independent_flag_types_failure() -> None:
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
     stats = circuits.StatePrepSpreadStatistics()
     failure = state_prep_certification._certify_maps(
-        flags, [1, 14, 0, 1, 2, 3, 1, 2, 3], PauliCosetSearch(matrix), 7, stats
+        flags, [1, 14, 0, 1, 2, 3, 1, 2, 3], _PauliCosetSearch(matrix), 7, stats
     )
     assert failure is not None and failure.fault_count == 2
     assert failure.fault_indices == (0, 1)
@@ -328,13 +328,13 @@ def test_dependency_reductions() -> None:
     ):
         stats = circuits.StatePrepSpreadStatistics()
         result = state_prep_certification._certify_maps(
-            flags, syndromes, PauliCosetSearch(matrix), budget, stats
+            flags, syndromes, _PauliCosetSearch(matrix), budget, stats
         )
         assert (result is None) == expected
     # Columns with neither a flag nor a syndrome are removed, so no search work remains.
     stats = circuits.StatePrepSpreadStatistics()
     assert (
-        state_prep_certification._certify_maps([0, 0], [0, 0], PauliCosetSearch(matrix), 4, stats)
+        state_prep_certification._certify_maps([0, 0], [0, 0], _PauliCosetSearch(matrix), 4, stats)
         is None
     )
     assert stats.distinct_symptoms == stats.generated == stats.syndrome_queries == 0
@@ -345,7 +345,11 @@ def test_dependency_reductions() -> None:
     syndromes = [0, 0, 0, 7, 56]
     for budget in (3, 4):
         result = state_prep_certification._certify_maps(
-            flags, syndromes, PauliCosetSearch(matrix), budget, circuits.StatePrepSpreadStatistics()
+            flags,
+            syndromes,
+            _PauliCosetSearch(matrix),
+            budget,
+            circuits.StatePrepSpreadStatistics(),
         )
         assert (result is None) == (budget == 3)
 

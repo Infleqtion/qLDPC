@@ -38,8 +38,8 @@ the closing index to exceed the prefix indices generates each minimal support ex
 dependent prefix cannot lie in any minimal support.  A cost heuristic chooses between the two
 searches; it does not affect correctness and is not a universal runtime guarantee.
 
-Each minimal pattern is decided by the amortized exact oracle
-:class:`~qldpc.codes.distance.bounded.PauliCosetSearch`, which is shared across all patterns.
+Each minimal pattern is decided by one amortized exact oracle, ``_PauliCosetSearch``, which is
+shared across all patterns.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ from typing import Literal
 import numpy as np
 import stim
 
-from qldpc.codes.distance import BoundedKernelSearch, PauliCosetSearch
+from qldpc.codes.distance._bounded import _BoundedKernelSearch, _PauliCosetSearch
 
 from ..common import get_pauli_product_measurements
 from ..encoding import get_state_stabilizers
@@ -159,7 +159,7 @@ def certify_state_prep_spread(
     dem, flags, syndromes = _get_fault_maps(circuit, stabilizers, qubits, selected)
 
     # Reuse one prepared coset oracle for every fault pattern and syndrome encountered below.
-    oracle = PauliCosetSearch(matrix, weight="css" if resolved_css_weight else "pauli")
+    oracle = _PauliCosetSearch(matrix, weight="css" if resolved_css_weight else "pauli")
     statistics = StatePrepSpreadStatistics(mechanisms=len(flags))
     statistics.setup_seconds = time.perf_counter() - start
     counterexample = _certify_maps(flags, syndromes, oracle, int(max_faults), statistics)
@@ -391,7 +391,7 @@ def _validate_indices(
 def _certify_maps(
     flags: Sequence[int],
     syndromes: Sequence[int],
-    oracle: PauliCosetSearch,
+    oracle: _PauliCosetSearch,
     budget: int,
     statistics: StatePrepSpreadStatistics,
 ) -> StatePrepSpreadCounterexample | None:
@@ -423,7 +423,7 @@ def _certify_maps(
 
 def _search_minimal_patterns(
     representatives: dict[tuple[int, int], int],
-    oracle: PauliCosetSearch,
+    oracle: _PauliCosetSearch,
     statistics: StatePrepSpreadStatistics,
 ) -> StatePrepSpreadCounterexample | None:
     """Check flag-free singletons, then dispatch the remaining minimal dependencies."""
@@ -462,7 +462,7 @@ def _search_minimal_patterns(
 def _check_fault_pattern(
     indices: tuple[int, ...],
     syndrome: int,
-    oracle: PauliCosetSearch,
+    oracle: _PauliCosetSearch,
     statistics: StatePrepSpreadStatistics,
 ) -> StatePrepSpreadCounterexample | None:
     """Prove this pattern safe or package a violation in the original DEM/output frames."""
@@ -519,7 +519,7 @@ def _use_prefix_search(num_columns: int, rank: int, budget: int) -> bool:
 def _search_bz_patterns(
     mechanisms: Sequence[tuple[int, int, int]],
     budget: int,
-    oracle: PauliCosetSearch,
+    oracle: _PauliCosetSearch,
     statistics: StatePrepSpreadStatistics,
 ) -> StatePrepSpreadCounterexample | None:
     """Enumerate the bounded rejection-map kernel with BZ, testing only minimal supports."""
@@ -531,7 +531,7 @@ def _search_bz_patterns(
         ],
         dtype=np.uint8,
     )
-    outer = BoundedKernelSearch(checks, budget)
+    outer = _BoundedKernelSearch(checks, budget)
     statistics.outer_ranks = outer.ranks
     try:
         for word in outer.words():
