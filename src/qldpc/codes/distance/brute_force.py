@@ -10,8 +10,8 @@ import numpy.typing as npt
 from ._binary import (
     _count_trailing_zeros,
     _inplace_rowsum,
+    _pack_bits,
     _riffle,
-    _rows_to_ints,
     _symplectic_weight,
 )
 
@@ -35,8 +35,8 @@ def _get_distance_quantum_brute_force(
         logical_ops = _riffle(logical_ops)
         stabilizers = _riffle(stabilizers)
 
-    int_logical_ops = _rows_to_ints(logical_ops, dtype=np.uint64)
-    int_stabilizers = _rows_to_ints(stabilizers, dtype=np.uint64)
+    int_logical_ops = _pack_bits(np.asarray(logical_ops, dtype=np.uint8))
+    int_stabilizers = _pack_bits(np.asarray(stabilizers, dtype=np.uint8))
     num_stabilizers = len(int_stabilizers)
 
     # Number of generators to include in the operational array.  Most calculations will then be

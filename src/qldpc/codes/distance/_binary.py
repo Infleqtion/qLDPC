@@ -4,8 +4,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
 import numpy as np
 import numpy.typing as npt
+from numba import njit, types
+from numba.extending import lower_builtin, type_callable
+
+if TYPE_CHECKING:
+    from llvmlite import ir
+    from numba.core.base import BaseContext
+    from numba.core.typing.context import BaseContext as TypingContext
+    from numba.core.typing.templates import Signature
 
 _MASK55 = np.uint64(0x5555555555555555)
 
@@ -66,41 +77,35 @@ def _row_reduce_binary(
     npt.NDArray[np.uint8] | None,
     npt.NDArray[np.int_],
 ]:
-    """Row-reduce a binary matrix over selected columns, transforming labels in parallel."""
-    matrix = matrix.copy()
-    labels = None if labels is None else labels.copy()
-    columns = np.arange(matrix.shape[1], dtype=int) if columns is None else columns
-    pivots: list[int] = []
-    pivot_row = 0
+    """Row-reduce a binary matrix over selected columns, transforming labels in parallel.
 
-    for col in columns:
-        candidates = np.flatnonzero(matrix[pivot_row:, col])
-        if not len(candidates):
-            continue
-        source_row = pivot_row + int(candidates[0])
-        if source_row != pivot_row:
-            matrix[[pivot_row, source_row]] = matrix[[source_row, pivot_row]]
-            if labels is not None:
-                labels[[pivot_row, source_row]] = labels[[source_row, pivot_row]]
-
-        rows_to_clear = np.flatnonzero(matrix[:, col])
-        rows_to_clear = rows_to_clear[rows_to_clear != pivot_row]
-        matrix[rows_to_clear] ^= matrix[pivot_row]
-        if labels is not None:
-            labels[rows_to_clear] ^= labels[pivot_row]
-
-        pivots.append(int(col))
-        pivot_row += 1
-        if pivot_row == len(matrix):
-            break
-
-    return matrix, labels, np.asarray(pivots, dtype=int)
+    Pivots are taken in the order of ``columns`` (by default, every column in order), each from the
+    first remaining row with a one in that column, and every other row is cleared in that column.
+    The inputs are not modified, and the reduced matrix and labels are uint8 arrays.
+    """
+    width = matrix.shape[1]
+    columns = np.arange(width) if columns is None else np.asarray(columns)
+    if len(columns) and (columns.min() < 0 or columns.max() >= width):
+        raise IndexError("Row-reduction columns are out of range")
+    tags = np.empty((len(matrix), 0), dtype=np.uint8) if labels is None else labels
+    reduced, reduced_tags, pivots = _row_reduce_packed(matrix, tags, columns.astype(np.int64))
+    return reduced, None if labels is None else reduced_tags, pivots.astype(int)
 
 
 def _get_independent_rows(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     """Return a row-reduced basis for the row space of a binary matrix."""
     reduced, _, pivots = _row_reduce_binary(matrix)
     return reduced[: len(pivots)]
+
+
+def _get_kernel(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
+    """Return a basis of the null space of a binary matrix, from its reduced row echelon form."""
+    reduced, _, pivots = _row_reduce_binary(matrix)
+    free = np.setdiff1d(np.arange(matrix.shape[1]), pivots)
+    basis = np.zeros((len(free), matrix.shape[1]), dtype=np.uint8)
+    basis[:, free] = np.eye(len(free), dtype=np.uint8)
+    basis[:, pivots] = reduced[: len(pivots), free].T
+    return basis
 
 
 def _get_nested_code_basis(
@@ -176,28 +181,6 @@ def _inplace_rowsum(arr: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
     return arr[..., 0]
 
 
-def _rows_to_ints(
-    array: npt.ArrayLike, dtype: npt.DTypeLike = np.uint64, axis: int = -1
-) -> npt.NDArray[np.uint64]:
-    """Pack rows of a binary array into rows of the given integral type."""
-    array = np.asarray(array, dtype=dtype)
-    tsize = array.itemsize * 8
-
-    if array.size == 0:
-        num_words = int(np.ceil(array.shape[-1] / tsize))
-        return np.empty((*array.shape[:-1], num_words), dtype=dtype)
-
-    def _to_int(bits: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
-        """Pack `bits` into a single integer (of type `dtype`)."""
-        return (bits << np.arange(len(bits) - 1, -1, -1, dtype=dtype)).sum(dtype=dtype)
-
-    def _to_ints(bits: npt.NDArray[np.uint64]) -> list[npt.NDArray[np.uint64]]:
-        """Pack a single row of bits into a row of integers."""
-        return [_to_int(bits[i : i + tsize]) for i in range(0, np.shape(bits)[-1], tsize)]
-
-    return np.apply_along_axis(_to_ints, axis, array)
-
-
 def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
     """'Riffle' Pauli strings, putting X and Z support bits for each qubit next to each other."""
     arr = np.asarray(array)
@@ -206,3 +189,102 @@ def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
     if arr.size == 0:
         return np.empty((0, num_bits), dtype=arr.dtype)  # nothing to riffle (e.g. no stabilizers)
     return np.reshape(arr, (-1, 2, num_bits // 2)).transpose(0, 2, 1).reshape(-1, num_bits)
+
+
+####################################################################################################
+# native bit counting, packing and row reduction
+
+
+def _popcount_word(value: np.uint64) -> np.int64:
+    """Count the set bits of one 64-bit word.
+
+    Compiled code calls LLVM's population-count instruction instead of this Python fallback.
+    """
+    return np.int64(int(value).bit_count())
+
+
+@type_callable(_popcount_word)
+def _type_popcount_word(context: TypingContext) -> Callable[[types.Type], types.Type | None]:
+    """Declare that compiled code may call ``_popcount_word`` on a uint64 word."""
+
+    def typer(value: types.Type) -> types.Type | None:
+        return types.int64 if value == types.uint64 else None
+
+    return typer
+
+
+@lower_builtin(_popcount_word, types.uint64)
+def _lower_popcount_word(
+    context: BaseContext, builder: ir.IRBuilder, signature: Signature, arguments: list[ir.Value]
+) -> ir.Value:
+    """Compile ``_popcount_word`` to LLVM's population-count instruction.
+
+    The count is at most 64, so the 64-bit result is the same as a signed integer.
+    """
+    return builder.ctpop(arguments[0])
+
+
+@njit(cache=True)
+def _pack_bits(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
+    """Pack binary rows into uint64 words, with column j in bit j % 64 of word j // 64.
+
+    This is the only packed layout in the distance package.  Entries must be 0 or 1.
+    """
+    num_rows, width = matrix.shape
+    num_words = (width + 63) // 64
+    packed = np.empty((num_rows, num_words), dtype=np.uint64)
+    for row in range(num_rows):
+        for word in range(num_words):
+            # Assemble each word in a register rather than updating memory once per bit.
+            value = np.uint64(0)
+            start = 64 * word
+            for bit in range(min(64, width - start)):
+                value |= np.uint64(matrix[row, start + bit]) << np.uint64(bit)
+            packed[row, word] = value
+    return packed
+
+
+@njit(cache=True)
+def _unpack_bits(packed: npt.NDArray[np.uint64], width: int) -> npt.NDArray[np.uint8]:
+    """Inverse of ``_pack_bits`` for rows with ``width`` columns."""
+    matrix = np.empty((len(packed), width), dtype=np.uint8)
+    one = np.uint64(1)
+    for row in range(len(packed)):
+        for column in range(width):
+            matrix[row, column] = (packed[row, column // 64] >> np.uint64(column % 64)) & one
+    return matrix
+
+
+@njit(cache=True)
+def _row_reduce_packed(
+    matrix: npt.NDArray[np.uint8], labels: npt.NDArray[np.uint8], columns: npt.NDArray[np.int64]
+) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8], npt.NDArray[np.int64]]:
+    """Implement ``_row_reduce_binary`` on packed copies, for in-range columns."""
+    rows, tags = _pack_bits(matrix), _pack_bits(labels)
+    num_rows = len(rows)
+    pivots = np.empty(min(num_rows, len(columns)), dtype=np.int64)
+    rank = 0
+    for column in columns:
+        if rank == num_rows:
+            break
+        word = column // 64
+        bit = np.uint64(1) << np.uint64(column % 64)
+        source = rank
+        while source < num_rows and not rows[source, word] & bit:
+            source += 1
+        if source == num_rows:
+            continue
+        if source != rank:
+            for index in range(rows.shape[1]):
+                rows[rank, index], rows[source, index] = rows[source, index], rows[rank, index]
+            for index in range(tags.shape[1]):
+                tags[rank, index], tags[source, index] = tags[source, index], tags[rank, index]
+        for row in range(num_rows):
+            if row != rank and rows[row, word] & bit:
+                for index in range(rows.shape[1]):
+                    rows[row, index] ^= rows[rank, index]
+                for index in range(tags.shape[1]):
+                    tags[row, index] ^= tags[rank, index]
+        pivots[rank] = column
+        rank += 1
+    return _unpack_bits(rows, matrix.shape[1]), _unpack_bits(tags, labels.shape[1]), pivots[:rank]
