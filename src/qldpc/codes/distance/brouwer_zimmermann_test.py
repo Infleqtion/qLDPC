@@ -17,40 +17,9 @@ from sympy.abc import x, y, z
 import qldpc
 
 from . import _binary as binary
+from . import _families as families
 from . import brouwer_zimmermann as bz
 from .conftest import _get_random_full_rank_matrix
-
-
-def test_binary_row_reduction_and_information_sets() -> None:
-    """Binary elimination transforms quotient labels and retains the residual rank."""
-    matrix = np.array([[0, 1, 1], [1, 1, 0]], dtype=np.uint8)
-    labels = np.eye(2, dtype=np.uint8)
-    reduced, reduced_labels, pivots = binary._row_reduce_binary(matrix, labels)
-    np.testing.assert_array_equal(reduced, [[1, 0, 1], [0, 1, 1]])
-    np.testing.assert_array_equal(reduced_labels, [[1, 1], [1, 0]])
-    np.testing.assert_array_equal(pivots, [0, 1])
-
-    basis = np.hstack(
-        [
-            np.eye(3, dtype=np.uint8),
-            np.eye(3, dtype=np.uint8),
-            np.array([[1, 0], [0, 1], [0, 0]], dtype=np.uint8),
-        ]
-    )
-    information_sets = bz._get_information_set_generators(basis, np.eye(3, dtype=np.uint8))
-    assert [rank for _, _, rank, _ in information_sets] == [3, 3, 2]
-    assert not bz._get_information_set_generators(np.zeros((1, 3), dtype=np.uint8), None)
-
-    basis = np.array(
-        [
-            [1, 0, 1, 1, 0, 1],
-            [0, 1, 0, 1, 1, 0],
-            [1, 0, 0, 0, 1, 1],
-        ],
-        dtype=np.uint8,
-    )
-    information_sets = bz._get_information_set_generators(basis, None)
-    assert [rank for _, _, rank, _ in information_sets] == [3, 3]
 
 
 @pytest.mark.parametrize("interpreted", [False, True])
@@ -130,32 +99,6 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
             assert (best, depth, visited) == (expected, -1, 0)
 
 
-@pytest.mark.parametrize("ranks, upper_bound", [([10, 6, 2], 6), ([10, 6, 2], 12), ([6, 2], 6)])
-def test_select_brouwer_zimmermann_information_sets(ranks: list[int], upper_bound: int) -> None:
-    """Selecting search bases does not increase estimated enumeration work."""
-    generators = np.empty((10, 0), dtype=np.uint8)
-    pivots = np.empty(0, dtype=int)
-    information_sets = [bz._InformationSet(generators, None, rank, pivots) for rank in ranks]
-    selected = bz._select_brouwer_zimmermann_information_sets(
-        information_sets,
-        dimension=10,
-        upper_bound=upper_bound,
-        weight_divisor=1,
-    )
-    assert selected
-    assert bz._get_brouwer_zimmermann_work(
-        10,
-        [item.rank for item in selected],
-        upper_bound=upper_bound,
-        weight_divisor=1,
-    ) <= bz._get_brouwer_zimmermann_work(
-        10,
-        ranks,
-        upper_bound=upper_bound,
-        weight_divisor=1,
-    )
-
-
 def test_brouwer_zimmermann_search_state() -> None:
     """A search state handles partial-rank information sets.
 
@@ -166,15 +109,15 @@ def test_brouwer_zimmermann_search_state() -> None:
     search = bz._BrouwerZimmermannSearch(
         np.array([[[3], [2]]], dtype=np.uint64),
         np.ones((1, 2, 1), dtype=np.uint64),
-        np.array([0], dtype=np.int64),
         np.array([1], dtype=np.int64),
         np.array([1], dtype=np.int64),
+        families._Certificate(2, (0,)),
         cutoff=1,
         batch_size=1,
-        weight_divisor=1,
         best=3,
         lower_bound=0,
     )
+    np.testing.assert_array_equal(search.ranks, [0])
 
     # An interrupted coefficient-weight layer leaves the lower-bound certificate unchanged.
     with (
@@ -210,13 +153,13 @@ def test_brouwer_zimmermann_setup_dispatches() -> None:
         ],
         dtype=np.uint8,
     )
-    information_set = [bz._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
+    information_set = [families._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
     with (
         mock.patch(
             "qldpc.codes.distance.brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
         ),
         mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._get_information_set_generators",
+            "qldpc.codes.distance._families._get_information_set_generators",
             return_value=information_set,
         ),
         mock.patch(
@@ -366,7 +309,7 @@ def test_brouwer_zimmermann_sector_certificates() -> None:
 def test_brouwer_zimmermann_without_certifying_bound() -> None:
     """Brouwer-Zimmermann returns its best codeword after exhausting every coefficient weight."""
     with mock.patch(
-        "qldpc.codes.distance.brouwer_zimmermann._get_information_set_generators", return_value=[]
+        "qldpc.codes.distance._families._get_information_set_generators", return_value=[]
     ):
         assert qldpc.codes.get_distance_classical(np.eye(2, dtype=np.uint8), cutoff=0) == 1
 
@@ -392,13 +335,13 @@ def test_brouwer_zimmermann_exhaustive_dispatch() -> None:
     assert bz._exhaustive_is_cheaper(21, 4000)
     assert not bz._exhaustive_is_cheaper(21, 22)
     assert bz._brute_force_is_cheaper(
-        dimension=4, num_logical_rows=2, ranks=[4], upper_bound=4, weight_divisor=1
+        num_logical_rows=2, certificate=families._Certificate(4, (4,)), upper_bound=4
     )
     assert not bz._brute_force_is_cheaper(
-        dimension=4, num_logical_rows=4, ranks=[4], upper_bound=4, weight_divisor=1
+        num_logical_rows=4, certificate=families._Certificate(4, (4,)), upper_bound=4
     )
     assert not bz._brute_force_is_cheaper(
-        dimension=20, num_logical_rows=20, ranks=[20, 20], upper_bound=3, weight_divisor=2
+        num_logical_rows=20, certificate=families._Certificate(20, (20, 20), 2), upper_bound=3
     )
 
     # Dependent logical rows skip the top-level independent-row exhaustive path.
@@ -434,84 +377,23 @@ def test_brouwer_zimmermann_initial_upper_bound_excludes_stabilizers() -> None:
     assert bz._get_brouwer_zimmermann_initial_upper_bound(basis, labels) == 2
 
 
-def test_brouwer_zimmermann_overlap_certificates() -> None:
-    """Check pivot coverage and label transformations against exhaustive codeword weights."""
-
-    # Label each row separately so its row operations can be checked.
-    basis = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
-    basis = binary._get_independent_rows(basis)
-    labels = np.eye(len(basis), dtype=np.uint8)
-    information_sets = bz._get_information_set_generators(basis, labels)
-    selected = bz._get_overlapping_information_sets(
-        basis, labels, information_sets, upper_bound=3, weight_divisor=1, minimum_work=0
-    )
-    assert selected is not None
-    family, coverage = selected
-    loads = np.bincount(np.concatenate([item.pivots for item in family]), minlength=basis.shape[1])
-    assert coverage >= loads.max() > 1
-    for item in family:
-        assert item.labels is not None
-        np.testing.assert_array_equal(item.generators, item.labels @ basis % 2)
-        np.testing.assert_array_equal(item.generators[:, item.pivots], np.eye(len(basis)))
-
-    # Check the Hamming-weight bound for every word still unsearched in all bases.
-    for bits in itertools.product((0, 1), repeat=len(basis)):
-        word = np.asarray(bits) @ basis % 2
-        for completed in (1, 2):
-            if all(np.count_nonzero(word[item.pivots]) > completed for item in family):
-                assert np.count_nonzero(word) >= bz._get_brouwer_zimmermann_lower_bound(
-                    len(basis),
-                    [item.rank for item in family],
-                    completed_weight=completed,
-                    weight_divisor=1,
-                    max_coverage=coverage,
-                )
-
-
-def test_brouwer_zimmermann_overlap_setup_guards() -> None:
-    """Reject unhelpful coverage and terminate repeated attempts at the same pivot set."""
-
-    # Nearly complete disjoint coverage leaves no cheaper family within the size budget.
-    basis = np.hstack([np.eye(25, dtype=np.uint8)] * 4)
-    shortened = basis[:, :-1]
-    assert (
-        bz._get_overlapping_information_sets(
-            shortened,
-            None,
-            bz._get_information_set_generators(shortened, None),
-            upper_bound=26,
-            weight_divisor=1,
-        )
-        is None
-    )
-
-    # Repeatedly rediscovering the same pivots must terminate without selecting a family.
-    basis = basis[:, :40]
-    first = bz._get_information_set_generators(basis, None)[0]
-    with mock.patch.object(
-        bz,
-        "_row_reduce_binary",
-        return_value=(first.generators, first.labels, first.pivots),
-    ):
-        assert (
-            bz._get_overlapping_information_sets(
-                basis, None, [first], upper_bound=8, weight_divisor=1
-            )
-            is None
-        )
-
-
 @pytest.mark.parametrize("cutoff", [0, 2])
 def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
     """A replacement basis can meet the cutoff or close the lower bound during setup."""
     basis = np.array([[1, 0, 1, 1], [0, 1, 1, 1]], dtype=np.uint8)
     generators, labels, pivots = binary._row_reduce_binary(basis, columns=np.array([0, 2]))
-    original = bz._InformationSet(basis, None, 2, np.array([0, 1]))
-    alternative = bz._InformationSet(generators, labels, 2, pivots)
+    original = families._InformationSet(basis, None, 2, np.array([0, 1]))
+    alternative = families._InformationSet(generators, labels, 2, pivots)
     with (
         mock.patch.object(bz, "_exhaustive_is_cheaper", return_value=False),
-        mock.patch.object(bz, "_get_information_set_generators", return_value=[original]),
-        mock.patch.object(bz, "_get_overlapping_information_sets", return_value=([alternative], 1)),
+        mock.patch.object(families, "_get_information_set_generators", return_value=[original]),
+        mock.patch.object(
+            families,
+            "_get_overlapping_family",
+            return_value=families._Family.from_information_sets(
+                [alternative], dimension=2, weight_divisor=1
+            ),
+        ),
         mock.patch.object(bz, "_brute_force_is_cheaper", side_effect=AssertionError),
     ):
         assert qldpc.codes.get_distance_classical(basis, cutoff=cutoff) == 2
@@ -543,23 +425,21 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
     )
 
     # Lower only the work threshold so this small oracle exercises production family construction.
-    original = bz._get_overlapping_information_sets
+    original = families._get_overlapping_family
 
-    def select(*args: Any, **kwargs: Any) -> tuple[list[bz._InformationSet], int] | None:
+    def select(*args: Any, **kwargs: Any) -> families._Family | None:
         selected = original(*args, **kwargs, minimum_work=0)
-        assert selected is not None and selected[1] > 1
+        assert selected is not None and selected.certificate.max_coverage > 1
         assert (
             min(
                 bz._get_brouwer_zimmermann_initial_upper_bound(item.generators, item.labels)
-                for item in selected[0]
+                for item in selected.information_sets
             )
             > expected
         )
         return selected
 
-    with mock.patch.object(
-        bz, "_get_overlapping_information_sets", side_effect=select
-    ) as select_mock:
+    with mock.patch.object(families, "_get_overlapping_family", side_effect=select) as select_mock:
         assert (
             qldpc.codes.get_distance_quantum(logicals, stabilizers, homogeneous=True, cutoff=0)
             == expected

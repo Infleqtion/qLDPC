@@ -16,6 +16,7 @@ import pytest
 from qldpc import codes
 from qldpc.objects import Pauli
 
+from . import _families as families
 from . import logical_counts as lc
 from ._binary import _get_independent_rows, _get_kernel
 from .core import DistanceMethod
@@ -218,8 +219,8 @@ def test_methods_agree_on_random_codes(num_qubits: int, rank_x: int, rank_z: int
 
 def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Overlapping information sets, which large searches use, still count every word once."""
-    select = functools.partial(lc._get_overlapping_information_sets, minimum_work=0)
-    monkeypatch.setattr(lc, "_get_overlapping_information_sets", select)
+    select = functools.partial(families._get_overlapping_family, minimum_work=0)
+    monkeypatch.setattr(families, "_get_overlapping_family", select)
     hamming = np.asarray(codes.HammingCode(4).matrix)
     rng = np.random.default_rng(5)
     for code in (
