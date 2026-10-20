@@ -196,7 +196,12 @@ def _inplace_rowsum(arr: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
 def _rows_to_ints(
     array: npt.ArrayLike, dtype: npt.DTypeLike = np.uint64, axis: int = -1
 ) -> npt.NDArray[np.uint64]:
-    """Pack rows of a binary array into rows of the given integral type."""
+    """Pack rows of a binary array into rows of the given integral type.
+
+    Each group of ``8 * itemsize`` bits along ``axis`` becomes one integer whose most significant
+    bit is the group's first bit.  A shorter final group is right-aligned, so that its last bit is
+    the least significant.
+    """
     array = np.asarray(array, dtype=dtype)
     tsize = array.itemsize * 8
 
@@ -204,15 +209,17 @@ def _rows_to_ints(
         num_words = int(np.ceil(array.shape[-1] / tsize))
         return np.empty((*array.shape[:-1], num_words), dtype=dtype)
 
-    def _to_int(bits: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
-        """Pack `bits` into a single integer (of type `dtype`)."""
-        return (bits << np.arange(len(bits) - 1, -1, -1, dtype=dtype)).sum(dtype=dtype)
-
-    def _to_ints(bits: npt.NDArray[np.uint64]) -> list[npt.NDArray[np.uint64]]:
-        """Pack a single row of bits into a row of integers."""
-        return [_to_int(bits[i : i + tsize]) for i in range(0, np.shape(bits)[-1], tsize)]
-
-    return np.apply_along_axis(_to_ints, axis, array)
+    bits = np.moveaxis(array, axis, -1)
+    leading, width = bits.shape[:-1], bits.shape[-1]
+    bits = bits.reshape(-1, width)
+    full, remainder = divmod(width, tsize)
+    num_words = full + (remainder > 0)
+    padded = np.zeros((len(bits), num_words * tsize), dtype=np.uint8)
+    padded[:, : full * tsize] = bits[:, : full * tsize]
+    if remainder:
+        padded[:, num_words * tsize - remainder :] = bits[:, full * tsize :]
+    words = np.packbits(padded, axis=1).view(np.dtype(dtype).newbyteorder(">")).astype(dtype)
+    return np.moveaxis(words.reshape(*leading, num_words), -1, axis)
 
 
 def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:

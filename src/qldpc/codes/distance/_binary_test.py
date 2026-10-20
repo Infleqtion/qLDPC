@@ -241,6 +241,33 @@ def test_rows_to_ints(dtype: npt.DTypeLike) -> None:
     np.testing.assert_array_equal(binary._rows_to_ints(bits, dtype=dtype, axis=0), bits)
 
 
+@pytest.mark.parametrize("dtype", [np.uint64, np.uint8, np.int16])
+@pytest.mark.parametrize("width", [1, 7, 15, 16, 17, 63, 64, 65, 130])
+def test_rows_to_ints_matches_row_by_row_packing(dtype: npt.DTypeLike, width: int) -> None:
+    """The vectorized packing keeps the layout of packing each row and word separately."""
+    bits = np.random.default_rng(width).integers(0, 2, size=(3, 4, width))
+    size = 8 * np.dtype(dtype).itemsize
+
+    def pack_row(row: npt.NDArray[np.int_]) -> list[int]:
+        return [
+            sum(
+                int(bit) << (len(group) - 1 - jj)
+                for jj, group_bit in enumerate(group)
+                for bit in [group_bit]
+            )
+            for group in (row[start : start + size] for start in range(0, len(row), size))
+        ]
+
+    expected = np.array(
+        [[pack_row(row) for row in block] for block in bits], dtype=np.uint64
+    ).astype(dtype)
+    np.testing.assert_array_equal(binary._rows_to_ints(bits, dtype=dtype), expected)
+    np.testing.assert_array_equal(
+        binary._rows_to_ints(np.moveaxis(bits, -1, 0), dtype=dtype, axis=0),
+        np.moveaxis(expected, -1, 0),
+    )
+
+
 def test_distance_requires_binary_input() -> None:
     """Distance calculations reject non-binary input rather than silently truncating it.
 
