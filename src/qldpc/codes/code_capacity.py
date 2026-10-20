@@ -10,6 +10,7 @@ by converting the physical errors that it infers into observable values.
 from __future__ import annotations
 
 import dataclasses
+import functools
 import warnings
 from collections.abc import Mapping
 
@@ -31,7 +32,7 @@ from qldpc.decoders.capabilities import (
 )
 from qldpc.decoders.common import PLACEHOLDER_ERROR_RATE, ObservableDecodingFallbackWarning
 from qldpc.decoders.construction.factories import DEMDecoderFactory
-from qldpc.decoders.construction.resolution import _resolve_error_decoder, reject_prebuilt_decoder
+from qldpc.decoders.construction.resolution import reject_prebuilt_decoder, resolve_decoder
 from qldpc.decoders.construction.specs import (
     DecoderInput,
     DecoderSpec,
@@ -64,9 +65,20 @@ def get_code_capacity_dem(
     ``observable_matrix @ error``.  If observable_matrix is None, every error location is itself an
     observable.
 
-    The error probabilities must be fixed while the returned code-capacity estimator is evaluated at
-    different physical error rates.  A code-capacity estimate reuses the decoding outcomes of
-    fixed-weight errors at every physical error rate, so it requires such a decoder.
+    Args:
+        syndrome_matrix: The matrix that maps an error to its syndrome.
+        observable_matrix: The matrix that maps an error to its observable values, or None if every
+            error location is itself an observable.
+        dem_errors: The errors of the error mechanisms, as columns of a matrix, or None to make each
+            error location an error mechanism.
+        symplectic_errors: Whether the error mechanisms are single-qudit X, Z, and Y errors.  This
+            requires an observable_matrix, and cannot be combined with dem_errors.
+        error_probs: The probability of each error mechanism, or one probability for all of them.
+            Code-capacity decoders use fixed placeholder probabilities, since an estimate reuses the
+            decoding outcomes of fixed-weight errors at every physical error rate.
+
+    Returns:
+        A stim.DetectorErrorModel.
 
     Raises:
         ValueError: If the matrices are not binary, since Stim detector error models are binary.
@@ -274,15 +286,16 @@ def get_code_capacity_decoder(
     dem_error_probs: npt.NDArray[np.floating] | float = PLACEHOLDER_ERROR_RATE
     if dem_error_weights is not None:
         dem_error_probs = PLACEHOLDER_ERROR_RATE * np.asarray(dem_error_weights, dtype=float)
+    build_dem = functools.partial(
+        get_code_capacity_dem,
+        syndrome_matrix,
+        observable_matrix,
+        dem_errors,
+        symplectic_errors=symplectic_dem_errors,
+        error_probs=dem_error_probs,
+    )
     if not decoder_args and compiles_for_dem(decoder):
-        dem = get_code_capacity_dem(
-            syndrome_matrix,
-            observable_matrix,
-            dem_errors,
-            symplectic_errors=symplectic_dem_errors,
-            error_probs=dem_error_probs,
-        )
-        compiled_decoder = decoder.compile_decoder_for_dem(dem=dem)
+        compiled_decoder = decoder.compile_decoder_for_dem(dem=build_dem())
         return _get_observable_code_capacity_decoder(
             compiled_decoder,
             syndrome_matrix,
@@ -304,15 +317,8 @@ def get_code_capacity_decoder(
         )
 
     if not decoder_args and isinstance(decoder, DEMDecoderFactory):
-        dem = get_code_capacity_dem(
-            syndrome_matrix,
-            observable_matrix,
-            dem_errors,
-            symplectic_errors=symplectic_dem_errors,
-            error_probs=dem_error_probs,
-        )
         return _get_observable_code_capacity_decoder(
-            decoder.build(dem),
+            decoder.build(build_dem()),
             syndrome_matrix,
             observable_matrix,
             "A from_dem factory",
@@ -323,13 +329,7 @@ def get_code_capacity_decoder(
     if not decoder_args and isinstance(decoder, DecoderSpec):
         is_binary = getattr(type(syndrome_matrix), "order", 2) == 2
         if not decoder.infers_errors or (is_binary and decoder.predicts_observables_natively):
-            dem = get_code_capacity_dem(
-                syndrome_matrix,
-                observable_matrix,
-                dem_errors,
-                symplectic_errors=symplectic_dem_errors,
-                error_probs=dem_error_probs,
-            )
+            dem = build_dem()
             if not decoder.infers_errors:
                 # an observable-only specification has nothing to fall back to
                 observable_decoder = decoder.build_observable_decoder(dem)
@@ -359,7 +359,7 @@ def get_code_capacity_decoder(
             )
 
     try:
-        error_decoder = _resolve_error_decoder(
+        error_decoder = resolve_decoder(
             syndrome_matrix,
             decoder,  # type:ignore[arg-type]
             decoder_args,

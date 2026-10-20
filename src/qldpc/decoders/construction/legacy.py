@@ -42,7 +42,6 @@ from .specs import (
     PcmOrDem,
 )
 
-_InputT = TypeVar("_InputT", ErrorDecoderInput, DecoderInput)
 _DecoderT = TypeVar("_DecoderT")
 
 
@@ -208,49 +207,7 @@ def get_decoder_rbp(
 
 
 ####################################################################################################
-# deprecated resolution functions
-
-
-def resolve_decoder(
-    pcm_or_dem: PcmOrDem,
-    decoder: ErrorDecoderInput,
-    decoder_args: Mapping[str, object],
-    *,
-    warn_deprecated: bool = True,
-) -> ErrorDecoder:
-    """Resolve an error decoder input with keyword-based construction arguments.
-
-    This serves methods that accept keyword arguments next to decoder=.  The decoder input may be a
-    decoder specification such as ``decoders.bp_osd(...)``, a constructor that builds an error
-    decoder from pcm_or_dem, a prebuilt error decoder, or None to select the default decoder: GUF
-    for a nonbinary FieldArray, and BP+OSD otherwise.
-    """
-    decoder_input = _merge_legacy_decoder_args(
-        pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
-    )
-    return _get_error_decoder(pcm_or_dem, decoder=decoder_input)
-
-
-def resolve_observable_decoder(
-    dem: stim.DetectorErrorModel,
-    decoder: DecoderInput,
-    decoder_args: Mapping[str, object],
-    *,
-    warn_deprecated: bool = True,
-) -> ObservableDecoder:
-    """Resolve an observable decoder input with keyword-based construction arguments.
-
-    This serves methods that accept keyword arguments next to decoder=.  Decoder specifications
-    build a native observable decoder where they support one, and otherwise an error decoder; an
-    observable-decoder compiler such as a ``decoders.SinterDecoder`` is compiled for dem; a
-    constructor may build an error decoder or an observable decoder from dem; and a prebuilt error
-    decoder or observable decoder is used as is.  An error decoder is wrapped so that the observable
-    flips of the errors that it infers become its predictions.
-    """
-    decoder_input = _merge_legacy_decoder_args(
-        dem, decoder, decoder_args, warn_deprecated=warn_deprecated
-    )
-    return _get_observable_decoder(dem, decoder=decoder_input)
+# removed-argument checks and migration messages
 
 
 def reject_removed_decoder_args(decoder_args: Mapping[str, object]) -> None:
@@ -368,15 +325,13 @@ def _get_legacy_decoder_input(
 
 def _merge_legacy_decoder_args(
     pcm_or_dem: PcmOrDem,
-    decoder: _InputT,
+    decoder: DecoderInput,
     decoder_args: Mapping[str, object],
     *,
     warn_deprecated: bool = True,
-) -> _InputT | ErrorDecoderConstructor:
-    """Translate deprecated keyword arguments into a decoder input."""
+) -> ErrorDecoderConstructor:
+    """Translate nonempty deprecated keyword arguments into a decoder input."""
     reject_removed_decoder_args(decoder_args)
-    if not decoder_args:
-        return decoder
     if decoder is not None:
         raise ValueError(
             "Cannot combine decoder= with deprecated decoder-selection or construction arguments"

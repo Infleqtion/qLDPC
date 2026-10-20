@@ -46,20 +46,18 @@ def test_legacy_translation_stays_at_the_input_boundary(monkeypatch: pytest.Monk
             "_merge_legacy_decoder_args",
             lambda *args, **kwargs: pytest.fail("Modern decoder inputs need no legacy translation"),
         )
-        error_decoder = resolution._resolve_error_decoder(matrix, decoders.lookup(1), {})
+        error_decoder = resolution.resolve_decoder(matrix, decoders.lookup(1), {})
         assert error_decoder.decode_errors(np.array([1])).tolist() == [1]
-        observable_decoder = resolution._resolve_observable_decoder(dem, decoders.lookup(1), {})
+        observable_decoder = resolution.resolve_observable_decoder(dem, decoders.lookup(1), {})
         assert observable_decoder.decode_observables(np.array([1])).tolist() == [1]
         compiled = decoders.SinterDecoder(decoder=decoders.lookup(1)).compile_decoder_for_dem(dem)
         assert compiled.decode_observables(np.array([1])).tolist() == [1]
 
     with pytest.warns(DeprecationWarning, match="with_lookup"):
-        decoder = resolution._resolve_error_decoder(
-            matrix, None, {"with_lookup": True, "max_weight": 1}
-        )
+        decoder = resolution.resolve_decoder(matrix, None, {"with_lookup": True, "max_weight": 1})
     assert decoder.decode_errors(np.array([1])).tolist() == [1]
     with pytest.raises(ValueError, match="Cannot combine decoder"):
-        resolution._resolve_observable_decoder(dem, decoders.lookup(1), {"with_lookup": True})
+        resolution.resolve_observable_decoder(dem, decoders.lookup(1), {"with_lookup": True})
 
 
 def test_decoding() -> None:
