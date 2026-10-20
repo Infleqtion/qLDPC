@@ -35,8 +35,7 @@ if TYPE_CHECKING:
 class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     """Array whose entries are members of a GroupRing."""
 
-    # None only for an array viewed from a plain array, until a base ring is assigned
-    _ring: GroupRing | None
+    _ring: GroupRing
 
     # Howell-form provenance, attached by howell_normal_form_* to their direct output only (via
     # _mark_as_hnf).  These deliberately do NOT propagate through numpy operations:
@@ -75,9 +74,10 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
     def __array_finalize__(self, obj: npt.NDArray[np.object_] | None) -> None:
         """Propagate metadata to newly constructed arrays."""
-        # obj may be None or lack _ring during numpy view construction; _ring is set before use.
-        # Howell-form provenance is intentionally NOT propagated here (see the class attributes).
-        self._ring = getattr(obj, "_ring", None)
+        # A view of a plain array (obj without _ring) has no ring until its creator assigns one,
+        # which every .view(RingArray) in this module does immediately.  Howell-form provenance is
+        # intentionally NOT propagated here (see the class attributes).
+        self._ring = getattr(obj, "_ring", None)  # type:ignore[assignment]
 
     def _mark_as_hnf(self, *, transformer: WedderburnArtinTransformer | None, right: bool) -> Self:
         """Record that this array is a Howell normal form, as provenance for get_howell_dual."""
@@ -143,8 +143,6 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     @property
     def ring(self) -> GroupRing:
         """Base ring of this RingArray."""
-        if self._ring is None:
-            raise ValueError("This RingArray has no base ring")
         return self._ring
 
     @property
