@@ -459,14 +459,17 @@ Heuristic tunables are identified by parameter name so that their current values
 | File | Responsibility | Key functions |
 | --- | --- | --- |
 | [core.py](core.py) | Public interfaces, input validation, adapted bases, method selection, and conversion between symplectic and Hamming units | `get_distance_classical`, `get_distance_quantum`, `get_distance_css_brouwer_zimmermann` |
-| [brouwer_zimmermann.py](brouwer_zimmermann.py) | The BZ search: preparation, certificates, scanning, sharing between CSS sectors, and cost models | `_prepare_brouwer_zimmermann_search`, `_BrouwerZimmermannSearch`, `_scan_brouwer_zimmermann`, `_get_distance_brouwer_zimmermann_many` |
+| [brouwer_zimmermann.py](brouwer_zimmermann.py) | The BZ distance search: preparation exits, witness discovery, scanning, sharing between CSS sectors, and exhaustive cost models | `_prepare_brouwer_zimmermann_search`, `_BrouwerZimmermannSearch`, `_scan_brouwer_zimmermann`, `_get_distance_brouwer_zimmermann_many` |
+| [_information_sets.py](_information_sets.py) | Families of search bases and their certificates, shared by distance and counting: disjoint packing, pruning, overlapping replacement, parity inference, the lower certificate, and the work estimate | `_get_disjoint_family`, `_prune_family`, `_get_overlapping_family`, `_prepare_family`, `_Family`, `_Certificate` |
 | [brute_force.py](brute_force.py) | Exhaustive enumeration | `_get_distance_quantum_brute_force` |
 | [_binary.py](_binary.py) | Shared binary helpers: row reduction with labels, independent and adapted bases, packing, weight functions, and the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) | `_row_reduce_binary`, `_get_independent_rows`, `_get_nested_code_basis`, `_symplectic_to_hamming` |
 
 [`__init__.py`](__init__.py) exports names from [core.py](core.py) and [logical_counts.py](logical_counts.py).
-[logical_counts.py](logical_counts.py) counts the logical operators of a given weight exactly, and it reuses the family selection and certificate of [brouwer_zimmermann.py](brouwer_zimmermann.py) under the constraint in [Section 5](#5-correctness-requirements).
+[logical_counts.py](logical_counts.py) counts the logical operators of a given weight exactly.
+It builds its families and certificates with the same stages of [_information_sets.py](_information_sets.py) as the distance search, under the constraint in [Section 5](#5-correctness-requirements).
+The family policy lives only in that module, so a change to it applies to both consumers.
 [core.py](core.py) calls [brouwer_zimmermann.py](brouwer_zimmermann.py) and [brute_force.py](brute_force.py), and [brouwer_zimmermann.py](brouwer_zimmermann.py) calls [brute_force.py](brute_force.py) for its exhaustive routes.
-All three modules use [_binary.py](_binary.py).
+All three modules, and [_information_sets.py](_information_sets.py), use [_binary.py](_binary.py).
 `get_distance_css_brouwer_zimmermann` builds an adapted basis ([Section 3.4](#34-quotient-labels-for-the-stabilizer-test)) for each nontrivial sector, then passes the resulting problems to `_get_distance_brouwer_zimmermann_many`.
 
 ### 4.2 Flow and exit points
@@ -485,7 +488,8 @@ An integer returned by preparation can incorporate a witness from another sector
 | Direct exhaustive shortcut in `get_distance_quantum` with `method="brouwer_zimmermann"` | Runs exhaustive enumeration if `_exhaustive_is_cheaper` approves the number of supplied rows and those rows are linearly independent |
 | `method="brute_force"` | Runs exhaustive enumeration over an independent basis, adapted to `S ⊆ V` for a quantum problem |
 
-`_prepare_brouwer_zimmermann_search` considers the following exits in order:
+`_prepare_brouwer_zimmermann_search` considers the following exits in order.
+The disjoint family, its pruning, and any overlapping replacement come from the stages of [_information_sets.py](_information_sets.py); the exits between those stages belong to the distance search.
 
 | Preparation stage | Outcome |
 | --- | --- |
@@ -513,11 +517,12 @@ The tests `test_brouwer_zimmermann_setup_dispatches`, `test_brouwer_zimmermann_s
 | Concept | Code |
 | --- | --- |
 | Upper bound `U` | `best`, or `upper_bound` as a parameter |
-| Lower certificate `L` | `lower_bound`, computed by `_get_brouwer_zimmermann_lower_bound` from `dimension`, `ranks`, `completed_weight`, `weight_divisor`, and `max_coverage` |
+| Lower certificate `L` | `lower_bound` of a search, computed by `_Certificate.lower_bound(completed_weight)` from the certificate's `dimension`, `ranks`, `weight_divisor`, and `max_coverage` |
+| Family of search bases | `_Family`, which holds the search bases and their `_Certificate`; a search keeps only the certificate |
 | Last completed layer `t`, next layer | `completed_weight`, `next_weight` |
-| Divisor `D` | `weight_divisor` |
-| Maximum coverage `C` | `max_coverage` |
-| Dimension `r`, block rank `r_i` | `dimension`, `ranks` (`_InformationSet.rank`) |
+| Divisor `D` | `_Certificate.weight_divisor`, in Hamming units of the searched basis |
+| Maximum coverage `C` | `_Certificate.max_coverage` |
+| Dimension `r`, block rank `r_i` | `dimension`, `ranks` (`_InformationSet.rank`); a search's `ranks` array is the native copy of its certificate's ranks |
 | Search basis and its block | `_InformationSet`, with fields `generators`, `labels`, `rank`, and `pivots`; the recorded block is the pivot subset, as explained below |
 | Number of coordinates `N` | The length of `columns` (or `nonzero_columns`), the array of nonzero columns, in the functions that build families of search bases |
 | Stored width `N_stored` | `basis.shape[1]` before pivot deletion, including any all-zero columns |
@@ -527,7 +532,7 @@ The tests `test_brouwer_zimmermann_setup_dispatches`, `test_brouwer_zimmermann_s
 | Packed generators | `generators` of `_BrouwerZimmermannSearch`: `uint64` words after deleting pivot columns; `widths` counts the valid words for each search basis |
 | Packed labels | `labels` of `_BrouwerZimmermannSearch`: `uint64` quotient-label words, without pivot-column deletion; `label_widths` counts the valid words |
 | Chunk | `batch_size`, equal to `1 << min(block_size, 15)` supports |
-| Candidate/set evaluation | The unit counted by `_get_brouwer_zimmermann_work` |
+| Candidate/set evaluation | The unit counted by `_Certificate.work` |
 
 For the rank-deficient remainder of [Section 2.4](#24-search-bases-and-rank-deficient-blocks), the implementation records only the independent pivot columns in `_InformationSet.pivots`.
 The remaining columns of that remainder stay in the generator matrix.
@@ -540,18 +545,19 @@ The certificate is computed from verified ranks and the actual maximum coverage 
 The heuristics below change search work while preserving certificate validity.
 With an early-exit cutoff above one, a different search order can find a different first witness at or below the cutoff, while preserving the upper-bound contract of [Section 4.5](#45-behavior-spanning-files).
 
-- **`_get_information_set_generators`** builds the disjoint family greedily in natural column order.
+- **`_get_disjoint_family`** builds the disjoint family greedily in natural column order, through `_get_information_set_generators`.
   If that does not reach the maximum number of blocks that are information sets, it tries a small fixed number of fixed-seed random column orders and keeps the family with the lexicographically largest tuple of ranks.
   Fixed seeds keep results reproducible, and the bounded retries keep setup cheap.
-- **`_select_brouwer_zimmermann_information_sets`** is exact, not heuristic.
+  It also infers the divisor `2` when every basis row has even weight, and combines it with any divisor supplied by the caller.
+- **`_prune_family`** is exact, not heuristic.
   A search basis whose block has rank deficiency `d = r - r_i` has a term `b_i(t)` that is zero for `t < d`.
   The function removes such a search basis when the blocks that are information sets reach `U` by layer `d`, so the removal leaves the result unchanged and saves enumeration.
   It removes nothing if no block is an information set.
-- **`_get_overlapping_information_sets`** tries to lower the work estimate of the disjoint family, with tunables `max_sets` and `minimum_work`.
+- **`_get_overlapping_family`** tries to lower the work estimate of the disjoint family, with tunables `max_sets` and `minimum_work`.
   It returns `None` if the existing work is below `minimum_work`, if the blocks already use every nonzero column, if the family is at `max_sets`, or if even the optimistic coverage `ceil(m*r/N)` cannot reduce the estimate.
   Otherwise it builds search bases by row reducing on column orders that put the least-used columns first, with seeded tie-breaking, and keeps the cheapest family built.
   A repeated pivot set is discarded, but it still consumes one of a bounded number of attempts.
-- **`_get_brouwer_zimmermann_work`, `_brute_force_is_cheaper`, and `_exhaustive_is_cheaper`** are cost models, which [Section 3.6](#36-exhaustive-enumeration-as-a-fallback) explains.
+- **`_Certificate.work`, `_brute_force_is_cheaper`, and `_exhaustive_is_cheaper`** are cost models, which [Section 3.6](#36-exhaustive-enumeration-as-a-fallback) explains.
   They are not runtime guarantees.
   `_exhaustive_is_cheaper` compares the setup cost of BZ with packed enumeration of all words, and its rule is in the source.
 
@@ -582,7 +588,7 @@ With an early-exit cutoff above one, a different search order can find a differe
   A subsequent call that is still permitted to advance restarts the unfinished layer from its first support.
 - **CSS sectors.**
   A joint search runs one search per sector in round-robin order and shares the best bound.
-  Each sector keeps its own `lower_bound`, `max_coverage`, and `weight_divisor`.
+  Each sector keeps its own `lower_bound` and `certificate`, including its coverage and divisor.
 
 ## 5. Correctness requirements
 
@@ -604,14 +610,15 @@ Changes to the BZ algorithm can use different representations, certificates, and
   Optional rounding requires a divisor valid for every eligible weight ([Section 3.2](#32-rounding-the-certificate-to-a-proven-weight-multiple)).
   A certificate from another CSS sector needs justification for the sector where it is applied, just as any other certificate does.
 - **Keep the strict certificate available to fixed-weight counting.**
-  [logical_counts.py](logical_counts.py) reuses `_get_information_set_generators`, `_select_brouwer_zimmermann_information_sets`, `_get_overlapping_information_sets`, and `_get_brouwer_zimmermann_lower_bound` to count every word of a target weight `w`, which defaults to the distance.
+  [logical_counts.py](logical_counts.py) builds its family with `_prepare_family` of [_information_sets.py](_information_sets.py), which runs the same stages as the distance search, and stops with that family's `_Certificate` to count every word of a target weight `w`, which defaults to the distance.
   Distance may stop at `L(t) ≥ U`, but counting must also exhaust words of weight exactly `w`, so it stops only at `L(t) > w`.
-  Its bound must use the ranks and actual maximum coverage of the family it scans; it passes `upper_bound=w+1` to the family selectors only to aim them at that stopping point.
+  Its bound must use the ranks and actual maximum coverage of the family it scans; it passes `upper_bound=w+1` to the family stages only to aim them at that stopping point.
 - **Preserve the return contract.**
   Return the exact minimum unless taking an early exit permitted by `cutoff`.
   Such an early exit returns the weight of a known eligible witness, an upper bound between the distance and `cutoff` ([Section 4.5](#45-behavior-spanning-files)).
 
-Representative correctness tests in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py) check certificate validity against exhaustive words (`test_brouwer_zimmermann_overlap_certificates`) and joint-search results with distinct sector certificates (`test_brouwer_zimmermann_sector_certificates`).
+Representative correctness tests check certificate validity against exhaustive words, including rank-deficient blocks, inferred parity, and overlapping coverage (`test_family_certificates` and `test_overlapping_family_certificates` in [_information_sets_test.py](_information_sets_test.py)), and joint-search results with distinct sector certificates (`test_brouwer_zimmermann_sector_certificates` in [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py)).
+`test_counting_continues_at_an_equal_lower_bound` in [logical_counts_test.py](logical_counts_test.py) checks the strict counting stop with a count that a stop at `L(t) = w` would miss.
 In [core_test.py](core_test.py), `test_brouwer_zimmermann_random_cross_checks` forces the BZ route and compares both homogeneous and general Pauli problems with exhaustive results.
 
 Performance tests also check broad work budgets, and helper tests exercise the current implementation's interfaces.
@@ -621,5 +628,5 @@ Those tests can evolve with the implementation; they do not make a particular in
 
 - [arXiv:1603.06757v2](https://arxiv.org/abs/1603.06757v2) (Algorithm 1): Section 2 and Algorithm 1 give the classical disjoint and rank-deficient bound.
 - [arXiv:2408.10743v2](https://arxiv.org/abs/2408.10743v2): Section 2.4 describes the `Saved_isometry` symplectic-to-Hamming construction.
-- [core.py](core.py), [brouwer_zimmermann.py](brouwer_zimmermann.py), [brute_force.py](brute_force.py), and [_binary.py](_binary.py): the implementation.
-- [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py) and [core_test.py](core_test.py): executable invariants and independent small-instance oracles.
+- [core.py](core.py), [brouwer_zimmermann.py](brouwer_zimmermann.py), [_information_sets.py](_information_sets.py), [brute_force.py](brute_force.py), and [_binary.py](_binary.py): the implementation.
+- [brouwer_zimmermann_test.py](brouwer_zimmermann_test.py), [_information_sets_test.py](_information_sets_test.py), and [core_test.py](core_test.py): executable invariants and independent small-instance oracles.

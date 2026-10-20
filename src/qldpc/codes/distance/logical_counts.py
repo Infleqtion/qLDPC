@@ -16,12 +16,13 @@ generally takes an exponentially long time.
 
 Each X/Z sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
 ``brouwer_zimmermann.md``).  Words are enumerated in layers over Brouwer--Zimmermann (BZ)
-information sets.  Unlike a distance search, the scan stops only when the BZ lower bound exceeds
-``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several information sets is
-counted by only one of them.  Full Pauli counts are derived from the homogeneous words of weight
-``d``, with one masked rank per word.  Self-dual codes scan only one sector, and have
-``count_pauli = 3 * count_x``.  Counters for codes conjugated by local CSS-preserving Cliffords
-transform the stored sector bases rather than recomputing them.
+information sets, whose family and certificate come from the stages in ``_information_sets.py``
+that the distance search shares.  Unlike a distance search, the scan stops only when the BZ lower
+bound exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several
+information sets is counted by only one of them.  Full Pauli counts are derived from the
+homogeneous words of weight ``d``, with one masked rank per word.  Self-dual codes scan only one
+sector, and have ``count_pauli = 3 * count_x``.  Counters for codes conjugated by local
+CSS-preserving Cliffords transform the stored sector bases rather than recomputing them.
 
 In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
 ``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
@@ -36,7 +37,7 @@ References:
 from __future__ import annotations
 
 import functools
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -44,6 +45,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
+from . import _information_sets
 from ._binary import (
     _get_independent_rows,
     _get_kernel,
@@ -52,13 +54,7 @@ from ._binary import (
     _popcount_word,
     _row_reduce_binary,
 )
-from .brouwer_zimmermann import (
-    _get_brouwer_zimmermann_lower_bound,
-    _get_distance_brouwer_zimmermann_many,
-    _get_information_set_generators,
-    _get_overlapping_information_sets,
-    _select_brouwer_zimmermann_information_sets,
-)
+from .brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
 from .brute_force import _get_distance_quantum_brute_force
 from .core import DistanceMethod, validate_distance_method
 
@@ -449,11 +445,11 @@ def _count_words(
     scan also visits every lighter word, so with ``reject_lighter`` it returns None as soon as it
     finds a nontrivial one.
     """
-    get_lower_bound: Callable[[int], int]
+    certificate: _information_sets._Certificate | None
     if method == "brute_force":
-        sets, get_lower_bound = [(basis, labels)], lambda layer: 0
+        sets, certificate = [(basis, labels)], None
     else:
-        sets, get_lower_bound = _get_counting_information_sets(basis, labels, weight)
+        sets, certificate = _get_counting_information_sets(basis, labels, weight)
 
     rows = [_pack_bits(generators) for generators, _ in sets]
     tags = [_pack_bits(set_labels) for _, set_labels in sets]
@@ -487,47 +483,26 @@ def _count_words(
                 if lighter:
                     return None
         # Equality would still allow unvisited words of the target weight.
-        if get_lower_bound(layer) > weight:
+        if certificate is not None and certificate.lower_bound(layer) > weight:
             break
     return histogram
 
 
 def _get_counting_information_sets(
     basis: _BinaryMatrix, labels: _BinaryMatrix, weight: int
-) -> tuple[list[_Sector], Callable[[int], int]]:
+) -> tuple[list[_Sector], _information_sets._Certificate]:
     """Select BZ information sets that certify every word of the given weight.
 
-    Returns the sets and the lower bound on the weight of unvisited words after each layer.
+    Returns the sets and the certificate that bounds the weight of unvisited words after each layer.
+    The family stages aim at the counting stop ``L(t) >= weight + 1``; any family gives an exact
+    count.
     """
-    # XOR preserves even parity, so an even basis spans only even weights.
-    divisor = 2 if np.all(np.count_nonzero(basis, axis=1) % 2 == 0) else 1
-    candidates = _get_information_set_generators(basis, labels)
-    # Aim the family at the counting stop L(t) >= weight + 1; any family gives an exact count.
-    candidates = _select_brouwer_zimmermann_information_sets(
-        candidates, dimension=len(basis), upper_bound=weight + 1, weight_divisor=divisor
-    )
-    max_coverage = 1
-    overlapping = _get_overlapping_information_sets(
-        basis, labels, candidates, upper_bound=weight + 1, weight_divisor=divisor
-    )
-    if overlapping is not None:
-        candidates, max_coverage = overlapping
-    ranks = [candidate.rank for candidate in candidates]
-
-    def get_lower_bound(layer: int) -> int:
-        return _get_brouwer_zimmermann_lower_bound(
-            len(basis),
-            ranks,
-            completed_weight=layer,
-            weight_divisor=divisor,
-            max_coverage=max_coverage,
-        )
-
+    family = _information_sets._prepare_family(basis, labels, upper_bound=weight + 1)
     sets = []
-    for candidate in candidates:
-        assert candidate.labels is not None
-        sets.append((candidate.generators, candidate.labels))
-    return sets, get_lower_bound
+    for information_set in family.information_sets:
+        assert information_set.labels is not None
+        sets.append((information_set.generators, information_set.labels))
+    return sets, family.certificate
 
 
 def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:

@@ -16,6 +16,7 @@ import pytest
 from qldpc import codes
 from qldpc.objects import Pauli
 
+from . import _information_sets
 from . import logical_counts as lc
 from ._binary import _get_independent_rows, _get_kernel
 from .core import DistanceMethod
@@ -168,6 +169,15 @@ def test_counts_match_enumeration(method: DistanceMethod) -> None:
         assert counter.count_logicals(distance, method=method, full_pauli=True) == expected_full
 
 
+def test_counting_continues_at_an_equal_lower_bound() -> None:
+    """With no checks, every one of the three words of weight two is a logical of each type.
+
+    After the first layer, the bound on unvisited words equals two, so the count must continue.
+    """
+    counter = _counter(np.zeros((0, 3)), np.zeros((0, 3)))
+    assert counter.count_logicals(2) == Counts(2, 3, 3, None)
+
+
 @pytest.mark.parametrize("method", METHODS)
 def test_full_pauli_counts_away_from_the_distance(method: DistanceMethod) -> None:
     counter = lc.CSSLogicalCounter(codes.SteaneCode())
@@ -218,8 +228,8 @@ def test_methods_agree_on_random_codes(num_qubits: int, rank_x: int, rank_z: int
 
 def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Overlapping information sets, which large searches use, still count every word once."""
-    select = functools.partial(lc._get_overlapping_information_sets, minimum_work=0)
-    monkeypatch.setattr(lc, "_get_overlapping_information_sets", select)
+    select = functools.partial(_information_sets._get_overlapping_family, minimum_work=0)
+    monkeypatch.setattr(_information_sets, "_get_overlapping_family", select)
     hamming = np.asarray(codes.HammingCode(4).matrix)
     rng = np.random.default_rng(5)
     for code in (
