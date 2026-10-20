@@ -74,8 +74,8 @@ def _get_distance_quantum_brute_force(
     # codes with >= 256 columns (the pre-loop call below casts explicitly for the same reason).
     out = np.empty_like(arrayf)
 
-    # Min weight of the block containing logical ops.  Cast to uint64 because np.bitwise_count
-    # returns uint8, which would overflow the reduction below for >= 256 columns.
+    # Min weight of the block containing logical ops.  Cast to uint64 because ``_hamming_weight``
+    # returns uint8 without ``out=``, which would overflow the reduction below for >= 256 columns.
     weights = np.asarray(weight_func(arrayf[2**num_stabilizers :]), dtype=np.uint64)
     min_weight = _inplace_rowsum(weights).min(initial=num_bits)
     if min_weight <= cutoff:

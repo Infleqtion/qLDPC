@@ -22,8 +22,6 @@ from numba import njit
 from numba.extending import register_jitable
 
 from ._binary import (
-    _MASK0F,
-    _MASK33,
     _MASK55,
     _get_packed_row_weights,
     _row_reduce_binary,
@@ -32,6 +30,10 @@ from ._binary import (
 from .brute_force import (
     _get_distance_quantum_brute_force,
 )
+
+# Masks for the SWAR popcount in _popcount_word, since numba cannot compile np.bitwise_count.
+_MASK33 = np.uint64(0x3333333333333333)
+_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
 
 
 class _InformationSet(NamedTuple):

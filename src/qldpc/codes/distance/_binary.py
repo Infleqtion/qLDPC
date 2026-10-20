@@ -8,8 +8,6 @@ import numpy as np
 import numpy.typing as npt
 
 _MASK55 = np.uint64(0x5555555555555555)
-_MASK33 = np.uint64(0x3333333333333333)
-_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
 
 
 ####################################################################################################
@@ -123,11 +121,6 @@ def _get_nested_code_basis(
     return basis, labels
 
 
-def _get_packed_row_weights(rows: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
-    """Compute Hamming weights of packed binary rows without narrow-integer overflow."""
-    return np.bitwise_count(rows).sum(axis=-1, dtype=np.uint64)
-
-
 def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     """Map ``(X | Z)`` to ``(X | Z | X xor Z)``, doubling symplectic weight.
 
@@ -158,13 +151,19 @@ def _symplectic_weight(
 ) -> npt.NDArray[np.uint64]:
     """Count the qubits in the support of each riffled word (see ``_riffle``).
 
-    Bits ``2j`` and ``2j + 1`` hold the X and Z support of qubit ``j``, so a qubit is in the support
-    if either bit is set.  The result is uint64, and ``out`` doubles as scratch space.
+    Each qubit occupies one aligned bit pair ``(2m, 2m + 1)`` of a word, so a qubit is in the
+    support if either bit of its pair is set.  The result is uint64, and ``out`` doubles as scratch
+    space.
     """
     out = np.right_shift(words, 1, out=out)
     out |= words
     out &= _MASK55
     return np.bitwise_count(out, out=out)
+
+
+def _get_packed_row_weights(rows: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
+    """Compute Hamming weights of packed binary rows without narrow-integer overflow."""
+    return _hamming_weight(rows).sum(axis=-1, dtype=np.uint64)
 
 
 ####################################################################################################
