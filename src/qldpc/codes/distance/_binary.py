@@ -4,15 +4,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import numpy as np
 import numpy.typing as npt
 
 _MASK55 = np.uint64(0x5555555555555555)
-_MASK33 = np.uint64(0x3333333333333333)
-_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
-_MASK01 = np.uint64(0x0101010101010101)
 
 
 ####################################################################################################
@@ -126,15 +121,6 @@ def _get_nested_code_basis(
     return basis, labels
 
 
-def _get_packed_row_weights(
-    rows: npt.NDArray[np.uint64],
-    weight_func: Callable[..., npt.NDArray[np.uint64]],
-) -> npt.NDArray[np.uint64]:
-    """Compute Hamming weights of packed binary rows without narrow-integer overflow."""
-    word_weights = np.asarray(weight_func(rows), dtype=np.uint64)
-    return word_weights.sum(axis=-1, dtype=np.uint64)
-
-
 def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     """Map ``(X | Z)`` to ``(X | Z | X xor Z)``, doubling symplectic weight.
 
@@ -147,35 +133,22 @@ def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uin
 
 
 ####################################################################################################
-# weight functions (Hamming and symplectic popcount) and backend selection
+# weight functions
 
 
-def _get_hamming_weight_fn() -> tuple[Callable[..., npt.NDArray[np.uint64]], int]:
-    if getattr(np, "bitwise_count", None) is not None:
-        weight_fn = np.bitwise_count
-        return weight_fn, 0
+def _symplectic_weight(
+    words: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
+) -> npt.NDArray[np.uint64]:
+    """Count the qubits in the support of each riffled word (see ``_riffle``).
 
-    return _hamming_weight, 1
-
-
-def _get_symplectic_weight_fn() -> tuple[Callable[..., npt.NDArray[np.uint64]], int]:
-    if getattr(np, "bitwise_count", None) is not None:
-        np_bitwise_count = np.bitwise_count
-
-        def weight_fn(
-            arr: npt.NDArray[np.uint64],
-            buf: npt.NDArray[np.uint64] | None = None,
-            out: npt.NDArray[np.uint64] | None = None,
-        ) -> npt.NDArray[np.uint64]:
-            """Symplectic weight of an integer."""
-            buf = np.right_shift(arr, 1, out=buf)
-            buf |= arr
-            buf &= _MASK55
-            return np_bitwise_count(buf, out=out)
-
-        return weight_fn, 1
-
-    return _symplectic_weight, 1
+    Each qubit occupies one aligned bit pair ``(2m, 2m + 1)`` of a word, so a qubit is in the
+    support if either bit of its pair is set.  The result is uint64, and ``out`` doubles as scratch
+    space.
+    """
+    out = np.right_shift(words, 1, out=out)
+    out |= words
+    out &= _MASK55
+    return np.bitwise_count(out, out=out)
 
 
 ####################################################################################################
@@ -233,67 +206,3 @@ def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
     if arr.size == 0:
         return np.empty((0, num_bits), dtype=arr.dtype)  # nothing to riffle (e.g. no stabilizers)
     return np.reshape(arr, (-1, 2, num_bits // 2)).transpose(0, 2, 1).reshape(-1, num_bits)
-
-
-####################################################################################################
-# numpy < 2.0 does not provide np.bitwise_count; the methods below provide a fallback
-
-
-def _hamming_weight(
-    arr: npt.NDArray[np.uint64],
-    buf: npt.NDArray[np.uint64] | None = None,
-    out: npt.NDArray[np.uint64] | None = None,
-) -> npt.NDArray[np.uint64]:
-    """Somewhat efficient (vectorized) Hamming weight calculation.
-
-    Assumes 64-bit uints.  For `numpy >= 2.0.0`, it's generally better to use `np.bitwise_count`
-    (which uses processors' builtin `popcnt` instruction).  Unfortunately this isn't available for
-    numpy < 2.0.0.
-
-    The mask-and-shift steps are the classic SWAR (SIMD-within-a-register) popcount; see
-    https://en.wikipedia.org/wiki/Hamming_weight.
-    """
-    out = np.right_shift(arr, 1, out=out)
-    out &= _MASK55
-    out = np.subtract(arr, out, out=out)
-
-    buf = np.right_shift(out, 2, out=buf)
-    buf &= _MASK33
-    out &= _MASK33
-    out += buf
-
-    buf = np.right_shift(out, 4, out=buf)
-    out += buf
-    out &= _MASK0F
-
-    out = np.multiply(out, _MASK01, out=out)
-    out >>= np.uint64(56)
-    return out
-
-
-def _symplectic_weight(
-    arr: npt.NDArray[np.uint64],
-    buf: npt.NDArray[np.uint64] | None = None,
-    out: npt.NDArray[np.uint64] | None = None,
-) -> npt.NDArray[np.uint64]:
-    """Somewhat efficient (vectorized) symplectic weight calculation.
-
-    Assumes 64-bit uints.  This function is equivalent to (but slightly more efficient than) the
-    expression ``_hamming_weight((arr | (arr >> 1)) & 0x5555555555555555, buf=buf, out=out)``.
-    """
-    out = np.right_shift(arr, 1, out=out)
-    out |= arr
-    out &= _MASK55
-
-    buf = np.right_shift(out, 2, out=buf)
-    buf &= _MASK33
-    out &= _MASK33
-    out += buf
-
-    buf = np.right_shift(out, 4, out=buf)
-    out += buf
-    out &= _MASK0F
-
-    out *= _MASK01
-    out >>= np.uint64(56)
-    return out

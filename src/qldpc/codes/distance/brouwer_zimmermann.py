@@ -22,17 +22,17 @@ from numba import njit
 from numba.extending import register_jitable
 
 from ._binary import (
-    _MASK0F,
-    _MASK33,
     _MASK55,
-    _get_hamming_weight_fn,
-    _get_packed_row_weights,
     _row_reduce_binary,
     _rows_to_ints,
 )
 from .brute_force import (
     _get_distance_quantum_brute_force,
 )
+
+# Masks for the SWAR popcount in _popcount_word, since numba cannot compile np.bitwise_count.
+_MASK33 = np.uint64(0x3333333333333333)
+_MASK0F = np.uint64(0x0F0F0F0F0F0F0F0F)
 
 
 class _InformationSet(NamedTuple):
@@ -404,10 +404,10 @@ def _get_brouwer_zimmermann_initial_upper_bound(
     labels: npt.NDArray[np.uint8] | None,
 ) -> int:
     """Return the lightest eligible row in a nested-code basis."""
-    weight_func, _ = _get_hamming_weight_fn()
     eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
     packed_basis = _rows_to_ints(basis[eligible], dtype=np.uint64)
-    return int(_get_packed_row_weights(packed_basis, weight_func).min())
+    # get row weights, summing in uint64 to avoid overflow in wide rows
+    return int(np.bitwise_count(packed_basis).sum(axis=-1, dtype=np.uint64).min())
 
 
 def _select_brouwer_zimmermann_information_sets(

@@ -11,8 +11,7 @@ import pytest
 
 import qldpc
 
-from . import _binary as binary
-from .conftest import _bitwise_count, _get_random_full_rank_matrix
+from .conftest import _get_random_full_rank_matrix
 
 
 def test_css_brouwer_zimmermann_special_inputs() -> None:
@@ -119,40 +118,6 @@ def test_brouwer_zimmermann_special_inputs() -> None:
         qldpc.codes.get_distance_classical([])
 
 
-def test_get_distance_classical_methods() -> None:
-    """get_distance_classical dispatches to NumPy bitcount or the fallback as available."""
-    generators = np.random.randint(2, size=(6, 56), dtype=np.uint64)
-    distance_default = qldpc.codes.distance.get_distance_classical(generators, block_size=3)
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    # This branch verifies the NumPy popcount backend for packed Hamming words.
-    with (
-        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
-        mock.patch(
-            "qldpc.codes.distance._binary._hamming_weight",
-            wraps=binary._hamming_weight,
-        ) as fallback,
-    ):
-        distance = qldpc.codes.distance.get_distance_classical(generators, block_size=3)
-        bitcount.assert_called()
-        fallback.assert_not_called()
-        assert distance == distance_default
-
-    # This branch verifies the fallback popcount backend for packed Hamming words.
-    with (
-        mock.patch("numpy.bitwise_count", None, create=True),
-        mock.patch(
-            "qldpc.codes.distance._binary._hamming_weight",
-            wraps=binary._hamming_weight,
-        ) as fallback,
-    ):
-        distance = qldpc.codes.distance.get_distance_classical(generators, block_size=3)
-        fallback.assert_called()
-        assert distance == distance_default
-
-
 def test_distance_backend_validation() -> None:
     """Distance backend and exact-method selectors are restricted to documented values."""
     for backend in ["auto", "decoder", "gap", "sqetch"]:
@@ -164,100 +129,6 @@ def test_distance_backend_validation() -> None:
         qldpc.codes.validate_distance_method(method)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="Unknown distance method"):
         qldpc.codes.validate_distance_method("other")  # type: ignore[arg-type]
-
-
-def test_get_distance_quantum_methods() -> None:
-    """Homogeneous get_distance_quantum dispatches to NumPy bitcount or the fallback."""
-    stabilizers = np.random.randint(2, size=(4, 56), dtype=np.uint64)
-    logical_ops = np.random.randint(2, size=(3, 56), dtype=np.uint64)
-    distance_default = qldpc.codes.distance.get_distance_quantum(
-        logical_ops, stabilizers, block_size=3, homogeneous=True
-    )
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    # This branch verifies the NumPy popcount backend for homogeneous quantum packed words.
-    with (
-        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
-        mock.patch(
-            "qldpc.codes.distance._binary._hamming_weight",
-            wraps=binary._hamming_weight,
-        ) as fallback,
-    ):
-        distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops, stabilizers, block_size=3, homogeneous=True
-        )
-        bitcount.assert_called()
-        fallback.assert_not_called()
-        assert distance == distance_default
-
-    # This branch verifies the fallback popcount backend for homogeneous quantum packed words.
-    with (
-        mock.patch("numpy.bitwise_count", None, create=True),
-        mock.patch(
-            "qldpc.codes.distance._binary._hamming_weight",
-            wraps=binary._hamming_weight,
-        ) as fallback,
-    ):
-        distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops, stabilizers, block_size=3, homogeneous=True
-        )
-        fallback.assert_called()
-        assert distance == distance_default
-
-
-def test_get_distance_quantum_methods_symplectic() -> None:
-    """Symplectic get_distance_quantum dispatches to NumPy bitcount or the fallback."""
-    stabilizers = np.random.randint(2, size=(4, 56), dtype=np.uint64)
-    logical_ops = np.random.randint(2, size=(3, 56), dtype=np.uint64)
-    distance_default = qldpc.codes.distance.get_distance_quantum(
-        logical_ops,
-        stabilizers,
-        block_size=3,
-        homogeneous=False,
-        method="brute_force",
-    )
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    # This branch verifies the NumPy popcount backend for symplectic quantum packed words.
-    with (
-        mock.patch("numpy.bitwise_count", wraps=mock_weight, create=True) as bitcount,
-        mock.patch(
-            "qldpc.codes.distance._binary._symplectic_weight",
-            wraps=binary._symplectic_weight,
-        ) as fallback,
-    ):
-        distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops,
-            stabilizers,
-            block_size=3,
-            homogeneous=False,
-            method="brute_force",
-        )
-        bitcount.assert_called()
-        fallback.assert_not_called()
-        assert distance == distance_default
-
-    # This branch verifies the fallback popcount backend for symplectic quantum packed words.
-    with (
-        mock.patch("numpy.bitwise_count", None, create=True),
-        mock.patch(
-            "qldpc.codes.distance._binary._symplectic_weight",
-            wraps=binary._symplectic_weight,
-        ) as fallback,
-    ):
-        distance = qldpc.codes.distance.get_distance_quantum(
-            logical_ops,
-            stabilizers,
-            block_size=3,
-            homogeneous=False,
-            method="brute_force",
-        )
-        fallback.assert_called()
-        assert distance == distance_default
 
 
 @pytest.mark.parametrize(
