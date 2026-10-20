@@ -43,7 +43,7 @@ def test_get_distance_classical(block_size: int) -> None:
             method="brute_force",
         )
 
-    int_generators = binary._rows_to_ints(generators)
+    int_generators = binary._pack_bits(np.asarray(generators, dtype=np.uint8))
     expected_bitstrings = [
         tuple(np.bitwise_xor.reduce(np.vstack(gens)).tolist())
         for n in range(1, len(generators) + 1)
@@ -91,8 +91,8 @@ def test_get_distance_quantum(block_size: int) -> None:
             method="brute_force",
         )
 
-    int_stabilizers = binary._rows_to_ints(stabilizers)
-    int_logical_ops = binary._rows_to_ints(logical_ops)
+    int_stabilizers = binary._pack_bits(np.asarray(stabilizers, dtype=np.uint8))
+    int_logical_ops = binary._pack_bits(np.asarray(logical_ops, dtype=np.uint8))
     expected_bitstrings = [
         tuple(np.bitwise_xor.reduce(np.vstack(stabs + ops)).tolist())
         for ns in range(len(stabilizers) + 1)
@@ -142,8 +142,8 @@ def test_get_distance_quantum_symplectic(block_size: int) -> None:
             method="brute_force",
         )
 
-    int_stabilizers = binary._rows_to_ints(binary._riffle(stabilizers))
-    int_logical_ops = binary._rows_to_ints(binary._riffle(logical_ops))
+    int_stabilizers = binary._pack_bits(np.asarray(binary._riffle(stabilizers), dtype=np.uint8))
+    int_logical_ops = binary._pack_bits(np.asarray(binary._riffle(logical_ops), dtype=np.uint8))
     expected_bitstrings = np.array(
         [
             np.bitwise_xor.reduce(np.vstack(stabs + ops))

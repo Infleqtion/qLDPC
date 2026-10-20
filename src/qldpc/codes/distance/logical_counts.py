@@ -587,9 +587,10 @@ def _pack_local_matrices(
         local = np.asarray(matrix)
         if local.shape != (size, size):
             raise ValueError("Local Clifford matrices must be square and match the target count")
-        if order is not None and order != 2:
+        if (order is not None and order != 2) or not np.all((local == 0) | (local == 1)):
             raise ValueError("Local Clifford matrices must be binary")
-        packed.append(_pack_local(local))
+        # At most 64 targets, so each row packs into a single word.
+        packed.append(_pack_bits(local.astype(np.uint8))[:, 0])
     if not _is_css_pairing(packed[0], packed[1]):
         raise ValueError("Local X/Z matrices must preserve the CSS commutation pairing")
     return packed[0], packed[1]
@@ -597,19 +598,6 @@ def _pack_local_matrices(
 
 ####################################################################################################
 # native kernels
-
-
-@njit(cache=True)
-def _pack_local(local: npt.NDArray[np.number]) -> npt.NDArray[np.uint64]:
-    """Pack each row of a binary local matrix into a word whose bit j is column j."""
-    packed = np.zeros(len(local), dtype=np.uint64)
-    for row in range(local.shape[0]):
-        for column in range(local.shape[1]):
-            if local[row, column] == 1:
-                packed[row] |= np.uint64(1) << np.uint64(column)
-            elif local[row, column] != 0:
-                raise ValueError("Local Clifford matrices must be binary")
-    return packed
 
 
 @njit(cache=True)

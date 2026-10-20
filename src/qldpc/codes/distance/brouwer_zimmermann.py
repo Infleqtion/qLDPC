@@ -23,9 +23,9 @@ from numba import njit
 from ._binary import (
     _get_hamming_weight_fn,
     _get_packed_row_weights,
+    _pack_bits,
     _popcount_word,
     _row_reduce_binary,
-    _rows_to_ints,
 )
 from .brute_force import (
     _get_distance_quantum_brute_force,
@@ -391,7 +391,7 @@ def _get_brouwer_zimmermann_initial_upper_bound(
     """Return the lightest eligible row in a nested-code basis."""
     weight_func, _ = _get_hamming_weight_fn()
     eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
-    packed_basis = _rows_to_ints(basis[eligible], dtype=np.uint64)
+    packed_basis = _pack_bits(basis[eligible])
     return int(_get_packed_row_weights(packed_basis, weight_func).min())
 
 
@@ -629,13 +629,8 @@ def _prepare_brouwer_zimmermann_search(
     # Remove systematic pivots; advance() restores their known weight arithmetically.
     packed_sets = [
         (
-            _rows_to_ints(
-                np.delete(information_set.generators, information_set.pivots, axis=1),
-                dtype=np.uint64,
-            ),
-            None
-            if information_set.labels is None
-            else _rows_to_ints(information_set.labels, dtype=np.uint64),
+            _pack_bits(np.delete(information_set.generators, information_set.pivots, axis=1)),
+            None if information_set.labels is None else _pack_bits(information_set.labels),
             information_set.rank,
         )
         for information_set in information_sets

@@ -37,7 +37,6 @@ KERNELS = (
     "_is_owned",
     "_get_masked_rank",
     "_apply_local",
-    "_pack_local",
     "_is_css_pairing",
 )
 

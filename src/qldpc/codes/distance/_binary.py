@@ -206,35 +206,6 @@ def _inplace_rowsum(arr: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
     return arr[..., 0]
 
 
-def _rows_to_ints(
-    array: npt.ArrayLike, dtype: npt.DTypeLike = np.uint64, axis: int = -1
-) -> npt.NDArray[np.uint64]:
-    """Pack rows of a binary array into rows of the given integral type.
-
-    Each group of ``8 * itemsize`` bits along ``axis`` becomes one integer whose most significant
-    bit is the group's first bit.  A shorter final group is right-aligned, so that its last bit is
-    the least significant.
-    """
-    array = np.asarray(array, dtype=dtype)
-    tsize = array.itemsize * 8
-
-    if array.size == 0:
-        num_words = int(np.ceil(array.shape[-1] / tsize))
-        return np.empty((*array.shape[:-1], num_words), dtype=dtype)
-
-    bits = np.moveaxis(array, axis, -1)
-    leading, width = bits.shape[:-1], bits.shape[-1]
-    bits = bits.reshape(-1, width)
-    full, remainder = divmod(width, tsize)
-    num_words = full + (remainder > 0)
-    padded = np.zeros((len(bits), num_words * tsize), dtype=np.uint8)
-    padded[:, : full * tsize] = bits[:, : full * tsize]
-    if remainder:
-        padded[:, num_words * tsize - remainder :] = bits[:, full * tsize :]
-    words = np.packbits(padded, axis=1).view(np.dtype(dtype).newbyteorder(">")).astype(dtype)
-    return np.moveaxis(words.reshape(*leading, num_words), -1, axis)
-
-
 def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
     """'Riffle' Pauli strings, putting X and Z support bits for each qubit next to each other."""
     arr = np.asarray(array)
@@ -282,14 +253,19 @@ def _lower_popcount_word(
 def _pack_bits(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
     """Pack binary rows into uint64 words, with column j in bit j % 64 of word j // 64.
 
-    Entries must be 0 or 1.  This layout differs from that of ``_rows_to_ints``, which puts the
-    first column in the most significant bit; do not mix the two.
+    This is the only packed layout in the distance package.  Entries must be 0 or 1.
     """
-    packed = np.zeros((len(matrix), (matrix.shape[1] + 63) // 64), dtype=np.uint64)
-    for row in range(len(matrix)):
-        for column in range(matrix.shape[1]):
-            if matrix[row, column]:
-                packed[row, column // 64] |= np.uint64(1) << np.uint64(column % 64)
+    num_rows, width = matrix.shape
+    num_words = (width + 63) // 64
+    packed = np.empty((num_rows, num_words), dtype=np.uint64)
+    for row in range(num_rows):
+        for word in range(num_words):
+            # Assemble each word in a register rather than updating memory once per bit.
+            value = np.uint64(0)
+            start = 64 * word
+            for bit in range(min(64, width - start)):
+                value |= np.uint64(matrix[row, start + bit]) << np.uint64(bit)
+            packed[row, word] = value
     return packed
 
 
