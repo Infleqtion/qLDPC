@@ -22,16 +22,18 @@ def test_get_distance_classical(block_size: int) -> None:
     """get_distance_classical visits every nontrivial XOR combination of generators exactly once."""
     generators = np.random.randint(2, size=(9, 137))
 
-    # The mocked Hamming-weight function records every packed nonzero generator combination once.
+    # The mocked popcount records every packed nonzero generator combination once.
     observed_bitstrings: list[tuple[int, ...]] = []
 
-    def _mock_hamming_weight(
+    bitwise_count = np.bitwise_count
+
+    def _mock_bitwise_count(
         arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, out=out)
+        return bitwise_count(arr, out=out)
 
-    with mock.patch("qldpc.codes.distance.brute_force._hamming_weight", _mock_hamming_weight):
+    with mock.patch.object(np, "bitwise_count", _mock_bitwise_count):
         distance = qldpc.codes.distance.get_distance_classical(
             np.vstack([generators, generators[0], generators[0] ^ generators[1]]),
             block_size=block_size,
@@ -62,17 +64,19 @@ def test_get_distance_quantum(block_size: int) -> None:
     stabilizers = np.random.randint(2, size=(8, 97))
     logical_ops = np.random.randint(2, size=(5, 97))
 
-    # The mocked Hamming-weight function records every nonzero logical combination combined
+    # The mocked popcount records every nonzero logical combination combined
     # with every stabilizer combination, including the empty one.
     observed_bitstrings: list[tuple[int, ...]] = []
 
-    def _mock_hamming_weight(
+    bitwise_count = np.bitwise_count
+
+    def _mock_bitwise_count(
         arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         observed_bitstrings.extend(map(tuple, arr.tolist()))
-        return binary._hamming_weight(arr, out=out)
+        return bitwise_count(arr, out=out)
 
-    with mock.patch("qldpc.codes.distance.brute_force._hamming_weight", _mock_hamming_weight):
+    with mock.patch.object(np, "bitwise_count", _mock_bitwise_count):
         distance = qldpc.codes.distance.get_distance_quantum(
             np.vstack([logical_ops, logical_ops[0] ^ stabilizers[0]]),
             np.vstack([stabilizers, stabilizers[0]]),

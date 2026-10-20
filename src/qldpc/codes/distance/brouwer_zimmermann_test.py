@@ -580,17 +580,16 @@ def get_candidate_count(monkeypatch: pytest.MonkeyPatch) -> Callable[[], int]:
         num_candidates += visited * len(args[2])
         return best, depth, visited
 
-    def counting_weight(
+    bitwise_count = np.bitwise_count
+
+    def counting_bitwise_count(
         arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
     ) -> npt.NDArray[np.uint64]:
         nonlocal num_candidates
         num_candidates += len(arr)
-        return binary._hamming_weight(arr, out=out)
+        return bitwise_count(arr, out=out)
 
-    def counting_row_weights(rows: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
-        return counting_weight(rows).sum(axis=-1, dtype=np.uint64)
-
-    monkeypatch.setattr(bz, "_get_packed_row_weights", counting_row_weights)
-    monkeypatch.setattr("qldpc.codes.distance.brute_force._hamming_weight", counting_weight)
+    # Row weights and exhaustive enumeration count every packed word with np.bitwise_count.
+    monkeypatch.setattr(np, "bitwise_count", counting_bitwise_count)
     monkeypatch.setattr(bz, "_scan_brouwer_zimmermann", counting_scan)
     return lambda: num_candidates

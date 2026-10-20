@@ -60,18 +60,6 @@ def test_riffle_and_symplectic_isometry() -> None:
     )
 
 
-def test_hamming_weight() -> None:
-    """Validate _hamming_weight against a simple reference bit-counting implementation."""
-    vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)
-    expected_weights = _bitwise_count(vals)
-    np.testing.assert_array_equal(binary._hamming_weight(vals), expected_weights)
-
-    out = np.empty_like(vals)
-    weights = binary._hamming_weight(vals, out=out)
-    np.testing.assert_array_equal(weights, expected_weights)
-    assert weights is out
-
-
 def test_symplectic_weight() -> None:
     """Validate _symplectic_weight against the reference bit-counting implementation."""
     vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)

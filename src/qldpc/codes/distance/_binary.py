@@ -136,16 +136,6 @@ def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uin
 # weight functions
 
 
-def _hamming_weight(
-    words: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
-) -> npt.NDArray[np.uint64]:
-    """Count the set bits of each packed word.
-
-    Without ``out``, the counts are uint8, so sums over many words must use a wider dtype.
-    """
-    return np.bitwise_count(words, out=out)
-
-
 def _symplectic_weight(
     words: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
 ) -> npt.NDArray[np.uint64]:
@@ -163,7 +153,7 @@ def _symplectic_weight(
 
 def _get_packed_row_weights(rows: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
     """Compute Hamming weights of packed binary rows without narrow-integer overflow."""
-    return _hamming_weight(rows).sum(axis=-1, dtype=np.uint64)
+    return np.bitwise_count(rows).sum(axis=-1, dtype=np.uint64)
 
 
 ####################################################################################################

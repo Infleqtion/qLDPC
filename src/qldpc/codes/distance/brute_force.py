@@ -9,7 +9,6 @@ import numpy.typing as npt
 
 from ._binary import (
     _count_trailing_zeros,
-    _hamming_weight,
     _inplace_rowsum,
     _riffle,
     _rows_to_ints,
@@ -31,7 +30,7 @@ def _get_distance_quantum_brute_force(
     """Enumerate independent logical and excluded bases prepared or verified in this module."""
     num_bits = np.shape(logical_ops)[-1]
 
-    weight_func = _hamming_weight if homogeneous else _symplectic_weight
+    weight_func = np.bitwise_count if homogeneous else _symplectic_weight
     if not homogeneous:
         logical_ops = _riffle(logical_ops)
         stabilizers = _riffle(stabilizers)
@@ -74,7 +73,7 @@ def _get_distance_quantum_brute_force(
     # codes with >= 256 columns (the pre-loop call below casts explicitly for the same reason).
     out = np.empty_like(arrayf)
 
-    # Min weight of the block containing logical ops.  Cast to uint64 because ``_hamming_weight``
+    # Min weight of the block containing logical ops.  Cast to uint64 because np.bitwise_count
     # returns uint8 without ``out=``, which would overflow the reduction below for >= 256 columns.
     weights = np.asarray(weight_func(arrayf[2**num_stabilizers :]), dtype=np.uint64)
     min_weight = _inplace_rowsum(weights).min(initial=num_bits)
