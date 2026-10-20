@@ -1,6 +1,46 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact certification of pure Clifford state preparation."""
+"""Exact certification of pure Clifford state preparation.
+
+``certify_state_prep_spread`` checks that every accepted pattern of at most ``max_faults``
+independent faults leaves an output error that is equivalent, on the prepared state, to an error of
+no greater weight.  A fault is one error mechanism of the undecomposed binary detector error model
+(DEM) of the noisy circuit, with unit cost.  Let ``P`` map a fault pattern ``f`` to the events of
+the selected rejection detectors, let ``S`` map it to the syndrome of the complete prepared-state
+stabilizer group ``W`` (including logical stabilizers), and let ``mu(s)`` be the minimum chosen
+weight of a Pauli with syndrome ``s``.  The certificate proves ``mu(S f) <= |f|`` whenever
+``P f = 0`` and ``1 <= |f| <= max_faults``.
+
+Reduction to minimal accepted patterns:
+
+- Paulis with equal complete syndromes differ by an element of ``W``, because ``W`` is a maximal
+  isotropic space.  Hence ``mu`` depends only on the syndrome.
+- ``mu`` is subadditive for both weights: the support of a product lies in the union of the
+  supports, and ``max(a+c, b+d) <= max(a, b) + max(c, d)`` for the CSS weight.
+- An accepted pattern (``P f = 0``) is a union of support-disjoint minimal accepted patterns, found
+  by repeatedly removing a proper accepted subset.  If every minimal pattern satisfies the bound,
+  so does their union, so it suffices to check minimal patterns.  An accepted pattern on support
+  ``J`` is minimal exactly when ``nullity(P[:, J]) = 1``, which implies ``|J| <= rank(P) + 1``.
+  A fault with no rejection flag is minimal only as a singleton.
+- Faults with identical joint (flag, syndrome) columns cancel in pairs without changing acceptance
+  or the output syndrome, and all-zero columns have no effect.  Merging them cannot hide a
+  violation, and a pattern of merged representatives is a pattern of original DEM indices.
+- If the distinct nonzero flag columns are linearly independent, acceptance requires each to
+  occur an even number of times, so the minimal patterns are the pairs of equal flag columns.
+  This holds at any flag rank and budget.
+
+Two complete searches enumerate the remaining minimal patterns.  Brouwer--Zimmermann (BZ) coverage
+visits every word of ``ker(P)`` through a weight bound, regardless of the nonlinear spread
+predicate, and a rank test discards non-minimal words.  Independent-prefix closure instead extends
+increasing prefixes of independent columns.  A minimal dependence, sorted by column index, is an
+independent prefix plus a last column equal to the XOR of the prefix, and conversely.  Requiring
+the closing index to exceed the prefix indices generates each minimal support exactly once, and a
+dependent prefix cannot lie in any minimal support.  A cost heuristic chooses between the two
+searches; it does not affect correctness and is not a universal runtime guarantee.
+
+Each minimal pattern is decided by the amortized exact oracle
+:class:`~qldpc.codes.distance.bounded.PauliCosetSearch`, which is shared across all patterns.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +49,7 @@ import numbers
 import time
 from bisect import bisect_left
 from collections.abc import Collection, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 import numpy as np
@@ -37,31 +77,11 @@ def certify_state_prep_spread(
     For the complete pure output-state stabilizers, let ``S`` map DEM faults to their state
     syndrome, ``P`` map them to the selected actual rejection detectors, and ``mu(s)`` be the
     minimum chosen weight with syndrome ``s``, jointly over a single representative.
-    The certificate proves
-    ``mu(S f) <= |f|`` whenever ``P f = 0`` and ``1 <= |f| <= max_faults``.
+    The certificate proves ``mu(S f) <= |f|`` whenever ``P f = 0`` and ``1 <= |f| <= max_faults``.
     Physical weight counts ``|support(x) union support(z)|``, with Y affecting one qubit.
     CSS weight counts ``max(|x|, |z|)``, in the supplied physical frame.
-    Logical stabilizers fixing the prepared state are included.
-
-    Args:
-        circuit: An already noisy Stim Clifford circuit, starting in Stim's all-zero state.
-        output_qubits: Nonempty distinct physical output identities, in the desired Pauli frame.
-        max_faults: Required positive integer unit-cost DEM fault budget.
-        post_select: Indices of actual circuit detectors whose *events* must vanish relative to
-            their deterministic ideal reference.  Appended output diagnostics are not rejected.
-        css_weight: True selects CSS-sector weight; False selects physical Pauli support.
-            None selects CSS weight exactly when the complete prepared-state stabilizer row
-            space has a pure-X/pure-Z decomposition in the physical output basis.
-            The resolved boolean is returned in the certificate.
-
-    Returns:
-        A complete certificate or a concrete accepted counterexample with an exact effective-
-        weight lower bound.  Witness indices refer to the returned undecomposed diagnostic DEM,
-        before any internal joint-symptom compression.
-
-    Raises:
-        ValueError: For invalid inputs, mixed/incomplete outputs, nondeterministic annotations
-            or diagnostics, or unsupported circuit-to-DEM conversion.
+    Both metrics always minimize jointly over one representative, never by separately minimizing
+    the X and Z projections.  Logical stabilizers fixing the prepared state are included.
 
     The selected output must be a definite pure stabilizer state independent of random measurement
     branches.  All existing detector and observable annotations must be deterministic, including
@@ -76,49 +96,43 @@ def certify_state_prep_spread(
     This detects state equivalences, not compatibility with an unspecified downstream protocol.
     A CSS code may prepare a non-CSS logical stabilizer state, requiring an explicit True
     override for its sector-wise application.
-    Both metrics always minimize jointly, never by separately minimizing the X and Z projections.
 
     The model is independent binary DEM mechanisms, not mutually exclusive alternatives at
     physical gate locations.  Stim's disjoint-channel probability approximation is enabled only
     to obtain those mechanisms; probabilities play no role in the combinatorial proof.
     Correlated mechanisms are never split.  This is not an exact sampling-distribution claim.
 
-    Proof of the outer reduction: equal complete syndromes differ by a state stabilizer because
-    the stabilizer space is maximal isotropic.  Minimum representative weight is subadditive,
-    since each sector's product support is contained in its union, and
-    ``max(a+c,b+d) <= max(a,b)+max(c,d)``.  Every accepted nonzero pattern partitions
-    into support-disjoint minimal accepted patterns: remove a proper accepted subset and repeat.
-    Thus it suffices to check minimal patterns.  For accepted support J, minimality is equivalent
-    to ``nullity(P[:, J]) = 1``, so ``|J| <= rank(P) + 1``.  A flag-free column occurs only as a
-    singleton.  General dependencies use packed BZ
-    coverage or canonical independent-prefix closure, independently of the nonlinear spread
-    predicate.  A minimal sorted dependence has an independent prefix and a last column equal
-    to the prefix XOR.  Conversely, an independent prefix plus that closing column has nullity
-    one.  Requiring the closing index to exceed the prefix indices generates each minimal support
-    exactly once.  Dependent prefixes cannot belong to any minimal support and are pruned.
-    If the distinct nonzero flag types are independent, acceptance requires even multiplicity
-    of each type, so all minimal patterns are equal-flag pairs regardless of the requested budget.
-
-    High-rate independent flag types use the proved pair-only bound directly.  Otherwise a
-    measured support-count crossover selects high-rate prefix closure when BZ coefficient
-    supports sufficiently outnumber possible prefix extensions.  The disjoint-information-set BZ
-    path is retained elsewhere.  The heuristic selects between two complete exact searches; it is
-    not part of the proof and is not a universal runtime guarantee.
-
-    Identical joint (flag, state-syndrome) columns may be merged: remove cancelling pairs from
-    any pattern, preserving symptoms while decreasing weight.  A violation reduces to a
-    representative-pattern violation; every such pattern lifts to original indices unchanged.
-    All-zero joint columns can likewise be removed.  Only joint symptoms, never output alone,
-    are used.  Inner decisions use the reusable exact
-    :class:`qldpc.codes.distance.bounded.PauliCosetSearch`.
-
     This sufficient *resource-state* property composes with downstream gadgets that propagate
     each input error of the selected weight r and additional faults within the corresponding
     r-plus-fault budget (or correct them).  CSS-sector use requires suitable sector-preserving
     downstream operations; a general Clifford can mix sectors.  An explicit CSS override on a
     non-CSS application is the caller's responsibility, not an automatic correction theorem.
-    No arbitrary downstream algorithm, acceptance
-    probability, or necessary-and-sufficient fault-tolerance criterion is certified here.
+    No arbitrary downstream algorithm, acceptance probability, or necessary-and-sufficient
+    fault-tolerance criterion is certified here.
+
+    The search is exact and never samples, but its cost is exponential in general.  See the module
+    documentation for the proof and the search strategy.
+
+    Args:
+        circuit: An already noisy Stim Clifford circuit, starting in Stim's all-zero state.
+        output_qubits: Nonempty distinct physical output identities, in the desired Pauli frame.
+        max_faults: Required positive integer unit-cost DEM fault budget.
+        post_select: Indices of actual circuit detectors whose *events* must vanish relative to
+            their deterministic ideal reference.  Appended output diagnostics are not rejected.
+        css_weight: True selects CSS-sector weight; False selects physical Pauli support.
+            None selects CSS weight exactly when the complete prepared-state stabilizer row
+            space has a pure-X/pure-Z decomposition in the physical output basis.
+            The resolved boolean is returned in the certificate.
+
+    Returns:
+        A certificate recording the decision and the exact model.  A negative decision includes an
+        accepted counterexample with a proved effective-weight lower bound exceeding its fault
+        count; witness indices refer to the returned undecomposed diagnostic DEM, before any
+        internal joint-symptom compression.
+
+    Raises:
+        ValueError: For invalid inputs, mixed/incomplete outputs, nondeterministic annotations
+            or diagnostics, or unsupported circuit-to-DEM conversion.
     """
     start = time.perf_counter()
     if css_weight is not None and not isinstance(css_weight, bool):
@@ -172,8 +186,9 @@ class StatePrepSpreadCounterexample:
     ``fault_indices`` index error instructions (not all instructions) in the flattened,
     undecomposed diagnostic DEM returned in the certificate.  ``output_syndrome`` is ordered
     like ``target_stabilizers``.  ``effective_weight_lower_bound`` is proved, not estimated.
-    ``output_pauli`` is a syndrome representative in the caller's output-qubit frame, not
-    necessarily a minimum-weight representative or the propagated physical error.
+    ``output_pauli`` is a syndrome representative, written as a Stim Pauli string such as
+    ``+YZ_____`` over the output qubits in the caller's frame.  It is not necessarily a
+    minimum-weight representative or the propagated physical error.
     This need not be the smallest violating fault order.
     """
 
@@ -190,54 +205,112 @@ class StatePrepSpreadCounterexample:
 
 @dataclass
 class StatePrepSpreadStatistics:
-    """Deterministic work counters and wall-clock setup/search costs (in seconds).
+    """Deterministic work counters and wall-clock costs of one certification.
 
-    For independent-prefix search, ``generated`` counts attempted prefix extensions plus emitted
-    closing supports.  ``prefix_extensions`` includes attempts pruned by dependence, whereas
-    ``independent_prefixes`` counts prefixes that survive.  Neither counts full fault combinations
-    through the original budget.
+    Counters tied to one search method keep their default values when another method runs.
+    The wall-clock fields are excluded from equality.
     """
 
     mechanisms: int = 0
+    """Number of error mechanisms (unit-cost faults) in the diagnostic DEM."""
+
     distinct_symptoms: int = 0
+    """Number of distinct nonzero joint (flag, output-syndrome) columns after merging."""
+
     flag_rank: int = 0
+    """Rank of the selected rejection-flag columns over GF(2)."""
+
     effective_budget: int = 0
+    """Largest minimal accepted pattern searched.
+
+    This is ``min(max_faults, flag_rank + 1)``, or 2 if the distinct flag columns are independent.
+    """
+
     generated: int = 0
+    """Search work: flag-free singletons, plus BZ coefficient supports or prefix extensions.
+
+    For independent-prefix search it counts attempted prefix extensions (including those pruned by
+    dependence) plus emitted closing supports.  It does not count full fault combinations through
+    the requested budget.
+    """
+
     bounded_candidates: int = 0
+    """Candidate supports produced by the search before the minimality filter."""
+
     minimal_candidates: int = 0
+    """Minimal accepted patterns passed to the output-weight oracle."""
+
     syndrome_queries: int = 0
+    """Number of output-weight decisions requested from the oracle."""
+
     cache_hits: int = 0
+    """Number of oracle decisions answered from its cache."""
+
     inner_generated: int = 0
+    """Number of coset candidates the oracle examined."""
+
     inner_preparations: int = 0
+    """Number of times the oracle prepared its information sets (zero or one)."""
+
     outer_ranks: tuple[int, ...] = ()
+    """Information-set ranks of the BZ rejection-kernel search; empty for other methods."""
+
     inner_ranks: tuple[int, ...] = ()
+    """Information-set ranks of the oracle; empty if the oracle never prepared them."""
+
     coefficient_depth: int = 0
-    setup_seconds: float = 0
-    search_seconds: float = 0
+    """Completed coefficient depth of the BZ rejection-kernel search; zero for other methods."""
+
+    setup_seconds: float = field(default=0.0, compare=False)
+    """Seconds spent compiling the model and preparing the oracle."""
+
+    search_seconds: float = field(default=0.0, compare=False)
+    """Seconds spent searching minimal accepted patterns."""
+
     search_method: Literal["singletons", "brouwer_zimmermann", "independent_prefix"] = "singletons"
+    """The search used for patterns with rejection flags (``singletons`` if there are none)."""
+
     prefix_extensions: int = 0
+    """Prefix extensions attempted by independent-prefix search, including pruned ones."""
+
     independent_prefixes: int = 0
+    """Independent prefixes surviving in independent-prefix search."""
 
 
 @dataclass(frozen=True)
 class StatePrepSpreadCertificate:
     """Completed bounded-spread decision, including the exact model and witness frame.
 
-    ``certified`` means every accepted pattern of one through ``max_faults`` unit-cost binary
-    DEM mechanisms has effective output error weight no greater than its own fault count.
-    ``css_weight`` records the resolved metric: True for CSS-sector weight, False for physical
-    Pauli support.
     A negative decision always includes a counterexample.  No incomplete search returns a result.
     """
 
     certified: bool
+    """Whether every accepted pattern of one through ``max_faults`` faults satisfies the bound.
+
+    Each such pattern of unit-cost binary DEM mechanisms has effective output error weight no
+    greater than its own fault count.
+    """
+
     max_faults: int
+    """The requested unit-cost fault budget."""
+
     output_qubits: tuple[int, ...]
+    """The output qubits, in the order of the target stabilizers and the witness Pauli."""
+
     target_stabilizers: tuple[str, ...]
+    """Signed Stim strings of the complete pure-state stabilizers, one per output qubit."""
+
     detector_error_model: stim.DetectorErrorModel
+    """The flattened, undecomposed DEM with the noiseless output diagnostics appended."""
+
     counterexample: StatePrepSpreadCounterexample | None
+    """An accepted violating pattern if ``certified`` is False, and None otherwise."""
+
     statistics: StatePrepSpreadStatistics
-    css_weight: bool = False
+    """Work counters and timings of the search."""
+
+    css_weight: bool
+    """The resolved metric: True for CSS-sector weight, False for physical Pauli support."""
 
 
 ####################################################################################################
@@ -371,24 +444,18 @@ def _search_minimal_patterns(
 
     # Independent distinct flag types require even multiplicities, so their minimal supports
     # are equal-flag pairs.  This reduction applies at any flag rank, not just one flag.
-    independent_flags = (
-        len(remaining) > 2 * statistics.flag_rank
-        and len({flag for flag, _, _ in remaining}) == statistics.flag_rank
-    )
-    if _use_prefix_search(
-        len(remaining), statistics.flag_rank, limit, independent_flags=independent_flags
-    ):
-        statistics.search_method = "independent_prefix"
-        if independent_flags:
-            limit = statistics.effective_budget = 2
-        for indices, syndrome in _iter_minimal_patterns(remaining, limit, statistics):
-            statistics.bounded_candidates += 1
-            failure = _check_fault_pattern(indices, syndrome, oracle, statistics)
-            if failure is not None:
-                return failure
-        return None
+    if len({flag for flag, _, _ in remaining}) == statistics.flag_rank:
+        limit = statistics.effective_budget = 2
+    elif not _use_prefix_search(len(remaining), statistics.flag_rank, limit):
+        return _search_bz_patterns(remaining, limit, oracle, statistics)
 
-    return _search_bz_patterns(remaining, limit, oracle, statistics)
+    statistics.search_method = "independent_prefix"
+    for indices, syndrome in _iter_minimal_patterns(remaining, limit, statistics):
+        statistics.bounded_candidates += 1
+        failure = _check_fault_pattern(indices, syndrome, oracle, statistics)
+        if failure is not None:
+            return failure
+    return None
 
 
 def _check_fault_pattern(
@@ -421,24 +488,31 @@ def _check_fault_pattern(
 ####################################################################################################
 # exact minimal-dependency search strategies
 
+# Thresholds of the search heuristic in ``_use_prefix_search``: the fewest BZ coefficient supports
+# worth replacing, and how many times they must outnumber the prefix extensions.
+_MIN_COEFFICIENT_SUPPORTS = 1024
+_PREFIX_ADVANTAGE = 2
 
-def _use_prefix_search(
-    num_columns: int, rank: int, budget: int, *, independent_flags: bool = False
-) -> bool:
-    """Choose high-rate prefix closure by pair-only structure or measured support counts."""
+
+def _use_prefix_search(num_columns: int, rank: int, budget: int) -> bool:
+    """Heuristically prefer prefix closure over BZ coverage; both searches are complete."""
     dimension = num_columns - rank
-    if budget < 2 or dimension <= rank:
+    if dimension <= rank:
         return False
-    if independent_flags:
-        return True
-    # This cost heuristic chooses between complete searches; it is not a correctness bound.
+
+    # BZ visits up to C(dimension, depth) coefficient supports per information set, while prefix
+    # closure extends up to C(columns, depth - 1) prefixes.  Prefer closure only when the BZ
+    # supports are numerous and clearly outnumber the extensions.
     coefficient_count = sum(
         math.comb(dimension, depth) for depth in range(1, min(dimension, budget) + 1)
     )
     prefix_count = sum(
         math.comb(num_columns, depth) for depth in range(1, min(num_columns, budget - 1) + 1)
     )
-    return coefficient_count >= 1024 and coefficient_count >= 2 * prefix_count
+    return (
+        coefficient_count >= _MIN_COEFFICIENT_SUPPORTS
+        and coefficient_count >= _PREFIX_ADVANTAGE * prefix_count
+    )
 
 
 def _search_bz_patterns(

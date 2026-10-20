@@ -149,10 +149,8 @@ def test_minimal_prefix_is_not_full_kernel() -> None:
     ],
 )
 def test_prefix_crossover(columns: int, rank: int, budget: int, expected: bool) -> None:
+    """The cost heuristic is pinned at representative sizes, and only chooses between searches."""
     assert state_prep_certification._use_prefix_search(columns, rank, budget) == expected
-    assert state_prep_certification._use_prefix_search(
-        columns, rank, budget, independent_flags=True
-    ) == (budget >= 2 and columns > 2 * rank)
 
 
 @pytest.mark.parametrize("damaging", [False, True])
@@ -254,6 +252,37 @@ def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
     assert _exhaustive(flags, [3, 5, 6] * 5, n, budget)
 
 
+@pytest.mark.parametrize("budget", [2, 3, 100])
+@pytest.mark.parametrize("weight", ["pauli", "css"])
+def test_independent_flag_types_reduce_to_pairs_with_few_columns(
+    budget: int, weight: Literal["pauli", "css"]
+) -> None:
+    """Pair-only reduction applies even when columns do not exceed twice the flag rank."""
+    n = 6
+    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
+    flags = [1 << flag_type for flag_type in range(8) for _ in range(2)]
+    # Each pair of equal flags has the syndrome XOR 3, 15, or 63 of effective weight 2, 4, or 6.
+    for syndromes, violation in (
+        ([1, 2] * 8, None),
+        ([3, 12] * 8, (0, 1)),
+        ([1, 2] * 7 + [7, 56], (14, 15)),
+    ):
+        stats = circuits.StatePrepSpreadStatistics()
+        oracle = PauliCosetSearch(matrix, weight=weight)
+        result = state_prep_certification._certify_maps(flags, syndromes, oracle, budget, stats)
+        assert (result is None) == _exhaustive(flags, syndromes, n, min(budget, 4))
+        assert stats.flag_rank == 8 and len(flags) == 2 * stats.flag_rank
+        assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
+        if violation is None:
+            assert result is None
+            assert stats.prefix_extensions == stats.independent_prefixes == 16
+            assert stats.minimal_candidates == stats.bounded_candidates == 8
+            assert stats.generated == 24
+        else:
+            assert result is not None and result.fault_indices == violation
+            assert 2 < result.effective_weight_lower_bound
+
+
 def test_independent_flag_types_failure() -> None:
     """Pair-only reduction still returns a genuine accepted violation with original IDs."""
     flags = [flag for flag in (3, 5, 8) for _ in range(3)]
@@ -268,6 +297,19 @@ def test_independent_flag_types_failure() -> None:
     assert 2 < failure.effective_weight_lower_bound <= 4
     assert failure.output_syndrome == (1, 1, 1, 1)
     assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
+
+
+def test_statistics_compare_work_not_time() -> None:
+    """Repeated certifications of one circuit are equal even though their timings differ."""
+    circuit = stim.Circuit("H 0\nCX 0 1\nDEPOLARIZE2(0.01) 0 1")
+    first, second = (
+        circuits.certify_state_prep_spread(circuit, output_qubits=[0, 1], max_faults=2)
+        for _ in range(2)
+    )
+    first.statistics.setup_seconds, first.statistics.search_seconds = 1.0, 2.0
+    assert first.statistics == second.statistics
+    assert first.statistics.mechanisms > 0
+    assert first.statistics != circuits.StatePrepSpreadStatistics()
 
 
 def test_dependency_reductions() -> None:
@@ -289,7 +331,13 @@ def test_dependency_reductions() -> None:
             flags, syndromes, PauliCosetSearch(matrix), budget, stats
         )
         assert (result is None) == expected
-    assert stats.generated == 0
+    # Columns with neither a flag nor a syndrome are removed, so no search work remains.
+    stats = circuits.StatePrepSpreadStatistics()
+    assert (
+        state_prep_certification._certify_maps([0, 0], [0, 0], PauliCosetSearch(matrix), 4, stats)
+        is None
+    )
+    assert stats.distinct_symptoms == stats.generated == stats.syndrome_queries == 0
     # Harmless systematic rows do not bound the first violating eligible word.
     n = 6
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
@@ -515,8 +563,13 @@ def test_invalid_weight_override(css_weight: bool) -> None:
         )
 
 
-def test_ghz_global_counterexample_bound() -> None:
-    """An accepted triple affects four GHZ blocks, proving effective weight exactly four."""
+@pytest.mark.parametrize("css_weight", [None, False])
+def test_ghz_global_counterexample_bound(css_weight: bool | None) -> None:
+    """An accepted triple affects four GHZ blocks, proving effective weight exactly four.
+
+    Both the CSS-sector and physical-support metrics must report the global bound four, not the
+    unseen-word bound five that follows a threshold-three search.
+    """
     circuit = stim.Circuit()
     for block in range(0, 12, 3):
         circuit.append("H", [block])
@@ -532,12 +585,13 @@ def test_ghz_global_counterexample_bound() -> None:
     circuit.append("DETECTOR", [stim.target_rec(-2)])
     circuit.append("DETECTOR", [stim.target_rec(-1)])
     assert circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=2
+        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=2, css_weight=css_weight
     ).certified
     certificate = circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=3
+        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=3, css_weight=css_weight
     )
     failure = certificate.counterexample
+    assert certificate.css_weight is (css_weight is None)
     assert not certificate.certified and failure is not None
     assert failure.fault_indices == (0, 1, 2)
     assert failure.effective_weight_lower_bound == 4
