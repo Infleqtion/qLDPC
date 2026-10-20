@@ -17,6 +17,7 @@ import numpy.typing as npt
 import pytest
 
 from qldpc import codes
+from qldpc.objects import Pauli
 
 from . import logical_counts as lc
 from ._binary import (
@@ -55,6 +56,14 @@ def _random_code(
     kernel = lc._get_kernel(checks_x)
     checks_z = (rng.integers(0, 2, (rank_z, len(kernel))) @ kernel % 2).astype(np.uint8)
     return checks_x, checks_z
+
+
+def _random_css_code(
+    rng: np.random.Generator, num_qubits: int, rank_x: int, rank_z: int
+) -> codes.CSSCode:
+    """A random binary CSS stabilizer code, as in _random_code."""
+    checks_x, checks_z = _random_code(rng, num_qubits, rank_x, rank_z)
+    return codes.CSSCode(checks_x.astype(int), checks_z.astype(int))
 
 
 def _frozen(
@@ -416,8 +425,104 @@ def test_code_input_and_lazily_built_code() -> None:
         lc.CSSLogicalCounter(not_css)
     with pytest.raises(ValueError, match="binary"):
         lc.CSSLogicalCounter(codes.CSSCode([[1, 1]], [[1, 1]], field=3))
-    with pytest.raises(ValueError, match="commute"):
-        lc.CSSLogicalCounter(codes.BaconShorCode(3))
+
+
+####################################################################################################
+# subsystem codes and an independent enumeration
+
+
+def _span(rows: npt.ArrayLike) -> set[int]:
+    """All combinations of the given binary rows, as integers whose bit j is column j."""
+    words = {0}
+    for row in np.asarray(rows, dtype=int):
+        value = sum(int(bit) << jj for jj, bit in enumerate(row))
+        words |= {word ^ value for word in words}
+    return words
+
+
+def _enumerate(code: codes.CSSCode) -> tuple[list[int], list[int], int, int]:
+    """Count logical operators by enumerating the normalizers, using CSSCode's stabilizers.
+
+    Returns the X-only and Z-only counts at every weight, the distance, and the number of nontrivial
+    logical operators of any type at the distance.
+    """
+    num_qubits = len(code)
+    normalizers = []
+    for stabilizers in (code.get_stabilizer_ops(Pauli.Z), code.get_stabilizer_ops(Pauli.X)):
+        field = galois.GF(2)
+        kernel = field(stabilizers).null_space() if len(stabilizers) else field.Identity(num_qubits)
+        normalizers.append(_span(kernel))
+    normal_x, normal_z = normalizers
+    gauge_x, gauge_z = _span(code.matrix_x), _span(code.matrix_z)
+    counts_x, counts_z = [0] * (num_qubits + 1), [0] * (num_qubits + 1)
+    for word in normal_x - gauge_x:
+        counts_x[word.bit_count()] += 1
+    for word in normal_z - gauge_z:
+        counts_z[word.bit_count()] += 1
+    distance = next(
+        weight for weight in range(1, num_qubits + 1) if counts_x[weight] or counts_z[weight]
+    )
+    full = sum(
+        (word_x | word_z).bit_count() == distance
+        for word_x, word_z in itertools.product(normal_x, normal_z)
+        if word_x not in gauge_x or word_z not in gauge_z
+    )
+    return counts_x, counts_z, distance, full
+
+
+def _random_subsystem_code(rng: np.random.Generator, num_qubits: int) -> codes.CSSCode:
+    """A random binary CSS code whose X and Z checks need not commute."""
+    while True:
+        checks_x = rng.integers(0, 2, (3, num_qubits))
+        checks_z = rng.integers(0, 2, (3, num_qubits))
+        code = codes.CSSCode(checks_x, checks_z)
+        if code.is_subsystem_code and code.dimension > 0:
+            return code
+
+
+@pytest.mark.parametrize("method", METHODS)
+def test_counts_match_enumeration(method: lc.LogicalCountMethod) -> None:
+    """Compare every weight, and full Pauli counts, with an enumeration of both normalizers."""
+    rng = np.random.default_rng(17)
+    examples = [
+        codes.BaconShorCode(3),
+        codes.BaconShorCode(2, 3),
+        codes.SteaneCode(),
+        *(_random_subsystem_code(rng, num_qubits) for num_qubits in (7, 8, 9, 10)),
+        *(_random_css_code(rng, 9, 3, 3) for _ in range(2)),
+    ]
+    for code in examples:
+        counts_x, counts_z, distance, full = _enumerate(code)
+        counter = lc.CSSLogicalCounter(code)
+        assert counter.dimension == code.dimension
+        for weight in range(len(code) + 1):
+            expected = Counts(weight, counts_x[weight], counts_z[weight], None)
+            assert counter.count_logicals(weight, method=method) == expected
+        expected_full = Counts(distance, counts_x[distance], counts_z[distance], full)
+        assert counter.count_logicals(method=method, full_pauli=True) == expected_full
+        assert counter.count_logicals(distance, method=method, full_pauli=True) == expected_full
+        assert distance == code.get_distance_exact()
+        with pytest.raises(ValueError, match=f"less than weight {distance + 1}"):
+            counter.count_logicals(distance + 1, method=method, full_pauli=True)
+
+
+def test_conjugation_carries_sector_bases() -> None:
+    """Conjugated counters reuse transformed sectors, and agree with counters built afresh."""
+    rng = np.random.default_rng(29)
+    for code in (codes.BaconShorCode(3), _random_css_code(rng, 10, 3, 3)):
+        counter = lc.CSSLogicalCounter(code)
+        assert counter.conjugated_cnot(0, 1)._sectors is None
+        counter.count_logicals()
+        for _ in range(6):
+            control, target = map(int, rng.choice(counter.num_qubits, 2, replace=False))
+            counter = counter.conjugated_cnot(control, target)
+            assert counter._sectors is not None
+            fresh = lc.CSSLogicalCounter.from_matrices(counter.checks_x, counter.checks_z)
+            with mock.patch.object(lc, "_get_nested_code_basis", side_effect=AssertionError):
+                results = [counter.count_logicals(w) for w in range(counter.num_qubits + 1)]
+                carried = counter.count_logicals(full_pauli=True)
+            assert results == [fresh.count_logicals(w) for w in range(fresh.num_qubits + 1)]
+            assert carried == fresh.count_logicals(full_pauli=True)
 
 
 def test_checks_are_copies_in_canonical_form() -> None:
@@ -437,8 +542,6 @@ def test_invalid_inputs() -> None:
             lc.CSSLogicalCounter.from_matrices(checks, [[0, 0]])
     with pytest.raises(ValueError, match="widths"):
         lc.CSSLogicalCounter.from_matrices([[1, 0]], [[1, 0, 0]])
-    with pytest.raises(ValueError, match="commute"):
-        lc.CSSLogicalCounter.from_matrices([[1, 0]], [[1, 0]])
     invalid_method: Any = "unknown"
     with pytest.raises(ValueError, match="Unknown"):
         lc.CSSLogicalCounter.from_matrices([[0, 0]], [[0, 0]]).count_logicals(method=invalid_method)
