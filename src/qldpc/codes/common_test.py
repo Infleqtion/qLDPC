@@ -84,6 +84,14 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     code = codes.RepetitionCode(3)
     assert np.array_equal(list(code.shortened([0]).iter_words()), [[0, 0]])
 
+    # repeated bits are removed once, and bits out of range are rejected
+    code = codes.HammingCode(3)
+    assert code.punctured([1, 1]).is_equiv_to(code.punctured([1]))
+    with pytest.raises(ValueError, match="Bit indices must lie in"):
+        code.punctured([len(code)])
+    with pytest.raises(ValueError, match="Bit indices must lie in"):
+        code.shortened([-1])
+
     # stack two codes
     code_a = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**31))
     code_b = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**31))
@@ -251,7 +259,7 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
     # raise an error when GAP is not installed
     external.gap.require_package.cache_clear()
     with (
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
         unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
         unittest.mock.patch(
             "qldpc.external.gap.get_output",
@@ -268,7 +276,7 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
     # otherwise, check that automorphisms do indeed preserve the code space this pytest.warns block
     # intentionally wraps a loop of warning-emitting calls
     with (  # noqa: PT031
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
         unittest.mock.patch(
             "qldpc.external.gap.subprocess.run",
@@ -636,6 +644,17 @@ def test_distance_bound_memory() -> None:
     assert steane_code.get_distance_bound(pauli=Pauli.Z) == 4
 
 
+def test_distance_bound_rejects_non_integer_num_trials() -> None:
+    """A Pauli passed positionally to get_distance_bound is rejected, not read as a trial count."""
+    css_code = codes.HGPCode(codes.RepetitionCode(3), codes.RepetitionCode(4))
+    with pytest.raises(TypeError, match="pass it by keyword as pauli"):
+        css_code.get_distance_bound(Pauli.X)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="pass it by keyword as pauli"):
+        codes.FiveQubitCode().get_distance_bound(Pauli.X)  # type: ignore[arg-type]
+    with pytest.raises(TypeError, match="pass it by keyword as pauli"):
+        codes.HammingCode(3).get_distance_bound(Pauli.X)  # type: ignore[arg-type]
+
+
 def test_exact_code_distance_method_api() -> None:
     """High-level exact-distance methods forward the selected binary method."""
     classical_code = codes.ClassicalCode(codes.RepetitionCode(3).matrix)
@@ -723,6 +742,44 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
         codes.QuditCode.from_strings(["I", "II"], field=field)
     with pytest.raises(ValueError, match="empty collection"):
         codes.QuditCode.from_strings([], field=field)
+
+
+def test_pauli_stabilizer_ops_respect_canonicalized() -> None:
+    """Splitting stabilizers by Pauli type honors canonicalized=True."""
+    # X-type checks that are redundant (rank 2, with 3 rows)
+    matrix_x = [[1, 1, 1, 1, 0, 0], [1, 1, 0, 0, 1, 1], [0, 0, 1, 1, 1, 1]]
+    matrix_z = [[1, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 1]]
+    code = codes.CSSCode(matrix_x, matrix_z)
+    assert len(code.get_stabilizer_ops(Pauli.X)) == 3
+    assert len(code.get_stabilizer_ops(Pauli.X, canonicalized=True)) == 2
+
+
+def test_canonicalized_code_is_its_own_canonical_form() -> None:
+    """Canonicalizing a canonicalized code returns the same code object."""
+    for code in [codes.HammingCode(3), codes.FiveQubitCode(), codes.SteaneCode()]:
+        canonicalized = code.canonicalized
+        assert canonicalized.canonicalized is canonicalized
+
+
+def test_gauge_ops_recompute() -> None:
+    """Gauge operators are recomputed on request, rather than read from the cache."""
+    code = codes.BaconShorCode(3)
+    gauge_ops_x = code.get_gauge_ops(Pauli.X).copy()
+    code._gauge_ops = code.field.Zeros(code.get_gauge_ops().shape)  # corrupt the cache
+    assert np.array_equal(code.get_gauge_ops(Pauli.X, recompute=True), gauge_ops_x)
+
+
+def test_non_css_operator_layout_and_argument_validation() -> None:
+    """Non-CSS codes reject non-symplectic layouts, and codes validate caller arguments."""
+    with pytest.raises(ValueError, match="only support symplectic=True"):
+        codes.FiveQubitCode().get_logical_ops(symplectic=False)
+    with pytest.raises(ValueError, match="is_subsystem_code=False contradicts"):
+        codes.QuditCode(codes.BaconShorCode(3), is_subsystem_code=False)
+
+    with pytest.raises(ValueError, match="logical_index must lie in"):
+        codes.SurfaceCode(3).reduce_logical_op(Pauli.X, 1)
+    with pytest.raises(ValueError, match="pauli_bias must have three entries"):
+        codes.SurfaceCode(3).get_logical_error_rate_func(10, pauli_bias=(1, 1))
 
 
 def test_from_qecdb_id() -> None:
@@ -1363,10 +1420,11 @@ def test_distance_css() -> None:
 
     code = codes.QuditCode(code.matrix).to_css()
     assert code.get_distance_bound(cutoff=len(code)) <= len(code)
-    with unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False):
+    with unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False):
         assert code.get_distance(bound=True) <= len(code)
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=-1),
     ):
         assert code.get_distance(bound=True) == -1
@@ -1395,7 +1453,7 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
             side_effect=AssertionError("sqetch should not be probed"),
         ),
         unittest.mock.patch(
-            "qldpc.external.gap.is_installed",
+            "qldpc.external.gap.is_callable",
             side_effect=AssertionError("GAP should not be probed"),
         ),
         unittest.mock.patch.object(
@@ -1567,7 +1625,7 @@ def test_css_auto_distance_bound_backend_selection() -> None:
             "qldpc.external.sqetch.get_distance_bound", return_value=3
         ) as sqetch_bound,
         unittest.mock.patch(
-            "qldpc.external.gap.is_installed",
+            "qldpc.external.gap.is_callable",
             side_effect=AssertionError("GAP should not be probed"),
         ),
     ):
@@ -1577,6 +1635,7 @@ def test_css_auto_distance_bound_backend_selection() -> None:
     code.forget_distance()
     with (
         unittest.mock.patch("qldpc.external.sqetch.is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=4) as gap_bound,
     ):
@@ -1586,7 +1645,11 @@ def test_css_auto_distance_bound_backend_selection() -> None:
     code.forget_distance()
     with (
         unittest.mock.patch("qldpc.external.sqetch.is_installed", return_value=False),
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch(
+            "qldpc.external.gap.is_installed",
+            side_effect=AssertionError("automatic selection must not prompt for manual GAP use"),
+        ),
         unittest.mock.patch.object(
             code, "get_distance_bound_with_decoder", return_value=5
         ) as decoder_bound,
@@ -1601,6 +1664,7 @@ def test_css_auto_distance_bound_backend_selection() -> None:
             "qldpc.external.sqetch.is_installed",
             side_effect=AssertionError("sqetch does not support nonbinary codes"),
         ),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
             "qldpc.external.codes.get_distance_bound", return_value=2

@@ -876,10 +876,11 @@ class QCCode(TBCode):
         respectively, by the row and column of ``A_1 @ B.T``.  These CNOTs get cancelled out by
         pushing ``ZRA_1`` to the left of ``XLB``.
         """
-        assert not strategy, (
-            f"{type(self)}.get_syndrome_subgraphs does not use an edge coloration strategy"
-            f" (provided: {strategy})"
-        )
+        if strategy:
+            raise ValueError(
+                f"{type(self)}.get_syndrome_subgraphs does not use an edge coloration strategy"
+                f" (provided: {strategy})"
+            )
 
         # build matrices for each term in A and B, transposed to match the lift in __init__
         terms_a = abstract.iter_monomial_terms(self.poly_a)

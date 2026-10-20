@@ -84,6 +84,8 @@ def test_matching_builder_validation() -> None:
     dem = stim.DetectorErrorModel("error(0.1) D0 ^ D1 L0\nerror(0.2) D0")
     with pytest.raises(ValueError, match="Cannot set error weights"):
         _get_decoder_mwpm(dem, weights=[1.0, 1.0])
+    with pytest.raises(ValueError, match="Cannot set error probabilities"):
+        decoders.mwpm(error_probabilities=[0.1, 0.2]).build_observable_decoder(dem)
 
     decomposed = _get_decoder_mwpm(dem, decompose_errors=True)
     assert getattr(decomposed, "_infers_decomposed_errors", False)
