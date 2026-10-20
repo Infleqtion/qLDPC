@@ -30,8 +30,8 @@ from .distance import (
     validate_distance_method,
 )
 from .distance.logical_counts import (
+    CSSLogicalCounter,
     CSSLogicalCounts,
-    CSSLogicalWeightCounter,
     LogicalCountMethod,
     count_logicals_css,
 )
@@ -79,8 +79,8 @@ __all__ = [
     "CHGPCode",
     "CRCode",
     "CSSCode",
+    "CSSLogicalCounter",
     "CSSLogicalCounts",
-    "CSSLogicalWeightCounter",
     "ClassicalCode",
     "CyclicCode",
     "DistanceBackend",

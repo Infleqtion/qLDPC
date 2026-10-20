@@ -20,8 +20,8 @@ Each homogeneous (X-only or Z-only) sector is a basis of its normalizer whose fi
 stabilizers, with quotient labels that are nonzero exactly for nontrivial logical words (see Section
 3.4 of ``brouwer_zimmermann.md``).  Every word of weight ``w`` in each sector is visited and counted
 as it is found, by scanning coefficient combinations of increasing size ("layers") over one or more
-information sets.  When no weight is given, or when full Pauli operators are counted, the distance
-is first computed by the existing Brouwer--Zimmermann (BZ) or brute-force distance search.
+information sets.  When no weight is given, the distance is first computed by the existing
+Brouwer--Zimmermann (BZ) or brute-force distance search.
 
 Counting with BZ needs a strict certificate.  BZ guarantees that every word not yet visited after
 layer ``t`` has weight at least ``L(t)``, where ``L`` is computed from the ranks and the maximum
@@ -51,7 +51,10 @@ This argument fails above the distance, where the X part of a nontrivial operato
 nontrivial logical whose support does not contain the Z part.  The operator's support then need not
 be the support of any homogeneous logical word of the same weight.  For example, ``XYZI`` is a
 nontrivial logical operator of weight three in the [[4, 2, 2]] code, which has no homogeneous
-logical words of odd weight.
+logical words of odd weight.  Given a weight ``w``, full Pauli counting does not search for the
+distance first.  The scan at ``w`` stops only when every unvisited word is heavier than ``w``, so it
+visits every lighter word, and it rejects ``w`` as soon as it finds a lighter nontrivial one.  If it
+finds none, then ``w <= d``, and the counts are exact.
 
 References:
 
@@ -62,7 +65,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal, get_args
+from typing import TYPE_CHECKING, Literal, get_args
 
 import numpy as np
 import numpy.typing as npt
@@ -85,6 +88,9 @@ from .brouwer_zimmermann import (
     _select_brouwer_zimmermann_information_sets,
 )
 from .brute_force import _get_distance_quantum_brute_force
+
+if TYPE_CHECKING:
+    from ..common import CSSCode
 
 LogicalCountMethod = Literal["brouwer_zimmermann", "brute_force"]
 
@@ -129,32 +135,75 @@ class CSSLogicalCounts:
     """
 
 
-class CSSLogicalWeightCounter:
+class CSSLogicalCounter:
     """Exact counter of the logical operators of a given weight in a binary CSS stabilizer code.
 
-    See the ``logical_counts`` module docstring for the conventions and algorithms.
+    See the ``logical_counts`` module docstring for the conventions and algorithms.  Use
+    :meth:`from_matrices` to start from parity check matrices without building a
+    :class:`~qldpc.codes.CSSCode`.
 
     Args:
-        checks_x: Binary X checks.  Redundant rows are allowed.
-        checks_z: Binary Z checks.  Redundant rows are allowed.
+        code: A binary CSS stabilizer code.  Its parity checks may be redundant.
 
     Raises:
-        ValueError: If the checks are not binary, have different widths, or do not commute.
-            Subsystem codes, whose gauge generators need not commute, are not supported.
+        TypeError: If the code is not a :class:`~qldpc.codes.CSSCode`.
+        ValueError: If the code is not binary, or if its X and Z checks do not commute.  Subsystem
+            codes, whose gauge generators need not commute, are not supported.
     """
 
-    def __init__(self, checks_x: npt.ArrayLike, checks_z: npt.ArrayLike) -> None:
-        _assert_binary(checks_x, "checks_x")
-        _assert_binary(checks_z, "checks_z")
-        matrix_x = _as_binary_matrix(checks_x)
-        matrix_z = _as_binary_matrix(checks_z, num_cols=matrix_x.shape[1])
-        if np.any((matrix_x.astype(int) @ matrix_z.T.astype(int)) % 2):
+    def __init__(self, code: CSSCode) -> None:
+        from ..common import CSSCode
+
+        if not isinstance(code, CSSCode):
+            raise TypeError(f"Expected a CSSCode, not {type(code).__name__}")
+        self._initialize(code.matrix_x, code.matrix_z)
+        self._code: CSSCode | None = code
+
+    @staticmethod
+    def from_matrices(matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike) -> CSSLogicalCounter:
+        """Build a counter from the parity check matrices of a binary CSS stabilizer code.
+
+        Args:
+            matrix_x: Binary X checks.  Redundant rows are allowed.
+            matrix_z: Binary Z checks.  Redundant rows are allowed.
+
+        Returns:
+            A counter whose :attr:`code` is built only when it is first accessed.
+
+        Raises:
+            ValueError: If the checks are not binary, have different widths, or do not commute.
+        """
+        counter = object.__new__(CSSLogicalCounter)
+        counter._initialize(matrix_x, matrix_z)
+        counter._code = None
+        return counter
+
+    def _initialize(self, matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike) -> None:
+        """Validate the checks and store an independent basis of each."""
+        _assert_binary(matrix_x, "matrix_x")
+        _assert_binary(matrix_z, "matrix_z")
+        checks_x = _as_binary_matrix(matrix_x)
+        checks_z = _as_binary_matrix(matrix_z, num_cols=checks_x.shape[1])
+        if np.any((checks_x.astype(int) @ checks_z.T.astype(int)) % 2):
             raise ValueError("CSS stabilizer checks must commute; subsystem codes are unsupported")
         # Reduced row echelon form is unique, so equal row spaces give equal arrays.
-        self._x = _get_independent_rows(matrix_x)
-        self._z = _get_independent_rows(matrix_z)
-        self.num_qubits = matrix_x.shape[1]
+        self._x = _get_independent_rows(checks_x)
+        self._z = _get_independent_rows(checks_z)
+        self.num_qubits = checks_x.shape[1]
         self.dimension = self.num_qubits - len(self._x) - len(self._z)
+
+    @property
+    def code(self) -> CSSCode:
+        """The code whose logical operators are counted.
+
+        For a counter built with :meth:`from_matrices` or a conjugation method, this is a new
+        :class:`~qldpc.codes.CSSCode` with the counter's independent checks, built on first access.
+        """
+        if self._code is None:
+            from ..common import CSSCode
+
+            self._code = CSSCode(self._x.astype(np.int_), self._z.astype(np.int_))
+        return self._code
 
     @property
     def checks_x(self) -> npt.NDArray[np.uint8]:
@@ -187,9 +236,9 @@ class CSSLogicalWeightCounter:
                 enumerates all ``2**rank`` combinations of each normalizer basis, and is a reference
                 for small codes.
             full_pauli: If True, also count full Pauli operators, including Y and mixed operators.
-                This requires the distance ``d``, which is computed if a weight is given.  There are
-                none below ``d``; at ``d``, each homogeneous word costs one rank calculation; above
-                ``d``, full Pauli counts are not supported.  Defaults to False.
+                Each homogeneous word of the counted weight costs one rank calculation.  These
+                counts are exact up to the distance and zero below it, and are not supported above
+                it.  Defaults to False.
 
         Returns:
             The counted weight and the counts.  If no weight is given and the code encodes no
@@ -214,29 +263,40 @@ class CSSLogicalWeightCounter:
 
         sector_x = _get_nested_code_basis(_get_kernel(self._z), self._x)
         sector_z = _get_nested_code_basis(_get_kernel(self._x), self._z)
-        distance = (
-            _get_distance(sector_x, sector_z, method) if weight is None or full_pauli else None
-        )
-        target = int(weight) if weight is not None else distance
-        assert target is not None
-        if full_pauli:
-            assert distance is not None
-            if target > distance:
-                raise ValueError(
-                    f"Full Pauli operators can be counted only up to the distance {distance}, not at"
-                    f" weight {target}"
-                )
+        target = int(weight) if weight is not None else _get_distance(sector_x, sector_z, method)
 
-        # Full Pauli counts weigh each support against the X checks, as in the module docstring;
-        # below the distance there are no words to weigh.  Otherwise the X checks are omitted and
-        # every word adds one to the zeroth exponent.
+        # Full Pauli counts weigh each support against the X checks, as in the module docstring,
+        # and the scans reject any nontrivial word lighter than the target, which would mean that
+        # the target exceeds the distance.  Otherwise the X checks are omitted and every word adds
+        # one to the zeroth exponent.
         lift = _pack_bits(self._x if full_pauli else self._x[:0])
         counts_x = _count_words(
-            *sector_x, target, method, lift, complement=False, base=target if full_pauli else 0
+            *sector_x,
+            target,
+            method,
+            lift,
+            complement=False,
+            base=target if full_pauli else 0,
+            reject_lighter=full_pauli,
         )
-        counts_z = _count_words(
-            *sector_z, target, method, lift, complement=True, base=len(self._x) if full_pauli else 0
+        counts_z = (
+            None
+            if counts_x is None
+            else _count_words(
+                *sector_z,
+                target,
+                method,
+                lift,
+                complement=True,
+                base=len(self._x) if full_pauli else 0,
+                reject_lighter=full_pauli,
+            )
         )
+        if counts_x is None or counts_z is None:
+            raise ValueError(
+                "Full Pauli operators can be counted only up to the distance, which is less than"
+                f" weight {target}"
+            )
         count_pauli = sum(int(count) << exponent for exponent, count in enumerate(counts_x))
         count_pauli += sum(int(count) << exponent for exponent, count in enumerate(counts_z))
         return CSSLogicalCounts(
@@ -248,7 +308,7 @@ class CSSLogicalWeightCounter:
 
     def conjugated(
         self, targets: Sequence[int], matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike
-    ) -> CSSLogicalWeightCounter:
+    ) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a local CSS-preserving Clifford.
 
         Args:
@@ -289,13 +349,13 @@ class CSSLogicalWeightCounter:
         checks_x, checks_z = self._x.astype(int), self._z.astype(int)
         checks_x[:, positions] = checks_x[:, positions] @ local_x.T % 2
         checks_z[:, positions] = checks_z[:, positions] @ local_z.T % 2
-        return CSSLogicalWeightCounter(checks_x, checks_z)
+        return CSSLogicalCounter.from_matrices(checks_x, checks_z)
 
-    def conjugated_cnot(self, control: int, target: int) -> CSSLogicalWeightCounter:
+    def conjugated_cnot(self, control: int, target: int) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a CNOT on zero-based qubit indices."""
         return self.conjugated([control, target], [[1, 0], [1, 1]], [[1, 1], [0, 1]])
 
-    def conjugated_swel(self, targets: Sequence[int]) -> CSSLogicalWeightCounter:
+    def conjugated_swel(self, targets: Sequence[int]) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a four-qubit SWEL-preserving Clifford.
 
         The Clifford applies the same binary matrix, whose rows have weight three, to X and Z
@@ -319,8 +379,7 @@ class CSSLogicalWeightCounter:
 
 
 def count_logicals_css(
-    checks_x: npt.ArrayLike,
-    checks_z: npt.ArrayLike,
+    code: CSSCode,
     weight: int | None = None,
     *,
     method: LogicalCountMethod = "brouwer_zimmermann",
@@ -328,12 +387,10 @@ def count_logicals_css(
 ) -> CSSLogicalCounts:
     """Count the nontrivial logical operators of a given weight in a binary CSS stabilizer code.
 
-    This is shorthand for ``CSSLogicalWeightCounter(checks_x, checks_z).count_logicals(...)``; see
-    :meth:`CSSLogicalWeightCounter.count_logicals` for the arguments and conventions.
+    This is shorthand for ``CSSLogicalCounter(code).count_logicals(...)``; see
+    :meth:`CSSLogicalCounter.count_logicals` for the arguments and conventions.
     """
-    return CSSLogicalWeightCounter(checks_x, checks_z).count_logicals(
-        weight, method=method, full_pauli=full_pauli
-    )
+    return CSSLogicalCounter(code).count_logicals(weight, method=method, full_pauli=full_pauli)
 
 
 ####################################################################################################
@@ -367,12 +424,14 @@ def _count_words(
     *,
     complement: bool,
     base: int,
-) -> npt.NDArray[np.int64]:
+    reject_lighter: bool,
+) -> npt.NDArray[np.int64] | None:
     """Visit each nontrivial word of one sector with the given weight exactly once.
 
     Returns a histogram over exponents ``base - rank(lift restricted to a mask)``, where the mask is
     the support of the word, or its complement.  The histogram sums to the number of words; see the
-    module docstring for how the exponents count Pauli operators.
+    module docstring for how the exponents count Pauli operators.  The scan also visits every
+    lighter word, so with ``reject_lighter`` it returns None as soon as it finds a nontrivial one.
     """
     get_lower_bound: Callable[[int], int]
     if method == "brute_force":
@@ -394,7 +453,7 @@ def _count_words(
             support = np.zeros(layer, dtype=np.int64)
             depth = 0
             while depth >= 0:
-                depth = _count_chunk(
+                depth, lighter = _count_chunk(
                     rows[index],
                     tags[index],
                     decoders,
@@ -406,8 +465,11 @@ def _count_words(
                     complement,
                     base,
                     histogram,
+                    reject_lighter,
                     _CHUNK_SIZE,
                 )
+                if lighter:
+                    return None
         # Equality would still allow unvisited words of the target weight.
         if get_lower_bound(layer) > weight:
             break
@@ -494,14 +556,16 @@ def _count_chunk(
     complement: bool,
     base: int,
     histogram: npt.NDArray[np.int64],
+    reject_lighter: bool,
     chunk_size: int,
-) -> int:
+) -> tuple[int, bool]:
     """Visit up to ``chunk_size`` combinations of ``len(support)`` rows, resuming at ``depth``.
 
     ``support`` holds the increasing row indices of the current combination; ``depth`` is the
     position being advanced, or -1 once every combination has been visited.  Each owned nontrivial
     word of weight ``target`` adds one to ``histogram`` (see ``_count_words``).  Returns the depth
-    from which to resume.
+    from which to resume, and whether the scan stopped at a nontrivial word lighter than
+    ``target``, which is checked only with ``reject_lighter``.
     """
     num_rows, width = rows.shape
     layer = len(support)
@@ -541,7 +605,7 @@ def _count_chunk(
             for index in range(width):
                 word[index] = prefixes[depth, index] ^ rows[row, index]
                 weight += _popcount_word(word[index])
-            if weight != target:
+            if weight > target or (weight < target and not reject_lighter):
                 continue
             # A nonzero quotient label marks a nontrivial logical rather than a stabilizer.
             nontrivial = False
@@ -549,11 +613,13 @@ def _count_chunk(
                 if tag_prefixes[depth, index] != tags[row, index]:
                     nontrivial = True
                     break
+            if nontrivial and weight < target:
+                return depth, True
             if nontrivial and _is_owned(word, decoders, set_index, layer):
                 histogram[base - _get_masked_rank(lift, word, complement, pivots)] += 1
         visited += stop - support[depth]
         support[depth] = stop
-    return depth
+    return depth, False
 
 
 @njit(cache=True)

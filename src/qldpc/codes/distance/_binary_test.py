@@ -287,7 +287,8 @@ def test_popcount_word() -> None:
     )
     expected = [int(value).bit_count() for value in values]
     np.testing.assert_array_equal(_popcounts(values), expected)
-    assert [binary._popcount_word(value) for value in values] == expected
+    # The Python implementation calls the Python fallback, and lets coverage trace the helper.
+    np.testing.assert_array_equal(_popcounts.py_func(values), expected)
 
 
 def test_popcount_lowering() -> None:
