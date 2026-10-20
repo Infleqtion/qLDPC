@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Tests for exact counts of the minimal logical operators of binary CSS codes."""
+"""Tests for exact counts of the logical operators of a given weight in binary CSS codes."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ import pytest
 
 from qldpc import codes
 
-from . import minimal_logicals as ml
+from . import logical_counts as lc
 from ._binary import (
     _get_independent_rows,
     _get_nested_code_basis,
@@ -27,8 +27,8 @@ from ._binary import (
 )
 from .brouwer_zimmermann import _InformationSet
 
-Weights = ml.CSSMinimumLogicalWeights
-METHODS: tuple[ml.MinimalLogicalMethod, ...] = ("brouwer_zimmermann", "brute_force")
+Counts = lc.CSSLogicalCounts
+METHODS: tuple[lc.LogicalCountMethod, ...] = ("brouwer_zimmermann", "brute_force")
 KERNELS = ("_count_chunk", "_is_owned", "_get_masked_rank")
 
 
@@ -38,7 +38,7 @@ def _maybe_interpreted(interpreted: bool) -> Iterator[None]:
     if not interpreted:
         yield
         return
-    with mock.patch.multiple(ml, **{name: getattr(ml, name).py_func for name in KERNELS}):
+    with mock.patch.multiple(lc, **{name: getattr(lc, name).py_func for name in KERNELS}):
         yield
 
 
@@ -52,7 +52,7 @@ def _random_code(
 ) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8]]:
     """Random commuting checks: Z checks are random combinations of the kernel of the X checks."""
     checks_x = rng.integers(0, 2, (rank_x, num_qubits), dtype=np.uint8)
-    kernel = ml._get_kernel(checks_x)
+    kernel = lc._get_kernel(checks_x)
     checks_z = (rng.integers(0, 2, (rank_z, len(kernel))) @ kernel % 2).astype(np.uint8)
     return checks_x, checks_z
 
@@ -60,7 +60,7 @@ def _random_code(
 def _frozen(
     checks_x: npt.ArrayLike, checks_z: npt.ArrayLike, width: int
 ) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8]]:
-    """Append qubits fixed in |0> by a Z check each; no minimal logical can touch them."""
+    """Append qubits fixed in |0> by a Z check each; no logical of minimum weight touches them."""
     x, z = np.asarray(checks_x, dtype=np.uint8), np.asarray(checks_z, dtype=np.uint8)
     extra = width - x.shape[1]
     padded_x = np.pad(x, ((0, 0), (0, extra)))
@@ -71,8 +71,9 @@ def _frozen(
 
 
 # X checks {0,1,2,3,4} and {2,4}, and Z checks {1,2,3,4} and {0,1}, on five qubits.  By hand, the
-# X-minimal words are {2,3} and {3,4}, and the Z-minimal words are {2,4}, {0,3} and {1,3}.  The Z
-# word {2,4} also supports the X stabilizer {2,4}, so there are 2 + 3 + 1 = 6 minimal Paulis.
+# distance is two, the X-only logicals of weight two are {2,3} and {3,4}, and the Z-only ones are
+# {2,4}, {0,3} and {1,3}.  The Z word {2,4} also supports the X stabilizer {2,4}, so in total there
+# are 2 + 3 + 1 = 6 logical Pauli operators of weight two.
 _HAND_X, _HAND_Z = _bits([31, 20], 5), _bits([30, 3], 5)
 
 
@@ -82,46 +83,44 @@ _HAND_X, _HAND_Z = _bits([31, 20], 5), _bits([30, 3], 5)
 
 @pytest.mark.parametrize("interpreted", [False, True])
 @pytest.mark.parametrize("method", METHODS)
-def test_known_codes(method: ml.MinimalLogicalMethod, interpreted: bool) -> None:
+def test_known_codes(method: lc.LogicalCountMethod, interpreted: bool) -> None:
     steane = codes.SteaneCode()
     examples = (
-        (steane.matrix_x, steane.matrix_z, Weights(3, 7, 7, 21)),
-        # After layer one the BZ bound equals two, which would miss one of six minimal words.
-        ([[1, 1, 1, 1]], [[1, 1, 1, 1]], Weights(2, 6, 6, 18)),
-        (_HAND_X, _HAND_Z, Weights(2, 2, 3, 6)),
+        (steane.matrix_x, steane.matrix_z, Counts(3, 7, 7, 21)),
+        # After layer one the BZ bound equals two, which would miss one of six words of weight two.
+        ([[1, 1, 1, 1]], [[1, 1, 1, 1]], Counts(2, 6, 6, 18)),
+        (_HAND_X, _HAND_Z, Counts(2, 2, 3, 6)),
         # The Z sector is heavier, so it contributes nothing at the global minimum.
-        ([[1, 1, 0]], [[0, 0, 1]], Weights(1, 2, 0, 2)),
-        (np.empty((0, 3)), np.empty((0, 3)), Weights(1, 3, 3, 9)),
-        (np.eye(4), np.empty((0, 4)), Weights(None, 0, 0, 0)),
+        ([[1, 1, 0]], [[0, 0, 1]], Counts(1, 2, 0, 2)),
+        (np.empty((0, 3)), np.empty((0, 3)), Counts(1, 3, 3, 9)),
+        (np.eye(4), np.empty((0, 4)), Counts(None, 0, 0, 0)),
     )
     with _maybe_interpreted(interpreted):
         for checks_x, checks_z, expected in examples:
-            counter = ml.CSSLogicalWeightCounter(checks_x, checks_z)
-            assert counter.get_minimum(method=method) == expected
-            homogeneous = counter.get_minimum(method=method, full_pauli=False)
-            assert homogeneous == Weights(
-                expected.distance, expected.count_x, expected.count_z, None
-            )
-    assert ml.get_minimum_logical_weights_css(steane.matrix_x, steane.matrix_z) == examples[0][2]
+            counter = lc.CSSLogicalWeightCounter(checks_x, checks_z)
+            assert counter.count_logicals(full_pauli=True, method=method) == expected
+            homogeneous = counter.count_logicals(method=method)
+            assert homogeneous == Counts(expected.weight, expected.count_x, expected.count_z, None)
+    assert lc.count_logicals_css(steane.matrix_x, steane.matrix_z) == Counts(3, 7, 7, None)
 
 
 def test_surface_code() -> None:
     code = codes.SurfaceCode(9)
-    counter = ml.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
-    assert counter.get_minimum() == Weights(9, 1556, 1556, 4608)
+    counter = lc.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
+    assert counter.count_logicals(full_pauli=True) == Counts(9, 1556, 1556, 4608)
 
 
 @pytest.mark.parametrize("width", [5, 63, 64, 65, 129])
 def test_frozen_qubits_preserve_counts(width: int) -> None:
-    """Frozen qubits change the physical width, not the minimal logical operators."""
+    """Frozen qubits change the physical width, not the counts at the distance."""
     # Each frozen qubit adds a Z stabilizer to the normalizer basis, so brute force is unaffordable.
     methods = METHODS if width < 20 else ("brouwer_zimmermann",)
     for method in methods:
-        counter = ml.CSSLogicalWeightCounter(*_frozen(_HAND_X, _HAND_Z, width))
-        assert counter.get_minimum(method=method) == Weights(2, 2, 3, 6)
+        counter = lc.CSSLogicalWeightCounter(*_frozen(_HAND_X, _HAND_Z, width))
+        assert counter.count_logicals(full_pauli=True, method=method) == Counts(2, 2, 3, 6)
     steane = codes.SteaneCode()
-    counter = ml.CSSLogicalWeightCounter(*_frozen(steane.matrix_x, steane.matrix_z, width + 2))
-    assert counter.get_minimum() == Weights(3, 7, 7, 21)
+    counter = lc.CSSLogicalWeightCounter(*_frozen(steane.matrix_x, steane.matrix_z, width + 2))
+    assert counter.count_logicals(full_pauli=True) == Counts(3, 7, 7, 21)
 
 
 @pytest.mark.parametrize(
@@ -132,21 +131,62 @@ def test_methods_agree_on_random_codes(num_qubits: int, rank_x: int, rank_z: int
     """Brute force visits every word once, so it checks BZ's set selection and ownership."""
     rng = np.random.default_rng(num_qubits)
     for _ in range(3):
-        counter = ml.CSSLogicalWeightCounter(*_random_code(rng, num_qubits, rank_x, rank_z))
-        assert counter.get_minimum(method="brouwer_zimmermann") == counter.get_minimum(
-            method="brute_force"
-        )
+        counter = lc.CSSLogicalWeightCounter(*_random_code(rng, num_qubits, rank_x, rank_z))
+        assert counter.count_logicals(
+            full_pauli=True, method="brouwer_zimmermann"
+        ) == counter.count_logicals(full_pauli=True, method="brute_force")
+
+
+@pytest.mark.parametrize("method", METHODS)
+def test_fixed_weights_of_known_codes(method: lc.LogicalCountMethod) -> None:
+    """The Steane X normalizer is the [7, 4] Hamming code; its weight-four words are stabilizers."""
+    steane = codes.SteaneCode()
+    counter = lc.CSSLogicalWeightCounter(steane.matrix_x, steane.matrix_z)
+    for weight, count in enumerate([0, 0, 0, 7, 0, 0, 0, 1]):
+        assert counter.count_logicals(weight, method=method) == Counts(weight, count, count, None)
+    assert counter.count_logicals(3, method=method, full_pauli=True) == Counts(3, 7, 7, 21)
+    for weight in (0, 2):
+        assert counter.count_logicals(weight, full_pauli=True) == Counts(weight, 0, 0, 0)
+    with pytest.raises(ValueError, match="up to the distance 3, not at weight 4"):
+        counter.count_logicals(4, method=method, full_pauli=True)
+
+    # XYZI is a logical of weight three in the [[4, 2, 2]] code, but no homogeneous logical is odd.
+    counter = lc.CSSLogicalWeightCounter([[1, 1, 1, 1]], [[1, 1, 1, 1]])
+    assert counter.count_logicals(3, method=method) == Counts(3, 0, 0, None)
+    with pytest.raises(ValueError, match="up to the distance 2"):
+        counter.count_logicals(3, method=method, full_pauli=True)
+    trivial = lc.CSSLogicalWeightCounter(np.eye(4), np.empty((0, 4)))
+    assert trivial.count_logicals(2, method=method, full_pauli=True) == Counts(2, 0, 0, 0)
+
+
+@pytest.mark.parametrize("num_qubits, rank_x, rank_z", [(10, 3, 3), (12, 5, 4), (14, 8, 2)])
+def test_fixed_weights_partition_the_logical_words(
+    num_qubits: int, rank_x: int, rank_z: int
+) -> None:
+    """Every nontrivial X word has one weight, so the counts sum to |ker(H_Z)| - |row(H_X)|."""
+    rng = np.random.default_rng(num_qubits)
+    for _ in range(3):
+        counter = lc.CSSLogicalWeightCounter(*_random_code(rng, num_qubits, rank_x, rank_z))
+        results = [counter.count_logicals(weight) for weight in range(num_qubits + 1)]
+        for weight, result in enumerate(results):
+            assert result == counter.count_logicals(weight, method="brute_force")
+        rx, rz = len(counter.checks_x), len(counter.checks_z)
+        assert sum(result.count_x for result in results) == 2 ** (num_qubits - rz) - 2**rx
+        assert sum(result.count_z for result in results) == 2 ** (num_qubits - rx) - 2**rz
+        default = counter.count_logicals()
+        assert default.weight is not None and results[default.weight] == default
+        assert not any(result.count_x or result.count_z for result in results[: default.weight])
 
 
 def test_methods_agree_on_conjugated_sparse_codes() -> None:
     rng = np.random.default_rng(3)
     code = codes.CSSCode.stack([codes.SteaneCode()] * 3)
-    counter = ml.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
+    counter = lc.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
     for _ in range(6):
         counter = counter.conjugated_cnot(*map(int, rng.choice(counter.num_qubits, 2, False)))
-        assert counter.get_minimum(method="brouwer_zimmermann") == counter.get_minimum(
-            method="brute_force"
-        )
+        assert counter.count_logicals(
+            full_pauli=True, method="brouwer_zimmermann"
+        ) == counter.count_logicals(full_pauli=True, method="brute_force")
 
 
 def test_dense_eighty_qubits_against_physical_enumeration() -> None:
@@ -188,7 +228,7 @@ def test_dense_eighty_qubits_against_physical_enumeration() -> None:
                     found += 1
         counts.append(found)
     assert counts == [1, 0]
-    assert ml.CSSLogicalWeightCounter(x, z).get_minimum() == Weights(4, 1, 0, 1)
+    assert lc.CSSLogicalWeightCounter(x, z).count_logicals(full_pauli=True) == Counts(4, 1, 0, 1)
 
 
 ####################################################################################################
@@ -200,8 +240,8 @@ def test_overlapping_information_sets(width: int) -> None:
     """Overlapping sets visit words repeatedly; ownership and coverage keep the count exact."""
     checks = np.asarray(codes.HammingCode(4).matrix, dtype=np.uint8)
     checks_x, checks_z = _frozen(checks, checks, width)
-    counter = ml.CSSLogicalWeightCounter(checks_x, checks_z)
-    basis, labels = _get_nested_code_basis(ml._get_kernel(counter.checks_z), counter.checks_x)
+    counter = lc.CSSLogicalWeightCounter(checks_x, checks_z)
+    basis, labels = _get_nested_code_basis(lc._get_kernel(counter.checks_z), counter.checks_x)
     family = []
     for order in (
         np.arange(width),
@@ -215,22 +255,20 @@ def test_overlapping_information_sets(width: int) -> None:
 
     lift = _pack_bits(counter.checks_x)
     with (
-        mock.patch.object(ml, "_get_overlapping_information_sets", return_value=(family, coverage)),
+        mock.patch.object(lc, "_get_overlapping_information_sets", return_value=(family, coverage)),
         mock.patch.object(
-            ml,
+            lc,
             "_get_brouwer_zimmermann_lower_bound",
-            wraps=ml._get_brouwer_zimmermann_lower_bound,
+            wraps=lc._get_brouwer_zimmermann_lower_bound,
         ) as bound,
     ):
-        histogram = ml._count_minimal_words(
+        histogram = lc._count_words(
             basis, labels, 3, "brouwer_zimmermann", lift, complement=False, base=3
         )
-    # The 35 weight-three words of the [15, 11, 3] Hamming code are its X-minimal words.
+    # The X-only logical words of weight three are the 35 weight-three Hamming codewords.
     assert histogram.sum() == 35
     assert all(call.kwargs["max_coverage"] == coverage for call in bound.call_args_list)
-    reference = ml._count_minimal_words(
-        basis, labels, 3, "brute_force", lift, complement=False, base=3
-    )
+    reference = lc._count_words(basis, labels, 3, "brute_force", lift, complement=False, base=3)
     assert np.array_equal(histogram, reference)
 
 
@@ -238,10 +276,10 @@ def test_overlapping_information_sets(width: int) -> None:
 def test_ownership_breaks_ties_by_layer_then_index(interpreted: bool) -> None:
     generators = np.array([[1, 0, 1, 0], [0, 1, 0, 1]], dtype=np.uint8)
     other = np.array([[1, 0, 1, 0], [1, 1, 1, 1]], dtype=np.uint8)
-    decoders = np.stack([ml._get_decoder(generators), ml._get_decoder(other)])
+    decoders = np.stack([lc._get_decoder(generators), lc._get_decoder(other)])
     word = _pack_bits(np.array([[1, 1, 1, 1]], dtype=np.uint8))[0]
     with _maybe_interpreted(interpreted):
-        is_owned = ml._is_owned
+        is_owned = lc._is_owned
         # The first set visits 1111 in layer two, and the second set in layer one.
         assert not is_owned(word, decoders, 0, 2)
         assert is_owned(word, decoders, 1, 1)
@@ -253,12 +291,12 @@ def test_ownership_breaks_ties_by_layer_then_index(interpreted: bool) -> None:
 
 @pytest.mark.parametrize("chunk_size", [1, 3])
 def test_resumable_chunks(chunk_size: int, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ml, "_CHUNK_SIZE", chunk_size)
+    monkeypatch.setattr(lc, "_CHUNK_SIZE", chunk_size)
     code = codes.CSSCode.stack([codes.SteaneCode()] * 2)
-    counter = ml.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
+    counter = lc.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
     with _maybe_interpreted(True):
         for method in METHODS:
-            assert counter.get_minimum(method=method) == Weights(3, 14, 14, 42)
+            assert counter.count_logicals(full_pauli=True, method=method) == Counts(3, 14, 14, 42)
 
 
 @pytest.mark.parametrize("interpreted", [False, True])
@@ -280,7 +318,7 @@ def test_masked_rank(interpreted: bool, width: int) -> None:
                     else 0
                 )
                 assert (
-                    ml._get_masked_rank(packed_rows, packed_mask, complement, scratch) == expected
+                    lc._get_masked_rank(packed_rows, packed_mask, complement, scratch) == expected
                 )
 
 
@@ -290,7 +328,7 @@ def test_masked_rank(interpreted: bool, width: int) -> None:
 
 def test_conjugation() -> None:
     code = codes.SteaneCode()
-    counter = ml.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
+    counter = lc.CSSLogicalWeightCounter(code.matrix_x, code.matrix_z)
     before = counter.checks_x
     changed = counter.conjugated_cnot(1, 6)
     assert np.array_equal(counter.checks_x, before)
@@ -299,12 +337,16 @@ def test_conjugation() -> None:
     assert np.array_equal(changed.checks_x, _get_independent_rows(expected))
     assert counter.is_self_dual and not changed.is_self_dual
     assert np.array_equal(changed.conjugated_cnot(1, 6).checks_x, before)
-    assert changed.get_minimum() == changed.get_minimum(method="brute_force")
+    assert changed.count_logicals(full_pauli=True) == changed.count_logicals(
+        full_pauli=True, method="brute_force"
+    )
 
     # The SWEL-preserving Clifford keeps the code self-dual.
     swel = counter.conjugated_swel([0, 2, 3, 5])
     assert swel.is_self_dual
-    assert swel.get_minimum() == swel.get_minimum(method="brute_force")
+    assert swel.count_logicals(full_pauli=True) == swel.count_logicals(
+        full_pauli=True, method="brute_force"
+    )
 
     for targets in ([0, 0], [-1, 2], [0, 7], [0.5, 2], [True, 2], []):
         invalid_targets: Any = targets
@@ -323,22 +365,29 @@ def test_conjugation() -> None:
 def test_checks_are_copies_in_canonical_form() -> None:
     code = codes.SteaneCode()
     redundant = np.vstack([code.matrix_x, code.matrix_x, np.zeros((1, 7), dtype=int)])
-    counter = ml.CSSLogicalWeightCounter(redundant, code.matrix_z)
+    counter = lc.CSSLogicalWeightCounter(redundant, code.matrix_z)
     assert len(counter.checks_x) == 3 and counter.dimension == 1 and counter.is_self_dual
     copy = counter.checks_x
     copy[:] = 0
     assert np.any(counter.checks_x)
-    assert counter.get_minimum() == Weights(3, 7, 7, 21)
+    assert counter.count_logicals(full_pauli=True) == Counts(3, 7, 7, 21)
 
 
 def test_invalid_inputs() -> None:
     for checks in ([[2, 0]], [[np.nan, 0]], galois.GF(3)([[1, 0]])):
         with pytest.raises(ValueError, match="binary"):
-            ml.CSSLogicalWeightCounter(checks, [[0, 0]])
+            lc.CSSLogicalWeightCounter(checks, [[0, 0]])
     with pytest.raises(ValueError, match="widths"):
-        ml.CSSLogicalWeightCounter([[1, 0]], [[1, 0, 0]])
+        lc.CSSLogicalWeightCounter([[1, 0]], [[1, 0, 0]])
     with pytest.raises(ValueError, match="commute"):
-        ml.CSSLogicalWeightCounter([[1, 0]], [[1, 0]])
+        lc.CSSLogicalWeightCounter([[1, 0]], [[1, 0]])
     invalid_method: Any = "unknown"
     with pytest.raises(ValueError, match="Unknown"):
-        ml.CSSLogicalWeightCounter([[0, 0]], [[0, 0]]).get_minimum(method=invalid_method)
+        lc.CSSLogicalWeightCounter([[0, 0]], [[0, 0]]).count_logicals(method=invalid_method)
+    counter = lc.CSSLogicalWeightCounter([[0, 0]], [[0, 0]])
+    for weight in (-1, 3, 1.5, True, "1"):
+        invalid_weight: Any = weight
+        with pytest.raises(ValueError, match="weight must be an integer"):
+            counter.count_logicals(invalid_weight)
+    numpy_weight: Any = np.int64(2)
+    assert counter.count_logicals(numpy_weight) == Counts(2, 1, 1, None)

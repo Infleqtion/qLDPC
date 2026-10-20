@@ -78,7 +78,8 @@ qLDPC adds some minor optimizations:
 Distance-finding methods exit early once an observed upper bound on distance is at most ``cutoff``; the default cutoff of one gives an exact result for nontrivial codes.
 Pass ``method="brute_force"`` to distance-finding methods to instead compute distance via brute-force enumeration.
 
-For binary CSS stabilizer codes (not subsystem or nonbinary codes), :class:`qldpc.codes.CSSLogicalWeightCounter <qldpc.codes.distance.minimal_logicals.CSSLogicalWeightCounter>` additionally counts the minimum-weight logical operators exactly: X-only, Z-only, and full Pauli operators, without storing them.
+For binary CSS stabilizer codes (not subsystem or nonbinary codes), :class:`qldpc.codes.CSSLogicalWeightCounter <qldpc.codes.distance.logical_counts.CSSLogicalWeightCounter>` additionally counts the X-only and Z-only logical operators of a given weight exactly, by default at the distance, without storing them.
+At the distance, it can also count full Pauli operators, including Y and mixed operators.
 
 Distance bounds
 ~~~~~~~~~~~~~~~

@@ -1,50 +1,57 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact counts of the minimal (minimum-weight) logical operators of binary CSS stabilizer codes.
+"""Exact counts of the logical operators of a given weight in binary CSS stabilizer codes.
 
-For a binary CSS stabilizer code with X checks ``H_X`` and Z checks ``H_Z``, this module computes
-the distance ``d`` together with three multiplicities:
+For a binary CSS stabilizer code with X checks ``H_X`` and Z checks ``H_Z``, this module counts, at
+a weight ``w`` that defaults to the distance ``d``:
 
-- ``count_x``: X-only words of weight ``d`` in ``ker(H_Z)`` that are not X stabilizers,
+- ``count_x``: X-only words of weight ``w`` in ``ker(H_Z)`` that are not X stabilizers,
 - ``count_z``: the same for Z, and
-- ``count_pauli``: physical Pauli operators of weight ``d`` that commute with every stabilizer but
-  are not stabilizers, including Y and mixed operators.
+- optionally ``count_pauli``: physical Pauli operators of weight ``w`` that commute with every
+  stabilizer but are not stabilizers, including Y and mixed operators.  This count is supported only
+  for ``w <= d``, and it is zero for ``w < d``.
 
-Counts are of physical operators ignoring phase, not of logical classes modulo stabilizers, and
-``count_x`` and ``count_z`` refer to the global minimum ``d``, so one of them may be zero.
-Subsystem, non-CSS and nonbinary codes are not supported, and counting is exponential in the worst
-case.  Memory use is polynomial: no method stores one entry per logical word.
+Counts are of physical operators ignoring phase, not of logical classes modulo stabilizers.  At the
+default weight, ``count_x`` and ``count_z`` refer to the global minimum ``d``, so one of them may be
+zero.  Subsystem, non-CSS and nonbinary codes are not supported, and counting is exponential in the
+worst case.  Memory use is polynomial: no method stores one entry per logical word.
 
 Each homogeneous (X-only or Z-only) sector is a basis of its normalizer whose first rows span the
 stabilizers, with quotient labels that are nonzero exactly for nontrivial logical words (see Section
-3.4 of ``brouwer_zimmermann.md``).  Counting runs in two phases.  First, the distance comes from the
-existing Brouwer--Zimmermann (BZ) or brute-force distance search.  Second, every word of weight
-``d`` in each sector is visited and counted as it is found, by scanning coefficient combinations of
-increasing size ("layers") over one or more information sets.
+3.4 of ``brouwer_zimmermann.md``).  Every word of weight ``w`` in each sector is visited and counted
+as it is found, by scanning coefficient combinations of increasing size ("layers") over one or more
+information sets.  When no weight is given, or when full Pauli operators are counted, the distance
+is first computed by the existing Brouwer--Zimmermann (BZ) or brute-force distance search.
 
 Counting with BZ needs a strict certificate.  BZ guarantees that every word not yet visited after
 layer ``t`` has weight at least ``L(t)``, where ``L`` is computed from the ranks and the maximum
 coordinate coverage of the information sets that are actually scanned.  A distance search may stop
-at ``L(t) >= d``, but counting must also visit every word of weight exactly ``d``, so it stops only
-at ``L(t) > d``.  That makes the count exact for any family of information sets; the family is
-chosen to reach ``L(t) >= d + 1`` cheaply, which affects only the work.  The ``"brute_force"``
-method instead scans every layer of a single basis, which visits each word exactly once.
+at ``L(t) >= d``, but counting must visit every word of weight exactly ``w``, so it stops only at
+``L(t) > w``.  That makes the count exact for any family of information sets; the family is chosen
+to reach ``L(t) >= w + 1`` cheaply, which affects only the work.  The ``"brute_force"`` method
+instead scans every layer of a single basis, which visits each word exactly once.
 
 A word may be visited by several information sets.  Each set ``j`` is a full basis ``R_j`` of the
-sector, so a word ``w`` has a unique coefficient vector ``c_j(w)`` with ``c_j(w) @ R_j = w``, and
-set ``j`` visits ``w`` in layer ``|c_j(w)|``.  A word found by set ``i`` in layer ``t`` is counted
-only if no set ``j`` has ``(|c_j(w)|, j) < (t, i)``.  The set that minimizes this pair visits ``w``
+sector, so a word ``v`` has a unique coefficient vector ``c_j(v)`` with ``c_j(v) @ R_j = v``, and
+set ``j`` visits ``v`` in layer ``|c_j(v)|``.  A word found by set ``i`` in layer ``t`` is counted
+only if no set ``j`` has ``(|c_j(v)|, j) < (t, i)``.  The set that minimizes this pair visits ``v``
 no later than set ``i`` does, so every word is counted exactly once without being stored.
 
-Full Pauli operators are counted from the same visits.  Let ``(x, z)`` be a nontrivial logical
-operator of weight ``d`` with X part ``x`` and Z part ``z``.  If ``x`` is not an X stabilizer, it is
-a nontrivial X logical of weight at most ``d``, so its support ``T`` has weight ``d`` and contains
-``z``.  Conversely, any ``z`` supported in ``T`` with ``H_X z = 0`` gives such an operator, so ``T``
-contributes ``2**(d - rank(H_X[:, T]))`` operators.  If ``x`` is an X stabilizer, then ``z`` is a
-nontrivial Z logical with support ``T`` of weight ``d`` that contains ``x``, and ``T`` contributes
-one operator per X stabilizer supported in ``T``: ``2**(rank(H_X) - rank(H_X[:, ~T]))`` of them.
-The two cases are disjoint, so ``count_pauli`` sums the first term over X-minimal words and the
-second over Z-minimal words, with one masked rank per word.
+Full Pauli operators of weight ``d`` are counted from the same visits.  Let ``(x, z)`` be a
+nontrivial logical operator of weight ``d`` with X part ``x`` and Z part ``z``.  If ``x`` is not an
+X stabilizer, it is a nontrivial X logical of weight at most ``d``, so its support ``T`` has weight
+``d`` and contains ``z``.  Conversely, any ``z`` supported in ``T`` with ``H_X z = 0`` gives such an
+operator, so ``T`` contributes ``2**(d - rank(H_X[:, T]))`` operators.  If ``x`` is an X stabilizer,
+then ``z`` is a nontrivial Z logical with support ``T`` of weight ``d`` that contains ``x``, and
+``T`` contributes ``2**(rank(H_X) - rank(H_X[:, ~T]))`` operators, one per X stabilizer supported in
+``T``.  The two cases are disjoint, so ``count_pauli`` sums the first term over X-only words of
+weight ``d`` and the second over Z-only words of weight ``d``, with one masked rank per word.
+
+This argument fails above the distance, where the X part of a nontrivial operator can be a lighter
+nontrivial logical whose support does not contain the Z part.  The operator's support then need not
+be the support of any homogeneous logical word of the same weight.  For example, ``XYZI`` is a
+nontrivial logical operator of weight three in the [[4, 2, 2]] code, which has no homogeneous
+logical words of odd weight.
 
 References:
 
@@ -79,7 +86,7 @@ from .brouwer_zimmermann import (
 )
 from .brute_force import _get_distance_quantum_brute_force
 
-MinimalLogicalMethod = Literal["brouwer_zimmermann", "brute_force"]
+LogicalCountMethod = Literal["brouwer_zimmermann", "brute_force"]
 
 _BinaryMatrix = npt.NDArray[np.uint8]
 _PackedMatrix = npt.NDArray[np.uint64]
@@ -99,29 +106,33 @@ _Sector = tuple[_BinaryMatrix, _BinaryMatrix]
 
 
 @dataclass(frozen=True)
-class CSSMinimumLogicalWeights:
-    """The distance of a binary CSS code and the multiplicities of its minimal logical operators."""
+class CSSLogicalCounts:
+    """Counts of the nontrivial logical operators of one weight in a binary CSS code."""
 
-    distance: int | None
-    """Minimum weight of a nontrivial logical operator, or None if the code encodes no qubits."""
+    weight: int | None
+    """Weight of the counted operators.
+
+    It is the distance of the code if no weight was requested, and None if no weight was requested
+    and the code encodes no qubits.
+    """
 
     count_x: int
-    """Number of X-only nontrivial logical operators of weight ``distance``."""
+    """Number of X-only nontrivial logical operators of weight ``weight``."""
 
     count_z: int
-    """Number of Z-only nontrivial logical operators of weight ``distance``."""
+    """Number of Z-only nontrivial logical operators of weight ``weight``."""
 
     count_pauli: int | None
-    """Number of nontrivial logical Pauli operators of weight ``distance``, ignoring phase.
+    """Number of nontrivial logical Pauli operators of weight ``weight``, ignoring phase.
 
     It includes Y and mixed operators, and is None if it was not requested.
     """
 
 
 class CSSLogicalWeightCounter:
-    """Exact counter of the minimal logical operators of a binary CSS stabilizer code.
+    """Exact counter of the logical operators of a given weight in a binary CSS stabilizer code.
 
-    See the ``minimal_logicals`` module docstring for the conventions and algorithms.
+    See the ``logical_counts`` module docstring for the conventions and algorithms.
 
     Args:
         checks_x: Binary X checks.  Redundant rows are allowed.
@@ -160,52 +171,76 @@ class CSSLogicalWeightCounter:
         """Whether the X and Z checks span the same row space."""
         return np.array_equal(self._x, self._z)
 
-    def get_minimum(
-        self, *, method: MinimalLogicalMethod = "brouwer_zimmermann", full_pauli: bool = True
-    ) -> CSSMinimumLogicalWeights:
-        """Compute the distance and the multiplicities of the minimal logical operators.
+    def count_logicals(
+        self,
+        weight: int | None = None,
+        *,
+        method: LogicalCountMethod = "brouwer_zimmermann",
+        full_pauli: bool = False,
+    ) -> CSSLogicalCounts:
+        """Count the nontrivial logical operators of a given weight.
 
         Args:
+            weight: Weight of the operators to count, between zero and the number of qubits.  If
+                None (the default), count the operators whose weight is the distance of the code.
             method: ``"brouwer_zimmermann"`` (the default) or ``"brute_force"``.  Brute force
                 enumerates all ``2**rank`` combinations of each normalizer basis, and is a reference
                 for small codes.
-            full_pauli: If True (the default), also count full Pauli operators, at the cost of
-                one rank calculation per minimal homogeneous word.
+            full_pauli: If True, also count full Pauli operators, including Y and mixed operators.
+                This requires the distance ``d``, which is computed if a weight is given.  There are
+                none below ``d``; at ``d``, each homogeneous word costs one rank calculation; above
+                ``d``, full Pauli counts are not supported.  Defaults to False.
 
         Returns:
-            The distance and multiplicities.  A code with no logical qubits has distance None and
-            zero counts.
+            The counted weight and the counts.  If no weight is given and the code encodes no
+            qubits, the returned weight is None and every count is zero.
 
         Raises:
-            ValueError: If the method is unknown.
+            ValueError: If the weight is not an integer between zero and the number of qubits, if
+                the method is unknown, or if full Pauli operators are requested at a weight above
+                the distance.
         """
-        if method not in get_args(MinimalLogicalMethod):
-            raise ValueError(f"Unknown minimal-logical method: {method!r}")
+        if method not in get_args(LogicalCountMethod):
+            raise ValueError(f"Unknown logical-count method: {method!r}")
+        if weight is not None and (
+            not isinstance(weight, (int, np.integer))
+            or isinstance(weight, bool)
+            or not 0 <= weight <= self.num_qubits
+        ):
+            raise ValueError("The weight must be an integer between zero and the number of qubits")
         if not self.dimension:
-            return CSSMinimumLogicalWeights(None, 0, 0, 0 if full_pauli else None)
+            empty_pauli = 0 if full_pauli else None
+            return CSSLogicalCounts(None if weight is None else int(weight), 0, 0, empty_pauli)
 
         sector_x = _get_nested_code_basis(_get_kernel(self._z), self._x)
         sector_z = _get_nested_code_basis(_get_kernel(self._x), self._z)
-        if method == "brute_force":
-            distance = min(_get_brute_force_distance(sector) for sector in (sector_x, sector_z))
-        else:
-            distance = _get_distance_brouwer_zimmermann_many(
-                [sector_x, sector_z], cutoff=0, block_size=_BLOCK_SIZE
-            )
-
-        # Both sectors weigh their supports against the X checks; see the module docstring.
-        lift_rank = len(self._x)
-        lift = _pack_bits(self._x if full_pauli else self._x[:0])
-        counts_x = _count_minimal_words(
-            *sector_x, distance, method, lift, complement=False, base=distance if full_pauli else 0
+        distance = (
+            _get_distance(sector_x, sector_z, method) if weight is None or full_pauli else None
         )
-        counts_z = _count_minimal_words(
-            *sector_z, distance, method, lift, complement=True, base=lift_rank if full_pauli else 0
+        target = int(weight) if weight is not None else distance
+        assert target is not None
+        if full_pauli:
+            assert distance is not None
+            if target > distance:
+                raise ValueError(
+                    f"Full Pauli operators can be counted only up to the distance {distance}, not at"
+                    f" weight {target}"
+                )
+
+        # Full Pauli counts weigh each support against the X checks, as in the module docstring;
+        # below the distance there are no words to weigh.  Otherwise the X checks are omitted and
+        # every word adds one to the zeroth exponent.
+        lift = _pack_bits(self._x if full_pauli else self._x[:0])
+        counts_x = _count_words(
+            *sector_x, target, method, lift, complement=False, base=target if full_pauli else 0
+        )
+        counts_z = _count_words(
+            *sector_z, target, method, lift, complement=True, base=len(self._x) if full_pauli else 0
         )
         count_pauli = sum(int(count) << exponent for exponent, count in enumerate(counts_x))
         count_pauli += sum(int(count) << exponent for exponent, count in enumerate(counts_z))
-        return CSSMinimumLogicalWeights(
-            distance,
+        return CSSLogicalCounts(
+            target,
             int(counts_x.sum()),
             int(counts_z.sum()),
             count_pauli if full_pauli else None,
@@ -283,25 +318,35 @@ class CSSLogicalWeightCounter:
         return self.conjugated(targets, matrix, matrix)
 
 
-def get_minimum_logical_weights_css(
+def count_logicals_css(
     checks_x: npt.ArrayLike,
     checks_z: npt.ArrayLike,
+    weight: int | None = None,
     *,
-    method: MinimalLogicalMethod = "brouwer_zimmermann",
-    full_pauli: bool = True,
-) -> CSSMinimumLogicalWeights:
-    """Compute the distance and minimal-logical multiplicities of a binary CSS stabilizer code.
+    method: LogicalCountMethod = "brouwer_zimmermann",
+    full_pauli: bool = False,
+) -> CSSLogicalCounts:
+    """Count the nontrivial logical operators of a given weight in a binary CSS stabilizer code.
 
-    This is shorthand for ``CSSLogicalWeightCounter(checks_x, checks_z).get_minimum(...)``; see
-    :class:`CSSLogicalWeightCounter` for the arguments and conventions.
+    This is shorthand for ``CSSLogicalWeightCounter(checks_x, checks_z).count_logicals(...)``; see
+    :meth:`CSSLogicalWeightCounter.count_logicals` for the arguments and conventions.
     """
-    return CSSLogicalWeightCounter(checks_x, checks_z).get_minimum(
-        method=method, full_pauli=full_pauli
+    return CSSLogicalWeightCounter(checks_x, checks_z).count_logicals(
+        weight, method=method, full_pauli=full_pauli
     )
 
 
 ####################################################################################################
-# counting minimal words
+# counting words of one weight
+
+
+def _get_distance(sector_x: _Sector, sector_z: _Sector, method: LogicalCountMethod) -> int:
+    """Minimum weight of a nontrivial word in either sector."""
+    if method == "brute_force":
+        return min(_get_brute_force_distance(sector) for sector in (sector_x, sector_z))
+    return _get_distance_brouwer_zimmermann_many(
+        [sector_x, sector_z], cutoff=0, block_size=_BLOCK_SIZE
+    )
 
 
 def _get_brute_force_distance(sector: _Sector) -> int:
@@ -313,11 +358,11 @@ def _get_brute_force_distance(sector: _Sector) -> int:
     )
 
 
-def _count_minimal_words(
+def _count_words(
     basis: _BinaryMatrix,
     labels: _BinaryMatrix,
     weight: int,
-    method: MinimalLogicalMethod,
+    method: LogicalCountMethod,
     lift: _PackedMatrix,
     *,
     complement: bool,
@@ -379,7 +424,7 @@ def _get_counting_information_sets(
     # XOR preserves even parity, so an even basis spans only even weights.
     divisor = 2 if np.all(np.count_nonzero(basis, axis=1) % 2 == 0) else 1
     candidates = _get_information_set_generators(basis, labels)
-    # Aim the family at the counting stop L(t) >= d + 1; any family gives an exact count.
+    # Aim the family at the counting stop L(t) >= weight + 1; any family gives an exact count.
     candidates = _select_brouwer_zimmermann_information_sets(
         candidates, dimension=len(basis), upper_bound=weight + 1, weight_divisor=divisor
     )
@@ -455,8 +500,8 @@ def _count_chunk(
 
     ``support`` holds the increasing row indices of the current combination; ``depth`` is the
     position being advanced, or -1 once every combination has been visited.  Each owned nontrivial
-    word of weight ``target`` adds one to ``histogram`` (see ``_count_minimal_words``).  Returns the
-    depth from which to resume.
+    word of weight ``target`` adds one to ``histogram`` (see ``_count_words``).  Returns the depth
+    from which to resume.
     """
     num_rows, width = rows.shape
     layer = len(support)

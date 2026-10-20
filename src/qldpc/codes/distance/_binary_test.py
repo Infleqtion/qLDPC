@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import contextlib
 import itertools
-from types import SimpleNamespace
 from unittest import mock
 
 import numpy as np
 import numpy.typing as npt
 import pytest
+from llvmlite import ir
 from numba import njit, types
+from numba.core.registry import cpu_target
 
 import qldpc
 
@@ -291,13 +292,16 @@ def test_popcount_word() -> None:
 
 def test_popcount_lowering() -> None:
     """Exercise the compiler extension directly, since coverage cannot trace compiled code."""
-    with pytest.raises(TypeError, match="uint64"):
-        binary._ctpop_definition(None, types.int64)
-    signature, emit = binary._ctpop_definition(None, types.uint64)
-    assert signature.return_type == types.uint64
-    assert emit(None, SimpleNamespace(ctpop=lambda value: value + 1), None, [6]) == 7
-    with mock.patch.object(binary, "_ctpop", return_value=np.uint64(3)):
-        assert binary._overload_popcount_word(types.uint64)(np.uint64(7)) == 3
+    typer = binary._type_popcount_word(cpu_target.typing_context)
+    assert typer(types.uint64) == types.int64
+    assert typer(types.int64) is None
+    word = ir.IntType(64)
+    function = ir.Function(ir.Module(), ir.FunctionType(word, [word]), "popcount")
+    builder = ir.IRBuilder(function.append_basic_block())
+    arguments: list[ir.Value] = [function.args[0]]
+    signature = types.int64(types.uint64)
+    lowered = binary._lower_popcount_word(cpu_target.target_context, builder, signature, arguments)
+    assert "llvm.ctpop.i64" in str(lowered)
 
 
 @pytest.mark.parametrize("interpreted", [False, True])

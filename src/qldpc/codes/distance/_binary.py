@@ -5,12 +5,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any, cast
 
 import numpy as np
 import numpy.typing as npt
+from llvmlite import ir
 from numba import njit, types
-from numba.extending import intrinsic, overload
+from numba.core.base import BaseContext
+from numba.core.typing.context import BaseContext as TypingContext
+from numba.core.typing.templates import Signature
+from numba.extending import lower_builtin, type_callable
 
 _MASK55 = np.uint64(0x5555555555555555)
 _MASK33 = np.uint64(0x3333333333333333)
@@ -234,28 +237,25 @@ def _popcount_word(value: np.uint64) -> np.int64:
     return np.int64(int(value).bit_count())
 
 
-def _ctpop_definition(context: Any, value: Any) -> Any:
-    """Lower a uint64 population count directly to LLVM's ctpop intrinsic."""
-    if value != types.uint64:
-        raise TypeError("Population count requires uint64")
+@type_callable(_popcount_word)
+def _type_popcount_word(context: TypingContext) -> Callable[[types.Type], types.Type | None]:
+    """Declare that compiled code may call ``_popcount_word`` on a uint64 word."""
 
-    def emit(context: Any, builder: Any, signature: Any, arguments: Any) -> Any:
-        return builder.ctpop(arguments[0])
+    def typer(value: types.Type) -> types.Type | None:
+        return types.int64 if value == types.uint64 else None
 
-    return types.uint64(types.uint64), emit
-
-
-_ctpop = cast(Callable[[np.uint64], np.uint64], intrinsic(_ctpop_definition))
+    return typer
 
 
-@overload(_popcount_word, inline="always")
-def _overload_popcount_word(value: Any) -> Callable[[np.uint64], np.int64]:
-    """Compile ``_popcount_word`` to a single population-count instruction."""
+@lower_builtin(_popcount_word, types.uint64)
+def _lower_popcount_word(
+    context: BaseContext, builder: ir.IRBuilder, signature: Signature, arguments: list[ir.Value]
+) -> ir.Value:
+    """Compile ``_popcount_word`` to LLVM's population-count instruction.
 
-    def implementation(value: Any) -> np.int64:
-        return np.int64(_ctpop(value))
-
-    return implementation
+    The count is at most 64, so the 64-bit result is the same as a signed integer.
+    """
+    return builder.ctpop(arguments[0])
 
 
 @njit(cache=True)
