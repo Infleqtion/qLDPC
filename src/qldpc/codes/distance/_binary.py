@@ -5,15 +5,18 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
-from llvmlite import ir
 from numba import njit, types
-from numba.core.base import BaseContext
-from numba.core.typing.context import BaseContext as TypingContext
-from numba.core.typing.templates import Signature
 from numba.extending import lower_builtin, type_callable
+
+if TYPE_CHECKING:
+    from llvmlite import ir
+    from numba.core.base import BaseContext
+    from numba.core.typing.context import BaseContext as TypingContext
+    from numba.core.typing.templates import Signature
 
 _MASK55 = np.uint64(0x5555555555555555)
 _MASK33 = np.uint64(0x3333333333333333)
@@ -81,7 +84,7 @@ def _row_reduce_binary(
 
     Pivots are taken in the order of ``columns`` (by default, every column in order), each from the
     first remaining row with a one in that column, and every other row is cleared in that column.
-    The inputs are not modified.
+    The inputs are not modified, and the reduced matrix and labels are uint8 arrays.
     """
     width = matrix.shape[1]
     columns = np.arange(width) if columns is None else np.asarray(columns)
@@ -96,6 +99,16 @@ def _get_independent_rows(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8
     """Return a row-reduced basis for the row space of a binary matrix."""
     reduced, _, pivots = _row_reduce_binary(matrix)
     return reduced[: len(pivots)]
+
+
+def _get_kernel(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
+    """Return a basis of the null space of a binary matrix, from its reduced row echelon form."""
+    reduced, _, pivots = _row_reduce_binary(matrix)
+    free = np.setdiff1d(np.arange(matrix.shape[1]), pivots)
+    basis = np.zeros((len(free), matrix.shape[1]), dtype=np.uint8)
+    basis[:, free] = np.eye(len(free), dtype=np.uint8)
+    basis[:, pivots] = reduced[: len(pivots), free].T
+    return basis
 
 
 def _get_nested_code_basis(

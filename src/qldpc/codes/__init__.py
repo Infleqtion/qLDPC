@@ -21,19 +21,16 @@ from .common import (
     QuditCode,
 )
 from .distance import (
+    CSSLogicalCounter,
+    CSSLogicalCounts,
     DistanceBackend,
     DistanceMethod,
+    count_logicals_css,
     get_distance_classical,
     get_distance_css_brouwer_zimmermann,
     get_distance_quantum,
     validate_distance_backend,
     validate_distance_method,
-)
-from .distance.logical_counts import (
-    CSSLogicalCounter,
-    CSSLogicalCounts,
-    LogicalCountMethod,
-    count_logicals_css,
 )
 from .quantum import (
     BaconShorCode,
@@ -97,7 +94,6 @@ __all__ = [
     "HammingCode",
     "IcebergCode",
     "LPCode",
-    "LogicalCountMethod",
     "ManyHypercubeCode",
     "QCCode",
     "QTCode",

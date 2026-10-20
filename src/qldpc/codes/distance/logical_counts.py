@@ -2,75 +2,31 @@
 
 """Exact counts of the logical operators of a given weight in binary CSS codes.
 
-A binary CSS code is given by X checks ``G_X`` and Z checks ``G_Z``.  In a subsystem code these are
-gauge generators, which need not commute.  The stabilizers ``S_X`` and ``S_Z`` are the gauge
-operators that commute with every gauge operator of the opposite type; in a stabilizer code, ``S_X``
-and ``G_X`` span the same space, as do ``S_Z`` and ``G_Z``.  A Pauli operator with X part ``x`` and
-Z part ``z`` is a nontrivial (dressed) logical operator if it commutes with every stabilizer
-(``S_Z x = 0`` and ``S_X z = 0``) but is not in the gauge group (``x`` is not in ``row(G_X)`` or
-``z`` is not in ``row(G_Z)``).  The distance ``d`` is the minimum weight of a nontrivial logical.
-At a weight ``w`` that defaults to ``d``, this module counts:
+For a CSS stabilizer code with checks ``H_X`` and ``H_Z``, the nontrivial X logicals are the words
+in ``ker(H_Z)`` outside ``row(H_X)``, and likewise for Z with X and Z exchanged.  At a weight ``w``
+that defaults to the distance ``d``, this module counts:
 
-- ``count_x``: X-only nontrivial logical operators of weight ``w``,
-- ``count_z``: the same for Z, and
-- optionally ``count_pauli``: nontrivial logical operators of weight ``w`` of any type, including Y
-  and mixed operators.  This count is supported only for ``w <= d``, and it is zero for ``w < d``.
+- ``count_x`` and ``count_z``: the X-only and Z-only nontrivial logical operators of weight ``w``,
+- optionally ``count_pauli``: all nontrivial logical operators of weight ``w``, including Y and
+  mixed operators.  This count is supported only for ``w <= d``, and is zero for ``w < d``.
 
-Counts are of physical operators ignoring phase, not of logical classes modulo the gauge group.  At
-the default weight, ``count_x`` and ``count_z`` refer to the global minimum ``d``, so one of them
-may be zero.  Non-CSS and nonbinary codes are not supported, and counting is exponential in the
-worst case.  Memory use is polynomial: no method stores one entry per logical word.
+Counts are of physical operators ignoring phase, not of logical classes.  At the default weight,
+``d`` is the minimum over both sectors, so ``count_x`` or ``count_z`` may be zero.  Counting takes
+exponential time in the worst case, but no method stores one entry per logical word.
 
-The X sector is a basis of ``ker(S_Z)`` whose first rows span ``row(G_X)``, with quotient labels
-that are nonzero exactly for nontrivial logical words (see Section 3.4 of
-``brouwer_zimmermann.md``), and the Z sector is the same with X and Z exchanged.  Every word of
-weight ``w`` in each sector is visited and counted as it is found, by scanning coefficient
-combinations of increasing size ("layers") over one or more information sets.  When no weight is
-given, the distance is first computed by the existing Brouwer--Zimmermann (BZ) or brute-force
-distance search.  The sector bases are cached, and a conjugated counter receives them transformed by
-the same local Clifford, because the Clifford maps each normalizer and gauge space onto that of the
-conjugated code without changing the quotient labels.
+Each sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
+``brouwer_zimmermann.md``).  Words are enumerated in layers over Brouwer--Zimmermann (BZ)
+information sets.  Unlike a distance search, the scan stops only when the BZ lower bound exceeds
+``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several information sets is
+counted by only one of them.  Full Pauli counts are derived from the homogeneous words of weight
+``d``, with one masked rank per word.  Self-dual codes scan only one sector, and have
+``count_pauli = 3 * count_x``.  Counters for codes conjugated by local CSS-preserving Cliffords
+transform the stored sector bases rather than recomputing them.
 
-Counting with BZ needs a strict certificate.  BZ guarantees that every word not yet visited after
-layer ``t`` has weight at least ``L(t)``, where ``L`` is computed from the ranks and the maximum
-coordinate coverage of the information sets that are actually scanned.  A distance search may stop
-at ``L(t) >= d``, but counting must visit every word of weight exactly ``w``, so it stops only at
-``L(t) > w``.  That makes the count exact for any family of information sets; the family is chosen
-to reach ``L(t) >= w + 1`` cheaply, which affects only the work.  The ``"brute_force"`` method
-instead scans every layer of a single basis, which visits each word exactly once.
-
-A word may be visited by several information sets.  Each set ``j`` is a full basis ``R_j`` of the
-sector, so a word ``v`` has a unique coefficient vector ``c_j(v)`` with ``c_j(v) @ R_j = v``, and
-set ``j`` visits ``v`` in layer ``|c_j(v)|``.  A word found by set ``i`` in layer ``t`` is counted
-only if no set ``j`` has ``(|c_j(v)|, j) < (t, i)``.  The set that minimizes this pair visits ``v``
-no later than set ``i`` does, so every word is counted exactly once without being stored.
-
-Full Pauli operators of weight ``d`` are counted from the same visits.  Let ``(x, z)`` be a
-nontrivial logical operator of weight ``d``.  If ``x`` is not in ``row(G_X)``, it is a nontrivial X
-logical of weight at most ``d``, so its support ``T`` has weight ``d`` and contains ``z``.
-Conversely, any ``z`` supported in ``T`` with ``S_X z = 0`` gives such an operator, so ``T``
-contributes ``2**(d - rank(S_X[:, T]))`` operators.  If ``x`` is in ``row(G_X)``, then ``z`` is a
-nontrivial Z logical with support ``T`` of weight ``d`` that contains ``x``, and ``T`` contributes
-``2**(rank(G_X) - rank(G_X[:, ~T]))`` operators, one per X gauge operator supported in ``T``.  The
-two cases are disjoint, so ``count_pauli`` sums the first term over X-only words of weight ``d`` and
-the second over Z-only words of weight ``d``, with one masked rank per word.
-
-A self-dual code, whose X and Z checks span the same space, has identical X and Z sectors, so the
-counter stores, conjugates and scans only one of them; gates that act identically on X and Z, such
-as the SWEL-preserving Clifford, keep it self-dual.  Each minimum support ``T`` of a self-dual code
-carries exactly three nontrivial logical operators of weight ``d``, so ``count_pauli`` is
-``3 * count_x``.  A nonzero gauge operator supported in ``T``, added to the logical on ``T``, would
-give a lighter nontrivial logical, so the only Z-type words supported in ``T`` with ``S_X z = 0``
-are zero and the logical on ``T``, and the only X gauge operator supported in ``T`` is zero.
-
-This argument fails above the distance, where the X part of a nontrivial operator can be a lighter
-nontrivial logical whose support does not contain the Z part.  The operator's support then need not
-be the support of any homogeneous logical word of the same weight.  For example, ``XYZI`` is a
-nontrivial logical operator of weight three in the [[4, 2, 2]] code, which has no homogeneous
-logical words of odd weight.  Given a weight ``w``, full Pauli counting does not search for the
-distance first.  The scan at ``w`` stops only when every unvisited word is heavier than ``w``, so it
-visits every lighter word, and it rejects ``w`` as soon as it finds a lighter nontrivial one.  If it
-finds none, then ``w <= d``, and the counts are exact.
+In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
+``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
+type.  Nontrivial logicals are those outside the gauge group (dressed logicals), so the X sector is
+``ker(S_Z)`` modulo ``row(G_X)``, and likewise for Z.
 
 References:
 
@@ -81,16 +37,15 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, get_args
+from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
 from numba import njit
 
 from ._binary import (
-    _as_binary_matrix,
-    _assert_binary,
     _get_independent_rows,
+    _get_kernel,
     _get_nested_code_basis,
     _pack_bits,
     _popcount_word,
@@ -104,11 +59,11 @@ from .brouwer_zimmermann import (
     _select_brouwer_zimmermann_information_sets,
 )
 from .brute_force import _get_distance_quantum_brute_force
+from .core import DistanceMethod, validate_distance_method
 
+# codes.common imports this package, so CSSCode is imported only where it is used.
 if TYPE_CHECKING:
     from ..common import CSSCode
-
-LogicalCountMethod = Literal["brouwer_zimmermann", "brute_force"]
 
 _BinaryMatrix = npt.NDArray[np.uint8]
 _PackedMatrix = npt.NDArray[np.uint64]
@@ -154,12 +109,11 @@ class CSSLogicalCounts:
 class CSSLogicalCounter:
     """Exact counter of the logical operators of a given weight in a binary CSS code.
 
-    Subsystem codes are supported; see the ``logical_counts`` module docstring for the conventions
-    and algorithms.  Use :meth:`from_matrices` to start from parity check matrices without building
-    a :class:`~qldpc.codes.CSSCode`.
+    See the ``logical_counts`` module docstring for the conventions and algorithms.  Counters for
+    codes conjugated by local CSS-preserving Cliffords reuse the work of this counter.
 
     Args:
-        code: A binary CSS code, possibly a subsystem code.  Its parity checks may be redundant.
+        code: A binary CSS code, which may be a subsystem code and may have redundant checks.
 
     Raises:
         TypeError: If the code is not a :class:`~qldpc.codes.CSSCode`.
@@ -171,56 +125,32 @@ class CSSLogicalCounter:
 
         if not isinstance(code, CSSCode):
             raise TypeError(f"Expected a CSSCode, not {type(code).__name__}")
-        self._initialize(code.matrix_x, code.matrix_z)
+        if code.field.order != 2:
+            raise ValueError(f"Logical counts require a binary code, not GF({code.field.order})")
         self._code: CSSCode | None = code
-
-    @staticmethod
-    def from_matrices(matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike) -> CSSLogicalCounter:
-        """Build a counter from the parity check matrices of a binary CSS code.
-
-        Args:
-            matrix_x: Binary X checks, which are gauge generators in a subsystem code.  Redundant
-                rows are allowed.
-            matrix_z: Binary Z checks, likewise.
-
-        Returns:
-            A counter whose :attr:`code` is built only when it is first accessed.
-
-        Raises:
-            ValueError: If the checks are not binary or have different widths.
-        """
-        counter = object.__new__(CSSLogicalCounter)
-        counter._initialize(matrix_x, matrix_z)
-        counter._code = None
-        return counter
-
-    def _initialize(self, matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike) -> None:
-        """Validate the checks, and store independent bases of the gauge and stabilizer spaces."""
-        _assert_binary(matrix_x, "matrix_x")
-        _assert_binary(matrix_z, "matrix_z")
-        checks_x = _as_binary_matrix(matrix_x)
-        checks_z = _as_binary_matrix(matrix_z, num_cols=checks_x.shape[1])
+        checks_x = code.matrix_x.view(np.ndarray).astype(np.uint8)
+        checks_z = code.matrix_z.view(np.ndarray).astype(np.uint8)
+        self.num_qubits = checks_x.shape[1]
         self._gauge_x = _get_independent_rows(checks_x)
         self._gauge_z = _get_independent_rows(checks_z)
-        # A self-dual code shares one array for each pair of X-type and Z-type data.
+        # Reduced row echelon form is unique, so the X and Z checks span the same space exactly when
+        # these arrays are equal.  A self-dual code then shares one array for each X/Z pair.
         self._self_dual = np.array_equal(self._gauge_x, self._gauge_z)
         if self._self_dual:
             self._gauge_z = self._gauge_x
         self._stabilizers_x, self._stabilizers_z = _get_stabilizers(self._gauge_x, self._gauge_z)
         if self._self_dual:
             self._stabilizers_z = self._stabilizers_x
-        self.num_qubits = checks_x.shape[1]
         self.dimension = self.num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
         self._sectors: tuple[_Sector, _Sector] | None = None
-        # Reduced row echelon form is unique, so equal row spaces give equal arrays.
         self._canonical: tuple[_BinaryMatrix, _BinaryMatrix] | None = (self._gauge_x, self._gauge_z)
 
     @property
     def code(self) -> CSSCode:
         """The code whose logical operators are counted.
 
-        For a counter built with :meth:`from_matrices` or a conjugation method, this is a new
-        :class:`~qldpc.codes.CSSCode` with the counter's independent checks, built on first access.
+        For a counter built by a conjugation method, this is a new :class:`~qldpc.codes.CSSCode`
+        with the counter's independent checks, built on first access.
         """
         if self._code is None:
             from ..common import CSSCode
@@ -248,7 +178,7 @@ class CSSLogicalCounter:
         self,
         weight: int | None = None,
         *,
-        method: LogicalCountMethod = "brouwer_zimmermann",
+        method: DistanceMethod = "brouwer_zimmermann",
         full_pauli: bool = False,
     ) -> CSSLogicalCounts:
         """Count the nontrivial logical operators of a given weight.
@@ -273,8 +203,7 @@ class CSSLogicalCounter:
                 the method is unknown, or if full Pauli operators are requested at a weight above
                 the distance.
         """
-        if method not in get_args(LogicalCountMethod):
-            raise ValueError(f"Unknown logical-count method: {method!r}")
+        validate_distance_method(method)
         if weight is not None and (
             not isinstance(weight, (int, np.integer))
             or isinstance(weight, bool)
@@ -290,34 +219,35 @@ class CSSLogicalCounter:
         sectors = [sector_x] if self._self_dual else [sector_x, sector_z]
         target = int(weight) if weight is not None else _get_distance(sectors, method)
 
-        # Full Pauli counts weigh X-sector supports against the X stabilizers and Z-sector supports
-        # against the X gauge generators, as in the module docstring, and the scans reject any
-        # nontrivial word lighter than the target, which would mean that the target exceeds the
-        # distance.  Otherwise no rows are weighed and every word adds one to the zeroth exponent.
-        # Self-dual codes need no weighing, since each support carries exactly three.
-        single_scan = self._self_dual
-        weigh = full_pauli and not single_scan
-        lift_x = _pack_bits(self._stabilizers_x if weigh else self._stabilizers_x[:0])
+        # A nontrivial logical Pauli (x, z) of weight d has one of two disjoint forms.  Either x is
+        # a nontrivial X logical with support T of size d, and z is one of 2**(d - rank(S_X[:, T]))
+        # Z words supported in T that commute with S_X, or x is an X gauge operator, and z is a
+        # nontrivial Z logical of weight d whose support T contains that of x, which leaves
+        # 2**(rank(G_X) - rank(G_X[:, ~T])) choices of x.  Each support T of a self-dual code
+        # carries exactly three operators, so self-dual codes need no ranks.  Above d, a logical
+        # Pauli need not have the support of a homogeneous logical, so the scans reject any
+        # nontrivial word lighter than the target.
+        weigh = full_pauli and not self._self_dual
+        no_rows = self._gauge_x[:0]
         counts_x = _count_words(
             *sector_x,
             target,
             method,
-            lift_x,
+            _pack_bits(self._stabilizers_x if weigh else no_rows),
             complement=False,
-            base=target if weigh else 0,
+            max_exponent=target if weigh else 0,
             reject_lighter=full_pauli,
         )
-        if single_scan or counts_x is None:
+        if self._self_dual or counts_x is None:
             counts_z = counts_x
         else:
-            lift_z = _pack_bits(self._gauge_x if weigh else self._gauge_x[:0])
             counts_z = _count_words(
                 *sector_z,
                 target,
                 method,
-                lift_z,
+                _pack_bits(self._gauge_x if weigh else no_rows),
                 complement=True,
-                base=len(self._gauge_x) if weigh else 0,
+                max_exponent=len(self._gauge_x) if weigh else 0,
                 reject_lighter=full_pauli,
             )
         if counts_x is None or counts_z is None:
@@ -327,11 +257,14 @@ class CSSLogicalCounter:
             )
         count_x, count_z = int(counts_x.sum()), int(counts_z.sum())
         count_pauli = None
-        if full_pauli and single_scan:
+        if full_pauli and self._self_dual:
             count_pauli = 3 * count_x
         elif full_pauli:
-            count_pauli = sum(int(count) << exponent for exponent, count in enumerate(counts_x))
-            count_pauli += sum(int(count) << exponent for exponent, count in enumerate(counts_z))
+            count_pauli = sum(
+                int(count) << exponent
+                for counts in (counts_x, counts_z)
+                for exponent, count in enumerate(counts)
+            )
         return CSSLogicalCounts(target, count_x, count_z, count_pauli)
 
     def conjugated(
@@ -360,26 +293,25 @@ class CSSLogicalCounter:
         """Return a counter for this code conjugated by a CNOT on zero-based qubit indices."""
         return self._conjugated(self._get_positions([control, target]), *_CNOT)
 
-    def conjugated_swel(self, targets: Sequence[int]) -> CSSLogicalCounter:
+    def conjugated_swel(
+        self, qubit_0: int, qubit_1: int, qubit_2: int, qubit_3: int
+    ) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a four-qubit SWEL-preserving Clifford.
 
         The Clifford applies the same binary matrix, whose rows have weight three, to X and Z
         supports on the four targets.  It therefore maps self-dual codes to self-dual codes, and
         preserves the self-dual-with-equivalent-logicals (SWEL) property of
-        :meth:`qldpc.codes.CSSCode.is_swel`.  It is valid for any CSS code.
-
-        Args:
-            targets: Four distinct qubit indices, in order.
+        :meth:`qldpc.codes.CSSCode.is_swel`.  It is valid for any CSS code.  The four qubits are
+        distinct zero-based indices, in the order of the matrix rows.
 
         Returns:
             A new counter.  This counter is not modified.
 
         Raises:
-            ValueError: If there are not four valid targets.
+            ValueError: If the qubits are not distinct, in-range indices.
         """
-        if len(targets) != 4:
-            raise ValueError("The SWEL-preserving Clifford requires four targets")
-        return self._conjugated(self._get_positions(targets), *_SWEL)
+        positions = self._get_positions([qubit_0, qubit_1, qubit_2, qubit_3])
+        return self._conjugated(positions, *_SWEL)
 
     def _get_positions(self, targets: Sequence[int]) -> npt.NDArray[np.int64]:
         """Validate conjugation targets."""
@@ -409,7 +341,7 @@ class CSSLogicalCounter:
         keeps the quotient labels, so nothing is recomputed.  The checks are no longer in reduced
         row echelon form, which is recomputed only if needed.
         """
-        counter = object.__new__(CSSLogicalCounter)
+        counter = CSSLogicalCounter.__new__(CSSLogicalCounter)
         counter.num_qubits, counter.dimension = self.num_qubits, self.dimension
         counter._code, counter._canonical = None, None
         # A gate that acts identically on X and Z keeps a self-dual code self-dual.
@@ -465,7 +397,7 @@ def count_logicals_css(
     code: CSSCode,
     weight: int | None = None,
     *,
-    method: LogicalCountMethod = "brouwer_zimmermann",
+    method: DistanceMethod = "brouwer_zimmermann",
     full_pauli: bool = False,
 ) -> CSSLogicalCounts:
     """Count the nontrivial logical operators of a given weight in a binary CSS code.
@@ -480,7 +412,7 @@ def count_logicals_css(
 # counting words of one weight
 
 
-def _get_distance(sectors: Sequence[_Sector], method: LogicalCountMethod) -> int:
+def _get_distance(sectors: Sequence[_Sector], method: DistanceMethod) -> int:
     """Minimum weight of a nontrivial word in any of the given sectors."""
     if method == "brute_force":
         return min(_get_brute_force_distance(sector) for sector in sectors)
@@ -500,19 +432,20 @@ def _count_words(
     basis: _BinaryMatrix,
     labels: _BinaryMatrix,
     weight: int,
-    method: LogicalCountMethod,
-    lift: _PackedMatrix,
+    method: DistanceMethod,
+    rank_rows: _PackedMatrix,
     *,
     complement: bool,
-    base: int,
+    max_exponent: int,
     reject_lighter: bool,
 ) -> npt.NDArray[np.int64] | None:
     """Visit each nontrivial word of one sector with the given weight exactly once.
 
-    Returns a histogram over exponents ``base - rank(lift restricted to a mask)``, where the mask is
-    the support of the word, or its complement.  The histogram sums to the number of words; see the
-    module docstring for how the exponents count Pauli operators.  The scan also visits every
-    lighter word, so with ``reject_lighter`` it returns None as soon as it finds a nontrivial one.
+    Returns a histogram over exponents ``max_exponent - rank(rank_rows[:, mask])``, where the mask
+    is the support of the word, or its complement.  The histogram sums to the number of words, and
+    the caller weighs each exponent by ``2**exponent``, which could overflow a native integer.  The
+    scan also visits every lighter word, so with ``reject_lighter`` it returns None as soon as it
+    finds a nontrivial one.
     """
     get_lower_bound: Callable[[int], int]
     if method == "brute_force":
@@ -528,7 +461,7 @@ def _count_words(
         if len(sets) > 1
         else np.zeros((1, 0, rows[0].shape[1]), dtype=np.uint64)
     )
-    histogram = np.zeros(base + 1, dtype=np.int64)
+    histogram = np.zeros(max_exponent + 1, dtype=np.int64)
     for layer in range(1, len(basis) + 1):
         for index in range(len(sets)):
             support = np.zeros(layer, dtype=np.int64)
@@ -542,9 +475,9 @@ def _count_words(
                     support,
                     depth,
                     weight,
-                    lift,
+                    rank_rows,
                     complement,
-                    base,
+                    max_exponent,
                     histogram,
                     reject_lighter,
                     _CHUNK_SIZE,
@@ -610,13 +543,17 @@ def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:
     return _pack_bits(decoder.T)
 
 
+####################################################################################################
+# stabilizers of subsystem codes
+
+
 def _get_stabilizers(
     gauge_x: _BinaryMatrix, gauge_z: _BinaryMatrix
 ) -> tuple[_BinaryMatrix, _BinaryMatrix]:
     """Independent bases of the stabilizers among the given gauge generators.
 
     The stabilizers are the gauge operators that commute with every gauge operator of the other
-    type.
+    type.  If all gauge generators commute, the given arrays are returned.
     """
     overlaps = (gauge_x.astype(int) @ gauge_z.T.astype(int) % 2).astype(np.uint8)
     if not np.any(overlaps):
@@ -628,6 +565,16 @@ def _get_stabilizers(
         _get_independent_rows(stabilizers_x.astype(np.uint8)),
         _get_independent_rows(stabilizers_z.astype(np.uint8)),
     )
+
+
+####################################################################################################
+# local Cliffords
+
+# Packed local matrices, in which bit j of row i is entry (i, j).  The CNOT, with its control first,
+# acts by [[1, 0], [1, 1]] on X supports and by [[1, 1], [0, 1]] on Z supports.  The SWEL-preserving
+# Clifford acts by [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]] on both.
+_CNOT = (np.array([1, 3], dtype=np.uint64), np.array([3, 2], dtype=np.uint64))
+_SWEL = (np.array([7, 11, 13, 14], dtype=np.uint64),) * 2
 
 
 def _pack_local_matrices(
@@ -646,16 +593,6 @@ def _pack_local_matrices(
     if not _is_css_pairing(packed[0], packed[1]):
         raise ValueError("Local X/Z matrices must preserve the CSS commutation pairing")
     return packed[0], packed[1]
-
-
-def _get_kernel(matrix: _BinaryMatrix) -> _BinaryMatrix:
-    """Basis of the null space of a binary matrix, from its reduced row echelon form."""
-    reduced, _, pivots = _row_reduce_binary(matrix)
-    free = np.setdiff1d(np.arange(matrix.shape[1]), pivots)
-    basis = np.zeros((len(free), matrix.shape[1]), dtype=np.uint8)
-    basis[:, free] = np.eye(len(free), dtype=np.uint8)
-    basis[:, pivots] = reduced[: len(pivots), free].T
-    return basis
 
 
 ####################################################################################################
@@ -714,9 +651,9 @@ def _count_chunk(
     support: npt.NDArray[np.int64],
     depth: int,
     target: int,
-    lift: _PackedMatrix,
+    rank_rows: _PackedMatrix,
     complement: bool,
-    base: int,
+    max_exponent: int,
     histogram: npt.NDArray[np.int64],
     reject_lighter: bool,
     chunk_size: int,
@@ -741,7 +678,7 @@ def _count_chunk(
         for index in range(tags.shape[1]):
             tag_prefixes[position, index] = tag_prefixes[position - 1, index] ^ tags[row, index]
     word = np.empty(width, dtype=np.uint64)
-    pivots = np.empty((len(lift), width), dtype=np.uint64)
+    pivots = np.empty((len(rank_rows), width), dtype=np.uint64)
     visited = 0
     while depth >= 0 and visited < chunk_size:
         # Backtrack when no room remains for the rows after this position.
@@ -778,7 +715,8 @@ def _count_chunk(
             if nontrivial and weight < target:
                 return depth, True
             if nontrivial and _is_owned(word, decoders, set_index, layer):
-                histogram[base - _get_masked_rank(lift, word, complement, pivots)] += 1
+                rank = _get_masked_rank(rank_rows, word, complement, pivots)
+                histogram[max_exponent - rank] += 1
         visited += stop - support[depth]
         support[depth] = stop
     return depth, False
@@ -788,7 +726,11 @@ def _count_chunk(
 def _is_owned(
     word: npt.NDArray[np.uint64], decoders: npt.NDArray[np.uint64], set_index: int, layer: int
 ) -> bool:
-    """Whether set ``set_index`` minimizes (layer, set index) among the sets that visit ``word``."""
+    """Whether set ``set_index`` minimizes (layer, set index) among the sets that visit ``word``.
+
+    Each set visits a word in the layer given by the weight of its coefficient vector in that set,
+    so exactly one set owns each word, and it visits the word before any other set does.
+    """
     for other in range(len(decoders)):
         if other == set_index:
             continue
@@ -836,12 +778,3 @@ def _get_masked_rank(
                 rank += 1
                 break
     return rank
-
-
-####################################################################################################
-# gate constants
-
-# Packed local matrices of the CNOT (control first) and of the SWEL-preserving Clifford.
-_CNOT = _pack_local_matrices([[1, 0], [1, 1]], [[1, 1], [0, 1]], 2)
-_SWEL_MATRIX = [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]]
-_SWEL = (_pack_local_matrices(_SWEL_MATRIX, _SWEL_MATRIX, 4)[0],) * 2

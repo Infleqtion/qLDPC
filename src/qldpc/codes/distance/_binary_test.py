@@ -45,6 +45,18 @@ def test_binary_matrices_and_nested_bases() -> None:
     np.testing.assert_array_equal(tags, [[0], [1]])
 
 
+@pytest.mark.parametrize("shape", [(0, 4), (3, 7), (5, 5), (4, 70)])
+def test_get_kernel(shape: tuple[int, int]) -> None:
+    """The kernel basis is independent, annihilated by the matrix, and of full nullity."""
+    matrix = np.random.default_rng(shape[1]).integers(0, 2, shape, dtype=np.uint8)
+    matrix[-1:] = matrix[:1]
+    kernel = binary._get_kernel(matrix)
+    rank = len(binary._get_independent_rows(matrix))
+    assert kernel.dtype == np.uint8 and kernel.shape == (shape[1] - rank, shape[1])
+    assert not np.any(matrix.astype(int) @ kernel.T % 2)
+    assert len(binary._get_independent_rows(kernel)) == len(kernel)
+
+
 def test_packed_row_weights_do_not_overflow() -> None:
     packed = np.full((2, 5), np.iinfo(np.uint64).max, dtype=np.uint64)
     packed[1, -1] = 0
