@@ -730,6 +730,10 @@ class ClassicalCode(AbstractCode):
 
         The automorphism group of a classical linear code is the group of permutations of bits that
         preserve the code space.
+
+        This computation may run GAP, install GAP packages, access GroupNames.org, or prompt on
+        standard input, or with ``with_magma=True`` prompt for MAGMA output on standard input; see
+        help(qldpc.abstract.Group.from_name).
         """
         matrix_str = self.canonicalized.matrix_as_string()
         if with_magma:
@@ -753,9 +757,8 @@ class ClassicalCode(AbstractCode):
                 return abstract.Group.from_name(
                     f"AutomorphismGroup({code_str})", warning_to_raise_if_calling_gap=warning
                 )
-            except ValueError as error:
-                if "Error encountered when running GAP" not in str(error):
-                    raise
+            except external.gap.GAPError:
+                pass
 
         # fall back to GAP/GAUAVA's PermutationAutomorphismGroup method
         return abstract.Group.from_name(

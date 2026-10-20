@@ -594,6 +594,10 @@ class Group:
         """Retrieve a group from the GAP computer algebra system (CAS).
 
         ... unless ``from_magma=True``, in which case retrieve a group from the MAGMA CAS.
+
+        This may run GAP, install GAP packages, access GroupNames.org, or prompt on standard input;
+        see help(qldpc.external.groups.get_generators) and
+        help(qldpc.external.groups.get_generators_from_magma).
         """
         name = "".join(name.split())  # strip whitespace
         if from_magma:
