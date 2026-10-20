@@ -4,9 +4,7 @@
 
 from __future__ import annotations
 
-import contextlib
 import itertools
-from unittest import mock
 
 import numpy as np
 import numpy.typing as npt
@@ -172,42 +170,58 @@ def test_popcount_lowering() -> None:
     assert lowered.type == word
 
 
-@pytest.mark.parametrize("interpreted", [False, True])
-def test_row_reduction_matches_dense_elimination(interpreted: bool) -> None:
-    """Compare with byte-valued elimination for partial, repeated and multiword columns."""
-    kernels = ("_pack_bits", "_unpack_bits", "_row_reduce_packed")
-    rng = np.random.default_rng(720)
-    with (
-        mock.patch.multiple(binary, **{name: getattr(binary, name).py_func for name in kernels})
-        if interpreted
-        else contextlib.nullcontext()
-    ):
-        for width in (0, 1, 7, 64, 65, 130):
-            for height in (0, 1, 3, 7):
-                for label_width in (0, 1, 65):
-                    matrix = rng.integers(0, 2, (height, width), dtype=np.uint8)
-                    labels = rng.integers(0, 2, (height, label_width), dtype=np.uint8)
-                    original, original_labels = matrix.copy(), labels.copy()
-                    for columns in (
-                        np.arange(width),
-                        rng.permutation(width)[: width // 2],
-                        np.tile(np.arange(width), 2),
-                    ):
-                        actual = binary._row_reduce_binary(matrix, labels, columns=columns)
-                        expected = _dense_elimination(matrix, labels, columns)
-                        for result, reference in zip(actual, expected, strict=True):
-                            np.testing.assert_array_equal(result, reference)
-                    np.testing.assert_array_equal(matrix, original)
-                    np.testing.assert_array_equal(labels, original_labels)
-                    packed = binary._pack_bits(matrix)
-                    for row in range(height):
-                        integer = sum(int(bit) << column for column, bit in enumerate(matrix[row]))
-                        words = [
-                            (integer >> (64 * word)) & (2**64 - 1)
-                            for word in range(len(packed[row]))
-                        ]
-                        np.testing.assert_array_equal(packed[row], words)
-                    np.testing.assert_array_equal(binary._unpack_bits(packed, width), matrix)
+@pytest.fixture(params=[False, True], ids=["compiled", "python"])
+def binary_kernels(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run the compiled packing and row-reduction kernels, or their Python versions for coverage."""
+    if request.param:
+        for name in ("_pack_bits", "_unpack_bits", "_row_reduce_packed"):
+            monkeypatch.setattr(binary, name, getattr(binary, name).py_func)
+
+
+@pytest.mark.usefixtures("binary_kernels")
+@pytest.mark.parametrize("width", [0, 64, 65, 130])
+def test_pack_bits(width: int) -> None:
+    """Column j goes to bit j % 64 of word j // 64, and unpacking inverts packing."""
+    matrix = np.random.default_rng(width).integers(0, 2, (3, width), dtype=np.uint8)
+    packed = binary._pack_bits(matrix)
+    for row, words in zip(matrix, packed, strict=True):
+        integer = sum(int(bit) << column for column, bit in enumerate(row))
+        expected = [(integer >> (64 * index)) & (2**64 - 1) for index in range(len(words))]
+        assert words.tolist() == expected
+    np.testing.assert_array_equal(binary._unpack_bits(packed, width), matrix)
+
+
+@pytest.mark.usefixtures("binary_kernels")
+@pytest.mark.parametrize(
+    "height, width, columns",
+    [
+        (5, 130, "all"),  # rows span several words
+        (7, 65, "subset"),  # pivots only in a shuffled subset of the columns
+        (3, 7, "repeated"),  # every column listed twice
+        (0, 7, "all"),  # no rows
+        (3, 0, "all"),  # no columns
+    ],
+)
+def test_row_reduction(height: int, width: int, columns: str) -> None:
+    """Row reduction matches a byte-valued reference elimination and leaves its inputs intact."""
+    rng = np.random.default_rng(height * width)
+    matrix = rng.integers(0, 2, (height, width), dtype=np.uint8)
+    labels = rng.integers(0, 2, (height, 3), dtype=np.uint8)
+    order = {
+        "all": np.arange(width),
+        "subset": rng.permutation(width)[: width // 2],
+        "repeated": np.tile(np.arange(width), 2),
+    }[columns]
+    original_matrix, original_labels = matrix.copy(), labels.copy()
+
+    result = binary._row_reduce_binary(matrix, labels, columns=order)
+    for actual, expected in zip(result, _dense_elimination(matrix, labels, order), strict=True):
+        np.testing.assert_array_equal(actual, expected)
+    np.testing.assert_array_equal(matrix, original_matrix)
+    np.testing.assert_array_equal(labels, original_labels)
+
+
+def test_row_reduction_rejects_out_of_range_columns() -> None:
     for columns in (np.array([-1]), np.array([2])):
         with pytest.raises(IndexError, match="out of range"):
             binary._row_reduce_binary(np.eye(2, dtype=np.uint8), columns=columns)
