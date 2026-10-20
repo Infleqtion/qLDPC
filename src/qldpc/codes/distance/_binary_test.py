@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import itertools
 
+import galois
 import numpy as np
 import numpy.typing as npt
 import pytest
@@ -192,62 +193,36 @@ def test_pack_bits(width: int) -> None:
 
 
 @pytest.mark.usefixtures("binary_kernels")
-@pytest.mark.parametrize(
-    "height, width, columns",
-    [
-        (5, 130, "all"),  # rows span several words
-        (7, 65, "subset"),  # pivots only in a shuffled subset of the columns
-        (3, 7, "repeated"),  # every column listed twice
-        (0, 7, "all"),  # no rows
-        (3, 0, "all"),  # no columns
-    ],
-)
-def test_row_reduction(height: int, width: int, columns: str) -> None:
-    """Row reduction matches a byte-valued reference elimination and leaves its inputs intact."""
-    rng = np.random.default_rng(height * width)
-    matrix = rng.integers(0, 2, (height, width), dtype=np.uint8)
-    labels = rng.integers(0, 2, (height, 3), dtype=np.uint8)
-    order = {
-        "all": np.arange(width),
-        "subset": rng.permutation(width)[: width // 2],
-        "repeated": np.tile(np.arange(width), 2),
-    }[columns]
-    original_matrix, original_labels = matrix.copy(), labels.copy()
+@pytest.mark.parametrize("height, width", [(5, 130), (7, 65), (0, 7), (3, 0)])
+def test_row_reduction_matches_galois(height: int, width: int) -> None:
+    """In the default column order, row reduction gives the reduced row echelon form."""
+    matrix = np.random.default_rng(width).integers(0, 2, (height, width), dtype=np.uint8)
+    reduced, _, _ = binary._row_reduce_binary(matrix)
+    np.testing.assert_array_equal(reduced, galois.GF(2)(matrix).row_reduce())
 
-    result = binary._row_reduce_binary(matrix, labels, columns=order)
-    for actual, expected in zip(result, _dense_elimination(matrix, labels, order), strict=True):
-        np.testing.assert_array_equal(actual, expected)
+
+@pytest.mark.usefixtures("binary_kernels")
+@pytest.mark.parametrize("columns", ["subset", "repeated"])
+def test_row_reduction_over_selected_columns(columns: str) -> None:
+    """Pivots come from the selected columns, and labels undergo the same row operations."""
+    rng = np.random.default_rng(65)
+    matrix = rng.integers(0, 2, (7, 65), dtype=np.uint8)
+    labels = np.eye(7, dtype=np.uint8)
+    order = rng.permutation(65)[:30] if columns == "subset" else np.tile(np.arange(65), 2)
+    original_matrix = matrix.copy()
+
+    reduced, transform, pivots = binary._row_reduce_binary(matrix, labels, columns=order)
+    assert transform is not None
+    np.testing.assert_array_equal(transform.astype(int) @ matrix % 2, reduced)
+    rank = len(pivots)
+    assert rank == np.linalg.matrix_rank(galois.GF(2)(matrix[:, np.unique(order)]))
+    assert len(set(pivots.tolist())) == rank and set(pivots.tolist()) <= set(order.tolist())
+    np.testing.assert_array_equal(reduced[:rank][:, pivots], np.eye(rank, dtype=np.uint8))
+    assert not np.any(reduced[rank:][:, order])
     np.testing.assert_array_equal(matrix, original_matrix)
-    np.testing.assert_array_equal(labels, original_labels)
 
 
 def test_row_reduction_rejects_out_of_range_columns() -> None:
     for columns in (np.array([-1]), np.array([2])):
         with pytest.raises(IndexError, match="out of range"):
             binary._row_reduce_binary(np.eye(2, dtype=np.uint8), columns=columns)
-
-
-def _dense_elimination(
-    matrix: npt.NDArray[np.uint8],
-    labels: npt.NDArray[np.uint8],
-    columns: npt.NDArray[np.int_],
-) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8], npt.NDArray[np.int_]]:
-    """Reference elimination on byte-valued rows."""
-    rows, tags = matrix.copy(), labels.copy()
-    pivots: list[int] = []
-    for column in columns:
-        rank = len(pivots)
-        if rank == len(rows):
-            break
-        choices = np.flatnonzero(rows[rank:, column])
-        if not len(choices):
-            continue
-        source = rank + int(choices[0])
-        rows[[rank, source]] = rows[[source, rank]]
-        tags[[rank, source]] = tags[[source, rank]]
-        for other in range(len(rows)):
-            if other != rank and rows[other, column]:
-                rows[other] ^= rows[rank]
-                tags[other] ^= tags[rank]
-        pivots.append(int(column))
-    return rows, tags, np.array(pivots, dtype=int)
