@@ -110,7 +110,7 @@ def _get_distance_brouwer_zimmermann(
 # helper methods
 
 
-@njit(boundscheck=True, cache=True)
+@njit(cache=True)
 def _scan_brouwer_zimmermann(
     generators: npt.NDArray[np.uint64],
     labels: npt.NDArray[np.uint64],
