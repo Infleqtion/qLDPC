@@ -117,6 +117,12 @@ class SequentialWindowDecoder(SinterDecoder):
 
         See help(sinter.Decoder) for additional information.
         """
+        return self._compile_windows(dem, self.windows)
+
+    def _compile_windows(
+        self, dem: stim.DetectorErrorModel, windows: Sequence[tuple[list[int], list[int]]]
+    ) -> CompiledSequentialWindowDecoder:
+        """Compile a decoder for each (detection region, commit region) window of a model."""
         dem_arrays = DetectorErrorModelArrays(
             dem, simplify=self.simplify, decompose_errors=self.decompose_errors
         )
@@ -126,7 +132,7 @@ class SequentialWindowDecoder(SinterDecoder):
         window_errors = []
         window_decoders = []
         addressed_errors = np.zeros(dem_arrays.num_errors, dtype=bool)
-        for d_detectors, c_detectors in self.windows:
+        for d_detectors, c_detectors in windows:
             # identify errors in the detection region
             d_errors = dem_arrays.detector_flip_matrix[d_detectors].getnnz(axis=0) != 0
             d_errors[addressed_errors] = False
@@ -415,7 +421,7 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
             detector_to_time = coordinate_to_time
 
         # construct windows defined by "detection" and "commit" regions
-        self.windows = []
+        windows: list[tuple[list[int], list[int]]] = []
         for detectors in self.detector_subsets or [range(dem.num_detectors)]:
             # collect detectors according to their time index
             time_to_dets: dict[int, list[int]] = collections.defaultdict(list)
@@ -439,18 +445,18 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
                     [det for dets in window_time_to_dets for det in dets],
                     [det for dets in window_time_to_dets[: self.stride] for det in dets],
                 )
-                self.windows.append(window)
+                windows.append(window)
                 start_time += self.stride
 
             # add last window
             window_time_to_dets = [time_to_dets[tt] for tt in range(start_time, end_time)]
             last_dets = [det for dets in window_time_to_dets for det in dets]
-            self.windows.append((last_dets, last_dets))
+            windows.append((last_dets, last_dets))
 
         # drop windows with nothing to commit, which arise from gaps between time indices
-        self.windows = [(d_dets, c_dets) for d_dets, c_dets in self.windows if c_dets]
+        windows = [(d_dets, c_dets) for d_dets, c_dets in windows if c_dets]
 
-        return SequentialWindowDecoder.compile_decoder_for_dem(self, dem)
+        return self._compile_windows(dem, windows)
 
 
 ####################################################################################################

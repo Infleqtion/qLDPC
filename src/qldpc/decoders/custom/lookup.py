@@ -646,6 +646,12 @@ class ObservableLookupDecoder(_LookupDecoderBase):
 # weighted lookup decoders
 
 
+# defined before the classes below, whose method signatures use it as a default argument
+def _hamming_weight(vec: npt.NDArray[np.int_]) -> int:
+    """The number of nonzero entries of a vector, which is the default lookup-decoding penalty."""
+    return int(np.count_nonzero(vec))
+
+
 class _WeightedLookupDecoderBase(_LookupDecoderBase):
     """Shared implementation of weighted lookup-table decoders.
 
@@ -712,9 +718,7 @@ class _WeightedLookupDecoderBase(_LookupDecoderBase):
     def _decode_weighted(
         self,
         syndrome: npt.NDArray[np.int_],
-        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = lambda vec: int(
-            np.count_nonzero(vec)
-        ),
+        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = _hamming_weight,
     ) -> npt.NDArray[np.int_]:
         """Look up the minimum-penalty configured prediction."""
         key = self._get_syndrome_key(syndrome)
@@ -781,9 +785,7 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
     def decode_errors(
         self,
         syndrome: npt.NDArray[np.int_],
-        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = lambda vec: int(
-            np.count_nonzero(vec)
-        ),
+        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = _hamming_weight,
     ) -> npt.NDArray[np.int_]:
         """Decode an error syndrome and return an inferred error."""
         return self._decode_weighted(syndrome, penalty_func)
@@ -791,9 +793,7 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
     def decode_errors_batch(
         self,
         syndromes: npt.NDArray[np.int_],
-        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = lambda vec: int(
-            np.count_nonzero(vec)
-        ),
+        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = _hamming_weight,
     ) -> npt.NDArray[np.int_]:
         """Decode a batch of syndromes, one per row, and return inferred errors."""
         return self._stack_predictions(
@@ -805,9 +805,7 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
     def decode(
         self,
         syndrome: npt.NDArray[np.int_],
-        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = lambda vec: int(
-            np.count_nonzero(vec)
-        ),
+        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = _hamming_weight,
     ) -> npt.NDArray[np.int_]:
         """Decode an error syndrome and return an inferred error (alias for decode_errors)."""
         return self.decode_errors(syndrome, penalty_func)
@@ -870,9 +868,7 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
     def decode_observables(
         self,
         syndrome: npt.NDArray[np.int_],
-        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = lambda vec: int(
-            np.count_nonzero(vec)
-        ),
+        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = _hamming_weight,
     ) -> npt.NDArray[np.int_]:
         """Decode a syndrome and return predicted observable flips."""
         return self._decode_weighted(syndrome, penalty_func)
@@ -880,9 +876,7 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
     def decode_observables_batch(
         self,
         syndromes: npt.NDArray[np.int_],
-        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = lambda vec: int(
-            np.count_nonzero(vec)
-        ),
+        penalty_func: Callable[[npt.NDArray[np.int_]], float] | None = _hamming_weight,
     ) -> npt.NDArray[np.int_]:
         """Decode a batch of syndromes, one per row, and return predicted observable flips."""
         return self._stack_predictions(

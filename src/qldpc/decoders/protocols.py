@@ -218,7 +218,7 @@ class WrappedErrorDecoder(ErrorDecoder):
     def __init__(self, decoder: SupportsDecode) -> None:
         self.decoder = decoder
 
-    def __getattr__(self, name: str) -> Any:
+    def __getattr__(self, name: str) -> object:
         """Read an attribute of the wrapped object, reading decode_errors_batch as decode_batch.
 
         Special (dunder) attributes are not read from the wrapped object, which keeps copying and
