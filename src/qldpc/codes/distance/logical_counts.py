@@ -35,6 +35,7 @@ References:
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -50,6 +51,7 @@ from ._binary import (
     _pack_bits,
     _popcount_word,
     _row_reduce_binary,
+    _unpack_bits,
 )
 from .brouwer_zimmermann import (
     _get_brouwer_zimmermann_lower_bound,
@@ -268,25 +270,36 @@ class CSSLogicalCounter:
         return CSSLogicalCounts(target, count_x, count_z, count_pauli)
 
     def conjugated(
-        self, targets: Sequence[int], matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike
+        self,
+        targets: Sequence[int],
+        matrix_x: npt.ArrayLike,
+        matrix_z: npt.ArrayLike | None = None,
     ) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a local CSS-preserving Clifford.
 
         Args:
             targets: Between one and 64 distinct qubit indices on which the Clifford acts, in order.
-            matrix_x: Binary matrix that maps the X support on the targets, as a column vector, to
-                its image.
-            matrix_z: The same for Z supports.  It must satisfy ``matrix_x @ matrix_z.T = I``
-                over GF(2), so that commutation is preserved.
+            matrix_x: Invertible binary matrix that maps the X support on the targets, as a column
+                vector, to its image.
+            matrix_z: The same for Z supports, which must satisfy ``matrix_x @ matrix_z.T = I`` over
+                GF(2) so that commutation is preserved.  If None (the default), it is computed from
+                ``matrix_x``.  A supplied ``matrix_z`` is trusted, not verified: one that violates
+                this condition gives wrong counts.
 
         Returns:
             A new counter.  This counter is not modified.
 
         Raises:
-            ValueError: If the targets or matrices are invalid.
+            ValueError: If the targets are invalid, if a matrix is not binary or does not match the
+                number of targets, or if ``matrix_z`` is None and ``matrix_x`` is not invertible.
         """
         positions = self._get_positions(targets)
-        local_x, local_z = _pack_local_matrices(matrix_x, matrix_z, len(positions))
+        local_x = _pack_local(_as_local_matrix(matrix_x, len(positions)))
+        local_z = (
+            _get_dual_local(tuple(local_x.tolist()))
+            if matrix_z is None
+            else _pack_local(_as_local_matrix(matrix_z, len(positions)))
+        )
         return self._conjugated(positions, local_x, local_z)
 
     def conjugated_cnot(self, control: int, target: int) -> CSSLogicalCounter:
@@ -577,37 +590,44 @@ _CNOT = (np.array([1, 3], dtype=np.uint64), np.array([3, 2], dtype=np.uint64))
 _SWEL = (np.array([7, 11, 13, 14], dtype=np.uint64),) * 2
 
 
-def _pack_local_matrices(
-    matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike, size: int
-) -> tuple[npt.NDArray[np.uint64], npt.NDArray[np.uint64]]:
-    """Validate local CSS-preserving matrices, and pack each row into a word (bit j is column j)."""
-    packed = []
-    for matrix in (matrix_x, matrix_z):
-        order = getattr(type(matrix), "order", None)
-        local = np.asarray(matrix)
-        if local.shape != (size, size):
-            raise ValueError("Local Clifford matrices must be square and match the target count")
-        if (order is not None and order != 2) or not np.all((local == 0) | (local == 1)):
-            raise ValueError("Local Clifford matrices must be binary")
-        # At most 64 targets, so each row packs into a single word.
-        packed.append(_pack_bits(local.astype(np.uint8))[:, 0])
-    if not _is_css_pairing(packed[0], packed[1]):
-        raise ValueError("Local X/Z matrices must preserve the CSS commutation pairing")
-    return packed[0], packed[1]
+def _as_local_matrix(matrix: npt.ArrayLike, size: int) -> _BinaryMatrix:
+    """Validate a binary local Clifford matrix that acts on ``size`` targets."""
+    order = getattr(type(matrix), "order", None)
+    local = np.asarray(matrix)
+    if local.shape != (size, size):
+        raise ValueError("Local Clifford matrices must be square and match the target count")
+    if (order is not None and order != 2) or not np.all((local == 0) | (local == 1)):
+        raise ValueError("Local Clifford matrices must be binary")
+    return local.astype(np.uint8)
+
+
+@functools.lru_cache(maxsize=1024)
+def _get_dual_local(local_x: tuple[int, ...]) -> npt.NDArray[np.uint64]:
+    """Packed ``matrix_z`` that satisfies ``matrix_x @ matrix_z.T = I`` over GF(2).
+
+    The argument holds the packed rows of ``matrix_x``.  Results are cached, since searches apply
+    the same local Cliffords repeatedly, and are read-only so that callers cannot alter the cache.
+    """
+    size = len(local_x)
+    matrix_x = _unpack_bits(np.array(local_x, dtype=np.uint64)[:, None], size)
+    # Row reduction finds T with T @ matrix_x = I, so that matrix_z = T.T.
+    _, inverse, pivots = _row_reduce_binary(matrix_x, np.eye(size, dtype=np.uint8))
+    if len(pivots) < size:
+        raise ValueError("Local Clifford matrix_x must be invertible over GF(2)")
+    assert inverse is not None
+    local_z = _pack_local(inverse.T.copy())
+    local_z.setflags(write=False)
+    return local_z
+
+
+def _pack_local(matrix: _BinaryMatrix) -> npt.NDArray[np.uint64]:
+    """Pack each row of a local matrix into one word, whose bit j is column j."""
+    # There are at most 64 targets, so each row fits in a single word.
+    return _pack_bits(matrix)[:, 0]
 
 
 ####################################################################################################
 # native kernels
-
-
-@njit(cache=True)
-def _is_css_pairing(local_x: npt.NDArray[np.uint64], local_z: npt.NDArray[np.uint64]) -> bool:
-    """Whether packed local matrices satisfy ``local_x @ local_z.T = I`` over GF(2)."""
-    for row in range(len(local_x)):
-        for column in range(len(local_z)):
-            if _popcount_word(local_x[row] & local_z[column]) & 1 != (row == column):
-                return False
-    return True
 
 
 @njit(cache=True)
