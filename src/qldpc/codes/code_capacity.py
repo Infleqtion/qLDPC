@@ -31,7 +31,7 @@ from qldpc.decoders.capabilities import (
 )
 from qldpc.decoders.common import PLACEHOLDER_ERROR_RATE, ObservableDecodingFallbackWarning
 from qldpc.decoders.construction.factories import DEMDecoderFactory
-from qldpc.decoders.construction.resolution import _resolve_error_decoder, reject_prebuilt_decoder
+from qldpc.decoders.construction.resolution import reject_prebuilt_decoder, resolve_decoder
 from qldpc.decoders.construction.specs import (
     DecoderInput,
     DecoderSpec,
@@ -359,7 +359,7 @@ def get_code_capacity_decoder(
             )
 
     try:
-        error_decoder = _resolve_error_decoder(
+        error_decoder = resolve_decoder(
             syndrome_matrix,
             decoder,  # type:ignore[arg-type]
             decoder_args,

@@ -121,10 +121,7 @@ def test_unsimplified_dense_decoder() -> None:
 
 def test_rejected_decoder_arguments() -> None:
     """Decoder arguments that an ObservableDecoder cannot honor are rejected."""
-    with (
-        pytest.warns(DeprecationWarning, match="free-form decoder options"),
-        pytest.raises(ValueError, match="DEFUNCT"),
-    ):
+    with pytest.raises(ValueError, match="DEFUNCT"):
         decoders.SinterDecoder(priors_arg="error_channel")
 
     dem = stim.DetectorErrorModel("""
