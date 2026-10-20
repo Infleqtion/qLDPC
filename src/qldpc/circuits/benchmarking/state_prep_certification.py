@@ -59,6 +59,11 @@ from qldpc.codes.distance._bounded_weight_search import _BoundedKernelSearch, _P
 from ..common import get_pauli_product_measurements
 from ..encoding import get_state_stabilizers
 
+# Thresholds of the search heuristic in ``_use_prefix_search``: the fewest BZ coefficient supports
+# worth replacing, and how many times they must outnumber the prefix extensions.
+_MIN_COEFFICIENT_SUPPORTS = 1024
+_PREFIX_ADVANTAGE = 2
+
 ####################################################################################################
 # state-preparation certification
 
@@ -267,7 +272,7 @@ class StatePrepSpreadCertificate:
 
 
 ####################################################################################################
-# circuit diagnostics and input validation
+# helper methods
 
 
 def _get_fault_maps(
@@ -334,10 +339,6 @@ def _validate_indices(
         or len(set(indices)) != len(indices)
     ):
         raise ValueError(f"{name} must contain distinct in-range integer indices")
-
-
-####################################################################################################
-# bounded search over accepted fault patterns
 
 
 def _certify_maps(
@@ -423,15 +424,6 @@ def _check_fault_pattern(
         decision.lower_bound,
         str(pauli),
     )
-
-
-####################################################################################################
-# exact minimal-dependency search strategies
-
-# Thresholds of the search heuristic in ``_use_prefix_search``: the fewest BZ coefficient supports
-# worth replacing, and how many times they must outnumber the prefix extensions.
-_MIN_COEFFICIENT_SUPPORTS = 1024
-_PREFIX_ADVANTAGE = 2
 
 
 def _use_prefix_search(num_columns: int, rank: int, budget: int) -> bool:
@@ -542,10 +534,6 @@ def _iter_minimal_patterns(
                 )
 
     yield from visit((), 0, 0, 0, ())
-
-
-####################################################################################################
-# binary linear algebra
 
 
 def _binary_rank(columns: Sequence[int]) -> int:
