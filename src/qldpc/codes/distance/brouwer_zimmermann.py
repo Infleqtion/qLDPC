@@ -21,8 +21,6 @@ import numpy.typing as npt
 from numba import njit
 
 from ._binary import (
-    _get_hamming_weight_fn,
-    _get_packed_row_weights,
     _pack_bits,
     _popcount_word,
     _row_reduce_binary,
@@ -389,10 +387,10 @@ def _get_brouwer_zimmermann_initial_upper_bound(
     labels: npt.NDArray[np.uint8] | None,
 ) -> int:
     """Return the lightest eligible row in a nested-code basis."""
-    weight_func, _ = _get_hamming_weight_fn()
     eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
     packed_basis = _pack_bits(basis[eligible])
-    return int(_get_packed_row_weights(packed_basis, weight_func).min())
+    # get row weights, summing in uint64 to avoid overflow in wide rows
+    return int(np.bitwise_count(packed_basis).sum(axis=-1, dtype=np.uint64).min())
 
 
 def _select_brouwer_zimmermann_information_sets(

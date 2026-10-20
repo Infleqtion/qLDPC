@@ -272,8 +272,8 @@ def parse_gap_permutations(permutations: str, cycle_sep: str = ",") -> Generator
         cycle_strings = line.strip()[1:-1].split(")(")
         try:
             cycles = [tuple(map(int, cycle.split(cycle_sep))) for cycle in cycle_strings if cycle]
-        except ValueError:
-            raise ValueError(f"Cannot extract cycles from string: {line}")
+        except ValueError as error:
+            raise ValueError(f"Cannot extract cycles from string: {line}") from error
 
         # decrement integers in the cycle by 1 to account for 0-indexing
         cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]

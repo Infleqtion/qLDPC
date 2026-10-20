@@ -36,16 +36,11 @@ def _get_random_full_rank_matrix(
             return matrix
 
 
-def _bitwise_count(
-    val: npt.ArrayLike, out: npt.NDArray[np.uint64] | None = None
-) -> npt.NDArray[np.uint64]:
-    """Return reference per-word bit counts for arrays accepted by optimized popcount helpers."""
+def _bitwise_count(val: npt.ArrayLike) -> npt.NDArray[np.uint64]:
+    """Return per-word bit counts, computed bit by bit as an independent reference for popcounts."""
     val = np.asarray(val)
     nbits = 8 * val.itemsize
-
-    if out is None:
-        out = np.empty_like(val)
-
+    out = np.empty_like(val)
     for indices in np.ndindex(val.shape):
         ival = int(val[indices])
         out[indices] = sum(ival >> i & 1 for i in range(nbits))

@@ -42,10 +42,12 @@ from .construction.legacy import (
     get_legacy_decoder_migration_message,
     get_observable_decoder,
     reject_removed_decoder_args,
+)
+from .construction.resolution import (
+    reject_prebuilt_decoder,
     resolve_decoder,
     resolve_observable_decoder,
 )
-from .construction.resolution import reject_prebuilt_decoder
 from .construction.specs import (
     DecoderInput,
     DecoderSpec,

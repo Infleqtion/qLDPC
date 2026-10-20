@@ -199,6 +199,23 @@ def test_jeffreys_variance() -> None:
     assert np.isclose(variances[2], mean * (1 - mean) / (100 + 2))
 
 
+def test_error_rate_func_from_sampler() -> None:
+    """ErrorRateFunc.from_sampler samples each allocated weight once and stores its counts."""
+    calls = []
+
+    def sample(weight: int, num_samples: int) -> tuple[int, int]:
+        calls.append((weight, num_samples))
+        return num_samples // 2, num_samples % 2
+
+    func = monte_carlo.ErrorRateFunc.from_sampler(sample, 100, 10, 0.1, min_error_weight=2)
+    allocation = monte_carlo.get_sample_allocation(100, 10, 0.1, min_error_weight=2)
+    assert calls == [(weight, allocation[weight]) for weight in np.nonzero(allocation)[0]]
+    assert np.array_equal(func.num_samples, allocation)
+    assert np.array_equal(func.num_failures, allocation // 2)
+    assert np.array_equal(func.num_discards, allocation % 2)
+    assert (func.num_error_locations, func.max_error_rate, func.min_error_weight) == (10, 0.1, 2)
+
+
 def test_error_rate_func_validation() -> None:
     """Inconsistent count arrays are rejected at construction."""
 

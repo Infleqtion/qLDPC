@@ -57,13 +57,6 @@ def test_get_kernel(shape: tuple[int, int]) -> None:
     assert len(binary._get_independent_rows(kernel)) == len(kernel)
 
 
-def test_packed_row_weights_do_not_overflow() -> None:
-    packed = np.full((2, 5), np.iinfo(np.uint64).max, dtype=np.uint64)
-    packed[1, -1] = 0
-    weight_func, _ = binary._get_hamming_weight_fn()
-    np.testing.assert_array_equal(binary._get_packed_row_weights(packed, weight_func), [320, 256])
-
-
 def test_riffle_and_symplectic_isometry() -> None:
     symplectic = np.array(list(itertools.product((0, 1), repeat=6)), dtype=np.uint8)
     expected = np.stack((symplectic[:, :3], symplectic[:, 3:]), axis=2).reshape(-1, 6)
@@ -78,110 +71,18 @@ def test_riffle_and_symplectic_isometry() -> None:
     )
 
 
-def test_hamming_weight() -> None:
-    """Validate _hamming_weight against a simple reference bit-counting implementation."""
-    vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)
-    expected_weights = _bitwise_count(vals)
-
-    weights = binary._hamming_weight(vals)
-    np.testing.assert_array_equal(weights, expected_weights)
-
-    buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = binary._hamming_weight(vals, buf=buf, out=out)
-    np.testing.assert_array_equal(weights, expected_weights)
-    assert out is weights
-
-
 def test_symplectic_weight() -> None:
     """Validate _symplectic_weight against the reference bit-counting implementation."""
     vals = np.random.randint(0, 2**64, size=(7, 11), dtype=np.uint64)
-    weights = binary._symplectic_weight(vals)
     expected_weights = _bitwise_count((vals | (vals >> np.uint64(1))) & 0x5555555555555555)
+    weights = binary._symplectic_weight(vals)
+    assert weights.dtype == np.uint64
     np.testing.assert_array_equal(weights, expected_weights)
 
-    buf, out = np.random.randint(0, 2**64, size=(2, *vals.shape), dtype=vals.dtype)
-    weights = binary._symplectic_weight(vals, buf=buf, out=out)
+    out = np.random.randint(0, 2**64, size=vals.shape, dtype=vals.dtype)
+    weights = binary._symplectic_weight(vals, out=out)
     np.testing.assert_array_equal(weights, expected_weights)
-    assert out is weights
-
-
-def test_get_hamming_weight_fn() -> None:
-    """_get_hamming_weight_fn selects NumPy bitcount when available and the fallback otherwise."""
-    generators = np.random.randint(2, size=(4, 64), dtype=np.uint64)
-    weight_fn, nbuf = binary._get_hamming_weight_fn()
-    weights_default = weight_fn(generators)
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
-        weight_fn, nbuf = binary._get_hamming_weight_fn()
-        assert weight_fn is not binary._hamming_weight
-        assert nbuf == 0
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-        patched.assert_called_once()
-
-    with mock.patch.object(np, "bitwise_count", None, create=True):
-        weight_fn, nbuf = binary._get_hamming_weight_fn()
-        assert weight_fn is binary._hamming_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-
-def test_get_symplectic_weight_fn() -> None:
-    """_get_symplectic_weight_fn uses NumPy bitcount when available and the fallback otherwise."""
-    generators = np.random.randint(2, size=(4, 56), dtype=np.uint64)
-    weight_fn, nbuf = binary._get_symplectic_weight_fn()
-    weights_default = weight_fn(generators)
-
-    # The mocked NumPy backend uses a per-word popcount reference when NumPy lacks bitwise_count.
-    mock_weight = getattr(np, "bitwise_count", _bitwise_count)
-
-    # This branch verifies the NumPy popcount backend for packed symplectic words.
-    with mock.patch.object(np, "bitwise_count", wraps=mock_weight, create=True) as patched:
-        weight_fn, nbuf = binary._get_symplectic_weight_fn()
-        assert weight_fn is not binary._hamming_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-        patched.assert_called_once()
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-    # This branch verifies the fallback popcount backend for packed symplectic words.
-    with mock.patch.object(np, "bitwise_count", None, create=True):
-        weight_fn, nbuf = binary._get_symplectic_weight_fn()
-        assert weight_fn is binary._symplectic_weight
-        assert nbuf == 1
-
-        out = np.empty_like(generators)
-        weights = weight_fn(generators, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
-
-        buf = np.empty_like(generators)
-        weights = weight_fn(generators, buf, out=out)
-        np.testing.assert_array_equal(weights, weights_default)
-        assert weights is out
+    assert weights is out
 
 
 @pytest.mark.parametrize(

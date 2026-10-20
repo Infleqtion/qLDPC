@@ -108,20 +108,19 @@ class DirectDecoder:
     - an indirect decoder, and
     - a parity check matrix.
 
-    When asked to decode a candidate code word, a DirectDecoder first computes a syndrome, decodes
-    the syndrome with an indirect decoder to infer an error, and then subtracts the error from the
-    candidate word.
+    To correct a candidate code word, a DirectDecoder first computes a syndrome, decodes the
+    syndrome with an indirect decoder to infer an error, and then subtracts the error from the
+    candidate word.  A DirectDecoder is therefore not a syndrome decoder, and its methods are named
+    correct and correct_batch rather than decode and decode_batch.
     """
 
     def __init__(
         self,
-        decode_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]],
-        decode_batch_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]] | None = None,
+        correct_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]],
+        correct_batch_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]] | None = None,
     ) -> None:
-        self.decode_func = decode_func
-        self.decode_batch_func = decode_batch_func
-        if decode_batch_func is not None:
-            self.decode_batch = decode_batch_func
+        self.correct_func = correct_func
+        self.correct_batch_func = correct_batch_func
 
     @staticmethod
     def from_indirect(
@@ -139,29 +138,49 @@ class DirectDecoder:
                     f"The given decoder inferred errors of shape {errors.shape}, which cannot be"
                     f" subtracted from candidate code words of shape {words.shape}.  A decoder that"
                     " appends an erasure bit, or that predicts observable flips rather than an"
-                    " error, cannot be used to decode code words directly."
+                    " error, cannot be used to correct code words directly."
                 )
 
-        def decode_func(candidate_word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        def correct_func(candidate_word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
             candidate_word = candidate_word.view(field)
             syndrome = field_matrix @ candidate_word
             error = error_decoder.decode_errors(syndrome.view(np.ndarray)).view(field)
             check_subtractable(error, candidate_word)
             return (candidate_word - error).view(np.ndarray)
 
-        decode_batch_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]] | None = None
+        correct_batch_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]] | None = None
 
         if supports_batch_decoding(error_decoder):
 
-            def decode_batch_func(candidate_words: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+            def correct_batch_func(candidate_words: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
                 candidate_words = candidate_words.view(field)
                 syndromes = candidate_words @ field_matrix.T
                 errors = batch_decode_errors(error_decoder, syndromes.view(np.ndarray)).view(field)
                 check_subtractable(errors, candidate_words)
                 return (candidate_words - errors).view(np.ndarray)
 
-        return DirectDecoder(decode_func, decode_batch_func)
+        return DirectDecoder(correct_func, correct_batch_func)
 
-    def decode(self, word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode a corrupted code word and return a corrected code word."""
-        return self.decode_func(word)
+    def correct(self, word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Correct a corrupted code word."""
+        return self.correct_func(word)
+
+    def correct_batch(self, words: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Correct a batch of corrupted code words, one per row."""
+        if self.correct_batch_func is not None:
+            return self.correct_batch_func(words)
+        return np.array([self.correct(word) for word in words])
+
+    def decode(self, word: npt.NDArray[np.int_]) -> None:
+        """DEFUNCT alias for DirectDecoder.correct."""
+        raise ValueError(
+            "DirectDecoder.decode is DEFUNCT; use DirectDecoder.correct instead.  A DirectDecoder"
+            " corrects code words, and is not a syndrome decoder"
+        )
+
+    def decode_batch(self, words: npt.NDArray[np.int_]) -> None:
+        """DEFUNCT alias for DirectDecoder.correct_batch."""
+        raise ValueError(
+            "DirectDecoder.decode_batch is DEFUNCT; use DirectDecoder.correct_batch instead.  A"
+            " DirectDecoder corrects code words, and is not a syndrome decoder"
+        )

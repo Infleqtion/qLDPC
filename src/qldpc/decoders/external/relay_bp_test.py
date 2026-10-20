@@ -27,6 +27,7 @@ from qldpc.decoders.external.relay_bp import (
     _get_decoder_min_sum_bp,
     _get_decoder_rbp,
     _get_decoder_relay_bp,
+    _get_relay_bp,
 )
 
 
@@ -50,6 +51,13 @@ def test_relay_bp(toy_problem: ToyProblem) -> None:
     decoder = _get_decoder_rbp(matrix)
     assert np.array_equal(error, copy.copy(decoder).decode(syndrome))
 
+    # batch methods show no progress bar by default
+    with unittest.mock.patch.object(decoder, "decoder") as runner:
+        runner.decode_batch.return_value = errors
+        decoder.decode_errors_batch(syndromes)
+        decoder.decode_batch(syndromes)
+    assert [call.args[2] for call in runner.decode_batch.call_args_list] == [False, False]
+
     with pytest.raises(TypeError, match="missing 1 required positional argument"):
         decoder.compute_observables()
 
@@ -62,14 +70,15 @@ def test_relay_bp(toy_problem: ToyProblem) -> None:
 
     with (
         unittest.mock.patch.dict("sys.modules", {"relay_bp": None}),
-        pytest.raises(ImportError, match="Failed to import relay-bp"),
+        pytest.raises(ModuleNotFoundError, match=r"qldpc\[relay-bp\]") as exc_info,
     ):
         _get_error_decoder(np.array([[]]), decoder=decoders.relay_bp())
+    assert isinstance(exc_info.value.__cause__, ModuleNotFoundError)
 
     with pytest.raises(ValueError, match="name not recognized"):
         _get_decoder_rbp(np.array([[]]), name="invalid_name")
 
-    with pytest.raises(TypeError, match="breaking change"):
+    with pytest.raises(TypeError, match="not a string"):
         decoders.external.RelayBPDecoder("MinSumBPDecoderF32")
 
     with pytest.warns(UserWarning, match="will override"):
@@ -207,6 +216,16 @@ import qldpc.decoders.external.relay_bp
 assert "relay_bp" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+def test_relay_bp_nested_import_failure() -> None:
+    """A module missing inside relay-bp is reported as is, rather than as a missing relay-bp."""
+    nested_error = ModuleNotFoundError("No module named 'nested'", name="nested")
+    with (
+        pytest.raises(ModuleNotFoundError, match="nested"),
+        unittest.mock.patch("builtins.__import__", side_effect=nested_error),
+    ):
+        _get_relay_bp()
 
 
 def test_relay_bp_unsorted_observables() -> None:
