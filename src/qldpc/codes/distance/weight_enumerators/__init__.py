@@ -2,7 +2,8 @@
 
 """Exact binary CSS logical-weight spectra and minimum-weight physical Pauli counts.
 
-See ``counter`` for the public counter and its backends.
+See ``counter`` for the public counter and its backends, and ``README.md`` in this directory
+for a guide to the code.
 """
 
 from .counter import (
