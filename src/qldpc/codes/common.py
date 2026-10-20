@@ -39,10 +39,7 @@ from .distance import (
     validate_distance_backend,
     validate_distance_method,
 )
-from .monte_carlo import (
-    ErrorRateFunc,
-    get_sample_allocation,
-)
+from .monte_carlo import ErrorRateFunc
 
 Slice = slice | npt.NDArray[np.int_] | list[int]
 
@@ -917,21 +914,13 @@ class ClassicalCode(AbstractCode):
         )
 
         # sample errors of fixed weight and record failure/discard counts
-        sample_allocation = get_sample_allocation(
-            num_samples, len(self), max_error_rate, min_error_weight
-        )
-        num_failures = np.zeros(sample_allocation.size, dtype=int)
-        num_discards = np.zeros(sample_allocation.size, dtype=int)
-        for weight in np.nonzero(sample_allocation)[0].tolist():
-            num_failures[weight], num_discards[weight] = self._sample_failure_and_discard_counts(
-                weight, sample_allocation[weight], code_capacity_decoder
-            )
-        return ErrorRateFunc(
-            sample_allocation,
-            num_failures,
-            num_discards,
+        return ErrorRateFunc.from_sampler(
+            functools.partial(
+                self._sample_failure_and_discard_counts, decoder=code_capacity_decoder
+            ),
+            num_samples,
             len(self),
-            float(max_error_rate),
+            max_error_rate,
             min_error_weight,
         )
 
@@ -2420,24 +2409,15 @@ class QuditCode(AbstractCode):
         )
 
         # sample errors of fixed weight and record failure/discard counts
-        sample_allocation = get_sample_allocation(
-            num_samples, len(self), max_error_rate, min_error_weight
-        )
-        num_failures = np.zeros(sample_allocation.size, dtype=int)
-        num_discards = np.zeros(sample_allocation.size, dtype=int)
-        for weight in np.nonzero(sample_allocation)[0].tolist():
-            num_failures[weight], num_discards[weight] = self._sample_failure_and_discard_counts(
-                weight,
-                sample_allocation[weight],
-                code_capacity_decoder,
-                pauli_bias_zxy,
-            )
-        return ErrorRateFunc(
-            sample_allocation,
-            num_failures,
-            num_discards,
+        return ErrorRateFunc.from_sampler(
+            functools.partial(
+                self._sample_failure_and_discard_counts,
+                decoder=code_capacity_decoder,
+                pauli_bias_zxy=pauli_bias_zxy,
+            ),
+            num_samples,
             len(self),
-            float(max_error_rate),
+            max_error_rate,
             min_error_weight,
         )
 
@@ -3998,27 +3978,16 @@ class CSSCode(QuditCode):
             )
 
         # sample errors of fixed weight and record failure/discard counts
-        sample_allocation = get_sample_allocation(
-            num_samples, len(self), max_error_rate, min_error_weight
-        )
-        num_failures = np.zeros(sample_allocation.size, dtype=int)
-        num_discards = np.zeros(sample_allocation.size, dtype=int)
-        for weight in np.nonzero(sample_allocation)[0].tolist():
-            num_failures[weight], num_discards[weight] = (
-                self._sample_css_failure_and_discard_counts(
-                    weight,
-                    sample_allocation[weight],
-                    code_capacity_decoder_x,
-                    code_capacity_decoder_z,
-                    pauli_bias_zxy,
-                )
-            )
-        return ErrorRateFunc(
-            sample_allocation,
-            num_failures,
-            num_discards,
+        return ErrorRateFunc.from_sampler(
+            functools.partial(
+                self._sample_css_failure_and_discard_counts,
+                decoder_x=code_capacity_decoder_x,
+                decoder_z=code_capacity_decoder_z,
+                pauli_bias_zxy=pauli_bias_zxy,
+            ),
+            num_samples,
             len(self),
-            float(max_error_rate),
+            max_error_rate,
             min_error_weight,
         )
 

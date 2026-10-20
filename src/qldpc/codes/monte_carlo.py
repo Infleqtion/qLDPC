@@ -10,7 +10,7 @@ that those methods perform.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import TypeVar
 
 import numpy as np
@@ -30,8 +30,8 @@ OneOrManyFloats = TypeVar("OneOrManyFloats", float, Iterable[float])
 class ErrorRateFunc:
     """Container for raw simulation data used to compute logical error and discard rates.
 
-    An instance of this class is built and returned by the .get_logical_error_rate_func method of
-    ClassicalCode, QuditCode, and CSSCode.  If::
+    An instance of this class is built with ErrorRateFunc.from_sampler and returned by the
+    .get_logical_error_rate_func method of ClassicalCode, QuditCode, and CSSCode.  If::
 
         func = code.get_logical_error_rate_func(...),
 
@@ -103,6 +103,47 @@ class ErrorRateFunc:
                 f"errors of weight below min_error_weight={self.min_error_weight} are taken to be"
                 " decoded perfectly, so they cannot fail or be discarded"
             )
+
+    @classmethod
+    def from_sampler(
+        cls,
+        sample_failures_and_discards: Callable[[int, int], tuple[int, int]],
+        num_samples: int,
+        num_error_locations: int,
+        max_error_rate: float,
+        min_error_weight: int = 1,
+    ) -> ErrorRateFunc:
+        """Sample errors of fixed weight according to get_sample_allocation, and collect the counts.
+
+        Args:
+            sample_failures_and_discards: A function that samples and decodes errors of a given
+                weight a given number of times, and returns the numbers of failures and discards.
+            num_samples: The total sample budget.
+            num_error_locations: The number of error locations, or block length.
+            max_error_rate: The largest physical error rate that the ErrorRateFunc can evaluate.
+            min_error_weight: The smallest error weight that the decoder is taken to be able to fail
+                on; lighter errors are taken to be decoded perfectly.
+
+        Returns:
+            An ErrorRateFunc.
+        """
+        sample_allocation = get_sample_allocation(
+            num_samples, num_error_locations, max_error_rate, min_error_weight
+        )
+        num_failures = np.zeros(sample_allocation.size, dtype=int)
+        num_discards = np.zeros(sample_allocation.size, dtype=int)
+        for weight in np.nonzero(sample_allocation)[0].tolist():
+            num_failures[weight], num_discards[weight] = sample_failures_and_discards(
+                weight, sample_allocation[weight]
+            )
+        return cls(
+            sample_allocation,
+            num_failures,
+            num_discards,
+            num_error_locations,
+            float(max_error_rate),
+            min_error_weight,
+        )
 
     @property
     def max_error_weight(self) -> int:
