@@ -273,9 +273,10 @@ def _pack_bits(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
 def _unpack_bits(packed: npt.NDArray[np.uint64], width: int) -> npt.NDArray[np.uint8]:
     """Inverse of ``_pack_bits`` for rows with ``width`` columns."""
     matrix = np.empty((len(packed), width), dtype=np.uint8)
+    one = np.uint64(1)
     for row in range(len(packed)):
         for column in range(width):
-            matrix[row, column] = (packed[row, column // 64] >> np.uint64(column % 64)) & 1
+            matrix[row, column] = (packed[row, column // 64] >> np.uint64(column % 64)) & one
     return matrix
 
 
