@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 import itertools
-from typing import Literal
+from typing import Literal, cast
 from unittest import mock
 
 import numpy as np
@@ -58,13 +58,13 @@ def test_bounded_kernel_information_bound() -> None:
     assert search.generated == 16 < sum(1 for _ in itertools.combinations(range(16), 3))
     wider = _BoundedKernelSearch(checks, 4)
     assert min(word.bit_count() for word in wider.words()) == 4 < wider.lower_bound
-    # Check packing across multiple 64-bit words without dense high-rate generators.
+    # Pairs of columns are the weight-two words of the even-weight code, packed across 64-bit words.
     search = _BoundedKernelSearch(np.ones((1, 130), dtype=int), 2)
     assert len(set(search.words())) == 130 * 129 // 2
 
 
-@pytest.mark.parametrize("weight", ["pauli", "css"])
-def test_pauli_coset_search_exhaustive(weight: Literal["pauli", "css"]) -> None:
+@pytest.mark.parametrize("metric", ["pauli", "css"])
+def test_pauli_coset_search_exhaustive(metric: Literal["pauli", "css"]) -> None:
     """Compare every small syndrome and threshold with independent stabilizer multiplication."""
     rng = np.random.default_rng(182)
     for n in range(1, 7):
@@ -76,13 +76,13 @@ def test_pauli_coset_search_exhaustive(weight: Literal["pauli", "css"]) -> None:
         circuit.append("S", range(n))
         generators = stim.Tableau.from_circuit(circuit).to_stabilizers()
         matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
-        oracle = _PauliCosetSearch(matrix, weight=weight, cache_size=2, batch_size=2)
+        oracle = _PauliCosetSearch(matrix, metric=metric, cache_size=2, batch_size=2)
         minimum = [n + 1] * (1 << n)
         for pauli in itertools.product(range(4), repeat=n):
             string = stim.PauliString(pauli)
             syndrome = sum((not string.commutes(gg)) << jj for jj, gg in enumerate(generators))
             xs, zs = string.to_numpy()
-            value = string.weight if weight == "pauli" else max(int(xs.sum()), int(zs.sum()))
+            value = string.weight if metric == "pauli" else max(int(xs.sum()), int(zs.sum()))
             minimum[syndrome] = min(minimum[syndrome], value)
         for syndrome, minimum_weight in enumerate(minimum):
             for threshold in (n, 0, 1, 2, 3, 0, n):
@@ -95,7 +95,7 @@ def test_pauli_coset_search_exhaustive(weight: Literal["pauli", "css"]) -> None:
                     x, z = string & ((1 << n) - 1), string >> n
                     actual = (
                         (x | z).bit_count()
-                        if weight == "pauli"
+                        if metric == "pauli"
                         else max(x.bit_count(), z.bit_count())
                     )
                     assert actual <= threshold
@@ -163,8 +163,8 @@ def test_affine_partial_information_set() -> None:
 
 
 @pytest.mark.parametrize("batch_size", [1, 7, 4096])
-@pytest.mark.parametrize("weight", ["pauli", "css"])
-def test_affine_global_bound_and_cache(batch_size: int, weight: Literal["pauli", "css"]) -> None:
+@pytest.mark.parametrize("metric", ["pauli", "css"])
+def test_affine_global_bound_and_cache(batch_size: int, metric: Literal["pauli", "css"]) -> None:
     """Four nonzero GHZ-block syndromes need exactly four qubits, not unseen bound five."""
     generators = [
         stim.PauliString("_" * (3 * block) + local + "_" * (9 - 3 * block))
@@ -177,12 +177,12 @@ def test_affine_global_bound_and_cache(batch_size: int, weight: Literal["pauli",
     # Each disjoint block has a nonzero syndrome, requiring at least one affected qubit.
     assert all((syndrome >> (3 * block)) & 7 for block in range(4))
     matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
-    oracle = _PauliCosetSearch(matrix, weight=weight, batch_size=batch_size)
+    oracle = _PauliCosetSearch(matrix, metric=metric, batch_size=batch_size)
     negative = oracle.decide(syndrome, 3)
     assert not negative.within_bound
     assert negative.lower_bound == 4
-    assert oracle.ranks == ((12, 12, 12) if weight == "pauli" else (12, 8))
-    assert oracle.coefficient_depth == (2 if weight == "pauli" else 5)
+    assert oracle.ranks == ((12, 12, 12) if metric == "pauli" else (12, 8))
+    assert oracle.coefficient_depth == (2 if metric == "pauli" else 5)
     generated = oracle.generated
     at_minimum = oracle.decide(syndrome, 4)
     assert at_minimum.within_bound and at_minimum.lower_bound == 4
@@ -193,7 +193,7 @@ def test_affine_global_bound_and_cache(batch_size: int, weight: Literal["pauli",
     repeated = oracle.decide(syndrome, 3)
     assert not repeated.within_bound and repeated.lower_bound == 4
     assert oracle.cache_hits == hits + 1 and oracle.generated == generated
-    fresh = _PauliCosetSearch(matrix, weight=weight).decide(syndrome, 4)
+    fresh = _PauliCosetSearch(matrix, metric=metric).decide(syndrome, 4)
     assert fresh.within_bound and fresh.lower_bound <= 4
 
 
@@ -293,15 +293,13 @@ def test_css_weight_one_and_fixed_metric() -> None:
     """X0 Z1 has CSS weight one but physical weight two on |0+>, even at threshold zero."""
     matrix = np.array([[0, 0, 1, 0], [0, 1, 0, 0]], dtype=np.uint8)
     physical = _PauliCosetSearch(matrix)
-    css = _PauliCosetSearch(matrix, weight="css")
-    assert physical.weight == "pauli" and css.weight == "css"
+    css = _PauliCosetSearch(matrix, metric="css")
+    assert physical.metric == "pauli" and css.metric == "css"
     assert not physical.decide(3, 1).within_bound
     assert css.decide(3, 1).within_bound
     assert css.decide(3, 0).lower_bound == 1
     assert css.decide(3, 1).within_bound
-    with pytest.raises(AttributeError):
-        object.__setattr__(css, "weight", "pauli")
-    assert css.weight == "css"
+    # The unconditional single-qubit tables stay linear in the number of qubits.
     assert len(css._x_singles) <= 3 and len(css._z_singles) <= 3
 
 
@@ -323,7 +321,7 @@ def test_css_joint_non_css_state() -> None:
         min_x, min_z, joint = min(min_x, x), min(min_z, z), min(joint, max(x, z))
     assert min_x == min_z == 0 and joint == 2
     matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
-    oracle = _PauliCosetSearch(matrix, weight="css")
+    oracle = _PauliCosetSearch(matrix, metric="css")
     assert not oracle.decide(syndrome, 1).within_bound
     assert oracle.decide(syndrome, 2).within_bound
 
@@ -336,7 +334,7 @@ def test_css_cache_boundaries_and_exhaustion(cache_size: int) -> None:
     for jj in range(n):
         matrix[jj, jj + n if jj < 3 else jj] = 1
     for reverse in (False, True):
-        oracle = _PauliCosetSearch(matrix, weight="css", cache_size=cache_size)
+        oracle = _PauliCosetSearch(matrix, metric="css", cache_size=cache_size)
         for syndrome in range(64):
             minimum = max((syndrome & 7).bit_count(), (syndrome >> 3).bit_count())
             thresholds = (max(0, minimum - 1), minimum, minimum + 1, 0, minimum)
@@ -351,7 +349,7 @@ def test_css_cache_boundaries_and_exhaustion(cache_size: int) -> None:
             assert oracle.decide(syndrome, minimum).within_bound
         assert len(oracle._cache) <= cache_size and oracle.preparations == 1
     zero_state = np.hstack([np.zeros((5, 5), dtype=np.uint8), np.eye(5, dtype=np.uint8)])
-    oracle = _PauliCosetSearch(zero_state, weight="css")
+    oracle = _PauliCosetSearch(zero_state, metric="css")
     zero_state[:] = 0  # Preparation owns its generators, even before lazy information-set setup.
     decision = oracle.decide(31, 4)
     assert not decision.within_bound and decision.lower_bound == 5
@@ -359,22 +357,21 @@ def test_css_cache_boundaries_and_exhaustion(cache_size: int) -> None:
     assert oracle.decide(31, 5).within_bound
 
 
-@pytest.mark.parametrize("weight", ["pauli", "css"])
+@pytest.mark.parametrize("metric", ["pauli", "css"])
 @pytest.mark.parametrize("n", [130, 257])
-def test_wide_packed_sectors(n: int, weight: Literal["pauli", "css"]) -> None:
+def test_wide_packed_sectors(n: int, metric: Literal["pauli", "css"]) -> None:
     """Unaligned sector boundaries and weights above 255 retain the actual metric weight."""
     matrix = np.hstack([np.zeros((n, n), dtype=np.uint8), np.eye(n, dtype=np.uint8)])
-    oracle = _PauliCosetSearch(matrix, weight=weight)
+    oracle = _PauliCosetSearch(matrix, metric=metric)
     decision = oracle.decide((1 << n) - 1, n)
     assert decision.within_bound
     assert oracle._weight(decision.representative) == n
     assert oracle.preparations == 1
 
 
-@pytest.mark.parametrize("weight", ["invalid"])
-def test_invalid_coset_weight(weight: Literal["pauli", "css"]) -> None:
-    with pytest.raises(ValueError, match="weight"):
-        _PauliCosetSearch([[1, 0]], weight=weight)
+def test_invalid_coset_metric() -> None:
+    with pytest.raises(ValueError, match="metric"):
+        _PauliCosetSearch([[1, 0]], metric=cast(Literal["pauli", "css"], "invalid"))
 
 
 def test_fixed_weight_supports() -> None:

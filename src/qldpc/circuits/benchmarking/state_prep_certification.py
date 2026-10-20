@@ -160,7 +160,7 @@ def certify_state_prep_spread(
     dem, flags, syndromes = _get_fault_maps(circuit, stabilizers, qubits, selected)
 
     # Reuse one prepared coset oracle for every fault pattern and syndrome encountered below.
-    oracle = _PauliCosetSearch(matrix, weight="css" if resolved_css_weight else "pauli")
+    oracle = _PauliCosetSearch(matrix, metric="css" if resolved_css_weight else "pauli")
     statistics = StatePrepSpreadStatistics(mechanisms=len(flags))
     counterexample = _certify_maps(flags, syndromes, oracle, int(max_faults), statistics)
     return StatePrepSpreadCertificate(

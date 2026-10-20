@@ -19,8 +19,20 @@ from qldpc.codes.distance._bounded_weight_search import _BoundedKernelSearch, _P
 from . import state_prep_certification
 
 
-def _exhaustive(flags: list[int], syndromes: list[int], n: int, budget: int) -> bool:
-    """Product-zero target: effective weight is syndrome Hamming weight."""
+def _pack_pauli(pauli: str) -> int:
+    """Pack a Stim Pauli string as an integer, with X in the low bits and Z in the next block."""
+    xs, zs = stim.PauliString(pauli).to_numpy()
+    num_qubits = len(xs)
+    return sum(int(x) << jj for jj, x in enumerate(xs)) | sum(
+        int(z) << (num_qubits + jj) for jj, z in enumerate(zs)
+    )
+
+
+def _exhaustive(flags: list[int], syndromes: list[int], budget: int) -> bool:
+    """Check every accepted fault pattern, for the state with one qubit per syndrome bit.
+
+    Its stabilizers are Z-type, so the effective weight of a syndrome is its Hamming weight.
+    """
     for size in range(1, min(budget, len(flags)) + 1):
         for support in itertools.combinations(range(len(flags)), size):
             flag = syndrome = 0
@@ -33,9 +45,9 @@ def _exhaustive(flags: list[int], syndromes: list[int], n: int, budget: int) -> 
 
 
 @pytest.mark.parametrize("force_prefix", [False, True])
-@pytest.mark.parametrize("weight", ["pauli", "css"])
+@pytest.mark.parametrize("metric", ["pauli", "css"])
 def test_random_maps(
-    force_prefix: bool, weight: Literal["pauli", "css"], monkeypatch: pytest.MonkeyPatch
+    force_prefix: bool, metric: Literal["pauli", "css"], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Minimal-dependency search agrees with all accepted patterns, including flag cancellation."""
     monkeypatch.setattr(
@@ -51,9 +63,9 @@ def test_random_maps(
                 for budget in (1, 2, 3, 5):
                     stats = circuits.StatePrepSpreadStatistics()
                     failure = state_prep_certification._certify_maps(
-                        flags, syndromes, _PauliCosetSearch(matrix, weight=weight), budget, stats
+                        flags, syndromes, _PauliCosetSearch(matrix, metric=metric), budget, stats
                     )
-                    assert (failure is None) == _exhaustive(flags, syndromes, n, budget)
+                    assert (failure is None) == _exhaustive(flags, syndromes, budget)
                     if failure is not None:
                         flag = syndrome = 0
                         for jj in failure.fault_indices:
@@ -66,20 +78,8 @@ def test_random_maps(
                         assert failure.output_syndrome == tuple(
                             (syndrome >> jj) & 1 for jj in range(n)
                         )
-                        assert (
-                            _PauliCosetSearch(matrix).syndrome(
-                                sum(
-                                    int(stim.PauliString(failure.output_pauli)[jj] in (1, 2)) << jj
-                                    for jj in range(n)
-                                )
-                                | sum(
-                                    int(stim.PauliString(failure.output_pauli)[jj] in (2, 3))
-                                    << (jj + n)
-                                    for jj in range(n)
-                                )
-                            )
-                            == syndrome
-                        )
+                        oracle = _PauliCosetSearch(matrix)
+                        assert oracle.syndrome(_pack_pauli(failure.output_pauli)) == syndrome
 
 
 def test_minimal_prefix_oracle() -> None:
@@ -246,13 +246,13 @@ def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
     assert stats.flag_rank == 5 and stats.effective_budget == 2
     assert stats.search_method == "independent_prefix"
     assert stats.minimal_candidates == 15 and stats.generated == 30
-    assert _exhaustive(flags, [3, 5, 6] * 5, n, budget)
+    assert _exhaustive(flags, [3, 5, 6] * 5, budget)
 
 
 @pytest.mark.parametrize("budget", [2, 3, 100])
-@pytest.mark.parametrize("weight", ["pauli", "css"])
+@pytest.mark.parametrize("metric", ["pauli", "css"])
 def test_independent_flag_types_reduce_to_pairs_with_few_columns(
-    budget: int, weight: Literal["pauli", "css"]
+    budget: int, metric: Literal["pauli", "css"]
 ) -> None:
     """Pair-only reduction applies even when columns do not exceed twice the flag rank."""
     n = 6
@@ -265,9 +265,9 @@ def test_independent_flag_types_reduce_to_pairs_with_few_columns(
         ([1, 2] * 7 + [7, 56], (14, 15)),
     ):
         stats = circuits.StatePrepSpreadStatistics()
-        oracle = _PauliCosetSearch(matrix, weight=weight)
+        oracle = _PauliCosetSearch(matrix, metric=metric)
         result = state_prep_certification._certify_maps(flags, syndromes, oracle, budget, stats)
-        assert (result is None) == _exhaustive(flags, syndromes, n, min(budget, 4))
+        assert (result is None) == _exhaustive(flags, syndromes, min(budget, 4))
         assert stats.flag_rank == 8 and len(flags) == 2 * stats.flag_rank
         assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
         if violation is None:
@@ -393,7 +393,8 @@ def test_steane_mixed_pauli_witness() -> None:
     )
     assert css.certified and css.css_weight is True
     assert result.css_weight is False
-    assert css.statistics.minimal_candidates == 31 + 465
+    # 31 flag-free faults, plus every pair of the 31 faults that raise the single flag.
+    assert css.statistics.minimal_candidates == 31 + 31 * 30 // 2
     assert (
         tuple(int(not stim.PauliString("X_Z____").commutes(gg)) for gg in stabilizers)
         == failure.output_syndrome
