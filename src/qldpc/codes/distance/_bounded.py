@@ -16,6 +16,7 @@ from typing import Literal
 import numpy as np
 import numpy.typing as npt
 
+from . import _information_sets
 from ._binary import (
     _as_binary_matrix,
     _assert_binary,
@@ -23,7 +24,6 @@ from ._binary import (
     _row_reduce_binary,
     _symplectic_to_hamming,
 )
-from .brouwer_zimmermann import _get_brouwer_zimmermann_lower_bound, _get_information_set_generators
 
 ####################################################################################################
 # bounded kernel and affine Pauli searches
@@ -80,7 +80,7 @@ class _BoundedKernelSearch:
             basis = np.zeros((self.dimension, self.length), dtype=np.uint8)
             basis[:, self._pivots] = pivot_parts
             basis[:, self._free] = np.eye(self.dimension, dtype=np.uint8)
-            information_sets = _get_information_set_generators(basis, None)
+            information_sets = _information_sets._get_information_set_generators(basis, None)
             self.ranks = tuple(rank for _, _, rank, _ in information_sets)
             self._sets = [_pack_bits(rows) for rows, _, _, _ in information_sets]
         else:
@@ -105,9 +105,9 @@ class _BoundedKernelSearch:
                             ) | sum(1 << self._free[int(jj)] for jj in supports[index])
                         yield word
             self.coefficient_depth = depth
-            self.lower_bound = _get_brouwer_zimmermann_lower_bound(
-                self.dimension, list(self.ranks), completed_weight=depth, weight_divisor=1
-            )
+            self.lower_bound = _information_sets._Certificate(
+                self.dimension, self.ranks
+            ).lower_bound(depth)
             if self.lower_bound > self.max_weight:
                 return
 
@@ -302,9 +302,12 @@ class _PauliCosetSearch:
 
     def _search(self, syndrome: int, threshold: int) -> _PauliWeightDecision:
         if not self._information_sets:
-            for generators, _, rank, pivot_columns in _get_information_set_generators(
-                self._embedded, None
-            ):
+            for (
+                generators,
+                _,
+                rank,
+                pivot_columns,
+            ) in _information_sets._get_information_set_generators(self._embedded, None):
                 self._information_sets.append(
                     (
                         _pack_bits(generators),
@@ -356,9 +359,7 @@ class _PauliCosetSearch:
                         word = _packed_row_int(candidates[int(weights.argmin())])
                         best_pauli = word & ((1 << (2 * n)) - 1)
             self.coefficient_depth = max(self.coefficient_depth, depth)
-            unseen_hamming = _get_brouwer_zimmermann_lower_bound(
-                n, list(self.ranks), completed_weight=depth, weight_divisor=1
-            )
+            unseen_hamming = _information_sets._Certificate(n, self.ranks).lower_bound(depth)
             # Either metric is at least half of the embedded Hamming weight.
             unseen_lower = (unseen_hamming + 1) // 2
             if depth == n:
