@@ -54,7 +54,7 @@ from typing import Literal
 import numpy as np
 import stim
 
-from qldpc.codes.distance._bounded import _BoundedKernelSearch, _PauliCosetSearch
+from qldpc.codes.distance._bounded_weight_search import _BoundedKernelSearch, _PauliCosetSearch
 
 from ..common import get_pauli_product_measurements
 from ..encoding import get_state_stabilizers

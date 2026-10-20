@@ -14,7 +14,7 @@ import pytest
 import stim
 
 from qldpc import circuits
-from qldpc.codes.distance._bounded import _BoundedKernelSearch, _PauliCosetSearch
+from qldpc.codes.distance._bounded_weight_search import _BoundedKernelSearch, _PauliCosetSearch
 
 from . import state_prep_certification
 
