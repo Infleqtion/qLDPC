@@ -35,7 +35,8 @@ if TYPE_CHECKING:
 class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     """Array whose entries are members of a GroupRing."""
 
-    _ring: GroupRing
+    # None only for an array viewed from a plain array, until a base ring is assigned
+    _ring: GroupRing | None
 
     # Howell-form provenance, attached by howell_normal_form_* to their direct output only (via
     # _mark_as_hnf).  These deliberately do NOT propagate through numpy operations:
@@ -76,7 +77,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         """Propagate metadata to newly constructed arrays."""
         # obj may be None or lack _ring during numpy view construction; _ring is set before use.
         # Howell-form provenance is intentionally NOT propagated here (see the class attributes).
-        self._ring = getattr(obj, "_ring", None)  # type:ignore[assignment]
+        self._ring = getattr(obj, "_ring", None)
 
     def _mark_as_hnf(self, *, transformer: WedderburnArtinTransformer | None, right: bool) -> Self:
         """Record that this array is a Howell normal form, as provenance for get_howell_dual."""
@@ -91,7 +92,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         types: Iterable[type],
         args: Iterable[Any],
         kwargs: Mapping[str, Any],
-    ) -> RingArray | None:
+    ) -> Any:
         """Intercept array operations to ensure RingArray compatibility."""
         # ``_iter_ring_arrays`` descends into sequence arguments (e.g. the list passed to
         # np.concatenate/np.stack), so RingArrays nested one or more levels deep are still checked
@@ -142,6 +143,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     @property
     def ring(self) -> GroupRing:
         """Base ring of this RingArray."""
+        if self._ring is None:
+            raise ValueError("This RingArray has no base ring")
         return self._ring
 
     @property

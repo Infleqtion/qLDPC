@@ -74,6 +74,8 @@ def test_ring_array(pytestconfig: pytest.Config) -> None:
         abstract.RingArray([[0]])
     with pytest.raises(ValueError, match="Cannot determine the underlying ring"):
         abstract.RingArray([])
+    with pytest.raises(ValueError, match="no base ring"):
+        _ = np.empty(0, dtype=object).view(abstract.RingArray).ring
     with pytest.raises(ValueError, match="Inconsistent rings"):
         abstract.RingArray([ring.one for ring in rings])
     with pytest.raises(ValueError, match="Inconsistent rings"):
