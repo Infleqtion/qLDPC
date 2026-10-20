@@ -192,13 +192,14 @@ class CSSLogicalCounter:
         _assert_binary(matrix_z, "matrix_z")
         checks_x = _as_binary_matrix(matrix_x)
         checks_z = _as_binary_matrix(matrix_z, num_cols=checks_x.shape[1])
-        # Reduced row echelon form is unique, so equal row spaces give equal arrays.
         self._gauge_x = _get_independent_rows(checks_x)
         self._gauge_z = _get_independent_rows(checks_z)
         self._stabilizers_x, self._stabilizers_z = _get_stabilizers(self._gauge_x, self._gauge_z)
         self.num_qubits = checks_x.shape[1]
         self.dimension = self.num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
         self._sectors: tuple[_Sector, _Sector] | None = None
+        # Reduced row echelon form is unique, so equal row spaces give equal arrays.
+        self._canonical: tuple[_BinaryMatrix, _BinaryMatrix] | None = (self._gauge_x, self._gauge_z)
 
     @property
     def code(self) -> CSSCode:
@@ -216,17 +217,18 @@ class CSSLogicalCounter:
     @property
     def checks_x(self) -> npt.NDArray[np.uint8]:
         """A copy of an independent basis of the X checks, in reduced row echelon form."""
-        return self._gauge_x.copy()
+        return self._get_canonical_checks()[0].copy()
 
     @property
     def checks_z(self) -> npt.NDArray[np.uint8]:
         """A copy of an independent basis of the Z checks, in reduced row echelon form."""
-        return self._gauge_z.copy()
+        return self._get_canonical_checks()[1].copy()
 
     @property
     def is_self_dual(self) -> bool:
         """Whether the X and Z checks span the same row space."""
-        return np.array_equal(self._gauge_x, self._gauge_z)
+        canonical_x, canonical_z = self._get_canonical_checks()
+        return np.array_equal(canonical_x, canonical_z)
 
     def count_logicals(
         self,
@@ -320,7 +322,7 @@ class CSSLogicalCounter:
         """Return a counter for this code conjugated by a local CSS-preserving Clifford.
 
         Args:
-            targets: Distinct qubit indices on which the Clifford acts, in order.
+            targets: Between one and 64 distinct qubit indices on which the Clifford acts, in order.
             matrix_x: Binary matrix that maps the X support on the targets, as a column vector, to
                 its image.
             matrix_z: The same for Z supports.  It must satisfy ``matrix_x @ matrix_z.T = I``
@@ -332,53 +334,13 @@ class CSSLogicalCounter:
         Raises:
             ValueError: If the targets or matrices are invalid.
         """
-        positions = list(targets)
-        size = len(positions)
-        if (
-            not size
-            or any(
-                not isinstance(index, (int, np.integer))
-                or isinstance(index, bool)
-                or not 0 <= index < self.num_qubits
-                for index in positions
-            )
-            or len(set(positions)) != size
-        ):
-            raise ValueError("Clifford targets must be distinct, in-range qubit indices")
-        _assert_binary(matrix_x, "matrix_x")
-        _assert_binary(matrix_z, "matrix_z")
-        local_x = np.asarray(matrix_x, dtype=int)
-        local_z = np.asarray(matrix_z, dtype=int)
-        if local_x.shape != (size, size) or local_z.shape != (size, size):
-            raise ValueError("Local Clifford matrices must be square and match the target count")
-        if not np.array_equal(local_x @ local_z.T % 2, np.eye(size, dtype=int)):
-            raise ValueError("Local X/Z matrices must preserve the CSS commutation pairing")
-
-        counter = CSSLogicalCounter.from_matrices(
-            _apply_local(self._gauge_x, positions, local_x),
-            _apply_local(self._gauge_z, positions, local_z),
-        )
-        # The Clifford maps each sector onto that of the new code and keeps its quotient labels.
-        if self._sectors is not None:
-            (basis_x, labels_x), (basis_z, labels_z) = self._sectors
-            counter._sectors = (
-                (_apply_local(basis_x, positions, local_x), labels_x),
-                (_apply_local(basis_z, positions, local_z), labels_z),
-            )
-        return counter
-
-    def _get_sectors(self) -> tuple[_Sector, _Sector]:
-        """The X and Z sectors: normalizer bases whose first rows span the gauge operators."""
-        if self._sectors is None:
-            self._sectors = (
-                _get_nested_code_basis(_get_kernel(self._stabilizers_z), self._gauge_x),
-                _get_nested_code_basis(_get_kernel(self._stabilizers_x), self._gauge_z),
-            )
-        return self._sectors
+        positions = self._get_positions(targets)
+        local_x, local_z = _pack_local_matrices(matrix_x, matrix_z, len(positions))
+        return self._conjugated(positions, local_x, local_z)
 
     def conjugated_cnot(self, control: int, target: int) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a CNOT on zero-based qubit indices."""
-        return self.conjugated([control, target], [[1, 0], [1, 1]], [[1, 1], [0, 1]])
+        return self._conjugated(self._get_positions([control, target]), *_CNOT)
 
     def conjugated_swel(self, targets: Sequence[int]) -> CSSLogicalCounter:
         """Return a counter for this code conjugated by a four-qubit SWEL-preserving Clifford.
@@ -399,8 +361,78 @@ class CSSLogicalCounter:
         """
         if len(targets) != 4:
             raise ValueError("The SWEL-preserving Clifford requires four targets")
-        matrix = [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]]
-        return self.conjugated(targets, matrix, matrix)
+        return self._conjugated(self._get_positions(targets), *_SWEL)
+
+    def _get_positions(self, targets: Sequence[int]) -> npt.NDArray[np.int64]:
+        """Validate conjugation targets."""
+        positions = list(targets)
+        if (
+            not 1 <= len(positions) <= 64
+            or any(
+                not isinstance(index, (int, np.integer))
+                or isinstance(index, bool)
+                or not 0 <= index < self.num_qubits
+                for index in positions
+            )
+            or len(set(positions)) != len(positions)
+        ):
+            raise ValueError("Clifford targets must be 1 to 64 distinct, in-range qubit indices")
+        return np.array(positions, dtype=np.int64)
+
+    def _conjugated(
+        self,
+        positions: npt.NDArray[np.int64],
+        local_x: npt.NDArray[np.uint64],
+        local_z: npt.NDArray[np.uint64],
+    ) -> CSSLogicalCounter:
+        """Apply validated, packed local matrices to every stored X-type and Z-type matrix.
+
+        The Clifford maps each gauge, stabilizer and sector space onto that of the new code, and
+        keeps the quotient labels, so nothing is recomputed.  The checks are no longer in reduced
+        row echelon form, which is recomputed only if needed.
+        """
+        counter = object.__new__(CSSLogicalCounter)
+        counter.num_qubits, counter.dimension = self.num_qubits, self.dimension
+        counter._code, counter._canonical = None, None
+        counter._gauge_x = _apply_local(self._gauge_x, positions, local_x)
+        counter._gauge_z = _apply_local(self._gauge_z, positions, local_z)
+        # Stabilizer codes share their gauge and stabilizer arrays.
+        counter._stabilizers_x = (
+            counter._gauge_x
+            if self._stabilizers_x is self._gauge_x
+            else _apply_local(self._stabilizers_x, positions, local_x)
+        )
+        counter._stabilizers_z = (
+            counter._gauge_z
+            if self._stabilizers_z is self._gauge_z
+            else _apply_local(self._stabilizers_z, positions, local_z)
+        )
+        counter._sectors = None
+        if self._sectors is not None:
+            (basis_x, labels_x), (basis_z, labels_z) = self._sectors
+            counter._sectors = (
+                (_apply_local(basis_x, positions, local_x), labels_x),
+                (_apply_local(basis_z, positions, local_z), labels_z),
+            )
+        return counter
+
+    def _get_sectors(self) -> tuple[_Sector, _Sector]:
+        """The X and Z sectors: normalizer bases whose first rows span the gauge operators."""
+        if self._sectors is None:
+            self._sectors = (
+                _get_nested_code_basis(_get_kernel(self._stabilizers_z), self._gauge_x),
+                _get_nested_code_basis(_get_kernel(self._stabilizers_x), self._gauge_z),
+            )
+        return self._sectors
+
+    def _get_canonical_checks(self) -> tuple[_BinaryMatrix, _BinaryMatrix]:
+        """The checks in reduced row echelon form, which conjugation does not preserve."""
+        if self._canonical is None:
+            self._canonical = (
+                _get_independent_rows(self._gauge_x),
+                _get_independent_rows(self._gauge_z),
+            )
+        return self._canonical
 
 
 def count_logicals_css(
@@ -574,13 +606,22 @@ def _get_stabilizers(
     )
 
 
-def _apply_local(
-    rows: _BinaryMatrix, positions: list[int], local: npt.NDArray[np.int_]
-) -> _BinaryMatrix:
-    """Apply a local binary matrix to the columns of the given rows at the given positions."""
-    result = rows.astype(int)
-    result[:, positions] = result[:, positions] @ local.T % 2
-    return result.astype(np.uint8)
+def _pack_local_matrices(
+    matrix_x: npt.ArrayLike, matrix_z: npt.ArrayLike, size: int
+) -> tuple[npt.NDArray[np.uint64], npt.NDArray[np.uint64]]:
+    """Validate local CSS-preserving matrices, and pack each row into a word (bit j is column j)."""
+    packed = []
+    for matrix in (matrix_x, matrix_z):
+        order = getattr(type(matrix), "order", None)
+        local = np.asarray(matrix)
+        if local.shape != (size, size):
+            raise ValueError("Local Clifford matrices must be square and match the target count")
+        if order is not None and order != 2:
+            raise ValueError("Local Clifford matrices must be binary")
+        packed.append(_pack_local(local))
+    if not _is_css_pairing(packed[0], packed[1]):
+        raise ValueError("Local X/Z matrices must preserve the CSS commutation pairing")
+    return packed[0], packed[1]
 
 
 def _get_kernel(matrix: _BinaryMatrix) -> _BinaryMatrix:
@@ -595,6 +636,49 @@ def _get_kernel(matrix: _BinaryMatrix) -> _BinaryMatrix:
 
 ####################################################################################################
 # native kernels
+
+
+@njit(cache=True)
+def _pack_local(local: npt.NDArray[np.number]) -> npt.NDArray[np.uint64]:
+    """Pack each row of a binary local matrix into a word whose bit j is column j."""
+    packed = np.zeros(len(local), dtype=np.uint64)
+    for row in range(local.shape[0]):
+        for column in range(local.shape[1]):
+            if local[row, column] == 1:
+                packed[row] |= np.uint64(1) << np.uint64(column)
+            elif local[row, column] != 0:
+                raise ValueError("Local Clifford matrices must be binary")
+    return packed
+
+
+@njit(cache=True)
+def _is_css_pairing(local_x: npt.NDArray[np.uint64], local_z: npt.NDArray[np.uint64]) -> bool:
+    """Whether packed local matrices satisfy ``local_x @ local_z.T = I`` over GF(2)."""
+    for row in range(len(local_x)):
+        for column in range(len(local_z)):
+            if _popcount_word(local_x[row] & local_z[column]) & 1 != (row == column):
+                return False
+    return True
+
+
+@njit(cache=True)
+def _apply_local(
+    rows: _BinaryMatrix, positions: npt.NDArray[np.int64], local: npt.NDArray[np.uint64]
+) -> _BinaryMatrix:
+    """Apply a packed local matrix to the target columns of a copy of the given rows.
+
+    Column ``positions[i]`` of a row becomes the parity of ``local[i]`` and the word whose bit ``j``
+    is the row's entry at ``positions[j]``.
+    """
+    result = rows.copy()
+    for row in range(rows.shape[0]):
+        word = np.uint64(0)
+        for index in range(len(positions)):
+            word |= np.uint64(rows[row, positions[index]]) << np.uint64(index)
+        if word:
+            for index in range(len(positions)):
+                result[row, positions[index]] = _popcount_word(local[index] & word) & 1
+    return result
 
 
 @njit(cache=True)
@@ -728,3 +812,12 @@ def _get_masked_rank(
                 rank += 1
                 break
     return rank
+
+
+####################################################################################################
+# gate constants
+
+# Packed local matrices of the CNOT (control first) and of the SWEL-preserving Clifford.
+_CNOT = _pack_local_matrices([[1, 0], [1, 1]], [[1, 1], [0, 1]], 2)
+_SWEL_MATRIX = [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]]
+_SWEL = _pack_local_matrices(_SWEL_MATRIX, _SWEL_MATRIX, 4)

@@ -30,7 +30,14 @@ from .brouwer_zimmermann import _InformationSet
 
 Counts = lc.CSSLogicalCounts
 METHODS: tuple[lc.LogicalCountMethod, ...] = ("brouwer_zimmermann", "brute_force")
-KERNELS = ("_count_chunk", "_is_owned", "_get_masked_rank")
+KERNELS = (
+    "_count_chunk",
+    "_is_owned",
+    "_get_masked_rank",
+    "_apply_local",
+    "_pack_local",
+    "_is_css_pairing",
+)
 
 
 @contextlib.contextmanager
@@ -363,16 +370,25 @@ def test_masked_rank(interpreted: bool, width: int) -> None:
 # conjugation and validation
 
 
-def test_conjugation() -> None:
+@pytest.mark.parametrize("interpreted", [False, True])
+def test_conjugation(interpreted: bool) -> None:
     code = codes.SteaneCode()
     counter = lc.CSSLogicalCounter(code)
     before = counter.checks_x
-    changed = counter.conjugated_cnot(1, 6)
+    with _maybe_interpreted(interpreted):
+        changed = counter.conjugated_cnot(1, 6)
     assert np.array_equal(counter.checks_x, before)
+    # Conjugated checks are put in reduced row echelon form only when they are requested.
+    assert changed._canonical is None
     expected = before.copy()
     expected[:, 6] ^= expected[:, 1]
     assert np.array_equal(changed.checks_x, _get_independent_rows(expected))
+    assert changed._canonical is not None
     assert counter.is_self_dual and not changed.is_self_dual
+    with _maybe_interpreted(interpreted):
+        general = counter.conjugated([1, 6], [[1, 0], [1, 1]], [[1, 1], [0, 1]])
+    assert np.array_equal(general.checks_x, changed.checks_x)
+    assert np.array_equal(general.checks_z, changed.checks_z)
     assert np.array_equal(changed.conjugated_cnot(1, 6).checks_x, before)
     assert changed.count_logicals(full_pauli=True) == changed.count_logicals(
         full_pauli=True, method="brute_force"
@@ -385,18 +401,43 @@ def test_conjugation() -> None:
         full_pauli=True, method="brute_force"
     )
 
-    for targets in ([0, 0], [-1, 2], [0, 7], [0.5, 2], [True, 2], []):
+    wide = lc.CSSLogicalCounter.from_matrices(np.empty((0, 65)), np.empty((0, 65)))
+    for targets in ([0, 0], [-1, 2], [0, 7], [0.5, 2], [True, 2], [], list(range(65))):
         invalid_targets: Any = targets
-        with pytest.raises(ValueError, match="targets"):
-            counter.conjugated(invalid_targets, np.eye(2), np.eye(2))
+        with pytest.raises(ValueError, match="1 to 64 distinct"):
+            (wide if len(targets) == 65 else counter).conjugated(invalid_targets, [[1]], [[1]])
     with pytest.raises(ValueError, match="four"):
         counter.conjugated_swel([0, 1])
     with pytest.raises(ValueError, match="square"):
         counter.conjugated([0, 1], [[1]], [[1]])
-    with pytest.raises(ValueError, match="pairing"):
-        counter.conjugated([0, 1], np.zeros((2, 2)), np.eye(2))
-    with pytest.raises(ValueError, match="binary"):
-        counter.conjugated([0, 1], 2 * np.eye(2), np.eye(2))
+    with _maybe_interpreted(interpreted):
+        with pytest.raises(ValueError, match="pairing"):
+            counter.conjugated([0, 1], np.zeros((2, 2)), np.eye(2))
+        for invalid in (2 * np.eye(2), np.full((2, 2), np.nan), galois.GF(3)(np.eye(2, dtype=int))):
+            with pytest.raises(ValueError, match="binary"):
+                counter.conjugated([0, 1], invalid, np.eye(2))
+
+
+@pytest.mark.parametrize("interpreted", [False, True])
+@pytest.mark.parametrize("size", [1, 2, 3, 5, 64])
+def test_local_matrices_match_matrix_products(interpreted: bool, size: int) -> None:
+    """Applying a packed local matrix equals multiplying the target columns by it over GF(2)."""
+    rng = np.random.default_rng(size)
+    field = galois.GF(2)
+    while True:
+        local = rng.integers(0, 2, (size, size))
+        if np.linalg.matrix_rank(field(local)) == size:
+            break
+    inverse_transpose = np.asarray(np.linalg.inv(field(local)).T, dtype=int)
+    rows = rng.integers(0, 2, (9, 70), dtype=np.uint8)
+    positions = np.sort(rng.choice(70, size, replace=False))
+    with _maybe_interpreted(interpreted):
+        packed_x, packed_z = lc._pack_local_matrices(local, inverse_transpose, size)
+        result = lc._apply_local(rows, positions, packed_x)
+    expected = rows.astype(int)
+    expected[:, positions] = expected[:, positions] @ local.T % 2
+    assert np.array_equal(result, expected)
+    assert len(packed_z) == size
 
 
 def test_code_input_and_lazily_built_code() -> None:
