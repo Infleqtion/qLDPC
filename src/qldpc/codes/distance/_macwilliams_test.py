@@ -1,13 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Functional counts and coverage of the weight-enumerator backend."""
+"""Functional counts and coverage of the MacWilliams method."""
 
 from __future__ import annotations
 
 import numpy as np
 import pytest
 
-from . import _weight_enumerator as we
+from . import _macwilliams as mw
 
 
 @pytest.mark.parametrize("compiled", [True, False])
@@ -17,18 +17,18 @@ def test_logical_counts(
 ) -> None:
     """Count two disjoint four-qubit blocks, with any remaining qubits free."""
     if not compiled:
-        monkeypatch.setattr(we, "_add_span_weights", we._add_span_weights.py_func)
-        monkeypatch.setattr(we, "_transform_weights", we._transform_weights.py_func)
-    monkeypatch.setattr(we, "_CHUNK_SIZE", 1)
+        monkeypatch.setattr(mw, "_add_span_weights", mw._add_span_weights.py_func)
+        monkeypatch.setattr(mw, "_transform_weights", mw._transform_weights.py_func)
+    monkeypatch.setattr(mw, "_CHUNK_SIZE", 1)
     checks = np.zeros((2, num_bits), dtype=np.uint8)
     checks[0, :4] = checks[1, -4:] = 1
-    enumerators = we._CheckEnumerators(checks, checks if num_bits == 8 else checks.copy())
+    enumerators = mw._CheckEnumerators(checks, checks if num_bits == 8 else checks.copy())
     assert enumerators.count_logicals(2) == (count_two, count_two)
     if num_bits > 64:
         assert enumerators.count_logicals(num_bits // 2)[0] > 2**64
 
 
 def test_check_rank_limit() -> None:
-    checks = np.eye(we._MAX_RANK + 1, we._MAX_RANK + 2, dtype=np.uint8)
+    checks = np.eye(mw._MAX_RANK + 1, mw._MAX_RANK + 2, dtype=np.uint8)
     with pytest.raises(ValueError, match="check ranks"):
-        we._CheckEnumerators(checks, checks[:0])
+        mw._CheckEnumerators(checks, checks[:0])

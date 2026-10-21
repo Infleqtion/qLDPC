@@ -18,7 +18,7 @@ import pytest
 from qldpc import codes
 from qldpc.objects import Pauli
 
-from . import _information_sets, _weight_enumerator
+from . import _information_sets, _macwilliams
 from . import logical_counts as lc
 from ._binary import _get_independent_rows, _get_kernel
 from .core import DistanceMethod
@@ -27,7 +27,7 @@ Counts = lc.CSSLogicalCounts
 METHODS: tuple[DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
 STABILIZER_METHODS: tuple[lc.LogicalCountMethod, ...] = (
     "brouwer_zimmermann",
-    "weight_enumerator",
+    "macwilliams",
     "brute_force",
 )
 
@@ -150,7 +150,7 @@ def test_known_codes(method: DistanceMethod) -> None:
         counter = _counter(checks_x, checks_z)
         assert counter.count_logicals(full_pauli=True, method=method) == expected
         assert counter.count_logicals(method=method).count_pauli is None
-    assert lc.count_logicals_css(steane) == Counts(3, 7, 7, None)
+    assert lc.count_logicals_css(steane, method="information_sets") == Counts(3, 7, 7, None)
 
 
 @pytest.mark.parametrize("method", METHODS)
@@ -470,7 +470,7 @@ def test_conjugated_counts_match_enumeration() -> None:
 # weight enumerators
 
 
-def test_weight_enumerators_match_enumeration() -> None:
+def test_macwilliams_counts_match_enumeration() -> None:
     """Compare every weight, and self-dual full Pauli counts, with enumerated normalizers."""
     rng = np.random.default_rng(31)
     steane = codes.SteaneCode()
@@ -485,16 +485,16 @@ def test_weight_enumerators_match_enumeration() -> None:
         counter = lc.CSSLogicalCounter(code)
         for weight in range(len(code) + 1):
             expected = Counts(weight, counts_x[weight], counts_z[weight], None)
-            assert counter.count_logicals(weight, method="weight_enumerator") == expected
+            assert counter.count_logicals(weight, method="macwilliams") == expected
         expected = Counts(distance, counts_x[distance], counts_z[distance], None)
-        assert counter.count_logicals(method="weight_enumerator") == expected
+        assert counter.count_logicals(method="macwilliams") == expected
         if counter.is_self_dual:
             expected = Counts(distance, counts_x[distance], counts_z[distance], full)
-            assert counter.count_logicals(method="weight_enumerator", full_pauli=True) == expected
+            assert counter.count_logicals(method="macwilliams", full_pauli=True) == expected
     assert lc.count_logicals_css(steane, method="weight_enumerator") == Counts(3, 7, 7, None)
 
 
-def test_weight_enumerators_of_wide_codes() -> None:
+def test_macwilliams_counts_of_wide_codes() -> None:
     """At length 130, counts exceed 64-bit integers.
 
     The X check is all ones, and the Z checks pair qubits 0 to 5, so an X-only logical repeats each
@@ -515,27 +515,24 @@ def test_weight_enumerators_of_wide_codes() -> None:
             math.comb(num_qubits, weight) - math.comb(3, weight // 2) if weight % 2 == 0 else 0
         )
         expected = Counts(weight, count_x, count_z, None)
-        assert counter.count_logicals(weight, method="weight_enumerator") == expected
+        assert counter.count_logicals(weight, method="macwilliams") == expected
 
 
 @pytest.mark.parametrize("copies, full_pauli_first", [(1, False), (1, True), (5, False)])
-def test_weight_enumerators_are_computed_once_per_counter(
+def test_macwilliams_enumerators_are_computed_once_per_counter(
     copies: int, full_pauli_first: bool
 ) -> None:
     """Later weights and flags reuse the walk, including checks with different equal-space bases."""
     code = codes.CSSCode.stack([codes.SteaneCode()] * copies)
     counter = lc.CSSLogicalCounter(code).conjugated_cnot(1, 6).conjugated_cnot(1, 6)
     with mock.patch.object(
-        _weight_enumerator, "_get_span_weights", wraps=_weight_enumerator._get_span_weights
+        _macwilliams, "_get_span_weights", wraps=_macwilliams._get_span_weights
     ) as walk:
         expected = Counts(3, 7 * copies, 7 * copies, 21 * copies if full_pauli_first else None)
-        assert (
-            counter.count_logicals(method="weight_enumerator", full_pauli=full_pauli_first)
-            == expected
-        )
+        assert counter.count_logicals(method="macwilliams", full_pauli=full_pauli_first) == expected
         walks = walk.call_count
-        assert counter.count_logicals(2, method="weight_enumerator") == Counts(2, 0, 0, None)
-        assert counter.count_logicals(3, method="weight_enumerator", full_pauli=True) == Counts(
+        assert counter.count_logicals(2, method="macwilliams") == Counts(2, 0, 0, None)
+        assert counter.count_logicals(3, method="macwilliams", full_pauli=True) == Counts(
             3, 7 * copies, 7 * copies, 21 * copies
         )
     assert walks > 0 and walk.call_count == walks
@@ -546,36 +543,36 @@ def test_conjugated_counters_walk_their_own_checks(gate: str) -> None:
     """A gate changes the weight distributions of the checks, so they are not reused."""
     counter = lc.CSSLogicalCounter(_random_css_code(np.random.default_rng(41), 10, 3, 3))
     weights = range(counter.num_qubits + 1)
-    before = [counter.count_logicals(weight, method="weight_enumerator") for weight in weights]
+    before = [counter.count_logicals(weight, method="macwilliams") for weight in weights]
     conjugated = (
         counter.conjugated_cnot(0, 1) if gate == "cnot" else counter.conjugated_swel(0, 1, 2, 3)
     )
     fresh = _counter(conjugated.checks_x, conjugated.checks_z)
-    expected = [fresh.count_logicals(weight, method="weight_enumerator") for weight in weights]
+    expected = [fresh.count_logicals(weight, method="macwilliams") for weight in weights]
     assert expected != before
-    counts = [conjugated.count_logicals(weight, method="weight_enumerator") for weight in weights]
+    counts = [conjugated.count_logicals(weight, method="macwilliams") for weight in weights]
     assert counts == expected
 
 
-def test_weight_enumerator_capabilities() -> None:
+def test_macwilliams_capabilities() -> None:
     """Unsupported codes and requests raise errors, and still work with the other methods."""
     no_logicals = _counter(np.eye(4)[:2], np.eye(4)[2:])
-    assert no_logicals.count_logicals(method="weight_enumerator") == Counts(None, 0, 0, None)
+    assert no_logicals.count_logicals(method="macwilliams") == Counts(None, 0, 0, None)
     extended_hamming = codes.ExtendedHammingCode(3).matrix
     self_dual = _counter(extended_hamming, extended_hamming)
     assert self_dual.dimension == 0
     expected = Counts(2, 0, 0, 0)
-    assert self_dual.count_logicals(2, method="weight_enumerator", full_pauli=True) == expected
+    assert self_dual.count_logicals(2, method="macwilliams", full_pauli=True) == expected
 
     bacon_shor = codes.BaconShorCode(3)
     subsystem = lc.CSSLogicalCounter(bacon_shor)
     with pytest.raises(ValueError, match="does not support subsystem codes"):
-        subsystem.count_logicals(method="weight_enumerator")
+        subsystem.count_logicals(method="macwilliams")
     assert subsystem.count_logicals(full_pauli=True) == _expected_at_distance(bacon_shor)
 
     asymmetric = _counter(_HAND_X, _HAND_Z)
     with pytest.raises(ValueError, match="only for self-dual codes"):
-        asymmetric.count_logicals(method="weight_enumerator", full_pauli=True)
+        asymmetric.count_logicals(method="macwilliams", full_pauli=True)
     assert asymmetric.count_logicals(full_pauli=True) == Counts(2, 2, 3, 6)
 
 

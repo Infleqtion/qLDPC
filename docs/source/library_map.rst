@@ -79,7 +79,7 @@ Distance-finding methods exit early once an observed upper bound on distance is 
 Pass ``method="brute_force"`` to distance-finding methods to instead compute distance via brute-force enumeration.
 
 :class:`qldpc.codes.CSSLogicalCounter <qldpc.codes.distance.logical_counts.CSSLogicalCounter>` counts the nontrivial X-only and Z-only logical operators of a given weight (by default, the code distance) in a binary CSS code.
-Available ``method=`` options are ``brouwer_zimmermann`` (the default), ``weight_enumerator``, and ``brute_force`` (a reference for small codes).
+Available ``method=`` options are ``brouwer_zimmermann`` (the default), ``macwilliams``, and ``brute_force`` (a reference for small codes).
 For details and supported options, see ``help(qldpc.codes.CSSLogicalCounter.count_logicals)``.
 
 Distance bounds

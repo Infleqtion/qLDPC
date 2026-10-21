@@ -25,9 +25,9 @@ sector, and have ``count_pauli = 3 * count_x``.  Counters for codes conjugated b
 CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
 recomputing them.
 
-The default method is ``"brouwer_zimmermann"``.  With ``method="weight_enumerator"``, counts of a
+The default method is ``"brouwer_zimmermann"``.  With ``method="macwilliams"``, counts of a
 stabilizer code instead come from the weight distributions of its two check spaces, by the
-MacWilliams identity (see ``_weight_enumerator.py``).  Each check space is walked once, over about
+MacWilliams identity (see ``_macwilliams.py``).  Each check space is walked once, over about
 ``2**rank`` words, independently of the requested weight.  The counter keeps these distributions,
 so later counts at other weights on the same counter usually take microseconds.  A conjugated
 counter starts without them and pays for a new walk.
@@ -71,7 +71,7 @@ from ._binary import (
     _popcount_word,
     _row_reduce_binary,
 )
-from ._weight_enumerator import _CheckEnumerators
+from ._macwilliams import _CheckEnumerators
 from .brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
 from .brute_force import _get_distance_quantum_brute_force
 from .core import DistanceMethod
@@ -97,7 +97,9 @@ _MIN_SHARED_WALK_RANK = 14
 # The basis of a homogeneous sector, and its quotient labels.
 _Sector = tuple[_BinaryMatrix, _BinaryMatrix]
 
-LogicalCountMethod = Literal["brouwer_zimmermann", "weight_enumerator", "brute_force"]
+LogicalCountMethod = Literal[
+    "brouwer_zimmermann", "macwilliams", "brute_force", "information_sets", "weight_enumerator"
+]
 
 
 ####################################################################################################
@@ -212,7 +214,7 @@ class CSSLogicalCounter:
         Args:
             weight: Weight of the operators to count, between zero and the number of qubits.  If
                 None (the default), count the operators whose weight is the distance of the code.
-            method: ``"brouwer_zimmermann"`` (the default), ``"weight_enumerator"``, or
+            method: ``"brouwer_zimmermann"`` (the default), ``"macwilliams"``, or
                 ``"brute_force"``.  Brouwer--Zimmermann usually suits counts at or near the distance
                 for larger check ranks, and has no fixed check-rank limit.  The weight enumerator
                 method walks about ``2**rank`` words per check space, independently of the requested
@@ -224,7 +226,9 @@ class CSSLogicalCounter:
                 for ranks up to the high twenties, where BZ can take seconds to minutes.  Weight
                 enumerators do not support subsystem codes, full Pauli counts of non-self-dual
                 codes, or check ranks above 63.  Brute force enumerates all ``2**rank`` combinations
-                of each normalizer basis, and is a reference for small codes.
+                of each normalizer basis, and is a reference for small codes.  The aliases
+                ``"information_sets"`` and ``"weight_enumerator"`` select ``"brouwer_zimmermann"``
+                and ``"macwilliams"``, respectively.
             full_pauli: If True, also count full Pauli operators, including Y and mixed operators.
                 For codes that are not self-dual, each homogeneous word of the counted weight costs
                 one rank calculation.  These
@@ -247,9 +251,13 @@ class CSSLogicalCounter:
         Raises:
             ValueError: If the weight is not an integer between zero and the number of qubits, if
                 the method is unknown, if the weight is above the distance and ``full_pauli`` or
-                ``within_distance`` is set, or if the weight enumerator method does not support
+                ``within_distance`` is set, or if the MacWilliams method does not support
                 the code or the request.
         """
+        if method == "information_sets":
+            method = "brouwer_zimmermann"
+        elif method == "weight_enumerator":
+            method = "macwilliams"
         _validate_count_method(method)
         if weight is not None and (
             not isinstance(weight, (int, np.integer))
@@ -257,13 +265,13 @@ class CSSLogicalCounter:
             or not 0 <= weight <= self.num_qubits
         ):
             raise ValueError("The weight must be an integer between zero and the number of qubits")
-        if method == "weight_enumerator":
-            self._validate_weight_enumerator_request(full_pauli)
+        if method == "macwilliams":
+            self._validate_macwilliams_request(full_pauli)
         if not self.dimension:
             empty_pauli = 0 if full_pauli else None
             return CSSLogicalCounts(None if weight is None else int(weight), 0, 0, empty_pauli)
-        if method == "weight_enumerator":
-            return self._count_with_weight_enumerators(
+        if method == "macwilliams":
+            return self._count_with_macwilliams(
                 weight, full_pauli=full_pauli, reject_lighter=full_pauli or within_distance
             )
 
@@ -440,8 +448,8 @@ class CSSLogicalCounter:
                         counter._disjoint_families[index] = moved
         return counter
 
-    def _validate_weight_enumerator_request(self, full_pauli: bool) -> None:
-        """Reject codes and requests that the weight enumerator method does not support.
+    def _validate_macwilliams_request(self, full_pauli: bool) -> None:
+        """Reject codes and requests that the MacWilliams method does not support.
 
         The X stabilizers are the X gauge operators that commute with every Z gauge operator, so
         they span fewer dimensions than the X gauge operators exactly when some X and Z checks
@@ -449,16 +457,16 @@ class CSSLogicalCounter:
         """
         if len(self._stabilizers_x) < len(self._gauge_x):
             raise ValueError(
-                "The weight enumerator method does not support subsystem codes; use"
+                "The MacWilliams method does not support subsystem codes; use"
                 " 'brouwer_zimmermann' or 'brute_force'"
             )
         if full_pauli and not self.is_self_dual:
             raise ValueError(
-                "The weight enumerator method counts full Pauli operators only for self-dual codes;"
+                "The MacWilliams method counts full Pauli operators only for self-dual codes;"
                 " use 'brouwer_zimmermann' or 'brute_force'"
             )
 
-    def _count_with_weight_enumerators(
+    def _count_with_macwilliams(
         self, weight: int | None, *, full_pauli: bool, reject_lighter: bool
     ) -> CSSLogicalCounts:
         """Count logical operators by the weight enumerators of the checks of a stabilizer code.
@@ -555,11 +563,11 @@ def count_logicals_css(
 
 
 def _validate_count_method(method: LogicalCountMethod) -> None:
-    """Validate a logical-count method selector."""
-    if method not in ("brouwer_zimmermann", "weight_enumerator", "brute_force"):
+    """Validate a normalized logical-count method selector."""
+    if method not in ("brouwer_zimmermann", "macwilliams", "brute_force"):
         raise ValueError(
             f"Unknown distance method {method!r} for logical counts; choose from"
-            " 'brouwer_zimmermann', 'weight_enumerator', or 'brute_force'."
+            " 'brouwer_zimmermann', 'macwilliams', or 'brute_force'."
         )
 
 
