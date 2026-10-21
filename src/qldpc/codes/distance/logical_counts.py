@@ -46,6 +46,8 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
+from qldpc._util import format_docstring
+
 from . import _information_sets
 from ._binary import (
     _get_independent_rows,
@@ -173,6 +175,7 @@ class CSSLogicalCounter:
         canonical_x, canonical_z = self._get_canonical_checks()
         return self._self_dual or np.array_equal(canonical_x, canonical_z)
 
+    @format_docstring(MAX_SETS=_information_sets.MAX_SETS)
     def count_logicals(
         self,
         weight: int | None = None,
@@ -201,7 +204,7 @@ class CSSLogicalCounter:
                 count may use when it replaces its first, disjoint sets by overlapping ones.  More
                 sets can skip costly layers of a hard count, but each set costs setup work, which
                 dominates a cheap count.  A small limit suits many cheap counts on a large code.
-                This never changes the counts.  Defaults to 16.
+                This never changes the counts.  Defaults to {MAX_SETS}.
 
         Returns:
             The counted weight and the counts.  If no weight is given and the code encodes no
