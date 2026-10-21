@@ -22,7 +22,8 @@ bound exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited
 information sets is counted by only one of them.  Full Pauli counts are derived from the
 homogeneous words of weight ``d``, with one masked rank per word.  Self-dual codes scan only one
 sector, and have ``count_pauli = 3 * count_x``.  Counters for codes conjugated by local
-CSS-preserving Cliffords transform the stored sector bases rather than recomputing them.
+CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
+recomputing them.
 
 In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
 ``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
@@ -376,6 +377,15 @@ class CSSLogicalCounter:
             sector_x = (_apply_local(basis_x, positions, local_x), labels_x)
             sector_z = sector_x if shared else (_apply_local(basis_z, positions, local_z), labels_z)
             counter._sectors = (sector_x, sector_z)
+
+            # The kept families follow the gate.  If one cannot, the sector is prepared again when
+            # it is next counted.  A self-dual code keeps one family, for both of its sectors.
+            for index, local in ((0, local_x), (1, local_z)):
+                family = self._disjoint_families.get(0 if self._self_dual else index)
+                if family is not None and not (shared and index == 1):
+                    moved = _transport_family(family, positions, local, counter._sectors[index][0])
+                    if moved is not None:
+                        counter._disjoint_families[index] = moved
         return counter
 
     def _get_sectors(self) -> tuple[_Sector, _Sector]:
@@ -533,6 +543,34 @@ def _get_counting_information_sets(
         assert information_set.labels is not None
         sets.append((information_set.generators, information_set.labels))
     return sets, family.certificate
+
+
+def _transport_family(
+    family: _information_sets._Family,
+    positions: npt.NDArray[np.int64],
+    local: npt.NDArray[np.uint64],
+    basis: _BinaryMatrix,
+) -> _information_sets._Family | None:
+    """The family of a sector after a local gate, or None if one of its sets stops being a set.
+
+    Each set is mapped through the gate and reduced again on its own pivot columns, so the pivots
+    stay disjoint and the labels move with their rows.  A set stops being one if its pivot columns
+    are no longer independent.
+    """
+    sets = []
+    for information_set in family.information_sets:
+        generators = _apply_local(information_set.generators, positions, local)
+        reduced, labels, pivots = _row_reduce_binary(
+            generators, information_set.labels, columns=information_set.pivots
+        )
+        if len(pivots) != information_set.rank:
+            return None
+        sets.append(_information_sets._InformationSet(reduced, labels, len(pivots), pivots))
+    return _information_sets._Family.from_information_sets(
+        sets,
+        dimension=family.certificate.dimension,
+        weight_divisor=_information_sets._infer_weight_divisor(basis),
+    )
 
 
 def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:

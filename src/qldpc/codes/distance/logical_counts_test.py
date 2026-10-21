@@ -281,6 +281,24 @@ def test_first_family_stage_is_computed_once_per_sector() -> None:
     assert first_stage.call_count == 2
 
 
+@pytest.mark.parametrize("targets, reuses", [((0, 2), True), ((4, 2), False)])
+def test_conjugated_counter_reuses_the_first_family_stage(
+    targets: tuple[int, int], reuses: bool
+) -> None:
+    """A gate that keeps the pivot columns of every set independent keeps the families."""
+    counter = _counter(_HAND_X, _HAND_Z)
+    counter.count_logicals()
+    conjugated = counter.conjugated_cnot(*targets)
+    weights = range(counter.num_qubits + 1)
+    fresh = _counter(conjugated.checks_x, conjugated.checks_z)
+    expected = [fresh.count_logicals(weight) for weight in weights]
+    with mock.patch.object(
+        _information_sets, "_get_disjoint_family", wraps=_information_sets._get_disjoint_family
+    ) as first_stage:
+        assert [conjugated.count_logicals(weight) for weight in weights] == expected
+    assert (first_stage.call_count == 0) == reuses
+
+
 def test_dense_eighty_qubits_against_physical_enumeration() -> None:
     """Enumerate physical supports of weight at most four, independently of the counter."""
     n, k = 80, 32
