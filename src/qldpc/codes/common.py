@@ -1202,7 +1202,7 @@ class QuditCode(AbstractCode):
         coloring = nx.greedy_color(check_graph, strategy)
 
         # collect all edges incident to each color, and return the corresponding subgraphs
-        color_to_edges: dict[int, nx.DiGraph] = collections.defaultdict(list)
+        color_to_edges: dict[int, list[tuple[Node, Node]]] = collections.defaultdict(list)
         for check_node, color in coloring.items():
             color_to_edges[color].extend(self.graph.edges(check_node))
         return tuple(self.graph.edge_subgraph(edges) for edges in color_to_edges.values())
