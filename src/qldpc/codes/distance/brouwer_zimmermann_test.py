@@ -393,7 +393,7 @@ def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
         mock.patch.object(
             _information_sets,
             "_get_overlapping_family",
-            return_value=_information_sets._Family.from_information_sets(
+            return_value=_information_sets._BasisFamily.from_information_sets(
                 [alternative], dimension=2, weight_divisor=1
             ),
         ),
@@ -430,7 +430,7 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
     # Lower only the work threshold so this small oracle exercises production family construction.
     original = _information_sets._get_overlapping_family
 
-    def select(*args: Any, **kwargs: Any) -> _information_sets._Family | None:
+    def select(*args: Any, **kwargs: Any) -> _information_sets._BasisFamily | None:
         selected = original(*args, **kwargs, minimum_work=0)
         assert selected is not None and selected.certificate.max_coverage > 1
         assert (

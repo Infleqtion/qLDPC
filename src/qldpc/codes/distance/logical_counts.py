@@ -141,7 +141,7 @@ class CSSLogicalCounter:
             self._stabilizers_z = self._stabilizers_x
         self.dimension = self.num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
         self._sectors: tuple[_Sector, _Sector] | None = None
-        self._disjoint_families: dict[int, _information_sets._Family] = {}
+        self._disjoint_families: dict[int, _information_sets._BasisFamily] = {}
         self._canonical: tuple[_BinaryMatrix, _BinaryMatrix] | None = (self._gauge_x, self._gauge_z)
 
     @property
@@ -400,7 +400,7 @@ class CSSLogicalCounter:
             self._sectors = (sector_x, sector_z)
         return self._sectors
 
-    def _get_disjoint_family(self, index: int) -> _information_sets._Family:
+    def _get_disjoint_family(self, index: int) -> _information_sets._BasisFamily:
         """The first stage of the information-set family of a sector, which is kept.
 
         This stage does not depend on the counted weight, so counting at another weight, as when a
@@ -470,7 +470,7 @@ def _count_words(
     complement: bool,
     max_exponent: int,
     reject_lighter: bool,
-    get_disjoint: Callable[[], _information_sets._Family],
+    get_disjoint: Callable[[], _information_sets._BasisFamily],
 ) -> npt.NDArray[np.int64] | None:
     """Visit each nontrivial word of one sector with the given weight exactly once.
 
@@ -527,7 +527,7 @@ def _get_counting_information_sets(
     basis: _BinaryMatrix,
     labels: _BinaryMatrix,
     weight: int,
-    disjoint: _information_sets._Family,
+    disjoint: _information_sets._BasisFamily,
 ) -> tuple[list[_Sector], _information_sets._Certificate]:
     """Select BZ information sets that certify every word of the given weight.
 
@@ -546,11 +546,11 @@ def _get_counting_information_sets(
 
 
 def _transport_family(
-    family: _information_sets._Family,
+    family: _information_sets._BasisFamily,
     positions: npt.NDArray[np.int64],
     local: npt.NDArray[np.uint64],
     basis: _BinaryMatrix,
-) -> _information_sets._Family | None:
+) -> _information_sets._BasisFamily | None:
     """The family of a sector after a local gate, or None if one of its sets stops being a set.
 
     Each set is mapped through the gate and reduced again on its own pivot columns, so the pivots
@@ -566,7 +566,7 @@ def _transport_family(
         if len(pivots) != information_set.rank:
             return None
         sets.append(_information_sets._InformationSet(reduced, labels, len(pivots), pivots))
-    return _information_sets._Family.from_information_sets(
+    return _information_sets._BasisFamily.from_information_sets(
         sets,
         dimension=family.certificate.dimension,
         weight_divisor=_information_sets._infer_weight_divisor(basis),

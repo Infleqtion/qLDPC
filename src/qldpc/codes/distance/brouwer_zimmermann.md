@@ -460,7 +460,7 @@ Heuristic tunables are identified by parameter name so that their current values
 | --- | --- | --- |
 | [core.py](core.py) | Public interfaces, input validation, adapted bases, method selection, and conversion between symplectic and Hamming units | `get_distance_classical`, `get_distance_quantum`, `get_distance_css_brouwer_zimmermann` |
 | [brouwer_zimmermann.py](brouwer_zimmermann.py) | The BZ distance search: preparation exits, witness discovery, scanning, sharing between CSS sectors, and exhaustive cost models | `_prepare_brouwer_zimmermann_search`, `_BrouwerZimmermannSearch`, `_scan_brouwer_zimmermann`, `_get_distance_brouwer_zimmermann_many` |
-| [_information_sets.py](_information_sets.py) | Families of search bases and their certificates, shared by distance and counting: disjoint packing, pruning, overlapping replacement, parity inference, the lower certificate, and the work estimate | `_get_disjoint_family`, `_prune_family`, `_get_overlapping_family`, `_prepare_family`, `_Family`, `_Certificate` |
+| [_information_sets.py](_information_sets.py) | Families of search bases and their certificates, shared by distance and counting: disjoint packing, pruning, overlapping replacement, parity inference, the lower certificate, and the work estimate | `_get_disjoint_family`, `_prune_family`, `_get_overlapping_family`, `_prepare_family`, `_BasisFamily`, `_Certificate` |
 | [brute_force.py](brute_force.py) | Exhaustive enumeration | `_get_distance_quantum_brute_force` |
 | [_binary.py](_binary.py) | Shared binary helpers: row reduction with labels, independent and adapted bases, packing, weight functions, and the map of [Section 2.7](#27-pauli-weight-as-hamming-weight) | `_row_reduce_binary`, `_get_independent_rows`, `_get_nested_code_basis`, `_symplectic_to_hamming` |
 
@@ -518,7 +518,7 @@ The tests `test_brouwer_zimmermann_setup_dispatches`, `test_brouwer_zimmermann_s
 | --- | --- |
 | Upper bound `U` | `best`, or `upper_bound` as a parameter |
 | Lower certificate `L` | `lower_bound` of a search, computed by `_Certificate.lower_bound(completed_weight)` from the certificate's `dimension`, `ranks`, `weight_divisor`, and `max_coverage` |
-| Family of search bases | `_Family`, which holds the search bases and their `_Certificate`; a search keeps only the certificate |
+| Family of search bases | `_BasisFamily`, which holds the search bases and their `_Certificate`; a search keeps only the certificate |
 | Last completed layer `t`, next layer | `completed_weight`, `next_weight` |
 | Divisor `D` | `_Certificate.weight_divisor`, in Hamming units of the searched basis |
 | Maximum coverage `C` | `_Certificate.max_coverage` |
