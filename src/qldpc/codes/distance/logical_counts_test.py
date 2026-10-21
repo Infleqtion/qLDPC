@@ -626,7 +626,7 @@ def test_invalid_inputs() -> None:
 
     counter = _counter([[0, 0]], [[0, 0]])
     invalid_method: Any = "unknown"
-    with pytest.raises(ValueError, match="Unknown distance method"):
+    with pytest.raises(ValueError, match="Unknown logical-count method"):
         counter.count_logical_ops(method=invalid_method)
     for weight in (-1, 3, 1.5, True, "1"):
         invalid_weight: Any = weight

@@ -63,8 +63,8 @@ _CHUNK_SIZE = 1 << 16
 # Batch size exponent passed to the distance searches, as in get_distance_quantum.
 _BLOCK_SIZE = 15
 
-# Check rank from which the weight enumerator method row-reduces both checks of a counter not known
-# to be self-dual, to share one walk if they span the same space.  Below it, a second walk over the
+# Check rank from which the MacWilliams method row-reduces both checks of a counter not known to be
+# self-dual, to share one walk if they span the same space.  Below it, a second walk over the
 # 2**rank words costs less than the row reduction.
 _MIN_SHARED_WALK_RANK = 14
 
@@ -233,9 +233,8 @@ class CSSLogicalCounter:
                 respectively.
             count_pauli: If True, also count full Pauli operators, including Y and mixed operators.
                 For codes that are not self-dual, each homogeneous word of the counted weight costs
-                one rank calculation.  These
-                counts are exact up to the distance and zero below it, and are not supported above
-                it.  Defaults to False.
+                one rank calculation.  These counts are exact up to the distance and zero below it,
+                and are not supported above it.  Defaults to False.
             within_distance: If True, raise an error when the weight is above the distance, that
                 is, when some nontrivial X-only or Z-only logical operator is lighter than the
                 weight.  Full Pauli counts always do this.  Defaults to False.
@@ -615,7 +614,7 @@ def _validate_count_method(method: LogicalCountMethod) -> None:
     """Validate a normalized logical-count method selector."""
     if method not in ("brouwer_zimmermann", "macwilliams", "brute_force"):
         raise ValueError(
-            f"Unknown distance method {method!r} for logical counts; choose from"
+            f"Unknown logical-count method {method!r}; choose from"
             " 'brouwer_zimmermann', 'macwilliams', or 'brute_force'."
         )
 

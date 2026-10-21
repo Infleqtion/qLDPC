@@ -65,7 +65,8 @@ class _CheckEnumerators:
         for checks in (checks_x, checks_z):
             if len(checks) > _MAX_RANK:
                 raise ValueError(
-                    f"MacWilliams enumeration supports check ranks up to {_MAX_RANK}, not {len(checks)}"
+                    f"The MacWilliams method supports check ranks up to {_MAX_RANK}, not"
+                    f" {len(checks)}; use 'brouwer_zimmermann' or 'brute_force'"
                 )
         self.num_bits = checks_x.shape[1]
         self.rank_x, self.rank_z = len(checks_x), len(checks_z)
