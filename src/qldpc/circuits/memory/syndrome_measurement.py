@@ -105,25 +105,6 @@ class EdgeColoring(SyndromeMeasurementStrategy):
         subgraphs = code.get_syndrome_subgraphs(**self.subgraph_kwargs)  # type:ignore[arg-type]
         return self._get_circuit_from_subgraphs(qubit_ids, subgraphs)
 
-    def _get_circuit_from_subgraphs(
-        self,
-        qubit_ids: QubitIDs,
-        subgraphs: tuple[nx.DiGraph, ...],
-    ) -> tuple[stim.Circuit, MeasurementRecord]:
-        """Build a circuit and record from an already selected subgraph sequence."""
-        circuit = stim.Circuit()
-        circuit.append("RX", qubit_ids.check)
-        circuit.append("TICK")
-        for subgraph in subgraphs:
-            circuit += EdgeColoring.graph_to_circuit(subgraph, qubit_ids, self.strategy)
-        circuit.append("MX", qubit_ids.check)
-        circuit.append("TICK")
-
-        measurement_record = MeasurementRecord(
-            {qubit: [mm] for mm, qubit in enumerate(qubit_ids.check)}
-        )
-        return circuit, measurement_record
-
     @staticmethod
     def graph_to_circuit(graph: nx.DiGraph, qubit_ids: QubitIDs, strategy: str) -> stim.Circuit:
         """Convert a Tanner (sub)graph into a syndrome extraction circuit.
@@ -160,6 +141,25 @@ class EdgeColoring(SyndromeMeasurementStrategy):
                 circuit.append(gate, [check_id, data_id])
             circuit.append("TICK")  # separate scheduled gate layers
         return circuit
+
+    def _get_circuit_from_subgraphs(
+        self,
+        qubit_ids: QubitIDs,
+        subgraphs: tuple[nx.DiGraph, ...],
+    ) -> tuple[stim.Circuit, MeasurementRecord]:
+        """Build a circuit and record from an already selected subgraph sequence."""
+        circuit = stim.Circuit()
+        circuit.append("RX", qubit_ids.check)
+        circuit.append("TICK")
+        for subgraph in subgraphs:
+            circuit += EdgeColoring.graph_to_circuit(subgraph, qubit_ids, self.strategy)
+        circuit.append("MX", qubit_ids.check)
+        circuit.append("TICK")
+
+        measurement_record = MeasurementRecord(
+            {qubit: [mm] for mm, qubit in enumerate(qubit_ids.check)}
+        )
+        return circuit, measurement_record
 
 
 class EdgeColoringXZ(EdgeColoring):

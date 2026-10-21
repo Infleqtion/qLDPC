@@ -1623,14 +1623,6 @@ class QuditCode(AbstractCode):
         self._dimension = len(logical_ops) // 2
         return self
 
-    def _validate_logical_ops_shape(self, logical_ops: galois.FieldArray) -> None:
-        """Require a 2D matrix with one row per logical qudit."""
-        if logical_ops.ndim != 2 or len(logical_ops) != self.dimension:
-            raise ValueError(
-                f"Expected {self.dimension} logical operators, got an array of shape "
-                f"{logical_ops.shape}"
-            )
-
     def set_logical_ops_x(
         self,
         logicals_ops_x: npt.NDArray[np.int_] | Sequence[Sequence[int]],
@@ -1710,6 +1702,14 @@ class QuditCode(AbstractCode):
         return self.set_logical_ops(
             np.vstack([new_logicals_x, logicals_ops_z]), skip_validation=skip_validation
         )
+
+    def _validate_logical_ops_shape(self, logical_ops: galois.FieldArray) -> None:
+        """Require a 2D matrix with one row per logical qudit."""
+        if logical_ops.ndim != 2 or len(logical_ops) != self.dimension:
+            raise ValueError(
+                f"Expected {self.dimension} logical operators, got an array of shape "
+                f"{logical_ops.shape}"
+            )
 
     def get_stabilizer_ops(
         self,
@@ -3370,10 +3370,6 @@ class CSSCode(QuditCode):
 
         return distance
 
-    def _get_distance_exact(self, pauli: PauliXZ | None) -> int | float:
-        """Method for subclasses to compute specialized exact distance calculations."""
-        return NotImplemented
-
     def get_distance_if_known(self, pauli: PauliXZLike | None = None) -> int | float | None:
         """Retrieve a distance, if known.
 
@@ -3394,33 +3390,6 @@ class CSSCode(QuditCode):
             if self._distance_x is not None and self._distance_z is not None
             else self._distance
         )
-
-    def _get_distance_bound_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
-        """Retrieve the best known upper bound on (X-, Z-, or ordinary) distance, or ``None``."""
-        if pauli is Pauli.X:
-            candidates = [self._distance_x, self._distance_bound_x]
-        elif pauli is Pauli.Z:
-            candidates = [self._distance_z, self._distance_bound_z]
-        else:
-            candidates = [
-                self._distance,
-                self._distance_bound,
-                self._distance_x,
-                self._distance_z,
-                self._distance_bound_x,
-                self._distance_bound_z,
-            ]
-        return min((bound for bound in candidates if bound is not None), default=None)
-
-    def _update_distance_bound(self, bound: float, pauli: PauliXZ) -> float:
-        """Remember an upper bound on the X-distance or Z-distance, and return the best bound."""
-        known_bound = self._get_distance_bound_if_known(None if self._equal_distance_xz else pauli)
-        bound = bound if known_bound is None else min(bound, known_bound)
-        if pauli is Pauli.X or self._equal_distance_xz:
-            self._distance_bound_x = bound
-        if pauli is Pauli.Z or self._equal_distance_xz:
-            self._distance_bound_z = bound
-        return bound
 
     @format_docstring(
         gap_options=sorted(_GAP_DISTANCE_BOUND_KWARGS),
@@ -3644,6 +3613,37 @@ class CSSCode(QuditCode):
         self._distance_x = self._distance_z = self._distance = None
         self._distance_bound_x = self._distance_bound_z = self._distance_bound = None
         return self
+
+    def _get_distance_exact(self, pauli: PauliXZ | None) -> int | float:
+        """Method for subclasses to compute specialized exact distance calculations."""
+        return NotImplemented
+
+    def _get_distance_bound_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
+        """Retrieve the best known upper bound on (X-, Z-, or ordinary) distance, or ``None``."""
+        if pauli is Pauli.X:
+            candidates = [self._distance_x, self._distance_bound_x]
+        elif pauli is Pauli.Z:
+            candidates = [self._distance_z, self._distance_bound_z]
+        else:
+            candidates = [
+                self._distance,
+                self._distance_bound,
+                self._distance_x,
+                self._distance_z,
+                self._distance_bound_x,
+                self._distance_bound_z,
+            ]
+        return min((bound for bound in candidates if bound is not None), default=None)
+
+    def _update_distance_bound(self, bound: float, pauli: PauliXZ) -> float:
+        """Remember an upper bound on the X-distance or Z-distance, and return the best bound."""
+        known_bound = self._get_distance_bound_if_known(None if self._equal_distance_xz else pauli)
+        bound = bound if known_bound is None else min(bound, known_bound)
+        if pauli is Pauli.X or self._equal_distance_xz:
+            self._distance_bound_x = bound
+        if pauli is Pauli.Z or self._equal_distance_xz:
+            self._distance_bound_z = bound
+        return bound
 
     def reduce_logical_op(
         self,

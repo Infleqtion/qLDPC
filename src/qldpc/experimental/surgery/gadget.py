@@ -68,6 +68,28 @@ class GadgetLayout:
     HZ_merged: np.ndarray  # Z checks of the merged code, same qubit ordering
     basis: PauliXZ  # Pauli.X to measure a logical X, Pauli.Z for a logical Z
 
+    @property
+    def is_augmented(self) -> bool:
+        """Whether this layout contains ancillas beyond the data-code restriction."""
+        return not np.array_equal(self.incidence, self._base_incidence())
+
+    @property
+    def added_ancilla_incidence(self) -> np.ndarray:
+        """Rows added after the data-code restriction, in their current order."""
+        base_rows = self._base_incidence().shape[0]
+        return self.incidence[base_rows:].copy()
+
+    def with_added_ancillas(self, incidence_rows: np.ndarray) -> GadgetLayout:
+        """Return a layout with additional weight-2 ancilla rows, preserving existing additions."""
+        added = np.asarray(incidence_rows).astype(np.uint8)
+        if added.ndim != 2 or added.shape[1] != len(self.support):
+            width = added.shape[1] if added.ndim == 2 else None
+            raise ValueError(
+                f"incidence_rows has {width} columns; expected {len(self.support)} (= |support|)"
+            )
+        combined = np.vstack([self.added_ancilla_incidence, added])
+        return _rebuild_with_added_ancillas(self.code, self.x, combined, basis=self.basis)
+
     def _get_cone_result(self) -> _CSSConeResult:
         """Derive cone provenance while retaining the stored merged matrices as authoritative."""
         _, data_checks, base_incidence = _restrict_checks_to_support(
@@ -97,28 +119,6 @@ class GadgetLayout:
         """Incidence matrix before any boost or bridge ancillas were added."""
         _, _, incidence = _restrict_checks_to_support(self.code, self.x, basis=self.basis)
         return incidence
-
-    @property
-    def is_augmented(self) -> bool:
-        """Whether this layout contains ancillas beyond the data-code restriction."""
-        return not np.array_equal(self.incidence, self._base_incidence())
-
-    @property
-    def added_ancilla_incidence(self) -> np.ndarray:
-        """Rows added after the data-code restriction, in their current order."""
-        base_rows = self._base_incidence().shape[0]
-        return self.incidence[base_rows:].copy()
-
-    def with_added_ancillas(self, incidence_rows: np.ndarray) -> GadgetLayout:
-        """Return a layout with additional weight-2 ancilla rows, preserving existing additions."""
-        added = np.asarray(incidence_rows).astype(np.uint8)
-        if added.ndim != 2 or added.shape[1] != len(self.support):
-            width = added.shape[1] if added.ndim == 2 else None
-            raise ValueError(
-                f"incidence_rows has {width} columns; expected {len(self.support)} (= |support|)"
-            )
-        combined = np.vstack([self.added_ancilla_incidence, added])
-        return _rebuild_with_added_ancillas(self.code, self.x, combined, basis=self.basis)
 
 
 def build_gadget(

@@ -434,15 +434,6 @@ class ChainComplex:
         if not skip_validation:
             self._validate_ops()
 
-    def _validate_ops(self) -> None:
-        """Validate the consistency of the boundary operators in this chain complex."""
-        for op_a, op_b in zip(self.ops, self.ops[1:]):
-            if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
-                raise ValueError(
-                    "Condition for a chain complex not satisfied:\n"
-                    "Neighboring boundary operators of a chain complex must compose to zero"
-                )
-
     @property
     def field(self) -> type[galois.FieldArray]:
         """The base field of this chain complex."""
@@ -579,3 +570,12 @@ class ChainComplex:
         # rebuild each operator through RingArray.build to coerce every entry into a ring member
         ops = [abstract.RingArray.build(matrix, chain_a.ring) for matrix in matrices]
         return ChainComplex(ops, skip_validation=True)
+
+    def _validate_ops(self) -> None:
+        """Validate the consistency of the boundary operators in this chain complex."""
+        for op_a, op_b in zip(self.ops, self.ops[1:]):
+            if op_a.shape[1] != op_b.shape[0] or np.any(op_a @ op_b):
+                raise ValueError(
+                    "Condition for a chain complex not satisfied:\n"
+                    "Neighboring boundary operators of a chain complex must compose to zero"
+                )

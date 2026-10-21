@@ -179,28 +179,6 @@ class CodeCapacityDecoder:
             int(observable_decoder.has_erasure_bit),
         )
 
-    def reuse_for(
-        self,
-        syndrome_matrix: galois.FieldArray,
-        observable_matrix: galois.FieldArray | None,
-    ) -> CodeCapacityDecoder | None:
-        """Reuse this decoder for another sector with the same syndrome matrix, if possible.
-
-        The decoder is reused as is if the observable matrices are also equal.  An error decoder is
-        reused with a different observable matrix, since the errors that it infers do not depend on
-        observables.  Otherwise, return None: an observable decoder only predicts the observables
-        that it was built for.
-        """
-        if not np.array_equal(syndrome_matrix, self.syndrome_matrix):
-            return None
-        if _observable_matrices_equal(observable_matrix, self.observable_matrix):
-            return self
-        if isinstance(self.decoder, ErrorsToFieldObservablesDecoder):
-            return CodeCapacityDecoder.from_error_decoder(
-                self.decoder.error_decoder, syndrome_matrix, observable_matrix
-            )
-        return None
-
     def decode(self, syndrome: galois.FieldArray) -> tuple[galois.FieldArray, bool]:
         """Predict the observable values of an error from its syndrome, and whether it was erased.
 
@@ -232,6 +210,28 @@ class CodeCapacityDecoder:
             error if self.observable_matrix is None else self.observable_matrix @ error
         )
         return bool(np.any(predicted_observables != actual_observables)), False
+
+    def reuse_for(
+        self,
+        syndrome_matrix: galois.FieldArray,
+        observable_matrix: galois.FieldArray | None,
+    ) -> CodeCapacityDecoder | None:
+        """Reuse this decoder for another sector with the same syndrome matrix, if possible.
+
+        The decoder is reused as is if the observable matrices are also equal.  An error decoder is
+        reused with a different observable matrix, since the errors that it infers do not depend on
+        observables.  Otherwise, return None: an observable decoder only predicts the observables
+        that it was built for.
+        """
+        if not np.array_equal(syndrome_matrix, self.syndrome_matrix):
+            return None
+        if _observable_matrices_equal(observable_matrix, self.observable_matrix):
+            return self
+        if isinstance(self.decoder, ErrorsToFieldObservablesDecoder):
+            return CodeCapacityDecoder.from_error_decoder(
+                self.decoder.error_decoder, syndrome_matrix, observable_matrix
+            )
+        return None
 
 
 def get_code_capacity_decoder(
