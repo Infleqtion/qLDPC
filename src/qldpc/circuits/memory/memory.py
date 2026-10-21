@@ -34,9 +34,7 @@ DEFAULT_STRATEGY = EdgeColoring()
 class MemoryExperimentParts(NamedTuple):
     """Noiseless components of a memory experiment, returned by get_memory_experiment_parts.
 
-    The fields are the initialization, qec_cycle, and readout circuits, the measurement_record and
-    detector_record of those circuits, and the qubit_ids of their data and check qubits.  See
-    help(get_memory_experiment_parts) for details.
+    See help(get_memory_experiment_parts) for details.
     """
 
     initialization: stim.Circuit
