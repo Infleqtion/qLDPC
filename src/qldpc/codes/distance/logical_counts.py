@@ -131,7 +131,8 @@ class CSSLogicalCounter:
     In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
     ``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
     type.  Nontrivial logicals are those outside the gauge group (dressed logicals), so the X sector
-    is ``ker(S_Z)`` modulo ``row(G_X)``, and likewise for Z.
+    is ``ker(S_Z)`` modulo ``row(G_X)``, and likewise for Z.  The Brouwer-Zimmermann and brute-force
+    methods support subsystem codes, but the MacWilliams method does not.
 
     Counters for codes deformed by local CSS-preserving Cliffords (see :meth:`deformed`) reuse the
     work of this counter.
