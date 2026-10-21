@@ -157,7 +157,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
     def regular_lift(self, *, right: bool = False) -> galois.FieldArray:
         """Block matrix obtained by a regular lift of each entry of this RingArray."""
-        assert self.ndim == 1 or self.ndim == 2
+        self._require_ndim(1, 2)
         rows = 1 if self.ndim == 1 else self.shape[0]
         cols = self.shape[-1]
         block_size = self.group.order
@@ -171,7 +171,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
     def lift(self, *, right: bool = False) -> galois.FieldArray:
         """Block matrix obtained by lifting each entry of this RingArray."""
-        assert self.ndim == 1 or self.ndim == 2
+        self._require_ndim(1, 2)
         rows = 1 if self.ndim == 1 else self.shape[0]
         cols = self.shape[-1]
         block_size = self.group.lift_dim
@@ -333,7 +333,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         this method are therefore generally an overcomplete basis for the null space of this
         ``RingArray``.
         """
-        assert self.ndim == 2
+        self._require_ndim(2)
 
         # field-valued null vectors of self.regular_lift() provide an overcomplete basis for the
         # space of ring-valued null vectors
@@ -355,7 +355,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         The RREF of a RingArray over a commutative ring is unique.  For non-commutative rings, the
         RREF is only unique up to a choice of matrix basis for simple components of the ring.
         """
-        assert self.ndim == 2
+        self._require_ndim(2)
         if not self.ring.is_semisimple:
             raise ValueError("RingArray.row_reduce only supports semisimple rings")
         transformer = transformer or self.ring.get_transformer()
@@ -422,7 +422,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         - https://en.wikipedia.org/wiki/Howell_normal_form
         - https://github.com/m-webster/XPFpackage/blob/570ea89/Examples/A.1_howell_matrix.ipynb
         """
-        assert self.ndim == 2
+        self._require_ndim(2)
         if not self.ring.is_semisimple:
             raise ValueError(
                 "The ordinary Howell normal form requires the base ring to be semisimple"
@@ -506,7 +506,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         - https://en.wikipedia.org/wiki/Howell_normal_form
         - https://github.com/m-webster/XPFpackage/blob/570ea89/Examples/A.1_howell_matrix.ipynb
         """
-        assert self.ndim == 2
+        self._require_ndim(2)
         if not isinstance(self.group, CyclicGroup):
             raise TypeError(
                 "The Howell normal form induced by polynomial division requires an underlying"
@@ -632,10 +632,16 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         At least, that's the plan.  This method is not yet implemented.
         """
-        assert self.ndim == 2
+        self._require_ndim(2)
         raise NotImplementedError(
             "Computing a reduced Groebner basis is very mathematically involved.  Here be dragons."
         )
+
+    def _require_ndim(self, *ndims: int) -> None:
+        """Raise a ValueError unless this RingArray has one of the given numbers of dimensions."""
+        if self.ndim not in ndims:
+            expected = " or ".join(map(str, ndims))
+            raise ValueError(f"This method requires a {expected}-dimensional RingArray")
 
 
 ####################################################################################################

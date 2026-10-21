@@ -521,7 +521,7 @@ class ClassicalCode(AbstractCode):
             if decoder is not None or bound_kwargs:
                 warnings.warn(
                     "Distance bounding arguments are ignored when computing an exact distance",
-                    stacklevel=2,
+                    stacklevel=get_external_caller_stacklevel(),
                 )
             return self.get_distance_exact(vector=vector, method=method)
         return self.get_distance_bound(
@@ -818,7 +818,7 @@ class ClassicalCode(AbstractCode):
         warnings.warn(
             "ClassicalCode.puncture is DEPRECATED; use ClassicalCode.punctured instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.punctured(bits)
 
@@ -840,7 +840,7 @@ class ClassicalCode(AbstractCode):
         warnings.warn(
             "ClassicalCode.shorten is DEPRECATED; use ClassicalCode.shortened instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.shortened(bits)
 
@@ -1894,7 +1894,7 @@ class QuditCode(AbstractCode):
         warnings.warn(
             "QuditCode.get_dual_subsystem_code is DEPRECATED; use QuditCode.dual instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.dual()
 
@@ -1966,7 +1966,7 @@ class QuditCode(AbstractCode):
             if bound_kwargs:
                 warnings.warn(
                     "Distance bounding arguments are ignored when computing an exact distance",
-                    stacklevel=2,
+                    stacklevel=get_external_caller_stacklevel(),
                 )
             return self.get_distance_exact(method=method)
         return self.get_distance_bound(num_trials=int(bound), **bound_kwargs)
@@ -2010,7 +2010,7 @@ class QuditCode(AbstractCode):
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time",
-                stacklevel=2,
+                stacklevel=get_external_caller_stacklevel(),
             )
             distance = len(self)
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
@@ -2133,7 +2133,7 @@ class QuditCode(AbstractCode):
             f"{type(self).__name__}.conjugate is DEPRECATED; use {type(self).__name__}.conjugated "
             "instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.conjugated()
 
@@ -3248,7 +3248,7 @@ class CSSCode(QuditCode):
             if decoder is not None or bound_kwargs:
                 warnings.warn(
                     "Distance bounding arguments are ignored when computing an exact distance",
-                    stacklevel=2,
+                    stacklevel=get_external_caller_stacklevel(),
                 )
             return self.get_distance_exact(pauli, method=method)
         return self.get_distance_bound(
@@ -3352,7 +3352,7 @@ class CSSCode(QuditCode):
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time",
-                stacklevel=2,
+                stacklevel=get_external_caller_stacklevel(),
             )
             distance = len(self)
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
@@ -3759,7 +3759,7 @@ class CSSCode(QuditCode):
             f"{type(self).__name__}.conjugate is DEPRECATED; use {type(self).__name__}.conjugated "
             "instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.conjugated().to_css()
 

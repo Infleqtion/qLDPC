@@ -294,7 +294,8 @@ class Group:
 
     def __pow__(self, power: int) -> Group:
         """Direct product of self multiple times."""
-        assert power > 0
+        if power < 1:
+            raise ValueError(f"A group can only be raised to a positive power (got {power})")
         return functools.reduce(operator.mul, [self] * power)
 
     @staticmethod
@@ -875,7 +876,8 @@ class SmallGroup(Group):
     group_index: int
 
     def __init__(self, order: int, index: int) -> None:
-        assert order > 0
+        if order < 1:
+            raise ValueError(f"SmallGroup order must be positive (got {order})")
         num_groups = SmallGroup.number(order)
         if not 1 <= index <= num_groups:
             raise ValueError(

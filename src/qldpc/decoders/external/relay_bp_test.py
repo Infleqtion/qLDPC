@@ -81,8 +81,9 @@ def test_relay_bp(toy_problem: ToyProblem) -> None:
     with pytest.raises(TypeError, match="not a string"):
         decoders.external.RelayBPDecoder("MinSumBPDecoderF32")
 
-    with pytest.warns(UserWarning, match="will override"):
-        decoders.external.RelayBPDecoder(dem, error_priors=[0.1, 0.1])
+    with pytest.warns(UserWarning, match="will override") as caught:
+        decoders.relay_bp(error_priors=[0.1, 0.1]).build(dem)
+    assert caught[0].filename == __file__
 
     with pytest.raises(ValueError, match="Cannot specify an observable_error_matrix"):
         decoders.external.RelayBPDecoder(dem, observable_error_matrix=np.eye(2, dtype=np.uint8))
