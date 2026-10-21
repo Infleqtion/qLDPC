@@ -29,7 +29,6 @@ import numpy.typing as npt
 import sympy.abc
 import sympy.core
 
-from qldpc import external
 from qldpc._util import get_deprecated_alias
 
 from ._monomials import iter_monomial_terms
@@ -193,6 +192,8 @@ class GroupRing:
         if not self.is_semisimple:
             raise ValueError("Only semisimple rings have primitive central idempotents")
         if self._idempotents is None:
+            from qldpc import external  # avoid circular import
+
             idempotents_as_tuples = external.groups.get_primitive_central_idempotents(
                 self.group.to_gap_group(), self.field.order
             )

@@ -37,8 +37,6 @@ import sympy.abc
 import sympy.combinatorics as comb
 import sympy.core
 
-from qldpc import external
-
 from ._monomials import get_coefficient_and_exponents
 
 
@@ -600,6 +598,8 @@ class Group:
         see help(qldpc.external.groups.get_generators) and
         help(qldpc.external.groups.get_generators_from_magma).
         """
+        from qldpc import external  # avoid circular import
+
         name = "".join(name.split())  # strip whitespace
         if from_magma:
             generators = external.groups.get_generators_from_magma(name)
@@ -897,6 +897,8 @@ class SmallGroup(Group):
     @staticmethod
     def number(order: int) -> int:
         """The number of groups of a given order."""
+        from qldpc import external  # avoid circular import
+
         return external.groups.get_small_group_number(order)
 
     @staticmethod
@@ -908,6 +910,8 @@ class SmallGroup(Group):
     @staticmethod
     def get_structure(order: int, index: int) -> str:
         """Retrieve a description of the structure of a group."""
+        from qldpc import external  # avoid circular import
+
         return external.groups.get_small_group_structure(order, index)
 
 
