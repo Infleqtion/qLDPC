@@ -911,9 +911,6 @@ class ClassicalCode(AbstractCode):
         ``k >= min_error_weight`` when a caller sets that higher, since ``F_k = 1`` for every weight
         declared to be decoded perfectly.  The sum runs only as far as the heaviest weight the
         budget reached, and ``F_k = 0`` is assumed above that.
-
-        Deprecated keyword arguments (``**decoder_kwargs``) select and configure a decoder; pass a
-        decoder specification as ``decoder=`` instead.
         """
         code_capacity_decoder = get_code_capacity_decoder(
             self.matrix, None, decoder, decoder_kwargs
@@ -2382,9 +2379,6 @@ class QuditCode(AbstractCode):
         Errors heavier than the sample budget could reach go unsampled and are all treated as
         failures, making the reported rate a high estimate by an amount the constructed function's
         truncation_error_bound method reports.  See help(qldpc.codes.ErrorRateFunc).
-
-        Deprecated keyword arguments (``**decoder_kwargs``) select and configure a decoder; pass a
-        decoder specification as ``decoder=`` instead.
 
         See help(qldpc.codes.ClassicalCode.get_logical_error_rate_func) for more details about how
         this method works.
@@ -3909,10 +3903,6 @@ class CSSCode(QuditCode):
         Errors heavier than the sample budget could reach go unsampled and are all treated as
         failures, making the reported rate a high estimate by an amount the constructed function's
         truncation_error_bound method reports.  See help(qldpc.codes.ErrorRateFunc).
-
-        The deprecated ``decoder_x_kwargs``, ``decoder_z_kwargs``, and ``**decoder_kwargs`` select
-        and configure decoders; pass decoder specifications as ``decoder=``, ``decoder_x=``, or
-        ``decoder_z=`` instead.
 
         See help(qldpc.codes.ClassicalCode.get_logical_error_rate_func) for more details about how
         this method works.

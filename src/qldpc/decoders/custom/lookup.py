@@ -445,11 +445,6 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
     that of a ``QuditCode``, with the first and last half of the columns denoting, respectively, the
     ``[X|Z]`` support of a stabilizer.  Decoded errors are likewise vectors that indicate ``[X|Z]``
     support.
-
-    Two options are deprecated.  With ``predict_observable_flips=True``, ``.decode`` returns
-    observable flips rather than errors; use an ObservableLookupDecoder instead.  A ``penalty_func``
-    scores errors as a negative log probability; pass a callable ``error_channel`` that returns the
-    log probability instead.
     """
 
     def __init__(
@@ -756,8 +751,7 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
 
     The ``pcm_or_dem``, ``max_weight``, ``observable_flip_matrix``, ``post_select``,
     ``add_erasure_bit``, and ``symplectic`` options behave as they do for a LookupDecoder; see
-    help(LookupDecoder).  The deprecated ``predict_observable_flips=True`` makes ``.decode`` return
-    observable flips; use a WeightedObservableLookupDecoder instead.
+    help(LookupDecoder).
     """
 
     def __init__(
