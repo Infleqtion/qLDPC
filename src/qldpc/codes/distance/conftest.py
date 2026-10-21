@@ -17,7 +17,7 @@ def force_information_sets() -> Iterator[None]:
     """Route Brouwer-Zimmermann searches through information sets instead of exhaustive search."""
     with (
         mock.patch.multiple(
-            "qldpc.codes.distance.brouwer_zimmermann",
+            "qldpc.codes.distance._brouwer_zimmermann",
             _exhaustive_is_cheaper=mock.Mock(return_value=False),
             _brute_force_is_cheaper=mock.Mock(return_value=False),
         ),
