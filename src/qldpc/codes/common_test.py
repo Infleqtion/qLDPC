@@ -684,6 +684,15 @@ def test_exact_code_distance_method_api() -> None:
     with pytest.raises(ValueError, match="Unknown distance method"):
         classical_code.get_distance(bound=True, method="other")  # type: ignore[arg-type]
 
+    # The "information_sets" alias selects the joint Brouwer-Zimmermann search of a CSS code.
+    hgp_code = codes.HGPCode(codes.RepetitionCode(3), codes.RepetitionCode(4))
+    css_code = codes.CSSCode(hgp_code.matrix_x, hgp_code.matrix_z)
+    with unittest.mock.patch(
+        "qldpc.codes.common.get_distance_css_brouwer_zimmermann", return_value=3
+    ) as mock_joint_distance:
+        assert css_code.get_distance_exact(method="information_sets") == 3
+    mock_joint_distance.assert_called_once()
+
 
 def test_css_joint_distance_cache() -> None:
     """A joint CSS search caches only the global distance, leaving sector distances independent."""

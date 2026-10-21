@@ -126,9 +126,27 @@ def test_distance_backend_validation() -> None:
         qldpc.codes.validate_distance_backend("other")  # type: ignore[arg-type]
 
     for method in ["brouwer_zimmermann", "brute_force"]:
-        qldpc.codes.validate_distance_method(method)  # type: ignore[arg-type]
+        assert qldpc.codes.validate_distance_method(method) == method  # type: ignore[arg-type]
+    assert qldpc.codes.validate_distance_method("information_sets") == "brouwer_zimmermann"
     with pytest.raises(ValueError, match="Unknown distance method"):
         qldpc.codes.validate_distance_method("other")  # type: ignore[arg-type]
+
+
+def test_distance_method_alias() -> None:
+    """The "information_sets" alias selects the Brouwer-Zimmermann search and its shortcut."""
+    with mock.patch.multiple(
+        "qldpc.codes.distance.core",
+        _exhaustive_is_cheaper=mock.Mock(return_value=True),
+        _get_distance_brouwer_zimmermann=mock.Mock(return_value=2),
+        _get_distance_quantum_brute_force=mock.Mock(return_value=1),
+    ):
+        assert qldpc.codes.get_distance_classical([[1, 1, 0]], method="information_sets") == 2
+        assert (
+            qldpc.codes.get_distance_quantum(
+                [[1, 1, 0]], [], homogeneous=True, method="information_sets"
+            )
+            == 1
+        )
 
 
 @pytest.mark.parametrize(

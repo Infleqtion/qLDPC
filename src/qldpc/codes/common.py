@@ -508,15 +508,15 @@ class ClassicalCode(AbstractCode):
                 Hamming distance between this vector and a code word.  Default: None.
             decoder: Decoder input used to bound distance; see help(get_distance_bound).
             method: Binary exact-distance method, unused when bounding the distance.
-                ``"brouwer_zimmermann"`` is the default; ``"brute_force"`` enumerates every nonzero
-                code word.  Nonbinary and vector-distance calculations always use exhaustive
-                enumeration.
+                ``"brouwer_zimmermann"`` is the default, with alias ``"information_sets"``;
+                ``"brute_force"`` enumerates every nonzero code word.  Nonbinary and vector-distance
+                calculations always use exhaustive enumeration.
             **bound_kwargs: Keyword arguments to pass to get_distance_bound.
 
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if not bound:
             if decoder is not None or bound_kwargs:
                 warnings.warn(
@@ -541,14 +541,14 @@ class ClassicalCode(AbstractCode):
             vector: If not None, rather than computing the code distance, compute the minimum
                 Hamming distance between this vector and a code word.  Default: None.
             cutoff: Exit and return once an upper bound on distance falls to or below this cutoff.
-            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default;
-                ``"brute_force"`` enumerates every nonzero code word.  Nonbinary and vector-distance
-                calculations always use exhaustive enumeration.
+            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default, with
+                alias ``"information_sets"``; ``"brute_force"`` enumerates every nonzero code word.
+                Nonbinary and vector-distance calculations always use exhaustive enumeration.
 
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if (known_distance := self.get_distance_if_known(vector)) is not None:
             return known_distance
 
@@ -1950,15 +1950,15 @@ class QuditCode(AbstractCode):
                 compute an upper bound on code distance by minimizing over int(bound) independent
                 randomized upper bounds; see help(get_distance_bound).
             method: Binary exact-distance method, unused when bounding the distance.
-                ``"brouwer_zimmermann"`` is the default; ``"brute_force"`` enumerates every
-                nontrivial logical operator.  Nonbinary calculations always use exhaustive
-                enumeration.
+                ``"brouwer_zimmermann"`` is the default, with alias ``"information_sets"``;
+                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
+                calculations always use exhaustive enumeration.
             **bound_kwargs: Keyword arguments to pass to get_distance_bound.
 
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if not bound:
             if bound_kwargs:
                 warnings.warn(
@@ -1978,14 +1978,14 @@ class QuditCode(AbstractCode):
 
         Args:
             cutoff: Exit and return once an upper bound on distance falls to or below this cutoff.
-            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default;
-                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
-                calculations always use exhaustive enumeration.
+            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default, with
+                alias ``"information_sets"``; ``"brute_force"`` enumerates every nontrivial logical
+                operator.  Nonbinary calculations always use exhaustive enumeration.
 
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if (known_distance := self.get_distance_if_known()) is not None:
             return known_distance
 
@@ -3229,15 +3229,15 @@ class CSSCode(QuditCode):
                 randomized upper bounds; see help(get_distance_bound).
             decoder: Decoder input used to bound distance; see help(get_distance_bound).
             method: Binary exact-distance method, unused when bounding the distance.
-                ``"brouwer_zimmermann"`` is the default; ``"brute_force"`` enumerates every
-                nontrivial logical operator.  Nonbinary calculations always use exhaustive
-                enumeration.
+                ``"brouwer_zimmermann"`` is the default, with alias ``"information_sets"``;
+                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
+                calculations always use exhaustive enumeration.
             **bound_kwargs: Keyword arguments to pass to get_distance_bound.
 
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if not bound:
             if decoder is not None or bound_kwargs:
                 warnings.warn(
@@ -3264,14 +3264,14 @@ class CSSCode(QuditCode):
                 The strings "X" and "Z" (case-insensitive) are also accepted.  If None (the
                 default), minimize over X and Z.
             cutoff: Exit and return once an upper bound on distance falls to or below this cutoff.
-            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default;
-                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
-                calculations always use exhaustive enumeration.
+            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default, with
+                alias ``"information_sets"``; ``"brute_force"`` enumerates every nontrivial logical
+                operator.  Nonbinary calculations always use exhaustive enumeration.
 
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
         if (known_distance := self.get_distance_if_known(pauli)) is not None:
             return known_distance
