@@ -268,6 +268,8 @@ def test_group_product() -> None:
     assert group.generators == [shift @ identity, identity @ shift]
     assert np.array_equal(table, group.table)
     assert np.array_equal(table, abstract.Group.from_table(table).table)
+    with pytest.raises(ValueError, match="positive power"):
+        cycle**0
 
 
 def test_group_tensor_product() -> None:
@@ -609,7 +611,9 @@ def test_small_group() -> None:
     order, index = 2, 1
     desired_group = abstract.CyclicGroup(order)
 
-    # invalid group index
+    # invalid group order or index
+    with pytest.raises(ValueError, match="order must be positive"):
+        abstract.SmallGroup(0, 1)
     with (
         pytest.raises(ValueError, match="Index for SmallGroup"),
         unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=index),

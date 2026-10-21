@@ -530,7 +530,7 @@ def test_surgery_final_detectors_count_matches_reliable_round1(basis: PauliXZ) -
     from qldpc.circuits.bookkeeping import QubitIDs
     from qldpc.experimental.surgery.circuit import (
         _classify_reliable_round1_checks,
-        _gadget_merged_csscode,
+        _merged_csscode,
         _surgery_detach_and_readout,
         _surgery_final_detectors,
         _surgery_qec_cycle,
@@ -541,7 +541,7 @@ def test_surgery_final_detectors_count_matches_reliable_round1(basis: PauliXZ) -
     op = code.get_logical_ops(Pauli.X)[0] if basis is Pauli.X else code.get_logical_ops(Pauli.Z)[0]
     op_arr = np.asarray(op).astype(np.uint8)
     g = build_gadget(code, op_arr, basis=basis)
-    merged = _gadget_merged_csscode(g)
+    merged = _merged_csscode(g)
     qubit_ids = QubitIDs.from_code(merged)
     n_data = code.num_qudits
     data_ids = qubit_ids.data[:n_data]

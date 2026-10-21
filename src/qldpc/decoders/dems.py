@@ -655,12 +655,17 @@ def _with_higher_order_corrections(
     ]
     removed_det_to_removed_errors = _get_removed_det_to_removed_errors(removed_det_flip_submatrix)
 
-    # identify pairs of removed errors to add back to the DEM
     combinations_to_add: set[frozenset[int]] = set()
+
+    def try_add(comb: list[int]) -> None:
+        """Add back a combination of removed errors if its flips on removed detectors cancel."""
+        if not np.any(removed_det_flip_submatrix[:, comb].sum(axis=1) % 2):
+            combinations_to_add.add(frozenset(removed_error_indices[comb]))
+
+    # identify pairs of removed errors to add back to the DEM
     for triggering_errors in removed_det_to_removed_errors:
         for pair in itertools.combinations(triggering_errors, 2):
-            if not np.any(removed_det_flip_submatrix[:, pair].sum(axis=1) % 2):
-                combinations_to_add.add(frozenset(removed_error_indices[list(pair)]))
+            try_add(list(pair))
 
     if order >= 3:
         all_errors = set(range(len(removed_error_indices)))
@@ -671,9 +676,7 @@ def _with_higher_order_corrections(
             for pair in itertools.combinations(triggering_errors, 2):
                 for num_rest in range(1, order - 1):
                     for rest in itertools.combinations(other_errors, num_rest):
-                        comb = [*pair, *rest]
-                        if not np.any(removed_det_flip_submatrix[:, comb].sum(axis=1) % 2):
-                            combinations_to_add.add(frozenset(removed_error_indices[comb]))
+                        try_add([*pair, *rest])
 
             # A combination cancels on this detector only if an even number of its errors flip it,
             # and the errors of a later group flip no earlier detector, so the errors this detector
@@ -682,9 +685,7 @@ def _with_higher_order_corrections(
                 for head in itertools.combinations(triggering_errors, num_head):
                     for num_rest in range(order - num_head + 1):
                         for rest in itertools.combinations(other_errors, num_rest):
-                            comb = [*head, *rest]
-                            if not np.any(removed_det_flip_submatrix[:, comb].sum(axis=1) % 2):
-                                combinations_to_add.add(frozenset(removed_error_indices[comb]))
+                            try_add([*head, *rest])
 
     # merge duplicate synthetic errors and combine their independent probabilities
     new_errors: dict[bytes, tuple[scipy.sparse.csc_matrix, scipy.sparse.csc_matrix, float]] = {}

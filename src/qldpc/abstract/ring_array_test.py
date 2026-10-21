@@ -78,6 +78,8 @@ def test_ring_array(pytestconfig: pytest.Config) -> None:
         abstract.RingArray([ring.one for ring in rings])
     with pytest.raises(ValueError, match="Inconsistent rings"):
         abstract.RingArray.build([ring.one for ring in rings])
+    with pytest.raises(ValueError, match="requires a 1 or 2-dimensional"):
+        abstract.RingArray.build([[[1]]], rings[0]).lift()
 
     new_matrix = abstract.RingArray.build([[1]], abstract.CyclicGroup(1))
     with pytest.raises(ValueError, match="different base rings"):

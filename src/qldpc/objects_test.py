@@ -128,6 +128,8 @@ def test_chain_complex(field: int = 3) -> None:
     two_chain = objects.ChainComplex.tensor_product(matrix, matrix, field)
     assert not np.any(two_chain.op(0))
     assert not np.any(two_chain.op(two_chain.num_links + 1))
+    with pytest.raises(ValueError, match="out of range"):
+        two_chain.op(-1)
 
     # tensor product of a two-complex and its dual
     four_chain = objects.ChainComplex.tensor_product(two_chain, two_chain.T, field)

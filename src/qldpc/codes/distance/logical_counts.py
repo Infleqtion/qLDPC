@@ -22,7 +22,8 @@ bound exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited
 information sets is counted by only one of them.  Full Pauli counts are derived from the
 homogeneous words of weight ``d``, with one masked rank per word.  Self-dual codes scan only one
 sector, and have ``count_pauli = 3 * count_x``.  Counters for codes conjugated by local
-CSS-preserving Cliffords transform the stored sector bases rather than recomputing them.
+CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
+recomputing them.
 
 In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
 ``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
@@ -37,7 +38,7 @@ References:
 from __future__ import annotations
 
 import functools
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -140,6 +141,7 @@ class CSSLogicalCounter:
             self._stabilizers_z = self._stabilizers_x
         self.dimension = self.num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
         self._sectors: tuple[_Sector, _Sector] | None = None
+        self._disjoint_families: dict[int, _information_sets._Family] = {}
         self._canonical: tuple[_BinaryMatrix, _BinaryMatrix] | None = (self._gauge_x, self._gauge_z)
 
     @property
@@ -239,6 +241,7 @@ class CSSLogicalCounter:
             complement=False,
             max_exponent=target if weigh else 0,
             reject_lighter=reject_above,
+            get_disjoint=functools.partial(self._get_disjoint_family, 0),
         )
         if self._self_dual or counts_x is None:
             counts_z = counts_x
@@ -251,6 +254,7 @@ class CSSLogicalCounter:
                 complement=True,
                 max_exponent=len(self._gauge_x) if weigh else 0,
                 reject_lighter=reject_above,
+                get_disjoint=functools.partial(self._get_disjoint_family, 1),
             )
         if counts_x is None or counts_z is None:
             raise ValueError(
@@ -367,11 +371,21 @@ class CSSLogicalCounter:
         else:
             counter._stabilizers_z = _apply_local(self._stabilizers_z, positions, local_z)
         counter._sectors = None
+        counter._disjoint_families = {}
         if self._sectors is not None:
             (basis_x, labels_x), (basis_z, labels_z) = self._sectors
             sector_x = (_apply_local(basis_x, positions, local_x), labels_x)
             sector_z = sector_x if shared else (_apply_local(basis_z, positions, local_z), labels_z)
             counter._sectors = (sector_x, sector_z)
+
+            # The kept families follow the gate.  If one cannot, the sector is prepared again when
+            # it is next counted.  A self-dual code keeps one family, for both of its sectors.
+            for index, local in ((0, local_x), (1, local_z)):
+                family = self._disjoint_families.get(0 if self._self_dual else index)
+                if family is not None and not (shared and index == 1):
+                    moved = _transport_family(family, positions, local, counter._sectors[index][0])
+                    if moved is not None:
+                        counter._disjoint_families[index] = moved
         return counter
 
     def _get_sectors(self) -> tuple[_Sector, _Sector]:
@@ -385,6 +399,18 @@ class CSSLogicalCounter:
             )
             self._sectors = (sector_x, sector_z)
         return self._sectors
+
+    def _get_disjoint_family(self, index: int) -> _information_sets._Family:
+        """The first stage of the information-set family of a sector, which is kept.
+
+        This stage does not depend on the counted weight, so counting at another weight, as when a
+        guessed weight fails, does not repeat it.
+        """
+        if index not in self._disjoint_families:
+            self._disjoint_families[index] = _information_sets._get_disjoint_family(
+                *self._get_sectors()[index]
+            )
+        return self._disjoint_families[index]
 
     def _get_canonical_checks(self) -> tuple[_BinaryMatrix, _BinaryMatrix]:
         """The checks in reduced row echelon form, which conjugation does not preserve."""
@@ -444,6 +470,7 @@ def _count_words(
     complement: bool,
     max_exponent: int,
     reject_lighter: bool,
+    get_disjoint: Callable[[], _information_sets._Family],
 ) -> npt.NDArray[np.int64] | None:
     """Visit each nontrivial word of one sector with the given weight exactly once.
 
@@ -457,7 +484,7 @@ def _count_words(
     if method == "brute_force":
         sets, certificate = [(basis, labels)], None
     else:
-        sets, certificate = _get_counting_information_sets(basis, labels, weight)
+        sets, certificate = _get_counting_information_sets(basis, labels, weight, get_disjoint())
 
     rows = [_pack_bits(generators) for generators, _ in sets]
     tags = [_pack_bits(set_labels) for _, set_labels in sets]
@@ -497,7 +524,10 @@ def _count_words(
 
 
 def _get_counting_information_sets(
-    basis: _BinaryMatrix, labels: _BinaryMatrix, weight: int
+    basis: _BinaryMatrix,
+    labels: _BinaryMatrix,
+    weight: int,
+    disjoint: _information_sets._Family,
 ) -> tuple[list[_Sector], _information_sets._Certificate]:
     """Select BZ information sets that certify every word of the given weight.
 
@@ -505,12 +535,42 @@ def _get_counting_information_sets(
     The family stages aim at the counting stop ``L(t) >= weight + 1``; any family gives an exact
     count.
     """
-    family = _information_sets._prepare_family(basis, labels, upper_bound=weight + 1)
+    family = _information_sets._prepare_family(
+        basis, labels, upper_bound=weight + 1, disjoint=disjoint
+    )
     sets = []
     for information_set in family.information_sets:
         assert information_set.labels is not None
         sets.append((information_set.generators, information_set.labels))
     return sets, family.certificate
+
+
+def _transport_family(
+    family: _information_sets._Family,
+    positions: npt.NDArray[np.int64],
+    local: npt.NDArray[np.uint64],
+    basis: _BinaryMatrix,
+) -> _information_sets._Family | None:
+    """The family of a sector after a local gate, or None if one of its sets stops being a set.
+
+    Each set is mapped through the gate and reduced again on its own pivot columns, so the pivots
+    stay disjoint and the labels move with their rows.  A set stops being one if its pivot columns
+    are no longer independent.
+    """
+    sets = []
+    for information_set in family.information_sets:
+        generators = _apply_local(information_set.generators, positions, local)
+        reduced, labels, pivots = _row_reduce_binary(
+            generators, information_set.labels, columns=information_set.pivots
+        )
+        if len(pivots) != information_set.rank:
+            return None
+        sets.append(_information_sets._InformationSet(reduced, labels, len(pivots), pivots))
+    return _information_sets._Family.from_information_sets(
+        sets,
+        dimension=family.certificate.dimension,
+        weight_divisor=_information_sets._infer_weight_divisor(basis),
+    )
 
 
 def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:

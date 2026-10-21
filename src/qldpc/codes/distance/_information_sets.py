@@ -131,9 +131,18 @@ def _prepare_family(
     *,
     upper_bound: int,
     weight_divisor: int = 1,
+    disjoint: _Family | None = None,
 ) -> _Family:
-    """Run every family stage, aimed at a fixed ``upper_bound``, without intermediate exits."""
-    family = _get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
+    """Run every family stage, aimed at a fixed ``upper_bound``, without intermediate exits.
+
+    The first stage does not depend on ``upper_bound``, so a caller that prepares several families
+    for one basis can pass its result as ``disjoint`` instead of computing it again.
+    """
+    family = (
+        _get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
+        if disjoint is None
+        else disjoint
+    )
     family = _prune_family(family, upper_bound=upper_bound)
     overlapping = _get_overlapping_family(basis, labels, family, upper_bound=upper_bound)
     return family if overlapping is None else overlapping
@@ -184,13 +193,15 @@ def _get_overlapping_family(
     family: _Family,
     *,
     upper_bound: int,
-    max_sets: int = 8,
+    max_sets: int = 16,
     minimum_work: int = 100_000,
 ) -> _Family | None:
     """Stage three: look for a lower-work replacement for a disjoint family.
 
     ``family`` contains full or partial sets for one independent binary basis.
     A replacement contains only full sets, with quotient labels transformed alongside rows.
+    ``max_sets`` bounds the size of a replacement family and the effort spent building it.
+    More sets can avoid costly coefficient layers in hard searches, while fewer reduce setup work.
     Return a lower-work family certified with its maximum Hamming-coordinate coverage, or ``None``.
     """
     # Start from full blocks; skip complete packings and families already at the size limit.
