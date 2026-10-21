@@ -202,7 +202,7 @@ class CSSLogicalCounter:
         Raises:
             ValueError: If the weight is not an integer between zero and the number of qubits, if
                 the method is unknown, or if the weight is above the distance and
-                ``within_distance`` or ``full_pauli`` is set.
+                ``full_pauli`` or ``within_distance`` is set.
         """
         validate_distance_method(method)
         if weight is not None and (
