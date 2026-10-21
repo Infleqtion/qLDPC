@@ -206,8 +206,8 @@ class CSSLogicalCounter:
             method: ``"brouwer_zimmermann"`` (the default), ``"macwilliams"``, or
                 ``"brute_force"``.  MacWilliams uses check-space weight distributions, cached on the
                 counter but not transferred through conjugation.  It does not support subsystem
-                codes, full Pauli counts of non-self-dual codes, or check ranks above 63.  Brute force
-                is a reference for small codes.  The aliases ``"information_sets"`` and
+                codes, full Pauli counts of non-self-dual codes, or check ranks above 63.  Brute
+                force is a reference for small codes.  The aliases ``"information_sets"`` and
                 ``"weight_enumerator"`` select ``"brouwer_zimmermann"`` and ``"macwilliams"``,
                 respectively.
             full_pauli: If True, also count full Pauli operators, including Y and mixed operators.
