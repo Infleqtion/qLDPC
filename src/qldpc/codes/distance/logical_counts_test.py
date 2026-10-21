@@ -196,6 +196,33 @@ def test_full_pauli_counts_away_from_the_distance(method: DistanceMethod) -> Non
         counter.count_logicals(3, method=method, full_pauli=True)
 
 
+@pytest.mark.parametrize("method", METHODS)
+@pytest.mark.parametrize(
+    "checks_x,checks_z,distance",
+    [
+        (codes.SteaneCode().matrix_x, codes.SteaneCode().matrix_z, 3),
+        ([[1, 1, 0]], [[0, 0, 1]], 1),  # The lightest logical operator is X-only.
+        ([[0, 0, 1]], [[1, 1, 0]], 1),  # The lightest logical operator is Z-only.
+    ],
+)
+def test_within_distance_raises_exactly_above_the_distance(
+    checks_x: npt.ArrayLike, checks_z: npt.ArrayLike, distance: int, method: DistanceMethod
+) -> None:
+    counter = _counter(checks_x, checks_z)
+    for weight in range(counter.num_qubits + 1):
+        if weight > distance:
+            with pytest.raises(ValueError):
+                counter.count_logicals(weight, method=method, within_distance=True)
+        else:
+            counts = counter.count_logicals(weight, method=method)
+            assert counter.count_logicals(weight, method=method, within_distance=True) == counts
+
+
+def test_count_logicals_css_accepts_within_distance() -> None:
+    with pytest.raises(ValueError):
+        lc.count_logicals_css(codes.SteaneCode(), 4, within_distance=True)
+
+
 def test_surface_codes() -> None:
     # Unrotated surface codes have d minimum-weight logicals of each type: straight lines.
     for distance in (3, 5, 7):

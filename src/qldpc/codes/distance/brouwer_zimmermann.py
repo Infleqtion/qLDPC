@@ -178,6 +178,8 @@ def _scan_brouwer_zimmermann(
                         candidate_weight += 1
             for word in range(widths[set_index]):
                 candidate_weight += _popcount_word(prefixes[weight, set_index, word])
+                if candidate_weight >= best:
+                    break
             if candidate_weight >= best:
                 continue
 

@@ -177,6 +177,7 @@ class CSSLogicalCounter:
         *,
         method: DistanceMethod = "brouwer_zimmermann",
         full_pauli: bool = False,
+        within_distance: bool = False,
     ) -> CSSLogicalCounts:
         """Count the nontrivial logical operators of a given weight.
 
@@ -190,6 +191,9 @@ class CSSLogicalCounter:
                 Each homogeneous word of the counted weight costs one rank calculation.  These
                 counts are exact up to the distance and zero below it, and are not supported above
                 it.  Defaults to False.
+            within_distance: If True, raise an error when the weight is above the distance, that
+                is, when some nontrivial X-only or Z-only logical operator is lighter than the
+                weight.  Full Pauli counts always do this.  Defaults to False.
 
         Returns:
             The counted weight and the counts.  If no weight is given and the code encodes no
@@ -197,8 +201,8 @@ class CSSLogicalCounter:
 
         Raises:
             ValueError: If the weight is not an integer between zero and the number of qubits, if
-                the method is unknown, or if full Pauli operators are requested at a weight above
-                the distance.
+                the method is unknown, or if the weight is above the distance and
+                ``full_pauli`` or ``within_distance`` is set.
         """
         validate_distance_method(method)
         if weight is not None and (
@@ -225,6 +229,7 @@ class CSSLogicalCounter:
         # Pauli need not have the support of a homogeneous logical, so the scans reject any
         # nontrivial word lighter than the target.
         weigh = full_pauli and not self._self_dual
+        reject_above = full_pauli or within_distance
         no_rows = self._gauge_x[:0]
         counts_x = _count_words(
             *sector_x,
@@ -233,7 +238,7 @@ class CSSLogicalCounter:
             _pack_bits(self._stabilizers_x if weigh else no_rows),
             complement=False,
             max_exponent=target if weigh else 0,
-            reject_lighter=full_pauli,
+            reject_lighter=reject_above,
         )
         if self._self_dual or counts_x is None:
             counts_z = counts_x
@@ -245,11 +250,11 @@ class CSSLogicalCounter:
                 _pack_bits(self._gauge_x if weigh else no_rows),
                 complement=True,
                 max_exponent=len(self._gauge_x) if weigh else 0,
-                reject_lighter=full_pauli,
+                reject_lighter=reject_above,
             )
         if counts_x is None or counts_z is None:
             raise ValueError(
-                "Full Pauli operators can be counted only up to the distance, which is less than"
+                "Counts above the distance are not supported here: the distance is less than"
                 f" weight {target}"
             )
         count_x, count_z = int(counts_x.sum()), int(counts_z.sum())
@@ -397,13 +402,16 @@ def count_logicals_css(
     *,
     method: DistanceMethod = "brouwer_zimmermann",
     full_pauli: bool = False,
+    within_distance: bool = False,
 ) -> CSSLogicalCounts:
     """Count the nontrivial logical operators of a given weight in a binary CSS code.
 
     This is shorthand for ``CSSLogicalCounter(code).count_logicals(...)``; see
     :meth:`CSSLogicalCounter.count_logicals` for the arguments and conventions.
     """
-    return CSSLogicalCounter(code).count_logicals(weight, method=method, full_pauli=full_pauli)
+    return CSSLogicalCounter(code).count_logicals(
+        weight, method=method, full_pauli=full_pauli, within_distance=within_distance
+    )
 
 
 ####################################################################################################
@@ -699,6 +707,9 @@ def _count_chunk(
             for index in range(width):
                 word[index] = prefixes[depth, index] ^ rows[row, index]
                 weight += _popcount_word(word[index])
+                # A heavier word is rejected below, so its unwritten words are never read.
+                if weight > target:
+                    break
             if weight > target or (weight < target and not reject_lighter):
                 continue
             # A nonzero quotient label marks a nontrivial logical rather than a stabilizer.
