@@ -575,7 +575,7 @@ def test_distance_qudit() -> None:
         code.get_distance(bound=True)
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        pytest.raises(ValueError, match="Arguments not recognized"),
+        pytest.raises(ValueError, match="not recognized by GAP/QDistRnd"),
     ):
         code.get_distance(bound=True, test=True)
 
@@ -1490,7 +1490,7 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
     non_css.forget_distance()
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        pytest.raises(ValueError, match="not recognized for distance bounding"),
+        pytest.raises(ValueError, match="not recognized by GAP/QDistRnd"),
     ):
         non_css.get_code_params(bound=True, decoder=decoder)
 

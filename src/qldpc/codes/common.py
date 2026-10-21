@@ -911,6 +911,9 @@ class ClassicalCode(AbstractCode):
         ``k >= min_error_weight`` when a caller sets that higher, since ``F_k = 1`` for every weight
         declared to be decoded perfectly.  The sum runs only as far as the heaviest weight the
         budget reached, and ``F_k = 0`` is assumed above that.
+
+        Deprecated keyword arguments (``**decoder_kwargs``) select and configure a decoder; pass a
+        decoder specification as ``decoder=`` instead.
         """
         code_capacity_decoder = get_code_capacity_decoder(
             self.matrix, None, decoder, decoder_kwargs
@@ -2038,6 +2041,7 @@ class QuditCode(AbstractCode):
 
         return self._distance
 
+    @format_docstring(gap_options=sorted(_GAP_DISTANCE_BOUND_KWARGS))
     def get_distance_bound(
         self,
         num_trials: int | None = None,
@@ -2058,8 +2062,8 @@ class QuditCode(AbstractCode):
             cutoff: Exit early once the upper bound falls to or below this cutoff.
             backend: Distance-bound backend.  ``"auto"`` and ``"gap"`` use GAP/QDistRnd;
                 ``"decoder"`` and ``"sqetch"`` require a CSSCode and are rejected here.
-            **bound_kwargs: Keyword arguments to pass to the downstream distance bounding method.
-                See https://qec-pages.github.io/QDistRnd/doc/chap4.html.
+            **bound_kwargs: Keyword arguments to pass to GAP/QDistRnd.  Recognized options are
+                {gap_options}; see https://qec-pages.github.io/QDistRnd/doc/chap4.html.
 
         Returns:
             An upper bound on distance if it is defined, or np.nan otherwise.  The returned bound is
@@ -2082,14 +2086,14 @@ class QuditCode(AbstractCode):
         if num_trials == 0 or (cutoff is not None and best_bound <= cutoff):
             return best_bound
 
+        if unknown_gap := sorted(set(bound_kwargs) - _GAP_DISTANCE_BOUND_KWARGS):
+            raise ValueError(f"Arguments not recognized by GAP/QDistRnd: {unknown_gap}")
         if not external.gap.is_installed():
             raise NotImplementedError(
                 "Bounding the code distance of non-CSS codes without GAP is not supported"
             )
 
-        maxav = bound_kwargs.pop("maxav", "fail")
-        if bound_kwargs:
-            raise ValueError(f"Arguments not recognized for distance bounding: {bound_kwargs}")
+        maxav = bound_kwargs.get("maxav", "fail")
         bound = external.codes.get_distance_bound(self, num_trials, cutoff=cutoff, maxav=maxav)
         self._distance_bound = min(best_bound, bound)
         return self._distance_bound
@@ -2379,6 +2383,9 @@ class QuditCode(AbstractCode):
         failures, making the reported rate a high estimate by an amount the constructed function's
         truncation_error_bound method reports.  See help(qldpc.codes.ErrorRateFunc).
 
+        Deprecated keyword arguments (``**decoder_kwargs``) select and configure a decoder; pass a
+        decoder specification as ``decoder=`` instead.
+
         See help(qldpc.codes.ClassicalCode.get_logical_error_rate_func) for more details about how
         this method works.
         """
@@ -2480,6 +2487,11 @@ class CSSCode(QuditCode):
 
     If all parity checks of a CSSCode commute, ``H_x @ H_z.T == 0``, then the CSSCode is a
     stabilizer code; otherwise, the CSSCode is a subsystem code.
+
+    Given a Pauli type, methods such as ``get_logical_ops``, ``get_stabilizer_ops``, and
+    ``get_gauge_ops`` default to ``symplectic=False`` for a CSSCode, returning matrices with one
+    column per qudit, whereas a QuditCode only supports ``symplectic=True``, which returns matrices
+    with two columns per qudit.
 
     References:
 
@@ -3708,8 +3720,8 @@ class CSSCode(QuditCode):
                 (case-insensitive) are also accepted.
             decoder: Decoder input used to reduce each logical operator; see
                 help(reduce_logical_op).
-            **decoder_kwargs: Deprecated decoder-selection and construction arguments to pass to
-                qldpc.decoders.get_decoder.
+            **decoder_kwargs: Deprecated decoder-selection options; pass a specification as
+                ``decoder=`` instead.
 
         Returns:
             This code, with reduced logical operators.
@@ -3897,6 +3909,10 @@ class CSSCode(QuditCode):
         Errors heavier than the sample budget could reach go unsampled and are all treated as
         failures, making the reported rate a high estimate by an amount the constructed function's
         truncation_error_bound method reports.  See help(qldpc.codes.ErrorRateFunc).
+
+        The deprecated ``decoder_x_kwargs``, ``decoder_z_kwargs``, and ``**decoder_kwargs`` select
+        and configure decoders; pass decoder specifications as ``decoder=``, ``decoder_x=``, or
+        ``decoder_z=`` instead.
 
         See help(qldpc.codes.ClassicalCode.get_logical_error_rate_func) for more details about how
         this method works.
