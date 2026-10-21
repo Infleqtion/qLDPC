@@ -272,11 +272,6 @@ def build_joint_ppm_circuit(
 # helper methods
 
 
-def _gadget_merged_csscode(g: GadgetLayout) -> CSSCode:
-    """Compatibility wrapper for the internal merged-code accessor."""
-    return _merged_csscode(g)
-
-
 def _validate_one_logical_measurement(
     merged_code: CSSCode,
     *,
