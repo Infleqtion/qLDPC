@@ -145,6 +145,8 @@ class CSSLogicalCounter:
             raise TypeError(f"Expected a CSSCode, not {type(code).__name__}{hint}")
         if code.field.order != 2:
             raise ValueError(f"Logical counts require a binary code, not GF({code.field.order})")
+
+        # Reduce the checks to independent bases in reduced row echelon form.
         self._code: CSSCode | None = code
         checks_x = code.matrix_x.view(np.ndarray).astype(np.uint8)
         checks_z = code.matrix_z.view(np.ndarray).astype(np.uint8)
@@ -156,10 +158,14 @@ class CSSLogicalCounter:
         self._self_dual = np.array_equal(self._gauge_x, self._gauge_z)
         if self._self_dual:
             self._gauge_z = self._gauge_x
+
+        # Identify the stabilizers among the gauge operators, which fixes the number of logicals.
         self._stabilizers_x, self._stabilizers_z = _get_stabilizers(self._gauge_x, self._gauge_z)
         if self._self_dual:
             self._stabilizers_z = self._stabilizers_x
         self._dimension = self._num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
+
+        # Work that is done on demand and kept for later counts.
         self._sectors: tuple[_Sector, _Sector] | None = None
         self._disjoint_families: dict[int, _information_sets._BasisFamily] = {}
         self._enumerators: _CheckEnumerators | None = None
@@ -250,6 +256,7 @@ class CSSLogicalCounter:
                 ``within_distance`` is set, or if the MacWilliams method does not support the code
                 or the request.
         """
+        # Validate the inputs, resolving method aliases.
         if method == "information_sets":
             method = "brouwer_zimmermann"
         elif method == "weight_enumerator":
@@ -263,6 +270,8 @@ class CSSLogicalCounter:
             raise ValueError("The weight must be an integer between zero and the number of qubits")
         if method == "macwilliams":
             self._validate_macwilliams_request(count_pauli)
+
+        # A code without logicals needs no scan, and the MacWilliams method needs no sectors.
         if not self.dimension:
             empty_pauli = 0 if count_pauli else None
             return CSSLogicalCounts(
@@ -289,6 +298,8 @@ class CSSLogicalCounter:
         weigh = count_pauli and not self._self_dual
         reject_above = count_pauli or within_distance
         no_rows = self._gauge_x[:0]
+
+        # Scan each sector, or only the X sector of a self-dual code.
         counts_x = _count_words(
             *sector_x,
             target,
@@ -316,6 +327,8 @@ class CSSLogicalCounter:
             )
         if counts_x is None or counts_z is None:
             raise _get_above_distance_error(target)
+
+        # Sum the histograms, and derive the full Pauli count as described above.
         count_x, count_z = int(counts_x.sum()), int(counts_z.sum())
         num_pauli = None
         if count_pauli and self._self_dual:
@@ -428,6 +441,7 @@ class CSSLogicalCounter:
         counter = CSSLogicalCounter.__new__(CSSLogicalCounter)
         counter._num_qubits, counter._dimension = self._num_qubits, self._dimension
         counter._code, counter._canonical = None, None
+
         # A gate that acts identically on X and Z keeps a self-dual code self-dual.
         shared = self._self_dual and (local_x is local_z or np.array_equal(local_x, local_z))
         counter._self_dual = shared
@@ -447,6 +461,8 @@ class CSSLogicalCounter:
             counter._stabilizers_z = counter._stabilizers_x
         else:
             counter._stabilizers_z = _apply_local(self._stabilizers_z, positions, local_z)
+
+        # Transform the kept work where the gate allows it, and drop the rest.
         counter._sectors = None
         counter._disjoint_families = {}
         # A gate changes the weight of every check word that touches its qubits, so the weight
@@ -498,6 +514,7 @@ class CSSLogicalCounter:
         changes only the number of walks, never the counts.  The enumerators are kept, so that later
         counts at any weight, with any options, do not walk again.
         """
+        # Walk the check spaces once per counter.
         if self._enumerators is None:
             rank = len(self._gauge_x)
             # A full Pauli count has already been validated as self-dual.
@@ -510,6 +527,8 @@ class CSSLogicalCounter:
                 self._gauge_x, self._gauge_x if share else self._gauge_z
             )
         enumerators = self._enumerators
+
+        # Find the distance, or make sure that no nontrivial logical is lighter than the weight.
         if weight is None:
             target = next(
                 candidate
@@ -522,6 +541,7 @@ class CSSLogicalCounter:
                 any(enumerators.count_logical_ops(lighter)) for lighter in range(1, target)
             ):
                 raise _get_above_distance_error(target)
+
         count_x, count_z = enumerators.count_logical_ops(target)
         return CSSLogicalCounts(target, count_x, count_z, 3 * count_x if count_pauli else None)
 
@@ -649,6 +669,7 @@ def _count_words(
     scan also visits every lighter word, so with ``reject_lighter`` it returns None as soon as it
     finds a nontrivial one.
     """
+    # Select the information sets, or scan the whole basis as one set for brute force.
     certificate: _information_sets._Certificate | None
     if method == "brute_force":
         sets, certificate = [(basis, labels)], None
@@ -657,6 +678,7 @@ def _count_words(
             basis, labels, weight, get_disjoint(), max_sets
         )
 
+    # Pack the sets for the native scan.
     rows = [_pack_bits(generators) for generators, _ in sets]
     tags = [_pack_bits(set_labels) for _, set_labels in sets]
     # Ownership compares sets, so a single set needs no decoder.
@@ -665,6 +687,8 @@ def _count_words(
         if len(sets) > 1
         else np.zeros((1, 0, rows[0].shape[1]), dtype=np.uint64)
     )
+
+    # Scan the sets layer by layer, until the certificate rules out unvisited words of the weight.
     histogram = np.zeros(max_exponent + 1, dtype=np.int64)
     for layer in range(1, len(basis) + 1):
         for index in range(len(sets)):
@@ -912,6 +936,8 @@ def _count_chunk(
             prefixes[position, index] = prefixes[position - 1, index] ^ rows[row, index]
         for index in range(tags.shape[1]):
             tag_prefixes[position, index] = tag_prefixes[position - 1, index] ^ tags[row, index]
+
+    # Advance through the combinations until the chunk is used up.
     word = np.empty(width, dtype=np.uint64)
     pivots = np.empty((len(rank_rows), width), dtype=np.uint64)
     visited = 0
@@ -922,6 +948,8 @@ def _count_chunk(
             if depth >= 0:
                 support[depth] += 1
             continue
+
+        # Extend the prefix by the row at this position, and advance to the next position.
         if depth + 1 < layer:
             row = support[depth]
             for index in range(width):
@@ -944,6 +972,7 @@ def _count_chunk(
                     break
             if weight > target or (weight < target and not reject_lighter):
                 continue
+
             # A nonzero quotient label marks a nontrivial logical rather than a stabilizer.
             nontrivial = False
             for index in range(tags.shape[1]):
@@ -955,6 +984,8 @@ def _count_chunk(
             if nontrivial and _is_owned(word, decoders, set_index, layer):
                 rank = _get_masked_rank(rank_rows, word, complement, pivots)
                 histogram[max_exponent - rank] += 1
+
+        # Record the visited rows, and resume after them.
         visited += stop - support[depth]
         support[depth] = stop
     return depth, False
@@ -1008,6 +1039,8 @@ def _get_masked_rank(
         for previous in range(rank):
             if current[pivot_words[previous]] & pivot_bits[previous]:
                 current ^= pivots[previous]
+
+        # A nonzero remainder becomes a new pivot row, whose pivot is its lowest set bit.
         for index in range(len(current)):
             if current[index]:
                 pivots[rank] = current
