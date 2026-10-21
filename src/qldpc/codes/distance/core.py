@@ -17,7 +17,7 @@ from ._binary import (
     _get_nested_code_basis,
     _symplectic_to_hamming,
 )
-from .brouwer_zimmermann import (
+from ._brouwer_zimmermann import (
     _exhaustive_is_cheaper,
     _get_distance_brouwer_zimmermann,
     _get_distance_brouwer_zimmermann_many,

@@ -17,8 +17,8 @@ from sympy.abc import x, y, z
 import qldpc
 
 from . import _binary as binary
+from . import _brouwer_zimmermann as bz
 from . import _information_sets
-from . import brouwer_zimmermann as bz
 from .conftest import _get_random_full_rank_matrix
 
 
@@ -121,7 +121,7 @@ def test_brouwer_zimmermann_search_state() -> None:
     # An interrupted coefficient-weight layer leaves the lower-bound certificate unchanged.
     with (
         mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._scan_brouwer_zimmermann",
+            "qldpc.codes.distance._brouwer_zimmermann._scan_brouwer_zimmermann",
             side_effect=KeyboardInterrupt,
         ),
         pytest.raises(KeyboardInterrupt),
@@ -155,17 +155,17 @@ def test_brouwer_zimmermann_setup_dispatches() -> None:
     information_set = [_information_sets._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
     with (
         mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
+            "qldpc.codes.distance._brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
         ),
         mock.patch(
             "qldpc.codes.distance._information_sets._get_information_set_generators",
             return_value=information_set,
         ),
         mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._brute_force_is_cheaper", return_value=True
+            "qldpc.codes.distance._brouwer_zimmermann._brute_force_is_cheaper", return_value=True
         ),
         mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._get_distance_quantum_brute_force",
+            "qldpc.codes.distance._brouwer_zimmermann._get_distance_quantum_brute_force",
             return_value=2,
         ),
     ):
@@ -184,11 +184,11 @@ def test_brouwer_zimmermann_setup_dispatches() -> None:
     search.advance.return_value = 1
     with (
         mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._get_brouwer_zimmermann_initial_upper_bound",
+            "qldpc.codes.distance._brouwer_zimmermann._get_brouwer_zimmermann_initial_upper_bound",
             return_value=3,
         ),
         mock.patch(
-            "qldpc.codes.distance.brouwer_zimmermann._prepare_brouwer_zimmermann_search",
+            "qldpc.codes.distance._brouwer_zimmermann._prepare_brouwer_zimmermann_search",
             return_value=search,
         ),
     ):
@@ -354,7 +354,7 @@ def test_brouwer_zimmermann_exhaustive_dispatch() -> None:
 
     # After information-set setup, _brute_force_is_cheaper can dispatch to exhaustive enumeration.
     with mock.patch(
-        "qldpc.codes.distance.brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
+        "qldpc.codes.distance._brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
     ):
         assert qldpc.codes.get_distance_classical(qldpc.codes.HammingCode(3).generator) == 3
 
