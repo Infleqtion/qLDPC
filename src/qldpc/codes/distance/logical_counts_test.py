@@ -628,6 +628,12 @@ def test_invalid_inputs() -> None:
     invalid_method: Any = "unknown"
     with pytest.raises(ValueError, match="Unknown logical-count method"):
         counter.count_logical_ops(method=invalid_method)
+    for method in ("brouwer_zimmermann", "macwilliams", "brute_force"):
+        assert codes.validate_logical_count_method(method) == method
+    assert codes.validate_logical_count_method("information_sets") == "brouwer_zimmermann"
+    assert codes.validate_logical_count_method("weight_enumerator") == "macwilliams"
+    with pytest.raises(ValueError, match="Unknown logical-count method"):
+        codes.validate_logical_count_method(invalid_method)
     for weight in (-1, 3, 1.5, True, "1"):
         invalid_weight: Any = weight
         with pytest.raises(ValueError, match="weight must be an integer"):

@@ -48,7 +48,7 @@ from ._binary import (
 from ._brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
 from ._macwilliams import _CheckEnumerators
 from .brute_force import _get_distance_quantum_brute_force
-from .core import DistanceMethod
+from .core import _DISTANCE_METHODS, DistanceMethod
 
 # codes.common imports this package, so CSSCode is imported only where it is used.
 if TYPE_CHECKING:
@@ -74,6 +74,13 @@ _Sector = tuple[_BinaryMatrix, _BinaryMatrix]
 LogicalCountMethod = Literal[
     "brouwer_zimmermann", "macwilliams", "brute_force", "information_sets", "weight_enumerator"
 ]
+
+# The canonical name of every accepted logical-count method name, including aliases.
+_LOGICAL_COUNT_METHODS: dict[str, Literal["brouwer_zimmermann", "macwilliams", "brute_force"]] = {
+    **_DISTANCE_METHODS,
+    "macwilliams": "macwilliams",
+    "weight_enumerator": "macwilliams",
+}
 
 
 ####################################################################################################
@@ -256,11 +263,7 @@ class CSSLogicalCounter:
                 or the request.
         """
         # Validate the inputs, resolving method aliases.
-        if method == "information_sets":
-            method = "brouwer_zimmermann"
-        elif method == "weight_enumerator":
-            method = "macwilliams"
-        _validate_count_method(method)
+        method = validate_logical_count_method(method)
         if weight is not None and (
             not isinstance(weight, (int, np.integer))
             or isinstance(weight, bool)
@@ -610,13 +613,20 @@ def count_logical_ops_css(
     )
 
 
-def _validate_count_method(method: LogicalCountMethod) -> None:
-    """Validate a normalized logical-count method selector."""
-    if method not in ("brouwer_zimmermann", "macwilliams", "brute_force"):
+def validate_logical_count_method(
+    method: LogicalCountMethod,
+) -> Literal["brouwer_zimmermann", "macwilliams", "brute_force"]:
+    """Validate a logical-count method selector, and return its canonical name.
+
+    The aliases ``"information_sets"`` and ``"weight_enumerator"`` resolve to
+    ``"brouwer_zimmermann"`` and ``"macwilliams"``, respectively.
+    """
+    if method not in _LOGICAL_COUNT_METHODS:
         raise ValueError(
-            f"Unknown logical-count method {method!r}; choose from"
-            " 'brouwer_zimmermann', 'macwilliams', or 'brute_force'."
+            f"Unknown logical-count method {method!r}; choose from 'brouwer_zimmermann',"
+            " 'macwilliams', or 'brute_force'."
         )
+    return _LOGICAL_COUNT_METHODS[method]
 
 
 def _get_above_distance_error(weight: int) -> ValueError:

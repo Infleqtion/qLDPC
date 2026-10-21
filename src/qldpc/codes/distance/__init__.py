@@ -16,6 +16,7 @@ from .logical_counts import (
     CSSLogicalCounts,
     LogicalCountMethod,
     count_logical_ops_css,
+    validate_logical_count_method,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "get_distance_quantum",
     "validate_distance_backend",
     "validate_distance_method",
+    "validate_logical_count_method",
 ]
