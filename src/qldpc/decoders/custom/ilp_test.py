@@ -15,6 +15,7 @@ import scipy.sparse
 from qldpc import decoders
 from qldpc.decoders.conftest import ToyProblem
 from qldpc.decoders.construction.resolution import _get_error_decoder
+from qldpc.decoders.custom import ilp
 from qldpc.decoders.custom.ilp import _get_decoder_ilp
 
 
@@ -136,6 +137,21 @@ def test_invalid_ilp() -> None:
 
     with pytest.raises(ValueError, match="ILP decoding only supports prime number fields"):
         _get_error_decoder(galois.GF(4)(matrix), decoder=decoders.ilp()).decode(syndrome)
+
+
+def test_ilp_requires_cvxpy() -> None:
+    """A missing cvxpy gets an install hint, but a module missing inside cvxpy is reported as is."""
+    with (
+        unittest.mock.patch.dict("sys.modules", {"cvxpy": None}),
+        pytest.raises(ModuleNotFoundError, match=r"qldpc\[ilp\]"),
+    ):
+        decoders.custom.ILPDecoder(np.eye(2, dtype=int))
+    nested_error = ModuleNotFoundError("No module named 'nested'", name="nested")
+    with (
+        pytest.raises(ModuleNotFoundError, match="nested"),
+        unittest.mock.patch("builtins.__import__", side_effect=nested_error),
+    ):
+        ilp._get_cvxpy()
 
 
 def test_ilp_builder() -> None:

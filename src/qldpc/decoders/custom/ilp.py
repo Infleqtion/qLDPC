@@ -46,7 +46,7 @@ class ILPDecoder(ErrorDecoder):
     def __init__(
         self, matrix: IntegerArray, *, add_erasure_bit: bool = False, **decoder_args: object
     ) -> None:
-        import cvxpy
+        cvxpy = _get_cvxpy()
 
         self.has_erasure_bit = add_erasure_bit
 
@@ -209,3 +209,21 @@ Returns:
     its dense detector-flip matrix.
 """,
 )
+
+
+####################################################################################################
+# helper methods
+
+
+def _get_cvxpy() -> Any:
+    """Import the optional cvxpy package or raise an actionable error."""
+    try:
+        import cvxpy
+    except ModuleNotFoundError as error:
+        if error.name != "cvxpy":
+            raise
+        raise ModuleNotFoundError(
+            "The ILP decoder requires the optional 'cvxpy' package.  Install it with"
+            " `pip install 'qldpc[ilp]'`"
+        ) from error
+    return cvxpy
