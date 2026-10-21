@@ -2481,14 +2481,6 @@ class SurfaceCode(CSSCode):
         - Tiles with a dot (⋅) denote Z-type parity checks (12 total).
         """
 
-        def check_is_used(row: int, col: int) -> bool:
-            """Is the check qubit with these coordinates used?"""
-            if row == 0 or row == rows:
-                return 0 < col < cols and _get_check_pauli(row, col) is Pauli.Z
-            if col == 0 or col == cols:
-                return 0 < row < rows and _get_check_pauli(row, col) is Pauli.X
-            return 0 < row < rows and 0 < col < cols
-
         def get_check(row: int, col: int) -> npt.NDArray[np.int_]:
             """Check on the qubits with the given indices, dropping any that are out of bounds."""
             row_indices = [row - 1, row, row - 1, row]
@@ -2502,7 +2494,7 @@ class SurfaceCode(CSSCode):
         checks_x = []
         checks_z = []
         for row, col in itertools.product(range(rows + 1), range(cols + 1)):
-            if check_is_used(row, col):
+            if _rotated_check_is_used(row, col, rows, cols):
                 check = get_check(row, col)
                 if _get_check_pauli(row, col) is Pauli.X:
                     checks_x.append(check)
@@ -2529,20 +2521,12 @@ class SurfaceCode(CSSCode):
         if not self.rotated:
             return self.parent_code.get_syndrome_subgraphs(strategy=strategy)
 
-        def check_is_used(row: int, col: int) -> bool:
-            """Is the check qubit with these coordinates used?"""
-            if row == 0 or row == self.rows:
-                return 0 < col < self.cols and _get_check_pauli(row, col) is Pauli.Z
-            if col == 0 or col == self.cols:
-                return 0 < row < self.rows and _get_check_pauli(row, col) is Pauli.X
-            return 0 < row < self.rows and 0 < col < self.cols
-
         # identify all coordinates of check qubits, and a map from coordinates to a Node
         check_node_coords = sorted(
             [
                 (row, col)
                 for row, col in itertools.product(range(self.rows + 1), range(self.cols + 1))
-                if check_is_used(row, col)
+                if _rotated_check_is_used(row, col, self.rows, self.cols)
             ],
             key=lambda row_col: (int(_get_check_pauli(*row_col)), *row_col),
         )
@@ -2555,27 +2539,12 @@ class SurfaceCode(CSSCode):
         edges: dict[tuple[Pauli, str], list[tuple[Node, Node]]] = collections.defaultdict(list)
         for qubit, (row, col) in enumerate(itertools.product(range(self.rows), range(self.cols))):
             data_node = Node(qubit, is_data=True)
-
-            check_nw = (row, col)
-            check_ne = (row, col + 1)
-            check_sw = (row + 1, col)
-            check_se = (row + 1, col + 1)
-            if check_is_used(*check_nw):
-                check_pauli = _get_check_pauli(*check_nw)
-                check_node = node_map[check_nw]
-                edges[check_pauli, "nw"].append((check_node, data_node))
-            if check_is_used(*check_ne):
-                check_pauli = _get_check_pauli(*check_ne)
-                check_node = node_map[check_ne]
-                edges[check_pauli, "ne"].append((check_node, data_node))
-            if check_is_used(*check_sw):
-                check_pauli = _get_check_pauli(*check_sw)
-                check_node = node_map[check_sw]
-                edges[check_pauli, "sw"].append((check_node, data_node))
-            if check_is_used(*check_se):
-                check_pauli = _get_check_pauli(*check_se)
-                check_node = node_map[check_se]
-                edges[check_pauli, "se"].append((check_node, data_node))
+            for orientation, (d_row, d_col) in _CHECK_OFFSETS.items():
+                check_row, check_col = row + d_row, col + d_col
+                if _rotated_check_is_used(check_row, check_col, self.rows, self.cols):
+                    check_pauli = _get_check_pauli(check_row, check_col)
+                    check_node = node_map[check_row, check_col]
+                    edges[check_pauli, orientation].append((check_node, data_node))
 
         # return subgraphs in the order that minimizes hook errors
         subgraphs = {key: self.graph.edge_subgraph(edge_group) for key, edge_group in edges.items()}
@@ -2903,3 +2872,20 @@ def _get_check_pauli(row: int, col: int) -> PauliXZ:
     pattern, so the type is fixed by the parity of the sum of the coordinates.
     """
     return Pauli.X if (row + col) % 2 == 0 else Pauli.Z
+
+
+def _rotated_check_is_used(row: int, col: int, rows: int, cols: int) -> bool:
+    """Is the check at these coordinates part of a rows x cols rotated surface code?
+
+    Check coordinates range over a (rows + 1) x (cols + 1) grid.  The only boundary checks are
+    Z-type checks on the top and bottom boundaries, and X-type checks on the left and right.
+    """
+    if row == 0 or row == rows:
+        return 0 < col < cols and _get_check_pauli(row, col) is Pauli.Z
+    if col == 0 or col == cols:
+        return 0 < row < rows and _get_check_pauli(row, col) is Pauli.X
+    return 0 < row < rows and 0 < col < cols
+
+
+# offsets from a data qubit at (row, col) to its neighboring checks in a rotated surface code
+_CHECK_OFFSETS = {"nw": (0, 0), "ne": (0, 1), "sw": (1, 0), "se": (1, 1)}
