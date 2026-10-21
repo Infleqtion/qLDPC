@@ -8,8 +8,8 @@ import functools
 import pathlib
 import sys
 import warnings
-from collections.abc import Callable, Hashable
-from typing import Generic, ParamSpec, TypeVar, cast
+from collections.abc import Callable, Hashable, MutableMapping
+from typing import Any, Generic, ParamSpec, TypeVar, cast
 
 import diskcache
 import platformdirs
@@ -82,8 +82,11 @@ def get_disk_cache_path(
 
 def get_disk_cache(
     cache_name: str, *, cache_dir: pathlib.Path | str | None = None
-) -> diskcache.Cache:
-    """Retrieve a dictionary-like cache object."""
+) -> MutableMapping[Hashable, Any]:
+    """Retrieve a dictionary-like cache object.
+
+    While pytest is imported, this returns a new, empty dict rather than a persistent disk cache.
+    """
     if running_with_pytest():
         return {}
     return diskcache.Cache(get_disk_cache_path(cache_name, cache_dir=cache_dir))

@@ -17,6 +17,7 @@ import pyperclip
 
 import qldpc.cache
 import qldpc.external.gap
+from qldpc._util import get_external_caller_stacklevel
 
 GeneratorsList = list[list[tuple[int, ...]]]
 IdempotentsList = list[tuple[tuple[int, tuple[tuple[int, ...], ...]], ...]]
@@ -207,7 +208,7 @@ def maybe_get_generators_from_gap(
 
     # if provided a warning to raise before calling GAP, raise it now
     if warning is not None:
-        warnings.warn(warning, stacklevel=2)
+        warnings.warn(warning, stacklevel=get_external_caller_stacklevel())
 
     # run GAP commands
     commands = [

@@ -521,7 +521,7 @@ class ClassicalCode(AbstractCode):
             if decoder is not None or bound_kwargs:
                 warnings.warn(
                     "Distance bounding arguments are ignored when computing an exact distance",
-                    stacklevel=2,
+                    stacklevel=get_external_caller_stacklevel(),
                 )
             return self.get_distance_exact(vector=vector, method=method)
         return self.get_distance_bound(
@@ -818,7 +818,7 @@ class ClassicalCode(AbstractCode):
         warnings.warn(
             "ClassicalCode.puncture is DEPRECATED; use ClassicalCode.punctured instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.punctured(bits)
 
@@ -840,7 +840,7 @@ class ClassicalCode(AbstractCode):
         warnings.warn(
             "ClassicalCode.shorten is DEPRECATED; use ClassicalCode.shortened instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.shortened(bits)
 
@@ -1199,7 +1199,7 @@ class QuditCode(AbstractCode):
         coloring = nx.greedy_color(check_graph, strategy)
 
         # collect all edges incident to each color, and return the corresponding subgraphs
-        color_to_edges: dict[int, nx.DiGraph] = collections.defaultdict(list)
+        color_to_edges: dict[int, list[tuple[Node, Node]]] = collections.defaultdict(list)
         for check_node, color in coloring.items():
             color_to_edges[color].extend(self.graph.edges(check_node))
         return tuple(self.graph.edge_subgraph(edges) for edges in color_to_edges.values())
@@ -1891,7 +1891,7 @@ class QuditCode(AbstractCode):
         warnings.warn(
             "QuditCode.get_dual_subsystem_code is DEPRECATED; use QuditCode.dual instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.dual()
 
@@ -1963,7 +1963,7 @@ class QuditCode(AbstractCode):
             if bound_kwargs:
                 warnings.warn(
                     "Distance bounding arguments are ignored when computing an exact distance",
-                    stacklevel=2,
+                    stacklevel=get_external_caller_stacklevel(),
                 )
             return self.get_distance_exact(method=method)
         return self.get_distance_bound(num_trials=int(bound), **bound_kwargs)
@@ -2007,7 +2007,7 @@ class QuditCode(AbstractCode):
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time",
-                stacklevel=2,
+                stacklevel=get_external_caller_stacklevel(),
             )
             distance = len(self)
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
@@ -2038,6 +2038,7 @@ class QuditCode(AbstractCode):
 
         return self._distance
 
+    @format_docstring(gap_options=sorted(_GAP_DISTANCE_BOUND_KWARGS))
     def get_distance_bound(
         self,
         num_trials: int | None = None,
@@ -2058,8 +2059,8 @@ class QuditCode(AbstractCode):
             cutoff: Exit early once the upper bound falls to or below this cutoff.
             backend: Distance-bound backend.  ``"auto"`` and ``"gap"`` use GAP/QDistRnd;
                 ``"decoder"`` and ``"sqetch"`` require a CSSCode and are rejected here.
-            **bound_kwargs: Keyword arguments to pass to the downstream distance bounding method.
-                See https://qec-pages.github.io/QDistRnd/doc/chap4.html.
+            **bound_kwargs: Keyword arguments to pass to GAP/QDistRnd.  Recognized options are
+                {gap_options}; see https://qec-pages.github.io/QDistRnd/doc/chap4.html.
 
         Returns:
             An upper bound on distance if it is defined, or np.nan otherwise.  The returned bound is
@@ -2082,14 +2083,14 @@ class QuditCode(AbstractCode):
         if num_trials == 0 or (cutoff is not None and best_bound <= cutoff):
             return best_bound
 
+        if unknown_gap := sorted(set(bound_kwargs) - _GAP_DISTANCE_BOUND_KWARGS):
+            raise ValueError(f"Arguments not recognized by GAP/QDistRnd: {unknown_gap}")
         if not external.gap.is_installed():
             raise NotImplementedError(
                 "Bounding the code distance of non-CSS codes without GAP is not supported"
             )
 
-        maxav = bound_kwargs.pop("maxav", "fail")
-        if bound_kwargs:
-            raise ValueError(f"Arguments not recognized for distance bounding: {bound_kwargs}")
+        maxav = bound_kwargs.get("maxav", "fail")
         bound = external.codes.get_distance_bound(self, num_trials, cutoff=cutoff, maxav=maxav)
         self._distance_bound = min(best_bound, bound)
         return self._distance_bound
@@ -2129,7 +2130,7 @@ class QuditCode(AbstractCode):
             f"{type(self).__name__}.conjugate is DEPRECATED; use {type(self).__name__}.conjugated "
             "instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.conjugated()
 
@@ -2480,6 +2481,11 @@ class CSSCode(QuditCode):
 
     If all parity checks of a CSSCode commute, ``H_x @ H_z.T == 0``, then the CSSCode is a
     stabilizer code; otherwise, the CSSCode is a subsystem code.
+
+    Given a Pauli type, methods such as ``get_logical_ops``, ``get_stabilizer_ops``, and
+    ``get_gauge_ops`` default to ``symplectic=False`` for a CSSCode, returning matrices with one
+    column per qudit, whereas a QuditCode only supports ``symplectic=True``, which returns matrices
+    with two columns per qudit.
 
     References:
 
@@ -3236,7 +3242,7 @@ class CSSCode(QuditCode):
             if decoder is not None or bound_kwargs:
                 warnings.warn(
                     "Distance bounding arguments are ignored when computing an exact distance",
-                    stacklevel=2,
+                    stacklevel=get_external_caller_stacklevel(),
                 )
             return self.get_distance_exact(pauli, method=method)
         return self.get_distance_bound(
@@ -3340,7 +3346,7 @@ class CSSCode(QuditCode):
         else:
             warnings.warn(
                 "Computing the exact distance of a non-binary code may take a (very) long time",
-                stacklevel=2,
+                stacklevel=get_external_caller_stacklevel(),
             )
             distance = len(self)
             code_logical_ops = ClassicalCode.from_generator(logical_ops)
@@ -3708,8 +3714,8 @@ class CSSCode(QuditCode):
                 (case-insensitive) are also accepted.
             decoder: Decoder input used to reduce each logical operator; see
                 help(reduce_logical_op).
-            **decoder_kwargs: Deprecated decoder-selection and construction arguments to pass to
-                qldpc.decoders.get_decoder.
+            **decoder_kwargs: Deprecated decoder-selection options; pass a specification as
+                ``decoder=`` instead.
 
         Returns:
             This code, with reduced logical operators.
@@ -3747,7 +3753,7 @@ class CSSCode(QuditCode):
             f"{type(self).__name__}.conjugate is DEPRECATED; use {type(self).__name__}.conjugated "
             "instead",
             DeprecationWarning,
-            stacklevel=2,
+            stacklevel=get_external_caller_stacklevel(),
         )
         return self.conjugated().to_css()
 

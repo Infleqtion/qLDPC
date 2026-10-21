@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact binary distance calculations with unchanged public entry points."""
+"""Exact binary distance calculations, logical-operator counts, and distance method selectors."""
 
 from .core import (
     DistanceBackend,

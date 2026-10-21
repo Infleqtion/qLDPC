@@ -138,7 +138,7 @@ class RelayBPDecoder(BatchErrorDecoder):
                 warnings.warn(
                     "Explicitly provided error_priors will override the error probabilities of the "
                     "provided detector error model",
-                    stacklevel=2,
+                    stacklevel=get_external_caller_stacklevel(),
                 )
         else:
             pcm = pcm_or_dem
