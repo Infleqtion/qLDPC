@@ -314,20 +314,20 @@ def test_first_family_stage_is_computed_once_per_sector() -> None:
 
 
 @pytest.mark.parametrize("targets, reuses", [((0, 2), True), ((4, 2), False)])
-def test_conjugated_counter_reuses_the_first_family_stage(
+def test_deformed_counter_reuses_the_first_family_stage(
     targets: tuple[int, int], reuses: bool
 ) -> None:
     """A gate that keeps the pivot columns of every set independent keeps the families."""
     counter = _counter(_HAND_X, _HAND_Z)
     counter.count_logical_ops()
-    conjugated = counter.deformed_cnot(*targets)
+    deformed = counter.deformed_cnot(*targets)
     weights = range(counter.num_qubits + 1)
-    fresh = _counter(conjugated.checks_x, conjugated.checks_z)
+    fresh = _counter(deformed.checks_x, deformed.checks_z)
     expected = [fresh.count_logical_ops(weight) for weight in weights]
     with mock.patch.object(
         _information_sets, "_get_disjoint_family", wraps=_information_sets._get_disjoint_family
     ) as first_stage:
-        assert [conjugated.count_logical_ops(weight) for weight in weights] == expected
+        assert [deformed.count_logical_ops(weight) for weight in weights] == expected
     assert (first_stage.call_count == 0) == reuses
 
 
@@ -390,18 +390,18 @@ def test_python_kernels(monkeypatch: pytest.MonkeyPatch) -> None:
         assert bacon_shor_counter.count_logical_ops(count_pauli=True, method=method) == expected
         stacked = lc.CSSLogicalCounter(codes.CSSCode.stack([codes.SteaneCode()] * 2))
         assert stacked.count_logical_ops(method=method) == Counts(3, 14, 14, None)
-        conjugated = counter.deformed_cnot(0, 3)
-        fresh = _counter(conjugated.checks_x, conjugated.checks_z)
-        assert conjugated.count_logical_ops(
+        deformed = counter.deformed_cnot(0, 3)
+        fresh = _counter(deformed.checks_x, deformed.checks_z)
+        assert deformed.count_logical_ops(
             count_pauli=True, method=method
         ) == fresh.count_logical_ops(count_pauli=True, method=method)
 
 
 ####################################################################################################
-# conjugation
+# deformation
 
 
-def test_conjugation() -> None:
+def test_deformation() -> None:
     counter = lc.CSSLogicalCounter(codes.SteaneCode())
     before = counter.checks_x
     changed = counter.deformed_cnot(1, 6)
@@ -424,7 +424,7 @@ def test_conjugation() -> None:
 
 
 @pytest.mark.parametrize("size", [3, 64])
-def test_conjugation_transforms_checks(size: int) -> None:
+def test_deformation_transforms_checks(size: int) -> None:
     """X checks transform by the gate, and Z checks by its inverse transpose."""
     rng = np.random.default_rng(size)
     field = galois.GF(2)
@@ -435,18 +435,18 @@ def test_conjugation_transforms_checks(size: int) -> None:
     inverse_transpose = np.asarray(np.linalg.inv(field(matrix)).T, dtype=int)
     counter = lc.CSSLogicalCounter(_random_css_code(rng, 70, 5, 5))
     targets = sorted(int(target) for target in rng.choice(70, size, replace=False))
-    conjugated = counter.deformed(targets, matrix)
+    deformed = counter.deformed(targets, matrix)
     for checks, local, result in (
-        (counter.checks_x, matrix, conjugated.checks_x),
-        (counter.checks_z, inverse_transpose, conjugated.checks_z),
+        (counter.checks_x, matrix, deformed.checks_x),
+        (counter.checks_z, inverse_transpose, deformed.checks_z),
     ):
         expected = checks.astype(int)
         expected[:, targets] = expected[:, targets] @ local.T % 2
         assert np.array_equal(result, _get_independent_rows(expected.astype(np.uint8)))
 
 
-def test_conjugated_counts_match_enumeration() -> None:
-    """Counters that conjugate an already counted code give the counts of the new code."""
+def test_deformed_counts_match_enumeration() -> None:
+    """Counters that deform an already counted code give the counts of the new code."""
     rng = np.random.default_rng(29)
     swel = [[1, 1, 1, 0], [1, 1, 0, 1], [1, 0, 1, 1], [0, 1, 1, 1]]
     for code in (
@@ -546,18 +546,16 @@ def test_macwilliams_enumerators_are_computed_once_per_counter(
 
 
 @pytest.mark.parametrize("gate", ["cnot", "swel"])
-def test_conjugated_counters_walk_their_own_checks(gate: str) -> None:
+def test_deformed_counters_walk_their_own_checks(gate: str) -> None:
     """A gate changes the weight distributions of the checks, so they are not reused."""
     counter = lc.CSSLogicalCounter(_random_css_code(np.random.default_rng(41), 10, 3, 3))
     weights = range(counter.num_qubits + 1)
     before = [counter.count_logical_ops(weight, method="macwilliams") for weight in weights]
-    conjugated = (
-        counter.deformed_cnot(0, 1) if gate == "cnot" else counter.deformed_swel(0, 1, 2, 3)
-    )
-    fresh = _counter(conjugated.checks_x, conjugated.checks_z)
+    deformed = counter.deformed_cnot(0, 1) if gate == "cnot" else counter.deformed_swel(0, 1, 2, 3)
+    fresh = _counter(deformed.checks_x, deformed.checks_z)
     expected = [fresh.count_logical_ops(weight, method="macwilliams") for weight in weights]
     assert expected != before
-    counts = [conjugated.count_logical_ops(weight, method="macwilliams") for weight in weights]
+    counts = [deformed.count_logical_ops(weight, method="macwilliams") for weight in weights]
     assert counts == expected
 
 

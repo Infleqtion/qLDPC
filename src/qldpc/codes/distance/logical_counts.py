@@ -411,7 +411,7 @@ class CSSLogicalCounter:
         return self._deformed(positions, *_SWEL)
 
     def _get_positions(self, targets: Sequence[int]) -> npt.NDArray[np.int64]:
-        """Validate conjugation targets."""
+        """Validate deformation targets."""
         positions = list(targets)
         if (
             not 1 <= len(positions) <= 64
@@ -424,8 +424,8 @@ class CSSLogicalCounter:
             or len(set(positions)) != len(positions)
         ):
             raise ValueError(
-                f"Clifford targets must be 1 to 64 distinct qubit indices in range({self.num_qubits})"
-                f" (got {positions})"
+                "Clifford targets must be 1 to 64 distinct qubit indices in"
+                f" range({self.num_qubits}) (got {positions})"
             )
         return np.array(positions, dtype=np.int64)
 
@@ -573,7 +573,7 @@ class CSSLogicalCounter:
         return self._disjoint_families[index]
 
     def _get_canonical_checks(self) -> tuple[_BinaryMatrix, _BinaryMatrix]:
-        """The checks in reduced row echelon form, which conjugation does not preserve."""
+        """The checks in reduced row echelon form, which deformation does not preserve."""
         if self._canonical is None:
             self._canonical = (
                 _get_independent_rows(self._gauge_x),

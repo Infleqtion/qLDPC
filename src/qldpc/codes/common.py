@@ -155,9 +155,9 @@ class AbstractCode(abc.ABC):
 
         else:
             self._field = abstract.resolve_field(field)
-            array = np.asanyarray(
-                matrix.todense() if scipy.sparse.issparse(matrix) else matrix,  # type:ignore[union-attr]
-            )
+            if scipy.sparse.issparse(matrix):
+                matrix = matrix.todense()  # type:ignore[union-attr]
+            array = np.asanyarray(matrix)
             if array.dtype == bool:
                 # galois rejects bool dtypes, so treat booleans as 0/1 integers
                 array = array.astype(np.uint8)
@@ -1303,7 +1303,8 @@ class QuditCode(AbstractCode):
         if self.field is not galois.GF2:
             raise ValueError(
                 "You asked for the number of qubits in this code, but this code is built out of "
-                f"{self.field.order}-dimensional qudits.  Try calling {type(self).__name__}.num_qudits."
+                f"{self.field.order}-dimensional qudits.  Try calling"
+                f" {type(self).__name__}.num_qudits."
             )
         return len(self)
 
@@ -2310,8 +2311,8 @@ class QuditCode(AbstractCode):
                 ) from error
             if sorted(inner_physical_to_outer_logical) != list(range(num_qudits)):
                 raise ValueError(
-                    "Code concatenation requires inner_physical_to_outer_logical to be a permutation"
-                    f" of the intermediate qudit indices 0 through {num_qudits - 1}"
+                    "Code concatenation requires inner_physical_to_outer_logical to be a"
+                    f" permutation of the intermediate qudit indices 0 through {num_qudits - 1}"
                 )
 
         # stack copies of the outer and inner codes, if necessary
@@ -4083,8 +4084,8 @@ def _decode_consistently(
         if not erased and np.array_equal(check_matrix @ error.view(field), syndrome):
             return error.view(field)
     raise ValueError(
-        f"The decoder failed to infer an error that reproduces its syndrome in {_MAX_DECODING_ATTEMPTS}"
-        " attempts.  Try a more thorough decoder, such as"
+        "The decoder failed to infer an error that reproduces its syndrome in"
+        f" {_MAX_DECODING_ATTEMPTS} attempts.  Try a more thorough decoder, such as"
         " decoder=decoders.bp_osd(osd_method='OSD_CS', osd_order=5)"
     )
 
