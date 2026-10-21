@@ -123,7 +123,7 @@ class AbstractPauliChannel(abc.ABC):
 
     def _resolve_targets(
         self, append_to: StimCircuitLike | None, qubits: Iterable[int] | None
-    ) -> tuple[StimCircuitLike, list[int]]:
+    ) -> tuple[StimCircuitLike | stim.Circuit, list[int]]:
         """Resolve the ``(circuit, qubit_targets)`` pair shared by every variant of ``to_circuit``.
 
         Creates a fresh circuit when ``append_to`` is ``None``, defaults ``qubits`` to
@@ -158,7 +158,7 @@ class AbstractPauliChannel(abc.ABC):
         append_to: StimCircuitLike | None = None,
         qubits: Iterable[int] | None = None,
         tag: str = "",
-    ) -> StimCircuitLike:
+    ) -> StimCircuitLike | stim.Circuit:
         """Convert this channel into a circuit."""
 
 
@@ -282,7 +282,7 @@ class PauliChannel(AbstractPauliChannel):
         qubits: Iterable[int] | None = None,
         simplify: bool = True,
         tag: str = "",
-    ) -> StimCircuitLike:
+    ) -> StimCircuitLike | stim.Circuit:
         """Convert this PauliChannel into a circuit.
 
         If provided a circuit, append to that circuit in-place and return it.
@@ -394,7 +394,7 @@ class PauliChannelSequence(AbstractPauliChannel):
         append_to: StimCircuitLike | None = None,
         qubits: Iterable[int] | None = None,
         tag: str = "",
-    ) -> StimCircuitLike:
+    ) -> StimCircuitLike | stim.Circuit:
         """Emit each entry of this channel as an independent ``CORRELATED_ERROR``.
 
         If provided a circuit, append to that circuit in-place and return it.

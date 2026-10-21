@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Public exact binary distance interfaces and method selection."""
+"""Exact binary distance calculations, and distance method and backend selectors."""
 
 from __future__ import annotations
 

@@ -13,6 +13,7 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
+from qldpc._util import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
 from ..common import _erasure_bit_support, _to_pcm, with_erasure_bits
@@ -149,7 +150,7 @@ class ILPDecoder(ErrorDecoder):
             )
             if not signal_erasure:
                 raise ValueError(message)
-            warnings.warn(message, stacklevel=3)
+            warnings.warn(message, stacklevel=get_external_caller_stacklevel())
             return np.zeros(self.matrix.shape[1], dtype=syndrome.dtype), True, problem
 
         error = (np.rint(self.variables.value) % self.modulus).astype(int)

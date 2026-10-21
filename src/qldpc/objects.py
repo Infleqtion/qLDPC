@@ -475,7 +475,10 @@ class ChainComplex:
 
     def op(self, degree: int) -> npt.NDArray[np.int_] | abstract.RingArray:
         """The boundary operator of this chain complex that acts on the module of a given degree."""
-        assert 0 <= degree <= self.num_links + 1
+        if not 0 <= degree <= self.num_links + 1:
+            raise ValueError(
+                f"Degree {degree} is out of range for a chain complex with {self.num_links} links"
+            )
         if degree == 0:
             matrix = self.field.Zeros((0, self.ops[0].shape[0]))
             return matrix if self.ring is None else abstract.RingArray.build(matrix, self.ring)

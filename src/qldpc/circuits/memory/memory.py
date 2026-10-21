@@ -2,6 +2,8 @@
 
 """Circuit construction utilities for quantum error-corrected memory experiments."""
 
+from __future__ import annotations
+
 from collections.abc import Collection, Sequence
 from typing import NamedTuple
 
@@ -30,6 +32,8 @@ DEFAULT_STRATEGY = EdgeColoring()
 
 
 class MemoryExperimentParts(NamedTuple):
+    """Noiseless components of a memory experiment, returned by get_memory_experiment_parts."""
+
     initialization: stim.Circuit
     qec_cycle: stim.Circuit
     readout: stim.Circuit

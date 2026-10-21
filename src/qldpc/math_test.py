@@ -38,6 +38,8 @@ def test_vectors() -> None:
     assert np.array_equal(qldpc.math.symplectic_conjugate(vectors), vectors_conj)
     assert np.array_equal(qldpc.math.first_nonzero_cols(vectors), [1, 0])
     assert np.array_equal(qldpc.math.first_nonzero_cols(vectors_conj), [0, 0])
+    with pytest.raises(ValueError, match="even length"):
+        qldpc.math.symplectic_weight(np.zeros(3, dtype=int))
 
 
 def test_symplectic_conjugate_identity() -> None:

@@ -69,7 +69,7 @@ def symplectic_conjugate(vectors: DenseIntegerArrayType) -> DenseIntegerArrayTyp
     between Pauli strings P and Q is
     ``⟨P,Q⟩_s = P_x @ Q_z - P_z @ Q_x = P @ symplectic_conjugate(Q)``.
     """
-    assert vectors.shape[-1] % 2 == 0
+    _require_symplectic_length(vectors)
     conjugated_vectors = vectors.copy().reshape(-1, 2, vectors.shape[-1] // 2)[:, ::-1, :]
     conjugated_vectors[:, 1, :] *= -1
     return conjugated_vectors.reshape(vectors.shape).view(type(vectors))
@@ -81,11 +81,17 @@ def symplectic_weight(vectors: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
     The symplectic weight of a Pauli string is the number of qudits that it addresses nontrivially.
     Returns one weight per input vector (a 0-dimensional array for a single vector).
     """
-    assert vectors.shape[-1] % 2 == 0
+    _require_symplectic_length(vectors)
     vectors_xz = vectors.reshape(-1, 2, vectors.shape[-1] // 2)
     vectors_x = np.asarray(vectors_xz[:, 0, :], dtype=int)
     vectors_z = np.asarray(vectors_xz[:, 1, :], dtype=int)
     return np.count_nonzero(vectors_x | vectors_z, axis=-1).reshape(vectors.shape[:-1])
+
+
+def _require_symplectic_length(vectors: npt.NDArray[np.int_]) -> None:
+    """Raise a ValueError unless vectors have an even length, as symplectic vectors [X|Z] do."""
+    if vectors.shape[-1] % 2:
+        raise ValueError(f"Symplectic vectors must have even length (got {vectors.shape[-1]})")
 
 
 ####################################################################################################
