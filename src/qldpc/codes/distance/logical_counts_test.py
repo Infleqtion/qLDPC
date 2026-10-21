@@ -7,6 +7,7 @@ from __future__ import annotations
 import functools
 import itertools
 from typing import Any
+from unittest import mock
 
 import galois
 import numpy as np
@@ -267,6 +268,17 @@ def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
         for weight in range(len(code) + 1):
             expected = counter.count_logicals(weight, method="brute_force")
             assert counter.count_logicals(weight) == expected
+
+
+def test_first_family_stage_is_computed_once_per_sector() -> None:
+    """Counting at other weights, as when a guess fails, does not repeat the first stage."""
+    counter = _counter(_HAND_X, _HAND_Z)
+    with mock.patch.object(
+        _information_sets, "_get_disjoint_family", wraps=_information_sets._get_disjoint_family
+    ) as first_stage:
+        for weight in (2, 3, 1):
+            counter.count_logicals(weight)
+    assert first_stage.call_count == 2
 
 
 def test_dense_eighty_qubits_against_physical_enumeration() -> None:
