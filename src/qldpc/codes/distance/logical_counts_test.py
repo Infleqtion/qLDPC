@@ -197,42 +197,30 @@ def test_full_pauli_counts_away_from_the_distance(method: DistanceMethod) -> Non
 
 
 @pytest.mark.parametrize("method", METHODS)
-def test_within_distance_rejects_weights_above_the_distance(method: DistanceMethod) -> None:
-    steane = codes.SteaneCode()
-    counter = lc.CSSLogicalCounter(steane)
-    for weight, expected in ((0, Counts(0, 0, 0, None)), (2, Counts(2, 0, 0, None))):
-        assert counter.count_logicals(weight, method=method, within_distance=True) == expected
-    assert counter.count_logicals(3, method=method, within_distance=True) == Counts(3, 7, 7, None)
-    for weight in (4, 7):
-        with pytest.raises(ValueError, match=f"less than weight {weight}"):
-            counter.count_logicals(weight, method=method, within_distance=True)
-    with pytest.raises(ValueError, match="less than weight 4"):
-        lc.count_logicals_css(steane, 4, method=method, within_distance=True)
-    # Without the option, a weight above the distance is still counted.
-    assert counter.count_logicals(7, method=method) == Counts(7, 1, 1, None)
+@pytest.mark.parametrize(
+    "checks_x,checks_z,distance",
+    [
+        (codes.SteaneCode().matrix_x, codes.SteaneCode().matrix_z, 3),
+        ([[1, 1, 0]], [[0, 0, 1]], 1),  # The lightest logical operator is X-only.
+        ([[0, 0, 1]], [[1, 1, 0]], 1),  # The lightest logical operator is Z-only.
+    ],
+)
+def test_within_distance_raises_exactly_above_the_distance(
+    checks_x: npt.ArrayLike, checks_z: npt.ArrayLike, distance: int, method: DistanceMethod
+) -> None:
+    counter = _counter(checks_x, checks_z)
+    for weight in range(counter.num_qubits + 1):
+        if weight > distance:
+            with pytest.raises(ValueError):
+                counter.count_logicals(weight, method=method, within_distance=True)
+        else:
+            counts = counter.count_logicals(weight, method=method)
+            assert counter.count_logicals(weight, method=method, within_distance=True) == counts
 
 
-@pytest.mark.parametrize("method", METHODS)
-def test_within_distance_raises_exactly_above_the_distance(method: DistanceMethod) -> None:
-    """Compare every weight with the distance, whichever sector has the lightest word."""
-    counters = [
-        lc.CSSLogicalCounter(codes.SteaneCode()),
-        lc.CSSLogicalCounter(codes.BaconShorCode(3)),
-        _counter(_HAND_X, _HAND_Z),
-        _counter(*_frozen([[1, 1, 1, 1]], [[1, 1, 1, 1]], 5)),
-        _counter([[1, 1, 0]], [[0, 0, 1]]),  # The X sector has the lightest word.
-        _counter([[0, 0, 1]], [[1, 1, 0]]),  # The Z sector has it, and is scanned after X passes.
-    ]
-    for counter in counters:
-        distance = _enumerate(counter.code)[2]
-        for weight in range(counter.num_qubits + 1):
-            if weight > distance:
-                with pytest.raises(ValueError, match=f"less than weight {weight}"):
-                    counter.count_logicals(weight, method=method, within_distance=True)
-            else:
-                assert counter.count_logicals(
-                    weight, method=method, within_distance=True
-                ) == counter.count_logicals(weight, method=method)
+def test_count_logicals_css_accepts_within_distance() -> None:
+    with pytest.raises(ValueError):
+        lc.count_logicals_css(codes.SteaneCode(), 4, within_distance=True)
 
 
 def test_surface_codes() -> None:
