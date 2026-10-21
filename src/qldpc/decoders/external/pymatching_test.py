@@ -124,21 +124,23 @@ def test_matching_backend_options() -> None:
     matrix = np.eye(2, dtype=int)
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     backend_options = {"backend_extension": 12}
-    with (
-        unittest.mock.patch.object(pymatching, "_validate_backend_options") as validate,
-        unittest.mock.patch.object(pymatching_package.Matching, "load_from_check_matrix") as load,
+    calls: list[dict[str, object]] = []
+
+    def load_from_check_matrix(
+        self: object, check_matrix: object = None, *, backend_extension: int = 0, **kwargs: object
+    ) -> None:
+        """Accept an option that a future PyMatching release might add."""
+        calls.append({"backend_extension": backend_extension, **kwargs})
+
+    with unittest.mock.patch.object(
+        pymatching_package.Matching, "load_from_check_matrix", load_from_check_matrix
     ):
         _get_decoder_mwpm(matrix, backend_options=backend_options)
-        assert validate.call_args.args[1] == backend_options
-        assert load.call_args.kwargs["backend_extension"] == 12
-        spec = decoders.mwpm(backend_options=backend_options)
-        assert spec.options["backend_options"] == backend_options
-        spec.build(matrix)
-        assert load.call_args.kwargs["backend_extension"] == 12
-        observable = spec.build_observable_decoder(dem)
-        assert isinstance(observable, pymatching.MatchingObservableDecoder)
-        assert load.call_args.kwargs["backend_extension"] == 12
-        assert load.call_args.kwargs["faults_matrix"] is not None
+        decoders.mwpm(backend_options=backend_options).build(matrix)
+        observable = decoders.mwpm(backend_options=backend_options).build_observable_decoder(dem)
+    assert isinstance(observable, pymatching.MatchingObservableDecoder)
+    assert [call["backend_extension"] for call in calls] == [12, 12, 12]
+    assert calls[-1]["faults_matrix"] is not None
 
 
 def test_matching_backend_option_validation() -> None:

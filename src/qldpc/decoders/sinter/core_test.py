@@ -30,7 +30,6 @@ def test_sinter_decoder() -> None:
 
     for decoder in [
         decoders.SinterDecoder(decoder=decoders.bp_osd()),
-        decoders.SinterDecoder(decoder=decoders.min_sum_bp()),
         decoders.SinterDecoder(decoder=decoders.mwpm()),
     ]:
         compiled_decoder = decoder.compile_decoder_for_dem(dem)

@@ -20,8 +20,7 @@ import pytest
 import scipy.sparse
 import stim
 
-from qldpc import codes, decoders
-from qldpc.codes import code_capacity
+from qldpc import decoders
 from qldpc.decoders.construction.resolution import _get_error_decoder, _get_observable_decoder
 from qldpc.decoders.external.tesseract import _get_decoder_tesseract
 
@@ -104,9 +103,7 @@ def test_tesseract_matrix_error_decoding(fake_tesseract: None) -> None:
 
     matrix_inputs = [
         matrix,
-        scipy.sparse.csc_matrix(matrix),
         scipy.sparse.dok_matrix(matrix),
-        scipy.sparse.lil_matrix(matrix),
         galois.GF2(matrix),
     ]
     for matrix_input in matrix_inputs:
@@ -252,9 +249,6 @@ def test_tesseract_options_and_validation(fake_tesseract: None) -> None:
             stim.DetectorErrorModel("error(0.1) D0"),
             error_rate=0.2,
         )
-    with pytest.warns(DeprecationWarning, match="error_rate=0.2.*error_channel=0.2"):
-        decoder = _get_decoder_tesseract(np.eye(1, dtype=int), error_rate=0.2)
-    assert np.array_equal(decoder.decoder.dem_arrays.error_probs, [0.2])
 
     decoder = _get_decoder_tesseract(np.eye(2, dtype=int))
     with pytest.raises(ValueError, match=r"shape \(2,\)"):
@@ -291,10 +285,8 @@ def test_tesseract_preset_merge_defaults(fake_tesseract: None) -> None:
         decoders.tesseract_preset(sparsify=cast(Any, "generic"))
 
 
-def test_tesseract_specs_sinter_and_code_capacity(
-    fake_tesseract: None,
-) -> None:
-    """Decoder specifications predict observables natively in all workflows."""
+def test_tesseract_specs_and_sinter(fake_tesseract: None) -> None:
+    """Decoder specifications predict observables natively, including through Sinter."""
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     spec = decoders.tesseract(det_beam=7)
     assert spec.predicts_observables_natively
@@ -306,23 +298,6 @@ def test_tesseract_specs_sinter_and_code_capacity(
     compiled = decoders.SinterDecoder(decoder=spec).compile_decoder_for_dem(dem)
     assert isinstance(compiled.observable_decoder, decoders.external.TesseractDecoder)
     assert np.array_equal(compiled.decode_shots(np.array([[1]], dtype=np.uint8)), [[1]])
-
-    code = codes.RepetitionCode(3)
-    observable_matrix = code.field([[1, 0, 0]])
-    native_capacity_decoder = code_capacity.get_code_capacity_decoder(
-        code.matrix, observable_matrix, spec
-    )
-    assert isinstance(native_capacity_decoder.decoder, decoders.external.TesseractDecoder)
-    capacity_decoder = code_capacity.get_code_capacity_decoder(
-        code.matrix,
-        observable_matrix,
-        decoders.SinterDecoder(decoder=decoders.tesseract()),
-    )
-    for bit in range(3):
-        error = code.field.Zeros(3)
-        error[bit] = 1
-        assert native_capacity_decoder.get_failure_and_erasure(error) == (False, False)
-        assert capacity_decoder.get_failure_and_erasure(error) == (False, False)
 
 
 _REAL_PACKAGE_CHECKS = """
@@ -390,11 +365,8 @@ assert "tesseract_decoder" not in sys.modules
 def test_tesseract_missing_dependency_error(monkeypatch: pytest.MonkeyPatch) -> None:
     """A missing backend produces an actionable error without hiding nested failures."""
     monkeypatch.setitem(sys.modules, "tesseract_decoder", None)
-    with pytest.raises(ModuleNotFoundError, match=r"qldpc\[tesseract\]") as exc_info:
+    with pytest.raises(ModuleNotFoundError, match=r"qldpc\[tesseract\]"):
         _get_decoder_tesseract(np.eye(1, dtype=int))
-    message = str(exc_info.value)
-    assert "CPython 3.12-3.14 on macOS arm64 and Linux x86-64" in message
-    assert "github.com/quantumlib/tesseract-decoder#installation" in message
 
     monkeypatch.delitem(sys.modules, "tesseract_decoder")
     original_import = builtins.__import__

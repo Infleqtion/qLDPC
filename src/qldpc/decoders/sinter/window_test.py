@@ -24,7 +24,7 @@ def test_sequential_decoding() -> None:
         error(0.1) D1 D2 L1
         error(0.1) D2 L2
     """)
-    sampler = dem.compile_sampler()
+    sampler = dem.compile_sampler(seed=0)
     det_data, obs_data, _err_data = sampler.sample(100)
 
     decoder_1 = decoders.SinterDecoder(decoder=decoders.lookup(max_weight=3))

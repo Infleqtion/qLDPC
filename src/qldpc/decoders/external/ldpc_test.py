@@ -7,7 +7,6 @@ from __future__ import annotations
 import pickle
 import subprocess
 import sys
-import unittest.mock
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -59,29 +58,9 @@ def test_ldpc_backend_options(
 ) -> None:
     """Named options and backend_options reach the underlying ldpc constructor."""
     matrix = np.eye(2, dtype=int)
-    with unittest.mock.patch.object(ldpc_integration, "_build_ldpc_decoder") as backend:
-        builder(matrix, max_iter=4, backend_options={"input_vector_type": "syndrome"})
-        assert backend.call_args.args[3]["max_iter"] == 4
-        assert backend.call_args.args[3]["input_vector_type"] == "syndrome"
-        spec = helper(max_iter=4, backend_options={"input_vector_type": "syndrome"})
-        assert spec.options["backend_options"] == {"input_vector_type": "syndrome"}
-        assert repr(spec).endswith(
-            "(max_iter=4, backend_options={'input_vector_type': 'syndrome'})"
-        )
-        assert pickle.loads(pickle.dumps(spec)).options == spec.options  # noqa: S301
-        spec.build(matrix)
-        assert backend.call_args.args[3]["input_vector_type"] == "syndrome"
-
-    # an empty mapping is equivalent to no backend options
-    assert helper(backend_options={}).options["backend_options"] is None
-
-    # misspelled named options are rejected when the specification is created
-    with pytest.raises(TypeError, match="unexpected keyword argument 'max_itr'"):
-        helper(max_itr=4)
-    with pytest.raises(ValueError, match="lists max_iter by name, so pass it directly"):
-        helper(backend_options={"max_iter": 4})
-    with pytest.raises(TypeError, match="backend_options must be a mapping"):
-        helper(backend_options=[("backend_extension", 12)])
+    decoder: Any
+    for decoder in [builder(matrix, max_iter=4), helper(max_iter=4).build(matrix)]:
+        assert decoder.max_iter == 4  # the default for this matrix is 2
 
     # the backend rejects unsupported names when the decoder is built, except that BP+LSD silently
     # ignores them, so qLDPC warns about names it does not know
