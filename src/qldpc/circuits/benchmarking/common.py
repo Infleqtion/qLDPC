@@ -108,16 +108,21 @@ def get_logical_error_and_discard_rate(
 
         postselection_mask = np.zeros(circuit.num_detectors, dtype=int)
         postselection_mask[post_select] = 1
+        postselected_observables_mask = np.zeros(circuit.num_observables, dtype=int)
+        postselected_observables_mask[post_select_observables] = 1
         task = sinter.Task(
             circuit=circuit,
             detector_error_model=dem_to_decode,
             postselection_mask=np.packbits(postselection_mask, bitorder="little"),
+            postselected_observables_mask=np.packbits(
+                postselected_observables_mask, bitorder="little"
+            ),
         )
 
     Sampling data would then be collected with::
 
         stats = sinter.collect(
-            tasks=[task],  # or more maybe more tasks
+            tasks=[task],  # or more tasks
             decoders=["custom"],
             custom_decoders={"custom": sinter_decoder},
             num_shots=num_samples,
@@ -181,7 +186,9 @@ def get_logical_error_and_discard_rate(
         num_discards += int(np.sum(~shot_mask))
 
     # decode and identify incorrectly predicted observable flips
-    compiled_sinter_decoder = sinter_decoder.compile_decoder_for_dem(dem_to_decode or dem)
+    compiled_sinter_decoder = sinter_decoder.compile_decoder_for_dem(
+        dem if dem_to_decode is None else dem_to_decode
+    )
     predicted_flips = compiled_sinter_decoder.decode_shots_bit_packed(det_data)
 
     # a prediction one byte wider than the sampled observables need signals discards in that byte
@@ -224,14 +231,17 @@ def _get_postselection_masks(
     num_observables: int,
 ) -> tuple[npt.NDArray[np.uint8] | None, npt.NDArray[np.uint8] | None]:
     """Build a post-selection mask for sinter."""
+    if isinstance(post_select, bool):
+        post_select = detector_record.get_events("flags") if post_select else ()
+    post_select = list(post_select)
+    post_select_observables = list(post_select_observables)
+
     if not post_select:
         postselection_mask = None
     else:
         num_prep = len(detector_record.get_events("prep"))
         num_flags = len(detector_record.get_events("flags"))
         num_detectors = num_prep + num_flags
-        if isinstance(post_select, bool):
-            post_select = detector_record.get_events("flags")
         if not all(-num_detectors <= dd < num_detectors for dd in post_select):
             raise ValueError(
                 f"The detector record exposes {num_detectors} selectable prep/flag detectors "
@@ -247,8 +257,13 @@ def _get_postselection_masks(
     if not post_select_observables:
         postselected_observables_mask = None
     else:
+        if not all(-num_observables <= oo < num_observables for oo in post_select_observables):
+            raise ValueError(
+                f"Observable post-selection accepts indices in the range [-{num_observables},"
+                f" {num_observables}); requested: {post_select_observables}"
+            )
         postselection_array = np.zeros(num_observables, dtype=int)
-        postselection_array[list(post_select_observables)] = 1
+        postselection_array[[oo % num_observables for oo in post_select_observables]] = 1
         postselected_observables_mask = np.packbits(postselection_array, bitorder="little")
 
     return postselection_mask, postselected_observables_mask

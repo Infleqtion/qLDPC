@@ -93,6 +93,7 @@ python -m pip install 'qldpc[decoders]'
 You can also use individual extras to install a specific optional decoder:
 
 ```bash
+python -m pip install 'qldpc[ilp]'
 python -m pip install 'qldpc[relay-bp]'
 python -m pip install 'qldpc[tesseract]'
 ```
@@ -128,7 +129,7 @@ For binary CSS codes, you can select this backend with `code.get_distance_bound(
 
 ### Troubleshooting
 
-On macOS, you may need to install `cvxpy` manually by following its [installation instructions](https://www.cvxpy.org/install) before installing qLDPC.
+On macOS, you may need to install `cvxpy`, which the ILP decoder requires, manually by following its [installation instructions](https://www.cvxpy.org/install) before installing `qldpc[ilp]` or `qldpc[decoders]`.
 If you use Conda to manage your Python environment, install `cvxpy` with:
 
 ```bash

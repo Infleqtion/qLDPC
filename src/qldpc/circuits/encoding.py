@@ -168,20 +168,22 @@ def get_state_stabilizers(
         A list of Pauli strings supported on the specified qubits.  The strings are compacted into
         the requested-qubit frame: position ``i`` refers to ``qubits[i]`` in the input circuit.
     """
-    resets = stim.Circuit("R " + " ".join(map(str, range(state_prep_circuit.num_qubits))))
+    state_qubits = (
+        np.arange(qubits, dtype=int) if isinstance(qubits, int) else np.asarray(qubits, dtype=int)
+    )
+
+    # reset every qubit, including requested qubits that the circuit leaves untouched in |0>
+    num_qubits = max(state_prep_circuit.num_qubits, int(state_qubits.max(initial=-1)) + 1)
+    resets = stim.Circuit("R " + " ".join(map(str, range(num_qubits))))
     flow_generators = (resets + state_prep_circuit.without_noise()).flow_generators()
 
     # identify some useful numbers
-    num_qubits = state_prep_circuit.num_qubits
     num_measurements = state_prep_circuit.num_measurements
     num_observables = state_prep_circuit.num_observables
     num_columns = 2 * num_qubits + num_measurements + num_observables
     num_rows = len(flow_generators) + state_prep_circuit.num_detectors
 
     # identify where all qubits live
-    state_qubits = (
-        np.arange(qubits, dtype=int) if isinstance(qubits, int) else np.asarray(qubits, dtype=int)
-    )
     other_qubits = np.array([qq for qq in range(num_qubits) if qq not in state_qubits], dtype=int)
     cols_state_x = state_qubits
     cols_other_x = other_qubits
@@ -242,7 +244,7 @@ def get_state_stabilizers(
     simulator = stim.TableauSimulator()
     simulator.do(state_prep_circuit.without_noise())
     for ss, stabilizer in enumerate(stabilizers):
-        physical_stabilizer = stim.PauliString(state_prep_circuit.num_qubits)
+        physical_stabilizer = stim.PauliString(num_qubits)
         for qubit, pauli in zip(state_qubits, str(stabilizer)[1:], strict=True):
             physical_stabilizer[qubit] = pauli
         expectation = simulator.peek_observable_expectation(physical_stabilizer)

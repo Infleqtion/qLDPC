@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Hashable, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 
 import numpy as np
 import numpy.typing as npt
@@ -160,7 +160,7 @@ def get_state_prep_diagnostic_tasks(
     | Sequence[stim.PauliString]
     | None = None,
     skip_validation: bool = False,
-    metadata: dict[str, Hashable] | None = None,
+    metadata: Mapping[str, object] | None = None,
 ) -> list[sinter.Task]:
     r"""Helper method to build sinter Tasks for benchmarking a logical state preparation circuit.
 
@@ -251,10 +251,10 @@ def get_state_prep_diagnostic_tasks(
     )
     return [
         sinter.Task(
-            circuit=noise_model_family(error_rate).noisy_circuit(diagnostic_circuit),
+            circuit=noise_model_family(float(error_rate)).noisy_circuit(diagnostic_circuit),
             postselection_mask=postselection_mask,
             postselected_observables_mask=postselected_observables_mask,
-            json_metadata=(metadata or {}) | {"p": error_rate},
+            json_metadata=dict(metadata or {}) | {"p": float(error_rate)},
         )
         for error_rate in error_rates
     ]
@@ -265,17 +265,17 @@ def get_state_prep_diagnostic_tasks(
 
 
 def _assert_pure_logical_state(
-    state_prep_circuit: stim.Circuit, code: codes.QuditCode, qubit_ids: QubitIDs | None = None
+    state_prep_circuit: stim.Circuit, code: codes.QuditCode, qubit_ids: QubitIDs
 ) -> None:
-    """Assert that the given circuit prepare a pure logical state of the given code."""
-    qubit_ids = QubitIDs.validated(qubit_ids or QubitIDs.from_code(code), code)
-
-    # test that all stabilizers have expectation value +1
+    """Assert that the given circuit prepares a pure logical state of the given code."""
+    # test that all stabilizers have expectation value +1, including on data qubits that the circuit
+    # leaves untouched in |0>
+    num_qubits = max(state_prep_circuit.num_qubits, max(qubit_ids.data) + 1)
     simulator = stim.TableauSimulator()
     simulator.do(state_prep_circuit.without_noise())
     for op in code.get_stabilizer_ops():
         compact_string = math.op_to_string(op)
-        string = stim.PauliString(state_prep_circuit.num_qubits)
+        string = stim.PauliString(num_qubits)
         for qubit, pauli in zip(qubit_ids.data, str(compact_string)[1:], strict=True):
             if pauli != "_":
                 string[qubit] = pauli

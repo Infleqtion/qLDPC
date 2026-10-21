@@ -18,8 +18,10 @@ from typing import Protocol
 import pyperclip
 
 import qldpc
+import qldpc.cache
 
-GAP_ROOT = os.path.join(os.path.dirname(os.path.dirname(qldpc.__file__)), "gap")
+# GAP root directory for packages that qLDPC installs for the GAP executable, in qLDPC's user cache
+GAP_ROOT = str(qldpc.cache.get_disk_cache_path("gap"))
 
 
 class GAPError(ValueError):
@@ -173,7 +175,8 @@ def require_package(name: str, repo: str | None = None) -> bool:
     the user package directory visible to libgap.  If that installation fails but a GAP executable
     is available, qLDPC prints instructions for installing the package for libgap before falling
     back to the executable backend.  With the executable backend, qLDPC installs a missing package
-    by cloning its repository into the GAP root's ``pkg`` directory.
+    by cloning its repository into the ``pkg`` directory of ``GAP_ROOT``, a ``gap`` directory in
+    qLDPC's user cache directory (see :func:`qldpc.cache.get_disk_cache_path`).
 
     Args:
         name: The GAP package name.

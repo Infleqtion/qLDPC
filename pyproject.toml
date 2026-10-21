@@ -30,7 +30,6 @@ classifiers = [
   "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
-  "cvxpy>=1.5.3",    # earlier releases do not import with NumPy 2
   "diskcache>=5",
   "galois>=0.4.11",
   "ldpc>=2.4.1",
@@ -47,6 +46,7 @@ dependencies = [
   "tqdm>=4",
 ]
 optional-dependencies.decoders = [
+  "qldpc[ilp]",
   "qldpc[relay-bp]",
   """\
   qldpc[tesseract]; ((sys_platform=='darwin' and platform_machine=='arm64') or (sys_platform=='linux' and \
@@ -73,6 +73,9 @@ optional-dependencies.docs = [
 ]
 optional-dependencies.gap = [
   "passagemath-gap==10.8.12; python_version=='3.13' and sys_platform!='win32'",
+]
+optional-dependencies.ilp = [
+  "cvxpy>=1.5.3", # earlier releases do not import with NumPy 2
 ]
 optional-dependencies.relay-bp = [ "relay-bp[stim]==0.2.2" ]
 optional-dependencies.tesseract = [

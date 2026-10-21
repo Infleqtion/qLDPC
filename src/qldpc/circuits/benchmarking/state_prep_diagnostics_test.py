@@ -46,6 +46,8 @@ def test_state_prep_benchmarks() -> None:
     )
     for error_rate, task in zip(error_rates, tasks):
         assert task.json_metadata["p"] == error_rate
+    float32_rates = np.array([0.01], dtype=np.float32)
+    assert circuits.get_state_prep_diagnostic_tasks(code, circuit, float32_rates)[0].circuit
     assert (
         circuits.get_state_prep_diagnostic_tasks(code, circuit, [0.123], metadata={"p": 999})[
             0
@@ -67,7 +69,9 @@ def test_state_prep_benchmarks() -> None:
     postselection_array = np.zeros(task.circuit.num_detectors, dtype=int)
     postselection_array[: circuit.num_measurements] = 1
     postselection_mask = np.packbits(postselection_array, bitorder="little")
-    assert task.circuit == noise_model_family(error_rates[0]).noisy_circuit(diagnostic_circuit)
+    assert task.circuit == noise_model_family(float(error_rates[0])).noisy_circuit(
+        diagnostic_circuit
+    )
     assert np.array_equal(task.postselection_mask, postselection_mask)
 
     # we can also post-select manually
@@ -79,9 +83,11 @@ def test_state_prep_benchmarks() -> None:
         error_rates[:1],
         noise_model_family,
         observables=string_observables,
-        post_select=range(circuit.num_measurements),
+        post_select=range(circuit.num_detectors),
     )[0]
-    assert task.circuit == noise_model_family(error_rates[0]).noisy_circuit(diagnostic_circuit)
+    assert task.circuit == noise_model_family(float(error_rates[0])).noisy_circuit(
+        diagnostic_circuit
+    )
     assert np.array_equal(task.postselection_mask, postselection_mask)
 
     # we can only manually post-select on detectors that are present in the circuit
@@ -140,3 +146,7 @@ def test_pure_logical_state(pytestconfig: pytest.Config) -> None:
         circuits.get_state_prep_diagnostic_circuit(
             code, stim.Circuit(f"H 0\nCX 0 {len(code)}") + encoder
         )
+
+    # data qubits that the circuit never touches are in |0>
+    zero_code = codes.QuditCode([[0, 0, 1, 0], [0, 0, 0, 1]])
+    assert circuits.get_state_prep_diagnostic_circuit(zero_code, stim.Circuit("X 0\nX 0"))

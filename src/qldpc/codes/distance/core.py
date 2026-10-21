@@ -27,7 +27,15 @@ from .brute_force import (
 )
 
 DistanceBackend = Literal["auto", "decoder", "gap", "sqetch"]
-DistanceMethod = Literal["brouwer_zimmermann", "brute_force"]
+DistanceMethod = Literal["brouwer_zimmermann", "brute_force", "information_sets"]
+
+# The canonical name of every accepted exact-distance method name, including aliases.  Logical
+# counts accept the same names.
+_DISTANCE_METHODS: dict[str, Literal["brouwer_zimmermann", "brute_force"]] = {
+    "brouwer_zimmermann": "brouwer_zimmermann",
+    "brute_force": "brute_force",
+    "information_sets": "brouwer_zimmermann",
+}
 
 
 def validate_distance_backend(backend: DistanceBackend) -> None:
@@ -39,13 +47,19 @@ def validate_distance_backend(backend: DistanceBackend) -> None:
         )
 
 
-def validate_distance_method(method: DistanceMethod) -> None:
-    """Validate an exact-distance method selector."""
-    if method not in ("brouwer_zimmermann", "brute_force"):
+def validate_distance_method(
+    method: DistanceMethod,
+) -> Literal["brouwer_zimmermann", "brute_force"]:
+    """Validate an exact-distance method selector, and return its canonical name.
+
+    The alias ``"information_sets"`` resolves to ``"brouwer_zimmermann"``.
+    """
+    if method not in _DISTANCE_METHODS:
         raise ValueError(
             f"Unknown distance method {method!r}; choose from 'brouwer_zimmermann' or "
             "'brute_force'."
         )
+    return _DISTANCE_METHODS[method]
 
 
 ####################################################################################################
@@ -69,13 +83,14 @@ def get_distance_classical(
             ``2**min(block_size, 15)`` supports; brute force vectorizes ``2**block_size`` values.
         method: Exact-distance method.  ``"brouwer_zimmermann"`` (default) enumerates fixed-weight
             combinations in several information-set bases and stops once its lower and upper bounds
-            meet.  ``"brute_force"`` enumerates every nonzero codeword.
+            meet.  ``"brute_force"`` enumerates every nonzero codeword.  ``"information_sets"`` is
+            an alias for ``"brouwer_zimmermann"``.
 
     Returns:
         The minimum Hamming distance between different code words, or equivalently the minimum
         Hamming weight of a nontrivial code word.
     """
-    validate_distance_method(method)
+    method = validate_distance_method(method)
     _assert_binary(generators, "generators")
     matrix = _as_binary_matrix(generators)
     basis = _get_independent_rows(matrix)
@@ -123,7 +138,8 @@ def get_distance_quantum(
             have mixed (X, Y, or Z) support on different qubits.
         method: Exact-distance method.  ``"brouwer_zimmermann"`` (default) uses an exclusion-aware
             search over the logical space modulo stabilizers.  ``"brute_force"`` enumerates eligible
-            words using independent bases constructed internally.
+            words using independent bases constructed internally.  ``"information_sets"`` is an
+            alias for ``"brouwer_zimmermann"``.
 
     Returns:
         The exact minimum weight of a nontrivial logical operator in ``logical_ops`` modulo
@@ -146,7 +162,7 @@ def get_distance_quantum(
             qubits) with the first and second halves indicating the X and Z Pauli support; and
         (b) the weight of a Pauli string is the symplectic weight of the corresponding bitstring.
     """
-    validate_distance_method(method)
+    method = validate_distance_method(method)
     _assert_binary(logical_ops, "logical_ops")
     _assert_binary(stabilizers, "stabilizers")
     logical_matrix = _as_binary_matrix(logical_ops)
