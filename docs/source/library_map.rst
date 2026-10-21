@@ -258,7 +258,7 @@ Optional integrations and side effects
   If neither option is available, some paths offer a manual copy/paste workflow that reads standard input and uses the system clipboard.
 * When a GAP package is unavailable to libgap, qLDPC asks for permission to install it with GAP's PackageManager so that the active libgap runtime can discover it.
   If that attempt fails and a separate GAP executable is available, qLDPC prints manual installation instructions before using the executable instead.
-  Packages missing from the executable backend can trigger an installation prompt and ``git clone`` into qLDPC's GAP package directory.
+  Packages missing from the executable backend can trigger an installation prompt and ``git clone`` into a ``gap`` directory in qLDPC's user cache directory.
 * Group and code lookups may use online resources when local data and GAP cannot answer the request.
 * Expensive results can be cached under the user's platform cache directory.
   A cached function ``func`` also has a ``func.refresh(...)`` method, which takes the same arguments, recomputes the result, and overwrites the cached value.
