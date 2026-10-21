@@ -26,12 +26,13 @@ from .distance import (
     DistanceBackend,
     DistanceMethod,
     LogicalCountMethod,
-    count_logicals_css,
+    count_logical_ops_css,
     get_distance_classical,
     get_distance_css_brouwer_zimmermann,
     get_distance_quantum,
     validate_distance_backend,
     validate_distance_method,
+    validate_logical_count_method,
 )
 from .quantum import (
     BaconShorCode,
@@ -120,10 +121,11 @@ __all__ = [
     "ToricCode",
     "TrivialCode",
     "TwoGrossCode",
-    "count_logicals_css",
+    "count_logical_ops_css",
     "get_distance_classical",
     "get_distance_css_brouwer_zimmermann",
     "get_distance_quantum",
     "validate_distance_backend",
     "validate_distance_method",
+    "validate_logical_count_method",
 ]

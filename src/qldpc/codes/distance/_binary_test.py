@@ -140,6 +140,14 @@ def _popcounts(values: npt.NDArray[np.uint64]) -> npt.NDArray[np.int64]:
     return counts
 
 
+@njit
+def _trailing_zeros(values: npt.NDArray[np.uint64]) -> npt.NDArray[np.int64]:
+    counts = np.empty(len(values), dtype=np.int64)
+    for index, value in enumerate(values):
+        counts[index] = binary._trailing_zeros_word(value)
+    return counts
+
+
 def test_popcount_word() -> None:
     rng = np.random.default_rng(78)
     values = np.concatenate(
@@ -152,6 +160,15 @@ def test_popcount_word() -> None:
     np.testing.assert_array_equal(_popcounts(values), expected)
     # The Python implementation calls the Python fallback, and lets coverage trace the helper.
     np.testing.assert_array_equal(_popcounts.py_func(values), expected)
+
+
+def test_trailing_zeros_word() -> None:
+    """Shift odd words by every amount, so the shift is the number of trailing zeros."""
+    shifts = np.arange(64, dtype=np.uint64)
+    odd = np.random.default_rng(79).integers(0, 2**64, 64, np.uint64) | np.uint64(1)
+    values = np.left_shift(odd, shifts)
+    np.testing.assert_array_equal(_trailing_zeros(values), shifts)
+    np.testing.assert_array_equal(_trailing_zeros.py_func(values), shifts)
 
 
 @pytest.mark.parametrize("name", ["popcount", "trailing_zeros"])
@@ -169,7 +186,6 @@ def test_word_lowering(name: str) -> None:
         cpu_target.target_context, builder, signature, arguments
     )
     assert lowered.type == word
-    getattr(binary, f"_{name}_word")(np.uint64(1))
 
 
 @pytest.fixture(params=[False, True], ids=["compiled", "python"])

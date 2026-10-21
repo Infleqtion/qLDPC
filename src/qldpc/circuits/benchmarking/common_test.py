@@ -59,10 +59,19 @@ def test_logical_error_and_discard_rate() -> None:
         circuit,
         sinter_decoder=decoders.TrivialDecoder(),
         num_samples=1,
-        post_select=range(circuit.num_measurements),
+        post_select=range(circuit.num_detectors),
     )
     assert logical_error_rate == 0
     assert discard_rate == 0
+
+    # post-selecting on a detector that always fires discards every shot, also for arrays
+    dem = stim.DetectorErrorModel("error(1) D0 L0")
+    for post_select in ([0], np.array([0])):
+        logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
+            dem, sinter_decoder=decoders.TrivialDecoder(), num_samples=2, post_select=post_select
+        )
+        assert np.isnan(logical_error_rate)
+        assert discard_rate == 1
 
     # post-select on observables
     dem = circuit.detector_error_model()
@@ -141,3 +150,5 @@ def test_postselection_masks() -> None:
     assert observable_mask is None
     with pytest.raises(ValueError, match="2 selectable prep/flag detectors"):
         common._get_postselection_masks([2], (), record, 0)
+    with pytest.raises(ValueError, match="Observable post-selection"):
+        common._get_postselection_masks((), [1], record, 1)

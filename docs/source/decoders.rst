@@ -29,6 +29,7 @@ qLDPC provides the following methods to construct decoder specifications:
 See, for example, ``help(qldpc.decoders.bp_osd)`` for configuration options.
 ``pip install 'qldpc[decoders]'`` installs all optional decoders published as qLDPC extras for your platform.
 You can install individual extras with, for example, ``pip install 'qldpc[relay-bp]'``.
+The ILP decoder needs the ``ilp`` extra, which installs ``cvxpy``: ``pip install 'qldpc[ilp]'``.
 The Frontier decoder is not available on PyPI, and must be installed manually; see `Backend limitations`_.
 
 The default decoder in qLDPC (with an argument of ``decoder=None``, where applicable), is BP+OSD for binary codes, and generalized union-find for codes over nonbinary finite fields.

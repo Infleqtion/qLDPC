@@ -229,7 +229,7 @@ def _trailing_zeros_word(value: np.uint64 | int) -> np.int64:
 
     Compiled code calls LLVM's count-trailing-zeros instruction instead of this Python fallback.
     """
-    return np.int64((int(value) & -int(value)).bit_length() - 1)
+    return np.int64(_count_trailing_zeros(int(value)))
 
 
 @type_callable(_trailing_zeros_word)

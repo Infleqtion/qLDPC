@@ -65,7 +65,8 @@ class _CheckEnumerators:
         for checks in (checks_x, checks_z):
             if len(checks) > _MAX_RANK:
                 raise ValueError(
-                    f"MacWilliams enumeration supports check ranks up to {_MAX_RANK}, not {len(checks)}"
+                    f"The MacWilliams method supports check ranks up to {_MAX_RANK}, not"
+                    f" {len(checks)}; use 'brouwer_zimmermann' or 'brute_force'"
                 )
         self.num_bits = checks_x.shape[1]
         self.rank_x, self.rank_z = len(checks_x), len(checks_z)
@@ -80,7 +81,7 @@ class _CheckEnumerators:
             else _count_light_dual_words(self.weights_x, self.rank_x, self.num_bits)
         )
 
-    def count_logicals(self, weight: int) -> tuple[int, int]:
+    def count_logical_ops(self, weight: int) -> tuple[int, int]:
         """The numbers of nontrivial X-only and Z-only logical operators of the given weight."""
         count_x = self._count_sector(
             self.weights_z, self.rank_z, self.kernel_x, self.weights_x, weight

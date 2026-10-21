@@ -155,9 +155,9 @@ class AbstractCode(abc.ABC):
 
         else:
             self._field = abstract.resolve_field(field)
-            array = np.asanyarray(
-                matrix.todense() if scipy.sparse.issparse(matrix) else matrix,  # type:ignore[union-attr]
-            )
+            if scipy.sparse.issparse(matrix):
+                matrix = matrix.todense()  # type:ignore[union-attr]
+            array = np.asanyarray(matrix)
             if array.dtype == bool:
                 # galois rejects bool dtypes, so treat booleans as 0/1 integers
                 array = array.astype(np.uint8)
@@ -508,15 +508,15 @@ class ClassicalCode(AbstractCode):
                 Hamming distance between this vector and a code word.  Default: None.
             decoder: Decoder input used to bound distance; see help(get_distance_bound).
             method: Binary exact-distance method, unused when bounding the distance.
-                ``"brouwer_zimmermann"`` is the default; ``"brute_force"`` enumerates every nonzero
-                code word.  Nonbinary and vector-distance calculations always use exhaustive
-                enumeration.
+                ``"brouwer_zimmermann"`` is the default, with alias ``"information_sets"``;
+                ``"brute_force"`` enumerates every nonzero code word.  Nonbinary and vector-distance
+                calculations always use exhaustive enumeration.
             **bound_kwargs: Keyword arguments to pass to get_distance_bound.
 
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if not bound:
             if decoder is not None or bound_kwargs:
                 warnings.warn(
@@ -541,14 +541,14 @@ class ClassicalCode(AbstractCode):
             vector: If not None, rather than computing the code distance, compute the minimum
                 Hamming distance between this vector and a code word.  Default: None.
             cutoff: Exit and return once an upper bound on distance falls to or below this cutoff.
-            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default;
-                ``"brute_force"`` enumerates every nonzero code word.  Nonbinary and vector-distance
-                calculations always use exhaustive enumeration.
+            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default, with
+                alias ``"information_sets"``; ``"brute_force"`` enumerates every nonzero code word.
+                Nonbinary and vector-distance calculations always use exhaustive enumeration.
 
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if (known_distance := self.get_distance_if_known(vector)) is not None:
             return known_distance
 
@@ -1303,7 +1303,8 @@ class QuditCode(AbstractCode):
         if self.field is not galois.GF2:
             raise ValueError(
                 "You asked for the number of qubits in this code, but this code is built out of "
-                f"{self.field.order}-dimensional qudits.  Try calling {type(self).__name__}.num_qudits."
+                f"{self.field.order}-dimensional qudits.  Try calling"
+                f" {type(self).__name__}.num_qudits."
             )
         return len(self)
 
@@ -1950,15 +1951,15 @@ class QuditCode(AbstractCode):
                 compute an upper bound on code distance by minimizing over int(bound) independent
                 randomized upper bounds; see help(get_distance_bound).
             method: Binary exact-distance method, unused when bounding the distance.
-                ``"brouwer_zimmermann"`` is the default; ``"brute_force"`` enumerates every
-                nontrivial logical operator.  Nonbinary calculations always use exhaustive
-                enumeration.
+                ``"brouwer_zimmermann"`` is the default, with alias ``"information_sets"``;
+                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
+                calculations always use exhaustive enumeration.
             **bound_kwargs: Keyword arguments to pass to get_distance_bound.
 
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if not bound:
             if bound_kwargs:
                 warnings.warn(
@@ -1978,14 +1979,14 @@ class QuditCode(AbstractCode):
 
         Args:
             cutoff: Exit and return once an upper bound on distance falls to or below this cutoff.
-            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default;
-                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
-                calculations always use exhaustive enumeration.
+            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default, with
+                alias ``"information_sets"``; ``"brute_force"`` enumerates every nontrivial logical
+                operator.  Nonbinary calculations always use exhaustive enumeration.
 
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if (known_distance := self.get_distance_if_known()) is not None:
             return known_distance
 
@@ -2310,8 +2311,8 @@ class QuditCode(AbstractCode):
                 ) from error
             if sorted(inner_physical_to_outer_logical) != list(range(num_qudits)):
                 raise ValueError(
-                    "Code concatenation requires inner_physical_to_outer_logical to be a permutation"
-                    f" of the intermediate qudit indices 0 through {num_qudits - 1}"
+                    "Code concatenation requires inner_physical_to_outer_logical to be a"
+                    f" permutation of the intermediate qudit indices 0 through {num_qudits - 1}"
                 )
 
         # stack copies of the outer and inner codes, if necessary
@@ -3229,15 +3230,15 @@ class CSSCode(QuditCode):
                 randomized upper bounds; see help(get_distance_bound).
             decoder: Decoder input used to bound distance; see help(get_distance_bound).
             method: Binary exact-distance method, unused when bounding the distance.
-                ``"brouwer_zimmermann"`` is the default; ``"brute_force"`` enumerates every
-                nontrivial logical operator.  Nonbinary calculations always use exhaustive
-                enumeration.
+                ``"brouwer_zimmermann"`` is the default, with alias ``"information_sets"``;
+                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
+                calculations always use exhaustive enumeration.
             **bound_kwargs: Keyword arguments to pass to get_distance_bound.
 
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         if not bound:
             if decoder is not None or bound_kwargs:
                 warnings.warn(
@@ -3264,14 +3265,14 @@ class CSSCode(QuditCode):
                 The strings "X" and "Z" (case-insensitive) are also accepted.  If None (the
                 default), minimize over X and Z.
             cutoff: Exit and return once an upper bound on distance falls to or below this cutoff.
-            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default;
-                ``"brute_force"`` enumerates every nontrivial logical operator.  Nonbinary
-                calculations always use exhaustive enumeration.
+            method: Binary exact-distance method.  ``"brouwer_zimmermann"`` is the default, with
+                alias ``"information_sets"``; ``"brute_force"`` enumerates every nontrivial logical
+                operator.  Nonbinary calculations always use exhaustive enumeration.
 
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        validate_distance_method(method)
+        method = validate_distance_method(method)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
         if (known_distance := self.get_distance_if_known(pauli)) is not None:
             return known_distance
@@ -4083,8 +4084,8 @@ def _decode_consistently(
         if not erased and np.array_equal(check_matrix @ error.view(field), syndrome):
             return error.view(field)
     raise ValueError(
-        f"The decoder failed to infer an error that reproduces its syndrome in {_MAX_DECODING_ATTEMPTS}"
-        " attempts.  Try a more thorough decoder, such as"
+        "The decoder failed to infer an error that reproduces its syndrome in"
+        f" {_MAX_DECODING_ATTEMPTS} attempts.  Try a more thorough decoder, such as"
         " decoder=decoders.bp_osd(osd_method='OSD_CS', osd_order=5)"
     )
 

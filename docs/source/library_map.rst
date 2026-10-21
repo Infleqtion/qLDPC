@@ -77,10 +77,14 @@ qLDPC adds some minor optimizations:
 
 Distance-finding methods exit early once an observed upper bound on distance is at most ``cutoff``; the default cutoff of one gives an exact result for nontrivial codes.
 Pass ``method="brute_force"`` to distance-finding methods to instead compute distance via brute-force enumeration.
+The default ``method="brouwer_zimmermann"`` also has the alias ``"information_sets"``.
 
-:class:`qldpc.codes.CSSLogicalCounter <qldpc.codes.distance.logical_counts.CSSLogicalCounter>` counts the nontrivial X-only and Z-only logical operators of a given weight (by default, the code distance) in a binary CSS code.
-Available ``method=`` options are ``brouwer_zimmermann`` (the default), ``macwilliams``, and ``brute_force`` (a reference for small codes).
-For details and supported options, see ``help(qldpc.codes.CSSLogicalCounter.count_logicals)``.
+:class:`qldpc.codes.CSSLogicalCounter <qldpc.codes.distance.logical_counts.CSSLogicalCounter>` counts the nontrivial X-only and Z-only logical operators of a given weight in a binary CSS code.
+The weight defaults to the code distance, at which the counter can also count all nontrivial logical operators, including those of mixed type.
+Available ``method=`` options are ``brouwer_zimmermann`` (the default), ``macwilliams``, and ``brute_force`` (a reference for small codes), with aliases ``information_sets`` for ``brouwer_zimmermann`` and ``weight_enumerator`` for ``macwilliams``.
+Subsystem codes are supported by the ``brouwer_zimmermann`` and ``brute_force`` methods, but not by the ``macwilliams`` method.
+For details and supported options, see ``help(qldpc.codes.CSSLogicalCounter.count_logical_ops)``.
+For a one-off count, :func:`qldpc.codes.count_logical_ops_css(code) <qldpc.codes.distance.logical_counts.count_logical_ops_css>` builds a counter and calls its ``count_logical_ops`` method; pass ``count_pauli=True`` to also count operators of mixed type.
 
 Distance bounds
 ~~~~~~~~~~~~~~~
@@ -258,7 +262,7 @@ Optional integrations and side effects
   If neither option is available, some paths offer a manual copy/paste workflow that reads standard input and uses the system clipboard.
 * When a GAP package is unavailable to libgap, qLDPC asks for permission to install it with GAP's PackageManager so that the active libgap runtime can discover it.
   If that attempt fails and a separate GAP executable is available, qLDPC prints manual installation instructions before using the executable instead.
-  Packages missing from the executable backend can trigger an installation prompt and ``git clone`` into qLDPC's GAP package directory.
+  Packages missing from the executable backend can trigger an installation prompt and ``git clone`` into a ``gap`` directory in qLDPC's user cache directory.
 * Group and code lookups may use online resources when local data and GAP cannot answer the request.
 * Expensive results can be cached under the user's platform cache directory.
   A cached function ``func`` also has a ``func.refresh(...)`` method, which takes the same arguments, recomputes the result, and overwrites the cached value.

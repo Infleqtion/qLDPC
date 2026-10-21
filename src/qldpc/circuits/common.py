@@ -176,6 +176,10 @@ def get_pauli_product_measurements(
     Args:
         pauli_strings: Pauli strings or symplectic rows to measure.
         qubits: Optional physical-qubit labels corresponding to the columns of each Pauli string.
+
+    Raises:
+        ValueError: If a Pauli string is the identity, or if qubits is provided and a Pauli string
+            does not act on exactly len(qubits) qubits.
     """
     if isinstance(pauli_strings, np.ndarray):
         pauli_strings = [math.op_to_string(op) for op in np.atleast_2d(pauli_strings)]
@@ -185,6 +189,11 @@ def get_pauli_product_measurements(
     for string in pauli_strings:
         if not any(pauli in "XYZ" for pauli in str(string)):
             raise ValueError("Pauli-product measurements cannot contain an all-identity row")
+        if qubits is not None and len(string) != len(qubits):
+            raise ValueError(
+                f"A Pauli string acts on {len(string)} qubits, but {len(qubits)} qubit labels were"
+                " provided"
+            )
         circuit.append("MPP", stim.target_combined_paulis(string))
     return circuit if qubits is None else with_remapped_qubits(circuit, qubits)
 
