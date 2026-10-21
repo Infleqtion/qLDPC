@@ -154,21 +154,22 @@ def test_popcount_word() -> None:
     np.testing.assert_array_equal(_popcounts.py_func(values), expected)
 
 
-def test_popcount_lowering() -> None:
-    """Exercise the compiler extension directly, since coverage cannot trace compiled code.
-
-    The compiled result itself is checked by ``test_popcount_word``.
-    """
-    typer = binary._type_popcount_word(cpu_target.typing_context)
+@pytest.mark.parametrize("name", ["popcount", "trailing_zeros"])
+def test_word_lowering(name: str) -> None:
+    """Exercise compiler hooks directly, since coverage cannot trace cached native calls."""
+    typer = getattr(binary, f"_type_{name}_word")(cpu_target.typing_context)
     assert typer(types.uint64) == types.int64
     assert typer(types.int64) is None
     word = ir.IntType(64)
-    function = ir.Function(ir.Module(), ir.FunctionType(word, [word]), "popcount")
+    function = ir.Function(ir.Module(), ir.FunctionType(word, [word]), name)
     builder = ir.IRBuilder(function.append_basic_block())
     arguments: list[ir.Value] = [function.args[0]]
     signature = types.int64(types.uint64)
-    lowered = binary._lower_popcount_word(cpu_target.target_context, builder, signature, arguments)
+    lowered = getattr(binary, f"_lower_{name}_word")(
+        cpu_target.target_context, builder, signature, arguments
+    )
     assert lowered.type == word
+    getattr(binary, f"_{name}_word")(np.uint64(1))
 
 
 @pytest.fixture(params=[False, True], ids=["compiled", "python"])

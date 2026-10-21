@@ -9,11 +9,11 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
+from llvmlite import ir
 from numba import njit, types
 from numba.extending import lower_builtin, type_callable
 
 if TYPE_CHECKING:
-    from llvmlite import ir
     from numba.core.base import BaseContext
     from numba.core.typing.context import BaseContext as TypingContext
     from numba.core.typing.templates import Signature
@@ -222,6 +222,34 @@ def _lower_popcount_word(
     The count is at most 64, so the 64-bit result is the same as a signed integer.
     """
     return builder.ctpop(arguments[0])
+
+
+def _trailing_zeros_word(value: np.uint64 | int) -> np.int64:
+    """Count the trailing zero bits of one nonzero 64-bit word.
+
+    Compiled code calls LLVM's count-trailing-zeros instruction instead of this Python fallback.
+    """
+    return np.int64((int(value) & -int(value)).bit_length() - 1)
+
+
+@type_callable(_trailing_zeros_word)
+def _type_trailing_zeros_word(
+    context: TypingContext,
+) -> Callable[[types.Type], types.Type | None]:
+    """Declare that compiled code may call ``_trailing_zeros_word`` on a uint64 word."""
+
+    def typer(value: types.Type) -> types.Type | None:
+        return types.int64 if value == types.uint64 else None
+
+    return typer
+
+
+@lower_builtin(_trailing_zeros_word, types.uint64)
+def _lower_trailing_zeros_word(
+    context: BaseContext, builder: ir.IRBuilder, signature: Signature, arguments: list[ir.Value]
+) -> ir.Value:
+    """Compile ``_trailing_zeros_word`` to LLVM's count-trailing-zeros instruction."""
+    return builder.cttz(arguments[0], ir.Constant(ir.IntType(1), 0))
 
 
 @njit(cache=True)
