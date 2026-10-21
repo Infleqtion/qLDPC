@@ -15,6 +15,9 @@ sector, and have ``count_pauli = 3 * count_x``.  Counters for codes deformed by 
 CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
 recomputing them.
 
+The default method is ``"brouwer_zimmermann"``.  The alternative ``"macwilliams"`` counts from
+check-space weight distributions; see ``_macwilliams.py`` for the algorithm.
+
 References:
 
 - https://arxiv.org/abs/1603.06757 (Brouwer--Zimmermann information sets)
@@ -25,7 +28,7 @@ from __future__ import annotations
 import functools
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -42,9 +45,10 @@ from ._binary import (
     _popcount_word,
     _row_reduce_binary,
 )
-from .brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
+from ._brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
+from ._macwilliams import _CheckEnumerators
 from .brute_force import _get_distance_quantum_brute_force
-from .core import DistanceMethod, validate_distance_method
+from .core import DistanceMethod
 
 # codes.common imports this package, so CSSCode is imported only where it is used.
 if TYPE_CHECKING:
@@ -59,8 +63,17 @@ _CHUNK_SIZE = 1 << 16
 # Batch size exponent passed to the distance searches, as in get_distance_quantum.
 _BLOCK_SIZE = 15
 
+# Check rank from which the weight enumerator method row-reduces both checks of a counter not known
+# to be self-dual, to share one walk if they span the same space.  Below it, a second walk over the
+# 2**rank words costs less than the row reduction.
+_MIN_SHARED_WALK_RANK = 14
+
 # The basis of a homogeneous sector, and its quotient labels.
 _Sector = tuple[_BinaryMatrix, _BinaryMatrix]
+
+LogicalCountMethod = Literal[
+    "brouwer_zimmermann", "macwilliams", "brute_force", "information_sets", "weight_enumerator"
+]
 
 
 ####################################################################################################
@@ -149,6 +162,7 @@ class CSSLogicalCounter:
         self._dimension = self._num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
         self._sectors: tuple[_Sector, _Sector] | None = None
         self._disjoint_families: dict[int, _information_sets._BasisFamily] = {}
+        self._enumerators: _CheckEnumerators | None = None
         self._canonical: tuple[_BinaryMatrix, _BinaryMatrix] | None = (self._gauge_x, self._gauge_z)
 
     @property
@@ -187,15 +201,14 @@ class CSSLogicalCounter:
     @property
     def is_self_dual(self) -> bool:
         """Whether the X and Z checks span the same row space."""
-        canonical_x, canonical_z = self._get_canonical_checks()
-        return self._self_dual or np.array_equal(canonical_x, canonical_z)
+        return self._self_dual or np.array_equal(*self._get_canonical_checks())
 
     @format_docstring(MAX_SETS=_information_sets.MAX_SETS)
     def count_logical_ops(
         self,
         weight: int | None = None,
         *,
-        method: DistanceMethod = "brouwer_zimmermann",
+        method: LogicalCountMethod = "brouwer_zimmermann",
         count_pauli: bool = False,
         within_distance: bool = False,
         max_information_sets: int = _information_sets.MAX_SETS,
@@ -205,11 +218,16 @@ class CSSLogicalCounter:
         Args:
             weight: Weight of the operators to count, between zero and the number of qubits.  If
                 None (the default), count the operators whose weight is the distance of the code.
-            method: ``"brouwer_zimmermann"`` (the default) or ``"brute_force"``.  Brute force
-                enumerates all ``2**rank`` combinations of each normalizer basis, and is a reference
-                for small codes.
+            method: ``"brouwer_zimmermann"`` (the default), ``"macwilliams"``, or
+                ``"brute_force"``.  MacWilliams uses check-space weight distributions, cached on the
+                counter but not transferred through deformation.  It does not support subsystem
+                codes, full Pauli counts of non-self-dual codes, or check ranks above 63.  Brute
+                force is a reference for small codes.  The aliases ``"information_sets"`` and
+                ``"weight_enumerator"`` select ``"brouwer_zimmermann"`` and ``"macwilliams"``,
+                respectively.
             count_pauli: If True, also count full Pauli operators, including Y and mixed operators.
-                Each homogeneous word of the counted weight costs one rank calculation.  These
+                For codes that are not self-dual, each homogeneous word of the counted weight costs
+                one rank calculation.  These
                 counts are exact up to the distance and zero below it, and are not supported above
                 it.  Defaults to False.
             within_distance: If True, raise an error when the weight is above the distance, that
@@ -219,7 +237,8 @@ class CSSLogicalCounter:
                 count may use when it replaces its first, disjoint sets by overlapping ones.  More
                 sets can skip costly layers of a hard count, but each set costs setup work, which
                 dominates a cheap count.  A small limit suits many cheap counts on a large code.
-                This never changes the counts.  Defaults to {MAX_SETS}.
+                This never changes the counts, and the other methods ignore it.  Defaults to
+                {MAX_SETS}.
 
         Returns:
             The counted weight and the counts.  If no weight is given and the code encodes no
@@ -227,20 +246,31 @@ class CSSLogicalCounter:
 
         Raises:
             ValueError: If the weight is not an integer between zero and the number of qubits, if
-                the method is unknown, or if the weight is above the distance and
-                ``count_pauli`` or ``within_distance`` is set.
+                the method is unknown, if the weight is above the distance and ``count_pauli`` or
+                ``within_distance`` is set, or if the MacWilliams method does not support the code
+                or the request.
         """
-        validate_distance_method(method)
+        if method == "information_sets":
+            method = "brouwer_zimmermann"
+        elif method == "weight_enumerator":
+            method = "macwilliams"
+        _validate_count_method(method)
         if weight is not None and (
             not isinstance(weight, (int, np.integer))
             or isinstance(weight, bool)
             or not 0 <= weight <= self.num_qubits
         ):
             raise ValueError("The weight must be an integer between zero and the number of qubits")
+        if method == "macwilliams":
+            self._validate_macwilliams_request(count_pauli)
         if not self.dimension:
             empty_pauli = 0 if count_pauli else None
             return CSSLogicalCounts(
                 self.num_qubits if weight is None else int(weight), 0, 0, empty_pauli
+            )
+        if method == "macwilliams":
+            return self._count_with_macwilliams(
+                weight, count_pauli=count_pauli, reject_lighter=count_pauli or within_distance
             )
 
         sector_x, sector_z = self._get_sectors()
@@ -285,10 +315,7 @@ class CSSLogicalCounter:
                 max_sets=max_information_sets,
             )
         if counts_x is None or counts_z is None:
-            raise ValueError(
-                "Counts above the distance are not supported here: the distance is less than"
-                f" weight {target}"
-            )
+            raise _get_above_distance_error(target)
         count_x, count_z = int(counts_x.sum()), int(counts_z.sum())
         num_pauli = None
         if count_pauli and self._self_dual:
@@ -422,6 +449,9 @@ class CSSLogicalCounter:
             counter._stabilizers_z = _apply_local(self._stabilizers_z, positions, local_z)
         counter._sectors = None
         counter._disjoint_families = {}
+        # A gate changes the weight of every check word that touches its qubits, so the weight
+        # enumerators are not kept.
+        counter._enumerators = None
         if self._sectors is not None:
             (basis_x, labels_x), (basis_z, labels_z) = self._sectors
             sector_x = (_apply_local(basis_x, positions, local_x), labels_x)
@@ -437,6 +467,63 @@ class CSSLogicalCounter:
                     if moved is not None:
                         counter._disjoint_families[index] = moved
         return counter
+
+    def _validate_macwilliams_request(self, count_pauli: bool) -> None:
+        """Reject codes and requests that the MacWilliams method does not support.
+
+        The X stabilizers are the X gauge operators that commute with every Z gauge operator, so
+        they span fewer dimensions than the X gauge operators exactly when some X and Z checks
+        anticommute, that is, in a subsystem code.
+        """
+        if len(self._stabilizers_x) < len(self._gauge_x):
+            raise ValueError(
+                "The MacWilliams method does not support subsystem codes; use"
+                " 'brouwer_zimmermann' or 'brute_force'"
+            )
+        if count_pauli and not self.is_self_dual:
+            raise ValueError(
+                "The MacWilliams method counts full Pauli operators only for self-dual codes;"
+                " use 'brouwer_zimmermann' or 'brute_force'"
+            )
+
+    def _count_with_macwilliams(
+        self, weight: int | None, *, count_pauli: bool, reject_lighter: bool
+    ) -> CSSLogicalCounts:
+        """Count logical operators by the weight enumerators of the checks of a stabilizer code.
+
+        Each support of a nontrivial logical Pauli operator of weight ``d`` in a self-dual code
+        carries exactly three such operators: one X-only, one Z-only, and one Y-only.  The checks
+        of a self-dual code may share one weight distribution, even if a conjugation gave them
+        different bases.  Equal check spaces have equal distributions, so whether they share one
+        changes only the number of walks, never the counts.  The enumerators are kept, so that later
+        counts at any weight, with any options, do not walk again.
+        """
+        if self._enumerators is None:
+            rank = len(self._gauge_x)
+            # A full Pauli count has already been validated as self-dual.
+            share = (
+                count_pauli
+                or self._self_dual
+                or (rank == len(self._gauge_z) >= _MIN_SHARED_WALK_RANK and self.is_self_dual)
+            )
+            self._enumerators = _CheckEnumerators(
+                self._gauge_x, self._gauge_x if share else self._gauge_z
+            )
+        enumerators = self._enumerators
+        if weight is None:
+            target = next(
+                candidate
+                for candidate in range(1, self.num_qubits + 1)
+                if any(enumerators.count_logicals(candidate))
+            )
+        else:
+            target = int(weight)
+            if reject_lighter and any(
+                any(enumerators.count_logicals(lighter)) for lighter in range(1, target)
+            ):
+                raise _get_above_distance_error(target)
+        count_x, count_z = enumerators.count_logicals(target)
+        return CSSLogicalCounts(target, count_x, count_z, 3 * count_x if count_pauli else None)
 
     def _get_sectors(self) -> tuple[_Sector, _Sector]:
         """The X and Z sectors: normalizer bases whose first rows span the gauge operators."""
@@ -476,7 +563,7 @@ def count_logical_ops_css(
     code: CSSCode,
     weight: int | None = None,
     *,
-    method: DistanceMethod = "brouwer_zimmermann",
+    method: LogicalCountMethod = "brouwer_zimmermann",
     count_pauli: bool = False,
     within_distance: bool = False,
     max_information_sets: int = _information_sets.MAX_SETS,
@@ -501,6 +588,23 @@ def count_logical_ops_css(
         count_pauli=count_pauli,
         within_distance=within_distance,
         max_information_sets=max_information_sets,
+    )
+
+
+def _validate_count_method(method: LogicalCountMethod) -> None:
+    """Validate a normalized logical-count method selector."""
+    if method not in ("brouwer_zimmermann", "macwilliams", "brute_force"):
+        raise ValueError(
+            f"Unknown distance method {method!r} for logical counts; choose from"
+            " 'brouwer_zimmermann', 'macwilliams', or 'brute_force'."
+        )
+
+
+def _get_above_distance_error(weight: int) -> ValueError:
+    """The error for counts that the distance makes unsupported."""
+    return ValueError(
+        "Counts above the distance are not supported here: the distance is less than"
+        f" weight {weight}"
     )
 
 

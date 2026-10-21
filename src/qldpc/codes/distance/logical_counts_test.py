@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import functools
 import itertools
+import math
 from typing import Any
 from unittest import mock
 
@@ -17,13 +18,18 @@ import pytest
 from qldpc import codes
 from qldpc.objects import Pauli
 
-from . import _information_sets
+from . import _information_sets, _macwilliams
 from . import logical_counts as lc
 from ._binary import _get_independent_rows, _get_kernel
 from .core import DistanceMethod
 
 Counts = lc.CSSLogicalCounts
 METHODS: tuple[DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
+STABILIZER_METHODS: tuple[lc.LogicalCountMethod, ...] = (
+    "brouwer_zimmermann",
+    "macwilliams",
+    "brute_force",
+)
 
 
 def _counter(checks_x: npt.ArrayLike, checks_z: npt.ArrayLike) -> lc.CSSLogicalCounter:
@@ -144,7 +150,7 @@ def test_known_codes(method: DistanceMethod) -> None:
         counter = _counter(checks_x, checks_z)
         assert counter.count_logical_ops(count_pauli=True, method=method) == expected
         assert counter.count_logical_ops(method=method).count_pauli is None
-    assert lc.count_logical_ops_css(steane) == Counts(3, 7, 7, None)
+    assert lc.count_logical_ops_css(steane, method="information_sets") == Counts(3, 7, 7, None)
 
 
 @pytest.mark.parametrize("method", METHODS)
@@ -197,7 +203,7 @@ def test_pauli_counts_away_from_the_distance(method: DistanceMethod) -> None:
         counter.count_logical_ops(3, method=method, count_pauli=True)
 
 
-@pytest.mark.parametrize("method", METHODS)
+@pytest.mark.parametrize("method", STABILIZER_METHODS)
 @pytest.mark.parametrize(
     "checks_x,checks_z,distance",
     [
@@ -207,7 +213,7 @@ def test_pauli_counts_away_from_the_distance(method: DistanceMethod) -> None:
     ],
 )
 def test_within_distance_raises_exactly_above_the_distance(
-    checks_x: npt.ArrayLike, checks_z: npt.ArrayLike, distance: int, method: DistanceMethod
+    checks_x: npt.ArrayLike, checks_z: npt.ArrayLike, distance: int, method: lc.LogicalCountMethod
 ) -> None:
     counter = _counter(checks_x, checks_z)
     for weight in range(counter.num_qubits + 1):
@@ -462,6 +468,119 @@ def test_conjugated_counts_match_enumeration() -> None:
             assert counter.count_logical_ops(count_pauli=True) == _expected_at_distance(
                 counter.code
             )
+
+
+####################################################################################################
+# weight enumerators
+
+
+def test_macwilliams_counts_match_enumeration() -> None:
+    """Compare every weight, and self-dual full Pauli counts, with enumerated normalizers."""
+    rng = np.random.default_rng(31)
+    steane = codes.SteaneCode()
+    examples = [
+        codes.CSSCode(np.vstack([steane.matrix_x, steane.matrix_x]), steane.matrix_z),
+        codes.CSSCode(_HAND_X.astype(int), _HAND_Z.astype(int)),
+        codes.CSSCode(np.zeros((0, 3), dtype=int), np.zeros((0, 3), dtype=int)),
+        _random_css_code(rng, 10, 2, 5),
+    ]
+    for code in examples:
+        counts_x, counts_z, distance, full = _enumerate(code)
+        counter = lc.CSSLogicalCounter(code)
+        for weight in range(len(code) + 1):
+            expected = Counts(weight, counts_x[weight], counts_z[weight], None)
+            assert counter.count_logical_ops(weight, method="macwilliams") == expected
+        expected = Counts(distance, counts_x[distance], counts_z[distance], None)
+        assert counter.count_logical_ops(method="macwilliams") == expected
+        if counter.is_self_dual:
+            expected = Counts(distance, counts_x[distance], counts_z[distance], full)
+            assert counter.count_logical_ops(method="macwilliams", count_pauli=True) == expected
+    assert lc.count_logical_ops_css(steane, method="weight_enumerator") == Counts(3, 7, 7, None)
+
+
+def test_macwilliams_counts_of_wide_codes() -> None:
+    """At length 130, counts exceed 64-bit integers.
+
+    The X check is all ones, and the Z checks pair qubits 0 to 5, so an X-only logical repeats each
+    pair, and a Z-only logical has even weight.  The excluded words are 0 and all ones for X, and
+    the three pairs combined for Z.
+    """
+    num_qubits = 130
+    pairs = np.zeros((3, num_qubits), dtype=int)
+    for pair in range(3):
+        pairs[pair, 2 * pair : 2 * pair + 2] = 1
+    counter = _counter(np.ones((1, num_qubits)), pairs)
+    for weight in (64, 65, 130):
+        count_x = sum(
+            math.comb(3, pair_count) * math.comb(num_qubits - 6, weight - 2 * pair_count)
+            for pair_count in range(min(3, weight // 2) + 1)
+        ) - (weight == num_qubits)
+        count_z = (
+            math.comb(num_qubits, weight) - math.comb(3, weight // 2) if weight % 2 == 0 else 0
+        )
+        expected = Counts(weight, count_x, count_z, None)
+        assert counter.count_logical_ops(weight, method="macwilliams") == expected
+
+
+@pytest.mark.parametrize("copies, count_pauli_first", [(1, False), (1, True), (5, False)])
+def test_macwilliams_enumerators_are_computed_once_per_counter(
+    copies: int, count_pauli_first: bool
+) -> None:
+    """Later weights and flags reuse the walk, including checks with different equal-space bases."""
+    code = codes.CSSCode.stack([codes.SteaneCode()] * copies)
+    counter = lc.CSSLogicalCounter(code).deformed_cnot(1, 6).deformed_cnot(1, 6)
+    with mock.patch.object(
+        _macwilliams, "_get_span_weights", wraps=_macwilliams._get_span_weights
+    ) as walk:
+        expected = Counts(3, 7 * copies, 7 * copies, 21 * copies if count_pauli_first else None)
+        assert (
+            counter.count_logical_ops(method="macwilliams", count_pauli=count_pauli_first)
+            == expected
+        )
+        walks = walk.call_count
+        assert counter.count_logical_ops(2, method="macwilliams") == Counts(2, 0, 0, None)
+        assert counter.count_logical_ops(3, method="macwilliams", count_pauli=True) == Counts(
+            3, 7 * copies, 7 * copies, 21 * copies
+        )
+    assert walks > 0 and walk.call_count == walks
+
+
+@pytest.mark.parametrize("gate", ["cnot", "swel"])
+def test_conjugated_counters_walk_their_own_checks(gate: str) -> None:
+    """A gate changes the weight distributions of the checks, so they are not reused."""
+    counter = lc.CSSLogicalCounter(_random_css_code(np.random.default_rng(41), 10, 3, 3))
+    weights = range(counter.num_qubits + 1)
+    before = [counter.count_logical_ops(weight, method="macwilliams") for weight in weights]
+    conjugated = (
+        counter.deformed_cnot(0, 1) if gate == "cnot" else counter.deformed_swel(0, 1, 2, 3)
+    )
+    fresh = _counter(conjugated.checks_x, conjugated.checks_z)
+    expected = [fresh.count_logical_ops(weight, method="macwilliams") for weight in weights]
+    assert expected != before
+    counts = [conjugated.count_logical_ops(weight, method="macwilliams") for weight in weights]
+    assert counts == expected
+
+
+def test_macwilliams_capabilities() -> None:
+    """Unsupported codes and requests raise errors, and still work with the other methods."""
+    no_logicals = _counter(np.eye(4)[:2], np.eye(4)[2:])
+    assert no_logicals.count_logical_ops(method="macwilliams") == Counts(4, 0, 0, None)
+    extended_hamming = codes.ExtendedHammingCode(3).matrix
+    self_dual = _counter(extended_hamming, extended_hamming)
+    assert self_dual.dimension == 0
+    expected = Counts(2, 0, 0, 0)
+    assert self_dual.count_logical_ops(2, method="macwilliams", count_pauli=True) == expected
+
+    bacon_shor = codes.BaconShorCode(3)
+    subsystem = lc.CSSLogicalCounter(bacon_shor)
+    with pytest.raises(ValueError, match="does not support subsystem codes"):
+        subsystem.count_logical_ops(method="macwilliams")
+    assert subsystem.count_logical_ops(count_pauli=True) == _expected_at_distance(bacon_shor)
+
+    asymmetric = _counter(_HAND_X, _HAND_Z)
+    with pytest.raises(ValueError, match="only for self-dual codes"):
+        asymmetric.count_logical_ops(method="macwilliams", count_pauli=True)
+    assert asymmetric.count_logical_ops(count_pauli=True) == Counts(2, 2, 3, 6)
 
 
 ####################################################################################################
