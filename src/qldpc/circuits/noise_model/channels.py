@@ -121,22 +121,6 @@ class AbstractPauliChannel(abc.ABC):
         """Non-identity Pauli-string → probability mapping."""
         return self._probabilities
 
-    def _resolve_targets(
-        self, append_to: StimCircuitLike | None, qubits: Iterable[int] | None
-    ) -> tuple[StimCircuitLike | stim.Circuit, list[int]]:
-        """Resolve the ``(circuit, qubit_targets)`` pair shared by every variant of ``to_circuit``.
-
-        Creates a fresh circuit when ``append_to`` is ``None``, defaults ``qubits`` to
-        ``range(num_qubits)``, and validates that the number of qubits matches the channel arity.
-        """
-        circuit = stim.Circuit() if append_to is None else append_to
-        qubit_targets = list(range(self._num_qubits)) if qubits is None else list(qubits)
-        if len(qubit_targets) != self.num_qubits:
-            raise ValueError(
-                f"Provided {len(qubit_targets)} qubits for a {self.num_qubits}-qubit channel"
-            )
-        return circuit, qubit_targets
-
     @overload
     def to_circuit(
         self, *, append_to: None = None, qubits: Iterable[int] | None = None, tag: str = ""
@@ -160,6 +144,22 @@ class AbstractPauliChannel(abc.ABC):
         tag: str = "",
     ) -> StimCircuitLike | stim.Circuit:
         """Convert this channel into a circuit."""
+
+    def _resolve_targets(
+        self, append_to: StimCircuitLike | None, qubits: Iterable[int] | None
+    ) -> tuple[StimCircuitLike | stim.Circuit, list[int]]:
+        """Resolve the ``(circuit, qubit_targets)`` pair shared by every variant of ``to_circuit``.
+
+        Creates a fresh circuit when ``append_to`` is ``None``, defaults ``qubits`` to
+        ``range(num_qubits)``, and validates that the number of qubits matches the channel arity.
+        """
+        circuit = stim.Circuit() if append_to is None else append_to
+        qubit_targets = list(range(self._num_qubits)) if qubits is None else list(qubits)
+        if len(qubit_targets) != self.num_qubits:
+            raise ValueError(
+                f"Provided {len(qubit_targets)} qubits for a {self.num_qubits}-qubit channel"
+            )
+        return circuit, qubit_targets
 
 
 class PauliChannel(AbstractPauliChannel):

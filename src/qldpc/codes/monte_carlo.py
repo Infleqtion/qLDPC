@@ -165,18 +165,6 @@ class ErrorRateFunc:
         """Discard rate at each error weight."""
         return self.num_discards / self._as_divisor(self.num_samples)
 
-    @staticmethod
-    def _as_divisor(counts: npt.NDArray[np.int_]) -> npt.NDArray[np.floating]:
-        """Cast sample counts to float for use as a divisor, mapping zeros to infinity.
-
-        Dividing by infinity yields zero, so a weight with no (kept) samples is recorded with a zero
-        rate rather than nan or inf.  That is optimistic for a weight with no data; the reported
-        variance does not share this optimism (see jeffreys_variance).
-        """
-        divisor = counts.astype(float)
-        divisor[divisor == 0] = np.inf
-        return divisor
-
     @property
     def infidelity_variances(self) -> npt.NDArray[np.floating]:
         """The Jeffreys posterior variance of the infidelity at each error weight.
@@ -261,6 +249,18 @@ class ErrorRateFunc:
                 error_rate,
             )
         )
+
+    @staticmethod
+    def _as_divisor(counts: npt.NDArray[np.int_]) -> npt.NDArray[np.floating]:
+        """Cast sample counts to float for use as a divisor, mapping zeros to infinity.
+
+        Dividing by infinity yields zero, so a weight with no (kept) samples is recorded with a zero
+        rate rather than nan or inf.  That is optimistic for a weight with no data; the reported
+        variance does not share this optimism (see jeffreys_variance).
+        """
+        divisor = counts.astype(float)
+        divisor[divisor == 0] = np.inf
+        return divisor
 
 
 def jeffreys_variance(

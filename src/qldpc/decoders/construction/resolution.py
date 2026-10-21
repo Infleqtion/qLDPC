@@ -33,20 +33,6 @@ from .specs import (
 # decoder input resolution
 
 
-def _get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
-    """Build or retrieve a decoder that maps a syndrome to an inferred error.
-
-    Args:
-        pcm_or_dem: The parity-check matrix or detector error model to decode.
-        decoder: An error-decoder specification such as ``decoders.bp_osd(...)``, or None to select
-            the default: GUF for a nonbinary FieldArray and BP+OSD otherwise.
-
-    Returns:
-        An ErrorDecoder.
-    """
-    return as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
-
-
 def resolve_decoder(
     pcm_or_dem: PcmOrDem,
     decoder: ErrorDecoderInput,
@@ -75,32 +61,6 @@ def resolve_decoder(
             pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
     return _get_error_decoder(pcm_or_dem, decoder=decoder)
-
-
-def _get_observable_decoder(
-    dem: stim.DetectorErrorModel, *, decoder: DecoderInput = None
-) -> ObservableDecoder:
-    """Build or retrieve a decoder that maps a syndrome to predicted observable flips.
-
-    Args:
-        dem: The detector error model to decode.
-        decoder: A decoder specification such as ``decoders.mwpm(...)``, which builds a native
-            observable decoder when supported, or None to select the default decoder.  If a
-            specification infers errors instead, those errors are projected onto the observables.
-
-    Returns:
-        An ObservableDecoder.
-    """
-    if isinstance(decoder, DecoderSpec):
-        return decoder.build_observable_decoder(dem)
-    if isinstance(decoder, DEMDecoderFactory):
-        return validate_observable_decoder(decoder.build(dem), "A from_dem factory")
-    if compiles_for_dem(decoder):
-        return _compile_observable_decoder(decoder, dem)
-    built_decoder, source = _build_decoder(dem, decoder)
-    if isinstance(built_decoder, ObservableDecoder):
-        return built_decoder
-    return _ErrorsToObservablesDecoder(as_error_decoder(built_decoder, source), dem)
 
 
 def resolve_observable_decoder(
@@ -143,6 +103,50 @@ def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
             f"A prebuilt decoder cannot be passed as decoder= here because {reason}.  Pass a decoder"
             " specification such as decoder=decoders.bp_osd(...), or a decoder constructor, instead"
         )
+
+
+####################################################################################################
+# helper methods
+
+
+def _get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
+    """Build or retrieve a decoder that maps a syndrome to an inferred error.
+
+    Args:
+        pcm_or_dem: The parity-check matrix or detector error model to decode.
+        decoder: An error-decoder specification such as ``decoders.bp_osd(...)``, or None to select
+            the default: GUF for a nonbinary FieldArray and BP+OSD otherwise.
+
+    Returns:
+        An ErrorDecoder.
+    """
+    return as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
+
+
+def _get_observable_decoder(
+    dem: stim.DetectorErrorModel, *, decoder: DecoderInput = None
+) -> ObservableDecoder:
+    """Build or retrieve a decoder that maps a syndrome to predicted observable flips.
+
+    Args:
+        dem: The detector error model to decode.
+        decoder: A decoder specification such as ``decoders.mwpm(...)``, which builds a native
+            observable decoder when supported, or None to select the default decoder.  If a
+            specification infers errors instead, those errors are projected onto the observables.
+
+    Returns:
+        An ObservableDecoder.
+    """
+    if isinstance(decoder, DecoderSpec):
+        return decoder.build_observable_decoder(dem)
+    if isinstance(decoder, DEMDecoderFactory):
+        return validate_observable_decoder(decoder.build(dem), "A from_dem factory")
+    if compiles_for_dem(decoder):
+        return _compile_observable_decoder(decoder, dem)
+    built_decoder, source = _build_decoder(dem, decoder)
+    if isinstance(built_decoder, ObservableDecoder):
+        return built_decoder
+    return _ErrorsToObservablesDecoder(as_error_decoder(built_decoder, source), dem)
 
 
 def _build_decoder(pcm_or_dem: PcmOrDem, decoder: DecoderInput) -> tuple[object, str]:

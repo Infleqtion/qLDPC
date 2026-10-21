@@ -86,7 +86,7 @@ def test_prune_family(ranks: list[int], upper_bound: int) -> None:
     information_sets = tuple(
         _information_sets._InformationSet(generators, None, rank, pivots) for rank in ranks
     )
-    family = _information_sets._Family(
+    family = _information_sets._BasisFamily(
         information_sets, _information_sets._Certificate(10, tuple(ranks))
     )
     pruned = _information_sets._prune_family(family, upper_bound=upper_bound)
@@ -141,7 +141,7 @@ def test_overlapping_family_guards() -> None:
     # Repeatedly rediscovering the same pivots must terminate without selecting a family.
     basis = basis[:, :40]
     first = _information_sets._get_disjoint_family(basis, None).information_sets[0]
-    family = _information_sets._Family.from_information_sets(
+    family = _information_sets._BasisFamily.from_information_sets(
         [first], dimension=25, weight_divisor=1
     )
     with mock.patch.object(
@@ -153,7 +153,7 @@ def test_overlapping_family_guards() -> None:
 
 
 def _assert_certificate_bounds_unvisited_words(
-    basis: npt.NDArray[np.uint8], family: _information_sets._Family
+    basis: npt.NDArray[np.uint8], family: _information_sets._BasisFamily
 ) -> None:
     """Check a family's certificate against every word that its search bases span.
 
