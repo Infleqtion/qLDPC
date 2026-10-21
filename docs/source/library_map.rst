@@ -243,15 +243,18 @@ Circuit utilities reject nonbinary codes.
 Encoding circuits are not fault-tolerant, and transversal-gate searches can be exponential.
 For sliding-window decoding, detector coordinates are only a heuristic source of time; pass ``detector_to_time`` when a model uses another convention.
 
-``circuits.benchmarking`` provides logical error-rate estimates, state-preparation diagnostics, exact fault distances, and spread certificates.
+Certify a state-preparation circuit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Certify resource-state preparation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-``circuits.certify_state_prep_spread`` checks accepted fault patterns within a budget: output errors must be equivalent on the prepared state to errors no heavier than the fault count.
-It uses physical Pauli or CSS-sector weight for definite pure Clifford outputs and independent unit-cost binary DEM mechanisms.
-This sufficient resource-state property does not certify downstream error propagation.
-See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` and :func:`API docstring <qldpc.circuits.benchmarking.state_prep_certification.certify_state_prep_spread>`.
+``circuits.certify_state_prep_spread`` checks a noisy Clifford circuit that prepares a stabilizer state.
+It considers every set of up to ``max_faults`` faults that triggers none of the detectors you post-select on.
+For each such set, the error left on the output must be equivalent to an error whose weight is at most the number of faults.
+Errors that differ by a stabilizer of the prepared state count as equivalent.
+Weight is physical Pauli weight or CSS weight (the larger of the X weight and the Z weight), chosen automatically for the prepared state unless you set ``css_weight=``.
+The check is exact, and a failure comes with a concrete set of faults.
+Faults are treated as independent and equally costly.
+Only the prepared state is certified, not the circuits that use it next.
+See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` for examples and the :func:`API documentation <qldpc.circuits.benchmarking.state_prep_certification.certify_state_prep_spread>` for details.
 
 Optional integrations and side effects
 --------------------------------------
