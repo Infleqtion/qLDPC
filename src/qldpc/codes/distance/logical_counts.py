@@ -2,17 +2,7 @@
 
 """Exact counts of the logical operators of a given weight in binary CSS codes.
 
-For a CSS stabilizer code with checks ``H_X`` and ``H_Z``, the nontrivial X logicals are the words
-in ``ker(H_Z)`` outside ``row(H_X)``, and likewise for Z with X and Z exchanged.  At a weight ``w``
-that defaults to the distance ``d``, this module counts:
-
-- ``count_x`` and ``count_z``: the X-only and Z-only nontrivial logical operators of weight ``w``,
-- optionally ``count_pauli``: all nontrivial logical operators of weight ``w``, including Y and
-  mixed operators.  This count is supported only for ``w <= d``, and is zero for ``w < d``.
-
-Counts are of physical operators ignoring phase, not of logical classes.  At the default weight,
-``d`` is the minimum over both sectors, so ``count_x`` or ``count_z`` may be zero.  Counting
-generally takes an exponentially long time.
+See :class:`CSSLogicalCounter` for the conventions.
 
 Each X/Z sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
 ``brouwer_zimmermann.md``).  Words are enumerated in layers over Brouwer--Zimmermann (BZ)
@@ -21,14 +11,9 @@ that the distance search shares.  Unlike a distance search, the scan stops only 
 bound exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several
 information sets is counted by only one of them.  Full Pauli counts are derived from the
 homogeneous words of weight ``d``, with one masked rank per word.  Self-dual codes scan only one
-sector, and have ``count_pauli = 3 * count_x``.  Counters for codes conjugated by local
+sector, and have ``count_pauli = 3 * count_x``.  Counters for codes deformed by local
 CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
 recomputing them.
-
-In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
-``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
-type.  Nontrivial logicals are those outside the gauge group (dressed logicals), so the X sector is
-``ker(S_Z)`` modulo ``row(G_X)``, and likewise for Z.
 
 References:
 
@@ -86,11 +71,11 @@ _Sector = tuple[_BinaryMatrix, _BinaryMatrix]
 class CSSLogicalCounts:
     """Counts of the nontrivial logical operators of one weight in a binary CSS code."""
 
-    weight: int | None
+    weight: int
     """Weight of the counted operators.
 
-    It is the distance of the code if no weight was requested, and None if no weight was requested
-    and the code encodes no qubits.
+    If no weight was requested, it is the distance of the code, or the number of qubits if the code
+    encodes no qubits, as with :func:`qldpc.codes.distance.get_distance_quantum`.
     """
 
     count_x: int
@@ -102,15 +87,34 @@ class CSSLogicalCounts:
     count_pauli: int | None
     """Number of nontrivial logical Pauli operators of weight ``weight``, ignoring phase.
 
-    It includes Y and mixed operators, and is None if it was not requested.
+    It includes the X-only and Z-only operators counted by ``count_x`` and ``count_z``, as well as Y
+    and mixed operators, and is None if it was not requested.
     """
 
 
 class CSSLogicalCounter:
     """Exact counter of the logical operators of a given weight in a binary CSS code.
 
-    See the ``logical_counts`` module docstring for the conventions and algorithms.  Counters for
-    codes conjugated by local CSS-preserving Cliffords reuse the work of this counter.
+    For a CSS stabilizer code with checks ``H_X`` and ``H_Z``, the nontrivial X logicals are the
+    words in ``ker(H_Z)`` outside ``row(H_X)``, and likewise for Z with X and Z exchanged.  At a
+    weight ``w`` that defaults to the distance ``d``, ``count_logical_ops`` counts:
+
+    - ``count_x`` and ``count_z``: the X-only and Z-only nontrivial logical operators of weight
+      ``w``,
+    - optionally ``count_pauli``: all nontrivial logical operators of weight ``w``, including Y and
+      mixed operators.  This count is supported only for ``w <= d``, and is zero for ``w < d``.
+
+    Counts are of physical operators ignoring phase, not of logical classes.  At the default weight,
+    ``d`` is the minimum over both sectors, so ``count_x`` or ``count_z`` may be zero.  Counting
+    generally takes an exponentially long time.
+
+    In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
+    ``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
+    type.  Nontrivial logicals are those outside the gauge group (dressed logicals), so the X sector
+    is ``ker(S_Z)`` modulo ``row(G_X)``, and likewise for Z.
+
+    Counters for codes deformed by local CSS-preserving Cliffords (see :meth:`deformed`) reuse the
+    work of this counter.
 
     Args:
         code: A binary CSS code, which may be a subsystem code and may have redundant checks.
@@ -121,16 +125,17 @@ class CSSLogicalCounter:
     """
 
     def __init__(self, code: CSSCode) -> None:
-        from ..common import CSSCode
+        from ..common import CSSCode, QuditCode
 
         if not isinstance(code, CSSCode):
-            raise TypeError(f"Expected a CSSCode, not {type(code).__name__}")
+            hint = "; convert it with code.to_css()" if isinstance(code, QuditCode) else ""
+            raise TypeError(f"Expected a CSSCode, not {type(code).__name__}{hint}")
         if code.field.order != 2:
             raise ValueError(f"Logical counts require a binary code, not GF({code.field.order})")
         self._code: CSSCode | None = code
         checks_x = code.matrix_x.view(np.ndarray).astype(np.uint8)
         checks_z = code.matrix_z.view(np.ndarray).astype(np.uint8)
-        self.num_qubits = checks_x.shape[1]
+        self._num_qubits = checks_x.shape[1]
         self._gauge_x = _get_independent_rows(checks_x)
         self._gauge_z = _get_independent_rows(checks_z)
         # Reduced row echelon form is unique, so the X and Z checks span the same space exactly when
@@ -141,10 +146,20 @@ class CSSLogicalCounter:
         self._stabilizers_x, self._stabilizers_z = _get_stabilizers(self._gauge_x, self._gauge_z)
         if self._self_dual:
             self._stabilizers_z = self._stabilizers_x
-        self.dimension = self.num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
+        self._dimension = self._num_qubits - len(self._gauge_x) - len(self._stabilizers_z)
         self._sectors: tuple[_Sector, _Sector] | None = None
         self._disjoint_families: dict[int, _information_sets._BasisFamily] = {}
         self._canonical: tuple[_BinaryMatrix, _BinaryMatrix] | None = (self._gauge_x, self._gauge_z)
+
+    @property
+    def num_qubits(self) -> int:
+        """The number of physical qubits of the code."""
+        return self._num_qubits
+
+    @property
+    def dimension(self) -> int:
+        """The number of logical qubits that the code encodes."""
+        return self._dimension
 
     @property
     def code(self) -> CSSCode:
@@ -176,12 +191,12 @@ class CSSLogicalCounter:
         return self._self_dual or np.array_equal(canonical_x, canonical_z)
 
     @format_docstring(MAX_SETS=_information_sets.MAX_SETS)
-    def count_logicals(
+    def count_logical_ops(
         self,
         weight: int | None = None,
         *,
         method: DistanceMethod = "brouwer_zimmermann",
-        full_pauli: bool = False,
+        count_pauli: bool = False,
         within_distance: bool = False,
         max_information_sets: int = _information_sets.MAX_SETS,
     ) -> CSSLogicalCounts:
@@ -193,7 +208,7 @@ class CSSLogicalCounter:
             method: ``"brouwer_zimmermann"`` (the default) or ``"brute_force"``.  Brute force
                 enumerates all ``2**rank`` combinations of each normalizer basis, and is a reference
                 for small codes.
-            full_pauli: If True, also count full Pauli operators, including Y and mixed operators.
+            count_pauli: If True, also count full Pauli operators, including Y and mixed operators.
                 Each homogeneous word of the counted weight costs one rank calculation.  These
                 counts are exact up to the distance and zero below it, and are not supported above
                 it.  Defaults to False.
@@ -208,12 +223,12 @@ class CSSLogicalCounter:
 
         Returns:
             The counted weight and the counts.  If no weight is given and the code encodes no
-            qubits, the returned weight is None and every count is zero.
+            qubits, the returned weight is the number of qubits and every count is zero.
 
         Raises:
             ValueError: If the weight is not an integer between zero and the number of qubits, if
                 the method is unknown, or if the weight is above the distance and
-                ``full_pauli`` or ``within_distance`` is set.
+                ``count_pauli`` or ``within_distance`` is set.
         """
         validate_distance_method(method)
         if weight is not None and (
@@ -223,8 +238,10 @@ class CSSLogicalCounter:
         ):
             raise ValueError("The weight must be an integer between zero and the number of qubits")
         if not self.dimension:
-            empty_pauli = 0 if full_pauli else None
-            return CSSLogicalCounts(None if weight is None else int(weight), 0, 0, empty_pauli)
+            empty_pauli = 0 if count_pauli else None
+            return CSSLogicalCounts(
+                self.num_qubits if weight is None else int(weight), 0, 0, empty_pauli
+            )
 
         sector_x, sector_z = self._get_sectors()
         # The two sectors of a self-dual code are the same, so one of them suffices.
@@ -239,8 +256,8 @@ class CSSLogicalCounter:
         # carries exactly three operators, so self-dual codes need no ranks.  Above d, a logical
         # Pauli need not have the support of a homogeneous logical, so the scans reject any
         # nontrivial word lighter than the target.
-        weigh = full_pauli and not self._self_dual
-        reject_above = full_pauli or within_distance
+        weigh = count_pauli and not self._self_dual
+        reject_above = count_pauli or within_distance
         no_rows = self._gauge_x[:0]
         counts_x = _count_words(
             *sector_x,
@@ -273,19 +290,19 @@ class CSSLogicalCounter:
                 f" weight {target}"
             )
         count_x, count_z = int(counts_x.sum()), int(counts_z.sum())
-        count_pauli = None
-        if full_pauli and self._self_dual:
-            count_pauli = 3 * count_x
-        elif full_pauli:
-            count_pauli = sum(
+        num_pauli = None
+        if count_pauli and self._self_dual:
+            num_pauli = 3 * count_x
+        elif count_pauli:
+            num_pauli = sum(
                 int(count) << exponent
                 for counts in (counts_x, counts_z)
                 for exponent, count in enumerate(counts)
             )
-        return CSSLogicalCounts(target, count_x, count_z, count_pauli)
+        return CSSLogicalCounts(target, count_x, count_z, num_pauli)
 
-    def conjugated(self, targets: Sequence[int], matrix_x: npt.ArrayLike) -> CSSLogicalCounter:
-        """Return a counter for this code conjugated by a local CSS-preserving Clifford.
+    def deformed(self, targets: Sequence[int], matrix_x: npt.ArrayLike) -> CSSLogicalCounter:
+        """Return a counter for this code deformed by a local CSS-preserving Clifford.
 
         The Clifford maps an X support ``x`` on the targets, as a column vector, to ``matrix_x @ x``
         and a Z support ``z`` to ``matrix_z @ z``, where ``matrix_z = (matrix_x^-1)^T`` over GF(2)
@@ -305,22 +322,41 @@ class CSSLogicalCounter:
         """
         positions = self._get_positions(targets)
         local_x, local_z = _get_local_matrices(matrix_x, len(positions))
-        return self._conjugated(positions, local_x, local_z)
+        return self._deformed(positions, local_x, local_z)
 
-    def conjugated_cnot(self, control: int, target: int) -> CSSLogicalCounter:
-        """Return a counter for this code conjugated by a CNOT on zero-based qubit indices."""
-        return self._conjugated(self._get_positions([control, target]), *_CNOT)
+    def deformed_cnot(self, control: int, target: int) -> CSSLogicalCounter:
+        """Return a counter for this code deformed by a CNOT on zero-based qubit indices.
 
-    def conjugated_swel(
+        The CNOT acts as Stim's ``CX control target``: it maps X on the control to X on the control
+        and target, and Z on the target to Z on the control and target.
+
+        Args:
+            control: The control qubit.
+            target: The target qubit, distinct from the control.
+
+        Returns:
+            A new counter.  This counter is not modified.
+
+        Raises:
+            ValueError: If the qubits are not distinct, in-range indices.
+        """
+        return self._deformed(self._get_positions([control, target]), *_CNOT)
+
+    def deformed_swel(
         self, qubit_0: int, qubit_1: int, qubit_2: int, qubit_3: int
     ) -> CSSLogicalCounter:
-        """Return a counter for this code conjugated by a four-qubit SWEL-preserving Clifford.
+        """Return a counter for this code deformed by a four-qubit SWEL-preserving Clifford.
 
         The Clifford applies the same binary matrix, whose rows have weight three, to X and Z
         supports on the four targets.  It therefore maps self-dual codes to self-dual codes, and
         preserves the self-dual-with-equivalent-logicals (SWEL) property of
-        :meth:`qldpc.codes.CSSCode.is_swel`.  It is valid for any CSS code.  The four qubits are
-        distinct zero-based indices, in the order of the matrix rows.
+        :meth:`qldpc.codes.CSSCode.is_swel`.  It is valid for any CSS code.
+
+        Args:
+            qubit_0: The qubit of the first matrix row.
+            qubit_1: The qubit of the second matrix row.
+            qubit_2: The qubit of the third matrix row.
+            qubit_3: The qubit of the fourth matrix row.
 
         Returns:
             A new counter.  This counter is not modified.
@@ -329,7 +365,7 @@ class CSSLogicalCounter:
             ValueError: If the qubits are not distinct, in-range indices.
         """
         positions = self._get_positions([qubit_0, qubit_1, qubit_2, qubit_3])
-        return self._conjugated(positions, *_SWEL)
+        return self._deformed(positions, *_SWEL)
 
     def _get_positions(self, targets: Sequence[int]) -> npt.NDArray[np.int64]:
         """Validate conjugation targets."""
@@ -344,10 +380,13 @@ class CSSLogicalCounter:
             )
             or len(set(positions)) != len(positions)
         ):
-            raise ValueError("Clifford targets must be 1 to 64 distinct, in-range qubit indices")
+            raise ValueError(
+                f"Clifford targets must be 1 to 64 distinct qubit indices in range({self.num_qubits})"
+                f" (got {positions})"
+            )
         return np.array(positions, dtype=np.int64)
 
-    def _conjugated(
+    def _deformed(
         self,
         positions: npt.NDArray[np.int64],
         local_x: npt.NDArray[np.uint64],
@@ -360,7 +399,7 @@ class CSSLogicalCounter:
         row echelon form, which is recomputed only if needed.
         """
         counter = CSSLogicalCounter.__new__(CSSLogicalCounter)
-        counter.num_qubits, counter.dimension = self.num_qubits, self.dimension
+        counter._num_qubits, counter._dimension = self._num_qubits, self._dimension
         counter._code, counter._canonical = None, None
         # A gate that acts identically on X and Z keeps a self-dual code self-dual.
         shared = self._self_dual and (local_x is local_z or np.array_equal(local_x, local_z))
@@ -433,24 +472,33 @@ class CSSLogicalCounter:
         return self._canonical
 
 
-def count_logicals_css(
+def count_logical_ops_css(
     code: CSSCode,
     weight: int | None = None,
     *,
     method: DistanceMethod = "brouwer_zimmermann",
-    full_pauli: bool = False,
+    count_pauli: bool = False,
     within_distance: bool = False,
     max_information_sets: int = _information_sets.MAX_SETS,
 ) -> CSSLogicalCounts:
     """Count the nontrivial logical operators of a given weight in a binary CSS code.
 
-    This is shorthand for ``CSSLogicalCounter(code).count_logicals(...)``; see
-    :meth:`CSSLogicalCounter.count_logicals` for the arguments and conventions.
+    This is shorthand for ``CSSLogicalCounter(code).count_logical_ops(...)``; see
+    :class:`CSSLogicalCounter` and :meth:`CSSLogicalCounter.count_logical_ops` for the arguments and
+    conventions.
+
+    Returns:
+        The counted weight and the counts.
+
+    Raises:
+        TypeError: If the code is not a :class:`~qldpc.codes.CSSCode`.
+        ValueError: If the code is not binary, or for invalid arguments as described in
+            :meth:`CSSLogicalCounter.count_logical_ops`.
     """
-    return CSSLogicalCounter(code).count_logicals(
+    return CSSLogicalCounter(code).count_logical_ops(
         weight,
         method=method,
-        full_pauli=full_pauli,
+        count_pauli=count_pauli,
         within_distance=within_distance,
         max_information_sets=max_information_sets,
     )

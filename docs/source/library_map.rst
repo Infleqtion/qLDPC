@@ -80,6 +80,7 @@ Pass ``method="brute_force"`` to distance-finding methods to instead compute dis
 
 :class:`qldpc.codes.CSSLogicalCounter <qldpc.codes.distance.logical_counts.CSSLogicalCounter>` uses the Brouwer--Zimmermann machinery to count the nontrivial X-only and Z-only logical operators of a given weight in a binary CSS code, including a subsystem code.
 The weight defaults to the code distance, at which the counter can also count all nontrivial logical operators, including those of mixed type.
+For a one-off count, :func:`qldpc.codes.count_logical_ops_css(code) <qldpc.codes.distance.logical_counts.count_logical_ops_css>` builds a counter and calls its ``count_logical_ops`` method; pass ``count_pauli=True`` to also count operators of mixed type.
 
 Distance bounds
 ~~~~~~~~~~~~~~~
