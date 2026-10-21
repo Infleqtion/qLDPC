@@ -32,10 +32,7 @@ DEFAULT_STRATEGY = EdgeColoring()
 
 
 class MemoryExperimentParts(NamedTuple):
-    """Noiseless components of a memory experiment, returned by get_memory_experiment_parts.
-
-    See help(get_memory_experiment_parts) for details.
-    """
+    """Noiseless components of a memory experiment, returned by get_memory_experiment_parts."""
 
     initialization: stim.Circuit
     qec_cycle: stim.Circuit
