@@ -147,20 +147,31 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
   A later monotone coordinate can enumerate checks rather than time.
 - Noise-model operation immunity and qubit immunity are separate controls; preserve both.
 
-### External systems, caching, and tests
+### External systems and caching
 
 - GAP helpers may start subprocesses, read standard input, use the clipboard, access the network, or clone missing packages.
   Keep these side effects explicit in docstrings and error messages.
-- Tests run with network sockets disabled.
-  Mock optional web, subprocess, clipboard, and prompt paths; do not add a live-service test.
-- Disk caches are bypassed while pytest is imported.
-  Tests must not depend on cache persistence.
 - Expensive reusable computations should use `qldpc.cache.use_disk_cache()`.
   Do not hide errors by returning a default value that looks successful.
+
+### Tests
+
+- Tests run with network sockets disabled.
+  Mock only external boundaries such as web, subprocess, clipboard, prompt, and optional-package paths, never the module under test, and do not add a live-service test.
+- Disk caches are bypassed while pytest is imported, so tests must not depend on cache persistence.
 - Statement coverage is gated at 100%.
   Co-located `*_test.py` files are the strong convention, although a thin helper can be covered through its consumer's test module.
+  Reach a hard-to-reach branch with a focused test rather than a broad scenario.
 - Pytest turns every `DeprecationWarning` into an error, so tests must use the modern API.
   A test of a deprecated path must assert its warning with `pytest.warns(DeprecationWarning, ...)`.
+- A test should guard behavior that matters: results, invariants, documented errors, and contracts between modules.
+  Do not pin implementation choices such as internal call order, private attributes, cache layouts, or incidental error-message wording.
+  Testing a private helper directly is fine when that is the simplest way to check its contract or reach coverage.
+- Keep each test minimal: use the smallest code, field, or circuit that exercises the behavior, do not parametrize over cases that take the same path, and delete tests implied by others.
+- Prefer independent oracles (rank, commutation, row-space identities, or brute force on small instances) over values that the code under test computed or cached.
+- Keep tests that reproduce results from the literature, and cite the source in the test.
+- Seed or construct random inputs so that a test cannot fail by chance.
+- Check that a new or rewritten test fails when the behavior it guards is broken.
 
 ## Common change recipes
 
@@ -170,7 +181,6 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
 2. Re-export public names from [`codes/__init__.py`](src/qldpc/codes/__init__.py).
 3. Add a linked literature reference and document the field, subsystem, distance, and validation assumptions in the class docstring.
 4. Add co-located tests with independent invariants: rank-derived dimension, CSS orthogonality, symplectic commutation, row-space identities, known small distances, or exact cross-family equivalence.
-5. Verify a regression test has teeth by checking that it fails when the intended mechanism is removed or perturbed.
 
 ### Change code-core algebra
 
