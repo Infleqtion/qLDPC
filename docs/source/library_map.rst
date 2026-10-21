@@ -78,8 +78,9 @@ qLDPC adds some minor optimizations:
 Distance-finding methods exit early once an observed upper bound on distance is at most ``cutoff``; the default cutoff of one gives an exact result for nontrivial codes.
 Pass ``method="brute_force"`` to distance-finding methods to instead compute distance via brute-force enumeration.
 
-:class:`qldpc.codes.CSSLogicalCounter <qldpc.codes.distance.logical_counts.CSSLogicalCounter>` uses the Brouwer--Zimmermann machinery to count the nontrivial X-only and Z-only logical operators of a given weight in a binary CSS code, including a subsystem code.
-The weight defaults to the code distance, at which the counter can also count all nontrivial logical operators, including those of mixed type.
+:class:`qldpc.codes.CSSLogicalCounter <qldpc.codes.distance.logical_counts.CSSLogicalCounter>` counts the nontrivial X-only and Z-only logical operators of a given weight (by default, the code distance) in a binary CSS code.
+Available ``method=`` options are ``brouwer_zimmermann`` (the default), ``weight_enumerator``, and ``brute_force`` (a reference for small codes).
+For details and supported options, see ``help(qldpc.codes.CSSLogicalCounter.count_logicals)``.
 
 Distance bounds
 ~~~~~~~~~~~~~~~

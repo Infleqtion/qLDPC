@@ -11,13 +11,19 @@ from .core import (
     validate_distance_backend,
     validate_distance_method,
 )
-from .logical_counts import CSSLogicalCounter, CSSLogicalCounts, count_logicals_css
+from .logical_counts import (
+    CSSLogicalCounter,
+    CSSLogicalCounts,
+    LogicalCountMethod,
+    count_logicals_css,
+)
 
 __all__ = [
     "CSSLogicalCounter",
     "CSSLogicalCounts",
     "DistanceBackend",
     "DistanceMethod",
+    "LogicalCountMethod",
     "count_logicals_css",
     "get_distance_classical",
     "get_distance_css_brouwer_zimmermann",
