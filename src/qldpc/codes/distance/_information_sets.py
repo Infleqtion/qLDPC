@@ -184,7 +184,7 @@ def _get_overlapping_family(
     family: _Family,
     *,
     upper_bound: int,
-    max_sets: int = 8,
+    max_sets: int = 16,
     minimum_work: int = 100_000,
 ) -> _Family | None:
     """Stage three: look for a lower-work replacement for a disjoint family.
