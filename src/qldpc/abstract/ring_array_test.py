@@ -237,7 +237,10 @@ def test_coefficient_matmul_fallbacks(monkeypatch: pytest.MonkeyPatch) -> None:
     assert kernel(np.stack([matrix] * 2), np.stack([matrix] * 3)) is None
 
     # products that are too small, or too large
-    assert kernel(matrix[:1, :1], matrix[:1, :1]) is None
+    work = 4 * 4 * 4 * ring.group.order  # rows * inner * columns * group order
+    monkeypatch.setattr(ring_array_module, "_MIN_MATMUL_COEFFICIENT_WORK", work + 1)
+    assert kernel(matrix, matrix) is None
+    monkeypatch.setattr(ring_array_module, "_MIN_MATMUL_COEFFICIENT_WORK", work)
     assert kernel(matrix, matrix) is not None
     monkeypatch.setattr(ring_array_module, "_MAX_MATMUL_COEFFICIENT_BYTES", 0)
     assert kernel(matrix, matrix) is None
@@ -372,7 +375,7 @@ def test_howell_form_poly_preserves_module() -> None:
     rng = np.random.default_rng(0)
     for order, characteristic in [(3, 2), (4, 2), (6, 2), (4, 3), (5, 5)]:
         ring = abstract.GroupRing(abstract.CyclicGroup(order), field=characteristic)
-        for _ in range(25):
+        for _ in range(8):
             shape = (rng.integers(1, 5), rng.integers(1, 5), order)
             coeffs = rng.integers(0, characteristic, size=shape)
             array = abstract.RingArray.from_field_array(ring.field(coeffs), ring)

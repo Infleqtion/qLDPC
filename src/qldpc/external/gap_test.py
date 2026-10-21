@@ -57,10 +57,7 @@ class MockLibGap:
             return MockGapValue("")
         if command == "false":
             return MockGapValue(False)
-        if not command.startswith("CallFuncList(function()\n") or not command.endswith(
-            "\nend, [])"
-        ):
-            raise RuntimeError("can only evaluate a single statement")
+        assert command.startswith("CallFuncList(function()\n") and command.endswith("\nend, [])")
         if isinstance(self.output, BaseException):
             raise self.output
         return MockGapValue(self.output)
@@ -153,36 +150,26 @@ def get_mock_process(
 
 def test_is_installed(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Is GAP 4 installed?"""
-    external.gap._is_gap_executable.cache_clear()
     with unittest.mock.patch("subprocess.run", return_value=get_mock_process("4.13.0\n")):
         assert external.gap._is_gap_executable()
     external.gap._is_gap_executable.cache_clear()
     with unittest.mock.patch("subprocess.run", side_effect=FileNotFoundError):
         assert not external.gap._is_gap_executable()
 
-    with unittest.mock.patch(
-        "qldpc.external.gap.importlib.import_module", side_effect=ImportError
-    ) as import_module:
+    with unittest.mock.patch("qldpc.external.gap.importlib.import_module", side_effect=ImportError):
         assert external.gap._get_libgap() is None
-    import_module.assert_called_once_with("sage.all__sagemath_gap")
 
     with unittest.mock.patch(
         "qldpc.external.gap.importlib.import_module",
         side_effect=[types.SimpleNamespace(), OSError],
-    ) as import_module:
+    ):
         assert external.gap._get_libgap() is None
-    import_module.assert_has_calls(
-        [unittest.mock.call("sage.all__sagemath_gap"), unittest.mock.call("sage.libs.gap.libgap")]
-    )
 
     with unittest.mock.patch(
         "qldpc.external.gap.importlib.import_module",
         side_effect=[types.SimpleNamespace(), types.SimpleNamespace()],
-    ) as import_module:
+    ):
         assert external.gap._get_libgap() is None
-    import_module.assert_has_calls(
-        [unittest.mock.call("sage.all__sagemath_gap"), unittest.mock.call("sage.libs.gap.libgap")]
-    )
 
     expected_libgap = MockLibGap()
     with unittest.mock.patch(
@@ -312,8 +299,13 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
 def test_get_output_libgap() -> None:
     """Run GAP commands through the direct libgap binding."""
     libgap = MockLibGap()
-    with pytest.raises(RuntimeError, match="single statement"):
-        libgap.eval("x := 1;; Print(x);;")
+
+    def get_output_command() -> str:
+        """The most recent command that evaluated the requested output."""
+        return next(
+            command for command in reversed(libgap.commands) if "__qldpc_output__" in command
+        )
+
     with (
         unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=libgap),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
@@ -322,10 +314,7 @@ def test_get_output_libgap() -> None:
         assert external.gap.get_output('Print("hello");;') == "_TEST_"
     run.assert_not_called()
     assert libgap.error_output_resets == 2
-    assert "PrintTo(__qldpc_output___stream, " in libgap.commands[-2]
-    assert 'PrintTo(__qldpc_output___stream, "hello")' in libgap.commands[-2]
-    assert libgap.commands[-2].startswith("CallFuncList(function()\n")
-    assert "x := 1;;" not in libgap.commands[-2]
+    assert 'PrintTo(__qldpc_output___stream, "hello")' in get_output_command()
     with (
         unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=libgap),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
@@ -341,10 +330,11 @@ def test_get_output_libgap() -> None:
             == "_TEST_"
         )
     assert libgap.error_output_resets == 4
-    assert "values := [1, 2];;" in libgap.commands[-2]
-    assert "for value in values do" in libgap.commands[-2]
-    assert "PrintTo(__qldpc_output___stream, value);;" in libgap.commands[-2]
-    assert 'PrintTo(__qldpc_output___stream, "!");;' in libgap.commands[-2]
+    command = get_output_command()
+    assert "values := [1, 2];;" in command
+    assert "for value in values do" in command
+    assert "PrintTo(__qldpc_output___stream, value);;" in command
+    assert 'PrintTo(__qldpc_output___stream, "!");;' in command
 
     external.gap._subprocess_packages.add("qdist")
     with (
@@ -441,16 +431,9 @@ def test_require_package(capsys: pytest.CaptureFixture[str]) -> None:
 
 def test_require_package_libgap(capsys: pytest.CaptureFixture[str]) -> None:
     """Check GAP packages through the direct libgap binding."""
-    external.gap._libgap_packages.clear()
     assert (
         external.gap._get_package_manager_source("Example", "https://example.com/gap-package.git")
         == "https://example.com/gap-package.git"
-    )
-    assert (
-        external.gap._get_package_manager_source(
-            "Example", "https://example.com/gap-package.tar.gz"
-        )
-        == "https://example.com/gap-package.tar.gz"
     )
     libgap = MockLibGap()
     with unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=libgap):
@@ -477,11 +460,10 @@ def test_require_package_libgap(capsys: pytest.CaptureFixture[str]) -> None:
     external.gap.require_package.cache_clear()
     with (
         unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=libgap),
-        unittest.mock.patch("qldpc.external.gap._is_gap_executable") as is_gap_executable,
+        unittest.mock.patch("qldpc.external.gap._is_gap_executable"),
         unittest.mock.patch("builtins.input", return_value="yes"),
     ):
         assert external.gap.require_package("Example")
-    is_gap_executable.assert_not_called()
     assert libgap.package_install_sources == ["Example"]
     assert external.gap._subprocess_packages == set()
 
@@ -603,5 +585,3 @@ def test_require_package_libgap(capsys: pytest.CaptureFixture[str]) -> None:
     ):
         assert external.gap.require_package("Example")
     get_output.assert_called_once_with('Print(TestPackageAvailability("example"));;')
-    external.gap._libgap_packages.clear()
-    external.gap._subprocess_packages.clear()

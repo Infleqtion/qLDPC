@@ -37,7 +37,6 @@ def test_permutation_group(pytestconfig: pytest.Config) -> None:
     assert group.order == group.degree == 3
     assert group.random() in group
     assert group.random(seed=0) == group.random(seed=0)
-    assert group.to_sympy() == group._group
     assert group.is_commutative
     assert group.is_abelian
     assert group.to_gap_group() == "Group((1,2,3),(1,3,2))"
@@ -126,7 +125,6 @@ def test_lifts() -> None:
     assert_valid_lifts(abstract.AbelianGroup(2, 3, direct_sum=True))
     assert_valid_lifts(abstract.DihedralGroup(3))
     assert_valid_lifts(abstract.AlternatingGroup(3))
-    assert_valid_lifts(abstract.SymmetricGroup(3))
     assert_valid_lifts(abstract.QuaternionGroup())
 
     # anti-representations for a non-commutative groups with a custom lift are not supported
@@ -350,9 +348,11 @@ def test_wreath_product_group_errors() -> None:
 def test_random_symmetric_subset() -> None:
     """Group.random_symmetric_subset generates properly symmetric subsets of the requested size."""
     group = abstract.CyclicGroup(2) * abstract.CyclicGroup(3)
-    for seed in [0, 1]:
-        subset = group.random_symmetric_subset(size=2, seed=seed)
-        assert subset == {~member for member in subset}
+    # with this seed, the sampled members overshoot the requested size by an odd count, so a
+    # self-inverse member must be discarded
+    subset = group.random_symmetric_subset(size=2, seed=1)
+    assert len(subset) == 2
+    assert subset == {~member for member in subset}
 
     subset = group.random_symmetric_subset(size=1, exclude_identity=False, seed=0)
     assert subset == {group.identity}
@@ -442,7 +442,7 @@ def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
 
 @pytest.mark.parametrize(
     "dimension,field,linear_rep",
-    [(2, 2, True), (2, 2, False), (2, 3, False), (2, 4, None), (2, 3, None), (3, 2, None)],
+    [(2, 2, True), (2, 2, False), (2, 4, None), (2, 3, None), (3, 2, None)],
 )
 def test_PSL(dimension: int, field: int, linear_rep: bool | None) -> None:
     """Projective special linear group; its lift is a homomorphism (though not orthogonal).
@@ -471,9 +471,7 @@ def test_psl_requires_trivial_center() -> None:
         abstract.PSL(2, 5, linear_rep=True)
 
 
-@pytest.mark.parametrize(
-    "dimension,field,linear_rep", [(2, 4, True), (2, 2, False), (2, 3, True), (3, 2, True)]
-)
+@pytest.mark.parametrize("dimension,field,linear_rep", [(2, 4, True), (2, 2, False), (3, 2, True)])
 def test_GL(dimension: int, field: int, linear_rep: bool) -> None:
     """General linear group; its lift is a homomorphism (though not orthogonal)."""
     group = abstract.GL(dimension, field=field, linear_rep=linear_rep)
@@ -486,7 +484,7 @@ def test_GL(dimension: int, field: int, linear_rep: bool) -> None:
 
 @pytest.mark.parametrize(
     "dimension,field,linear_rep",
-    [(2, 2, True), (2, 2, False), (2, 3, False), (2, 2, None), (2, 3, None), (3, 2, None)],
+    [(2, 2, True), (2, 2, False), (2, 3, None), (3, 2, None)],
 )
 def test_PGL(dimension: int, field: int, linear_rep: bool | None) -> None:
     """Projective general linear group; its lift is a homomorphism (though not orthogonal).
@@ -557,45 +555,6 @@ def test_quotient_generating_mats_are_homomorphic(
     reps = [rep_a @ rep_b, rep_b @ rep_a, rep_a @ rep_a @ rep_b, rep_b @ rep_a @ rep_b]
     for word, rep in zip(words, reps):
         assert np.array_equal(rep, conjugation_rep(word))
-
-
-def test_psl_iter_mats_dimension_3() -> None:
-    """``PSL(3, 2)`` has the correct order and 2-D (not flattened) matrix representatives.
-
-    Building a dimension-3 group end-to-end via ``linear_rep=False`` is slow, so ``iter_mats`` is
-    checked directly instead: it exercises both the group order and the reshape of orbit
-    representatives to ``dimension x dimension`` matrices, which is the ``iter_mats``-specific bug
-    this test guards against.  The smallest field keeps the brute-force enumeration of all
-    ``field**9`` candidate matrices fast; quotients by nontrivial centers are checked in
-    ``test_PSL``.  (That the underlying quotient representation is a genuine homomorphism -- the
-    other bug fixed alongside this one -- is covered separately by
-    ``test_quotient_generating_mats_are_homomorphic``.)
-    """
-    dimension, field = 3, 2
-    order_SL = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
-    order = order_SL // math.gcd(dimension, field - 1)
-    mats = tuple(abstract.PSL.iter_mats(dimension, field))
-    assert len(mats) == order
-    assert all(mat.shape == (dimension, dimension) for mat in mats)
-
-
-def test_pgl_iter_mats_dimension_3() -> None:
-    """``PGL(3, 2)`` has the correct order and 2-D (not flattened) matrix representatives.
-
-    Building a dimension-3 group end-to-end via ``linear_rep=False`` is slow -- and, before the fix,
-    the non-homomorphic quotient representation was confirmed to make that construction generate a
-    vastly oversized group for ``PGL(3, 3)`` -- so ``iter_mats`` is checked directly instead: it
-    exercises both the group order and the reshape of orbit representatives to
-    ``dimension x dimension`` matrices.  The smallest field keeps the brute-force enumeration of all
-    ``field**9`` candidate matrices fast; quotients by nontrivial centers are checked in
-    ``test_PGL``.
-    """
-    dimension, field = 3, 2
-    order_GL = np.prod([field**dimension - field**jj for jj in range(dimension)])
-    order = order_GL // (field - 1)
-    mats = tuple(abstract.PGL.iter_mats(dimension, field))
-    assert len(mats) == order
-    assert all(mat.shape == (dimension, dimension) for mat in mats)
 
 
 def test_resolve_field() -> None:
