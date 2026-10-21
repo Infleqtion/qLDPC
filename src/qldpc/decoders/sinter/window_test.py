@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import stim
 
-from qldpc import decoders
+from qldpc import circuits, codes, decoders
 
 
 def test_sequential_decoding() -> None:
@@ -213,6 +213,22 @@ def test_sliding_window_time_coordinate() -> None:
 
     compiled = decoder.compile_decoder_for_dem(dem_with_coords([(1, 5), (0, 5), (1, 5)]))
     assert list(compiled.window_detectors) == [[1], [0, 2]]
+
+
+def test_sliding_window_memory_experiment() -> None:
+    """A sliding window decoder windows the detector error model of a memory experiment by round."""
+    noise_model = circuits.DepolarizingNoiseModel(1e-3)
+    circuit = circuits.get_memory_experiment(
+        codes.SurfaceCode(2), num_rounds=4, noise_model=noise_model
+    )
+    dem = circuit.detector_error_model()
+    round_of = {det: int(coords[0]) for det, coords in dem.get_detector_coordinates().items()}
+    compiled = decoders.SlidingWindowDecoder(2, 1).compile_decoder_for_dem(dem)
+    detectors = np.arange(dem.num_detectors)
+    spans = [
+        sorted({round_of[det] for det in detectors[window]}) for window in compiled.window_detectors
+    ]
+    assert spans == [[0, 1], [1, 2], [2, 3], [3, 4]]
 
 
 def test_sliding_window_time_gaps() -> None:
