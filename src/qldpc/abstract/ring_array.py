@@ -79,13 +79,6 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         # intentionally NOT propagated here (see the class attributes).
         self._ring = getattr(obj, "_ring", None)  # type:ignore[assignment]
 
-    def _mark_as_hnf(self, *, transformer: WedderburnArtinTransformer | None, right: bool) -> Self:
-        """Record that this array is a Howell normal form, as provenance for get_howell_dual."""
-        self._in_hnf = True
-        self._hnf_transformer = transformer
-        self._hnf_right = right
-        return self
-
     def __array_function__(
         self,
         func: Any,
@@ -642,6 +635,13 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         if self.ndim not in ndims:
             expected = " or ".join(map(str, ndims))
             raise ValueError(f"This method requires a {expected}-dimensional RingArray")
+
+    def _mark_as_hnf(self, *, transformer: WedderburnArtinTransformer | None, right: bool) -> Self:
+        """Record that this array is a Howell normal form, as provenance for get_howell_dual."""
+        self._in_hnf = True
+        self._hnf_transformer = transformer
+        self._hnf_right = right
+        return self
 
 
 ####################################################################################################

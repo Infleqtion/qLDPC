@@ -266,12 +266,6 @@ class Group:
         """Generators of this group in a hashable form."""
         return tuple(tuple(generator) for generator in self.generators)
 
-    @functools.cached_property
-    def _members(self) -> dict[GroupMember, int]:
-        generate = self._generate_func or self._group.generate
-        members = map(GroupMember.from_sympy, generate())
-        return {member: idx for idx, member in enumerate(members)}
-
     def generate(self) -> Iterator[GroupMember]:
         """Iterate over all group members."""
         # Keep iteration lazy.  ``index`` still materializes the lookup table when random access is
@@ -362,11 +356,6 @@ class Group:
             self._regular_lift_cache[member, right] = matrix
         return self._regular_lift_cache[member, right].copy()
 
-    @functools.cached_property
-    def _regular_lift_cache(self) -> dict[tuple[GroupMember, bool], npt.NDArray[np.int_]]:
-        """Per-instance cache for regular_lift (avoids the memory leak of caching on methods)."""
-        return {}
-
     def adjoint_lift(self, member: GroupMember) -> npt.NDArray[np.int_]:
         r"""Lift a group member to its adjoint representation.
 
@@ -384,11 +373,6 @@ class Group:
                 self.regular_lift(member) @ self.regular_lift(member, right=True).T
             )
         return self._adjoint_lift_cache[member]
-
-    @functools.cached_property
-    def _adjoint_lift_cache(self) -> dict[GroupMember, npt.NDArray[np.int_]]:
-        """Per-instance cache for adjoint_lift (avoids the memory leak of caching on methods)."""
-        return {}
 
     @functools.cached_property
     def inversion_matrix(self) -> npt.NDArray[np.int_]:
@@ -637,6 +621,22 @@ class Group:
         if self.generators == [GroupMember()]:
             return self.identity
         return GroupMember.from_sympy(self._group.coset_unrank(rng.randrange(self.order)))
+
+    @functools.cached_property
+    def _members(self) -> dict[GroupMember, int]:
+        generate = self._generate_func or self._group.generate
+        members = map(GroupMember.from_sympy, generate())
+        return {member: idx for idx, member in enumerate(members)}
+
+    @functools.cached_property
+    def _regular_lift_cache(self) -> dict[tuple[GroupMember, bool], npt.NDArray[np.int_]]:
+        """Per-instance cache for regular_lift (avoids the memory leak of caching on methods)."""
+        return {}
+
+    @functools.cached_property
+    def _adjoint_lift_cache(self) -> dict[GroupMember, npt.NDArray[np.int_]]:
+        """Per-instance cache for adjoint_lift (avoids the memory leak of caching on methods)."""
+        return {}
 
 
 class WreathProductGroup(Group):

@@ -31,6 +31,10 @@ from .syndrome_measurement import EdgeColoring, SyndromeMeasurementStrategy
 DEFAULT_STRATEGY = EdgeColoring()
 
 
+####################################################################################################
+# memory experiments
+
+
 class MemoryExperimentParts(NamedTuple):
     """Noiseless components of a memory experiment, returned by get_memory_experiment_parts."""
 
@@ -252,6 +256,142 @@ def get_memory_experiment_parts(
     )
 
 
+def get_qubit_coordinates(
+    data_qubits: Sequence[int] = (),
+    check_qubits: Sequence[int] = (),
+    ancilla_qubits: Sequence[int] = (),
+) -> stim.Circuit:
+    """Circuit declaring coordinates for the given qubits.
+
+    Args:
+        data_qubits: The indices of data qubits.  data_qubits[kk] gets index (0, kk).
+        check_qubits: The indices of check qubits.  check_qubits[kk] gets index (1, kk).
+        ancilla_qubits: The indices of ancilla qubits.  ancilla_qubits[kk] gets index (2, kk).
+
+    Returns:
+        A circuit declaring qubit coordinates.
+    """
+    circuit = stim.Circuit()
+    for kk, qubit in enumerate(data_qubits):
+        circuit.append("QUBIT_COORDS", qubit, (0, kk))
+    for kk, qubit in enumerate(check_qubits):
+        circuit.append("QUBIT_COORDS", qubit, (1, kk))
+    for kk, qubit in enumerate(ancilla_qubits):
+        circuit.append("QUBIT_COORDS", qubit, (2, kk))
+    return circuit
+
+
+@restrict_to_qubits
+def get_observables(
+    code: codes.QuditCode,
+    data_qubits: Sequence[int] | None = None,
+    *,
+    basis: PauliXZLike | None = None,
+    on_measurements: Sequence[stim.GateTarget] | bool = False,
+    observable_indices: Sequence[int] | None = None,
+) -> stim.Circuit:
+    """Construct a circuit of logical observable annotations.
+
+    Args:
+        code: The code whose observables we wish to annotate.
+        data_qubits: Indices of the data qubits of the code.  Default: the first len(code) integers.
+        basis: The type of observable (Pauli.X or Pauli.Z, or equivalently a case-insensitive "X" or
+            "Z" string) we wish to annotate, or None for both.
+        on_measurements: If provided a sequence of measurement targets, assume that they correspond
+            to measurements of the data qubits in a specified basis (which in this case is not
+            allowed to be None), and define observables using these measurements.  If True, define
+            observables identically on the last len(code) measurements.  Otherwise (if False),
+            define observable using Pauli targets.  Default: False.
+        observable_indices: Indices to use for the observables.  Default: range(num_observables).
+
+    Returns:
+        A Stim circuit of OBSERVABLE_INCLUDE instructions.
+    """
+    basis = None if basis is None else Pauli.coerce_xz(basis)
+    data_qubits = range(len(code)) if data_qubits is None else data_qubits
+    if len(data_qubits) != len(code):
+        raise ValueError("data_qubits must contain one target per data qubit")
+    num_observables = code.dimension * (2 if basis is None else 1)
+    observable_indices = (
+        range(num_observables) if observable_indices is None else observable_indices
+    )
+
+    if on_measurements is True:
+        on_measurements = [stim.target_rec(mm) for mm in range(-len(code), 0)]
+
+    # consistency checks
+    if on_measurements is not False and len(on_measurements) != len(code):
+        raise ValueError("on_measurements must contain one target per data qubit")
+    if len(observable_indices) != num_observables:
+        raise ValueError(f"Expected {num_observables} observable indices")
+
+    # build a graph of edges directed from observables to the data qubits they address
+    logical_ops = code.get_logical_ops(basis, symplectic=True)
+    logical_op_graph = codes.QuditCode.matrix_to_graph(logical_ops)
+
+    if on_measurements and (not isinstance(code, codes.CSSCode) or basis is None):
+        raise ValueError(
+            "Defining observables on measurements is only allowed (a) for CSS codes (b) with a"
+            " fixed measurement basis (Pauli.X or Pauli.Z)"
+        )
+
+    circuit = stim.Circuit()
+    for node_index, observable_index in enumerate(observable_indices):
+        observable_node = Node(node_index, is_data=False)
+        targets = [
+            on_measurements[data_node.index]
+            if on_measurements
+            else stim.target_pauli(data_qubits[data_node.index], str(edge_data[Pauli]))
+            for _, data_node, edge_data in logical_op_graph.edges(observable_node, data=True)
+        ]
+        circuit.append("OBSERVABLE_INCLUDE", targets, [observable_index])
+
+    return circuit
+
+
+@restrict_to_qubits
+def get_logical_bell_prep(
+    code: codes.QuditCode,
+    data_qubits: Sequence[int] | None = None,
+    reference_qubits: Sequence[int] | None = None,
+) -> stim.Circuit:
+    """Noiselessly prepare the logical qubits of the given code in Bell states with references.
+
+    Args:
+        code: The code for which we are constructing a logical Bell-state preparation circuit.
+        data_qubits: Indices of the code's data qubits.  Default: the first len(code) integers.
+        reference_qubits: Indices of the reference qubits to entangle with the code's logical
+            qubits.  Default: the first code.dimension integers after the data qubit indices.
+
+    Returns:
+        A circuit that noiselessly initializes all logical qubits into Bell pairs with references.
+    """
+    data_qubits = range(len(code)) if data_qubits is None else data_qubits
+    reference_qubits = (
+        range(max(data_qubits, default=-1) + 1, max(data_qubits, default=-1) + 1 + code.dimension)
+        if reference_qubits is None
+        else reference_qubits
+    )
+    if len(data_qubits) != len(code):
+        raise ValueError("data_qubits must contain one target per data qubit")
+    if len(reference_qubits) != code.dimension:
+        raise ValueError("reference_qubits must contain one target per logical qubit")
+
+    # entangle the first code.dimension data qubits with references
+    circuit = stim.Circuit()
+    circuit.append("H", data_qubits[: code.dimension])
+    circuit.append("CX", [qq for pair in zip(data_qubits, reference_qubits) for qq in pair])
+
+    # encode the first code.dimension data qubits
+    circuit.append(with_remapped_qubits(get_encoding_circuit(code), data_qubits))
+
+    return as_noiseless_circuit(circuit)
+
+
+####################################################################################################
+# helper methods
+
+
 def _get_basis_memory_experiment_parts(
     code: codes.QuditCode,
     basis: PauliXZ,
@@ -401,138 +541,6 @@ def _get_combined_memory_simulation_parts(
         detector_record,
         qubit_ids,
     )
-
-
-def get_qubit_coordinates(
-    data_qubits: Sequence[int] = (),
-    check_qubits: Sequence[int] = (),
-    ancilla_qubits: Sequence[int] = (),
-) -> stim.Circuit:
-    """Circuit declaring coordinates for the given qubits.
-
-    Args:
-        data_qubits: The indices of data qubits.  data_qubits[kk] gets index (0, kk).
-        check_qubits: The indices of check qubits.  check_qubits[kk] gets index (1, kk).
-        ancilla_qubits: The indices of ancilla qubits.  ancilla_qubits[kk] gets index (2, kk).
-
-    Returns:
-        A circuit declaring qubit coordinates.
-    """
-    circuit = stim.Circuit()
-    for kk, qubit in enumerate(data_qubits):
-        circuit.append("QUBIT_COORDS", qubit, (0, kk))
-    for kk, qubit in enumerate(check_qubits):
-        circuit.append("QUBIT_COORDS", qubit, (1, kk))
-    for kk, qubit in enumerate(ancilla_qubits):
-        circuit.append("QUBIT_COORDS", qubit, (2, kk))
-    return circuit
-
-
-@restrict_to_qubits
-def get_observables(
-    code: codes.QuditCode,
-    data_qubits: Sequence[int] | None = None,
-    *,
-    basis: PauliXZLike | None = None,
-    on_measurements: Sequence[stim.GateTarget] | bool = False,
-    observable_indices: Sequence[int] | None = None,
-) -> stim.Circuit:
-    """Construct a circuit of logical observable annotations.
-
-    Args:
-        code: The code whose observables we wish to annotate.
-        data_qubits: Indices of the data qubits of the code.  Default: the first len(code) integers.
-        basis: The type of observable (Pauli.X or Pauli.Z, or equivalently a case-insensitive "X" or
-            "Z" string) we wish to annotate, or None for both.
-        on_measurements: If provided a sequence of measurement targets, assume that they correspond
-            to measurements of the data qubits in a specified basis (which in this case is not
-            allowed to be None), and define observables using these measurements.  If True, define
-            observables identically on the last len(code) measurements.  Otherwise (if False),
-            define observable using Pauli targets.  Default: False.
-        observable_indices: Indices to use for the observables.  Default: range(num_observables).
-
-    Returns:
-        A Stim circuit of OBSERVABLE_INCLUDE instructions.
-    """
-    basis = None if basis is None else Pauli.coerce_xz(basis)
-    data_qubits = range(len(code)) if data_qubits is None else data_qubits
-    if len(data_qubits) != len(code):
-        raise ValueError("data_qubits must contain one target per data qubit")
-    num_observables = code.dimension * (2 if basis is None else 1)
-    observable_indices = (
-        range(num_observables) if observable_indices is None else observable_indices
-    )
-
-    if on_measurements is True:
-        on_measurements = [stim.target_rec(mm) for mm in range(-len(code), 0)]
-
-    # consistency checks
-    if on_measurements is not False and len(on_measurements) != len(code):
-        raise ValueError("on_measurements must contain one target per data qubit")
-    if len(observable_indices) != num_observables:
-        raise ValueError(f"Expected {num_observables} observable indices")
-
-    # build a graph of edges directed from observables to the data qubits they address
-    logical_ops = code.get_logical_ops(basis, symplectic=True)
-    logical_op_graph = codes.QuditCode.matrix_to_graph(logical_ops)
-
-    if on_measurements and (not isinstance(code, codes.CSSCode) or basis is None):
-        raise ValueError(
-            "Defining observables on measurements is only allowed (a) for CSS codes (b) with a"
-            " fixed measurement basis (Pauli.X or Pauli.Z)"
-        )
-
-    circuit = stim.Circuit()
-    for node_index, observable_index in enumerate(observable_indices):
-        observable_node = Node(node_index, is_data=False)
-        targets = [
-            on_measurements[data_node.index]
-            if on_measurements
-            else stim.target_pauli(data_qubits[data_node.index], str(edge_data[Pauli]))
-            for _, data_node, edge_data in logical_op_graph.edges(observable_node, data=True)
-        ]
-        circuit.append("OBSERVABLE_INCLUDE", targets, [observable_index])
-
-    return circuit
-
-
-@restrict_to_qubits
-def get_logical_bell_prep(
-    code: codes.QuditCode,
-    data_qubits: Sequence[int] | None = None,
-    reference_qubits: Sequence[int] | None = None,
-) -> stim.Circuit:
-    """Noiselessly prepare the logical qubits of the given code in Bell states with references.
-
-    Args:
-        code: The code for which we are constructing a logical Bell-state preparation circuit.
-        data_qubits: Indices of the code's data qubits.  Default: the first len(code) integers.
-        reference_qubits: Indices of the reference qubits to entangle with the code's logical
-            qubits.  Default: the first code.dimension integers after the data qubit indices.
-
-    Returns:
-        A circuit that noiselessly initializes all logical qubits into Bell pairs with references.
-    """
-    data_qubits = range(len(code)) if data_qubits is None else data_qubits
-    reference_qubits = (
-        range(max(data_qubits, default=-1) + 1, max(data_qubits, default=-1) + 1 + code.dimension)
-        if reference_qubits is None
-        else reference_qubits
-    )
-    if len(data_qubits) != len(code):
-        raise ValueError("data_qubits must contain one target per data qubit")
-    if len(reference_qubits) != code.dimension:
-        raise ValueError("reference_qubits must contain one target per logical qubit")
-
-    # entangle the first code.dimension data qubits with references
-    circuit = stim.Circuit()
-    circuit.append("H", data_qubits[: code.dimension])
-    circuit.append("CX", [qq for pair in zip(data_qubits, reference_qubits) for qq in pair])
-
-    # encode the first code.dimension data qubits
-    circuit.append(with_remapped_qubits(get_encoding_circuit(code), data_qubits))
-
-    return as_noiseless_circuit(circuit)
 
 
 def _get_qec_cycle(

@@ -462,13 +462,6 @@ class TannerCode(ClassicalCode):
             matrix[np.ix_(checks, bits)] = subcode.matrix
         super().__init__(matrix, subcode.field)
 
-    def _get_sorted_neighbors(self, node: object) -> Sequence[object]:
-        """Sorted neighbors of the given node."""
-        return sorted(
-            self.subgraph.neighbors(node),
-            key=lambda neighbor: self.subgraph[node][neighbor].get("sort", neighbor),
-        )
-
     @staticmethod
     def as_directed_subgraph(subgraph: nx.Graph) -> nx.DiGraph:
         """Convert an undirected graph for a Tanner code into a directed graph for the same code."""
@@ -481,3 +474,10 @@ class TannerCode(ClassicalCode):
                 directed_subgraph[node_a][edge]["sort"] = sort_data[node_a]
                 directed_subgraph[node_b][edge]["sort"] = sort_data[node_b]
         return directed_subgraph
+
+    def _get_sorted_neighbors(self, node: object) -> Sequence[object]:
+        """Sorted neighbors of the given node."""
+        return sorted(
+            self.subgraph.neighbors(node),
+            key=lambda neighbor: self.subgraph[node][neighbor].get("sort", neighbor),
+        )
