@@ -23,9 +23,9 @@ def test_logical_counts(
     checks = np.zeros((2, num_bits), dtype=np.uint8)
     checks[0, :4] = checks[1, -4:] = 1
     enumerators = mw._CheckEnumerators(checks, checks if num_bits == 8 else checks.copy())
-    assert enumerators.count_logicals(2) == (count_two, count_two)
+    assert enumerators.count_logical_ops(2) == (count_two, count_two)
     if num_bits > 64:
-        assert enumerators.count_logicals(num_bits // 2)[0] > 2**64
+        assert enumerators.count_logical_ops(num_bits // 2)[0] > 2**64
 
 
 def test_check_rank_limit() -> None:

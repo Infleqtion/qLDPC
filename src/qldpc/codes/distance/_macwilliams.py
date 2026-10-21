@@ -80,7 +80,7 @@ class _CheckEnumerators:
             else _count_light_dual_words(self.weights_x, self.rank_x, self.num_bits)
         )
 
-    def count_logicals(self, weight: int) -> tuple[int, int]:
+    def count_logical_ops(self, weight: int) -> tuple[int, int]:
         """The numbers of nontrivial X-only and Z-only logical operators of the given weight."""
         count_x = self._count_sector(
             self.weights_z, self.rank_z, self.kernel_x, self.weights_x, weight

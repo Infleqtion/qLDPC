@@ -179,7 +179,7 @@ class CSSLogicalCounter:
     def code(self) -> CSSCode:
         """The code whose logical operators are counted.
 
-        For a counter built by a conjugation method, this is a new :class:`~qldpc.codes.CSSCode`
+        For a counter built by a deformation method, this is a new :class:`~qldpc.codes.CSSCode`
         with the counter's independent checks, built on first access.
         """
         if self._code is None:
@@ -493,7 +493,7 @@ class CSSLogicalCounter:
 
         Each support of a nontrivial logical Pauli operator of weight ``d`` in a self-dual code
         carries exactly three such operators: one X-only, one Z-only, and one Y-only.  The checks
-        of a self-dual code may share one weight distribution, even if a conjugation gave them
+        of a self-dual code may share one weight distribution, even if a deformation gave them
         different bases.  Equal check spaces have equal distributions, so whether they share one
         changes only the number of walks, never the counts.  The enumerators are kept, so that later
         counts at any weight, with any options, do not walk again.
@@ -514,15 +514,15 @@ class CSSLogicalCounter:
             target = next(
                 candidate
                 for candidate in range(1, self.num_qubits + 1)
-                if any(enumerators.count_logicals(candidate))
+                if any(enumerators.count_logical_ops(candidate))
             )
         else:
             target = int(weight)
             if reject_lighter and any(
-                any(enumerators.count_logicals(lighter)) for lighter in range(1, target)
+                any(enumerators.count_logical_ops(lighter)) for lighter in range(1, target)
             ):
                 raise _get_above_distance_error(target)
-        count_x, count_z = enumerators.count_logicals(target)
+        count_x, count_z = enumerators.count_logical_ops(target)
         return CSSLogicalCounts(target, count_x, count_z, 3 * count_x if count_pauli else None)
 
     def _get_sectors(self) -> tuple[_Sector, _Sector]:
