@@ -25,19 +25,8 @@ sector, and have ``count_pauli = 3 * count_x``.  Counters for codes conjugated b
 CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
 recomputing them.
 
-The default method is ``"brouwer_zimmermann"``.  With ``method="macwilliams"``, counts of a
-stabilizer code instead come from the weight distributions of its two check spaces, by the
-MacWilliams identity (see ``_macwilliams.py``).  Each check space is walked once, over about
-``2**rank`` words, independently of the requested weight.  The counter keeps these distributions,
-so later counts at other weights on the same counter usually take microseconds.  A conjugated
-counter starts without them and pays for a new walk.
-
-Measurements on one machine with random stabilizer CSS codes of 30 to 70 qubits and check ranks of
-14 to 29 suggest that weight enumerators are usually faster when the larger check rank is at most
-roughly 18, or at weights well above the distance for ranks up to the high twenties.  In the latter
-cases, BZ counts took seconds to minutes.  BZ is usually faster at or near the distance for larger
-check ranks, and has no fixed check-rank limit.  Weight enumerators support neither subsystem codes
-nor full Pauli counts of non-self-dual codes, and their walk supports check ranks only up to 63.
+The default method is ``"brouwer_zimmermann"``.  The alternative ``"macwilliams"`` counts from
+check-space weight distributions; see ``_macwilliams.py`` for the algorithm.
 
 In a subsystem code, the checks ``G_X`` and ``G_Z`` are gauge generators, and the stabilizers
 ``S_X`` and ``S_Z`` are the gauge operators that commute with all gauge operators of the other
@@ -215,20 +204,12 @@ class CSSLogicalCounter:
             weight: Weight of the operators to count, between zero and the number of qubits.  If
                 None (the default), count the operators whose weight is the distance of the code.
             method: ``"brouwer_zimmermann"`` (the default), ``"macwilliams"``, or
-                ``"brute_force"``.  Brouwer--Zimmermann usually suits counts at or near the distance
-                for larger check ranks, and has no fixed check-rank limit.  The weight enumerator
-                method walks about ``2**rank`` words per check space, independently of the requested
-                weight, and keeps the distributions on the counter.  Later weights on the same
-                counter usually cost microseconds; a conjugated counter pays for a new walk.
-                Measurements on one machine with random stabilizer CSS codes of 30 to 70 qubits and
-                check ranks of 14 to 29 suggest that weight enumerators are usually faster when the
-                larger check rank is at most roughly 18, or when counting well above the distance
-                for ranks up to the high twenties, where BZ can take seconds to minutes.  Weight
-                enumerators do not support subsystem codes, full Pauli counts of non-self-dual
-                codes, or check ranks above 63.  Brute force enumerates all ``2**rank`` combinations
-                of each normalizer basis, and is a reference for small codes.  The aliases
-                ``"information_sets"`` and ``"weight_enumerator"`` select ``"brouwer_zimmermann"``
-                and ``"macwilliams"``, respectively.
+                ``"brute_force"``.  MacWilliams uses check-space weight distributions, cached on the
+                counter but not transferred through conjugation.  It does not support subsystem
+                codes, full Pauli counts of non-self-dual codes, or check ranks above 63.  Brute force
+                is a reference for small codes.  The aliases ``"information_sets"`` and
+                ``"weight_enumerator"`` select ``"brouwer_zimmermann"`` and ``"macwilliams"``,
+                respectively.
             full_pauli: If True, also count full Pauli operators, including Y and mixed operators.
                 For codes that are not self-dual, each homogeneous word of the counted weight costs
                 one rank calculation.  These
