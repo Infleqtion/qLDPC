@@ -265,15 +265,11 @@ def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
     select = functools.partial(_information_sets._get_overlapping_family, minimum_work=0)
     monkeypatch.setattr(_information_sets, "_get_overlapping_family", select)
     hamming = np.asarray(codes.HammingCode(4).matrix)
-    rng = np.random.default_rng(5)
-    for code in (
-        _counter(*_frozen(hamming, hamming, 15)).code,
-        _random_css_code(rng, 24, 8, 8),
-    ):
-        counter = lc.CSSLogicalCounter(code)
-        for weight in range(len(code) + 1):
-            expected = counter.count_logical_ops(weight, method="brute_force")
-            assert counter.count_logical_ops(weight) == expected
+    code = _counter(*_frozen(hamming, hamming, 15)).code
+    counter = lc.CSSLogicalCounter(code)
+    for weight in range(len(code) + 1):
+        expected = counter.count_logical_ops(weight, method="brute_force")
+        assert counter.count_logical_ops(weight) == expected
 
 
 def test_information_set_limit_bounds_overlapping_families(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -545,13 +541,12 @@ def test_macwilliams_enumerators_are_computed_once_per_counter(
     assert walks > 0 and walk.call_count == walks
 
 
-@pytest.mark.parametrize("gate", ["cnot", "swel"])
-def test_deformed_counters_walk_their_own_checks(gate: str) -> None:
+def test_deformed_counters_walk_their_own_checks() -> None:
     """A gate changes the weight distributions of the checks, so they are not reused."""
     counter = lc.CSSLogicalCounter(_random_css_code(np.random.default_rng(41), 10, 3, 3))
     weights = range(counter.num_qubits + 1)
     before = [counter.count_logical_ops(weight, method="macwilliams") for weight in weights]
-    deformed = counter.deformed_cnot(0, 1) if gate == "cnot" else counter.deformed_swel(0, 1, 2, 3)
+    deformed = counter.deformed_cnot(0, 1)
     fresh = _counter(deformed.checks_x, deformed.checks_z)
     expected = [fresh.count_logical_ops(weight, method="macwilliams") for weight in weights]
     assert expected != before

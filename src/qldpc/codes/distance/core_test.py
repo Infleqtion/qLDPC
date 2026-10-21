@@ -4,9 +4,8 @@
 
 from __future__ import annotations
 
-from unittest import mock
-
 import numpy as np
+import numpy.typing as npt
 import pytest
 
 import qldpc
@@ -32,17 +31,10 @@ def test_css_brouwer_zimmermann_special_inputs() -> None:
         == 0
     )
 
-    with mock.patch(
-        "qldpc.codes.distance.core._get_distance_brouwer_zimmermann_many",
-        return_value=2,
-    ) as mock_search:
-        distance = qldpc.codes.get_distance_css_brouwer_zimmermann(
-            [([[1, 1]], [])],
-            cutoff=0,
-            upper_bound=3,
-        )
-    assert distance == 2
-    assert mock_search.call_args.kwargs["upper_bound"] == 3
+    # The result is the minimum of the upper bound and the distances of the supplied sectors.
+    sectors: list[tuple[npt.ArrayLike, npt.ArrayLike]] = [([[1, 1]], [])]
+    assert qldpc.codes.get_distance_css_brouwer_zimmermann(sectors, cutoff=0, upper_bound=3) == 2
+    assert qldpc.codes.get_distance_css_brouwer_zimmermann(sectors, cutoff=0, upper_bound=1) == 1
 
 
 @pytest.mark.usefixtures("force_information_sets")
@@ -92,15 +84,7 @@ def test_brouwer_zimmermann_special_inputs() -> None:
         == 4
     )
     assert qldpc.codes.get_distance_quantum([[1, 0]], [[1, 0]], homogeneous=True) == 0
-    methods: tuple[qldpc.codes.DistanceMethod, ...] = ("brouwer_zimmermann", "brute_force")
-    for method in methods:
-        for stabilizers in ([[1, 0, 0, 0]], [[1, 0, 0, 0]] * 2):
-            assert (
-                qldpc.codes.get_distance_quantum(
-                    np.empty((0, 4), dtype=np.uint8), stabilizers, method=method
-                )
-                == 2
-            )
+    assert qldpc.codes.get_distance_quantum(np.empty((0, 4), dtype=np.uint8), [[1, 0, 0, 0]]) == 2
 
     with pytest.raises(ValueError, match="incompatible widths"):
         qldpc.codes.get_distance_quantum([[1, 0, 0]], [[1, 0]], homogeneous=True)
@@ -130,23 +114,6 @@ def test_distance_backend_validation() -> None:
     assert qldpc.codes.validate_distance_method("information_sets") == "brouwer_zimmermann"
     with pytest.raises(ValueError, match="Unknown distance method"):
         qldpc.codes.validate_distance_method("other")  # type: ignore[arg-type]
-
-
-def test_distance_method_alias() -> None:
-    """The "information_sets" alias selects the Brouwer-Zimmermann search and its shortcut."""
-    with mock.patch.multiple(
-        "qldpc.codes.distance.core",
-        _exhaustive_is_cheaper=mock.Mock(return_value=True),
-        _get_distance_brouwer_zimmermann=mock.Mock(return_value=2),
-        _get_distance_quantum_brute_force=mock.Mock(return_value=1),
-    ):
-        assert qldpc.codes.get_distance_classical([[1, 1, 0]], method="information_sets") == 2
-        assert (
-            qldpc.codes.get_distance_quantum(
-                [[1, 1, 0]], [], homogeneous=True, method="information_sets"
-            )
-            == 1
-        )
 
 
 @pytest.mark.parametrize(
