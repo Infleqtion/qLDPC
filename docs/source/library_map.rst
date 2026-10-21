@@ -242,15 +242,15 @@ Circuit utilities reject nonbinary codes.
 Encoding circuits are not fault-tolerant, and transversal-gate searches can be exponential.
 For sliding-window decoding, detector coordinates are only a heuristic source of time; pass ``detector_to_time`` when a model uses another convention.
 
-``circuits.benchmarking`` provides sampled logical error rates, state-preparation diagnostics, exact fault distances, and prepared-state spread certificates.
+``circuits.benchmarking`` provides logical error-rate estimates, state-preparation diagnostics, exact fault distances, and spread certificates.
 
 Certify resource-state preparation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``circuits.certify_state_prep_spread`` checks that accepted fault patterns up to a chosen budget leave output errors equivalent on the prepared state to errors of no greater weight.
-It supports physical Pauli or CSS-sector weight for definite pure Clifford outputs under a unit-cost binary DEM model.
-This is a sufficient resource-state spread condition; downstream operations must satisfy the corresponding propagation guarantees.
-See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` for examples and the :func:`API docstring <qldpc.circuits.benchmarking.state_prep_certification.certify_state_prep_spread>` for details.
+``circuits.certify_state_prep_spread`` checks accepted fault patterns within a budget: output errors must be equivalent on the prepared state to errors no heavier than the fault count.
+It uses physical Pauli or CSS-sector weight for definite pure Clifford outputs and independent unit-cost binary DEM mechanisms.
+This sufficient resource-state property does not certify downstream error propagation.
+See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` and :func:`API docstring <qldpc.circuits.benchmarking.state_prep_certification.certify_state_prep_spread>`.
 
 Optional integrations and side effects
 --------------------------------------

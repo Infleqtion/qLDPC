@@ -28,7 +28,7 @@ The other notebooks in this group are standalone technical examples.
 Logical error rates
 --------------------
 
-A progressive series on estimating logical error rates and certifying fault distance, from the code-capacity model up to circuit-level simulations with Sinter and exact fault-distance certificates.
+A series on logical error rates and fault-distance certification, from code-capacity models to Sinter circuit simulations and exact certificates.
 The numbered notebooks build conceptually on one another, but none relies on files or state produced by an earlier notebook.
 
 .. toctree::

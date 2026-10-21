@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Independent small oracles for the bounded-spread verifier."""
+"""Independent small-instance oracles for spread certification."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from . import state_prep_certification
 
 
 def _pack_pauli(pauli: str) -> int:
-    """Pack a Stim Pauli string as an integer, with X in the low bits and Z in the next block."""
+    """Pack a Stim Pauli string with X in the low bits, then Z."""
     xs, zs = stim.PauliString(pauli).to_numpy()
     num_qubits = len(xs)
     return sum(int(x) << jj for jj, x in enumerate(xs)) | sum(
@@ -29,9 +29,9 @@ def _pack_pauli(pauli: str) -> int:
 
 
 def _exhaustive(flags: list[int], syndromes: list[int], budget: int) -> bool:
-    """Check every accepted fault pattern, for the state with one qubit per syndrome bit.
+    """Check every accepted pattern for a Z-stabilized state.
 
-    Its stabilizers are Z-type, so the effective weight of a syndrome is its Hamming weight.
+    One qubit per syndrome bit makes effective weight equal to syndrome Hamming weight.
     """
     for size in range(1, min(budget, len(flags)) + 1):
         for support in itertools.combinations(range(len(flags)), size):
@@ -49,7 +49,7 @@ def _exhaustive(flags: list[int], syndromes: list[int], budget: int) -> bool:
 def test_random_maps(
     force_prefix: bool, metric: Literal["pauli", "css"], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Minimal-dependency search agrees with all accepted patterns, including flag cancellation."""
+    """Minimal-pattern search matches exhaustive checks, including flag cancellation."""
     monkeypatch.setattr(
         state_prep_certification, "_use_prefix_search", mock.Mock(return_value=force_prefix)
     )
@@ -83,7 +83,7 @@ def test_random_maps(
 
 
 def test_minimal_prefix_oracle() -> None:
-    """Independent accepted-subset enumeration checks canonical closure and original-ID mapping."""
+    """Exhaustive subsets check unique closure and original-ID mapping."""
     rng = np.random.default_rng(518)
     for width in range(10):
         for flag_bits in range(1, 5):
@@ -116,7 +116,7 @@ def test_minimal_prefix_oracle() -> None:
 
 
 def test_minimal_prefix_is_not_full_kernel() -> None:
-    """The separate minimal search must not weaken the full-kernel iterator's contract."""
+    """Minimal-pattern filtering must not change full-kernel coverage."""
     flags = [1, 2, 3, 4, 8, 12]
     mechanisms = [(flag, 1, jj) for jj, flag in enumerate(flags)]
     stats = circuits.StatePrepSpreadStatistics()
@@ -148,13 +148,13 @@ def test_minimal_prefix_is_not_full_kernel() -> None:
     ],
 )
 def test_prefix_crossover(columns: int, rank: int, budget: int, expected: bool) -> None:
-    """The cost heuristic is pinned at representative sizes, and only chooses between searches."""
+    """Pin the cost heuristic at representative sizes."""
     assert state_prep_certification._use_prefix_search(columns, rank, budget) == expected
 
 
 @pytest.mark.parametrize("damaging", [False, True])
 def test_adaptive_prefix_circuit(damaging: bool) -> None:
-    """Real compiled DEMs use canonical closure, retain fault costs, and expose valid witnesses."""
+    """Compiled DEMs preserve fault costs and witness indices under prefix closure."""
     circuit = stim.Circuit()
     circuit.append("I", range(9))
     for flag in range(1, 16):
@@ -197,15 +197,15 @@ def test_adaptive_prefix_circuit(damaging: bool) -> None:
         )
         assert sum(failure.output_syndrome) == 4
     else:
-        # Even-parity three-bit syndromes have weight <=2; no singleton is accepted.
+        # Even-parity three-bit syndromes have weight <=2; singletons reject.
         assert failure is None
-        # 1035 prefix extensions plus 990 closing supports, far below the 11521 BZ supports.
+        # 1035 extensions and 990 closures cost less than 11521 BZ supports.
         assert stats.generated == 2025
         assert stats.minimal_candidates == 990
 
 
 def test_adaptive_retains_strong_information_sets() -> None:
-    """Low-rate accepted codes keep the original multiple-information-set path."""
+    """Low-rate kernels use multiple information sets."""
     flags = [
         flag
         for group in range(8)
@@ -226,13 +226,13 @@ def test_adaptive_retains_strong_information_sets() -> None:
             is None
         )
     assert stats.search_method == "brouwer_zimmermann"
-    # Three information sets, each with eight depth-one coefficient supports.
+    # Three information sets each contribute eight depth-one supports.
     assert stats.generated == 24
 
 
 @pytest.mark.parametrize("budget", [2, 3, 6, 30])
 def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
-    """Acceptance has even multiplicity in each independent flag type at every budget."""
+    """Independent flag types require even multiplicities at every budget."""
     flags = [flag for flag in (3, 5, 8, 16, 1 << 130) for _ in range(3)]
     n = 3
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
@@ -254,11 +254,11 @@ def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
 def test_independent_flag_types_reduce_to_pairs_with_few_columns(
     budget: int, metric: Literal["pauli", "css"]
 ) -> None:
-    """Pair-only reduction applies even when columns do not exceed twice the flag rank."""
+    """Pair reduction also applies when column count is at most twice flag rank."""
     n = 6
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
     flags = [1 << flag_type for flag_type in range(8) for _ in range(2)]
-    # Each pair of equal flags has the syndrome XOR 3, 15, or 63 of effective weight 2, 4, or 6.
+    # Equal-flag pairs have syndrome XOR 3, 15, or 63, with effective weight 2, 4, or 6.
     for syndromes, violation in (
         ([1, 2] * 8, None),
         ([3, 12] * 8, (0, 1)),
@@ -279,7 +279,7 @@ def test_independent_flag_types_reduce_to_pairs_with_few_columns(
 
 
 def test_independent_flag_types_failure() -> None:
-    """Pair-only reduction still returns a genuine accepted violation with original IDs."""
+    """Pair reduction preserves accepted violations and original IDs."""
     flags = [flag for flag in (3, 5, 8) for _ in range(3)]
     n = 4
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
@@ -295,7 +295,7 @@ def test_independent_flag_types_failure() -> None:
 
 
 def test_certificates_are_deterministic() -> None:
-    """Repeated certifications of one circuit are identical, including their search statistics."""
+    """Repeated certifications have identical results and counters."""
     circuit = stim.Circuit("H 0\nCX 0 1\nDEPOLARIZE2(0.01) 0 1")
     first, second = (
         circuits.certify_state_prep_spread(circuit, output_qubits=[0, 1], max_faults=2)
@@ -307,7 +307,7 @@ def test_certificates_are_deterministic() -> None:
 
 
 def test_dependency_reductions() -> None:
-    """Genuine triples, decomposable pairs, duplicate joint symptoms, and budget boundaries."""
+    """Check triples, decomposable pairs, joint duplicates, and budget boundaries."""
     n = 4
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
     for flags, syndromes, budget, expected in (
@@ -325,14 +325,14 @@ def test_dependency_reductions() -> None:
             flags, syndromes, _PauliCosetSearch(matrix), budget, stats
         )
         assert (result is None) == expected
-    # Columns with neither a flag nor a syndrome are removed, so no search work remains.
+    # All-zero columns need no search.
     stats = circuits.StatePrepSpreadStatistics()
     assert (
         state_prep_certification._certify_maps([0, 0], [0, 0], _PauliCosetSearch(matrix), 4, stats)
         is None
     )
     assert stats.generated == stats.minimal_candidates == 0
-    # Harmless systematic rows do not bound the first violating eligible word.
+    # Harmless systematic rows cannot bound the first violating word.
     n = 6
     matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
     flags = [1, 2, 4, 3, 5]
@@ -349,7 +349,7 @@ def test_dependency_reductions() -> None:
 
 
 def test_steane_mixed_pauli_witness() -> None:
-    """Steane passes CSS spread despite failing the stronger physical-support criterion."""
+    """Steane passes CSS spread but fails the stronger physical-support test."""
     ideal = stim.Circuit("""
         H 0 2 4
         CX 0 3 2 1 4 5
@@ -374,7 +374,7 @@ def test_steane_mixed_pauli_witness() -> None:
     assert (
         tuple(int(not representative.commutes(gg)) for gg in stabilizers) == failure.output_syndrome
     )
-    # Complete independent physical weight-zero/one oracle, not the implementation's lookup.
+    # Independently rule out every physical weight-zero/one representative.
     for qubit in range(7):
         for pauli in "IXYZ":
             candidate = stim.PauliString(7)
@@ -393,13 +393,13 @@ def test_steane_mixed_pauli_witness() -> None:
     )
     assert css.certified and css.css_weight is True
     assert result.css_weight is False
-    # 31 flag-free faults, plus every pair of the 31 faults that raise the single flag.
+    # Minimal patterns are 31 flag-free singletons and all pairs of 31 flagged faults.
     assert css.statistics.minimal_candidates == 31 + 31 * 30 // 2
     assert (
         tuple(int(not stim.PauliString("X_Z____").commutes(gg)) for gg in stabilizers)
         == failure.output_syndrome
     )
-    # Z0 Z1 Z2 is a full prepared-state stabilizer, so Y0 Z1 and X0 Z2 agree up to phase.
+    # Stabilizer Z0 Z1 Z2 makes Y0 Z1 and X0 Z2 equivalent up to phase.
     simulator = stim.TableauSimulator()
     simulator.do(ideal)
     assert simulator.peek_observable_expectation(stim.PauliString("ZZZ____")) == 1
@@ -407,7 +407,7 @@ def test_steane_mixed_pauli_witness() -> None:
 
 @pytest.mark.parametrize("css_weight", [None, True, False])
 def test_state_selection_and_overrides(css_weight: bool | None) -> None:
-    """Automatic physical-basis state detection, not an unsupplied code, chooses the metric."""
+    """The prepared state in the physical basis selects the automatic metric."""
     circuit = stim.Circuit("I 0\nH 1\nCORRELATED_ERROR(0.01) X0 Z1")
     result = circuits.certify_state_prep_spread(
         circuit, output_qubits=[0, 1], max_faults=3, css_weight=css_weight
@@ -425,7 +425,7 @@ def test_state_selection_and_overrides(css_weight: bool | None) -> None:
 
 
 def test_css_row_space_not_individual_generators(monkeypatch: pytest.MonkeyPatch) -> None:
-    """All supplied rows mix X and Z, but their row space is the CSS state |+00>."""
+    """Mixed X/Z generators still span the CSS state |+00>."""
     generators = [stim.PauliString(gg) for gg in ("XZ_", "X_Z", "XZZ")]
     monkeypatch.setattr(state_prep_certification, "get_state_stabilizers", lambda *args: generators)
     result = circuits.certify_state_prep_spread(
@@ -439,7 +439,7 @@ def test_css_row_space_not_individual_generators(monkeypatch: pytest.MonkeyPatch
 
 @pytest.mark.parametrize("css_weight", [None, True, False])
 def test_css_code_non_css_logical_state(css_weight: bool | None) -> None:
-    """A CSS repetition code can prepare logical Y; never require a CSS complete state."""
+    """A CSS repetition code can prepare non-CSS logical Y."""
     result = circuits.certify_state_prep_spread(
         stim.Circuit("H 0\nS 0\nCX 0 1 0 2\nDEPOLARIZE1(0.001) 0 1 2"),
         output_qubits=range(3),
@@ -451,7 +451,7 @@ def test_css_code_non_css_logical_state(css_weight: bool | None) -> None:
 
 
 def test_non_css_override_minimizes_jointly() -> None:
-    """Each graph-state sector can vanish separately, but no joint CSS-weight-one word exists."""
+    """Sectors can vanish separately without a joint CSS-weight-one representative."""
     result = circuits.certify_state_prep_spread(
         stim.Circuit("H 0 1 2 3\nCZ 0 1 1 2 2 3\nCORRELATED_ERROR(0.001) Z0 Z1 Z2 Z3"),
         output_qubits=range(4),
@@ -469,7 +469,7 @@ def test_non_css_override_minimizes_jointly() -> None:
 def test_multi_flag_joint_sector_triples(
     css_weight: bool, sector: int, prefix: bool, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """True 01/10/11 dependencies have CSS weight sector, physical weight twice sector."""
+    """01/10/11 dependencies have CSS weight sector and physical weight twice sector."""
     monkeypatch.setattr(
         state_prep_certification, "_use_prefix_search", mock.Mock(return_value=prefix)
     )
@@ -512,7 +512,7 @@ def test_many_flags_finite_budget(
     extra_weight: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Rank far exceeds budget; the sole accepted dependency is a genuine triple or quadruple."""
+    """Rank exceeds budget with one accepted triple or quadruple."""
     monkeypatch.setattr(
         state_prep_certification, "_use_prefix_search", mock.Mock(return_value=prefix)
     )
@@ -564,10 +564,9 @@ def test_invalid_weight_override(css_weight: bool) -> None:
 
 @pytest.mark.parametrize("css_weight", [None, False])
 def test_ghz_global_counterexample_bound(css_weight: bool | None) -> None:
-    """An accepted triple affects four GHZ blocks, proving effective weight exactly four.
+    """An accepted triple has effective weight four in both metrics.
 
-    Both the CSS-sector and physical-support metrics must report the global bound four, not the
-    unseen-word bound five that follows a threshold-three search.
+    Report the global bound four, not the unseen-word bound five from a threshold-three search.
     """
     circuit = stim.Circuit()
     for block in range(0, 12, 3):
@@ -597,7 +596,7 @@ def test_ghz_global_counterexample_bound(css_weight: bool | None) -> None:
     witness = stim.PauliString("__X__X__X__X")
     generators = [stim.PauliString(gg) for gg in certificate.target_stabilizers]
     assert tuple(int(not witness.commutes(gg)) for gg in generators) == failure.output_syndrome
-    # Every block has a nonzero local syndrome, so a representative must touch all four.
+    # Nonzero local syndromes force every representative to touch all four blocks.
     for block in range(4):
         local = stim.PauliString("_" * (3 * block) + "Z_Z" + "_" * (9 - 3 * block))
         assert not witness.commutes(local)
@@ -624,7 +623,7 @@ def test_ghz_global_counterexample_bound(css_weight: bool | None) -> None:
 
 @pytest.mark.parametrize("pauli", ["X", "Y", "Z"])
 def test_non_css_signed_frame(pauli: str) -> None:
-    """Signed non-CSS state, reordered physical outputs, correlated mechanisms, and ideal signs."""
+    """Check non-CSS signs, reordered outputs, and correlated mechanisms."""
     circuit = stim.Circuit(f"""
         H 4
         S 4
@@ -643,7 +642,7 @@ def test_non_css_signed_frame(pauli: str) -> None:
 
 
 def test_correlated_violation() -> None:
-    """A two-qubit output error is one correlated fault, not two artificially split faults."""
+    """A correlated two-qubit error costs one fault."""
     result = circuits.certify_state_prep_spread(
         stim.Circuit("I 0 1\nCORRELATED_ERROR(0.01) X0 Y1"),
         output_qubits=[1, 0],
@@ -658,7 +657,7 @@ def test_correlated_violation() -> None:
 
 
 def test_post_selection_pairs() -> None:
-    """Individually rejected mechanisms can combine to form an accepted damaging pair."""
+    """Individually rejected faults can form an accepted damaging pair."""
     circuit = stim.Circuit("""
         I 0 1 2 3 4
         CORRELATED_ERROR(0.01) X0 X1 X4
@@ -680,7 +679,7 @@ def test_post_selection_pairs() -> None:
 
 
 def test_empty_model() -> None:
-    """No errors, repetitions, existing observables, and deterministic nonzero measurement bits."""
+    """Check noiseless circuits, repeats, observables, and deterministic nonzero measurements."""
     circuit = stim.Circuit("""
         X 0
         REPEAT 2 {
@@ -725,7 +724,7 @@ def test_invalid_annotations_and_mixed_states() -> None:
     ):
         with pytest.raises(ValueError, match="non-deterministic"):
             circuits.certify_state_prep_spread(stim.Circuit(text), output_qubits=[0], max_faults=1)
-    # A detector cannot be used as an assumed random post-selected branch condition.
+    # Post-selection cannot make a random detector deterministic.
     with pytest.raises(ValueError, match="non-deterministic"):
         circuits.certify_state_prep_spread(
             stim.Circuit("H 0\nM 0\nDETECTOR rec[-1]"),

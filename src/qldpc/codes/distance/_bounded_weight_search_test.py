@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Independent regression oracles for bounded kernel and affine Pauli searches."""
+"""Independent oracles for bounded kernel and affine Pauli searches."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ from ._bounded_weight_search import (
 
 
 def test_bounded_kernel_search() -> None:
-    """Independent enumeration checks coverage, nonlinear filtering, and both storage paths."""
+    """Exhaustive enumeration checks coverage, nonlinear filters, and both storage paths."""
     rng = np.random.default_rng(431)
     for width in range(1, 10):
         for height in (0, 1, width // 2, width, width + 1):
@@ -35,7 +35,7 @@ def test_bounded_kernel_search() -> None:
                     and not np.any(checks @ [(word >> jj) & 1 for jj in range(width)] % 2)
                 }
                 assert actual == expected
-                # Harmless initial rows must not create an eligible-word upper bound.
+                # Harmless rows cannot supply an eligible-word upper bound.
                 assert {word for word in actual if word % 3 == 0} == {
                     word for word in expected if word % 3 == 0
                 }
@@ -46,7 +46,7 @@ def test_bounded_kernel_search() -> None:
 
 
 def test_bounded_kernel_information_bound() -> None:
-    """Disjoint full information sets certify all repetition words at coefficient depth one."""
+    """Disjoint full information sets prove coverage at coefficient depth one."""
     checks = np.zeros((12, 16), dtype=np.uint8)
     for jj in range(12):
         checks[jj, jj % 4] = checks[jj, jj + 4] = 1
@@ -58,14 +58,14 @@ def test_bounded_kernel_information_bound() -> None:
     assert search.generated == 16 < sum(1 for _ in itertools.combinations(range(16), 3))
     wider = _BoundedKernelSearch(checks, 4)
     assert min(word.bit_count() for word in wider.words()) == 4 < wider.lower_bound
-    # Pairs of columns are the weight-two words of the even-weight code, packed across 64-bit words.
+    # Even-weight-code pairs cross 64-bit packing boundaries.
     search = _BoundedKernelSearch(np.ones((1, 130), dtype=int), 2)
     assert len(set(search.words())) == 130 * 129 // 2
 
 
 @pytest.mark.parametrize("metric", ["pauli", "css"])
 def test_pauli_coset_search_exhaustive(metric: Literal["pauli", "css"]) -> None:
-    """Compare every small syndrome and threshold with independent stabilizer multiplication."""
+    """Check every small syndrome and threshold by independent stabilizer multiplication."""
     rng = np.random.default_rng(182)
     for n in range(1, 7):
         circuit = stim.Circuit()
@@ -107,7 +107,7 @@ def test_pauli_coset_search_exhaustive(metric: Literal["pauli", "css"]) -> None:
 
 
 def test_pauli_coset_bounds_and_validation() -> None:
-    """Affine zero coefficients, exact negatives, cached thresholds, and Y weight."""
+    """Check affine zero coefficients, exact negatives, cached thresholds, and Y weight."""
     matrix = np.hstack([np.zeros((5, 5), dtype=np.uint8), np.eye(5, dtype=np.uint8)])
     oracle = _PauliCosetSearch(matrix, batch_size=3)
     assert not oracle.decide(3, 1).within_bound
@@ -135,7 +135,7 @@ def test_pauli_coset_bounds_and_validation() -> None:
 
 
 def test_affine_partial_information_set() -> None:
-    """A partial pivot set proves absence after depth one when full sets alone cannot."""
+    """A partial pivot set proves absence at depth one; full sets alone cannot."""
     circuit = stim.Circuit("""
         H 0 1 2 3 4 5 6 7
         CZ 0 1 0 6 0 7 1 2 1 7 2 6 2 7 4 5 4 6 5 7 6 7
@@ -165,7 +165,7 @@ def test_affine_partial_information_set() -> None:
 @pytest.mark.parametrize("batch_size", [1, 7, 4096])
 @pytest.mark.parametrize("metric", ["pauli", "css"])
 def test_affine_global_bound_and_cache(batch_size: int, metric: Literal["pauli", "css"]) -> None:
-    """Four nonzero GHZ-block syndromes need exactly four qubits, not unseen bound five."""
+    """Four nonzero GHZ-block syndromes have global bound four, not unseen bound five."""
     generators = [
         stim.PauliString("_" * (3 * block) + local + "_" * (9 - 3 * block))
         for block in range(4)
@@ -174,7 +174,7 @@ def test_affine_global_bound_and_cache(batch_size: int, metric: Literal["pauli",
     witness = stim.PauliString("__X__X__X__X")
     syndrome = sum((not witness.commutes(gg)) << jj for jj, gg in enumerate(generators))
     assert syndrome == 3510 and witness.weight == 4
-    # Each disjoint block has a nonzero syndrome, requiring at least one affected qubit.
+    # Each nonzero block syndrome requires an affected qubit.
     assert all((syndrome >> (3 * block)) & 7 for block in range(4))
     matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
     oracle = _PauliCosetSearch(matrix, metric=metric, batch_size=batch_size)
@@ -188,7 +188,7 @@ def test_affine_global_bound_and_cache(batch_size: int, metric: Literal["pauli",
     assert at_minimum.within_bound and at_minimum.lower_bound == 4
     assert oracle.generated == generated
     assert oracle.syndrome(at_minimum.representative) == syndrome
-    # A negative threshold-three query is answered from the cached bound without more search.
+    # The cached bound answers threshold three without more search.
     hits = oracle.cache_hits
     repeated = oracle.decide(syndrome, 3)
     assert not repeated.within_bound and repeated.lower_bound == 4
@@ -198,9 +198,9 @@ def test_affine_global_bound_and_cache(batch_size: int, metric: Literal["pauli",
 
 
 def test_cache_keeps_proved_bound_after_recompute() -> None:
-    """A positive recompute at a higher threshold must not discard the bound for a lower one."""
+    """A higher-threshold recomputation must retain the proved lower bound."""
     n = 10
-    # A graph state: each stabilizer is X on one vertex and Z on its neighbors.
+    # Graph-state stabilizers place X on a vertex and Z on its neighbors.
     graph_state = [
         "X_ZZ__ZZ__",
         "_X______Z_",
@@ -219,7 +219,7 @@ def test_cache_keeps_proved_bound_after_recompute() -> None:
     oracle = _PauliCosetSearch(matrix)
     syndrome = 1019
 
-    # The first search keeps a heavy representative, so only its proved bound answers threshold two.
+    # The representative has weight four; only the proved bound answers threshold two.
     negative = oracle.decide(syndrome, 2)
     assert not negative.within_bound and negative.lower_bound == 3
     assert oracle._weight(negative.representative) == 4
@@ -230,7 +230,6 @@ def test_cache_keeps_proved_bound_after_recompute() -> None:
     assert not repeated.within_bound and repeated.lower_bound == 3
     assert oracle.cache_hits == hits + 1 and oracle.generated == generated
 
-    # Brute force over every stabilizer product confirms the exact minimum.
     rows = [sum(int(bit) << jj for jj, bit in enumerate(row)) for row in matrix]
     assert oracle.syndrome(positive.representative) == syndrome
     weights = []
@@ -245,14 +244,14 @@ def test_cache_keeps_proved_bound_after_recompute() -> None:
 
 @pytest.mark.parametrize("cache_size", [1, 2, 4096])
 def test_affine_query_order_boundaries(cache_size: int) -> None:
-    """Global bounds stay valid across threshold equality, query order, and cache eviction."""
+    """Global bounds survive threshold equality, query order, and eviction."""
     generators = [
         stim.PauliString("_" * (3 * block) + local + "_" * (9 - 3 * block))
         for block in range(4)
         for local in ("XXX", "Z_Z", "_ZZ")
     ]
     matrix = np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
-    # The eight local syndromes have one-qubit representatives I,Z0,X0,Y0,X1,Y1,X2,Y2.
+    # Every local syndrome has a weight-zero/one representative.
     local_representatives = ("___", "Z__", "X__", "Y__", "_X_", "_Y_", "__X", "__Y")
     rng = np.random.default_rng(713)
     local_syndromes: list[tuple[int, ...]] = [(0, 0, 0, 0), (6, 6, 6, 6)]
@@ -281,7 +280,7 @@ def test_affine_query_order_boundaries(cache_size: int) -> None:
                     assert weight <= threshold
                 else:
                     assert threshold < decision.lower_bound
-            # Eviction must only cause recomputation, never a different mathematical decision.
+            # Eviction may force recomputation but cannot change the decision.
             oracle.decide(syndrome ^ 1, 12)
             oracle.decide(syndrome ^ 2, 12)
             decision = oracle.decide(syndrome, minimum)
@@ -290,7 +289,7 @@ def test_affine_query_order_boundaries(cache_size: int) -> None:
 
 
 def test_css_weight_one_and_fixed_metric() -> None:
-    """X0 Z1 has CSS weight one but physical weight two on |0+>, even at threshold zero."""
+    """X0 Z1 has CSS weight one and physical weight two on |0+>."""
     matrix = np.array([[0, 0, 1, 0], [0, 1, 0, 0]], dtype=np.uint8)
     physical = _PauliCosetSearch(matrix)
     css = _PauliCosetSearch(matrix, metric="css")
@@ -299,12 +298,12 @@ def test_css_weight_one_and_fixed_metric() -> None:
     assert css.decide(3, 1).within_bound
     assert css.decide(3, 0).lower_bound == 1
     assert css.decide(3, 1).within_bound
-    # The unconditional single-qubit tables stay linear in the number of qubits.
+    # Single-qubit tables use linear space.
     assert len(css._x_singles) <= 3 and len(css._z_singles) <= 3
 
 
 def test_css_joint_non_css_state() -> None:
-    """Invertible graph-state X/Z projections can each vanish, but not in one representative."""
+    """X/Z projections can vanish separately, but not in one representative."""
     circuit = stim.Circuit("H 0 1 2 3\nCZ 0 1 1 2 2 3")
     generators = stim.Tableau.from_circuit(circuit).to_stabilizers()
     error = stim.PauliString("ZZZZ")
@@ -328,7 +327,7 @@ def test_css_joint_non_css_state() -> None:
 
 @pytest.mark.parametrize("cache_size", [1, 3, 4096])
 def test_css_cache_boundaries_and_exhaustion(cache_size: int) -> None:
-    """Independent mixed-product minima check query order, equality, eviction, and exhaustion."""
+    """Mixed-product minima check query order, equality, eviction, and exhaustion."""
     n = 6
     matrix = np.zeros((n, 2 * n), dtype=np.uint8)
     for jj in range(n):
@@ -350,7 +349,7 @@ def test_css_cache_boundaries_and_exhaustion(cache_size: int) -> None:
         assert len(oracle._cache) <= cache_size and oracle.preparations == 1
     zero_state = np.hstack([np.zeros((5, 5), dtype=np.uint8), np.eye(5, dtype=np.uint8)])
     oracle = _PauliCosetSearch(zero_state, metric="css")
-    zero_state[:] = 0  # Preparation owns its generators, even before lazy information-set setup.
+    zero_state[:] = 0  # The oracle owns its generators before lazy setup.
     decision = oracle.decide(31, 4)
     assert not decision.within_bound and decision.lower_bound == 5
     assert oracle.coefficient_depth == 5
@@ -360,7 +359,7 @@ def test_css_cache_boundaries_and_exhaustion(cache_size: int) -> None:
 @pytest.mark.parametrize("metric", ["pauli", "css"])
 @pytest.mark.parametrize("n", [130, 257])
 def test_wide_packed_sectors(n: int, metric: Literal["pauli", "css"]) -> None:
-    """Unaligned sector boundaries and weights above 255 retain the actual metric weight."""
+    """Unaligned packed sectors preserve weights above 255."""
     matrix = np.hstack([np.zeros((n, n), dtype=np.uint8), np.eye(n, dtype=np.uint8)])
     oracle = _PauliCosetSearch(matrix, metric=metric)
     decision = oracle.decide((1 << n) - 1, n)
@@ -375,7 +374,7 @@ def test_invalid_coset_metric() -> None:
 
 
 def test_fixed_weight_supports() -> None:
-    """Witness enumeration retains every support and the large-count streaming fallback."""
+    """Enumerate every support, including with large-count streaming."""
     for dimension in range(1, 8):
         for weight in range(1, dimension + 1):
             actual = _iter_fixed_weight_supports(

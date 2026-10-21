@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Internal exact bounded-kernel enumeration and affine Pauli-coset decisions.
+"""Exact internal searches for bounded kernel words and Pauli cosets.
 
-These searches serve ``circuits.certify_state_prep_spread`` and are not part of the public API.
+Used by ``circuits.certify_state_prep_spread``; not public API.
 """
 
 from __future__ import annotations
@@ -30,28 +30,26 @@ from ._binary import (
 
 
 class _BoundedKernelSearch:
-    """Enumerate every binary kernel word through a weight bound using packed BZ coverage.
+    """Enumerate all nonzero binary kernel words through a weight bound with packed BZ coverage.
 
     Args:
-        checks: Binary parity-check matrix, including redundant or zero rows.
-        max_weight: Only yield nonzero words of at most this Hamming weight.
-        batch_size: Maximum number of coefficient supports processed together.
+        checks: Binary parity-check matrix; redundant and zero rows are allowed.
+        max_weight: Hamming-weight limit.
+        batch_size: Maximum coefficient supports per batch.
 
-    Words are Python integers, with column zero in the least significant bit.  A word can be yielded
-    repeatedly in different information sets; consumers may apply arbitrary predicates.  No
-    eligible-word upper bound or ordinary distance-search fallback is used.
+    Words are integers with column zero in the lowest bit; different information sets may yield
+    duplicates.  Arbitrary filtering is safe: coverage uses no eligible-word upper bound or
+    distance-search fallback.
 
-    After coefficient weights through ``a`` in dimension ``k``, an unseen word has weight at least
-    ``sum(max(0, a + 1 - (k - r)) for r in ranks)``: its coefficient vector in each basis has more
-    than ``a`` bits, of which at most ``k-r`` lie outside that set's pivots.  The pivot sets are
-    disjoint, so their bounds add.  Enumeration stops only when this bound exceeds ``max_weight`` or
-    all coefficients have been exhausted.  Filtering yielded words cannot weaken this proof.  The
-    ``lower_bound`` attribute bounds unseen words only, not the minimum over all kernel words.
+    After coefficient weights through ``a`` in dimension ``k``, unseen words have weight at least
+    ``sum(max(0, a + 1 - (k - r)) for r in ranks)``.  Each basis needs more than ``a`` coefficient
+    bits, at most ``k-r`` outside its pivots; disjoint pivot sets let these bounds add.  Stop only
+    when this bound exceeds ``max_weight`` or coefficients are exhausted.  The ``lower_bound``
+    attribute bounds unseen words, not the global kernel minimum.
 
-    When the kernel dimension exceeds the check rank, store only the pivot-coordinate parts of the
-    systematic generators, not a quadratic-size dense kernel matrix.  Coefficient support supplies
-    the free coordinates and their exact weight.  In the lower-rate case, reuse the distance
-    implementation's disjoint information-set construction.
+    When dimension exceeds check rank, store only generator pivot coordinates to avoid a quadratic
+    dense kernel matrix; coefficient support supplies free coordinates and their weight.  Otherwise
+    reuse the distance search's disjoint information sets.
     """
 
     def __init__(self, checks: npt.ArrayLike, max_weight: int, *, batch_size: int = 4096) -> None:
@@ -88,7 +86,7 @@ class _BoundedKernelSearch:
             self._sets = []
 
     def words(self) -> Iterator[int]:
-        """Yield bounded-weight words; exhaustion is the coverage certificate."""
+        """Yield bounded-weight words; exhaustion certifies coverage."""
         for depth in range(1, min(self.dimension, self.max_weight) + 1):
             for rows in self._sets:
                 for supports in _iter_fixed_weight_supports(self.dimension, depth, self.batch_size):
@@ -114,12 +112,11 @@ class _BoundedKernelSearch:
 
 @dataclass(frozen=True)
 class _PauliWeightDecision:
-    """A checked coset representative or a global lower bound in the oracle's fixed metric.
+    """A checked representative and global coset lower bound in the oracle's fixed metric.
 
-    ``representative`` packs X in the low ``n`` bits and Z in the next ``n`` bits.  It is not
-    asserted to be a minimum representative.  If ``within_bound`` is False, ``lower_bound`` strictly
-    exceeds the queried threshold.  In every decision it bounds the minimum of the entire coset, so
-    it remains valid when reused at a different threshold.
+    ``representative`` packs X in the low ``n`` bits and Z in the next ``n``; it need not minimize
+    weight.  ``lower_bound`` bounds the entire coset at any threshold and exceeds the queried
+    threshold when ``within_bound`` is False.
     """
 
     within_bound: bool
@@ -128,40 +125,34 @@ class _PauliWeightDecision:
 
 
 class _PauliCosetSearch:
-    """Amortized exact joint error-weight oracle for a pure stabilizer state.
+    """Exact joint Pauli-weight oracle shared across queries for a pure stabilizer state.
 
     Args:
         stabilizers: An independent commuting binary ``n x 2n`` matrix in ``[X|Z]`` order.
-        metric: Fixed metric: ``"pauli"`` counts physical support, while ``"css"`` counts
-            ``max(|x|, |z|)`` in the supplied physical frame.  Minimize jointly over one coset
-            representative, including when the complete state stabilizers are non-CSS.
-        cache_size: Maximum number of cached syndrome decisions (at least one).
-        batch_size: Maximum coefficient supports in a packed affine BZ batch.
+        metric: ``"pauli"`` counts physical support; ``"css"`` counts ``max(|x|, |z|)`` in the
+            physical frame, jointly over one representative even for non-CSS states.
+        cache_size: Maximum cached syndrome decisions; at least one.
+        batch_size: Maximum coefficient supports per packed affine BZ batch.
 
-    The full syndrome identifies a Pauli coset because a maximal isotropic space equals its
-    symplectic orthogonal.  Physical weight uses the embedding ``(x|z) -> (x|z|x+z)``, whose Hamming
-    weight is twice physical weight, including Y.  CSS weight uses ``[X|Z]`` directly: its Hamming
-    weight is at most twice ``max(|x|, |z|)``.
+    Full syndromes identify cosets: a maximal isotropic space equals its symplectic orthogonal.  The
+    physical embedding ``(x|z) -> (x|z|x+z)`` has twice the Pauli weight, including Y.  CSS uses
+    ``[X|Z]``, whose Hamming weight is at most twice ``max(|x|, |z|)``.
 
-    For each information-set basis, zero the affine offset on its pivots by adding rows.  Pivot
-    coordinates then equal coefficient bits.  The same disjoint-set coverage bound as
-    :class:`_BoundedKernelSearch` applies, starting at coefficient weight zero.  Absence of a
-    threshold witness is reported only after all visited metric weights and the unseen metric bound
-    exceed the threshold.  If ``v`` is the minimum visited metric weight and ``L`` bounds unseen
-    binary Hamming weights, the global metric bound is ``min(v, ceil(L / 2))``.  Exhausting all
-    coefficients gives the exact visited minimum.  An unseen-word bound alone is never published as
-    a global coset bound.
+    Zero each affine offset on its basis pivots so pivot coordinates equal coefficient bits.  The
+    disjoint-set bound of :class:`_BoundedKernelSearch` then applies from coefficient weight zero.
+    A negative decision requires both visited weights and the unseen bound to exceed the threshold.
+    For minimum visited weight ``v`` and unseen Hamming bound ``L``, the global metric bound is
+    ``min(v, ceil(L / 2))``; exhaustion gives the exact visited minimum.  An unseen-word bound alone
+    is never published as a global bound.
 
-    Elimination is performed once.  Information sets are prepared lazily, at most once.  The
-    unconditional syndrome tables have linear size: identity and single-qubit Paulis.  A
-    CSS-weight-one representative may be ``X_i Z_j`` on distinct qubits.  Per-query matching of
-    X-single and Z-single syndromes checks all such representatives in linear work without a
-    quadratic table.  Absence from that complete search, not just physical singles, proves a CSS
-    lower bound two.
+    Eliminate once and prepare information sets lazily, at most once.  Identity and single-qubit
+    syndrome tables use linear space.  CSS weight one also includes ``X_i Z_j`` on distinct qubits:
+    matching X-single and Z-single syndromes checks these in linear time without a quadratic table.
+    Only this complete search, not physical singles alone, can prove a CSS lower bound of two.
 
-    The bounded cache stores checked upper bounds and proved lower bounds.  A recomputed decision
-    is merged into its entry, so a proved bound is never lost.  Eviction changes only runtime,
-    never correctness.  No heuristic or probabilistic negative decision is used.
+    The bounded cache stores checked upper bounds and proved lower bounds.  Merging recomputed
+    decisions never loses a proved bound; eviction affects runtime, not correctness.  Negative
+    decisions are exact, never heuristic or probabilistic.
     """
 
     def __init__(
@@ -201,7 +192,7 @@ class _PauliCosetSearch:
             )
             for sector in (mask, mask << n)
         )
-        # Prepared lazily: packed generators, their integer rows, and pivot columns of each basis.
+        # Lazy bases hold packed generators, integer rows, and pivots.
         self._bases: list[tuple[npt.NDArray[np.uint64], tuple[int, ...], tuple[int, ...]]] = []
         self.ranks: tuple[int, ...] = ()
         self.cache_size = cache_size
@@ -224,11 +215,11 @@ class _PauliCosetSearch:
             self._singles.setdefault(sx ^ sz, x ^ z)
 
     def syndrome(self, pauli: int) -> int:
-        """Compute the complete stabilizer syndrome of a packed symplectic Pauli."""
+        """Compute the complete syndrome of a packed symplectic Pauli."""
         return sum(((row & pauli).bit_count() & 1) << jj for jj, row in enumerate(self._checks))
 
     def decide(self, syndrome: int, max_weight: int) -> _PauliWeightDecision:
-        """Prove or disprove that this syndrome has a representative within the threshold."""
+        """Decide whether the coset has a representative within the weight threshold."""
         if not 0 <= syndrome < 1 << self.num_qubits or max_weight < 0:
             raise ValueError("Syndrome out of range or negative weight threshold")
         known = self._cache.get(syndrome)
@@ -257,7 +248,7 @@ class _PauliCosetSearch:
     def _merge_decisions(
         self, known: _PauliWeightDecision | None, found: _PauliWeightDecision
     ) -> _PauliWeightDecision:
-        """Keep the lightest checked representative and strongest proved bound for one coset."""
+        """Keep the lightest checked representative and strongest proved bound."""
         if known is None:
             return found
         representative = min((known.representative, found.representative), key=self._weight)
@@ -297,7 +288,7 @@ class _PauliCosetSearch:
         )
 
     def _prepare_bases(self) -> None:
-        """Pack the disjoint information-set bases of the embedded stabilizers, at most once."""
+        """Pack embedded-stabilizer information sets at most once."""
         if self._bases:
             return
         for generators, _, rank, pivots in _information_sets._get_information_set_generators(
@@ -314,7 +305,7 @@ class _PauliCosetSearch:
         self.preparations += 1
 
     def _embed(self, pauli: int) -> int:
-        """Map a packed Pauli into the binary space whose Hamming weight the search bounds."""
+        """Embed a Pauli for Hamming-weight bounds."""
         if self.metric == "css":
             return pauli
         n = self.num_qubits
@@ -322,7 +313,7 @@ class _PauliCosetSearch:
         return x | (z << n) | ((x ^ z) << (2 * n))
 
     def _get_offsets(self, embedded: int) -> list[npt.NDArray[np.uint64]]:
-        """Reduce an embedded Pauli to zero on the pivots of each basis, as packed words."""
+        """Pack affine offsets with each basis's pivots zeroed."""
         offsets = []
         for packed, rows, pivots in self._bases:
             word = embedded
@@ -338,7 +329,7 @@ class _PauliCosetSearch:
         return offsets
 
     def _search(self, syndrome: int, threshold: int) -> _PauliWeightDecision:
-        """Scan affine coefficient layers until a witness appears or the global bound is proved."""
+        """Scan affine layers for a witness or a proved global bound."""
         self._prepare_bases()
         pauli = self._representative(syndrome)
         offsets = self._get_offsets(self._embed(pauli))
@@ -387,15 +378,13 @@ class _PauliCosetSearch:
 def _iter_fixed_weight_supports(
     dimension: int, weight: int, batch_size: int
 ) -> Iterator[npt.NDArray[np.int_]]:
-    """Yield coefficient supports for witness enumeration and affine-coset decisions.
+    """Yield batched coefficient supports.
 
-    Unlike the compiled distance minimizer, these consumers need the individual supports and
-    candidate words, including words that do not improve a distance upper bound.
+    These searches need individual words, even those that do not improve a distance upper bound.
     """
     num_supports = math.comb(dimension, weight)
     max_rank = np.iinfo(np.int64).max
     if num_supports <= max_rank:
-        # Unrank consecutive combinadic indices as whole NumPy batches.
         binomial_tables = [
             np.asarray(
                 [min(math.comb(value, index), max_rank) for value in range(dimension)],
@@ -418,7 +407,7 @@ def _iter_fixed_weight_supports(
             yield supports
         return
 
-    # Stream supports when their ranks cannot be represented exactly by int64.
+    # Stream supports when their ranks exceed int64.
     combinations = itertools.combinations(range(dimension), weight)
     flattened = itertools.chain.from_iterable(combinations)
     while True:
