@@ -273,6 +273,13 @@ def test_tesseract_preset_merge_defaults(fake_tesseract: None) -> None:
     assert not spec.build(np.eye(2, dtype=int)).config.merge_errors
     assert spec.build(stim.DetectorErrorModel("error(0.1) D0")).config.merge_errors
 
+    # presets default to "long-beam" and preserve qLDPC options
+    assert spec.options == decoders.tesseract_preset("long-beam").options
+    channel = np.array([0.1, 0.2])
+    spec = decoders.tesseract_preset("short-beam", error_channel=channel, add_erasure_bit=True)
+    assert spec.options["error_channel"] is channel
+    assert spec.options["add_erasure_bit"] is True
+
     with pytest.warns(DeprecationWarning, match="error_rate=0.2.*error_channel=0.2") as warnings:
         deprecated_spec = decoders.tesseract_preset(error_rate=0.2)
     assert warnings[0].filename == __file__

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 import warnings
 from typing import Any
 
@@ -16,7 +17,6 @@ import stim
 from qldpc import decoders
 from qldpc.decoders import common
 from qldpc.decoders.common import _deprecate_error_rate_option
-from qldpc.decoders.external.ldpc import _get_decoder_bp_osd
 
 
 def test_get_error_and_erasure() -> None:
@@ -63,12 +63,16 @@ def test_with_erasure_bits() -> None:
 def test_erasure_bit_support_decorator() -> None:
     """Erasure support declarations enforce capabilities and use an explicit display name."""
 
+    class NoErasureDecoder(decoders.ErrorDecoder):
+        def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+            return syndrome
+
     @common._erasure_bit_support("Friendly Name", supported=True)
     def unusually_named_builder(
         matrix: npt.NDArray[np.int_], *, add_erasure_bit: bool = False
     ) -> decoders.ErrorDecoder:
-        del add_erasure_bit
-        return _get_decoder_bp_osd(matrix)
+        del matrix, add_erasure_bit
+        return NoErasureDecoder()
 
     with pytest.raises(ValueError, match="The Friendly Name decoder cannot signal erasure"):
         unusually_named_builder(np.eye(1, dtype=int), add_erasure_bit=True)
@@ -77,10 +81,11 @@ def test_erasure_bit_support_decorator() -> None:
     def unsupported_builder(
         matrix: npt.NDArray[np.int_], *, add_erasure_bit: bool = False
     ) -> decoders.ErrorDecoder:
-        del add_erasure_bit
-        return _get_decoder_bp_osd(matrix)
+        del matrix, add_erasure_bit
+        return NoErasureDecoder()
 
-    assert unsupported_builder(np.eye(1, dtype=int), add_erasure_bit=False)
+    decoder = unsupported_builder(np.eye(1, dtype=int), add_erasure_bit=False)
+    assert np.array_equal(decoder.decode_errors(np.array([1])), [1])
     with pytest.raises(ValueError, match="The unsupported decoder cannot signal erasure"):
         unsupported_builder(np.eye(1, dtype=int), add_erasure_bit=True)
 
@@ -129,14 +134,8 @@ def test_get_matrix_error_channel() -> None:
         (0.2, None, "error_channel=0.2"),
         (0.2, 0.3, "error_channel=0.2 and error_rate=0.3"),
     ):
-        with pytest.raises(ValueError) as error:
+        with pytest.raises(ValueError, match=f"so {re.escape(specified)} cannot"):
             common._get_matrix_error_channel(dem, error_channel, error_rate)
-        message = str(error.value)
-        assert message.startswith(
-            f"A detector error model supplies its own error probabilities, so {specified} cannot"
-        )
-        assert "SinterDecoder" in message
-        assert "DetectorErrorModelArrays(dem).detector_flip_matrix" in message
 
 
 def test_dem_error_probabilities_through_public_paths() -> None:

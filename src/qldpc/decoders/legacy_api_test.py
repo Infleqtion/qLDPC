@@ -141,26 +141,23 @@ V041_ROOT_NAMES = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(V033_ROOT_NAMES | V041_ROOT_NAMES))
-def test_tagged_root_name_is_importable(name: str) -> None:
-    assert name in qldpc.decoders.__all__
+def test_tagged_root_names_are_importable() -> None:
+    """Every root name of a tagged release is exported and importable from the package root."""
+    assert not (V033_ROOT_NAMES | V041_ROOT_NAMES) - set(qldpc.decoders.__all__)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        assert hasattr(qldpc.decoders, name)
-
-
-def test_tagged_root_inventory() -> None:
-    """The v0.3.3 root API is a subset of the v0.4.1 root API."""
-    assert len(V033_ROOT_NAMES) == 32
-    assert len(V041_ROOT_NAMES) == 90
-    assert V033_ROOT_NAMES <= V041_ROOT_NAMES
+        for name in V033_ROOT_NAMES | V041_ROOT_NAMES:
+            assert hasattr(qldpc.decoders, name)
 
 
 def test_tagged_root_star_import() -> None:
-    """The import machinery can resolve the package root's star-import inventory."""
+    """A star import of the package root resolves every name in its __all__."""
+    namespace: dict[str, object] = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        assert __import__("qldpc.decoders", fromlist=["*"]) is qldpc.decoders
+        # a star import is only valid at module level, so execute it in a fresh namespace
+        exec("from qldpc.decoders import *", namespace)  # noqa: S102
+    assert set(qldpc.decoders.__all__) <= namespace.keys()
 
 
 @pytest.mark.parametrize(

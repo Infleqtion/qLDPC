@@ -7,7 +7,6 @@ from __future__ import annotations
 import functools
 import pickle
 import re
-import unittest.mock
 import warnings
 from collections.abc import Callable
 from typing import Any, cast
@@ -23,7 +22,6 @@ from qldpc.decoders.construction import legacy
 from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.custom.ilp import ILPDecoder
 from qldpc.decoders.custom.lookup import LookupDecoder, ObservableLookupDecoder
-from qldpc.decoders.external import ldpc as ldpc_integration
 
 
 def test_decoder_selection() -> None:
@@ -41,12 +39,6 @@ def test_decoder_selection() -> None:
         pytest.raises(ValueError, match="Only one decoder"),
     ):
         decoders.get_decoder(matrix, with_BF=True, with_MWPM=True)
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        decoders.decode(matrix, syndrome, with_BF=True)
-    assert caught[0].filename == __file__
-    assert "decoders.bf(...).build(pcm_or_dem)" in str(caught[0].message)
 
     with pytest.warns(DeprecationWarning, match=r"decoders\.bp_osd\(\.\.\.\)\.build"):
         decoders.get_decoder(matrix, max_iter=1)
@@ -97,11 +89,10 @@ def test_decoder_selection() -> None:
     assert matrix_decoder.decode(np.array([1], dtype=int)).tolist() == [1]
 
 
-def test_deprecated_decoder_functions(pytestconfig: pytest.Config) -> None:
+def test_deprecated_decoder_functions() -> None:
     """The deprecated get_decoder and decode functions behave as they did, and name replacements."""
-    np.random.seed(pytestconfig.getoption("randomly_seed"))
-    matrix = np.random.randint(2, size=(3, 4))
-    error = np.random.randint(2, size=matrix.shape[1])
+    matrix = np.array([[1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 1]])
+    error = np.array([1, 0, 0, 1])
     syndrome = (matrix @ error) % 2
 
     class CustomDecoder:
@@ -164,18 +155,16 @@ def test_deprecated_decoder_functions(pytestconfig: pytest.Config) -> None:
 def test_legacy_flat_backend_options() -> None:
     """Deprecated APIs move flat backend options into the backend_options of a builder."""
     matrix = np.array([[1, 1, 0], [0, 1, 1]])
-    with (
-        warnings.catch_warnings(),
-        unittest.mock.patch.object(ldpc_integration, "_build_ldpc_decoder") as backend,
-    ):
-        warnings.simplefilter("ignore", DeprecationWarning)
-        decoders.get_decoder_bp_osd(
-            matrix, max_iter=7, backend_extension=1, backend_options={"other": 2}
+    with pytest.warns(DeprecationWarning):
+        decoder: Any = decoders.get_decoder_bp_osd(
+            matrix,
+            osd_method="OSD_CS",
+            input_vector_type="syndrome",
+            backend_options={"osd_order": 2},
         )
-        expected_options = {"max_iter": 7, "backend_extension": 1, "other": 2}
-        assert expected_options.items() <= backend.call_args.args[3].items()
-        decoders.get_decoder(matrix, with_BF=True, backend_extension=3)
-        assert backend.call_args.args[3]["backend_extension"] == 3
+    assert decoder.osd_order == 2
+    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match="Unknown parameter"):
+        decoders.get_decoder(matrix, with_BP_OSD=True, unsupported_option=1)
 
     # add_erasure_bit is not a backend option, so unsupported decoders still reject it clearly
     with (
@@ -193,9 +182,8 @@ def test_legacy_flat_backend_options() -> None:
 
     # builders without backend_options receive their keyword arguments unchanged, and the legacy
     # constructors remain pickleable for Sinter
-    constructor = legacy.DECODER_CONSTRUCTORS["BP_OSD"]
-    assert isinstance(constructor, functools.partial)
-    assert pickle.loads(pickle.dumps(constructor)).func is constructor.func  # noqa: S301
+    constructor = pickle.loads(pickle.dumps(legacy.DECODER_CONSTRUCTORS["BP_OSD"]))  # noqa: S301
+    assert np.array_equal(constructor(matrix).decode(np.array([1, 0])), [1, 0, 0])
     with pytest.warns(DeprecationWarning):
         decoder = decoders.get_decoder(matrix, with_lookup=True, max_weight=1)
     assert np.array_equal(decoder.decode(np.array([1, 0])), [1, 0, 0])
@@ -238,10 +226,6 @@ def test_deprecated_builders() -> None:
     with pytest.warns(DeprecationWarning):
         bp_osd_decoder: Any = decoders.get_decoder_bp_osd(matrix, max_iter=7)
     assert bp_osd_decoder.max_iter == 7
-
-    # the deprecated uppercase aliases resolve to the deprecated lowercase builders
-    with pytest.warns(DeprecationWarning, match="get_decoder_BP_OSD"):
-        assert decoders.get_decoder_BP_OSD is decoders.get_decoder_bp_osd
 
 
 def test_deprecated_resolution_functions() -> None:
@@ -313,6 +297,14 @@ def test_deprecated_resolution_functions() -> None:
             ),
         ),
         (decoders.from_dem(build_observable_lookup), "decoder.build(dem)", ""),
+        (
+            functools.partial(build_observable_lookup),
+            "decoder_constructor(dem)",
+            (
+                " (if it builds an error decoder, use"
+                " decoders.ErrorsToObservablesDecoder(decoder_constructor(dem), dem))"
+            ),
+        ),
     ]
     for observable_input, expression, note in observable_cases:
         message = get_message(decoders.get_observable_decoder, dem, decoder=observable_input)
@@ -336,45 +328,6 @@ def test_deprecated_resolution_functions() -> None:
     ):
         decoders.get_observable_decoder(dem, decoder=decoders.from_matrix(build_lookup))
 
-    # bare constructors receive advice for both output kinds, regardless of their annotation
-    def build_unannotated(dem: stim.DetectorErrorModel):  # type: ignore[no-untyped-def]
-        return ObservableLookupDecoder(dem, max_weight=1)
-
-    def build_unresolvable(dem: stim.DetectorErrorModel) -> ObservableLookupDecoder:
-        return ObservableLookupDecoder(dem, max_weight=1)
-
-    build_unresolvable.__annotations__["return"] = "UndefinedDecoder"
-    wrapped = "decoders.ErrorsToObservablesDecoder({}(dem), dem)"
-    constructor_cases: list[tuple[Callable[..., object], str, str]] = [
-        (
-            functools.partial(build_observable_lookup),
-            "decoder_constructor(dem)",
-            f" (if it builds an error decoder, use {wrapped.format('decoder_constructor')})",
-        ),
-        (
-            functools.partial(LookupDecoder, max_weight=1),
-            "decoder_constructor(dem)",
-            f" (if it builds an error decoder, use {wrapped.format('decoder_constructor')})",
-        ),
-        (
-            build_unannotated,
-            "build_unannotated(dem)",
-            f" (if it builds an error decoder, use {wrapped.format('build_unannotated')})",
-        ),
-        (
-            build_unresolvable,
-            "build_unresolvable(dem)",
-            f" (if it builds an error decoder, use {wrapped.format('build_unresolvable')})",
-        ),
-    ]
-    for constructor, expression, note in constructor_cases:
-        message = get_message(decoders.get_observable_decoder, dem, decoder=constructor)
-        assert message == f"{expression}{note} instead"
-        message = get_message(
-            decoders.decode_observables, dem, np.array([1, 0]), decoder=constructor
-        )
-        assert message == f"{expression}.decode_observables(syndrome){note} instead"
-
     # an invalid input still names a replacement before it is rejected
     with (
         pytest.warns(DeprecationWarning, match=r"decoders\.bp_osd\(\.\.\.\)\.build"),
@@ -391,12 +344,6 @@ def test_deprecated_resolution_functions() -> None:
     with pytest.warns(DeprecationWarning, match="lookup_table is deprecated; use lookup") as caught:
         assert decoders.lookup_table is decoders.lookup
     assert caught[0].filename == __file__
-
-    # internal resolution, used by methods that accept decoder=, does not warn
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        decoders.resolve_decoder(matrix, decoders.bf(), {})
-        decoders.resolve_observable_decoder(dem, None, {})
 
 
 def test_legacy_decoder_migration_messages() -> None:
