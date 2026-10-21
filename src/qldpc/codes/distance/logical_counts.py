@@ -46,6 +46,8 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
+from qldpc._util import format_docstring
+
 from . import _information_sets
 from ._binary import (
     _get_independent_rows,
@@ -173,6 +175,7 @@ class CSSLogicalCounter:
         canonical_x, canonical_z = self._get_canonical_checks()
         return self._self_dual or np.array_equal(canonical_x, canonical_z)
 
+    @format_docstring(MAX_SETS=_information_sets.MAX_SETS)
     def count_logicals(
         self,
         weight: int | None = None,
@@ -180,6 +183,7 @@ class CSSLogicalCounter:
         method: DistanceMethod = "brouwer_zimmermann",
         full_pauli: bool = False,
         within_distance: bool = False,
+        max_information_sets: int = _information_sets.MAX_SETS,
     ) -> CSSLogicalCounts:
         """Count the nontrivial logical operators of a given weight.
 
@@ -196,6 +200,11 @@ class CSSLogicalCounter:
             within_distance: If True, raise an error when the weight is above the distance, that
                 is, when some nontrivial X-only or Z-only logical operator is lighter than the
                 weight.  Full Pauli counts always do this.  Defaults to False.
+            max_information_sets: Limit on the number of information sets that a Brouwer-Zimmermann
+                count may use when it replaces its first, disjoint sets by overlapping ones.  More
+                sets can skip costly layers of a hard count, but each set costs setup work, which
+                dominates a cheap count.  A small limit suits many cheap counts on a large code.
+                This never changes the counts.  Defaults to {MAX_SETS}.
 
         Returns:
             The counted weight and the counts.  If no weight is given and the code encodes no
@@ -242,6 +251,7 @@ class CSSLogicalCounter:
             max_exponent=target if weigh else 0,
             reject_lighter=reject_above,
             get_disjoint=functools.partial(self._get_disjoint_family, 0),
+            max_sets=max_information_sets,
         )
         if self._self_dual or counts_x is None:
             counts_z = counts_x
@@ -255,6 +265,7 @@ class CSSLogicalCounter:
                 max_exponent=len(self._gauge_x) if weigh else 0,
                 reject_lighter=reject_above,
                 get_disjoint=functools.partial(self._get_disjoint_family, 1),
+                max_sets=max_information_sets,
             )
         if counts_x is None or counts_z is None:
             raise ValueError(
@@ -429,6 +440,7 @@ def count_logicals_css(
     method: DistanceMethod = "brouwer_zimmermann",
     full_pauli: bool = False,
     within_distance: bool = False,
+    max_information_sets: int = _information_sets.MAX_SETS,
 ) -> CSSLogicalCounts:
     """Count the nontrivial logical operators of a given weight in a binary CSS code.
 
@@ -436,7 +448,11 @@ def count_logicals_css(
     :meth:`CSSLogicalCounter.count_logicals` for the arguments and conventions.
     """
     return CSSLogicalCounter(code).count_logicals(
-        weight, method=method, full_pauli=full_pauli, within_distance=within_distance
+        weight,
+        method=method,
+        full_pauli=full_pauli,
+        within_distance=within_distance,
+        max_information_sets=max_information_sets,
     )
 
 
@@ -471,6 +487,7 @@ def _count_words(
     max_exponent: int,
     reject_lighter: bool,
     get_disjoint: Callable[[], _information_sets._BasisFamily],
+    max_sets: int,
 ) -> npt.NDArray[np.int64] | None:
     """Visit each nontrivial word of one sector with the given weight exactly once.
 
@@ -484,7 +501,9 @@ def _count_words(
     if method == "brute_force":
         sets, certificate = [(basis, labels)], None
     else:
-        sets, certificate = _get_counting_information_sets(basis, labels, weight, get_disjoint())
+        sets, certificate = _get_counting_information_sets(
+            basis, labels, weight, get_disjoint(), max_sets
+        )
 
     rows = [_pack_bits(generators) for generators, _ in sets]
     tags = [_pack_bits(set_labels) for _, set_labels in sets]
@@ -528,6 +547,7 @@ def _get_counting_information_sets(
     labels: _BinaryMatrix,
     weight: int,
     disjoint: _information_sets._BasisFamily,
+    max_sets: int,
 ) -> tuple[list[_Sector], _information_sets._Certificate]:
     """Select BZ information sets that certify every word of the given weight.
 
@@ -536,7 +556,7 @@ def _get_counting_information_sets(
     count.
     """
     family = _information_sets._prepare_family(
-        basis, labels, upper_bound=weight + 1, disjoint=disjoint
+        basis, labels, upper_bound=weight + 1, disjoint=disjoint, max_sets=max_sets
     )
     sets = []
     for information_set in family.information_sets:
