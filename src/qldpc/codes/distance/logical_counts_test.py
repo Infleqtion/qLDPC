@@ -270,6 +270,30 @@ def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
             assert counter.count_logicals(weight) == expected
 
 
+def test_information_set_limit_bounds_overlapping_families(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The limit shrinks the overlapping families that a count may use, not the counts."""
+    sizes: list[int] = []
+    original = _information_sets._get_overlapping_family
+
+    def select(*args: Any, **kwargs: Any) -> _information_sets._BasisFamily | None:
+        family = original(*args, minimum_work=0, **kwargs)
+        if family is not None:
+            sizes.append(len(family.information_sets))
+        return family
+
+    monkeypatch.setattr(_information_sets, "_get_overlapping_family", select)
+    code = _random_css_code(np.random.default_rng(5), 24, 8, 8)
+    counter = lc.CSSLogicalCounter(code)
+    expected = [counter.count_logicals(weight, method="brute_force") for weight in range(25)]
+    assert [counter.count_logicals(weight) for weight in range(25)] == expected
+    assert max(sizes) > 4
+
+    sizes.clear()
+    limited = [lc.count_logicals_css(code, weight, max_information_sets=4) for weight in range(25)]
+    assert limited == expected
+    assert sizes and max(sizes) <= 4
+
+
 def test_first_family_stage_is_computed_once_per_sector() -> None:
     """Counting at other weights, as when a guess fails, does not repeat the first stage."""
     counter = _counter(_HAND_X, _HAND_Z)

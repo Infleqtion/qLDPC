@@ -32,6 +32,9 @@ import numpy.typing as npt
 
 from ._binary import _row_reduce_binary
 
+# Default limit on the number of sets in a replacement family (see _get_overlapping_family).
+MAX_SETS = 16
+
 
 class _InformationSet(NamedTuple):
     """Generators, labels, rank, and pivot columns for one systematic column block."""
@@ -132,6 +135,7 @@ def _prepare_family(
     upper_bound: int,
     weight_divisor: int = 1,
     disjoint: _BasisFamily | None = None,
+    max_sets: int = MAX_SETS,
 ) -> _BasisFamily:
     """Run every family stage, aimed at a fixed ``upper_bound``, without intermediate exits.
 
@@ -144,7 +148,9 @@ def _prepare_family(
         else disjoint
     )
     family = _prune_family(family, upper_bound=upper_bound)
-    overlapping = _get_overlapping_family(basis, labels, family, upper_bound=upper_bound)
+    overlapping = _get_overlapping_family(
+        basis, labels, family, upper_bound=upper_bound, max_sets=max_sets
+    )
     return family if overlapping is None else overlapping
 
 
@@ -193,7 +199,7 @@ def _get_overlapping_family(
     family: _BasisFamily,
     *,
     upper_bound: int,
-    max_sets: int = 16,
+    max_sets: int = MAX_SETS,
     minimum_work: int = 100_000,
 ) -> _BasisFamily | None:
     """Stage three: look for a lower-work replacement for a disjoint family.
