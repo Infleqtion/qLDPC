@@ -707,6 +707,9 @@ def _count_chunk(
             for index in range(width):
                 word[index] = prefixes[depth, index] ^ rows[row, index]
                 weight += _popcount_word(word[index])
+                # A heavier word is rejected below, so its unwritten words are never read.
+                if weight > target:
+                    break
             if weight > target or (weight < target and not reject_lighter):
                 continue
             # A nonzero quotient label marks a nontrivial logical rather than a stabilizer.
