@@ -32,6 +32,16 @@ from .conftest import (
 )
 
 
+def test_webster_fixture_validation() -> None:
+    """Webster fixture helpers reject unknown codes and logical operators clearly."""
+    with pytest.raises(IndexError, match="code_index must be"):
+        load_webster_seed_set(-1)
+
+    data = load_webster_seed_set(0)
+    with pytest.raises(ValueError, match="seed not found"):
+        _webster_x_bar_operator(data, name="missing")
+
+
 def test_cheeger_constant_steane() -> None:
     """Steane's X̄ gadget has h(F) = 2, and boosting to the current h adds no rows.
 
