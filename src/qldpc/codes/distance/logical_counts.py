@@ -60,8 +60,8 @@ from ._binary import (
     _popcount_word,
     _row_reduce_binary,
 )
+from ._brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
 from ._macwilliams import _CheckEnumerators
-from .brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
 from .brute_force import _get_distance_quantum_brute_force
 from .core import DistanceMethod
 
