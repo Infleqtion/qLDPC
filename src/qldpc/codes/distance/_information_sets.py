@@ -92,7 +92,7 @@ class _Certificate:
 
 
 @dataclass(frozen=True)
-class _Family:
+class _BasisFamily:
     """Search bases for one binary basis, and the certificate that their complete layers give."""
 
     information_sets: tuple[_InformationSet, ...]
@@ -109,7 +109,7 @@ class _Family:
         *,
         dimension: int,
         weight_divisor: int,
-    ) -> _Family:
+    ) -> _BasisFamily:
         """Certify a family with its ranks and its actual maximum pivot coverage."""
         sets = tuple(information_sets)
         certificate = _Certificate(
@@ -131,8 +131,8 @@ def _prepare_family(
     *,
     upper_bound: int,
     weight_divisor: int = 1,
-    disjoint: _Family | None = None,
-) -> _Family:
+    disjoint: _BasisFamily | None = None,
+) -> _BasisFamily:
     """Run every family stage, aimed at a fixed ``upper_bound``, without intermediate exits.
 
     The first stage does not depend on ``upper_bound``, so a caller that prepares several families
@@ -153,16 +153,16 @@ def _get_disjoint_family(
     labels: npt.NDArray[np.uint8] | None,
     *,
     weight_divisor: int = 1,
-) -> _Family:
+) -> _BasisFamily:
     """Stage one: pack disjoint information sets, and certify them with any inferred parity."""
-    return _Family.from_information_sets(
+    return _BasisFamily.from_information_sets(
         _get_information_set_generators(basis, labels),
         dimension=len(basis),
         weight_divisor=_infer_weight_divisor(basis, weight_divisor),
     )
 
 
-def _prune_family(family: _Family, *, upper_bound: int) -> _Family:
+def _prune_family(family: _BasisFamily, *, upper_bound: int) -> _BasisFamily:
     """Stage two: retain partial sets that can strengthen certification of ``upper_bound``."""
     certificate = family.certificate
     dimension = certificate.dimension
@@ -184,18 +184,18 @@ def _prune_family(family: _Family, *, upper_bound: int) -> _Family:
         for item in family.information_sets
         if item.rank == dimension or dimension - item.rank < full_set_certifying_weight
     )
-    return _Family(retained, replace(certificate, ranks=tuple(item.rank for item in retained)))
+    return _BasisFamily(retained, replace(certificate, ranks=tuple(item.rank for item in retained)))
 
 
 def _get_overlapping_family(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
-    family: _Family,
+    family: _BasisFamily,
     *,
     upper_bound: int,
     max_sets: int = 16,
     minimum_work: int = 100_000,
-) -> _Family | None:
+) -> _BasisFamily | None:
     """Stage three: look for a lower-work replacement for a disjoint family.
 
     ``family`` contains full or partial sets for one independent binary basis.
@@ -262,7 +262,7 @@ def _get_overlapping_family(
             break
     if best_sets is None:
         return None
-    return _Family(
+    return _BasisFamily(
         tuple(best_sets),
         replace(certificate, ranks=(dimension,) * len(best_sets), max_coverage=best_coverage),
     )

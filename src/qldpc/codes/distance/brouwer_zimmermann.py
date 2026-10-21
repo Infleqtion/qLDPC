@@ -412,7 +412,7 @@ def _prepare_brouwer_zimmermann_search(
     )
 
 
-def _get_family_upper_bound(family: _information_sets._Family, upper_bound: int) -> int:
+def _get_family_upper_bound(family: _information_sets._BasisFamily, upper_bound: int) -> int:
     """Tighten an upper bound with the systematic rows of a family, all layer-one candidates."""
     for information_set in family.information_sets:
         upper_bound = min(
