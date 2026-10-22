@@ -12,4 +12,9 @@ if __name__ == "__main__":
     build_docs.ensure_pandoc_on_path()
     skip_files = ["--sysmon", "--skip", "configs", "requirements"]
     check_result = checks_superstaq.all_.run(*skip_files, *sys.argv[1:])
-    sys.exit(check_result or build_docs.validate_rendered_docstrings())
+    # Rendered docstrings exist only after a full run, which builds the docs; file or incremental
+    # runs skip the docs build, so they skip this validation too.
+    full_run = not any(
+        arg in ("-i", "--incremental") or not arg.startswith("-") for arg in sys.argv[1:]
+    )
+    sys.exit(check_result or (build_docs.validate_rendered_docstrings() if full_run else 0))

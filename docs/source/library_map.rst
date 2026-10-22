@@ -116,7 +116,7 @@ Algebraic inputs of lifted and geometric families
 Lifted-product families such as :class:`~qldpc.codes.quantum.LPCode` take :class:`~qldpc.abstract.ring_array.RingArray` matrices, whose entries belong to a :class:`~qldpc.abstract.rings.GroupRing` over a finite field.
 Each entry lifts to a block matrix over that field, and ``RingArray.lift()`` returns the resulting ``galois.FieldArray``.
 Every ``RingArray`` has one base ring, and arithmetic between arrays over different rings raises an error.
-:class:`~qldpc.codes.quantum.QTCode` builds a :class:`~qldpc.objects.CayleyComplex` from two subsets of a group, and families such as :class:`~qldpc.codes.quantum.T4Code` are built from a :class:`~qldpc.objects.ChainComplex`.
+:class:`~qldpc.codes.quantum.QTCode` builds a :class:`~qldpc.objects.CayleyComplex` from two subsets of a group, and families such as :class:`~qldpc.codes.quantum.T4Code` (built from a 4×4 integer lattice matrix) build a :class:`~qldpc.objects.ChainComplex` internally and expose it as ``code.chain``.
 The API reference documents each family's conventions and literature.
 
 Distances across packages
@@ -124,9 +124,11 @@ Distances across packages
 
 ``get_distance()`` computes an exact distance, and ``get_distance_bound`` computes a randomized upper bound; CSS codes also have separate X and Z distances.
 Exact distances of binary codes use an optimized `Brouwer--Zimmermann search <https://github.com/qLDPCOrg/qLDPC/blob/main/src/qldpc/codes/distance/brouwer_zimmermann.md>`_, and nonbinary codes use exhaustive enumeration; both can take exponential time.
-``get_distance_exact(cutoff=c)`` stops once it finds a nontrivial word of weight at most ``c``, so its result is exact only for the default ``cutoff=1``.
+``get_distance_exact(cutoff=c)`` stops once it finds a nontrivial word of weight at most ``c``.
+A result of at most ``c`` is therefore only an upper bound, while a larger result, or any result with ``cutoff <= 1`` (the default is 1), is exact.
 Distance-bound backends depend on the class: ``ClassicalCode`` uses a decoder, a non-CSS ``QuditCode`` uses GAP's QDistRnd, and ``CSSCode`` supports ``sqetch`` (binary only), GAP, and a decoder.
-For ``CSSCode``, the default ``backend="auto"`` tries those three in order and uses GAP only if it can run without user interaction, so it never prompts.
+For ``CSSCode``, the default ``backend="auto"`` tries those three in order and uses GAP only if a GAP binding or executable can be called, so it never falls back to the manual copy-and-paste workflow.
+It can still ask on standard input before installing a missing GUAVA or QDistRnd package.
 Codes remember the best distance bound that they have computed or been given, and CSS codes remember X and Z bounds separately.
 With ``num_trials=None``, ``get_distance_bound`` returns the exact distance or best known bound if there is one, and otherwise computes one bound.
 An explicit ``num_trials`` runs that many trials, and never returns a worse bound than the best known one.
@@ -200,7 +202,7 @@ Other limitations:
 What qLDPC computes exactly, bounds, and trusts
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-* Exact: ``get_distance_exact`` with the default ``cutoff=1``, which ``get_distance`` calls unless it is given ``bound=``, and logical-operator counts.
+* Exact: ``get_distance_exact`` with ``cutoff <= 1`` (the default is 1), or whenever its result exceeds the cutoff, which ``get_distance`` calls unless it is given ``bound=``, and logical-operator counts.
 * Upper bounds: ``get_distance_bound`` with every backend.
 * Estimates: code-capacity and circuit-level logical error rates are sampled.
   A code-capacity estimate treats unsampled heavy errors as failures, so it can be high by up to the amount that its ``truncation_error_bound`` method reports.
@@ -224,7 +226,7 @@ Code and group lookups
 
 * :meth:`QuditCode.from_qecdb_id <qldpc.codes.common.QuditCode.from_qecdb_id>` and :meth:`QuditCode.from_qldpc_challenge_id <qldpc.codes.common.QuditCode.from_qldpc_challenge_id>` download code data on their first call for each ID, and later calls reuse the copy cached on disk.
 * ``ClassicalCode.from_name`` runs GAP and GUAVA rather than an online lookup, and also caches its result on disk.
-* ``Group.from_name`` tries a small local database, then GAP if it can run without user interaction, then GroupNames.org for a ``SmallGroup``, and finally the manual GAP workflow.
+* ``Group.from_name`` tries a small local database, then GAP if a GAP binding or executable can be called (GAP may ask before installing a missing package), then GroupNames.org for a ``SmallGroup``, and finally the manual GAP workflow.
 
 Pass ``refresh=True`` to ``ClassicalCode.from_name``, ``QuditCode.from_qecdb_id``, or ``QuditCode.from_qldpc_challenge_id`` to bypass and replace its cached result.
 

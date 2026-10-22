@@ -3438,10 +3438,11 @@ class CSSCode(QuditCode):
         Set ``backend="gap"`` to use GAP's QDistRnd package or ``backend="sqetch"`` to use the
         optional GPU-accelerated random-ISD estimator.  By default, ``backend="auto"`` chooses the
         first applicable backend in this order: an installed sqetch for binary CSS codes,
-        GAP/QDistRnd if GAP can be called without user interaction, then the decoder-based
-        algorithm.  Automatic selection therefore never prompts on standard input (see
-        :func:`qldpc.external.gap.is_callable`); request ``backend="gap"`` explicitly to use the
-        manual copy/paste GAP workflow.
+        GAP/QDistRnd if a GAP binding or executable can be called (see
+        :func:`qldpc.external.gap.is_callable`), then the decoder-based algorithm.  Automatic
+        selection therefore never falls back to the manual copy/paste GAP workflow, which requires
+        ``backend="gap"``, but GAP may still ask on standard input before installing a missing
+        GUAVA or QDistRnd package.
 
         Args:
             num_trials: Minimize over this many independent upper bounds.  If ``None`` (the
@@ -4172,9 +4173,9 @@ def _resolve_distance_backend(
 ) -> DistanceBackend:
     """Resolve the automatic distance-bound backend.
 
-    Automatic selection only uses GAP when it can be called without user interaction, so that the
-    default backend never prompts on standard input.  The manual copy/paste GAP workflow is
-    available by requesting ``backend="gap"`` explicitly.
+    Automatic selection only uses GAP when a GAP binding or executable can be called, so that the
+    default backend never falls back to the manual copy/paste GAP workflow, which is available by
+    requesting ``backend="gap"`` explicitly.
     """
     if backend != "auto":
         return backend

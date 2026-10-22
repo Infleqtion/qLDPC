@@ -43,10 +43,13 @@ Plumbing that several modules share lives in private modules; helpers that one f
 - Plain names defined in public modules (no underscore anywhere in the import path) are public.
   Keep them working, and retire a released public name through a tested shim rather than breaking its import (see [Deprecations](#deprecations)).
 - [`src/qldpc/__init__.py`](src/qldpc/__init__.py) exports subpackages rather than flattening their classes and functions.
-- Each stable subpackage lists its public names (or, for `qldpc` and `qldpc.external`, its public submodules) in the `__all__` of its `__init__.py`.
-  `qldpc.decoders.construction` has no `__all__`, because `qldpc.decoders` re-exports its public names.
+- Each stable subpackage lists its public classes and functions (or, for `qldpc` and `qldpc.external`, its public submodules) in the `__all__` of its `__init__.py`.
+  Decoder specification helpers such as `bp_osd` are listed only in `qldpc.decoders.__all__`.
+  `qldpc.decoders.construction` has no `__all__`: `qldpc.decoders` re-exports its user-facing names, and the helpers for backend authors (`decoder_spec`, `observable_decoder_spec`) are public at `qldpc.decoders.construction.specs`.
+  Type aliases and type variables used in public signatures are public without being listed.
   Keep `__all__` complete and preserve these import paths when moving implementation code.
-- AutoAPI lists every public symbol, so human-written docs explain what packages do and show representative tasks rather than catalogue classes.
+- AutoAPI lists every public symbol except the generated decoder specification helpers, which [`decoders.rst`](docs/source/decoders.rst) documents instead.
+  Other human-written docs therefore explain what packages do and show representative tasks rather than catalogue classes.
 - A private module has an underscore somewhere in its import path, and is private as a whole.
   It uses plain names for definitions that other modules use, and underscore names for helpers that only its own file uses.
 - A module-level underscore name is used only in its own file and that file's `*_test.py`.
@@ -59,7 +62,7 @@ Plumbing that several modules share lives in private modules; helpers that one f
 
 ## Code style and organization
 
-- Every source file starts with `# SPDX-License-Identifier: Apache-2.0`, a blank line, and a module docstring whose first line summarizes the module.
+- Every source file outside `experimental/` starts with `# SPDX-License-Identifier: Apache-2.0`, a blank line, and a module docstring whose first line summarizes the module.
 - Docstrings follow the Google convention, and lines are at most 100 columns long.
 - Python comments and docstrings use ordinary paragraphs: separate sentences with two spaces and fill lines to the 100-column limit.
 - Keep one prose sentence per physical source line in `.rst`, `.md`, and Markdown notebook cells.
@@ -229,7 +232,7 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
 - `.rst` pages and the README do not mention deprecated APIs.
   Docstrings carry no deprecation notes, except one line in `Args` that calls out a deprecated option and what to use instead.
 - The data-driven tests in [`core_test.py`](src/qldpc/_deprecations/core_test.py) cover every registry entry and the attached methods, and [`decoders_test.py`](src/qldpc/_deprecations/decoders_test.py) covers the deprecated decoder API.
-  [`decoders/legacy_api_test.py`](src/qldpc/decoders/legacy_api_test.py) checks that the package-root names of tagged releases remain importable.
+  [`decoders/legacy_api_test.py`](src/qldpc/decoders/legacy_api_test.py) checks that the `qldpc.decoders` root names of v0.3.3 and v0.4.1 remain importable.
   Tests of inline deprecations stay beside their modules; name new ones `test_deprecated_*`.
 - To remove deprecations, grep for `_deprecations` and, case-insensitively, for `deprecat`.
   Delete the registry entries, attached methods, inline blocks, and `Args` notes, the stubs of modules that no longer serve deprecated names, and the matching tests.
@@ -255,6 +258,8 @@ Run checks on what you changed while iterating, and save repository-wide runs fo
 Every check script except `build_docs.py` accepts explicit files, as in `python checks/coverage_.py src/qldpc/codes/common.py`, or `-i/--incremental [REVISION ...]`.
 The incremental mode checks only the files changed since the merge base with `upstream/main`, `origin/main`, or `main` (the first that exists), or with the given revisions.
 For example, `python checks/coverage_.py -i` runs the per-module coverage gate for changed modules only, which is much faster than a full run.
+`format_.py` always checks, or with `--fix` rewrites, `pyproject.toml` as well, whatever files it is given.
+Prefer the individual scripts for incremental runs: `all_.py -i` measures overall coverage over only the selected tests, so shared fixtures in `conftest.py` files can fail it spuriously.
 Before merging, run `python checks/all_.py` and `python checks/coverage_.py`.
 
 The docs build renders saved notebook outputs without executing code cells.
