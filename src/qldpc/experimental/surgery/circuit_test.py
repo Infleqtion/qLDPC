@@ -229,6 +229,31 @@ def test_ppm_logical_error_rate_grows_with_p(layout: str, pytestconfig: pytest.C
     assert decoded_rates[1] > 0.2, f"decoded rates: {decoded_rates}"
 
 
+def test_single_ppm_decoding_corrects_errors(pytestconfig: pytest.Config) -> None:
+    """With repeated rounds, decoding lowers the logical error rate of a single PPM.
+
+    At p=1e-3 with three rounds, a Steane X̄ measurement flips its raw outcome in about 3% of shots,
+    while the decoded outcome is wrong in under 1% of shots.
+    """
+    from qldpc import decoders
+    from qldpc.circuits import DepolarizingNoiseModel
+    from qldpc.experimental.surgery import build_gadget
+    from qldpc.experimental.surgery.circuit import build_single_ppm_circuit
+
+    code = codes.SteaneCode()
+    logical = np.asarray(code.get_logical_ops(Pauli.X)[0], dtype=np.uint8)
+    gadget = build_gadget(code, logical, basis=Pauli.X)
+    circuit = build_single_ppm_circuit(gadget, rounds=3, noise_model=DepolarizingNoiseModel(1e-3))
+    sampler = circuit.compile_detector_sampler(seed=pytestconfig.getoption("randomly_seed"))
+    detectors, observables = sampler.sample(2000, separate_observables=True)
+    decoder = decoders.bp_osd().build_observable_decoder(circuit.detector_error_model())
+    assert isinstance(decoder, decoders.BatchObservableDecoder)
+    predictions = np.asarray(decoder.decode_observables_batch(detectors))
+    raw_rate = observables[:, 0].mean()
+    decoded_rate = (predictions[:, 0] != observables[:, 0]).mean()
+    assert decoded_rate < 0.015 < raw_rate, f"raw={raw_rate}, decoded={decoded_rate}"
+
+
 @pytest.mark.parametrize("basis", [Pauli.X, Pauli.Z])
 def test_stitch_intercode_both_bases_commute_and_singletons_excluded(basis: PauliXZ) -> None:
     """Inter-code Steane × Steane: commuting checks, k_l + k_r - 1, and only the joint fixed."""
@@ -270,6 +295,29 @@ def test_stitch_intercode_both_bases_commute_and_singletons_excluded(basis: Paul
             single[n_l : 2 * n_l] = x
         augmented = np.vstack([H_joint, single.reshape(1, -1)])
         assert np.linalg.matrix_rank(GF2(augmented.tolist())) == base_rank + 1, which
+
+
+def test_joint_ppm_of_different_codes() -> None:
+    """Inter-code Webster GB code 0 × Steane joint PPM has dimension k_l + k_r - 1 = 10.
+
+    The other inter-code tests join two copies of one code, so they cannot tell the left code's
+    sizes from the right code's.
+    """
+    from qldpc.experimental.surgery.bridge import build_bridge
+    from qldpc.experimental.surgery.circuit import build_joint_ppm_circuit
+    from qldpc.experimental.surgery.gadget import build_gadget
+
+    data = load_webster_seed_set(0)
+    webster = build_generalised_bicycle_code(data["l"], data["A"], data["B"])
+    z_webster = _webster_x_bar_operator(data, "Z_bar_1", pauli_type="Z")
+    steane = codes.SteaneCode()
+    z_steane = np.asarray(steane.get_logical_ops(Pauli.Z)[0]).astype(np.uint8)
+    g_l = build_gadget(webster, z_webster, basis=Pauli.Z)
+    g_r = build_gadget(steane, z_steane, basis=Pauli.Z)
+    _, joint_code = build_joint_ppm_circuit(
+        g_l, g_r, build_bridge(g_l, g_r), rounds=1, noise_model=None
+    )
+    assert joint_code.dimension == webster.dimension + steane.dimension - 1
 
 
 @pytest.mark.parametrize("basis", [Pauli.X, Pauli.Z])
@@ -867,7 +915,10 @@ def test_joint_ppm_qubit_coords_intercode_layout() -> None:
 
 
 def test_joint_ppm_augmented_gauge_rows_stay_in_gauge_lane() -> None:
-    """Bridge-added gauge checks use lane 5; only adapter cycle checks use lane 6."""
+    """Bridge-added gauge checks use lane 5; only adapter cycle checks use lane 6.
+
+    The detectors are deterministic, including those of the bridge-added ancillas.
+    """
     from qldpc.experimental.surgery.bridge import build_bridge
     from qldpc.experimental.surgery.circuit import build_joint_ppm_circuit
     from qldpc.experimental.surgery.gadget import build_gadget
@@ -885,6 +936,7 @@ def test_joint_ppm_augmented_gauge_rows_stay_in_gauge_lane() -> None:
     assert augmented_gauge_count > bare_gauge_count, "fixture must add a bridge gauge row"
 
     circuit, _joint_code = build_joint_ppm_circuit(g_l, g_r, bridge, rounds=1)
+    circuit.detector_error_model()  # raises if any detector is nondeterministic
     qubit_lane = {
         qid: int(coords[1]) for qid, coords in circuit.get_final_qubit_coordinates().items()
     }

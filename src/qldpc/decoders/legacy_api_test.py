@@ -215,6 +215,10 @@ def test_tagged_root_function_signatures() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         rbp = root.get_decoder_RBP
+        # each uppercase alias names the same builder as its lowercase counterpart
+        for suffix in ["BF", "BP_LSD", "BP_OSD", "GUF", "ILP", "MWPM", "RBP"]:
+            alias = getattr(root, f"get_decoder_{suffix}")
+            assert alias is getattr(root, f"get_decoder_{suffix.lower()}")
     assert "error_priors" in inspect.signature(rbp).parameters
     assert list(inspect.signature(root.resolve_decoder).parameters) == [
         "pcm_or_dem",

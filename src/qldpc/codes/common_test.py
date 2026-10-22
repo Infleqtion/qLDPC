@@ -740,13 +740,19 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 
 
 def test_pauli_stabilizer_ops_respect_canonicalized() -> None:
-    """Splitting stabilizers by Pauli type honors canonicalized=True."""
+    """Stabilizers honor canonicalized=True, including when split by Pauli type."""
     # X-type checks that are redundant (rank 2, with 3 rows)
     matrix_x = [[1, 1, 1, 1, 0, 0], [1, 1, 0, 0, 1, 1], [0, 0, 1, 1, 1, 1]]
     matrix_z = [[1, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 1]]
     code = codes.CSSCode(matrix_x, matrix_z)
     assert len(code.get_stabilizer_ops(Pauli.X)) == 3
     assert len(code.get_stabilizer_ops(Pauli.X, canonicalized=True)) == 2
+
+    # the stabilizers of a subsystem code are not row-reduced unless canonicalized
+    bacon_shor = codes.BaconShorCode(3)
+    for subsystem_code in [bacon_shor, bacon_shor.conjugated([1, 3, 5])]:
+        stabilizers = subsystem_code.get_stabilizer_ops(canonicalized=True)
+        assert np.array_equal(stabilizers, stabilizers.row_reduce()[: len(stabilizers)])
 
 
 def test_canonicalized_code_is_its_own_canonical_form() -> None:
@@ -1411,7 +1417,15 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
     """Decoder-specific arguments bypass optional-backend probes."""
     code = codes.QuditCode(codes.SteaneCode().matrix).to_css()
     code.forget_distance()
-    decoder = decoders.lookup(max_weight=3)
+
+    # record each matrix that the factory decodes, to check that the caller's decoder is used
+    built: list[object] = []
+
+    def build_lookup(matrix: npt.NDArray[np.int_]) -> decoders.ErrorDecoder:
+        built.append(matrix)
+        return decoders.lookup(max_weight=3).build(matrix)
+
+    decoder = decoders.from_matrix(build_lookup)
 
     with (
         unittest.mock.patch(
@@ -1424,8 +1438,11 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
         ),
     ):
         assert code.get_distance_bound(pauli=Pauli.X, decoder=decoder) == 3
+        assert built
+        built.clear()
         code.forget_distance()
         assert code.get_code_params(bound=True, decoder=decoder) == (7, 1, 3)
+        assert built
 
     code.forget_distance()
     with pytest.raises(ValueError, match="cannot be combined"):

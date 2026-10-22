@@ -859,6 +859,8 @@ def test_clifford_nq_error_errors() -> None:
         circuits.NoiseModel(clifford_1q_error=0.01, clifford_nq_error={1: 0.0})
     with pytest.raises(ValueError, match="Ambiguous"):
         circuits.NoiseModel(clifford_1q_error=0.0, clifford_nq_error={1: 0.01})
+    with pytest.raises(ValueError, match="Ambiguous"):
+        circuits.NoiseModel(clifford_2q_error=0.01, clifford_nq_error={2: 0.02})
 
     # bool rejection
     with pytest.raises(TypeError, match="unsupported type bool"):

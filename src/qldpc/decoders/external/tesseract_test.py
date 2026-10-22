@@ -279,6 +279,10 @@ def test_tesseract_preset_merge_defaults(fake_tesseract: None) -> None:
     spec = decoders.tesseract_preset("short-beam", error_channel=channel, add_erasure_bit=True)
     assert spec.options["error_channel"] is channel
     assert spec.options["add_erasure_bit"] is True
+    options = decoders.tesseract_preset(sparsify="surface-code-like").options
+    assert options["sparsify_errors"] and options["sparsify_base_degree"] == 2
+    options = decoders.tesseract_preset(sparsify="color-code-like").options
+    assert options["sparsify_errors"] and options["sparsify_base_degree"] == 3
 
     with pytest.warns(DeprecationWarning, match="error_rate=0.2.*error_channel=0.2") as warnings:
         deprecated_spec = decoders.tesseract_preset(error_rate=0.2)

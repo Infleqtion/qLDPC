@@ -16,7 +16,10 @@ def test_basic() -> None:
     """Repetition, ring, and Hamming codes."""
     num_bits = 4
     for code in [codes.RepetitionCode(num_bits), codes.RingCode(num_bits)]:
-        assert codes.ClassicalCode(code.matrix).get_code_params() == (num_bits, 1, num_bits)
+        params = (num_bits, 1, num_bits)
+        assert (
+            code.get_code_params() == codes.ClassicalCode(code.matrix).get_code_params() == params
+        )
     ring_code = codes.RingCode(1)
     assert np.array_equal(ring_code.matrix, [[0]])
     assert ring_code.is_equiv_to(codes.RepetitionCode(1))
@@ -61,11 +64,11 @@ def test_special_codes() -> None:
 
     bits, dimension = 3, 2
     code = codes.ReedSolomonCode(bits, dimension)
-    assert codes.ClassicalCode(code.matrix).dimension == dimension
+    assert code.dimension == codes.ClassicalCode(code.matrix).dimension == dimension
 
     bits, dimension, field = 7, 4, 2
     code = codes.BCHCode(bits, dimension, field)
-    assert codes.ClassicalCode(code.matrix).dimension == dimension
+    assert code.dimension == codes.ClassicalCode(code.matrix).dimension == dimension
     with pytest.raises(ValueError, match=rf"block lengths {field}\^m - 1"):
         codes.BCHCode(bits - 1, dimension, field)
 
@@ -83,7 +86,7 @@ def test_special_codes() -> None:
         codes.HammingCode(4), codes.ExtendedHammingCode(4).punctured([0])
     )
 
-    # Hamming and extended Hamming codes have the parameters that their parity checks bear out.
+    # Hamming and extended Hamming codes report the parameters that their parity checks bear out.
     # Rebuilding a code from its parity check matrix alone carries none of the parameters that its
     # constructor caches, so the rebuilt code has to compute them.
     for size in [2, 3, 4]:
@@ -91,12 +94,15 @@ def test_special_codes() -> None:
             (codes.HammingCode(size), (2**size - 1, 2**size - 1 - size, 3)),
             (codes.ExtendedHammingCode(size), (2**size, 2**size - 1 - size, 4)),
         ]:
+            assert code.get_code_params() == params
             assert codes.ClassicalCode(code.matrix).get_code_params() == params
 
     # the Golay code is a [23, 12, 7] code with minimum-weight (weight-8) parity checks; see
     # https://errorcorrectionzoo.org/c/golay
     code = codes.GolayCode()
-    assert codes.ClassicalCode(code.matrix).get_code_params() == (23, 12, 7)
+    assert (
+        code.get_code_params() == codes.ClassicalCode(code.matrix).get_code_params() == (23, 12, 7)
+    )
     assert set(code.matrix.view(np.ndarray).sum(axis=1)) == {8}
 
 
@@ -138,8 +144,11 @@ def test_reed_muller_order_zero() -> None:
     for size in range(5):
         generator = codes.ReedMullerCode.get_generator(0, size)
         assert np.asarray(generator).ndim == 2  # a single row, not a flat vector
-        code = codes.ClassicalCode(codes.ReedMullerCode(0, size).matrix)
-        assert code.get_code_params() == (2**size, 1, 2**size)
+        code = codes.ReedMullerCode(0, size)
+        params = (2**size, 1, 2**size)
+        assert (
+            code.get_code_params() == codes.ClassicalCode(code.matrix).get_code_params() == params
+        )
 
     # the documented duality RM(r, m)^perp == RM(m - r - 1, m) reaches order zero at r == m - 1
     assert codes.ClassicalCode.equiv(~codes.ReedMullerCode(2, 3), codes.ReedMullerCode(0, 3))
