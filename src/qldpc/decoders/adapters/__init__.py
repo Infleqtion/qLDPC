@@ -2,27 +2,21 @@
 
 """Generic error- and observable-decoder adapters."""
 
+from typing import TYPE_CHECKING
+
+from qldpc import _deprecations
+
 from ..protocols import BatchErrorDecoder, ErrorDecoder
-from .error_decoders import (
-    ErrorsToObservablesDecoder,
-    ExpandedErrorDecoder,
-    match_error_decoder_to_dem,
-)
-from .observable_decoders import (
-    BitPackedObservableDecoder,
-    ErrorsToFieldObservablesDecoder,
-    validate_decoder_output,
-    validate_observable_decoder,
-)
+from .error_decoders import ErrorsToObservablesDecoder
 
 __all__ = [
     "BatchErrorDecoder",
-    "BitPackedObservableDecoder",
     "ErrorDecoder",
-    "ErrorsToFieldObservablesDecoder",
     "ErrorsToObservablesDecoder",
-    "ExpandedErrorDecoder",
-    "match_error_decoder_to_dem",
-    "validate_decoder_output",
-    "validate_observable_decoder",
 ]
+__all__.extend(_deprecations.deprecated_names(__name__))
+
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
+
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

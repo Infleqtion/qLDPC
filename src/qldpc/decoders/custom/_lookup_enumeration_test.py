@@ -12,7 +12,7 @@ import numpy.typing as npt
 import pytest
 
 from qldpc import math
-from qldpc.decoders.custom._lookup_enumeration import _iter_errors_and_syndromes
+from qldpc.decoders.custom._lookup_enumeration import iter_errors_and_syndromes
 
 
 def _brute_force(
@@ -58,7 +58,7 @@ def _enumerate(
 ) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
     return [
         (tuple(error.tolist()), tuple(syndrome.tolist()))
-        for error, syndrome in _iter_errors_and_syndromes(
+        for error, syndrome in iter_errors_and_syndromes(
             matrix,
             max_weight,
             syndrome_mask,
@@ -145,7 +145,7 @@ def test_probability_cutoff_prunes_without_enumerating() -> None:
     errors = np.array(
         [
             error
-            for error, _ in _iter_errors_and_syndromes(
+            for error, _ in iter_errors_and_syndromes(
                 galois.GF2.Zeros((1, 60)),
                 30,
                 None,

@@ -21,18 +21,16 @@ import scipy.sparse
 import stim
 
 from qldpc._util import get_external_caller_stacklevel
-from qldpc.decoders.adapters.observable_decoders import (
+from qldpc.decoders._capabilities import compiles_for_dem, is_prebuilt_observable_decoder
+from qldpc.decoders._common import PLACEHOLDER_ERROR_RATE
+from qldpc.decoders.adapters._observable_decoders import (
     BitPackedObservableDecoder,
     ErrorsToFieldObservablesDecoder,
     validate_decoder_output,
 )
-from qldpc.decoders.capabilities import (
-    compiles_for_dem,
-    is_prebuilt_observable_decoder,
-)
-from qldpc.decoders.common import PLACEHOLDER_ERROR_RATE, ObservableDecodingFallbackWarning
+from qldpc.decoders.common import ObservableDecodingFallbackWarning
+from qldpc.decoders.construction._resolution import reject_prebuilt_decoder, resolve_decoder
 from qldpc.decoders.construction.factories import DEMDecoderFactory
-from qldpc.decoders.construction.resolution import reject_prebuilt_decoder, resolve_decoder
 from qldpc.decoders.construction.specs import (
     DecoderInput,
     DecoderSpec,
@@ -205,8 +203,8 @@ def get_code_capacity_decoder(
             are scaled by a fixed placeholder error rate, so decoder decisions do not change when
             the returned estimator is evaluated at different physical error rates.
         prebuilt_rejection_reason: If not None, reject a prebuilt (error or observable) decoder,
-            with this reason; see help(qldpc.decoders.reject_prebuilt_decoder).  A Sinter-style
-            decoder is compiled here, so it is not rejected.
+            with this reason in the error message.  A Sinter-style decoder is compiled here, so it
+            is not rejected.
         warn_deprecated: Whether to warn when decoder_args is nonempty.
 
     Returns:

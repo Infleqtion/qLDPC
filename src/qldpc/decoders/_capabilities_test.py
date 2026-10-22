@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for capabilities.py."""
+"""Unit tests for _capabilities.py."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ import numpy as np
 import stim
 
 from qldpc import decoders
+from qldpc.decoders import _capabilities
 
 _OBSERVABLE_DECODER = types.SimpleNamespace(decode_observables=lambda syndrome: np.zeros(1))
 _ERROR_DECODER = types.SimpleNamespace(
@@ -32,7 +33,7 @@ def test_is_prebuilt_decoder() -> None:
         decoders.bp_osd().build(matrix),
     ]
     for decoder in prebuilt_decoders:
-        assert decoders.is_prebuilt_decoder(decoder)
+        assert _capabilities.is_prebuilt_decoder(decoder)
     deferred_decoders: list[object] = [
         None,
         decoders.bp_osd(),
@@ -44,22 +45,22 @@ def test_is_prebuilt_decoder() -> None:
         decoders.TrivialDecoder(),
     ]
     for decoder in deferred_decoders:
-        assert not decoders.is_prebuilt_decoder(decoder)
+        assert not _capabilities.is_prebuilt_decoder(decoder)
 
 
 def test_is_prebuilt_observable_decoder() -> None:
     """Classify decoder inputs by explicit capabilities."""
     matrix = galois.GF2([[1, 1]])
-    assert decoders.is_prebuilt_observable_decoder(_OBSERVABLE_DECODER)
-    assert decoders.is_prebuilt_observable_decoder(_BIT_PACKED_COMPILED_DECODER)
-    assert not decoders.is_prebuilt_observable_decoder(_ERROR_DECODER)
-    assert not decoders.is_prebuilt_observable_decoder(decoders.lookup(max_weight=1))
-    assert not decoders.is_prebuilt_observable_decoder(decoders.custom.ObservableLookupDecoder)
+    assert _capabilities.is_prebuilt_observable_decoder(_OBSERVABLE_DECODER)
+    assert _capabilities.is_prebuilt_observable_decoder(_BIT_PACKED_COMPILED_DECODER)
+    assert not _capabilities.is_prebuilt_observable_decoder(_ERROR_DECODER)
+    assert not _capabilities.is_prebuilt_observable_decoder(decoders.lookup(max_weight=1))
+    assert not _capabilities.is_prebuilt_observable_decoder(decoders.custom.ObservableLookupDecoder)
     sinter_decoder = decoders.TrivialDecoder()
     assert not isinstance(sinter_decoder, decoders.ObservableDecoder)
-    assert not decoders.is_prebuilt_observable_decoder(sinter_decoder)
+    assert not _capabilities.is_prebuilt_observable_decoder(sinter_decoder)
     compiled_sinter_decoder = sinter_decoder.compile_decoder_for_dem(stim.DetectorErrorModel())
-    assert decoders.is_prebuilt_observable_decoder(compiled_sinter_decoder)
-    assert not decoders.is_prebuilt_observable_decoder(decoders.relay_bp().build(matrix))
-    assert decoders.compiles_for_dem(sinter_decoder)
-    assert not decoders.compiles_for_dem(decoders.TrivialDecoder)
+    assert _capabilities.is_prebuilt_observable_decoder(compiled_sinter_decoder)
+    assert not _capabilities.is_prebuilt_observable_decoder(decoders.relay_bp().build(matrix))
+    assert _capabilities.compiles_for_dem(sinter_decoder)
+    assert not _capabilities.compiles_for_dem(decoders.TrivialDecoder)

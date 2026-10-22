@@ -12,13 +12,8 @@ import numpy.typing as npt
 
 from qldpc.math import IntegerArray
 
-from ..protocols import (
-    ErrorDecoder,
-    SupportsDecode,
-    as_error_decoder,
-    batch_decode_errors,
-    supports_batch_decoding,
-)
+from .._common import as_error_decoder, batch_decode_errors, supports_batch_decoding
+from ..protocols import ErrorDecoder, SupportsDecode
 
 
 class CompositeDecoder(ErrorDecoder):

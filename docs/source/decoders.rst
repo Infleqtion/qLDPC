@@ -344,6 +344,11 @@ The following usage remains available during a deprecation period, and each use 
      - ``decoders.lookup(...)``
 
 The internal helpers ``decoders.get_legacy_decoder_migration_message`` and ``decoders.reject_removed_decoder_args`` emit a ``DeprecationWarning`` when accessed, and will be removed from the public API.
+The following internal helpers likewise warn when accessed, and will be removed from the public API:
+
+* From ``qldpc.decoders``: ``as_error_decoder``, ``batch_decode_errors``, ``compiles_for_dem``, ``ExpandedErrorDecoder``, ``is_prebuilt_decoder``, ``is_prebuilt_observable_decoder``, ``match_error_decoder_to_dem``, ``reject_prebuilt_decoder``, ``resolve_decoder``, ``resolve_observable_decoder``, ``supports_batch_decoding``, and ``WrappedErrorDecoder``.
+* From ``qldpc.decoders.adapters``: ``BitPackedObservableDecoder``, ``ErrorsToFieldObservablesDecoder``, ``ExpandedErrorDecoder``, ``match_error_decoder_to_dem``, ``validate_decoder_output``, and ``validate_observable_decoder``.
+* From ``qldpc.decoders.custom``: ``PLACEHOLDER_ERROR_RATE``.
 
 Migrating custom code-capacity factories
 ----------------------------------------

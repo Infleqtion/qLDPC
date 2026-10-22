@@ -18,11 +18,12 @@ from qldpc import _deprecations, math
 from qldpc._util import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
-from ..common import _erasure_bit_support, with_erasure_bits
+from .._common import erasure_bit_support
+from ..common import with_erasure_bits
 from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, ObservableDecoder
-from ._lookup_enumeration import _iter_errors_and_syndromes
+from ._lookup_enumeration import iter_errors_and_syndromes
 
 _LOOKUP_CHUNK_SIZE = 4096
 
@@ -118,7 +119,7 @@ class _LookupDecoderBase:
         self._packed_syndrome_to_prediction: dict[bytes, bytes] = {}
 
         # enumerate errors and their syndromes, and use them to build the decoding map
-        errors_and_syndromes = _iter_errors_and_syndromes(
+        errors_and_syndromes = iter_errors_and_syndromes(
             pcm,
             max_weight,
             syndrome_mask,
@@ -702,7 +703,7 @@ class _WeightedLookupDecoderBase(_LookupDecoderBase):
             get_observable_flip = _build_observable_flip_func(
                 pcm, observable_flip_matrix, symplectic
             )
-        for error, syndrome in _iter_errors_and_syndromes(
+        for error, syndrome in iter_errors_and_syndromes(
             pcm, max_weight, syndrome_mask, symplectic
         ):
             output = (
@@ -893,7 +894,7 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
 # decoder specifications
 
 
-@_erasure_bit_support("lookup", supported=True)
+@erasure_bit_support("lookup", supported=True)
 def _get_decoder_lookup(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: object
 ) -> LookupDecoder:
@@ -1118,7 +1119,7 @@ def _build_observable_flip_func(
     flip that it induces in an observable is their symplectic product,
     ``observable @ symplectic_conjugate(error)``.  That product is obtained by multiplying the error
     by -symplectic_conjugate(observable_flip_matrix), in the same way that
-    _iter_errors_and_syndromes obtains a syndrome from a parity check matrix.
+    iter_errors_and_syndromes obtains a syndrome from a parity check matrix.
     """
     field = type(pcm) if isinstance(pcm, galois.FieldArray) else galois.GF2
     if isinstance(observable_flip_matrix, galois.FieldArray) and (
@@ -1194,7 +1195,7 @@ class _FieldVectorPacker:
     Over GF(2), vectors are bit-packed with np.packbits.  Over any other field, each entry is stored
     as the smallest unsigned integer that holds the integer representation of a field element that
     galois uses, which is lossless for both prime and extension fields.  Fields with more than 2**64
-    elements are out of scope, since _iter_errors_and_syndromes builds a tuple of every element.
+    elements are out of scope, since iter_errors_and_syndromes builds a tuple of every element.
     """
 
     def __init__(self, field_order: int, vector_length: int, unpacked_dtype: npt.DTypeLike) -> None:
@@ -1241,7 +1242,7 @@ class _FieldVectorPacker:
 def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
     """The weight of an error: the number of qudits, or of bits, that it addresses nontrivially.
 
-    This is the weight that ``_iter_errors_and_syndromes`` enumerates by, so ranking errors by it
+    This is the weight that ``iter_errors_and_syndromes`` enumerates by, so ranking errors by it
     keeps the lighter of two that a penalty scores equally.  A symplectic error assigns both an X
     and a Z component to each qudit, and a qudit carrying both counts once, so the number of nonzero
     entries would count it twice.

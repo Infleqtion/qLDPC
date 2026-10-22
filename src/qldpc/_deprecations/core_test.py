@@ -28,7 +28,7 @@ def test_aliases() -> None:
             assert value is replacement
 
             # a renamed object is named by its new name, and a moved one by its full path
-            path = f"{replacement.__module__}.{replacement.__qualname__}"
+            path = f"{target_module}.{attribute}"
             if attribute != name:
                 expected = f"{name} is deprecated; use {attribute} instead"
                 assert _get_from_package(module_name, attribute) is replacement

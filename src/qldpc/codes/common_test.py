@@ -545,7 +545,7 @@ def test_distance_bound_memory() -> None:
     ):
         assert classical_code.get_distance_bound() == 4
         assert classical_code.get_distance_bound(num_trials=1) == 4  # never worse than known
-    with unittest.mock.patch("qldpc.decoders.resolve_decoder", side_effect=AssertionError):
+    with unittest.mock.patch("qldpc.codes.common.resolve_decoder", side_effect=AssertionError):
         assert classical_code.get_distance_bound() == 4
         assert classical_code.canonicalized.get_distance_bound() == 4
 

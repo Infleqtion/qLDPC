@@ -24,10 +24,9 @@ import stim
 
 from qldpc.math import IntegerArray
 
+from .._common import is_default_value
+from ..adapters._observable_decoders import validate_observable_decoder
 from ..adapters.error_decoders import ErrorsToObservablesDecoder as _ErrorsToObservablesDecoder
-from ..adapters.observable_decoders import (
-    validate_observable_decoder as _validate_observable_decoder,
-)
 from ..protocols import ErrorDecoder, ObservableDecoder, SupportsDecode
 from .factories import DEMDecoderFactory, MatrixDecoderFactory
 
@@ -75,7 +74,7 @@ class DecoderSpec(Generic[_DecoderT_co]):
         options = ", ".join(
             f"{name}={value!r}"
             for name, value in self._options
-            if name not in defaults or not _is_default_value(value, defaults[name])
+            if name not in defaults or not is_default_value(value, defaults[name])
         )
         return f"decoders.{self._helper_name}({options})"
 
@@ -98,7 +97,7 @@ class DecoderSpec(Generic[_DecoderT_co]):
     def build_observable_decoder(self, dem: stim.DetectorErrorModel) -> ObservableDecoder:
         """Build a decoder that predicts the observable flips of a detector error model."""
         if self._observable_builder is not None:
-            return _validate_observable_decoder(
+            return validate_observable_decoder(
                 self._observable_builder(dem, **self.options), "A decoder specification"
             )
         return _ErrorsToObservablesDecoder(self.build(dem), dem)
@@ -379,11 +378,3 @@ def _normalize_backend_options(helper_name: str, options: dict[str, object]) -> 
             + " directly rather than in backend_options"
         )
     options["backend_options"] = dict(backend_options) or None
-
-
-def _is_default_value(value: object, default: object) -> bool:
-    """Whether an option is a plain copy of its default value."""
-    if value is default:
-        return True
-    plain_types = (bool, int, float, str)
-    return type(value) is type(default) and isinstance(value, plain_types) and value == default

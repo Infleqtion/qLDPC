@@ -18,10 +18,10 @@ import pytest
 import stim
 
 from qldpc import decoders
-from qldpc.decoders import common
+from qldpc.decoders import _common
 from qldpc.decoders.adapters import error_decoders
 from qldpc.decoders.construction import specs
-from qldpc.decoders.construction.resolution import _get_error_decoder
+from qldpc.decoders.construction._resolution import get_error_decoder
 from qldpc.decoders.custom.lookup import _get_decoder_lookup, _get_observable_decoder_lookup
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
 from qldpc.decoders.external.ldpc import _get_decoder_bf, _get_decoder_bp_lsd, _get_decoder_bp_osd
@@ -49,7 +49,7 @@ def test_decoder_specs() -> None:
     spec = decoders.lookup(max_weight=1, error_channel=_uniform_binary_error_channel)
     assert spec.options["error_channel"] is _uniform_binary_error_channel
     restored = pickle.loads(pickle.dumps(spec))  # noqa: S301 - trusted in-memory round trip
-    assert np.array_equal(_get_error_decoder(matrix, decoder=restored).decode(syndrome), syndrome)
+    assert np.array_equal(get_error_decoder(matrix, decoder=restored).decode(syndrome), syndrome)
 
     # a spec displays the helper call that reproduces it, omitting default options
     assert repr(decoders.bp_osd()) == "decoders.bp_osd()"
@@ -202,7 +202,7 @@ def test_observable_decoder_specs() -> None:
     with pytest.raises(TypeError, match="cannot build an error decoder"):
         spec.build(dem)
     with pytest.raises(TypeError, match="cannot build an error decoder"):
-        _get_error_decoder(dem, decoder=spec)
+        get_error_decoder(dem, decoder=spec)
     with pytest.raises(ValueError, match="needs an error builder or an observable builder"):
         decoders.DecoderSpec("nothing", None, ())
 
@@ -350,7 +350,7 @@ def test_decoder_spec_helper_defaults() -> None:
     ]
     for helper, constructor, attributes in ldpc_decoders:
         helper_decoder = helper().build(matrix)
-        default_channel = [common.PLACEHOLDER_ERROR_RATE] * matrix.shape[1]
+        default_channel = [_common.PLACEHOLDER_ERROR_RATE] * matrix.shape[1]
         ldpc_decoder = constructor(matrix, error_channel=default_channel)
         for attribute in shared_attributes + attributes:
             assert getattr(helper_decoder, attribute) == getattr(ldpc_decoder, attribute), (

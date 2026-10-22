@@ -1,25 +1,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared helpers for decoders."""
+"""Erasure signaling and warnings shared by decoders."""
 
 from __future__ import annotations
-
-import functools
-from collections.abc import Callable, Sequence
-from typing import ParamSpec, TypeAlias, TypeVar
 
 import galois
 import numpy as np
 import numpy.typing as npt
-import stim
 
-from qldpc._deprecations.decoders import deprecate_error_rate_option
-from qldpc.math import IntegerArray
-
-from .dems import DetectorErrorModelArrays
-from .protocols import ErrorDecoder, SupportsDecode, as_error_decoder
-
-PLACEHOLDER_ERROR_RATE = 1e-3  # required for some decoding methods
+from ._common import as_error_decoder
+from .protocols import ErrorDecoder, SupportsDecode
 
 
 class ObservableDecodingFallbackWarning(UserWarning):
@@ -27,12 +17,6 @@ class ObservableDecodingFallbackWarning(UserWarning):
 
     Filter this category with ``warnings.filterwarnings`` to silence the notice.
     """
-
-
-_PcmOrDem: TypeAlias = IntegerArray | stim.DetectorErrorModel
-_Parameters = ParamSpec("_Parameters")
-_Decoder = TypeVar("_Decoder", bound=ErrorDecoder)
-_ErrorChannel: TypeAlias = float | npt.NDArray[np.floating] | Sequence[float] | None
 
 
 ####################################################################################################
@@ -67,96 +51,3 @@ def with_erasure_bits(
     """
     flags = np.asarray(erased, dtype=errors.dtype).reshape(errors.shape[:-1] + (1,))
     return np.hstack([errors, flags])
-
-
-####################################################################################################
-# private builder helpers
-
-
-def _erasure_bit_support(
-    display_name: str,
-    *,
-    supported: bool,
-) -> Callable[[Callable[_Parameters, _Decoder]], Callable[_Parameters, _Decoder]]:
-    """Declare and enforce whether a decoder builder supports an erasure bit."""
-
-    def decorator(
-        decoder_builder: Callable[_Parameters, _Decoder],
-    ) -> Callable[_Parameters, _Decoder]:
-        message = (
-            f"The {display_name} decoder cannot signal erasure, so it does not accept the"
-            " add_erasure_bit argument"
-        )
-
-        @functools.wraps(decoder_builder)
-        def checked_builder(*args: _Parameters.args, **kwargs: _Parameters.kwargs) -> _Decoder:
-            add_erasure_bit = bool(kwargs.get("add_erasure_bit"))
-            if not supported:
-                if add_erasure_bit:
-                    raise ValueError(message)
-                kwargs.pop("add_erasure_bit", None)
-
-            decoder = decoder_builder(*args, **kwargs)
-            if add_erasure_bit and not getattr(decoder, "has_erasure_bit", False):
-                raise ValueError(message)
-            return decoder
-
-        return checked_builder
-
-    return decorator
-
-
-def _to_pcm(pcm_or_dem: _PcmOrDem) -> IntegerArray:
-    """Return a parity-check matrix, densifying a detector error model."""
-    if isinstance(pcm_or_dem, stim.DetectorErrorModel):
-        return DetectorErrorModelArrays(pcm_or_dem).detector_flip_matrix.toarray()
-    return pcm_or_dem
-
-
-def _get_matrix_error_channel(
-    pcm_or_dem: _PcmOrDem,
-    error_channel: _ErrorChannel,
-    error_rate: float | None,
-) -> npt.NDArray[np.floating] | None:
-    """Normalize matrix error probabilities and reject explicit probabilities for a DEM."""
-    if isinstance(pcm_or_dem, stim.DetectorErrorModel):
-        _reject_dem_error_probabilities(error_channel, error_rate)
-        return None
-
-    if error_rate is not None:
-        deprecate_error_rate_option(
-            {"error_channel": error_channel, "error_rate": error_rate},
-            frozenset(
-                {"error_rate", "error_channel"} if error_channel is not None else {"error_rate"}
-            ),
-        )
-        error_channel = error_rate
-    if error_channel is None:
-        error_channel = PLACEHOLDER_ERROR_RATE
-
-    if np.isscalar(error_channel):
-        probabilities = np.full(pcm_or_dem.shape[1], error_channel, dtype=float)
-    else:
-        probabilities = np.asarray(error_channel, dtype=float)
-    expected_shape = (pcm_or_dem.shape[1],)
-    if probabilities.shape != expected_shape:
-        raise ValueError(
-            f"error probabilities of shape {expected_shape} are required in error_channel, but got"
-            f" {probabilities.shape}"
-        )
-    if np.any(~np.isfinite(probabilities)) or np.any((probabilities < 0) | (probabilities > 1)):
-        raise ValueError("error_channel probabilities must be finite and between 0 and 1")
-    return probabilities
-
-
-def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -> None:
-    """Reject explicit error probabilities for a detector error model, which supplies its own."""
-    options = {"error_channel": error_channel, "error_rate": error_rate}
-    if specified := [f"{name}={value!r}" for name, value in options.items() if value is not None]:
-        raise ValueError(
-            "A detector error model supplies its own error probabilities, so"
-            f" {' and '.join(specified)} cannot be specified with one.  Remove the option, as for a"
-            " SinterDecoder, which always decodes detector error models.  Alternatively, pass"
-            " error_channel with the detector-flip matrix of the model,"
-            " decoders.DetectorErrorModelArrays(dem).detector_flip_matrix"
-        )

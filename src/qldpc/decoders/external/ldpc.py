@@ -22,11 +22,7 @@ from qldpc._deprecations.decoders import deprecate_error_rate_option
 from qldpc._util import format_docstring, get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
-from ..common import (
-    PLACEHOLDER_ERROR_RATE,
-    _erasure_bit_support,
-    _get_matrix_error_channel,
-)
+from .._common import PLACEHOLDER_ERROR_RATE, erasure_bit_support, get_matrix_error_channel
 from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, ErrorDecodeResult
@@ -48,7 +44,7 @@ if TYPE_CHECKING:
 # decoder specifications
 
 
-@_erasure_bit_support("BP_OSD", supported=False)
+@erasure_bit_support("BP_OSD", supported=False)
 @format_docstring(PLACEHOLDER_ERROR_RATE=PLACEHOLDER_ERROR_RATE)
 def _get_decoder_bp_osd(
     pcm_or_dem: _PcmOrDem,
@@ -114,7 +110,7 @@ def _get_decoder_bp_osd(
     )
 
 
-@_erasure_bit_support("BP_LSD", supported=False)
+@erasure_bit_support("BP_LSD", supported=False)
 @format_docstring(PLACEHOLDER_ERROR_RATE=PLACEHOLDER_ERROR_RATE)
 def _get_decoder_bp_lsd(
     pcm_or_dem: _PcmOrDem,
@@ -192,7 +188,7 @@ def _get_decoder_bp_lsd(
     )
 
 
-@_erasure_bit_support("BF", supported=False)
+@erasure_bit_support("BF", supported=False)
 @format_docstring(PLACEHOLDER_ERROR_RATE=PLACEHOLDER_ERROR_RATE)
 def _get_decoder_bf(
     pcm_or_dem: _PcmOrDem,
@@ -389,7 +385,7 @@ def _to_ldpc_inputs(
     error_rate: float | None,
 ) -> tuple[IntegerArray, list[float]]:
     """Convert backend input to the matrix and probabilities expected by ldpc."""
-    matrix_error_channel = _get_matrix_error_channel(pcm_or_dem, error_channel, error_rate)
+    matrix_error_channel = get_matrix_error_channel(pcm_or_dem, error_channel, error_rate)
     if isinstance(pcm_or_dem, stim.DetectorErrorModel):
         dem_arrays = DetectorErrorModelArrays(pcm_or_dem)
         pcm = dem_arrays.detector_flip_matrix

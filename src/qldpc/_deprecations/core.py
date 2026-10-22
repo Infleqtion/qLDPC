@@ -86,6 +86,7 @@ ALIASES: dict[str, dict[str, str]] = {
         "CompositeDecoder": "qldpc.decoders.custom.composition:CompositeDecoder",
         "Decoder": "qldpc.decoders.protocols:ErrorDecoder",
         "DirectDecoder": "qldpc.decoders.custom.composition:DirectDecoder",
+        "ExpandedErrorDecoder": "qldpc.decoders.adapters._dem_matching:ExpandedErrorDecoder",
         "FlipPattern": "qldpc.decoders.dems:FlipPattern",
         "FrontierObservableDecoder": "qldpc.decoders.external.frontier:FrontierObservableDecoder",
         "GUFDecoder": "qldpc.decoders.custom.guf:GUFDecoder",
@@ -100,6 +101,10 @@ ALIASES: dict[str, dict[str, str]] = {
         "WeightedObservableLookupDecoder": (
             "qldpc.decoders.custom.lookup:WeightedObservableLookupDecoder"
         ),
+        "WrappedErrorDecoder": "qldpc.decoders._common:WrappedErrorDecoder",
+        "as_error_decoder": "qldpc.decoders._common:as_error_decoder",
+        "batch_decode_errors": "qldpc.decoders._common:batch_decode_errors",
+        "compiles_for_dem": "qldpc.decoders._capabilities:compiles_for_dem",
         "get_decoder_BF": "qldpc._deprecations.decoders:get_decoder_bf",
         "get_decoder_BP_LSD": "qldpc._deprecations.decoders:get_decoder_bp_lsd",
         "get_decoder_BP_OSD": "qldpc._deprecations.decoders:get_decoder_bp_osd",
@@ -110,12 +115,46 @@ ALIASES: dict[str, dict[str, str]] = {
         "get_legacy_decoder_migration_message": (
             "qldpc._deprecations.decoders:get_legacy_decoder_migration_message"
         ),
+        "is_prebuilt_decoder": "qldpc.decoders._capabilities:is_prebuilt_decoder",
+        "is_prebuilt_observable_decoder": (
+            "qldpc.decoders._capabilities:is_prebuilt_observable_decoder"
+        ),
         "lookup_table": "qldpc.decoders.custom.lookup:lookup",
+        "match_error_decoder_to_dem": (
+            "qldpc.decoders.adapters._dem_matching:match_error_decoder_to_dem"
+        ),
+        "reject_prebuilt_decoder": (
+            "qldpc.decoders.construction._resolution:reject_prebuilt_decoder"
+        ),
         "reject_removed_decoder_args": "qldpc._deprecations.decoders:reject_removed_decoder_args",
+        "resolve_decoder": "qldpc.decoders.construction._resolution:resolve_decoder",
+        "resolve_observable_decoder": (
+            "qldpc.decoders.construction._resolution:resolve_observable_decoder"
+        ),
+        "supports_batch_decoding": "qldpc.decoders._common:supports_batch_decoding",
+    },
+    "qldpc.decoders.adapters": {
+        "BitPackedObservableDecoder": (
+            "qldpc.decoders.adapters._observable_decoders:BitPackedObservableDecoder"
+        ),
+        "ErrorsToFieldObservablesDecoder": (
+            "qldpc.decoders.adapters._observable_decoders:ErrorsToFieldObservablesDecoder"
+        ),
+        "ExpandedErrorDecoder": "qldpc.decoders.adapters._dem_matching:ExpandedErrorDecoder",
+        "match_error_decoder_to_dem": (
+            "qldpc.decoders.adapters._dem_matching:match_error_decoder_to_dem"
+        ),
+        "validate_decoder_output": (
+            "qldpc.decoders.adapters._observable_decoders:validate_decoder_output"
+        ),
+        "validate_observable_decoder": (
+            "qldpc.decoders.adapters._observable_decoders:validate_observable_decoder"
+        ),
     },
     "qldpc.decoders.custom": {
         "BatchDecoder": "qldpc.decoders.protocols:BatchErrorDecoder",
         "Decoder": "qldpc.decoders.protocols:ErrorDecoder",
+        "PLACEHOLDER_ERROR_RATE": "qldpc.decoders._common:PLACEHOLDER_ERROR_RATE",
         "RelayBPDecoder": "qldpc.decoders.external.relay_bp:RelayBPDecoder",
     },
     "qldpc.decoders.sinter": {
@@ -145,6 +184,12 @@ SILENT_ALIASES: dict[str, dict[str, str]] = {
         "get_decoder_rbp": "qldpc._deprecations.decoders:get_decoder_rbp",
         "get_error_decoder": "qldpc._deprecations.decoders:get_error_decoder",
         "get_observable_decoder": "qldpc._deprecations.decoders:get_observable_decoder",
+    },
+    "qldpc.decoders.adapters.error_decoders": {
+        "ExpandedErrorDecoder": "qldpc.decoders.adapters._dem_matching:ExpandedErrorDecoder",
+    },
+    "qldpc.decoders.protocols": {
+        "WrappedErrorDecoder": "qldpc.decoders._common:WrappedErrorDecoder",
     },
 }
 

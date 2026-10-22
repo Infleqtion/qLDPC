@@ -10,16 +10,7 @@ from . import custom as custom
 from . import dems as dems
 from . import external as external
 from . import sinter as sinter
-from .adapters.error_decoders import (
-    ErrorsToObservablesDecoder,
-    ExpandedErrorDecoder,
-    match_error_decoder_to_dem,
-)
-from .capabilities import (
-    compiles_for_dem,
-    is_prebuilt_decoder,
-    is_prebuilt_observable_decoder,
-)
+from .adapters.error_decoders import ErrorsToObservablesDecoder
 from .common import (
     ObservableDecodingFallbackWarning,
     get_error_and_erasure,
@@ -30,11 +21,6 @@ from .construction.factories import (
     MatrixDecoderFactory,
     from_dem,
     from_matrix,
-)
-from .construction.resolution import (
-    reject_prebuilt_decoder,
-    resolve_decoder,
-    resolve_observable_decoder,
 )
 from .construction.specs import (
     DecoderInput,
@@ -68,10 +54,6 @@ from .protocols import (
     ObservableDecoder,
     ObservableDecodeResult,
     SupportsDecode,
-    WrappedErrorDecoder,
-    as_error_decoder,
-    batch_decode_errors,
-    supports_batch_decoding,
 )
 from .sinter import (
     SequentialWindowDecoder,
@@ -99,7 +81,6 @@ __all__ = [
     "ErrorDecoderConstructor",
     "ErrorDecoderInput",
     "ErrorsToObservablesDecoder",
-    "ExpandedErrorDecoder",
     "MatrixDecoderFactory",
     "ObservableDecodeResult",
     "ObservableDecoder",
@@ -113,30 +94,19 @@ __all__ = [
     "SubgraphDecoder",
     "SupportsDecode",
     "TrivialDecoder",
-    "WrappedErrorDecoder",
-    "as_error_decoder",
-    "batch_decode_errors",
     "bf",
     "bp_lsd",
     "bp_osd",
-    "compiles_for_dem",
     "from_dem",
     "from_matrix",
     "frontier",
     "get_error_and_erasure",
     "guf",
     "ilp",
-    "is_prebuilt_decoder",
-    "is_prebuilt_observable_decoder",
     "lookup",
-    "match_error_decoder_to_dem",
     "min_sum_bp",
     "mwpm",
-    "reject_prebuilt_decoder",
     "relay_bp",
-    "resolve_decoder",
-    "resolve_observable_decoder",
-    "supports_batch_decoding",
     "tesseract",
     "tesseract_preset",
     "with_erasure_bits",

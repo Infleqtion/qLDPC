@@ -22,7 +22,7 @@ import stim
 
 from qldpc import _deprecations
 from qldpc._util import get_external_caller_stacklevel
-from qldpc.decoders.capabilities import (
+from qldpc.decoders._capabilities import (
     compiles_for_dem,
     is_prebuilt_decoder,
     is_prebuilt_observable_decoder,
@@ -91,7 +91,7 @@ def decode(
 
 def get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
     """Build or retrieve an error decoder."""
-    from qldpc.decoders.construction.resolution import resolve_decoder
+    from qldpc.decoders.construction._resolution import resolve_decoder
 
     if isinstance(decoder, DecoderSpec):
         replacement = f"{decoder!r}.build(pcm_or_dem)"
@@ -111,7 +111,7 @@ def get_observable_decoder(
     dem: stim.DetectorErrorModel, *, decoder: DecoderInput = None
 ) -> ObservableDecoder:
     """Build or retrieve an observable decoder."""
-    from qldpc.decoders.construction.resolution import resolve_observable_decoder
+    from qldpc.decoders.construction._resolution import resolve_observable_decoder
 
     expression, note = _get_observable_decoder_expression(decoder)
     replacement = "the prebuilt observable decoder directly" if expression is None else expression
@@ -126,7 +126,7 @@ def decode_observables(
     decoder: DecoderInput = None,
 ) -> npt.NDArray[np.int_]:
     """Predict the observable flips of one syndrome."""
-    from qldpc.decoders.construction.resolution import resolve_observable_decoder
+    from qldpc.decoders.construction._resolution import resolve_observable_decoder
 
     expression, note = _get_observable_decoder_expression(decoder)
     replacement = (

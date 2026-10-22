@@ -222,15 +222,15 @@ def test_tagged_root_function_signatures() -> None:
             assert alias is getattr(root, f"get_decoder_{suffix.lower()}")
     # the last alias, get_decoder_RBP, accepts error priors
     assert "error_priors" in inspect.signature(alias).parameters
-    assert list(inspect.signature(root.resolve_decoder).parameters) == [
-        "pcm_or_dem",
-        "decoder",
-        "decoder_args",
-        "warn_deprecated",
-    ]
-    assert list(inspect.signature(root.resolve_observable_decoder).parameters) == [
-        "dem",
-        "decoder",
-        "decoder_args",
-        "warn_deprecated",
-    ]
+    for name, first_parameter in [
+        ("resolve_decoder", "pcm_or_dem"),
+        ("resolve_observable_decoder", "dem"),
+    ]:
+        with pytest.warns(DeprecationWarning, match=f"{name} is deprecated"):
+            function = getattr(root, name)
+        assert list(inspect.signature(function).parameters) == [
+            first_parameter,
+            "decoder",
+            "decoder_args",
+            "warn_deprecated",
+        ]

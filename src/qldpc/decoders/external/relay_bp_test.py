@@ -22,7 +22,7 @@ import stim
 
 from qldpc import decoders
 from qldpc.decoders.conftest import ToyProblem
-from qldpc.decoders.construction.resolution import _get_error_decoder
+from qldpc.decoders.construction._resolution import get_error_decoder
 from qldpc.decoders.external.relay_bp import (
     _get_decoder_min_sum_bp,
     _get_decoder_rbp,
@@ -69,7 +69,7 @@ def test_relay_bp(toy_problem: ToyProblem) -> None:
         unittest.mock.patch.dict("sys.modules", {"relay_bp": None}),
         pytest.raises(ModuleNotFoundError, match=r"qldpc\[relay-bp\]") as exc_info,
     ):
-        _get_error_decoder(np.array([[]]), decoder=decoders.relay_bp())
+        get_error_decoder(np.array([[]]), decoder=decoders.relay_bp())
     assert isinstance(exc_info.value.__cause__, ModuleNotFoundError)
 
     with pytest.raises(ValueError, match="name not recognized"):

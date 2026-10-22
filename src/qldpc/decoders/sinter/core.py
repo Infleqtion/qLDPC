@@ -19,11 +19,12 @@ from qldpc._deprecations.decoders import (
 )
 from qldpc._util import get_external_caller_stacklevel
 
+from .._common import as_error_decoder
 from ..adapters.error_decoders import ErrorsToObservablesDecoder
-from ..construction.resolution import reject_prebuilt_decoder, resolve_observable_decoder
+from ..construction._resolution import reject_prebuilt_decoder, resolve_observable_decoder
 from ..construction.specs import DecoderSpec, DeferredDecoderInput
 from ..dems import DetectorErrorModelArrays
-from ..protocols import ErrorDecoder, ObservableDecoder, as_error_decoder
+from ..protocols import ErrorDecoder, ObservableDecoder
 
 # sinter does not ship type information, so mypy treats sinter.Decoder and sinter.CompiledDecoder as
 # Any.  A subclass of Any is assumed to have every attribute, so it would structurally satisfy the

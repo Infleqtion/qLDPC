@@ -124,10 +124,11 @@ The methods in `codes/common.py` share cached and mutable state for standard for
 Do not split them into mixins merely to reduce the file length.
 Free-standing statistical Monte Carlo helpers live in `codes/monte_carlo.py`.
 Code-capacity detector-error-model and decoder orchestration lives in `codes/_code_capacity.py`.
-Generic decoder-input checks live in `decoders/capabilities.py`; field-valued and bit-packed observable-decoder adapters live in `decoders/adapters/observable_decoders.py`.
+Generic decoder-input checks live in `decoders/_capabilities.py`; coercion into error decoders, batch decoding, and helpers shared by decoder builders live in `decoders/_common.py`.
+Field-valued and bit-packed observable-decoder adapters live in `decoders/adapters/_observable_decoders.py`, and the alignment of inferred errors with DEM error mechanisms lives in `decoders/adapters/_dem_matching.py`.
 Immediate builders live beside their implementations: external-package integrations under `decoders/external/`, and qLDPC-owned implementations under `decoders/custom/`.
 Typed decoder specifications and generic input resolution live under `decoders/construction/`.
-Modern decoder inputs resolve directly in `decoders/construction/resolution.py`; nonempty deprecated keywords enter `_deprecations/decoders.py` for translation, and the deprecated package-root functions live there too.
+Modern decoder inputs resolve directly in `decoders/construction/_resolution.py`; nonempty deprecated keywords enter `_deprecations/decoders.py` for translation, and the deprecated package-root functions live there too.
 
 ## Core invariants
 
@@ -163,12 +164,12 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
 
 - Build decoders from typed specifications, as in `decoders.bp_osd(...).build(pcm_or_dem)` or `decoders.mwpm(...).build_observable_decoder(dem)`.
   Builders named `get_decoder_<NAME>`, `get_error_decoder`, and `get_observable_decoder` are deprecated and live only in [`_deprecations/decoders.py`](src/qldpc/_deprecations/decoders.py).
-- `decoder=None` selects GUF for a nonbinary `FieldArray` and BP+OSD otherwise (see [`construction/resolution.py`](src/qldpc/decoders/construction/resolution.py)).
+- `decoder=None` selects GUF for a nonbinary `FieldArray` and BP+OSD otherwise (see [`construction/_resolution.py`](src/qldpc/decoders/construction/_resolution.py)).
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
-  Code that consumes a user-supplied error decoder coerces it with `decoders.as_error_decoder` and calls `decode_errors`.
-- A method that decodes a matrix it constructs itself must reject prebuilt decoders with `decoders.reject_prebuilt_decoder`.
+  Code that consumes a user-supplied error decoder coerces it with `as_error_decoder` from `decoders/_common.py` and calls `decode_errors`.
+- A method that decodes a matrix it constructs itself must reject prebuilt decoders with `reject_prebuilt_decoder` from `decoders/construction/_resolution.py`.
 - Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with [`codes._code_capacity.get_code_capacity_decoder`](src/qldpc/codes/_code_capacity.py), which always yields an observable decoder: on binary codes, specifications with native observable support build it from a DEM; otherwise inferred errors can be projected onto logical predictions.
-  Keep `decoders.resolve_decoder` error-decoder-specific, and dispatch on explicit capabilities (`compile_decoder_for_dem`, `decode_observables`, the `ErrorDecoder` protocol), never on output length.
+  Keep `resolve_decoder` in `decoders/construction/_resolution.py` error-decoder-specific, and dispatch on explicit capabilities (`compile_decoder_for_dem`, `decode_observables`, the `ErrorDecoder` protocol), never on output length.
 - Only decoders that declare erasure support may append an erasure flag.
   They append that flag as the last entry of each inferred error; unsupported decoders must reject `add_erasure_bit=True`.
 - Detector-error-model decomposition indices and remaps must remain valid after cancellation and simplification.

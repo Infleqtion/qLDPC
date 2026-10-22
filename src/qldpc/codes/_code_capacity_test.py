@@ -20,7 +20,7 @@ import stim
 
 from qldpc import codes, decoders
 from qldpc.codes import _code_capacity
-from qldpc.decoders.adapters import observable_decoders
+from qldpc.decoders.adapters import _observable_decoders
 from qldpc.decoders.external.pymatching import MatchingObservableDecoder
 
 
@@ -192,7 +192,7 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
     decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, decoders.lookup(max_weight=1)
     )
-    assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
+    assert isinstance(decoder.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
     assert isinstance(decoder.decoder.error_decoder, decoders.custom.LookupDecoder)
 
     # None represents an identity observable map without materializing a dense identity matrix
@@ -249,7 +249,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
     decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _BothDecoder([1, 0, 1])
     )
-    assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
+    assert isinstance(decoder.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
     assert decoder.get_failure_and_erasure(error) == (False, False)
 
     # an object with both decode and decode_observables keeps its legacy error-decoder semantics
@@ -263,7 +263,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
     decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _DecodeOnlyBoth()
     )
-    assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
+    assert isinstance(decoder.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
     assert decoder.get_failure_and_erasure(error) == (False, False)
 
     # the ObservableDecoder protocol does not require optional dimension metadata
@@ -343,7 +343,7 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
         decoders.from_matrix(specification.build),
     )
     assert isinstance(native.decoder, decoders.custom.ObservableLookupDecoder)
-    assert isinstance(projected.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
+    assert isinstance(projected.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
     assert native.decode(field([1]))[0].tolist() == [0]
     assert projected.decode(field([1]))[0].tolist() == [1]
     assert [native.get_failure_and_erasure(error) for error in errors] == [
@@ -364,7 +364,7 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
             None,
             {"with_lookup": True, "max_weight": 1},
         )
-    assert isinstance(legacy.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
+    assert isinstance(legacy.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
     assert legacy.decode(field([1]))[0].tolist() == [1]
 
     # The DEM's relative mechanism weights affect the native class prediction.
@@ -420,7 +420,7 @@ def test_code_capacity_native_build_fallback() -> None:
             decoder = _code_capacity.get_code_capacity_decoder(
                 syndrome_matrix, observable_matrix, specification
             )
-        assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
+        assert isinstance(decoder.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
         assert not any(decoder.get_failure_and_erasure(error)[0] for error in single_errors)
 
     # a backend can reject the structure of the model, such as Y mechanisms that are not graphlike
@@ -697,8 +697,8 @@ def test_code_capacity_decoder_reuse() -> None:
     )
     reused_decoder = projected.reuse_for(syndrome_matrix, observables_b)
     assert reused_decoder is not None
-    assert isinstance(projected.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
-    assert isinstance(reused_decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
+    assert isinstance(projected.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
+    assert isinstance(reused_decoder.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
     assert reused_decoder.decoder.error_decoder is projected.decoder.error_decoder
     assert reused_decoder.observable_matrix is not None
     assert np.array_equal(reused_decoder.observable_matrix, observables_b)
@@ -715,10 +715,10 @@ def test_code_capacity_decoder_reuse() -> None:
     [
         "qldpc.codes._code_capacity",
         "qldpc.codes.monte_carlo",
-        "qldpc.decoders.capabilities",
+        "qldpc.decoders._capabilities",
         "qldpc.decoders.custom",
         "qldpc.decoders.custom.lookup",
-        "qldpc.decoders.adapters.observable_decoders",
+        "qldpc.decoders.adapters._observable_decoders",
         "qldpc.circuits",
     ],
 )

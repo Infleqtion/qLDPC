@@ -14,7 +14,7 @@ import scipy.sparse
 
 from qldpc import decoders
 from qldpc.decoders.conftest import ToyProblem
-from qldpc.decoders.construction.resolution import _get_error_decoder
+from qldpc.decoders.construction._resolution import get_error_decoder
 from qldpc.decoders.custom import ilp
 from qldpc.decoders.custom.ilp import _get_decoder_ilp
 
@@ -128,7 +128,7 @@ def test_invalid_ilp() -> None:
     matrix = np.ones((2, 2), dtype=int)
     syndrome = np.array([0, 1], dtype=int)
     with pytest.raises(ValueError, match="ILP decoding only supports prime number fields"):
-        _get_error_decoder(galois.GF(4)(matrix), decoder=decoders.ilp()).decode(syndrome)
+        get_error_decoder(galois.GF(4)(matrix), decoder=decoders.ilp()).decode(syndrome)
 
 
 def test_ilp_requires_cvxpy() -> None:

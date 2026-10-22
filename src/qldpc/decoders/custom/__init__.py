@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 from qldpc import _deprecations
 
-from ..common import PLACEHOLDER_ERROR_RATE
 from .composition import CompositeDecoder, DirectDecoder
 from .guf import GUFDecoder
 from .ilp import ILPDecoder
@@ -18,7 +17,6 @@ from .lookup import (
 )
 
 __all__ = [
-    "PLACEHOLDER_ERROR_RATE",
     "CompositeDecoder",
     "DirectDecoder",
     "GUFDecoder",

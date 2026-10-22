@@ -17,7 +17,7 @@ import pytest
 import stim
 
 from qldpc import decoders
-from qldpc.decoders.construction.resolution import _get_observable_decoder
+from qldpc.decoders.construction._resolution import get_observable_decoder
 from qldpc.decoders.external import frontier
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
 
@@ -208,7 +208,7 @@ def test_frontier_with_generic_decoding_apis() -> None:
     specification = decoders.frontier(add_erasure_bit=True)
     syndrome = np.array([1, 0])
 
-    assert _get_observable_decoder(dem, decoder=specification).decode_observables(
+    assert get_observable_decoder(dem, decoder=specification).decode_observables(
         syndrome
     ).tolist() == [
         1,

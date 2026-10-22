@@ -11,17 +11,13 @@ import stim
 
 from qldpc._deprecations.decoders import merge_legacy_decoder_args
 
-from ..adapters.error_decoders import ErrorsToObservablesDecoder as _ErrorsToObservablesDecoder
-from ..adapters.observable_decoders import (
-    BitPackedObservableDecoder as _BitPackedObservableDecoder,
-)
-from ..adapters.observable_decoders import (
-    validate_observable_decoder,
-)
-from ..capabilities import compiles_for_dem, is_prebuilt_decoder
+from .._capabilities import compiles_for_dem, is_prebuilt_decoder
+from .._common import as_error_decoder
+from ..adapters._observable_decoders import BitPackedObservableDecoder, validate_observable_decoder
+from ..adapters.error_decoders import ErrorsToObservablesDecoder
 from ..custom.guf import guf
 from ..external.ldpc import bp_osd
-from ..protocols import ErrorDecoder, ObservableDecoder, as_error_decoder
+from ..protocols import ErrorDecoder, ObservableDecoder
 from .factories import DEMDecoderFactory, MatrixDecoderFactory
 from .specs import (
     DecoderInput,
@@ -60,7 +56,7 @@ def resolve_decoder(
         decoder = merge_legacy_decoder_args(
             pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
-    return _get_error_decoder(pcm_or_dem, decoder=decoder)
+    return get_error_decoder(pcm_or_dem, decoder=decoder)
 
 
 def resolve_observable_decoder(
@@ -91,7 +87,7 @@ def resolve_observable_decoder(
         decoder = merge_legacy_decoder_args(
             dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
-    return _get_observable_decoder(dem, decoder=decoder)
+    return get_observable_decoder(dem, decoder=decoder)
 
 
 def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
@@ -103,11 +99,7 @@ def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
         )
 
 
-####################################################################################################
-# helper methods
-
-
-def _get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
+def get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
     """Build or retrieve a decoder that maps a syndrome to an inferred error.
 
     Args:
@@ -121,7 +113,7 @@ def _get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = Non
     return as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
 
 
-def _get_observable_decoder(
+def get_observable_decoder(
     dem: stim.DetectorErrorModel, *, decoder: DecoderInput = None
 ) -> ObservableDecoder:
     """Build or retrieve a decoder that maps a syndrome to predicted observable flips.
@@ -144,7 +136,7 @@ def _get_observable_decoder(
     built_decoder, source = _build_decoder(dem, decoder)
     if isinstance(built_decoder, ObservableDecoder):
         return built_decoder
-    return _ErrorsToObservablesDecoder(as_error_decoder(built_decoder, source), dem)
+    return ErrorsToObservablesDecoder(as_error_decoder(built_decoder, source), dem)
 
 
 def _build_decoder(pcm_or_dem: PcmOrDem, decoder: DecoderInput) -> tuple[object, str]:
@@ -193,7 +185,7 @@ def _compile_observable_decoder(
     if isinstance(compiled_decoder, ObservableDecoder):
         return compiled_decoder
     if callable(getattr(compiled_decoder, "decode_shots_bit_packed", None)):
-        return _BitPackedObservableDecoder(compiled_decoder, dem.num_observables)
+        return BitPackedObservableDecoder(compiled_decoder, dem.num_observables)
     raise TypeError(
         "A decoder compiled by compile_decoder_for_dem must provide a decode_observables or"
         " decode_shots_bit_packed method"

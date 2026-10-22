@@ -19,6 +19,7 @@ import stim
 
 from qldpc import decoders
 from qldpc._deprecations import decoders as deprecated_decoders
+from qldpc.decoders.construction._resolution import resolve_decoder, resolve_observable_decoder
 from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.custom.ilp import ILPDecoder
 from qldpc.decoders.custom.lookup import LookupDecoder, ObservableLookupDecoder
@@ -151,11 +152,11 @@ def test_deprecated_decoder_functions() -> None:
     # the static_decoder argument has been removed from other methods, in favor of decoder=
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     with pytest.raises(TypeError, match="static_decoder argument has been removed"):
-        decoders.resolve_decoder(matrix, None, {"static_decoder": static_decoder})
+        resolve_decoder(matrix, None, {"static_decoder": static_decoder})
     with pytest.raises(TypeError, match="static_decoder argument has been removed"):
-        decoders.resolve_observable_decoder(dem, None, {"static_decoder": static_decoder})
+        resolve_observable_decoder(dem, None, {"static_decoder": static_decoder})
     with pytest.raises(ValueError, match="Cannot combine decoder"):
-        decoders.resolve_decoder(matrix, static_decoder, {"with_BF": True})
+        resolve_decoder(matrix, static_decoder, {"with_BF": True})
 
 
 def test_legacy_flat_backend_options() -> None:
@@ -388,16 +389,16 @@ def test_legacy_decoder_migration_messages() -> None:
 
     # deprecated arguments build a decoder, warning unless an outer API has already warned
     with pytest.warns(DeprecationWarning, match="with_BF keyword"):
-        decoder = decoders.resolve_decoder(matrix, None, {"with_BF": True})
+        decoder = resolve_decoder(matrix, None, {"with_BF": True})
     assert np.array_equal(decoder.decode_errors(np.array([1, 0])), [1, 0])
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        decoders.resolve_decoder(matrix, None, {"with_BF": True}, warn_deprecated=False)
-        decoders.resolve_decoder(matrix, decoders.bf(), {})
+        resolve_decoder(matrix, None, {"with_BF": True}, warn_deprecated=False)
+        resolve_decoder(matrix, decoders.bf(), {})
 
     # deprecated arguments build an observable decoder with error-decoder semantics
     dem = stim.DetectorErrorModel("error(0.1) D0 L0\nerror(0.2) D0 D1\nerror(0.1) D1")
-    observable_decoder = decoders.resolve_observable_decoder(
+    observable_decoder = resolve_observable_decoder(
         dem, None, {"with_lookup": True, "max_weight": 1}, warn_deprecated=False
     )
     assert isinstance(observable_decoder, decoders.ErrorsToObservablesDecoder)
@@ -405,7 +406,7 @@ def test_legacy_decoder_migration_messages() -> None:
     assert np.array_equal(observable_decoder.decode_observables(np.array([1, 1])), [0])
 
     # without deprecated arguments, decoder specifications may build a native observable decoder
-    observable_decoder = decoders.resolve_observable_decoder(dem, decoders.lookup(1), {})
+    observable_decoder = resolve_observable_decoder(dem, decoders.lookup(1), {})
     assert isinstance(observable_decoder, ObservableLookupDecoder)
 
 

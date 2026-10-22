@@ -12,11 +12,12 @@ import numpy as np
 import numpy.typing as npt
 import stim
 
-from ..adapters.error_decoders import match_error_decoder_to_dem
-from ..construction.resolution import resolve_decoder
+from .._common import batch_decode_errors
+from ..adapters._dem_matching import match_error_decoder_to_dem
+from ..construction._resolution import resolve_decoder
 from ..construction.specs import DeferredErrorDecoderInput
 from ..dems import DetectorErrorModelArrays
-from ..protocols import ErrorDecoder, batch_decode_errors
+from ..protocols import ErrorDecoder
 from .core import CompiledSinterDecoder, SinterDecoder
 
 

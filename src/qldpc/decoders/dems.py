@@ -17,7 +17,7 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-HashableType = TypeVar("HashableType", bound=Hashable)
+_HashableType = TypeVar("_HashableType", bound=Hashable)
 
 
 ####################################################################################################
@@ -767,6 +767,6 @@ def _combined_flips(components: Iterable[FlipPattern]) -> FlipPattern:
     return combined
 
 
-def _xor_reduce(items: Iterable[HashableType]) -> frozenset[HashableType]:
+def _xor_reduce(items: Iterable[_HashableType]) -> frozenset[_HashableType]:
     """Subset of items that occur an odd number of times."""
     return frozenset([item for item, count in collections.Counter(items).items() if count % 2])

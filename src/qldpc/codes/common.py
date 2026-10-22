@@ -30,6 +30,8 @@ from qldpc._deprecations.decoders import (
 )
 from qldpc._util import format_docstring, get_external_caller_stacklevel, get_scrambled_seed
 from qldpc._util import networkx as nx
+from qldpc.decoders._capabilities import is_prebuilt_decoder, is_prebuilt_observable_decoder
+from qldpc.decoders.construction._resolution import reject_prebuilt_decoder, resolve_decoder
 from qldpc.math import IntegerArray
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, PauliXZLike, QuditPauli
 
@@ -626,7 +628,7 @@ class ClassicalCode(AbstractCode):
                 f"The {backend!r} distance backend is only available for CSSCode instances."
             )
         if vector is None:
-            decoders.reject_prebuilt_decoder(decoder, _CLASSICAL_DISTANCE_BOUND_REASON)
+            reject_prebuilt_decoder(decoder, _CLASSICAL_DISTANCE_BOUND_REASON)
         if (known_distance := self.get_distance_if_known(vector)) is not None:
             return known_distance
         known_bound = None if vector is not None else self._distance_bound
@@ -641,7 +643,7 @@ class ClassicalCode(AbstractCode):
         else:
             check_matrix = np.vstack([self.matrix, self.generator]).view(self.field)
             syndrome = np.zeros(len(check_matrix), dtype=int).view(self.field)
-        error_decoder = decoders.resolve_decoder(check_matrix, decoder, decoder_kwargs)
+        error_decoder = resolve_decoder(check_matrix, decoder, decoder_kwargs)
 
         def get_syndrome() -> npt.NDArray[np.int_]:
             """Get a syndrome to decode, randomizing its overlap with code words if necessary."""
@@ -3393,7 +3395,7 @@ class CSSCode(QuditCode):
         validate_distance_backend(backend)
         _validate_num_trials(num_trials)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
-        decoders.reject_prebuilt_decoder(decoder, _CSS_DISTANCE_BOUND_REASON)
+        reject_prebuilt_decoder(decoder, _CSS_DISTANCE_BOUND_REASON)
         if (known_distance := self.get_distance_if_known(pauli)) is not None:
             return known_distance
         known_bound = self._get_distance_bound_if_known(pauli)
@@ -3525,7 +3527,7 @@ class CSSCode(QuditCode):
         choice of the logical operators in ``L_z``.
         """
         pauli = Pauli.coerce_xz(pauli)
-        decoders.reject_prebuilt_decoder(decoder, _CSS_DISTANCE_BOUND_REASON)
+        reject_prebuilt_decoder(decoder, _CSS_DISTANCE_BOUND_REASON)
         cutoff = cutoff or 0
 
         # pretend without loss of generality that we are computing the X-distance
@@ -3535,7 +3537,7 @@ class CSSCode(QuditCode):
 
         # initialize a decoder and a trivial effective syndrome
         effective_check_matrix = np.vstack([matrix_z, logical_ops_z])
-        error_decoder = decoders.resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
+        error_decoder = resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
         effective_syndrome = np.zeros(len(effective_check_matrix), dtype=int)
 
         def get_effective_syndrome() -> npt.NDArray[np.int_]:
@@ -3626,7 +3628,7 @@ class CSSCode(QuditCode):
             raise ValueError(
                 f"logical_index must lie in range({self.dimension}) (provided: {logical_index})"
             )
-        decoders.reject_prebuilt_decoder(decoder, _REDUCE_LOGICAL_OP_REASON)
+        reject_prebuilt_decoder(decoder, _REDUCE_LOGICAL_OP_REASON)
 
         # effective check matrix = syndromes and dual-pauli logical operators
         code = self.get_code(pauli.swap_xz())
@@ -3638,7 +3640,7 @@ class CSSCode(QuditCode):
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[dual_op_index] = 1
 
-        error_decoder = decoders.resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
+        error_decoder = resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
         candidate_logical_op = _decode_consistently(
             error_decoder, effective_check_matrix, lambda: effective_syndrome, self.field
         )
@@ -3860,7 +3862,7 @@ class CSSCode(QuditCode):
         if (
             decoder_x is None
             and decoder_z is None
-            and decoders.is_prebuilt_decoder(decoder)
+            and is_prebuilt_decoder(decoder)
             and not np.array_equal(stabilizer_ops_x, stabilizer_ops_z)
         ):
             raise ValueError(
@@ -3913,7 +3915,7 @@ class CSSCode(QuditCode):
             else None
         )
         if code_capacity_decoder_z is None:
-            if same_x_and_z and decoders.is_prebuilt_observable_decoder(decoder_z_input):
+            if same_x_and_z and is_prebuilt_observable_decoder(decoder_z_input):
                 raise ValueError(
                     "A shared prebuilt observable decoder cannot decode both CSS sectors, whose"
                     " logical operators differ.  Pass decoder_x= and decoder_z= with observable"

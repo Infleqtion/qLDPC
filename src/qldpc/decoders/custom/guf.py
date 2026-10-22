@@ -17,7 +17,8 @@ from qldpc import math
 from qldpc.math import IntegerArray
 from qldpc.objects import Node
 
-from ..common import _erasure_bit_support, _to_pcm, with_erasure_bits
+from .._common import erasure_bit_support, to_pcm
+from ..common import with_erasure_bits
 from ..construction.specs import decoder_spec
 from ..protocols import ErrorDecoder
 
@@ -172,7 +173,7 @@ class GUFDecoder(ErrorDecoder):
         return sorted(checks, reverse=True), sorted(bits, reverse=True)
 
 
-@_erasure_bit_support("GUF", supported=True)
+@erasure_bit_support("GUF", supported=True)
 def _get_decoder_guf(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: object
 ) -> GUFDecoder:
@@ -195,7 +196,7 @@ def _get_decoder_guf(
     :class:`~qldpc.decoders.custom.guf.GUFDecoder` and
     `arXiv:2103.08049 <https://arxiv.org/abs/2103.08049>`_.
     """
-    return GUFDecoder(_to_pcm(pcm_or_dem), **decoder_args)  # type: ignore[arg-type]
+    return GUFDecoder(to_pcm(pcm_or_dem), **decoder_args)  # type: ignore[arg-type]
 
 
 guf = decoder_spec(

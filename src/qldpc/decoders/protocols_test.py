@@ -4,15 +4,14 @@
 
 from __future__ import annotations
 
-import copy
-import types
-from typing import Any
+import pickle
 
 import numpy as np
 import numpy.typing as npt
 import pytest
 
 from qldpc import decoders
+from qldpc.decoders import _common
 
 
 def test_error_decoder_protocols() -> None:
@@ -49,65 +48,7 @@ def test_error_decoder_protocols() -> None:
         IncompleteDecoder().decode_batch(syndromes)
 
 
-def test_error_decoder_coercion() -> None:
-    """Objects with a decode method are wrapped to provide decode_errors."""
-    syndromes = np.eye(2, dtype=int)
-
-    class BareDecoder:
-        scale = 2
-
-        def decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-            return self.scale * syndrome
-
-    class BareBatchDecoder(BareDecoder):
-        def decode_batch(self, syndromes: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-            return 3 * syndromes
-
-    # a wrapped decoder decodes with, and reads attributes of, the object that it wraps
-    bare_decoder = BareDecoder()
-    decoder: Any = decoders.as_error_decoder(bare_decoder)
-    assert decoder.decoder is bare_decoder
-    assert repr(decoder) == f"WrappedErrorDecoder({bare_decoder!r})"
-    assert np.array_equal(decoder.decode_errors(syndromes[0]), [2, 0])
-    assert np.array_equal(decoder.decode(syndromes[0]), [2, 0])
-    bare_decoder.scale = 4
-    assert decoder.scale == 4
-    assert not hasattr(decoder, "decode_errors_batch")
-    assert not hasattr(decoder, "__missing_attribute__")
-    assert copy.copy(decoder).decoder is bare_decoder
-
-    # batch decoding methods are provided if the wrapped object has them
-    decoder = decoders.as_error_decoder(BareBatchDecoder())
-    assert np.array_equal(decoder.decode_errors_batch(syndromes), 3 * syndromes)
-    assert decoders.supports_batch_decoding(decoder)
-    assert np.array_equal(decoders.batch_decode_errors(decoder, syndromes), 3 * syndromes)
-
-    # an error decoder is returned as is, and its native batch method is used
-    lookup_decoder = decoders.custom.LookupDecoder(np.eye(2, dtype=int), max_weight=1)
-    assert decoders.as_error_decoder(lookup_decoder) is lookup_decoder
-    assert decoders.supports_batch_decoding(lookup_decoder)
-    assert np.array_equal(decoders.batch_decode_errors(lookup_decoder, syndromes), syndromes)
-
-    # an error decoder without a batch method decodes batches one syndrome at a time
-    class SingleSyndromeDecoder(decoders.ErrorDecoder):
-        def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-            return np.concatenate([syndrome, syndrome])
-
-    error_decoder = SingleSyndromeDecoder()
-    assert not decoders.supports_batch_decoding(error_decoder)
-    batch = decoders.batch_decode_errors(error_decoder, syndromes)
-    assert np.array_equal(batch, np.hstack([syndromes, syndromes]))
-    assert decoders.batch_decode_errors(error_decoder, syndromes[:0]).shape == (0, 4)
-
-    # objects that predict observable flips, or that do not decode, are rejected
-    observable_decoders = [
-        types.SimpleNamespace(decode_observables=lambda syndrome: syndrome),
-        types.SimpleNamespace(decode=lambda syndrome: syndrome, decode_returns_observables=True),
-    ]
-    for observable_decoder in observable_decoders:
-        with pytest.raises(TypeError, match="observable flips rather than errors"):
-            decoders.as_error_decoder(observable_decoder)
-    with pytest.raises(TypeError, match="cannot decode until it is compiled"):
-        decoders.as_error_decoder(decoders.SinterDecoder())
-    with pytest.raises(TypeError, match="must be an ErrorDecoder, or have a decode method"):
-        decoders.as_error_decoder(object())
+def test_deprecated_pickle_path() -> None:
+    """Pickles that reference WrappedErrorDecoder at its former module still load."""
+    cls = pickle.loads(b"cqldpc.decoders.protocols\nWrappedErrorDecoder\n.")  # noqa: S301
+    assert cls is _common.WrappedErrorDecoder

@@ -17,13 +17,13 @@ from qldpc._deprecations.decoders import deprecate_error_rate_option
 from qldpc._util import format_docstring
 from qldpc.math import IntegerArray
 
-from ..common import (
+from .._common import (
     PLACEHOLDER_ERROR_RATE,
-    _erasure_bit_support,
-    _get_matrix_error_channel,
-    _reject_dem_error_probabilities,
-    with_erasure_bits,
+    erasure_bit_support,
+    get_matrix_error_channel,
+    reject_dem_error_probabilities,
 )
+from ..common import with_erasure_bits
 from ..construction.specs import DecoderSpec, decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import (
@@ -239,7 +239,7 @@ class TesseractDecoder(ErrorDecoder, BatchObservableDecoder):
         return validated_syndromes
 
 
-@_erasure_bit_support("Tesseract", supported=True)
+@erasure_bit_support("Tesseract", supported=True)
 def _get_decoder_tesseract(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: Any
 ) -> TesseractDecoder:
@@ -410,13 +410,13 @@ def _get_dem_and_num_errors(
 ) -> tuple[stim.DetectorErrorModel, int]:
     """Convert an input to Tesseract's DEM while preserving its error indexing."""
     if isinstance(pcm_or_dem, stim.DetectorErrorModel):
-        _reject_dem_error_probabilities(error_channel, error_rate)
+        reject_dem_error_probabilities(error_channel, error_rate)
         return pcm_or_dem, pcm_or_dem.num_errors
 
     _validate_binary_matrix(pcm_or_dem)
     probabilities = cast(
         npt.NDArray[np.floating],
-        _get_matrix_error_channel(pcm_or_dem, error_channel, error_rate),
+        get_matrix_error_channel(pcm_or_dem, error_channel, error_rate),
     )
     dem_arrays = DetectorErrorModelArrays.from_arrays(pcm_or_dem, None, probabilities)
     return dem_arrays.to_dem(), dem_arrays.num_errors

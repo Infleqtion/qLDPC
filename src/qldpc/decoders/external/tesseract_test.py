@@ -21,7 +21,8 @@ import scipy.sparse
 import stim
 
 from qldpc import decoders
-from qldpc.decoders.construction.resolution import _get_error_decoder, _get_observable_decoder
+from qldpc.decoders._common import batch_decode_errors, supports_batch_decoding
+from qldpc.decoders.construction._resolution import get_error_decoder, get_observable_decoder
 from qldpc.decoders.external.tesseract import _get_decoder_tesseract
 
 
@@ -114,11 +115,11 @@ def test_tesseract_matrix_error_decoding(fake_tesseract: None) -> None:
         assert np.array_equal(decoder.decode_errors(syndromes[0]), expected[0])
 
     assert isinstance(decoder, decoders.ErrorDecoder)
-    assert not decoders.supports_batch_decoding(decoder)
+    assert not supports_batch_decoding(decoder)
     assert isinstance(decoder, decoders.BatchObservableDecoder)
     assert np.array_equal(decoder.decode(syndromes[0]), expected[0])
-    assert np.array_equal(decoders.batch_decode_errors(decoder, syndromes), expected)
-    assert decoders.batch_decode_errors(decoder, syndromes[:0]).shape == (0, 3)
+    assert np.array_equal(batch_decode_errors(decoder, syndromes), expected)
+    assert batch_decode_errors(decoder, syndromes[:0]).shape == (0, 3)
     assert np.array_equal(decoder.decoder.dem_arrays.error_probs, [0.1, 0.2, 0.3])
 
     with pytest.warns(DeprecationWarning, match="error_rate=0.25.*error_channel=0.25"):
@@ -169,10 +170,10 @@ def test_tesseract_erasure_bits(fake_tesseract: None) -> None:
 
     assert np.array_equal(decoder.decode_errors(syndromes[0]), [0, 1])
     assert np.array_equal(decoder.decode_errors(syndromes[1]), [0, 0])
-    assert np.array_equal(decoders.batch_decode_errors(decoder, syndromes), [[0, 1], [0, 0]])
+    assert np.array_equal(batch_decode_errors(decoder, syndromes), [[0, 1], [0, 0]])
     assert np.array_equal(decoder.decode_observables(syndromes[0]), [0, 1])
     assert np.array_equal(decoder.decode_observables_batch(syndromes), [[0, 1], [0, 0]])
-    assert decoders.batch_decode_errors(decoder, syndromes[:0]).shape == (0, 2)
+    assert batch_decode_errors(decoder, syndromes[:0]).shape == (0, 2)
     assert decoder.decode_observables_batch(syndromes[:0]).shape == (0, 2)
 
     # detailed results flag low-confidence erasure whether or not erasure bits are requested
@@ -301,8 +302,8 @@ def test_tesseract_specs_and_sinter(fake_tesseract: None) -> None:
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     spec = decoders.tesseract(det_beam=7)
     assert spec.predicts_observables_natively
-    assert isinstance(_get_error_decoder(dem, decoder=spec), decoders.external.TesseractDecoder)
-    observable_decoder = _get_observable_decoder(dem, decoder=spec)
+    assert isinstance(get_error_decoder(dem, decoder=spec), decoders.external.TesseractDecoder)
+    observable_decoder = get_observable_decoder(dem, decoder=spec)
     assert isinstance(observable_decoder, decoders.external.TesseractDecoder)
     assert np.array_equal(observable_decoder.decode_observables(np.array([1])), [1])
 
@@ -316,7 +317,8 @@ import numpy as np
 import stim
 
 from qldpc import decoders
-from qldpc.decoders.construction.resolution import _get_error_decoder, _get_observable_decoder
+from qldpc.decoders._common import batch_decode_errors
+from qldpc.decoders.construction._resolution import get_error_decoder, get_observable_decoder
 from qldpc.decoders.external.tesseract import _get_decoder_tesseract
 
 # A matrix keeps the most likely of two identical columns.
@@ -328,7 +330,7 @@ dem = stim.DetectorErrorModel("error(0.3) D0 L0\\nerror(0.3) D0 L0\\nerror(0.4) 
 decoder = _get_decoder_tesseract(dem)
 syndromes = np.array([[1], [0]])
 assert np.array_equal(decoder.decode_observables_batch(syndromes), [[1], [0]])
-assert np.array_equal(decoders.batch_decode_errors(decoder, syndromes), [[1, 0, 0], [0, 0, 0]])
+assert np.array_equal(batch_decode_errors(decoder, syndromes), [[1, 0, 0], [0, 0, 0]])
 
 # A syndrome that no error explains is flagged, with generated detector orders.
 dem = stim.DetectorErrorModel("detector D0\\ndetector D1\\nerror(0.1) D0 L0")
@@ -344,7 +346,7 @@ circuit = stim.Circuit.generated(
 )
 dem = circuit.detector_error_model()
 shots = circuit.compile_detector_sampler(seed=0).sample(50).astype(np.uint8)
-errors = decoders.batch_decode_errors(_get_decoder_tesseract(dem), shots)
+errors = batch_decode_errors(_get_decoder_tesseract(dem), shots)
 matrix = decoders.DetectorErrorModelArrays(dem, simplify=False).detector_flip_matrix
 assert np.array_equal(matrix @ errors.T % 2, shots.T)
 compiled = decoders.SinterDecoder(decoder=decoders.tesseract()).compile_decoder_for_dem(dem)
