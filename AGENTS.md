@@ -157,7 +157,7 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
 ### Tests
 
 - Tests run with network sockets disabled.
-  Mock only external boundaries such as web, subprocess, clipboard, prompt, and optional-package paths, never the module under test, and do not add a live-service test.
+  Mock only external boundaries such as web, subprocess, clipboard, prompt, and optional-package paths, or a module's own thin wrappers around them, never the logic under test, and do not add a live-service test.
 - Disk caches are bypassed while pytest is imported, so tests must not depend on cache persistence.
 - Statement coverage is gated at 100%.
   Co-located `*_test.py` files are the strong convention, although a thin helper can be covered through its consumer's test module.
@@ -169,6 +169,7 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
   Testing a private helper directly is fine when that is the simplest way to check its contract or reach coverage.
 - Keep each test minimal: use the smallest code, field, or circuit that exercises the behavior, do not parametrize over cases that take the same path, and delete tests implied by others.
 - Prefer independent oracles (rank, commutation, row-space identities, or brute force on small instances) over values that the code under test computed or cached.
+  Checking a stored value against an independent expected value, such as one from the literature, is not tautological; deriving the expected value from the code under test is.
 - Keep tests that reproduce results from the literature, and cite the source in the test.
 - Seed or construct random inputs so that a test cannot fail by chance.
 - Check that a new or rewritten test fails when the behavior it guards is broken.
