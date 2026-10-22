@@ -20,7 +20,31 @@ import qldpc
 from . import _binary as binary
 from . import _brouwer_zimmermann as bz
 from . import _information_sets, core
-from .conftest import _get_random_full_rank_matrix
+from .conftest import get_random_full_rank_matrix
+
+
+def test_css_brouwer_zimmermann_special_inputs() -> None:
+    """The joint CSS helper handles empty, trivial, and nontrivial quotient sectors."""
+    empty = np.empty((0, 4), dtype=np.uint8)
+    assert (
+        bz.get_distance_css_brouwer_zimmermann(
+            [(empty, empty)],
+            cutoff=0,
+        )
+        == 4
+    )
+    assert (
+        bz.get_distance_css_brouwer_zimmermann(
+            [([[1, 0]], [[1, 0]])],
+            cutoff=0,
+        )
+        == 0
+    )
+
+    # The result is the minimum of the upper bound and the distances of the supplied sectors.
+    sectors: list[tuple[npt.ArrayLike, npt.ArrayLike]] = [([[1, 1]], [])]
+    assert bz.get_distance_css_brouwer_zimmermann(sectors, cutoff=0, upper_bound=3) == 2
+    assert bz.get_distance_css_brouwer_zimmermann(sectors, cutoff=0, upper_bound=1) == 1
 
 
 @pytest.mark.parametrize("interpreted", [False, True])
@@ -107,7 +131,7 @@ def test_brouwer_zimmermann_search_state() -> None:
         np.ones((1, 2, 1), dtype=np.uint64),
         np.array([1], dtype=np.int64),
         np.array([1], dtype=np.int64),
-        _information_sets._Certificate(2, (0,)),
+        _information_sets.Certificate(2, (0,)),
         cutoff=1,
         batch_size=1,
         best=3,
@@ -215,13 +239,13 @@ def test_brouwer_zimmermann_setup_exits(
     )
 
     # Lower only the cost knobs, so that these small inputs reach the information-set search.
-    monkeypatch.setattr(bz, "_exhaustive_is_cheaper", lambda *_: False)
-    monkeypatch.setattr(core, "_exhaustive_is_cheaper", lambda *_: False)
+    monkeypatch.setattr(bz, "exhaustive_is_cheaper", lambda *_: False)
+    monkeypatch.setattr(core, "exhaustive_is_cheaper", lambda *_: False)
     if overlap:
         monkeypatch.setattr(
             _information_sets,
-            "_get_overlapping_family",
-            functools.partial(_information_sets._get_overlapping_family, minimum_work=0),
+            "get_overlapping_family",
+            functools.partial(_information_sets.get_overlapping_family, minimum_work=0),
         )
     distance = qldpc.codes.get_distance_quantum(
         logicals, stabilizers, homogeneous=True, cutoff=cutoff
@@ -238,7 +262,7 @@ def test_brouwer_zimmermann_setup_cutoffs() -> None:
         )
         == 3
     )
-    with mock.patch.object(bz, "_exhaustive_is_cheaper", return_value=False):
+    with mock.patch.object(bz, "exhaustive_is_cheaper", return_value=False):
         assert (
             bz._prepare_brouwer_zimmermann_search(
                 basis, None, cutoff=2, block_size=2, weight_divisor=1, upper_bound=4
@@ -251,8 +275,8 @@ def test_brouwer_zimmermann_setup_cutoffs() -> None:
 def test_brouwer_zimmermann_shared_search() -> None:
     """A shared Brouwer-Zimmermann search returns the minimum distance across nested codes."""
     rng = np.random.default_rng(119)
-    basis_a = _get_random_full_rank_matrix(rng, 5, 8)
-    basis_b = _get_random_full_rank_matrix(rng, 5, 9)
+    basis_a = get_random_full_rank_matrix(rng, 5, 8)
+    basis_b = get_random_full_rank_matrix(rng, 5, 9)
     labels_b = np.vstack(
         [
             np.zeros((2, 3), dtype=np.uint8),
@@ -272,7 +296,7 @@ def test_brouwer_zimmermann_shared_search() -> None:
         homogeneous=True,
         method="brute_force",
     )
-    actual = bz._get_distance_brouwer_zimmermann_many(
+    actual = bz.get_distance_brouwer_zimmermann_many(
         [(basis_a, None), (basis_b, labels_b)],
         cutoff=0,
         block_size=2,
@@ -284,10 +308,10 @@ def test_brouwer_zimmermann_shared_search() -> None:
 def test_brouwer_zimmermann_sector_certificates() -> None:
     """A completed sector's certificate must not finish a different sector's search."""
     generators = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
-    basis_a = binary._get_independent_rows(
+    basis_a = binary.get_independent_rows(
         np.column_stack([generators, np.bitwise_xor.reduce(generators, axis=1)])
     )
-    basis_b = binary._get_independent_rows(
+    basis_b = binary.get_independent_rows(
         np.array(
             [
                 [0, 0, 1, 0, 0, 0, 0, 0, 1, 1],
@@ -325,7 +349,7 @@ def test_brouwer_zimmermann_sector_certificates() -> None:
         mock.patch.object(bz, "_prepare_brouwer_zimmermann_search", side_effect=prepare),
         mock.patch.object(bz._BrouwerZimmermannSearch, "advance", advance),
     ):
-        actual = bz._get_distance_brouwer_zimmermann_many(
+        actual = bz.get_distance_brouwer_zimmermann_many(
             [(basis_a, None), (basis_b, None)], cutoff=0, block_size=2
         )
     assert actual == min(expected)
@@ -397,7 +421,7 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
     """Compare witness-improving overlap enumeration with an exhaustive quotient oracle."""
 
     # Shorten a systematic BCH(31,21) basis to [26,16] and isolate a one-bit quotient.
-    basis = binary._get_independent_rows(
+    basis = binary.get_independent_rows(
         np.asarray(qldpc.codes.BCHCode(31, 21).generator, dtype=np.uint8)
     )[5:, 5:]
     logicals = basis[13:14]
@@ -407,9 +431,9 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
     )
 
     # Lower only the work threshold so this small oracle exercises production family construction.
-    original = _information_sets._get_overlapping_family
+    original = _information_sets.get_overlapping_family
 
-    def select(*args: Any, **kwargs: Any) -> _information_sets._BasisFamily | None:
+    def select(*args: Any, **kwargs: Any) -> _information_sets.BasisFamily | None:
         selected = original(*args, **kwargs, minimum_work=0)
         assert selected is not None and selected.certificate.max_coverage > 1
         assert (
@@ -422,7 +446,7 @@ def test_brouwer_zimmermann_overlap_improves_quotient_witness() -> None:
         return selected
 
     with mock.patch.object(
-        _information_sets, "_get_overlapping_family", side_effect=select
+        _information_sets, "get_overlapping_family", side_effect=select
     ) as select_mock:
         assert (
             qldpc.codes.get_distance_quantum(logicals, stabilizers, homogeneous=True, cutoff=0)

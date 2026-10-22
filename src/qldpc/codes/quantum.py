@@ -22,6 +22,7 @@ from sympy.matrices.normalforms import hermite_normal_form
 
 import qldpc
 from qldpc import abstract
+from qldpc._util import get_scrambled_seed
 from qldpc._util import networkx as nx
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
 
@@ -35,7 +36,7 @@ from .classical import (
     SimplexCode,
     TannerCode,
 )
-from .common import ClassicalCode, CSSCode, QuditCode, get_scrambled_seed
+from .common import ClassicalCode, CSSCode, QuditCode
 
 ####################################################################################################
 # small named codes

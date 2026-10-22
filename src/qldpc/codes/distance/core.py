@@ -1,65 +1,32 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact binary distance calculations, and distance method and backend selectors."""
+"""Exact binary distance calculations, and distance method and backend types."""
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
 
 from ._binary import (
-    _as_binary_matrix,
-    _assert_binary,
-    _get_independent_rows,
-    _get_nested_code_basis,
-    _symplectic_to_hamming,
+    as_binary_matrix,
+    assert_binary,
+    get_independent_rows,
+    get_nested_code_basis,
+    symplectic_to_hamming,
 )
 from ._brouwer_zimmermann import (
-    _exhaustive_is_cheaper,
-    _get_distance_brouwer_zimmermann,
-    _get_distance_brouwer_zimmermann_many,
+    exhaustive_is_cheaper,
+    get_distance_brouwer_zimmermann,
 )
-from .brute_force import (
-    _get_distance_quantum_brute_force,
+from ._brute_force import (
+    get_distance_quantum_brute_force,
 )
+from ._methods import validate_distance_method
 
 DistanceBackend = Literal["auto", "decoder", "gap", "sqetch"]
 DistanceMethod = Literal["brouwer_zimmermann", "brute_force", "information_sets"]
-
-# The canonical name of every accepted exact-distance method name, including aliases.  Logical
-# counts accept the same names.
-_DISTANCE_METHODS: dict[str, Literal["brouwer_zimmermann", "brute_force"]] = {
-    "brouwer_zimmermann": "brouwer_zimmermann",
-    "brute_force": "brute_force",
-    "information_sets": "brouwer_zimmermann",
-}
-
-
-def validate_distance_backend(backend: DistanceBackend) -> None:
-    """Validate a distance-bound backend selector."""
-    if backend not in ("auto", "decoder", "gap", "sqetch"):
-        raise ValueError(
-            f"Unknown distance backend {backend!r}; choose from 'auto', 'decoder', 'gap', or "
-            "'sqetch'."
-        )
-
-
-def validate_distance_method(
-    method: DistanceMethod,
-) -> Literal["brouwer_zimmermann", "brute_force"]:
-    """Validate an exact-distance method selector, and return its canonical name.
-
-    The alias ``"information_sets"`` resolves to ``"brouwer_zimmermann"``.
-    """
-    if method not in _DISTANCE_METHODS:
-        raise ValueError(
-            f"Unknown distance method {method!r}; choose from 'brouwer_zimmermann' or "
-            "'brute_force'."
-        )
-    return _DISTANCE_METHODS[method]
 
 
 ####################################################################################################
@@ -91,14 +58,14 @@ def get_distance_classical(
         Hamming weight of a nontrivial code word.
     """
     method = validate_distance_method(method)
-    _assert_binary(generators, "generators")
-    matrix = _as_binary_matrix(generators)
-    basis = _get_independent_rows(matrix)
+    assert_binary(generators, "generators")
+    matrix = as_binary_matrix(generators)
+    basis = get_independent_rows(matrix)
     if not len(basis):
         return matrix.shape[1]
 
     if method == "brouwer_zimmermann":
-        return _get_distance_brouwer_zimmermann(
+        return get_distance_brouwer_zimmermann(
             basis,
             labels=None,
             cutoff=cutoff,
@@ -106,7 +73,7 @@ def get_distance_classical(
         )
 
     # The reduced classical basis needs no excluded subspace.
-    return _get_distance_quantum_brute_force(
+    return get_distance_quantum_brute_force(
         basis,
         np.empty((0, matrix.shape[1]), dtype=np.uint8),
         cutoff=cutoff,
@@ -163,10 +130,10 @@ def get_distance_quantum(
         (b) the weight of a Pauli string is the symplectic weight of the corresponding bitstring.
     """
     method = validate_distance_method(method)
-    _assert_binary(logical_ops, "logical_ops")
-    _assert_binary(stabilizers, "stabilizers")
-    logical_matrix = _as_binary_matrix(logical_ops)
-    stabilizer_matrix = _as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
+    assert_binary(logical_ops, "logical_ops")
+    assert_binary(stabilizers, "stabilizers")
+    logical_matrix = as_binary_matrix(logical_ops)
+    stabilizer_matrix = as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
     num_bits = logical_matrix.shape[1]
     physical_size = num_bits if homogeneous else num_bits // 2
     if not homogeneous and num_bits % 2:
@@ -177,10 +144,10 @@ def get_distance_quantum(
     if method == "brouwer_zimmermann":
         # Verify independence before bypassing adapted-basis preparation.
         num_rows = len(logical_matrix) + len(stabilizer_matrix)
-        if _exhaustive_is_cheaper(num_rows, num_bits) and num_rows == len(
-            _get_independent_rows(np.vstack([stabilizer_matrix, logical_matrix]))
+        if exhaustive_is_cheaper(num_rows, num_bits) and num_rows == len(
+            get_independent_rows(np.vstack([stabilizer_matrix, logical_matrix]))
         ):
-            return _get_distance_quantum_brute_force(
+            return get_distance_quantum_brute_force(
                 logical_matrix,
                 stabilizer_matrix,
                 cutoff=cutoff,
@@ -189,12 +156,12 @@ def get_distance_quantum(
             )
 
     # Separate an independent excluded basis from a complement representing the quotient.
-    basis, labels = _get_nested_code_basis(logical_matrix, stabilizer_matrix)
+    basis, labels = get_nested_code_basis(logical_matrix, stabilizer_matrix)
     if labels.shape[1] == 0:
         return 0
     if method == "brute_force":
         num_stabilizers = len(basis) - labels.shape[1]
-        return _get_distance_quantum_brute_force(
+        return get_distance_quantum_brute_force(
             basis[num_stabilizers:],
             basis[:num_stabilizers],
             cutoff=cutoff,
@@ -204,10 +171,10 @@ def get_distance_quantum(
 
     divisor = 1
     if not homogeneous:
-        basis = _symplectic_to_hamming(basis)
+        basis = symplectic_to_hamming(basis)
         divisor = 2
 
-    distance = _get_distance_brouwer_zimmermann(
+    distance = get_distance_brouwer_zimmermann(
         basis,
         labels,
         cutoff=cutoff * divisor,
@@ -215,53 +182,3 @@ def get_distance_quantum(
         weight_divisor=divisor,
     )
     return distance // divisor
-
-
-def get_distance_css_brouwer_zimmermann(
-    sectors: Sequence[tuple[npt.ArrayLike, npt.ArrayLike]],
-    *,
-    cutoff: int,
-    block_size: int = 15,
-    upper_bound: int | None = None,
-) -> int:
-    """Compute the minimum distance across homogeneous binary CSS sectors.
-
-    Args:
-        sectors: Logical operators and stabilizers for every sector to search.  All operators use
-            homogeneous binary support vectors rather than symplectic vectors.
-        cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
-        block_size: Batch size exponent, as in :func:`get_distance_quantum`.
-        upper_bound: Weight of a known logical operator from an omitted sector, if any.  The result
-            is the minimum of this bound and the distances of the supplied sectors.
-
-    Returns:
-        The minimum exact distance across the supplied sectors and optional upper bound.  As with
-        :func:`get_distance_quantum`, a result at or below ``cutoff`` is an observed upper bound.
-    """
-    problems: list[tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8]]] = []
-    best = upper_bound
-    for logical_ops, stabilizers in sectors:
-        _assert_binary(logical_ops, "logical_ops")
-        _assert_binary(stabilizers, "stabilizers")
-        logical_matrix = _as_binary_matrix(logical_ops)
-        stabilizer_matrix = _as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
-        basis, labels = _get_nested_code_basis(logical_matrix, stabilizer_matrix)
-        if labels.shape[1]:
-            problems.append((basis, labels))
-            continue
-
-        # A supplied but trivial quotient has distance zero; an empty sector contributes its width.
-        sector_distance = 0 if len(logical_matrix) else logical_matrix.shape[1]
-        best = sector_distance if best is None else min(best, sector_distance)
-
-    if best is not None and best <= cutoff:
-        return best
-    if not problems:
-        assert best is not None
-        return best
-    return _get_distance_brouwer_zimmermann_many(
-        problems,
-        cutoff=cutoff,
-        block_size=block_size,
-        upper_bound=best,
-    )

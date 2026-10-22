@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for code_capacity.py."""
+"""Unit tests for _code_capacity.py."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ import sinter
 import stim
 
 from qldpc import codes, decoders
-from qldpc.codes import code_capacity
+from qldpc.codes import _code_capacity
 from qldpc.decoders.adapters import observable_decoders
 from qldpc.decoders.external.pymatching import MatchingObservableDecoder
 
@@ -87,7 +87,7 @@ def test_get_code_capacity_dem() -> None:
     """A code-capacity DEM has one error mechanism per column of the syndrome matrix."""
     syndrome_matrix = galois.GF2([[1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 0, 0]])
     observable_matrix = galois.GF2([[1, 0, 0, 1]])
-    dem = code_capacity.get_code_capacity_dem(syndrome_matrix, observable_matrix)
+    dem = _code_capacity._get_code_capacity_dem(syndrome_matrix, observable_matrix)
     assert dem.num_detectors == 3  # an untriggered detector is still declared
     assert dem.num_observables == 1
     assert dem.num_errors == 4
@@ -101,7 +101,7 @@ def test_get_code_capacity_dem() -> None:
 
     # error mechanisms may be combinations of error locations
     dem_errors = galois.GF2([[1, 0], [0, 1], [0, 1], [0, 1]])
-    dem = code_capacity.get_code_capacity_dem(syndrome_matrix, observable_matrix, dem_errors)
+    dem = _code_capacity._get_code_capacity_dem(syndrome_matrix, observable_matrix, dem_errors)
     dem_arrays = decoders.DetectorErrorModelArrays(dem, simplify=False)
     assert np.array_equal(dem_arrays.detector_flip_matrix.toarray(), syndrome_matrix @ dem_errors)
     assert np.array_equal(
@@ -112,7 +112,7 @@ def test_get_code_capacity_dem() -> None:
     syndrome_matrix = galois.GF2([[1, 0, 0, 1]])
     observable_matrix = galois.GF2([[0, 1, 1, 0]])
     error_probs = np.arange(1, 7) / 100
-    dem = code_capacity.get_code_capacity_dem(
+    dem = _code_capacity._get_code_capacity_dem(
         syndrome_matrix,
         observable_matrix,
         symplectic_errors=True,
@@ -123,9 +123,9 @@ def test_get_code_capacity_dem() -> None:
     assert np.array_equal(dem_arrays.observable_flip_matrix.toarray(), [[0, 1, 1, 0, 1, 1]])
     assert np.array_equal(dem_arrays.error_probs, error_probs)
     with pytest.raises(ValueError, match="requires an observable_matrix"):
-        code_capacity.get_code_capacity_dem(syndrome_matrix, None, symplectic_errors=True)
+        _code_capacity._get_code_capacity_dem(syndrome_matrix, None, symplectic_errors=True)
     with pytest.raises(ValueError, match="cannot both be specified"):
-        code_capacity.get_code_capacity_dem(
+        _code_capacity._get_code_capacity_dem(
             syndrome_matrix,
             observable_matrix,
             galois.GF2.Identity(4),
@@ -135,7 +135,7 @@ def test_get_code_capacity_dem() -> None:
     # Stim detector error models are binary
     field = galois.GF(3)
     with pytest.raises(ValueError, match="cannot decode a code over GF"):
-        code_capacity.get_code_capacity_dem(field(syndrome_matrix), field(observable_matrix))
+        _code_capacity._get_code_capacity_dem(field(syndrome_matrix), field(observable_matrix))
 
 
 def test_code_capacity_decoder_from_error_decoder() -> None:
@@ -144,7 +144,7 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
     syndrome_matrix = field([[1, 2, 0]])
     observable_matrix = field([[1, 1, 1], [0, 2, 1]])
 
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _FixedErrorDecoder([2, 1, 0])
     )
     assert not decoder.can_discard
@@ -158,7 +158,7 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
     assert decoder.get_failure_and_erasure(field([1, 0, 2])) == (False, False)  # same logical class
 
     # an erasure bit is passed through, and an erased sample is not a failure
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _FixedErrorDecoder([0, 0, 0, 1], has_erasure_bit=True)
     )
     assert decoder.can_discard
@@ -171,32 +171,32 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
         ([0.0, 0.0, 0.0], "expected integers"),
     ]
     for output, message in malformed_outputs:
-        decoder = code_capacity.get_code_capacity_decoder(
+        decoder = _code_capacity.get_code_capacity_decoder(
             syndrome_matrix, observable_matrix, _FixedErrorDecoder(output)
         )
         with pytest.raises(ValueError, match=message):
             decoder.decode(field([0]))
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _FixedErrorDecoder([0, 0, 0, 2], has_erasure_bit=True)
     )
     with pytest.raises(ValueError, match="erasure flags that are not 0 or 1"):
         decoder.decode(field([0]))
 
     # binary specifications with a native observable builder use the sector's detector error model
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         galois.GF2([[1, 1]]), galois.GF2([[1, 0]]), decoders.lookup(max_weight=1)
     )
     assert isinstance(decoder.decoder, decoders.custom.ObservableLookupDecoder)
 
     # nonbinary codes cannot use a Stim DEM, but can still infer field-valued errors
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, decoders.lookup(max_weight=1)
     )
     assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
     assert isinstance(decoder.decoder.error_decoder, decoders.custom.LookupDecoder)
 
     # None represents an identity observable map without materializing a dense identity matrix
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, None, _FixedErrorDecoder([2, 1, 0])
     )
     assert decoder.observable_matrix is None and decoder.num_observables == 3
@@ -211,7 +211,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
     observable_matrix = field([[1, 1, 1], [0, 2, 1]])
 
     observable_decoder = _FixedObservableDecoder([2, 1])
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, observable_decoder
     )
     assert decoder.decoder is observable_decoder
@@ -222,7 +222,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
     assert decoder.get_failure_and_erasure(field([1, 0, 0])) == (True, False)
 
     # an erasure flag discards a sample
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _FixedObservableDecoder([0, 0, 1], True)
     )
     assert decoder.num_erasure_flags == 1
@@ -233,7 +233,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
         ([0, 0, 0], "expected shape"),
         ([0, 5], "not elements of GF"),
     ]:
-        decoder = code_capacity.get_code_capacity_decoder(
+        decoder = _code_capacity.get_code_capacity_decoder(
             syndrome_matrix,
             observable_matrix,
             _FixedObservableDecoder(output, num_observables=2),
@@ -246,7 +246,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
         def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
             raise NotImplementedError  # pragma: no cover
 
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _BothDecoder([1, 0, 1])
     )
     assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
@@ -260,7 +260,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
         def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
             raise AssertionError("decode_observables should not be called")  # pragma: no cover
 
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _DecodeOnlyBoth()
     )
     assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
@@ -271,14 +271,14 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
         def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
             return np.array([2, 1])
 
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _NoDimensions()
     )
     assert decoder.get_failure_and_erasure(error) == (False, False)
 
     # prebuilt observable decoders are rejected where a caller asks for that
     with pytest.raises(ValueError, match="prebuilt decoder cannot be passed as decoder="):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             syndrome_matrix,
             observable_matrix,
             _FixedObservableDecoder([0, 0]),
@@ -287,7 +287,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
 
     # deprecated keyword arguments cannot be combined with an observable decoder
     with pytest.raises(ValueError, match="Cannot combine decoder="):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             syndrome_matrix,
             observable_matrix,
             _FixedObservableDecoder([0, 0]),
@@ -301,7 +301,7 @@ def test_code_capacity_dem_mechanism_order_and_native_prediction() -> None:
     syndrome_matrix = field([[1, 1, 0], [0, 0, 1]])
     observable_matrix = field([[1, 0, 1], [0, 1, 1]])
     dem_errors = field([[0, 1, 0], [1, 0, 0], [0, 0, 1]])
-    dem = code_capacity.get_code_capacity_dem(
+    dem = _code_capacity._get_code_capacity_dem(
         syndrome_matrix,
         observable_matrix,
         dem_errors,
@@ -313,7 +313,7 @@ def test_code_capacity_dem_mechanism_order_and_native_prediction() -> None:
     assert np.allclose(arrays.error_probs, [0.12, 0.04, 0.06])
 
     native = decoders.lookup(max_weight=1).build_observable_decoder(dem)
-    decoder = code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, native)
+    decoder = _code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, native)
     errors = [field([0, 1, 0]), field([1, 0, 0]), field([0, 0, 1])]
     assert [decoder.get_failure_and_erasure(error) for error in errors] == [
         (False, False),
@@ -334,10 +334,10 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
     specification = decoders.lookup(max_weight=1)
     inferred_error = specification.build(syndrome_matrix).decode_errors(np.array([1]))
     assert inferred_error.tolist() == [0, 0, 1]
-    native = code_capacity.get_code_capacity_decoder(
+    native = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, specification
     )
-    projected = code_capacity.get_code_capacity_decoder(
+    projected = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix,
         observable_matrix,
         decoders.from_matrix(specification.build),
@@ -358,7 +358,7 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
     ]
 
     with pytest.warns(DeprecationWarning, match="with_lookup"):
-        legacy = code_capacity.get_code_capacity_decoder(
+        legacy = _code_capacity.get_code_capacity_decoder(
             syndrome_matrix,
             observable_matrix,
             None,
@@ -368,7 +368,7 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
     assert legacy.decode(field([1]))[0].tolist() == [1]
 
     # The DEM's relative mechanism weights affect the native class prediction.
-    weighted = code_capacity.get_code_capacity_decoder(
+    weighted = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix,
         observable_matrix,
         specification,
@@ -378,13 +378,13 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
 
     # Even a most likely individual error can lose to the combined probability of another class.
     weighted_observables = field([[1, 0, 0]])
-    weighted_native = code_capacity.get_code_capacity_decoder(
+    weighted_native = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix,
         weighted_observables,
         specification,
         dem_error_weights=np.array([3.0, 2.0, 2.0]),
     )
-    weighted_projected = code_capacity.get_code_capacity_decoder(
+    weighted_projected = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix,
         weighted_observables,
         decoders.from_matrix(
@@ -396,7 +396,7 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
     assert weighted_native.decode(field([1]))[0].tolist() == [0]
     assert weighted_projected.decode(field([1]))[0].tolist() == [1]
 
-    erasing = code_capacity.get_code_capacity_decoder(
+    erasing = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, decoders.lookup(max_weight=0, add_erasure_bit=True)
     )
     prediction, erased = erasing.decode(field([1]))
@@ -417,7 +417,7 @@ def test_code_capacity_native_build_fallback() -> None:
         decoders.mwpm(weights=np.ones(3)),
     ]:
         with pytest.warns(decoders.ObservableDecodingFallbackWarning, match="from_matrix"):
-            decoder = code_capacity.get_code_capacity_decoder(
+            decoder = _code_capacity.get_code_capacity_decoder(
                 syndrome_matrix, observable_matrix, specification
             )
         assert isinstance(decoder.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
@@ -437,7 +437,9 @@ def test_code_capacity_native_build_fallback() -> None:
             decoders.lookup(max_weight=1),
         ]
         for quiet_input in quiet_inputs:
-            code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, quiet_input)
+            _code_capacity.get_code_capacity_decoder(
+                syndrome_matrix, observable_matrix, quiet_input
+            )
 
     # if error decoding also fails, both errors are reported
     bad_shape = decoders.lookup(max_weight=1, error_channel=[0.1, 0.1])
@@ -445,7 +447,7 @@ def test_code_capacity_native_build_fallback() -> None:
         pytest.warns(decoders.ObservableDecodingFallbackWarning),
         pytest.raises(ValueError, match="must have shape") as error_info,
     ):
-        code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, bad_shape)
+        _code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, bad_shape)
     assert isinstance(error_info.value.__cause__, ValueError)
     assert "stim.DetectorErrorModel" in str(error_info.value.__cause__)
 
@@ -454,7 +456,9 @@ def test_code_capacity_native_build_fallback() -> None:
         "observable_only", None, (), _raise_value_error
     )
     with pytest.raises(ValueError, match="cannot build"):
-        code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, observable_only)
+        _code_capacity.get_code_capacity_decoder(
+            syndrome_matrix, observable_matrix, observable_only
+        )
 
     # only a ValueError falls back; other errors from the native build propagate
     native_type_error: decoders.DecoderSpec[decoders.ErrorDecoder] = decoders.DecoderSpec(
@@ -463,7 +467,7 @@ def test_code_capacity_native_build_fallback() -> None:
     with warnings.catch_warnings():
         warnings.simplefilter("error", decoders.ObservableDecodingFallbackWarning)
         with pytest.raises(TypeError, match="wrong type"):
-            code_capacity.get_code_capacity_decoder(
+            _code_capacity.get_code_capacity_decoder(
                 syndrome_matrix, observable_matrix, native_type_error
             )
 
@@ -473,7 +477,7 @@ def test_code_capacity_native_build_fallback() -> None:
         pytest.warns(decoders.ObservableDecodingFallbackWarning) as records,
         pytest.raises(ValueError),
     ):
-        code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, long_channel)
+        _code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, long_channel)
     assert str(records[0].message).startswith("decoders.lookup(")
     assert "...) could not build" in str(records[0].message)
 
@@ -491,11 +495,11 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
     code = codes.RepetitionCode(3)
     observable_matrix = code.field([[1, 0, 0]])
 
-    native = code_capacity.get_code_capacity_decoder(
+    native = _code_capacity.get_code_capacity_decoder(
         code.matrix, observable_matrix, decoders.mwpm()
     )
     assert isinstance(native.decoder, MatchingObservableDecoder)
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         code.matrix, observable_matrix, decoders.SinterDecoder(decoder=decoders.mwpm())
     )
     assert isinstance(decoder.decoder, decoders.sinter.CompiledSinterDecoder)
@@ -507,7 +511,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
         assert decoder.get_failure_and_erasure(error) == (False, False)
 
     # a trivial decoder fails whenever an error flips an observable
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         code.matrix, observable_matrix, decoders.TrivialDecoder()
     )
     assert decoder.get_failure_and_erasure(code.field([1, 0, 0])) == (True, False)
@@ -517,7 +521,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
     sinter_decoder = decoders.SinterDecoder(
         decoder=decoders.lookup(max_weight=0, add_erasure_bit=True)
     )
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         code.matrix, observable_matrix, sinter_decoder
     )
     assert decoder.num_erasure_flags == 1
@@ -525,7 +529,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
     assert decoder.get_failure_and_erasure(code.field([0, 0, 0])) == (False, False)
 
     # a Sinter-style decoder is not rejected as prebuilt, since it is compiled here
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         code.matrix,
         observable_matrix,
         decoders.TrivialDecoder(),
@@ -535,18 +539,18 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
 
     # but a compiled decoder is, and it must fit the sector that it decodes
     compiled_decoder = decoders.TrivialDecoder().compile_decoder_for_dem(
-        code_capacity.get_code_capacity_dem(code.matrix, observable_matrix)
+        _code_capacity._get_code_capacity_dem(code.matrix, observable_matrix)
     )
     with pytest.raises(ValueError, match="prebuilt decoder cannot be passed as decoder="):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             code.matrix, observable_matrix, compiled_decoder, prebuilt_rejection_reason="test"
         )
     with pytest.raises(ValueError, match="has num_observables=1, but this code-capacity sector"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             code.matrix, code.field.Identity(3), compiled_decoder
         )
     with pytest.raises(ValueError, match="has num_detectors=2, but this code-capacity sector"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             code.field.Zeros((3, 3)), observable_matrix, compiled_decoder
         )
 
@@ -554,7 +558,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
     def observable_constructor(dem: stim.DetectorErrorModel) -> decoders.ObservableDecoder:
         return decoders.custom.ObservableLookupDecoder(dem, max_weight=1)
 
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         code.matrix, observable_matrix, decoders.from_dem(observable_constructor)
     )
     assert decoder.get_failure_and_erasure(code.field([1, 0, 0])) == (False, False)
@@ -564,7 +568,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
         return _FixedObservableDecoder([0])
 
     with pytest.raises(TypeError, match="predicts observable flips rather than errors"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             code.matrix, observable_matrix, annotated_observable_factory
         )
 
@@ -572,7 +576,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
     observable_spec: decoders.DecoderSpec[Never] = decoders.DecoderSpec(
         "observable_lookup", None, (), observable_constructor
     )
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         code.matrix, observable_matrix, observable_spec
     )
     assert isinstance(decoder.decoder, decoders.custom.ObservableLookupDecoder)
@@ -580,7 +584,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
 
     # relative mechanism weights are scaled by a fixed placeholder probability
     weighted_sinter_decoder = _BitPackedSinterDecoder(np.zeros((1, 1), dtype=np.uint8))
-    code_capacity.get_code_capacity_decoder(
+    _code_capacity.get_code_capacity_decoder(
         code.matrix,
         observable_matrix,
         weighted_sinter_decoder,
@@ -596,15 +600,15 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
     # a Sinter-style decoder cannot decode a nonbinary code
     field = galois.GF(3)
     with pytest.raises(ValueError, match="cannot decode a code over GF"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             field(code.matrix), field(observable_matrix), decoders.TrivialDecoder()
         )
     with pytest.raises(ValueError, match="is binary, so it cannot decode a code over GF"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             field(code.matrix), field(observable_matrix), compiled_decoder
         )
     with pytest.raises(ValueError, match="is binary, so it cannot decode a code over GF"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             field(code.matrix),
             field(observable_matrix),
             _BitPackedCompiledDecoder(np.zeros((1, 1), dtype=np.uint8)),
@@ -617,7 +621,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
         error_channel=[0.1] * len(code),
     )
     with pytest.raises(ValueError, match=r"built over GF\(2\).+sector is over GF\(3\)"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             field(code.matrix), field(observable_matrix), binary_lookup
         )
 
@@ -630,7 +634,7 @@ def test_code_capacity_decoder_from_bit_packed_sinter_decoder() -> None:
 
     # a raw precompiled decoder needs dimension metadata before it can be used directly
     with pytest.raises(ValueError, match="does not declare num_detectors"):
-        code_capacity.get_code_capacity_decoder(
+        _code_capacity.get_code_capacity_decoder(
             syndrome_matrix,
             observable_matrix,
             _BitPackedCompiledDecoder(np.array([[1, 1]], dtype=np.uint8)),
@@ -638,7 +642,7 @@ def test_code_capacity_decoder_from_bit_packed_sinter_decoder() -> None:
 
     # nine observables take two bytes, so the prediction [1, 0, ..., 0, 1] is packed as [1, 1]
     sinter_decoder = _BitPackedSinterDecoder(np.array([[1, 1]], dtype=np.uint8))
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, sinter_decoder
     )
     assert sinter_decoder.dems[0].num_detectors == sinter_decoder.dems[0].num_observables == 9
@@ -650,14 +654,14 @@ def test_code_capacity_decoder_from_bit_packed_sinter_decoder() -> None:
 
     # a nonzero byte added past the observables discards the sample
     sinter_decoder = _BitPackedSinterDecoder(np.array([[1, 1, 1]], dtype=np.uint8))
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, sinter_decoder
     )
     assert decoder.get_failure_and_erasure(error) == (False, True)
 
     # a prediction of any other width is rejected
     sinter_decoder = _BitPackedSinterDecoder(np.array([[1]], dtype=np.uint8))
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, sinter_decoder
     )
     with pytest.raises(ValueError, match=r"shape \(1, 1\) for one shot"):
@@ -669,7 +673,7 @@ def test_code_capacity_decoder_from_bit_packed_sinter_decoder() -> None:
             return object()
 
     with pytest.raises(TypeError, match="must provide a decode_observables or"):
-        code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, _NotADecoder())
+        _code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, _NotADecoder())
 
 
 def test_code_capacity_decoder_reuse() -> None:
@@ -678,7 +682,7 @@ def test_code_capacity_decoder_reuse() -> None:
     observables_a = galois.GF2([[1, 1, 1]])
     observables_b = galois.GF2([[1, 0, 0]])
 
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observables_a, decoders.lookup(max_weight=1)
     )
     assert decoder.reuse_for(syndrome_matrix, observables_a) is decoder
@@ -686,7 +690,7 @@ def test_code_capacity_decoder_reuse() -> None:
     assert decoder.reuse_for(syndrome_matrix, observables_b) is None
 
     # a matrix-only error decoder may be reused with other observables
-    projected = code_capacity.get_code_capacity_decoder(
+    projected = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix,
         observables_a,
         decoders.from_matrix(lambda matrix: decoders.custom.LookupDecoder(matrix, max_weight=1)),
@@ -700,7 +704,7 @@ def test_code_capacity_decoder_reuse() -> None:
     assert np.array_equal(reused_decoder.observable_matrix, observables_b)
 
     # an observable decoder is not
-    decoder = code_capacity.get_code_capacity_decoder(
+    decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observables_a, decoders.TrivialDecoder()
     )
     assert decoder.reuse_for(syndrome_matrix, observables_b) is None
@@ -709,7 +713,7 @@ def test_code_capacity_decoder_reuse() -> None:
 @pytest.mark.parametrize(
     "module",
     [
-        "qldpc.codes.code_capacity",
+        "qldpc.codes._code_capacity",
         "qldpc.codes.monte_carlo",
         "qldpc.decoders.capabilities",
         "qldpc.decoders.custom",

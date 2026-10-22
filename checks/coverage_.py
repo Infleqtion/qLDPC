@@ -13,7 +13,7 @@ import pytest_
 SLOW_TESTS = (
     "src/qldpc/experimental/surgery/circuit_test.py",
     "src/qldpc/codes/quantum_test.py",
-    "src/qldpc/codes/code_capacity_test.py",
+    "src/qldpc/codes/_code_capacity_test.py",
     "src/qldpc/codes/classical_test.py",
     "src/qldpc/circuits/memory/alpha_syndrome_test.py",
     "src/qldpc/codes/common_test.py",

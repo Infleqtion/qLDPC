@@ -27,10 +27,15 @@ Do not copy transient project history, machine-specific paths, or local-session 
   Do not infer that this weaker guarantee applies elsewhere.
 - Keep complete lists of public symbols in `__all__` and AutoAPI.
   Human-written docs should explain what packages do and show representative tasks, not duplicate a class catalogue.
-- A module should not use a private (underscore-prefixed) name from another module unless it is a narrowly shared internal helper or an intentional decoder-composition boundary.
-  For example, `_deprecations/decoders.py` calls private backend builders kept beside their implementations, so that deprecated APIs pass options to them unchecked; they are not public APIs merely because the legacy module imports them.
-  Otherwise, needing a cross-module private name indicates that it should be public and documented.
-  A test module may use private names of the module that it tests.
+- A name is public if it is broadly useful to researchers and engineers, and private if it is plumbing that makes qLDPC work.
+  Where a name is used, such as in other modules or in notebooks, does not decide this.
+- An underscore-prefixed name is used only within its own file and that file's `*_test.py`.
+  Anything that another module uses is a plain name, either in a public module, where it is public API, or in a private module.
+  The single exception is that [`_deprecations/decoders.py`](src/qldpc/_deprecations/decoders.py) imports private backend builders, so that deprecated APIs pass options to them unchecked.
+- A module whose file name starts with an underscore is private as a whole.
+  It uses plain names for definitions that other modules use, and underscore names for helpers internal to the file.
+- Public objects are defined in public modules.
+  A public module may use a private module's implementation, but never re-exports a private module's object as public API, except as a temporary deprecation shim.
 
 ### Deprecations
 
@@ -86,7 +91,7 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
 | --- | --- | --- |
 | [`src/qldpc/codes/common.py`](src/qldpc/codes/common.py) | `AbstractCode`, `ClassicalCode`, `QuditCode`, and `CSSCode`; logicals, stabilizers, distance, concatenation, and error-rate interfaces | [`common_test.py`](src/qldpc/codes/common_test.py) |
 | [`src/qldpc/codes/monte_carlo.py`](src/qldpc/codes/monte_carlo.py) | Fixed-weight sample allocation, rate estimation, and statistical uncertainty | [`monte_carlo_test.py`](src/qldpc/codes/monte_carlo_test.py) |
-| [`src/qldpc/codes/code_capacity.py`](src/qldpc/codes/code_capacity.py) | Code-capacity detector error models, observable-decoder orchestration, and sector reuse | [`code_capacity_test.py`](src/qldpc/codes/code_capacity_test.py), [`common_test.py`](src/qldpc/codes/common_test.py) |
+| [`src/qldpc/codes/_code_capacity.py`](src/qldpc/codes/_code_capacity.py) | Code-capacity detector error models, observable-decoder orchestration, and sector reuse | [`_code_capacity_test.py`](src/qldpc/codes/_code_capacity_test.py), [`common_test.py`](src/qldpc/codes/common_test.py) |
 | [`src/qldpc/codes/classical.py`](src/qldpc/codes/classical.py) | Classical code families | [`classical_test.py`](src/qldpc/codes/classical_test.py), [`basics.ipynb`](examples/basics.ipynb) |
 | [`src/qldpc/codes/quantum.py`](src/qldpc/codes/quantum.py) | Quantum, CSS, subsystem, product, and geometric code families | [`quantum_test.py`](src/qldpc/codes/quantum_test.py), [`bivariate_bicycle_codes.ipynb`](examples/bivariate_bicycle_codes.ipynb) |
 | [`src/qldpc/codes/distance/`](src/qldpc/codes/distance/) | Exact binary classical and quantum distance enumeration, and exact counts of CSS logical operators of a given weight ([`logical_counts.py`](src/qldpc/codes/distance/logical_counts.py)) | Co-located `*_test.py` files |
@@ -118,7 +123,7 @@ AbstractCode
 The methods in `codes/common.py` share cached and mutable state for standard form, logical and gauge operators, parameters, and code transformations.
 Do not split them into mixins merely to reduce the file length.
 Free-standing statistical Monte Carlo helpers live in `codes/monte_carlo.py`.
-Code-capacity detector-error-model and decoder orchestration lives in `codes/code_capacity.py`.
+Code-capacity detector-error-model and decoder orchestration lives in `codes/_code_capacity.py`.
 Generic decoder-input checks live in `decoders/capabilities.py`; field-valued and bit-packed observable-decoder adapters live in `decoders/adapters/observable_decoders.py`.
 Immediate builders live beside their implementations: external-package integrations under `decoders/external/`, and qLDPC-owned implementations under `decoders/custom/`.
 Typed decoder specifications and generic input resolution live under `decoders/construction/`.
@@ -162,7 +167,7 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
   Code that consumes a user-supplied error decoder coerces it with `decoders.as_error_decoder` and calls `decode_errors`.
 - A method that decodes a matrix it constructs itself must reject prebuilt decoders with `decoders.reject_prebuilt_decoder`.
-- Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with [`codes.code_capacity.get_code_capacity_decoder`](src/qldpc/codes/code_capacity.py), which always yields an observable decoder: on binary codes, specifications with native observable support build it from a DEM; otherwise inferred errors can be projected onto logical predictions.
+- Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with [`codes._code_capacity.get_code_capacity_decoder`](src/qldpc/codes/_code_capacity.py), which always yields an observable decoder: on binary codes, specifications with native observable support build it from a DEM; otherwise inferred errors can be projected onto logical predictions.
   Keep `decoders.resolve_decoder` error-decoder-specific, and dispatch on explicit capabilities (`compile_decoder_for_dem`, `decode_observables`, the `ErrorDecoder` protocol), never on output length.
 - Only decoders that declare erasure support may append an erasure flag.
   They append that flag as the last entry of each inferred error; unsupported decoders must reject `add_erasure_bit=True`.

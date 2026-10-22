@@ -13,6 +13,8 @@ from collections.abc import Callable
 from types import ModuleType
 from typing import TYPE_CHECKING, TypeVar
 
+import numpy as np
+
 CallableType = TypeVar("CallableType", bound=Callable[..., object])
 
 
@@ -120,3 +122,16 @@ def get_external_caller_stacklevel() -> int:
         stacklevel += 1
         frame = frame.f_back
     return stacklevel
+
+
+####################################################################################################
+# random seeds
+
+
+def get_scrambled_seed(seed: int) -> int:
+    """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
+    state = np.random.get_state()
+    np.random.seed(seed)
+    new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
+    np.random.set_state(state)
+    return new_seed

@@ -5,36 +5,11 @@
 from __future__ import annotations
 
 import numpy as np
-import numpy.typing as npt
 import pytest
 
 import qldpc
 
-from .conftest import _get_random_full_rank_matrix
-
-
-def test_css_brouwer_zimmermann_special_inputs() -> None:
-    """The joint CSS helper handles empty, trivial, and nontrivial quotient sectors."""
-    empty = np.empty((0, 4), dtype=np.uint8)
-    assert (
-        qldpc.codes.get_distance_css_brouwer_zimmermann(
-            [(empty, empty)],
-            cutoff=0,
-        )
-        == 4
-    )
-    assert (
-        qldpc.codes.get_distance_css_brouwer_zimmermann(
-            [([[1, 0]], [[1, 0]])],
-            cutoff=0,
-        )
-        == 0
-    )
-
-    # The result is the minimum of the upper bound and the distances of the supplied sectors.
-    sectors: list[tuple[npt.ArrayLike, npt.ArrayLike]] = [([[1, 1]], [])]
-    assert qldpc.codes.get_distance_css_brouwer_zimmermann(sectors, cutoff=0, upper_bound=3) == 2
-    assert qldpc.codes.get_distance_css_brouwer_zimmermann(sectors, cutoff=0, upper_bound=1) == 1
+from .conftest import get_random_full_rank_matrix
 
 
 @pytest.mark.usefixtures("force_information_sets")
@@ -100,20 +75,6 @@ def test_brouwer_zimmermann_special_inputs() -> None:
         qldpc.codes.get_distance_classical(np.zeros((1, 1, 1), dtype=np.uint8))
     with pytest.raises(ValueError, match="infer the width"):
         qldpc.codes.get_distance_classical([])
-
-
-def test_distance_backend_validation() -> None:
-    """Distance backend and exact-method selectors are restricted to documented values."""
-    for backend in ["auto", "decoder", "gap", "sqetch"]:
-        qldpc.codes.validate_distance_backend(backend)  # type: ignore[arg-type]
-    with pytest.raises(ValueError, match="Unknown distance backend"):
-        qldpc.codes.validate_distance_backend("other")  # type: ignore[arg-type]
-
-    for method in ["brouwer_zimmermann", "brute_force"]:
-        assert qldpc.codes.validate_distance_method(method) == method  # type: ignore[arg-type]
-    assert qldpc.codes.validate_distance_method("information_sets") == "brouwer_zimmermann"
-    with pytest.raises(ValueError, match="Unknown distance method"):
-        qldpc.codes.validate_distance_method("other")  # type: ignore[arg-type]
 
 
 @pytest.mark.parametrize(
@@ -198,7 +159,7 @@ def test_brouwer_zimmermann_random_cross_checks() -> None:
     """Information-set search agrees with exhaustive enumeration on random nested codes."""
     rng = np.random.default_rng(118)
     for length in range(5, 10):
-        basis = _get_random_full_rank_matrix(rng, min(5, length - 1), length)
+        basis = get_random_full_rank_matrix(rng, min(5, length - 1), length)
         expected = qldpc.codes.get_distance_classical(basis, cutoff=0, method="brute_force")
         assert qldpc.codes.get_distance_classical(basis, cutoff=0) == expected
 
@@ -212,7 +173,7 @@ def test_brouwer_zimmermann_random_cross_checks() -> None:
         )
 
     for num_qubits in range(3, 7):
-        basis = _get_random_full_rank_matrix(rng, min(6, 2 * num_qubits - 1), 2 * num_qubits)
+        basis = get_random_full_rank_matrix(rng, min(6, 2 * num_qubits - 1), 2 * num_qubits)
         stabilizers, logical_ops = basis[:2], basis[2:]
         expected = qldpc.codes.get_distance_quantum(
             logical_ops, stabilizers, cutoff=0, method="brute_force"

@@ -113,7 +113,11 @@ class ErrorRateFunc:
         max_error_rate: float,
         min_error_weight: int = 1,
     ) -> ErrorRateFunc:
-        """Sample errors of fixed weight according to get_sample_allocation, and collect the counts.
+        """Sample errors of fixed weight, and collect the counts.
+
+        The sample budget is apportioned in proportion to the largest probability that each error
+        weight has at physical error rates up to max_error_rate, with at least one sample for every
+        weight from min_error_weight up to the heaviest weight sampled.
 
         Args:
             sample_failures_and_discards: A function that samples and decodes errors of a given
@@ -127,7 +131,7 @@ class ErrorRateFunc:
         Returns:
             An ErrorRateFunc.
         """
-        sample_allocation = get_sample_allocation(
+        sample_allocation = _get_sample_allocation(
             num_samples, num_error_locations, max_error_rate, min_error_weight
         )
         num_failures = np.zeros(sample_allocation.size, dtype=int)
@@ -169,10 +173,11 @@ class ErrorRateFunc:
     def infidelity_variances(self) -> npt.NDArray[np.floating]:
         """The Jeffreys posterior variance of the infidelity at each error weight.
 
-        See help(qldpc.codes.monte_carlo.jeffreys_variance) for additional info.
+        With x failures in n kept samples, this is the variance of the Beta(x + 1/2, n - x + 1/2)
+        posterior, which is positive even if x = 0.
         """
         num_samples_kept = self.num_samples - self.num_discards
-        variances = jeffreys_variance(self.num_failures, num_samples_kept)
+        variances = _jeffreys_variance(self.num_failures, num_samples_kept)
         variances[: self.min_error_weight] = 0.0  # a perfectly decoded weight cannot fail
         return variances
 
@@ -180,9 +185,10 @@ class ErrorRateFunc:
     def discard_rate_variances(self) -> npt.NDArray[np.floating]:
         """The Jeffreys posterior variance of the discard rate at each error weight.
 
-        See help(qldpc.codes.monte_carlo.jeffreys_variance) for additional info.
+        With x discards in n samples, this is the variance of the Beta(x + 1/2, n - x + 1/2)
+        posterior, which is positive even if x = 0.
         """
-        variances = jeffreys_variance(self.num_discards, self.num_samples)
+        variances = _jeffreys_variance(self.num_discards, self.num_samples)
         variances[: self.min_error_weight] = 0.0  # a perfectly decoded weight is never discarded
         return variances
 
@@ -256,37 +262,18 @@ class ErrorRateFunc:
 
         Dividing by infinity yields zero, so a weight with no (kept) samples is recorded with a zero
         rate rather than nan or inf.  That is optimistic for a weight with no data; the reported
-        variance does not share this optimism (see jeffreys_variance).
+        variance does not share this optimism (see _jeffreys_variance).
         """
         divisor = counts.astype(float)
         divisor[divisor == 0] = np.inf
         return divisor
 
 
-def jeffreys_variance(
-    num_events: npt.NDArray[np.int_], num_trials: npt.NDArray[np.int_]
-) -> npt.NDArray[np.floating]:
-    """Posterior variance of a binomial rate under a Jeffreys prior.
-
-    With x events observed in n trials, the rate posterior is Beta(x + 1/2, n - x + 1/2), whose mean
-    is (x + 1/2) / (n + 1) and whose variance is mean * (1 - mean) / (n + 2).  Unlike the plug-in
-    variance f (1 - f) / n, this is positive at x = 0, so a weight with no observed events still
-    carries uncertainty, and finite at n = 0, where it reverts to the prior variance 1/8 for a
-    weight with no data at all.
-
-    See Brown, Cai & DasGupta, "Interval Estimation for a Binomial Proportion," Statist. Sci. 16
-    (2001) 101-133, https://doi.org/10.1214/ss/1009213286, for this posterior and its behaviour at
-    small counts.  That work recommends quoting an interval between two quantiles of the posterior,
-    which callers here cannot use: they need one uncertainty on a weighted sum over error weights,
-    and variances add in quadrature across that sum while quantiles do not.  A variance is therefore
-    what this function returns, at the price of a symmetric half-width that does not inherit the
-    coverage of the recommended interval.
-    """
-    smoothed_rate = (num_events + 0.5) / (num_trials + 1)
-    return smoothed_rate * (1 - smoothed_rate) / (num_trials + 2)
+####################################################################################################
+# helper methods
 
 
-def get_sample_allocation(
+def _get_sample_allocation(
     num_samples: int, block_length: int, max_error_rate: float, min_error_weight: int = 1
 ) -> npt.NDArray[np.int_]:
     """Construct an allocation of samples by error weight.
@@ -348,8 +335,27 @@ def get_sample_allocation(
     return sample_allocation
 
 
-####################################################################################################
-# helper methods
+def _jeffreys_variance(
+    num_events: npt.NDArray[np.int_], num_trials: npt.NDArray[np.int_]
+) -> npt.NDArray[np.floating]:
+    """Posterior variance of a binomial rate under a Jeffreys prior.
+
+    With x events observed in n trials, the rate posterior is Beta(x + 1/2, n - x + 1/2), whose mean
+    is (x + 1/2) / (n + 1) and whose variance is mean * (1 - mean) / (n + 2).  Unlike the plug-in
+    variance f (1 - f) / n, this is positive at x = 0, so a weight with no observed events still
+    carries uncertainty, and finite at n = 0, where it reverts to the prior variance 1/8 for a
+    weight with no data at all.
+
+    See Brown, Cai & DasGupta, "Interval Estimation for a Binomial Proportion," Statist. Sci. 16
+    (2001) 101-133, https://doi.org/10.1214/ss/1009213286, for this posterior and its behaviour at
+    small counts.  That work recommends quoting an interval between two quantiles of the posterior,
+    which callers here cannot use: they need one uncertainty on a weighted sum over error weights,
+    and variances add in quadrature across that sum while quantiles do not.  A variance is therefore
+    what this function returns, at the price of a symmetric half-width that does not inherit the
+    coverage of the recommended interval.
+    """
+    smoothed_rate = (num_events + 0.5) / (num_trials + 1)
+    return smoothed_rate * (1 - smoothed_rate) / (num_trials + 2)
 
 
 def _check_error_weight(min_error_weight: int) -> None:
@@ -377,7 +383,7 @@ def _get_max_error_weight(
         # perfectly.  Nothing anywhere in range can fail, so cover all of it and truncate nothing.
         return block_length
     # a weight's share is measured against the weights covered when it is the heaviest one, which is
-    # the range get_sample_allocation apportions over, so the share tested is the one that weight
+    # the range _get_sample_allocation apportions over, so the share tested is the one that weight
     # would receive.  The cumulative sum is zero below min_error_weight, where nothing is eligible.
     covered = np.cumsum(envelope)
     fractions = np.divide(envelope, covered, out=np.zeros_like(envelope), where=covered > 0)

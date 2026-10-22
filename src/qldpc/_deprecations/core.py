@@ -61,6 +61,20 @@ ALIASES: dict[str, dict[str, str]] = {
         "Element": "qldpc.abstract.rings:RingMember",
         "Protograph": "qldpc.abstract.ring_array:RingArray",
     },
+    "qldpc.codes": {
+        "get_distance_css_brouwer_zimmermann": (
+            "qldpc.codes.distance._brouwer_zimmermann:get_distance_css_brouwer_zimmermann"
+        ),
+        "validate_distance_backend": "qldpc.codes.distance._methods:validate_distance_backend",
+        "validate_distance_method": "qldpc.codes.distance._methods:validate_distance_method",
+    },
+    "qldpc.codes.distance": {
+        "get_distance_css_brouwer_zimmermann": (
+            "qldpc.codes.distance._brouwer_zimmermann:get_distance_css_brouwer_zimmermann"
+        ),
+        "validate_distance_backend": "qldpc.codes.distance._methods:validate_distance_backend",
+        "validate_distance_method": "qldpc.codes.distance._methods:validate_distance_method",
+    },
     "qldpc.decoders": {
         "BatchDecoder": "qldpc.decoders.protocols:BatchErrorDecoder",
         "CompiledSequentialWindowDecoder": (

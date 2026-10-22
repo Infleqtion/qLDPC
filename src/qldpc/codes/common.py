@@ -28,21 +28,20 @@ from qldpc._deprecations.decoders import (
     get_legacy_decoder_migration_message,
     reject_removed_decoder_args,
 )
-from qldpc._util import format_docstring, get_external_caller_stacklevel
+from qldpc._util import format_docstring, get_external_caller_stacklevel, get_scrambled_seed
 from qldpc._util import networkx as nx
 from qldpc.math import IntegerArray
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, PauliXZLike, QuditPauli
 
-from .code_capacity import CodeCapacityDecoder, get_code_capacity_decoder
+from ._code_capacity import CodeCapacityDecoder, get_code_capacity_decoder
 from .distance import (
     DistanceBackend,
     DistanceMethod,
     get_distance_classical,
-    get_distance_css_brouwer_zimmermann,
     get_distance_quantum,
-    validate_distance_backend,
-    validate_distance_method,
 )
+from .distance._brouwer_zimmermann import get_distance_css_brouwer_zimmermann
+from .distance._methods import validate_distance_backend, validate_distance_method
 from .monte_carlo import ErrorRateFunc
 
 Slice = slice | npt.NDArray[np.int_] | list[int]
@@ -70,32 +69,6 @@ _QUDIT_SYNDROME_MATRIX_REASON = "errors are decoded against an internal syndrome
 
 # the number of times to decode a (possibly randomized) syndrome before giving up
 _MAX_DECODING_ATTEMPTS = 100
-
-
-def get_scrambled_seed(seed: int) -> int:
-    """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
-    state = np.random.get_state()
-    np.random.seed(seed)
-    new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
-    np.random.set_state(state)
-    return new_seed
-
-
-def get_random_array(
-    field: type[galois.FieldArray],
-    shape: int | tuple[int, ...],
-    *,
-    satisfy: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
-    seed: int | None = None,
-) -> galois.FieldArray:
-    """Get a random array over a given finite field with a given shape.
-
-    If passed a condition that the array must satisfy, re-sample until the condition is met.
-    """
-    seed = get_scrambled_seed(seed) if seed is not None else None
-    while not satisfy(array := field.Random(shape, seed=seed)):
-        seed = seed + 1 if seed is not None else None  # pragma: no cover
-    return array
 
 
 ####################################################################################################
@@ -434,7 +407,7 @@ class ClassicalCode(AbstractCode):
     def get_random_word(self, *, seed: int | None = None) -> galois.FieldArray:
         """Random code word: a sum of all generating words with random field coefficients."""
         num_words = self.generator.shape[0]
-        return get_random_array(self.field, num_words, seed=seed) @ self.generator
+        return _get_random_array(self.field, num_words, seed=seed) @ self.generator
 
     def dual(self) -> ClassicalCode:
         """Dual to this code.
@@ -673,7 +646,7 @@ class ClassicalCode(AbstractCode):
         def get_syndrome() -> npt.NDArray[np.int_]:
             """Get a syndrome to decode, randomizing its overlap with code words if necessary."""
             if vector is None:
-                syndrome[-len(self.generator) :] = get_random_array(
+                syndrome[-len(self.generator) :] = _get_random_array(
                     self.field, len(self.generator), satisfy=lambda vec: vec.any()
                 )
             return syndrome
@@ -709,7 +682,7 @@ class ClassicalCode(AbstractCode):
             """Return True iff all rows and columns are nonzero."""
             return all(np.any(row) for row in matrix) and all(np.any(col) for col in matrix.T)
 
-        matrix = get_random_array(field, (checks, bits), satisfy=nontrivial, seed=seed)
+        matrix = _get_random_array(field, (checks, bits), satisfy=nontrivial, seed=seed)
         return ClassicalCode(matrix)
 
     @staticmethod
@@ -865,9 +838,13 @@ class ClassicalCode(AbstractCode):
         Here each error location is an observable, so decoding succeeds only if the decoder predicts
         the error at every location.  Pass a decoder specification such as ``decoders.bp_osd(...)``
         as ``decoder=``.  With no specification, the default is BP+OSD for binary codes and GUF
-        otherwise.  A specification that predicts observables natively is used that way when it can
-        be built for this code; otherwise it decodes errors, with a warning (see
-        help(qldpc.codes.code_capacity.get_code_capacity_decoder)).
+        otherwise.  For a binary code, a specification that predicts observables natively is built
+        as an observable decoder for the code-capacity detector error model, which has one error
+        mechanism per bit.  If that build raises a ValueError, an ObservableDecodingFallbackWarning
+        is emitted and the specification decodes errors instead; wrap it as
+        ``decoders.from_matrix(spec.build)`` to select error decoding explicitly.  A Sinter-style
+        decoder is compiled for the same detector error model, and a prebuilt observable decoder
+        must be built for the syndromes and observables of this code.
 
         The basic idea in this method is to think of the fidelity
 
@@ -2328,10 +2305,14 @@ class QuditCode(AbstractCode):
         Decoding succeeds if the decoder predicts the logical action of the sampled error, that is,
         its symplectic products with the logical operators of the code.  Pass a decoder
         specification such as ``decoders.bp_osd(...)`` as ``decoder=``.  With no specification, the
-        default is BP+OSD for binary codes and GUF otherwise.  A specification that predicts
-        observables natively is used that way when it can be built for this code; otherwise it
-        decodes errors, with a warning (see
-        help(qldpc.codes.code_capacity.get_code_capacity_decoder)).
+        default is BP+OSD for binary codes and GUF otherwise.  For a binary code, a specification
+        that predicts observables natively is built as an observable decoder for the code-capacity
+        detector error model, which has one X, Z, and Y error mechanism per qubit.  If that build
+        raises a ValueError, an ObservableDecodingFallbackWarning is emitted and the specification
+        decodes errors instead; wrap it as ``decoders.from_matrix(spec.build)`` to select error
+        decoding explicitly.  A Sinter-style decoder is compiled for the same detector error model.
+        Prebuilt decoders are rejected, because errors are decoded against an internal syndrome
+        matrix.
 
         For a subsystem code, errors are decoded against the stabilizer generators of the code, so a
         syndrome has one entry per stabilizer generator.  These generators can be high-weight (for
@@ -3559,7 +3540,7 @@ class CSSCode(QuditCode):
 
         def get_effective_syndrome() -> npt.NDArray[np.int_]:
             """Get an effective syndrome from a random X-type logical operator."""
-            effective_syndrome[-self.dimension :] = get_random_array(
+            effective_syndrome[-self.dimension :] = _get_random_array(
                 self.field, self.dimension, satisfy=lambda vec: vec.any()
             )
             return effective_syndrome
@@ -3842,10 +3823,14 @@ class CSSCode(QuditCode):
         The X and Z sectors are decoded independently.  Pass a decoder specification such as
         ``decoders.bp_osd(...)`` as ``decoder=`` for both sectors, or set ``decoder_x=`` and
         ``decoder_z=`` separately.  An omitted sector uses the shared ``decoder=`` specification.
-        With no specification, the default is BP+OSD for binary codes and GUF otherwise.  A
-        specification that predicts observables natively is used that way when it can be built for
-        this code; otherwise it decodes errors, with a warning (see
-        help(qldpc.codes.code_capacity.get_code_capacity_decoder)).
+        With no specification, the default is BP+OSD for binary codes and GUF otherwise.  For a
+        binary code, a specification that predicts observables natively is built as an observable
+        decoder for the code-capacity detector error model of each sector, which has one error
+        mechanism per qubit.  If that build raises a ValueError, an
+        ObservableDecodingFallbackWarning is emitted and the specification decodes errors instead;
+        wrap it as ``decoders.from_matrix(spec.build)`` to select error decoding explicitly.  A
+        Sinter-style decoder is compiled for the detector error model of each sector, and a prebuilt
+        decoder must be built for the syndromes and observables of the sector that it decodes.
 
         For a subsystem code, errors are decoded against the stabilizer generators of the code, so a
         syndrome has one entry per stabilizer generator.  These generators can be high-weight (for
@@ -4017,6 +4002,23 @@ class CSSCode(QuditCode):
 
 ####################################################################################################
 # helper methods
+
+
+def _get_random_array(
+    field: type[galois.FieldArray],
+    shape: int | tuple[int, ...],
+    *,
+    satisfy: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
+    seed: int | None = None,
+) -> galois.FieldArray:
+    """Get a random array over a given finite field with a given shape.
+
+    If passed a condition that the array must satisfy, re-sample until the condition is met.
+    """
+    seed = get_scrambled_seed(seed) if seed is not None else None
+    while not satisfy(array := field.Random(shape, seed=seed)):
+        seed = seed + 1 if seed is not None else None  # pragma: no cover
+    return array
 
 
 def _decode_consistently(

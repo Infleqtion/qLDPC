@@ -8,11 +8,13 @@ import sys
 import uuid
 from types import FunctionType, ModuleType
 
+import numpy as np
 import pytest
 
 from qldpc._util import (
     format_docstring,
     get_external_caller_stacklevel,
+    get_scrambled_seed,
     lazy_import,
 )
 
@@ -86,3 +88,10 @@ def test_get_external_caller_stacklevel() -> None:
         "get_external_caller_stacklevel": get_external_caller_stacklevel,
     }
     assert FunctionType(get_stacklevel.__code__, namespace)() == 2
+
+
+def test_get_scrambled_seed() -> None:
+    """Scrambled seeds are deterministic, and leave the global random state untouched."""
+    state = np.random.get_state()
+    assert get_scrambled_seed(0) == get_scrambled_seed(0) != get_scrambled_seed(1)
+    assert np.array_equal(np.random.get_state()[1], state[1])

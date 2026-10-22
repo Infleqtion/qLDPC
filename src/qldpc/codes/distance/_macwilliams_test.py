@@ -26,7 +26,7 @@ def test_logical_counts(monkeypatch: pytest.MonkeyPatch, num_bits: int, compiled
     monkeypatch.setattr(mw, "_CHUNK_SIZE", 1)
     checks = np.zeros((2, num_bits), dtype=np.uint8)
     checks[0, :4] = checks[1, -4:] = 1
-    enumerators = mw._CheckEnumerators(checks, checks if num_bits == 8 else checks.copy())
+    enumerators = mw.CheckEnumerators(checks, checks if num_bits == 8 else checks.copy())
     for weight in range(num_bits + 1):
         kernel = sum(
             math.comb(4, block_0) * math.comb(4, block_1) * math.comb(num_bits - 8, rest)
@@ -41,4 +41,4 @@ def test_logical_counts(monkeypatch: pytest.MonkeyPatch, num_bits: int, compiled
 def test_check_rank_limit() -> None:
     checks = np.eye(mw._MAX_RANK + 1, mw._MAX_RANK + 2, dtype=np.uint8)
     with pytest.raises(ValueError, match="check ranks up to 63"):
-        mw._CheckEnumerators(checks, checks[:0])
+        mw.CheckEnumerators(checks, checks[:0])

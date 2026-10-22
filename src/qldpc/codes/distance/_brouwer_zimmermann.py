@@ -23,18 +23,71 @@ from numba import njit
 
 from . import _information_sets
 from ._binary import (
-    _pack_bits,
-    _popcount_word,
+    as_binary_matrix,
+    assert_binary,
+    get_nested_code_basis,
+    pack_bits,
+    popcount_word,
 )
-from .brute_force import (
-    _get_distance_quantum_brute_force,
+from ._brute_force import (
+    get_distance_quantum_brute_force,
 )
 
 ####################################################################################################
 # search entry points
 
 
-def _get_distance_brouwer_zimmermann_many(
+def get_distance_css_brouwer_zimmermann(
+    sectors: Sequence[tuple[npt.ArrayLike, npt.ArrayLike]],
+    *,
+    cutoff: int,
+    block_size: int = 15,
+    upper_bound: int | None = None,
+) -> int:
+    """Compute the minimum distance across homogeneous binary CSS sectors.
+
+    Args:
+        sectors: Logical operators and stabilizers for every sector to search.  All operators use
+            homogeneous binary support vectors rather than symplectic vectors.
+        cutoff: Exit early and return once an upper bound on distance falls to or below this cutoff.
+        block_size: Batch size exponent, as in get_distance_quantum.
+        upper_bound: Weight of a known logical operator from an omitted sector, if any.  The result
+            is the minimum of this bound and the distances of the supplied sectors.
+
+    Returns:
+        The minimum exact distance across the supplied sectors and optional upper bound.  As with
+        get_distance_quantum, a result at or below ``cutoff`` is an observed upper bound.
+    """
+    problems: list[tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8]]] = []
+    best = upper_bound
+    for logical_ops, stabilizers in sectors:
+        assert_binary(logical_ops, "logical_ops")
+        assert_binary(stabilizers, "stabilizers")
+        logical_matrix = as_binary_matrix(logical_ops)
+        stabilizer_matrix = as_binary_matrix(stabilizers, num_cols=logical_matrix.shape[1])
+        basis, labels = get_nested_code_basis(logical_matrix, stabilizer_matrix)
+        if labels.shape[1]:
+            problems.append((basis, labels))
+            continue
+
+        # A supplied but trivial quotient has distance zero; an empty sector contributes its width.
+        sector_distance = 0 if len(logical_matrix) else logical_matrix.shape[1]
+        best = sector_distance if best is None else min(best, sector_distance)
+
+    if best is not None and best <= cutoff:
+        return best
+    if not problems:
+        assert best is not None
+        return best
+    return get_distance_brouwer_zimmermann_many(
+        problems,
+        cutoff=cutoff,
+        block_size=block_size,
+        upper_bound=best,
+    )
+
+
+def get_distance_brouwer_zimmermann_many(
     problems: Sequence[tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8] | None]],
     *,
     cutoff: int,
@@ -83,7 +136,7 @@ def _get_distance_brouwer_zimmermann_many(
     return int(best)
 
 
-def _get_distance_brouwer_zimmermann(
+def get_distance_brouwer_zimmermann(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
     *,
@@ -98,7 +151,7 @@ def _get_distance_brouwer_zimmermann(
     Nonzero ``labels`` identify rows outside an excluded subcode; transforming them alongside the
     generators makes the upper-bound search exact for logical operators modulo stabilizers.
     """
-    return _get_distance_brouwer_zimmermann_many(
+    return get_distance_brouwer_zimmermann_many(
         [(basis, labels)],
         cutoff=cutoff,
         block_size=block_size,
@@ -107,98 +160,41 @@ def _get_distance_brouwer_zimmermann(
 
 
 ####################################################################################################
-# helper methods
+# cost models
 
 
-@njit(cache=True)
-def _scan_brouwer_zimmermann(
-    generators: npt.NDArray[np.uint64],
-    labels: npt.NDArray[np.uint64],
-    ranks: npt.NDArray[np.int64],
-    widths: npt.NDArray[np.int64],
-    label_widths: npt.NDArray[np.int64],
-    support: npt.NDArray[np.int64],
-    prefixes: npt.NDArray[np.uint64],
-    depth: int,
-    best: int,
-    cutoff: int,
-    batch_size: int,
-) -> tuple[int, int, int]:
-    """Scan one bounded chunk of coefficient supports for Brouwer-Zimmermann search.
+def exhaustive_is_cheaper(dimension: int, length: int) -> bool:
+    """Estimate whether enumerating every codeword is cheaper than building information sets.
 
-    Args:
-        generators: Packed information-set rows after pivot columns have been deleted.
-        labels: Packed quotient labels whose nonzero XOR marks eligible candidates.
-        ranks: Rank of each information-set block before pivot columns were deleted.
-        widths: Number of packed generator words used by each information-set block.
-        label_widths: Number of packed label words used by each information-set block.
-        support: Mutable row indices for the current coefficient support.
-        prefixes: Mutable prefix XORs for internal support depths and information-set blocks.
-        depth: Current support-tree depth, or ``-1`` when the coefficient layer is complete.
-        best: Current upper bound; only strictly lighter eligible candidates replace it.
-        cutoff: Weight threshold that stops this chunk once ``best <= cutoff``.
-        batch_size: Maximum number of complete supports visited by this chunk.
-
-    Returns:
-        Updated ``best``, updated ``depth``, and number of complete supports visited.
+    Setup costs dominate the Brouwer-Zimmermann search for dimensions up to 20.  For long,
+    low-dimensional codes, byte-wise elimination for each information set can cost more than packed
+    ``uint64`` enumeration of all ``2**dimension`` codewords.
     """
-    dimension = generators.shape[1]
-    weight = len(support)
-    visited = 0
-    while depth >= 0:
-        # Backtrack once the row at this depth leaves too few rows to complete the support.
-        if support[depth] > dimension - weight + depth:
-            depth -= 1
-            if depth >= 0:
-                support[depth] += 1
-            continue
+    return dimension <= 20 or (dimension < 63 and 1 << dimension <= 128 * dimension * length)
 
-        row = support[depth]
-        if depth + 1 < weight:
-            for set_index in range(len(ranks)):
-                for word in range(widths[set_index]):
-                    prefixes[depth + 1, set_index, word] = (
-                        prefixes[depth, set_index, word] ^ generators[set_index, row, word]
-                    )
-            depth += 1
-            support[depth] = row + 1
-            continue
 
-        # Evaluate the completed support in each information set.
-        for set_index in range(len(ranks)):
-            # Each selected row whose pivot column was deleted contributes one to the Hamming
-            # weight; packed words hold the remaining columns.
-            candidate_weight = np.int64(weight) if ranks[set_index] == dimension else np.int64(0)
-            if ranks[set_index] != dimension:
-                for selected in range(weight):
-                    if support[selected] < ranks[set_index]:
-                        candidate_weight += 1
-            for word in range(widths[set_index]):
-                value = prefixes[depth, set_index, word] ^ generators[set_index, row, word]
-                candidate_weight += _popcount_word(value)
-                if candidate_weight >= best:
-                    break
-            if candidate_weight >= best:
-                continue
+def _brute_force_is_cheaper(
+    *,
+    num_logical_rows: int,
+    certificate: _information_sets.Certificate,
+    upper_bound: int,
+) -> bool:
+    """Estimate whether exhaustive nested-code enumeration will outperform BZ.
 
-            # A candidate is eligible when no subcode is excluded or its quotient label is nonzero.
-            eligible = label_widths[set_index] == 0
-            for word in range(label_widths[set_index]):
-                combined = labels[set_index, support[0], word]
-                for selected in range(1, weight):
-                    combined ^= labels[set_index, support[selected], word]
-                if combined:
-                    eligible = True
-                    break
-            if eligible:
-                best = int(candidate_weight)
+    The BZ estimate pessimistically assumes that the search must certify the current upper bound,
+    whereas lighter witnesses usually end the search sooner.  Although the vectorized exhaustive
+    kernel is a few times cheaper per candidate than the serial Numba BZ kernel, whole-search
+    timings near this boundary favor BZ until the exhaustive count reaches roughly the estimated BZ
+    count, so the two counts are compared directly.
+    """
+    dimension = certificate.dimension
+    bz_candidates = certificate.work(upper_bound)
+    exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
+    return exhaustive_candidates <= bz_candidates
 
-        # Move to the next support, returning at the cutoff or at the end of this chunk.
-        visited += 1
-        support[depth] += 1
-        if best <= cutoff or visited >= batch_size:
-            return best, depth, visited
-    return best, depth, visited
+
+####################################################################################################
+# resumable searches
 
 
 @dataclass
@@ -213,7 +209,7 @@ class _BrouwerZimmermannSearch:
     labels: npt.NDArray[np.uint64]
     widths: npt.NDArray[np.int64]
     label_widths: npt.NDArray[np.int64]
-    certificate: _information_sets._Certificate
+    certificate: _information_sets.Certificate
     cutoff: int
     batch_size: int
     best: int
@@ -283,17 +279,6 @@ class _BrouwerZimmermannSearch:
         return self.best
 
 
-def _get_brouwer_zimmermann_initial_upper_bound(
-    basis: npt.NDArray[np.uint8],
-    labels: npt.NDArray[np.uint8] | None,
-) -> int:
-    """Return the lightest eligible row in a nested-code basis."""
-    eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
-    packed_basis = _pack_bits(basis[eligible])
-    # get row weights, summing in uint64 to avoid overflow in wide rows
-    return int(np.bitwise_count(packed_basis).sum(axis=-1, dtype=np.uint64).min())
-
-
 def _prepare_brouwer_zimmermann_search(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
@@ -313,7 +298,7 @@ def _prepare_brouwer_zimmermann_search(
     eligible = np.ones(dimension, dtype=bool) if labels is None else np.any(labels, axis=1)
 
     def brute_force_distance() -> int:
-        distance = _get_distance_quantum_brute_force(
+        distance = get_distance_quantum_brute_force(
             basis[eligible],
             basis[~eligible],
             cutoff=cutoff,
@@ -333,23 +318,23 @@ def _prepare_brouwer_zimmermann_search(
     if best <= cutoff:
         return best
 
-    if _exhaustive_is_cheaper(dimension, basis.shape[1]):
+    if exhaustive_is_cheaper(dimension, basis.shape[1]):
         return brute_force_distance()
 
     # The disjoint family's certificate also uses any inferred even ambient parity.
-    family = _information_sets._get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
+    family = _information_sets.get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
     best = _get_family_upper_bound(family, best)
     if best <= cutoff:
         return best
 
-    family = _information_sets._prune_family(family, upper_bound=best)
+    family = _information_sets.prune_family(family, upper_bound=best)
     completed_weight = 1 if family.information_sets else 0
     lower_bound = family.certificate.lower_bound(completed_weight)
     if lower_bound >= best:
         return best
 
     # Replace disjoint blocks only when overlap predicts less certification work.
-    overlapping = _information_sets._get_overlapping_family(basis, labels, family, upper_bound=best)
+    overlapping = _information_sets.get_overlapping_family(basis, labels, family, upper_bound=best)
     if overlapping is not None:
         family = overlapping
 
@@ -373,8 +358,8 @@ def _prepare_brouwer_zimmermann_search(
     # Remove systematic pivots; advance() restores their known weight arithmetically.
     packed_sets = [
         (
-            _pack_bits(np.delete(information_set.generators, information_set.pivots, axis=1)),
-            None if information_set.labels is None else _pack_bits(information_set.labels),
+            pack_bits(np.delete(information_set.generators, information_set.pivots, axis=1)),
+            None if information_set.labels is None else pack_bits(information_set.labels),
         )
         for information_set in family.information_sets
     ]
@@ -410,7 +395,18 @@ def _prepare_brouwer_zimmermann_search(
     )
 
 
-def _get_family_upper_bound(family: _information_sets._BasisFamily, upper_bound: int) -> int:
+def _get_brouwer_zimmermann_initial_upper_bound(
+    basis: npt.NDArray[np.uint8],
+    labels: npt.NDArray[np.uint8] | None,
+) -> int:
+    """Return the lightest eligible row in a nested-code basis."""
+    eligible = np.ones(len(basis), dtype=bool) if labels is None else np.any(labels, axis=1)
+    packed_basis = pack_bits(basis[eligible])
+    # get row weights, summing in uint64 to avoid overflow in wide rows
+    return int(np.bitwise_count(packed_basis).sum(axis=-1, dtype=np.uint64).min())
+
+
+def _get_family_upper_bound(family: _information_sets.BasisFamily, upper_bound: int) -> int:
     """Tighten an upper bound with the systematic rows of a family, all layer-one candidates."""
     for information_set in family.information_sets:
         upper_bound = min(
@@ -422,31 +418,96 @@ def _get_family_upper_bound(family: _information_sets._BasisFamily, upper_bound:
     return upper_bound
 
 
-def _exhaustive_is_cheaper(dimension: int, length: int) -> bool:
-    """Estimate whether enumerating every codeword is cheaper than building information sets.
+####################################################################################################
+# native scan
 
-    Setup costs dominate the Brouwer-Zimmermann search for dimensions up to 20.  For long,
-    low-dimensional codes, byte-wise elimination for each information set can cost more than packed
-    ``uint64`` enumeration of all ``2**dimension`` codewords.
+
+@njit(cache=True)
+def _scan_brouwer_zimmermann(
+    generators: npt.NDArray[np.uint64],
+    labels: npt.NDArray[np.uint64],
+    ranks: npt.NDArray[np.int64],
+    widths: npt.NDArray[np.int64],
+    label_widths: npt.NDArray[np.int64],
+    support: npt.NDArray[np.int64],
+    prefixes: npt.NDArray[np.uint64],
+    depth: int,
+    best: int,
+    cutoff: int,
+    batch_size: int,
+) -> tuple[int, int, int]:
+    """Scan one bounded chunk of coefficient supports for Brouwer-Zimmermann search.
+
+    Args:
+        generators: Packed information-set rows after pivot columns have been deleted.
+        labels: Packed quotient labels whose nonzero XOR marks eligible candidates.
+        ranks: Rank of each information-set block before pivot columns were deleted.
+        widths: Number of packed generator words used by each information-set block.
+        label_widths: Number of packed label words used by each information-set block.
+        support: Mutable row indices for the current coefficient support.
+        prefixes: Mutable prefix XORs for internal support depths and information-set blocks.
+        depth: Current support-tree depth, or ``-1`` when the coefficient layer is complete.
+        best: Current upper bound; only strictly lighter eligible candidates replace it.
+        cutoff: Weight threshold that stops this chunk once ``best <= cutoff``.
+        batch_size: Maximum number of complete supports visited by this chunk.
+
+    Returns:
+        Updated ``best``, updated ``depth``, and number of complete supports visited.
     """
-    return dimension <= 20 or (dimension < 63 and 1 << dimension <= 128 * dimension * length)
+    dimension = generators.shape[1]
+    weight = len(support)
+    visited = 0
+    while depth >= 0:
+        # Backtrack once the row at this depth leaves too few rows to complete the support.
+        if support[depth] > dimension - weight + depth:
+            depth -= 1
+            if depth >= 0:
+                support[depth] += 1
+            continue
 
+        row = support[depth]
+        if depth + 1 < weight:
+            for set_index in range(len(ranks)):
+                for word in range(widths[set_index]):
+                    prefixes[depth + 1, set_index, word] = (
+                        prefixes[depth, set_index, word] ^ generators[set_index, row, word]
+                    )
+            depth += 1
+            support[depth] = row + 1
+            continue
 
-def _brute_force_is_cheaper(
-    *,
-    num_logical_rows: int,
-    certificate: _information_sets._Certificate,
-    upper_bound: int,
-) -> bool:
-    """Estimate whether exhaustive nested-code enumeration will outperform BZ.
+        # Evaluate the completed support in each information set.
+        for set_index in range(len(ranks)):
+            # Each selected row whose pivot column was deleted contributes one to the Hamming
+            # weight; packed words hold the remaining columns.
+            candidate_weight = np.int64(weight) if ranks[set_index] == dimension else np.int64(0)
+            if ranks[set_index] != dimension:
+                for selected in range(weight):
+                    if support[selected] < ranks[set_index]:
+                        candidate_weight += 1
+            for word in range(widths[set_index]):
+                value = prefixes[depth, set_index, word] ^ generators[set_index, row, word]
+                candidate_weight += popcount_word(value)
+                if candidate_weight >= best:
+                    break
+            if candidate_weight >= best:
+                continue
 
-    The BZ estimate pessimistically assumes that the search must certify the current upper bound,
-    whereas lighter witnesses usually end the search sooner.  Although the vectorized exhaustive
-    kernel is a few times cheaper per candidate than the serial Numba BZ kernel, whole-search
-    timings near this boundary favor BZ until the exhaustive count reaches roughly the estimated BZ
-    count, so the two counts are compared directly.
-    """
-    dimension = certificate.dimension
-    bz_candidates = certificate.work(upper_bound)
-    exhaustive_candidates = ((1 << num_logical_rows) - 1) << (dimension - num_logical_rows)
-    return exhaustive_candidates <= bz_candidates
+            # A candidate is eligible when no subcode is excluded or its quotient label is nonzero.
+            eligible = label_widths[set_index] == 0
+            for word in range(label_widths[set_index]):
+                combined = labels[set_index, support[0], word]
+                for selected in range(1, weight):
+                    combined ^= labels[set_index, support[selected], word]
+                if combined:
+                    eligible = True
+                    break
+            if eligible:
+                best = int(candidate_weight)
+
+        # Move to the next support, returning at the cutoff or at the end of this chunk.
+        visited += 1
+        support[depth] += 1
+        if best <= cutoff or visited >= batch_size:
+            return best, depth, visited
+    return best, depth, visited

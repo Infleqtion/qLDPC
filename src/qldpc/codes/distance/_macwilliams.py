@@ -15,7 +15,7 @@ than in the number of logical qubits.  The transforms use 64-bit integers at the
 bound rules out overflow, and exact Python integers at the others.
 
 The walk visits the words of a span in reflected Gray-code order, as the brute-force distance search
-in ``brute_force.py`` does, but it reduces every word to a weight histogram in one compiled loop
+in ``_brute_force.py`` does, but it reduces every word to a weight histogram in one compiled loop
 instead of to a minimum weight over vectorized blocks.
 
 References:
@@ -34,7 +34,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from ._binary import _pack_bits, _popcount_word, _trailing_zeros_word
+from ._binary import pack_bits, popcount_word, trailing_zeros_word
 
 _BinaryMatrix = npt.NDArray[np.uint8]
 
@@ -49,7 +49,7 @@ _MAX_RANK = 63
 # logical counts
 
 
-class _CheckEnumerators:
+class CheckEnumerators:
     """Weight distributions of the X and Z check spaces of a binary CSS stabilizer code.
 
     Args:
@@ -70,9 +70,9 @@ class _CheckEnumerators:
                 )
         self.num_bits = checks_x.shape[1]
         self.rank_x, self.rank_z = len(checks_x), len(checks_z)
-        self.weights_x = _get_span_weights(checks_x)
+        self.weights_x = get_span_weights(checks_x)
         self.self_dual = checks_z is checks_x
-        self.weights_z = self.weights_x if self.self_dual else _get_span_weights(checks_z)
+        self.weights_z = self.weights_x if self.self_dual else get_span_weights(checks_z)
         # Counts of the light words of ker(H_Z) and ker(H_X), from one 64-bit transform each.
         self.kernel_x = _count_light_dual_words(self.weights_z, self.rank_z, self.num_bits)
         self.kernel_z = (
@@ -114,12 +114,12 @@ class _CheckEnumerators:
 # weight distributions and transforms
 
 
-def _get_span_weights(generators: _BinaryMatrix) -> npt.NDArray[np.uint64]:
+def get_span_weights(generators: _BinaryMatrix) -> npt.NDArray[np.uint64]:
     """The number of words of each weight in the span of independent binary rows, as uint64s."""
     rank, num_bits = generators.shape
     weights = np.zeros(num_bits + 1, dtype=np.uint64)
     weights[0] = 1
-    packed = _pack_bits(generators)
+    packed = pack_bits(generators)
     word = np.zeros(packed.shape[1], dtype=np.uint64)
     stop = 1 << rank
     for start in range(1, stop, _CHUNK_SIZE):
@@ -214,16 +214,16 @@ def _add_span_weights(
         # Up to 64 bits fit in one word, which can stay in a register.
         value = word[0]
         for step in range(start, stop):
-            value ^= generators[_trailing_zeros_word(step), 0]
-            weights[_popcount_word(value)] += 1
+            value ^= generators[trailing_zeros_word(step), 0]
+            weights[popcount_word(value)] += 1
         word[0] = value
         return
     for step in range(start, stop):
-        index = _trailing_zeros_word(step)
+        index = trailing_zeros_word(step)
         weight = np.int64(0)
         for column in range(len(word)):
             word[column] ^= generators[index, column]
-            weight += _popcount_word(word[column])
+            weight += popcount_word(word[column])
         weights[weight] += 1
 
 

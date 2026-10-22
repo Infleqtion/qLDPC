@@ -20,7 +20,7 @@ from qldpc.objects import Pauli
 
 from . import _information_sets, _macwilliams
 from . import logical_counts as lc
-from ._binary import _get_independent_rows, _get_kernel
+from ._binary import get_independent_rows, get_kernel
 from .core import DistanceMethod
 
 Counts = lc.CSSLogicalCounts
@@ -48,7 +48,7 @@ def _random_css_code(
 ) -> codes.CSSCode:
     """A random binary CSS stabilizer code: Z checks are random combinations of ker(H_X)."""
     checks_x = rng.integers(0, 2, (rank_x, num_qubits), dtype=np.uint8)
-    kernel = _get_kernel(checks_x)
+    kernel = get_kernel(checks_x)
     checks_z = rng.integers(0, 2, (rank_z, len(kernel))) @ kernel % 2
     return codes.CSSCode(checks_x.astype(int), checks_z.astype(int))
 
@@ -262,8 +262,8 @@ def test_methods_agree_on_random_codes(num_qubits: int, rank_x: int, rank_z: int
 
 def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
     """Overlapping information sets, which large searches use, still count every word once."""
-    select = functools.partial(_information_sets._get_overlapping_family, minimum_work=0)
-    monkeypatch.setattr(_information_sets, "_get_overlapping_family", select)
+    select = functools.partial(_information_sets.get_overlapping_family, minimum_work=0)
+    monkeypatch.setattr(_information_sets, "get_overlapping_family", select)
     hamming = np.asarray(codes.HammingCode(4).matrix)
     code = _counter(*_frozen(hamming, hamming, 15)).code
     counter = lc.CSSLogicalCounter(code)
@@ -275,15 +275,15 @@ def test_overlapping_information_sets(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_information_set_limit_bounds_overlapping_families(monkeypatch: pytest.MonkeyPatch) -> None:
     """The limit shrinks the overlapping families that a count may use, not the counts."""
     sizes: list[int] = []
-    original = _information_sets._get_overlapping_family
+    original = _information_sets.get_overlapping_family
 
-    def select(*args: Any, **kwargs: Any) -> _information_sets._BasisFamily | None:
+    def select(*args: Any, **kwargs: Any) -> _information_sets.BasisFamily | None:
         family = original(*args, minimum_work=0, **kwargs)
         if family is not None:
             sizes.append(len(family.information_sets))
         return family
 
-    monkeypatch.setattr(_information_sets, "_get_overlapping_family", select)
+    monkeypatch.setattr(_information_sets, "get_overlapping_family", select)
     code = _random_css_code(np.random.default_rng(5), 24, 8, 8)
     counter = lc.CSSLogicalCounter(code)
     expected = [counter.count_logical_ops(weight, method="brute_force") for weight in range(25)]
@@ -302,7 +302,7 @@ def test_first_family_stage_is_computed_once_per_sector() -> None:
     """Counting at other weights, as when a guess fails, does not repeat the first stage."""
     counter = _counter(_HAND_X, _HAND_Z)
     with mock.patch.object(
-        _information_sets, "_get_disjoint_family", wraps=_information_sets._get_disjoint_family
+        _information_sets, "get_disjoint_family", wraps=_information_sets.get_disjoint_family
     ) as first_stage:
         for weight in (2, 3, 1):
             counter.count_logical_ops(weight)
@@ -321,7 +321,7 @@ def test_deformed_counter_reuses_the_first_family_stage(
     fresh = _counter(deformed.checks_x, deformed.checks_z)
     expected = [fresh.count_logical_ops(weight) for weight in weights]
     with mock.patch.object(
-        _information_sets, "_get_disjoint_family", wraps=_information_sets._get_disjoint_family
+        _information_sets, "get_disjoint_family", wraps=_information_sets.get_disjoint_family
     ) as first_stage:
         assert [deformed.count_logical_ops(weight) for weight in weights] == expected
     assert (first_stage.call_count == 0) == reuses
@@ -404,7 +404,7 @@ def test_deformation() -> None:
     assert np.array_equal(counter.checks_x, before)
     expected = before.copy()
     expected[:, 6] ^= expected[:, 1]
-    assert np.array_equal(changed.checks_x, _get_independent_rows(expected))
+    assert np.array_equal(changed.checks_x, get_independent_rows(expected))
     assert counter.is_self_dual and not changed.is_self_dual
     assert changed.deformed_cnot(1, 6).is_self_dual
 
@@ -438,7 +438,7 @@ def test_deformation_transforms_checks(size: int) -> None:
     ):
         expected = checks.astype(int)
         expected[:, targets] = expected[:, targets] @ local.T % 2
-        assert np.array_equal(result, _get_independent_rows(expected.astype(np.uint8)))
+        assert np.array_equal(result, get_independent_rows(expected.astype(np.uint8)))
 
 
 def test_deformed_counts_match_enumeration() -> None:
@@ -526,7 +526,7 @@ def test_macwilliams_enumerators_are_computed_once_per_counter(
     code = codes.CSSCode.stack([codes.SteaneCode()] * copies)
     counter = lc.CSSLogicalCounter(code).deformed_cnot(1, 6).deformed_cnot(1, 6)
     with mock.patch.object(
-        _macwilliams, "_get_span_weights", wraps=_macwilliams._get_span_weights
+        _macwilliams, "get_span_weights", wraps=_macwilliams.get_span_weights
     ) as walk:
         expected = Counts(3, 7 * copies, 7 * copies, 21 * copies if count_pauli_first else None)
         assert (
@@ -587,7 +587,7 @@ def test_code_and_checks() -> None:
 
     derived = counter.deformed_cnot(0, 1)
     assert isinstance(derived.code, codes.CSSCode)
-    derived_x = _get_independent_rows(derived.code.matrix_x.view(np.ndarray).astype(np.uint8))
+    derived_x = get_independent_rows(derived.code.matrix_x.view(np.ndarray).astype(np.uint8))
     assert np.array_equal(derived_x, derived.checks_x)
 
     # Redundant checks are reduced, and the returned checks are copies.
@@ -622,11 +622,11 @@ def test_invalid_inputs() -> None:
     with pytest.raises(ValueError, match="Unknown logical-count method"):
         counter.count_logical_ops(method=invalid_method)
     for method in ("brouwer_zimmermann", "macwilliams", "brute_force"):
-        assert codes.validate_logical_count_method(method) == method
-    assert codes.validate_logical_count_method("information_sets") == "brouwer_zimmermann"
-    assert codes.validate_logical_count_method("weight_enumerator") == "macwilliams"
+        assert lc._validate_logical_count_method(method) == method
+    assert lc._validate_logical_count_method("information_sets") == "brouwer_zimmermann"
+    assert lc._validate_logical_count_method("weight_enumerator") == "macwilliams"
     with pytest.raises(ValueError, match="Unknown logical-count method"):
-        codes.validate_logical_count_method(invalid_method)
+        lc._validate_logical_count_method(invalid_method)
     for weight in (-1, 3, 1.5, True, "1"):
         invalid_weight: Any = weight
         with pytest.raises(ValueError, match="weight must be an integer"):
