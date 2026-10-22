@@ -15,9 +15,8 @@ A deprecated name thereby refers to the same object as its replacement, which pr
 checks and subclassing.  Type checkers do not see the stub, so they reject deprecated names, and no
 __all__ lists them, so that star imports do not warn.
 
-A registry target without an attribute names a module that replaces a deprecated submodule.  Such a
-submodule is served both as an attribute of its package and, by a finder that this module appends
-to sys.meta_path, to import statements.
+A registry target without an attribute names a module that replaces a deprecated submodule, which
+is served as an attribute of its package, as in ``from package import submodule``.
 
 Registry targets are lazy "module:attribute" strings, and this module imports no qLDPC subpackage
 at import time, so that every module can import it without an import cycle.  Deprecated methods are
@@ -29,13 +28,9 @@ are handled where they are accepted, by calling warn_deprecated or raising defun
 from __future__ import annotations
 
 import importlib
-import importlib.abc
-import importlib.machinery
-import importlib.util
 import sys
 import warnings
-from collections.abc import Callable, Sequence
-from types import ModuleType
+from collections.abc import Callable
 from typing import TYPE_CHECKING, TypeVar
 
 from qldpc._util import get_external_caller_stacklevel
@@ -263,42 +258,6 @@ def _is_import_probe(frame: FrameType | None) -> bool:
         and frame.f_code.co_name == "_handle_fromlist"
         and frame.f_globals.get("__name__") == "importlib._bootstrap"
     )
-
-
-class _DeprecatedModuleFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-    """Import a deprecated submodule as the module that replaces it, warning about the import."""
-
-    def find_spec(
-        self,
-        fullname: str,
-        path: Sequence[str] | None,
-        target: ModuleType | None = None,
-    ) -> importlib.machinery.ModuleSpec | None:
-        """Find a deprecated submodule that the registry lists with a "module" target."""
-        package, _, name = fullname.rpartition(".")
-        target_name = ALIASES.get(package, {}).get(name)
-        if target_name is None or ":" in target_name:
-            return None
-        return importlib.util.spec_from_loader(fullname, self)
-
-    def create_module(self, spec: importlib.machinery.ModuleSpec) -> ModuleType:
-        """Warn about the import of a deprecated submodule, and return its replacement."""
-        package, _, name = spec.name.rpartition(".")
-        target = ALIASES[package][name]
-        # warnings skip the frames of the import system, which leads to the importing code
-        warn_deprecated(_get_alias_warning(name, target), stacklevel=2)
-        module = importlib.import_module(target)
-        spec.loader_state = module.__spec__  # the import system replaces it, so keep it to restore
-        return module
-
-    def exec_module(self, module: ModuleType) -> None:
-        """Restore the spec of the replacement module, which is otherwise executed already."""
-        spec = module.__spec__
-        assert spec is not None
-        module.__spec__ = spec.loader_state
-
-
-sys.meta_path.append(_DeprecatedModuleFinder())
 
 
 ####################################################################################################

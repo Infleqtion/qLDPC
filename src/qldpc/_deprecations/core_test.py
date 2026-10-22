@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import importlib
 import inspect
-import sys
 import warnings
 
 import numpy as np
@@ -92,22 +91,6 @@ def test_star_imports_do_not_warn() -> None:
             warnings.simplefilter("error")
             # a star import is only valid at module level, so execute it in a fresh namespace
             exec(f"from {module_name} import *", {})  # noqa: S102
-
-
-def test_deprecated_modules() -> None:
-    """Deprecated submodules can be imported, warning once."""
-    for package, aliases in _deprecations.ALIASES.items():
-        for name, target in aliases.items():
-            if ":" in target:
-                continue
-            path = f"{package}.{name}"
-            replacement = importlib.import_module(target)
-            with pytest.warns(DeprecationWarning, match=f"{name} is deprecated") as caught:
-                __import__(path)
-            assert len(caught) == 1 and caught[0].filename == __file__
-            assert sys.modules[path] is replacement
-            assert replacement.__spec__ is not None and replacement.__spec__.name == target
-            del sys.modules[path], vars(sys.modules[package])[name]
 
 
 def test_deprecated_methods() -> None:
