@@ -794,6 +794,36 @@ def test_detector_coords_steane_round_1_reliable() -> None:
         assert qubit_lane[check_id] == lane, f"check {check_id} is on lane {qubit_lane[check_id]}"
 
 
+@pytest.mark.parametrize("basis", [Pauli.X, Pauli.Z])
+def test_joint_ppm_round_0_detectors(basis: PauliXZ) -> None:
+    """A joint PPM's first round has detectors for data, gauge, and cycle checks.
+
+    On the default product-state initialization, the deterministic checks in the first round are
+    the data checks of the measured basis (lane 2 for X, lane 4 for Z), the bridge-augmented gauge
+    checks (lane 5), and the bridge's cycle checks (lane 6, one per row of H_R).
+    """
+    from qldpc.experimental.surgery import build_bridge, build_gadget
+    from qldpc.experimental.surgery.circuit import build_joint_ppm_circuit
+
+    code = codes.SteaneCode()
+    logical = np.asarray(code.get_logical_ops(basis)[0]).astype(np.uint8)
+    g_l = build_gadget(code, logical, basis=basis)
+    g_r = build_gadget(codes.SteaneCode(), logical, basis=basis)
+    bridge = build_bridge(g_l, g_r)
+    circuit, _ = build_joint_ppm_circuit(g_l, g_r, bridge, rounds=1, noise_model=None)
+
+    round_0_lanes = collections.Counter(
+        int(coords[1]) for coords in circuit.get_detector_coordinates().values() if coords[0] == 0
+    )
+    data_lane = 2 if basis is Pauli.X else 4
+    expected = {
+        data_lane: 2 * code.get_matrix(basis).shape[0],
+        5: bridge.g_l_aug.gauge.shape[0] + bridge.g_r_aug.gauge.shape[0],
+        6: bridge.H_R.shape[0],
+    }
+    assert round_0_lanes == collections.Counter({k: v for k, v in expected.items() if v})
+
+
 def test_detector_coords_basis_z_preserves_lane_semantics() -> None:
     """basis=Z: reliable detectors use lanes 4 (H_Z) and 5 (G); the readout re-checks round 0.
 
