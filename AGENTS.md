@@ -53,14 +53,8 @@ AbstractCode
 
 The methods in `codes/common.py` share cached and mutable state for standard form, logical and gauge operators, parameters, and code transformations.
 Do not split them into mixins merely to reduce the file length.
-Free-standing statistical Monte Carlo helpers live in `codes/monte_carlo.py`.
-Code-capacity detector-error-model and decoder orchestration lives in `codes/_code_capacity.py`.
-Generic decoder-input checks live in `decoders/_capabilities.py`; coercion into error decoders, batch decoding, and helpers shared by decoder builders live in `decoders/_common.py`.
-Field-valued and bit-packed observable-decoder adapters live in `decoders/adapters/_observable_decoders.py`, and the alignment of inferred errors with DEM error mechanisms lives in `decoders/adapters/_dem_matching.py`.
-Immediate builders live beside their implementations: external-package integrations under `decoders/external/`, and qLDPC-owned implementations under `decoders/custom/`.
-Typed decoder specifications and generic input resolution live under `decoders/construction/`.
-Modern decoder inputs resolve directly in `decoders/construction/_resolution.py`; nonempty deprecated keywords enter `_deprecations/decoders.py` for translation, and the deprecated package-root functions live there too.
-Noise-model plumbing lives in private modules under `circuits/noise_model/`: instruction classification and rule keys in `_operations.py`, moments and idle-error composition in `_moments.py`, and the normalization and validation of noise rules in `_rules.py`.
+Immediate decoder builders live beside their implementations under `decoders/external/` and `decoders/custom/`, and typed decoder specifications live under `decoders/construction/`.
+Plumbing lives in private modules, whose file names start with an underscore, beside the public code that it serves.
 
 ## Public API and compatibility
 
