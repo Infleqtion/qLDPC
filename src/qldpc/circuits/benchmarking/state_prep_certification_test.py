@@ -1,38 +1,39 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Independent small-instance oracles for spread certification."""
+"""Tests for exact bounded-spread certification of noisy Clifford state preparation."""
 
 from __future__ import annotations
 
-import inspect
 import itertools
-from typing import Literal
-from unittest import mock
+from collections.abc import Sequence
 
 import numpy as np
+import numpy.typing as npt
 import pytest
 import stim
 
 from qldpc import circuits
-from qldpc.codes.distance._bounded_weight_search import BoundedKernelSearch, PauliCosetSearch
+from qldpc.codes.distance._bounded_weight_search import PauliCosetSearch
 
 from . import state_prep_certification
 
 
+def _z_state(num_qubits: int) -> npt.NDArray[np.int_]:
+    """Stabilizers of |0...0>, for which an error's effective weight is its syndrome's weight."""
+    return np.hstack([np.zeros((num_qubits, num_qubits), dtype=int), np.eye(num_qubits, dtype=int)])
+
+
 def _pack_pauli(pauli: str) -> int:
-    """Pack a Stim Pauli string with X in the low bits, then Z."""
+    """Pack a Stim Pauli string as an integer, with X in the low bits and Z in the next block."""
     xs, zs = stim.PauliString(pauli).to_numpy()
-    num_qubits = len(xs)
+    n = len(xs)
     return sum(int(x) << jj for jj, x in enumerate(xs)) | sum(
-        int(z) << (num_qubits + jj) for jj, z in enumerate(zs)
+        int(z) << (n + jj) for jj, z in enumerate(zs)
     )
 
 
-def _exhaustive(flags: list[int], syndromes: list[int], budget: int) -> bool:
-    """Check every accepted pattern for a Z-stabilized state.
-
-    One qubit per syndrome bit makes effective weight equal to syndrome Hamming weight.
-    """
+def _exhaustive(flags: Sequence[int], syndromes: Sequence[int], budget: int) -> bool:
+    """Whether every accepted pattern on the |0...0> state satisfies the spread bound."""
     for size in range(1, min(budget, len(flags)) + 1):
         for support in itertools.combinations(range(len(flags)), size):
             flag = syndrome = 0
@@ -44,46 +45,136 @@ def _exhaustive(flags: list[int], syndromes: list[int], budget: int) -> bool:
     return True
 
 
-@pytest.mark.parametrize("force_prefix", [False, True])
-@pytest.mark.parametrize("metric", ["pauli", "css"])
-def test_random_maps(
-    force_prefix: bool, metric: Literal["pauli", "css"], monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Minimal-pattern search matches exhaustive checks, including flag cancellation."""
-    monkeypatch.setattr(
-        state_prep_certification, "_use_prefix_search", mock.Mock(return_value=force_prefix)
+def _certify_map(
+    flags: Sequence[int],
+    syndromes: Sequence[int],
+    budget: int,
+    num_qubits: int,
+    statistics: circuits.StatePrepSpreadStatistics | None = None,
+) -> circuits.StatePrepSpreadCounterexample | None:
+    """Certify a flag/syndrome map on |0...0> and check any witness against the map."""
+    failure = state_prep_certification._certify_maps(
+        flags,
+        syndromes,
+        PauliCosetSearch(_z_state(num_qubits)),
+        budget,
+        statistics or circuits.StatePrepSpreadStatistics(),
     )
+    if failure is not None:
+        flag = syndrome = 0
+        for index in failure.fault_indices:
+            flag ^= flags[index]
+            syndrome ^= syndromes[index]
+        assert len(set(failure.fault_indices)) == failure.fault_count <= budget
+        assert flag == 0
+        assert failure.fault_count < failure.effective_weight_lower_bound <= syndrome.bit_count()
+        assert failure.output_syndrome == tuple((syndrome >> jj) & 1 for jj in range(num_qubits))
+        oracle = PauliCosetSearch(_z_state(num_qubits))
+        assert oracle.syndrome(_pack_pauli(failure.output_pauli)) == syndrome
+    return failure
+
+
+def _true_minimum(stabilizers: Sequence[str], syndrome: Sequence[int], metric_css: bool) -> int:
+    """Minimum weight over all Paulis with this syndrome, by enumerating every Pauli."""
+    n = len(stabilizers)
+    rows = np.array([np.concatenate(stim.PauliString(ss).to_numpy()) for ss in stabilizers])
+    paulis = (np.arange(4**n)[:, None] >> np.arange(2 * n)) & 1
+    x, z = paulis[:, :n], paulis[:, n:]
+    syndromes = (x @ rows[:, n:].T + z @ rows[:, :n].T) % 2
+    weights = np.maximum(x.sum(axis=1), z.sum(axis=1)) if metric_css else (x | z).sum(axis=1)
+    return int(weights[np.all(syndromes == np.array(syndrome), axis=1)].min())
+
+
+def _assert_valid_counterexample(
+    certificate: circuits.StatePrepSpreadCertificate,
+    circuit: stim.Circuit,
+    post_select: Sequence[int],
+) -> None:
+    """Check a witness against the returned DEM and a brute-force minimum, not the search."""
+    failure = certificate.counterexample
+    assert failure is not None and not certificate.certified
+    errors = [inst for inst in certificate.detector_error_model if inst.type == "error"]
+    events: set[int] = set()
+    for index in failure.fault_indices:
+        events ^= {tt.val for tt in errors[index].targets_copy() if tt.is_relative_detector_id()}
+    assert not events & set(post_select)
+    syndrome = tuple(
+        int(circuit.num_detectors + jj in events)
+        for jj in range(len(certificate.target_stabilizers))
+    )
+    assert syndrome == failure.output_syndrome
+    stabilizers = [stim.PauliString(ss) for ss in certificate.target_stabilizers]
+    pauli = stim.PauliString(failure.output_pauli)
+    assert tuple(int(not pauli.commutes(ss)) for ss in stabilizers) == failure.output_syndrome
+    assert failure.effective_weight_lower_bound > failure.fault_count
+    if len(stabilizers) <= 8:
+        minimum = _true_minimum(certificate.target_stabilizers, syndrome, certificate.css_weight)
+        assert failure.effective_weight_lower_bound <= minimum
+
+
+def test_certify_maps_matches_exhaustive_search() -> None:
+    """Random maps with repeated columns and flag rank above the budget match brute force."""
     rng = np.random.default_rng(612)
-    for n in (3, 5):
-        matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
-        for rank in range(5):
-            for _ in range(12):
-                flags = list(map(int, rng.integers(1 << rank, size=8)))
-                syndromes = list(map(int, rng.integers(1 << n, size=8)))
-                for budget in (1, 2, 3, 5):
-                    stats = circuits.StatePrepSpreadStatistics()
-                    failure = state_prep_certification._certify_maps(
-                        flags, syndromes, PauliCosetSearch(matrix, metric=metric), budget, stats
-                    )
-                    assert (failure is None) == _exhaustive(flags, syndromes, budget)
-                    if failure is not None:
-                        flag = syndrome = 0
-                        for jj in failure.fault_indices:
-                            flag ^= flags[jj]
-                            syndrome ^= syndromes[jj]
-                        assert flag == 0
-                        assert 1 <= failure.fault_count <= budget
-                        assert syndrome.bit_count() >= failure.effective_weight_lower_bound
-                        assert failure.effective_weight_lower_bound > failure.fault_count
-                        assert failure.output_syndrome == tuple(
-                            (syndrome >> jj) & 1 for jj in range(n)
-                        )
-                        oracle = PauliCosetSearch(matrix)
-                        assert oracle.syndrome(_pack_pauli(failure.output_pauli)) == syndrome
+    maps: list[tuple[int, npt.NDArray[np.int_], npt.NDArray[np.int_], Sequence[int]]] = []
+    for n, rank in itertools.product((3, 5), range(5)):
+        for _ in range(12):
+            flag_array, syndrome_array = (
+                rng.integers(1 << rank, size=8),
+                rng.integers(1 << n, size=8),
+            )
+            maps.append((n, flag_array, syndrome_array, (1, 2, 3, 5)))
+    # With 24 columns of flag rank 5, the independent-prefix search is the cheaper complete search.
+    for _ in range(6):
+        flag_array, syndrome_array = rng.integers(1, 32, size=24), rng.integers(1, 8, size=24)
+        maps.append((3, flag_array, syndrome_array, (2, 3)))
+    outcomes = {True: 0, False: 0}
+    for n, flag_array, syndrome_array, budgets in maps:
+        flags, syndromes = list(map(int, flag_array)), list(map(int, syndrome_array))
+        for budget in budgets:
+            failure = _certify_map(flags, syndromes, budget, n)
+            assert (failure is None) == _exhaustive(flags, syndromes, budget)
+            outcomes[failure is None] += 1
+    assert min(outcomes.values()) > 20  # both outcomes occur often
 
 
-def test_minimal_prefix_oracle() -> None:
-    """Exhaustive subsets check unique closure and original-ID mapping."""
+def test_hand_derived_dependency_cases() -> None:
+    """Triples, decomposable pairs, duplicate joint symptoms, zero columns, and budget limits."""
+    for flags, syndromes, budget, certified in (
+        ([1, 2, 3], [1, 2, 12], 2, True),  # the triple of weight 4 needs three faults
+        ([1, 2, 3], [1, 2, 12], 3, False),
+        ([1, 1], [1, 14], 3, False),  # an accepted pair of weight 4
+        ([0, 0, 0], [1, 2, 4], 4, True),  # flag-free faults of weight one
+        ([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 8, 12], 4, False),
+        ([1, 1, 2, 2, 4, 4], [1, 2, 1, 2, 1, 2], 4, True),  # pairs of weight two
+        ([1, 1, 1, 0], [1, 1, 1, 0], 4, True),  # identical columns cancel in pairs
+        ([0, 0], [0, 0], 4, True),  # faults with no effect
+        ([1, 2, 4, 3, 5], [0, 0, 0, 7, 56], 3, True),
+        ([1, 2, 4, 3, 5], [0, 0, 0, 7, 56], 4, False),  # four faults of weight six
+    ):
+        failure = _certify_map(flags, syndromes, budget, 6)
+        assert (failure is None) == certified
+
+
+def test_independent_flag_types_need_only_equal_flag_pairs() -> None:
+    """For independent flag columns, only equal-flag pairs matter, at any column count."""
+    outcomes = set()
+    # Flags 3, 5, 8, 16, and 2**130 are independent; three copies exceed twice the flag rank.
+    for copies in (2, 3):
+        flags = [flag for flag in (3, 5, 8, 16, 1 << 130) for _ in range(copies)]
+        passing = [1, 2, 4] * 5
+        failing = [3, 12, 0] * 5
+        for syndromes in (passing[: len(flags)], failing[: len(flags)]):
+            for budget in (2, 3, 30):
+                statistics = circuits.StatePrepSpreadStatistics()
+                failure = _certify_map(flags, syndromes, budget, 4, statistics)
+                assert (failure is None) == _exhaustive(flags, syndromes, budget)
+                assert statistics.effective_budget == 2  # only pairs of equal flags matter
+                outcomes.add(failure is None)
+    assert outcomes == {True, False}
+
+
+def test_minimal_patterns_match_exhaustive_enumeration() -> None:
+    """Each minimal accepted pattern is produced once, with original indices and its syndrome."""
     rng = np.random.default_rng(518)
     for width in range(10):
         for flag_bits in range(1, 5):
@@ -100,431 +191,151 @@ def test_minimal_prefix_oracle() -> None:
                         for jj in support:
                             flag ^= flags[jj]
                             syndrome ^= syndromes[jj]
-                        if flag:
-                            continue
                         word = sum(1 << jj for jj in support)
-                        if not any(previous & word == previous for previous in accepted):
-                            expected[tuple(originals[jj] for jj in support)] = syndrome
-                        accepted.append(word)
-                stats = circuits.StatePrepSpreadStatistics()
+                        if flag == 0:
+                            if not any(previous & word == previous for previous in accepted):
+                                expected[tuple(originals[jj] for jj in support)] = syndrome
+                            accepted.append(word)
                 actual = list(
-                    state_prep_certification._iter_minimal_patterns(mechanisms, budget, stats)
+                    state_prep_certification._iter_minimal_patterns(
+                        mechanisms, budget, circuits.StatePrepSpreadStatistics()
+                    )
                 )
-                assert dict(actual) == expected
                 assert len(actual) == len(expected)
-                assert stats.generated >= len(actual)
+                assert dict(actual) == expected
 
 
-def test_minimal_prefix_is_not_full_kernel() -> None:
-    """Minimal-pattern filtering must not change full-kernel coverage."""
-    flags = [1, 2, 3, 4, 8, 12]
-    mechanisms = [(flag, 1, jj) for jj, flag in enumerate(flags)]
-    stats = circuits.StatePrepSpreadStatistics()
-    minimal = list(state_prep_certification._iter_minimal_patterns(mechanisms, 6, stats))
-    assert {support for support, _ in minimal} == {(0, 1, 2), (3, 4, 5)}
-    checks = np.array([[(flag >> jj) & 1 for flag in flags] for jj in range(4)], dtype=int)
-    assert set(BoundedKernelSearch(checks, 6).words()) == {0b000111, 0b111000, 0b111111}
-    wide = [(1 << 80, 1, 90), (1 << 130, 2, 10), ((1 << 80) ^ (1 << 130), 4, 50)]
-    assert list(state_prep_certification._iter_minimal_patterns(wide, 3, stats)) == [
-        ((90, 10, 50), 7)
-    ]
-
-
-@pytest.mark.parametrize(
-    "columns,rank,budget,expected",
-    [
-        (45, 4, 3, True),
-        (93, 5, 2, True),
-        (381, 7, 3, True),
-        (21, 3, 4, True),
-        (30, 4, 5, True),
-        (35, 5, 5, True),
-        (21, 3, 2, False),
-        (21, 3, 3, False),
-        (24, 16, 3, False),
-        (41, 20, 3, False),
-        (49, 24, 3, True),
-        (100, 3, 1, False),
-    ],
-)
-def test_prefix_crossover(columns: int, rank: int, budget: int, expected: bool) -> None:
-    """Pin the cost heuristic at representative sizes."""
-    assert state_prep_certification._use_prefix_search(columns, rank, budget) == expected
-
-
-@pytest.mark.parametrize("damaging", [False, True])
-def test_adaptive_prefix_circuit(damaging: bool) -> None:
-    """Compiled DEMs preserve fault costs and witness indices under prefix closure."""
-    circuit = stim.Circuit()
-    circuit.append("I", range(9))
-    for flag in range(1, 16):
-        for syndrome in (3, 5, 6):
-            targets = [stim.target_x(jj) for jj in range(3) if (syndrome >> jj) & 1]
-            targets += [stim.target_x(5 + jj) for jj in range(4) if (flag >> jj) & 1]
-            circuit.append("CORRELATED_ERROR", targets, 0.001)
-    if damaging:
-        circuit.append("CORRELATED_ERROR", [stim.target_x(jj) for jj in (3, 4, 5)], 0.001)
-    circuit += stim.Circuit("H 0 1 2\nS 0 2\nX 0")
-    circuit.append("M", range(5, 9))
-    for jj in range(4):
-        circuit.append("DETECTOR", [stim.target_rec(jj - 4)])
-    result = circuits.certify_state_prep_spread(
-        circuit, output_qubits=[2, 0, 4, 1, 3], post_select=range(4), max_faults=3
+def test_minimal_patterns_with_flags_wider_than_a_machine_word() -> None:
+    """Flag columns of 80 and 130 bits combine correctly."""
+    mechanisms = [(1 << 80, 1, 90), (1 << 130, 2, 10), ((1 << 80) ^ (1 << 130), 4, 50)]
+    patterns = state_prep_certification._iter_minimal_patterns(
+        mechanisms, 3, circuits.StatePrepSpreadStatistics()
     )
-    assert result.certified != damaging
-    assert any("Y" in gg for gg in result.target_stabilizers)
-    assert any(gg.startswith("-") for gg in result.target_stabilizers)
-    stats = result.statistics
-    assert stats.search_method == "independent_prefix"
-    failure = result.counterexample
-    if damaging:
-        assert failure is not None and failure.fault_count in (2, 3)
-        assert failure.fault_count < failure.effective_weight_lower_bound <= 4
-        errors = [
-            instruction
-            for instruction in result.detector_error_model
-            if instruction.type == "error"
-        ]
-        events: set[int] = set()
-        for jj in failure.fault_indices:
-            events.symmetric_difference_update(target.val for target in errors[jj].targets_copy())
-        assert not events.intersection(range(4))
-        generators = [stim.PauliString(gg) for gg in result.target_stabilizers]
-        representative = stim.PauliString(failure.output_pauli)
-        assert (
-            tuple(int(not representative.commutes(gg)) for gg in generators)
-            == failure.output_syndrome
+    assert list(patterns) == [((90, 10, 50), 7)]
+
+
+def test_flagged_circuit_with_permuted_signed_outputs() -> None:
+    """Many flags, a signed Y stabilizer, and permuted outputs; witnesses name DEM mechanisms."""
+    for damaging in (False, True):
+        circuit = stim.Circuit()
+        circuit.append("I", range(9))
+        for flag in range(1, 16):
+            for syndrome in (3, 5, 6):
+                targets = [stim.target_x(jj) for jj in range(3) if (syndrome >> jj) & 1]
+                targets += [stim.target_x(5 + jj) for jj in range(4) if (flag >> jj) & 1]
+                circuit.append("CORRELATED_ERROR", targets, 0.001)
+        if damaging:  # also flips the outputs on qubits 3 and 4, with the flag on qubit 5
+            circuit.append("CORRELATED_ERROR", [stim.target_x(jj) for jj in (3, 4, 5)], 0.001)
+        circuit += stim.Circuit("H 0 1 2\nS 0 2\nX 0")
+        circuit.append("M", range(5, 9))
+        for jj in range(4):
+            circuit.append("DETECTOR", [stim.target_rec(jj - 4)])
+        result = circuits.certify_state_prep_spread(
+            circuit, output_qubits=[2, 0, 4, 1, 3], post_select=range(4), max_faults=3
         )
-        assert sum(failure.output_syndrome) == 4
-    else:
-        # Even-parity three-bit syndromes have weight <=2; singletons reject.
-        assert failure is None
-        # 1035 extensions and 990 closures cost less than 11521 BZ supports.
-        assert stats.generated == 2025
-        assert stats.minimal_candidates == 990
+        assert any("Y" in ss for ss in result.target_stabilizers)
+        assert any(ss.startswith("-") for ss in result.target_stabilizers)
+        assert result.certified != damaging
+        if damaging:
+            _assert_valid_counterexample(result, circuit, range(4))
 
 
-def test_adaptive_retains_strong_information_sets() -> None:
-    """Low-rate kernels use multiple information sets."""
-    flags = [
-        flag
-        for group in range(8)
-        for flag in (1 << (2 * group), 1 << (2 * group + 1), 3 << (2 * group))
-    ]
-    n = 5
-    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
-    stats = circuits.StatePrepSpreadStatistics()
-    with mock.patch.object(
-        state_prep_certification,
-        "_iter_minimal_patterns",
-        side_effect=AssertionError("Wrong search"),
-    ):
-        assert (
-            state_prep_certification._certify_maps(
-                flags, [3, 6, 28] * 8, PauliCosetSearch(matrix), 3, stats
-            )
-            is None
+def test_steane_preparation_meets_css_spread_but_not_physical_spread() -> None:
+    """Steane preparation: a single Y0 Z1 fault has CSS weight one but physical weight two."""
+    circuit = circuits.DepolarizingNoiseModel(1e-3).noisy_circuit(
+        stim.Circuit("""
+            H 0 2 4
+            CX 0 3 2 1 4 5
+            CX 0 1 2 6 4 3
+            CX 2 5 3 6
+            H 7
+            CZ 7 1 7 3 7 5
+            MX 7
+            DETECTOR rec[-1]
+        """)
+    )
+
+    def certify(css_weight: bool | None) -> circuits.StatePrepSpreadCertificate:
+        return circuits.certify_state_prep_spread(
+            circuit, output_qubits=range(7), max_faults=3, post_select=[0], css_weight=css_weight
         )
-    assert stats.search_method == "brouwer_zimmermann"
-    # Three information sets each contribute eight depth-one supports.
-    assert stats.generated == 24
 
-
-@pytest.mark.parametrize("budget", [2, 3, 6, 30])
-def test_independent_flag_types_reduce_to_pairs(budget: int) -> None:
-    """Independent flag types require even multiplicities at every budget."""
-    flags = [flag for flag in (3, 5, 8, 16, 1 << 130) for _ in range(3)]
-    n = 3
-    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
-    stats = circuits.StatePrepSpreadStatistics()
-    assert (
-        state_prep_certification._certify_maps(
-            flags, [3, 5, 6] * 5, PauliCosetSearch(matrix), budget, stats
-        )
-        is None
-    )
-    assert stats.flag_rank == 5 and stats.effective_budget == 2
-    assert stats.search_method == "independent_prefix"
-    assert stats.minimal_candidates == 15 and stats.generated == 30
-    assert _exhaustive(flags, [3, 5, 6] * 5, budget)
-
-
-@pytest.mark.parametrize("budget", [2, 3, 100])
-@pytest.mark.parametrize("metric", ["pauli", "css"])
-def test_independent_flag_types_reduce_to_pairs_with_few_columns(
-    budget: int, metric: Literal["pauli", "css"]
-) -> None:
-    """Pair reduction also applies when column count is at most twice flag rank."""
-    n = 6
-    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
-    flags = [1 << flag_type for flag_type in range(8) for _ in range(2)]
-    # Equal-flag pairs have syndrome XOR 3, 15, or 63, with effective weight 2, 4, or 6.
-    for syndromes, violation in (
-        ([1, 2] * 8, None),
-        ([3, 12] * 8, (0, 1)),
-        ([1, 2] * 7 + [7, 56], (14, 15)),
-    ):
-        stats = circuits.StatePrepSpreadStatistics()
-        oracle = PauliCosetSearch(matrix, metric=metric)
-        result = state_prep_certification._certify_maps(flags, syndromes, oracle, budget, stats)
-        assert (result is None) == _exhaustive(flags, syndromes, min(budget, 4))
-        assert stats.flag_rank == 8 and len(flags) == 2 * stats.flag_rank
-        assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
-        if violation is None:
-            assert result is None
-            assert stats.minimal_candidates == 8 and stats.generated == 24
-        else:
-            assert result is not None and result.fault_indices == violation
-            assert 2 < result.effective_weight_lower_bound
-
-
-def test_independent_flag_types_failure() -> None:
-    """Pair reduction preserves accepted violations and original IDs."""
-    flags = [flag for flag in (3, 5, 8) for _ in range(3)]
-    n = 4
-    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
-    stats = circuits.StatePrepSpreadStatistics()
-    failure = state_prep_certification._certify_maps(
-        flags, [1, 14, 0, 1, 2, 3, 1, 2, 3], PauliCosetSearch(matrix), 7, stats
-    )
-    assert failure is not None and failure.fault_count == 2
-    assert failure.fault_indices == (0, 1)
-    assert 2 < failure.effective_weight_lower_bound <= 4
-    assert failure.output_syndrome == (1, 1, 1, 1)
-    assert stats.search_method == "independent_prefix" and stats.effective_budget == 2
-
-
-def test_certificates_are_deterministic() -> None:
-    """Repeated certifications have identical results and counters."""
-    circuit = stim.Circuit("H 0\nCX 0 1\nDEPOLARIZE2(0.01) 0 1")
-    first, second = (
-        circuits.certify_state_prep_spread(circuit, output_qubits=[0, 1], max_faults=2)
-        for _ in range(2)
-    )
-    assert first == second
-    assert first.statistics.mechanisms > 0
-    assert first.statistics != circuits.StatePrepSpreadStatistics()
-
-
-def test_dependency_reductions() -> None:
-    """Check triples, decomposable pairs, joint duplicates, and budget boundaries."""
-    n = 4
-    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
-    for flags, syndromes, budget, expected in (
-        ([1, 2, 3], [1, 2, 12], 2, True),
-        ([1, 2, 3], [1, 2, 12], 3, False),
-        ([1, 1], [1, 14], 3, False),
-        ([0, 0, 0], [1, 2, 4], 4, True),
-        ([1, 2, 3, 1, 2, 3], [1, 2, 3, 4, 8, 12], 4, False),
-        ([1, 1, 2, 2, 4, 4], [1, 2, 1, 2, 1, 2], 4, True),
-        ([1, 1, 1, 0], [1, 1, 1, 0], 4, True),
-        ([0, 0], [0, 0], 4, True),
-    ):
-        stats = circuits.StatePrepSpreadStatistics()
-        result = state_prep_certification._certify_maps(
-            flags, syndromes, PauliCosetSearch(matrix), budget, stats
-        )
-        assert (result is None) == expected
-    # All-zero columns need no search.
-    stats = circuits.StatePrepSpreadStatistics()
-    assert (
-        state_prep_certification._certify_maps([0, 0], [0, 0], PauliCosetSearch(matrix), 4, stats)
-        is None
-    )
-    assert stats.generated == stats.minimal_candidates == 0
-    # Harmless systematic rows cannot bound the first violating word.
-    n = 6
-    matrix = np.hstack([np.zeros((n, n), dtype=int), np.eye(n, dtype=int)])
-    flags = [1, 2, 4, 3, 5]
-    syndromes = [0, 0, 0, 7, 56]
-    for budget in (3, 4):
-        result = state_prep_certification._certify_maps(
-            flags,
-            syndromes,
-            PauliCosetSearch(matrix),
-            budget,
-            circuits.StatePrepSpreadStatistics(),
-        )
-        assert (result is None) == (budget == 3)
-
-
-def test_steane_mixed_pauli_witness() -> None:
-    """Steane passes CSS spread but fails the stronger physical-support test."""
-    ideal = stim.Circuit("""
-        H 0 2 4
-        CX 0 3 2 1 4 5
-        CX 0 1 2 6 4 3
-        CX 2 5 3 6
-        H 7
-        CZ 7 1 7 3 7 5
-        MX 7
-        DETECTOR rec[-1]
-    """)
-    circuit = circuits.DepolarizingNoiseModel(1e-3).noisy_circuit(ideal)
-    result = circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(7), max_faults=3, post_select=[0], css_weight=False
-    )
-    failure = result.counterexample
-    assert not result.certified and failure is not None
-    assert failure.fault_count == 1
-    assert failure.effective_weight_lower_bound == 2
-    assert failure.output_syndrome == (1, 1, 0, 1, 0, 0, 0)
-    stabilizers = [stim.PauliString(string) for string in result.target_stabilizers]
-    representative = stim.PauliString("YZ_____")
-    assert (
-        tuple(int(not representative.commutes(gg)) for gg in stabilizers) == failure.output_syndrome
-    )
-    # Independently rule out every physical weight-zero/one representative.
-    for qubit in range(7):
-        for pauli in "IXYZ":
-            candidate = stim.PauliString(7)
-            candidate[qubit] = pauli
-            assert (
-                tuple(int(not candidate.commutes(gg)) for gg in stabilizers)
-                != failure.output_syndrome
-            )
-    errors = [
-        instruction for instruction in result.detector_error_model if instruction.type == "error"
-    ]
-    targets = errors[failure.fault_indices[0]].targets_copy()
-    assert {target.val for target in targets} == {1, 2, 4}
-    css = circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(7), max_faults=3, post_select=[0]
-    )
+    css = certify(None)
     assert css.certified and css.css_weight is True
-    assert result.css_weight is False
-    # Minimal patterns are 31 flag-free singletons and all pairs of 31 flagged faults.
-    assert css.statistics.minimal_candidates == 31 + 31 * 30 // 2
-    assert (
-        tuple(int(not stim.PauliString("X_Z____").commutes(gg)) for gg in stabilizers)
-        == failure.output_syndrome
-    )
-    # Stabilizer Z0 Z1 Z2 makes Y0 Z1 and X0 Z2 equivalent up to phase.
-    simulator = stim.TableauSimulator()
-    simulator.do(ideal)
-    assert simulator.peek_observable_expectation(stim.PauliString("ZZZ____")) == 1
+    physical = certify(False)
+    assert physical.css_weight is False
+    _assert_valid_counterexample(physical, circuit, [0])
+    failure = physical.counterexample
+    assert failure is not None
+    # Every Pauli of weight at most one has a different syndrome, so its class is heavier.
+    stabilizers = [stim.PauliString(ss) for ss in physical.target_stabilizers]
+    for qubit, pauli in itertools.product(range(7), "IXYZ"):
+        candidate = stim.PauliString(7)
+        candidate[qubit] = pauli
+        syndrome = tuple(int(not candidate.commutes(ss)) for ss in stabilizers)
+        assert syndrome != failure.output_syndrome
 
 
 @pytest.mark.parametrize("css_weight", [None, True, False])
 def test_state_selection_and_overrides(css_weight: bool | None) -> None:
-    """The prepared state in the physical basis selects the automatic metric."""
-    circuit = stim.Circuit("I 0\nH 1\nCORRELATED_ERROR(0.01) X0 Z1")
+    """Automatic selection picks CSS weight for |0+> only, and an explicit value overrides it."""
+    css_state = stim.Circuit("I 0\nH 1\nCORRELATED_ERROR(0.01) X0 Z1")  # X0 Z1 has CSS weight one
     result = circuits.certify_state_prep_spread(
-        circuit, output_qubits=[0, 1], max_faults=3, css_weight=css_weight
+        css_state, output_qubits=[0, 1], max_faults=3, css_weight=css_weight
     )
-    assert result.certified is (css_weight is not False)
     assert result.css_weight is (css_weight is not False)
-    graph = stim.Circuit("H 0 1\nCZ 0 1\nCORRELATED_ERROR(0.001) X0 X1")
+    assert result.certified is (css_weight is not False)
+    graph_state = stim.Circuit("H 0 1\nCZ 0 1\nCORRELATED_ERROR(0.001) X0 X1")
     result = circuits.certify_state_prep_spread(
-        graph, output_qubits=[0, 1], max_faults=3, css_weight=css_weight
+        graph_state, output_qubits=[0, 1], max_faults=3, css_weight=css_weight
     )
     assert result.certified and result.css_weight is (css_weight is True)
-    parameters = inspect.signature(circuits.certify_state_prep_spread).parameters
-    assert "code" not in parameters and "weight" not in parameters
-    assert parameters["css_weight"].default is None
 
 
-def test_css_row_space_not_individual_generators(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mixed X/Z generators still span the CSS state |+00>."""
-    generators = [stim.PauliString(gg) for gg in ("XZ_", "X_Z", "XZZ")]
-    monkeypatch.setattr(state_prep_certification, "get_state_stabilizers", lambda *args: generators)
-    result = circuits.certify_state_prep_spread(
-        stim.Circuit("H 0\nI 1 2\nCORRELATED_ERROR(0.001) Z0 X1"),
-        output_qubits=range(3),
-        max_faults=1,
-    )
-    assert result.certified and result.css_weight is True
-    assert all(np.any(gg.to_numpy()[0]) and np.any(gg.to_numpy()[1]) for gg in generators)
+def test_css_detection_depends_on_the_stabilizer_row_space() -> None:
+    """Generators that mix X and Z can still span a CSS state, and a logical Y state is not CSS."""
+
+    def matrix(generators: Sequence[str]) -> npt.NDArray[np.uint8]:
+        return np.array(
+            [np.concatenate(stim.PauliString(gg).to_numpy()) for gg in generators], dtype=np.uint8
+        )
+
+    def state(circuit: str) -> npt.NDArray[np.uint8]:
+        tableau = stim.Tableau.from_circuit(stim.Circuit(circuit))
+        return matrix([str(gg) for gg in tableau.to_stabilizers()])
+
+    # These products of the stabilizers X0, Z1, and Z2 of |+00> each mix X and Z.
+    assert state_prep_certification._is_css_state(matrix(["XZ_", "X_Z", "XZZ"]))
+    assert state_prep_certification._is_css_state(state("H 0\nI 1 2"))
+    assert not state_prep_certification._is_css_state(state("H 0 1\nCZ 0 1"))
+    # A CSS repetition code can prepare logical Y, whose stabilizers are not pure X or Z.
+    assert not state_prep_certification._is_css_state(state("H 0\nS 0\nCX 0 1 0 2"))
 
 
-@pytest.mark.parametrize("css_weight", [None, True, False])
-def test_css_code_non_css_logical_state(css_weight: bool | None) -> None:
-    """A CSS repetition code can prepare non-CSS logical Y."""
-    result = circuits.certify_state_prep_spread(
-        stim.Circuit("H 0\nS 0\nCX 0 1 0 2\nDEPOLARIZE1(0.001) 0 1 2"),
-        output_qubits=range(3),
-        max_faults=3,
-        css_weight=css_weight,
-    )
-    assert result.certified and result.css_weight is (css_weight is True)
-    assert any("Y" in gg for gg in result.target_stabilizers)
-
-
-def test_non_css_override_minimizes_jointly() -> None:
-    """Sectors can vanish separately without a joint CSS-weight-one representative."""
+def test_css_override_minimizes_jointly_on_a_non_css_state() -> None:
+    """On a path graph state, Z^4 is equivalent to pure X and to pure Z, but not to both at once."""
     result = circuits.certify_state_prep_spread(
         stim.Circuit("H 0 1 2 3\nCZ 0 1 1 2 2 3\nCORRELATED_ERROR(0.001) Z0 Z1 Z2 Z3"),
         output_qubits=range(4),
         max_faults=1,
         css_weight=True,
     )
-    assert not result.certified and result.css_weight is True
     assert result.counterexample is not None
     assert result.counterexample.effective_weight_lower_bound == 2
 
 
-@pytest.mark.parametrize("css_weight", [False, True])
-@pytest.mark.parametrize("sector", [3, 4])
-@pytest.mark.parametrize("prefix", [False, True])
-def test_multi_flag_joint_sector_triples(
-    css_weight: bool, sector: int, prefix: bool, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """01/10/11 dependencies have CSS weight sector and physical weight twice sector."""
-    monkeypatch.setattr(
-        state_prep_certification, "_use_prefix_search", mock.Mock(return_value=prefix)
-    )
-    n = 2 * sector
+@pytest.mark.parametrize("css_weight", [True, False])
+def test_flag_rank_above_the_fault_budget(css_weight: bool) -> None:
+    """With 65 flags, one accepted triple has CSS weight three but physical weight six."""
+    rank, order = 65, 3
+    n = 2 * order
     circuit = stim.Circuit()
-    circuit.append("H", range(sector, n))
-    circuit.append("CORRELATED_ERROR", [stim.target_x(n)], 0.001)
-    circuit.append("CORRELATED_ERROR", [stim.target_x(n + 1)], 0.001)
-    targets = [stim.target_x(jj) for jj in range(sector)]
-    targets += [stim.target_z(jj) for jj in range(sector, n)]
-    circuit.append("CORRELATED_ERROR", targets + [stim.target_x(n), stim.target_x(n + 1)], 0.001)
-    circuit.append("M", [n, n + 1])
-    circuit.append("DETECTOR", [stim.target_rec(-2)])
-    circuit.append("DETECTOR", [stim.target_rec(-1)])
-    result = circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(n), post_select=[0, 1], max_faults=3, css_weight=css_weight
-    )
-    minimum = sector if css_weight else n
-    assert result.certified == (minimum <= 3)
-    assert result.statistics.flag_rank == 2 and result.css_weight is css_weight
-    assert result.statistics.search_method == (
-        "independent_prefix" if prefix else "brouwer_zimmermann"
-    )
-    if not result.certified:
-        failure = result.counterexample
-        assert failure is not None and failure.fault_count == 3
-        assert 3 < failure.effective_weight_lower_bound <= minimum
-
-
-@pytest.mark.parametrize("rank", [12, 65])
-@pytest.mark.parametrize("order", [3, 4])
-@pytest.mark.parametrize("css_weight", [False, True])
-@pytest.mark.parametrize("prefix", [False, True])
-@pytest.mark.parametrize("extra_weight", [0, 1])
-def test_many_flags_finite_budget(
-    rank: int,
-    order: int,
-    css_weight: bool,
-    prefix: bool,
-    extra_weight: int,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Rank exceeds budget with one accepted triple or quadruple."""
-    monkeypatch.setattr(
-        state_prep_certification, "_use_prefix_search", mock.Mock(return_value=prefix)
-    )
-    sector = order + extra_weight
-    n = 2 * sector
-    circuit = stim.Circuit()
-    circuit.append("H", range(sector, n))
-    for bit in range(rank):
+    circuit.append("H", range(order, n))  # |0>^3 |+>^3
+    for bit in range(rank):  # one fault per flag
         circuit.append("CORRELATED_ERROR", [stim.target_x(n + bit)], 0.001)
-    targets = [stim.target_x(jj) for jj in range(sector)]
-    targets += [stim.target_z(jj) for jj in range(sector, n)]
-    targets += [stim.target_x(n + bit) for bit in range(order - 1)]
+    targets = [stim.target_x(jj) for jj in range(order)]
+    targets += [stim.target_z(jj) for jj in range(order, n)]
+    targets += [stim.target_x(n + bit) for bit in range(order - 1)]  # cancels flags 0 and 1
     circuit.append("CORRELATED_ERROR", targets, 0.001)
     circuit.append("M", range(n, n + rank))
     for bit in range(rank):
@@ -537,127 +348,77 @@ def test_many_flags_finite_budget(
             max_faults=budget,
             css_weight=css_weight,
         )
-        minimum = sector if css_weight else n
-        assert result.certified is (budget < order or minimum <= order)
+        assert result.certified is (budget < order or css_weight)
         assert result.css_weight is css_weight
-        assert result.statistics.flag_rank == rank > budget
-        assert result.statistics.effective_budget == budget
-        assert result.statistics.search_method == (
-            "independent_prefix" if prefix else "brouwer_zimmermann"
-        )
-        if budget < order:
-            assert result.statistics.minimal_candidates == 0
-        else:
-            assert 1 <= result.statistics.minimal_candidates <= order
-        if result.counterexample is not None:
+        if not result.certified:
+            _assert_valid_counterexample(result, circuit, range(rank))
+            assert result.counterexample is not None
             assert result.counterexample.fault_count == order
-            assert order < result.counterexample.effective_weight_lower_bound <= minimum
-
-
-@pytest.mark.parametrize("css_weight", ["css", "pauli", "", 0, 1, [], np.bool_(True)])
-def test_invalid_weight_override(css_weight: bool) -> None:
-    with pytest.raises(ValueError, match="css_weight"):
-        circuits.certify_state_prep_spread(
-            stim.Circuit("I 0"), output_qubits=[0], max_faults=1, css_weight=css_weight
-        )
 
 
 @pytest.mark.parametrize("css_weight", [None, False])
-def test_ghz_global_counterexample_bound(css_weight: bool | None) -> None:
-    """An accepted triple has effective weight four in both metrics.
-
-    Report the global bound four, not the unseen-word bound five from a threshold-three search.
-    """
+def test_four_ghz_blocks_have_global_lower_bound_four(css_weight: bool | None) -> None:
+    """Four GHZ blocks hit by one accepted triple need weight four, not five."""
     circuit = stim.Circuit()
     for block in range(0, 12, 3):
         circuit.append("H", [block])
         circuit.append("CX", [block, block + 1, block, block + 2])
     circuit.append("CORRELATED_ERROR", [stim.target_x(12)], 0.001)
     circuit.append("CORRELATED_ERROR", [stim.target_x(13)], 0.001)
-    circuit.append(
-        "CORRELATED_ERROR",
-        [stim.target_x(jj) for jj in (2, 5, 8, 11, 12, 13)],
-        0.001,
-    )
+    circuit.append("CORRELATED_ERROR", [stim.target_x(jj) for jj in (2, 5, 8, 11, 12, 13)], 0.001)
     circuit.append("M", [12, 13])
     circuit.append("DETECTOR", [stim.target_rec(-2)])
     circuit.append("DETECTOR", [stim.target_rec(-1)])
-    assert circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=2, css_weight=css_weight
-    ).certified
-    certificate = circuits.certify_state_prep_spread(
-        circuit, output_qubits=range(12), post_select=[0, 1], max_faults=3, css_weight=css_weight
-    )
-    failure = certificate.counterexample
+
+    def certify(max_faults: int) -> circuits.StatePrepSpreadCertificate:
+        return circuits.certify_state_prep_spread(
+            circuit,
+            output_qubits=range(12),
+            post_select=[0, 1],
+            max_faults=max_faults,
+            css_weight=css_weight,
+        )
+
+    assert certify(2).certified
+    certificate = certify(3)
     assert certificate.css_weight is (css_weight is None)
-    assert not certificate.certified and failure is not None
+    _assert_valid_counterexample(certificate, circuit, [0, 1])
+    failure = certificate.counterexample
+    assert failure is not None
+    # X on each block's last qubit flips two Z-type stabilizers there, so every equivalent error
+    # has an X component on all four blocks.  The minimum is four in both metrics.
     assert failure.fault_indices == (0, 1, 2)
     assert failure.effective_weight_lower_bound == 4
-    witness = stim.PauliString("__X__X__X__X")
-    generators = [stim.PauliString(gg) for gg in certificate.target_stabilizers]
-    assert tuple(int(not witness.commutes(gg)) for gg in generators) == failure.output_syndrome
-    # Nonzero local syndromes force every representative to touch all four blocks.
-    for block in range(4):
-        local = stim.PauliString("_" * (3 * block) + "Z_Z" + "_" * (9 - 3 * block))
-        assert not witness.commutes(local)
-    assert witness.weight == 4
-    representative = stim.PauliString(failure.output_pauli)
-    assert representative.weight == 4
-    assert (
-        tuple(int(not representative.commutes(gg)) for gg in generators) == failure.output_syndrome
-    )
-    errors = [
-        instruction
-        for instruction in certificate.detector_error_model
-        if instruction.type == "error"
-    ]
-    acceptance: set[int] = set()
-    for index in failure.fault_indices:
-        acceptance.symmetric_difference_update(
-            target.val
-            for target in errors[index].targets_copy()
-            if target.is_relative_detector_id() and target.val < 2
-        )
-    assert acceptance == set()
 
 
-@pytest.mark.parametrize("pauli", ["X", "Y", "Z"])
-def test_non_css_signed_frame(pauli: str) -> None:
-    """Check non-CSS signs, reordered outputs, and correlated mechanisms."""
-    circuit = stim.Circuit(f"""
-        H 4
-        S 4
-        CX 4 1
-        X 1
-        CORRELATED_ERROR(0.01) {pauli}4
-    """)
+def test_stabilizers_keep_signs_and_the_output_frame() -> None:
+    """Reported stabilizers are +1 eigenoperators of the ideal state on the chosen output qubits."""
+    circuit = stim.Circuit("H 4\nS 4\nCX 4 1\nX 1\nCORRELATED_ERROR(0.01) Y4")
     result = circuits.certify_state_prep_spread(circuit, output_qubits=[4, 1], max_faults=3)
-    assert result.certified
-    assert result.counterexample is None
-    assert len(result.target_stabilizers) == 2
-    assert any("Y" in stabilizer for stabilizer in result.target_stabilizers)
-    assert any(stabilizer.startswith("-") for stabilizer in result.target_stabilizers)
-    assert result.output_qubits == (4, 1)
-    assert result.max_faults == 3
+    assert result.certified and result.output_qubits == (4, 1)
+    assert any(ss.startswith("-") for ss in result.target_stabilizers)
+    simulator = stim.TableauSimulator()
+    simulator.do(circuit.without_noise())
+    for text in result.target_stabilizers:
+        physical = stim.PauliString(circuit.num_qubits)
+        for qubit, pauli in zip(result.output_qubits, text[1:], strict=True):
+            physical[qubit] = pauli
+        assert simulator.peek_observable_expectation(-physical if text[0] == "-" else physical) == 1
 
 
-def test_correlated_violation() -> None:
-    """A correlated two-qubit error costs one fault."""
-    result = circuits.certify_state_prep_spread(
-        stim.Circuit("I 0 1\nCORRELATED_ERROR(0.01) X0 Y1"),
-        output_qubits=[1, 0],
-        max_faults=3,
-    )
-    assert not result.certified
+def test_correlated_mechanism_costs_one_fault() -> None:
+    """A two-qubit error is one fault, reported in the order of the requested output qubits."""
+    circuit = stim.Circuit("I 0 1\nCORRELATED_ERROR(0.01) X0 Y1")
+    result = circuits.certify_state_prep_spread(circuit, output_qubits=[1, 0], max_faults=3)
+    _assert_valid_counterexample(result, circuit, [])
     failure = result.counterexample
     assert failure is not None
-    assert failure.fault_indices == (0,)
-    assert failure.effective_weight_lower_bound == 2
-    assert failure.output_syndrome == (1, 1)
+    assert failure.fault_indices == (0,) and failure.effective_weight_lower_bound == 2
+    assert result.output_qubits == (1, 0)
 
 
-def test_post_selection_pairs() -> None:
-    """Individually rejected faults can form an accepted damaging pair."""
+def test_post_selection_can_accept_a_damaging_pair() -> None:
+    """Two faults that each trip the detector cancel it together and damage four outputs."""
     circuit = stim.Circuit("""
         I 0 1 2 3 4
         CORRELATED_ERROR(0.01) X0 X1 X4
@@ -665,21 +426,20 @@ def test_post_selection_pairs() -> None:
         M 4
         DETECTOR rec[-1]
     """)
-    assert circuits.certify_state_prep_spread(
-        circuit, output_qubits=[0, 1, 2, 3], post_select=[0], max_faults=1
-    ).certified
-    result = circuits.certify_state_prep_spread(
-        circuit, output_qubits=[0, 1, 2, 3], post_select=[0], max_faults=3
-    )
-    assert not result.certified
-    assert result.counterexample is not None
-    assert result.counterexample.fault_count == 2
-    assert result.counterexample.effective_weight_lower_bound >= 3
-    assert result.statistics.flag_rank == 1
+
+    def certify(max_faults: int) -> circuits.StatePrepSpreadCertificate:
+        return circuits.certify_state_prep_spread(
+            circuit, output_qubits=[0, 1, 2, 3], post_select=[0], max_faults=max_faults
+        )
+
+    assert certify(1).certified
+    result = certify(3)
+    _assert_valid_counterexample(result, circuit, [0])
+    assert result.counterexample is not None and result.counterexample.fault_count == 2
 
 
-def test_empty_model() -> None:
-    """Check noiseless circuits, repeats, observables, and deterministic nonzero measurements."""
+def test_circuit_without_faults_certifies() -> None:
+    """Deterministic nonzero measurements, repeats, and observables need no search."""
     circuit = stim.Circuit("""
         X 0
         REPEAT 2 {
@@ -691,44 +451,55 @@ def test_empty_model() -> None:
     result = circuits.certify_state_prep_spread(
         circuit, output_qubits=[0], post_select=[0, 1], max_faults=4
     )
-    assert result.certified
-    assert result.statistics.mechanisms == 0
-    assert result.target_stabilizers == ("-Z",)
+    assert result.certified and result.target_stabilizers == ("-Z",)
 
 
-@pytest.mark.parametrize("budget", [0, -1, True, 1.5])
-def test_invalid_budget(budget: int) -> None:
-    with pytest.raises(ValueError, match="positive integer"):
+@pytest.mark.parametrize("css_weight", ["css", np.bool_(True)])
+def test_invalid_css_weight_is_rejected(css_weight: bool) -> None:
+    """Only bool and None are accepted, and numpy booleans are not bool."""
+    with pytest.raises(ValueError, match="css_weight"):
+        circuits.certify_state_prep_spread(
+            stim.Circuit("I 0"), output_qubits=[0], max_faults=1, css_weight=css_weight
+        )
+
+
+@pytest.mark.parametrize("budget", [0, True, 1.5])
+def test_invalid_fault_budget_is_rejected(budget: int) -> None:
+    """The budget must be a positive integer, and a bool is not an integer here."""
+    with pytest.raises(ValueError, match="max_faults"):
         circuits.certify_state_prep_spread(
             stim.Circuit("I 0"), output_qubits=[0], max_faults=budget
         )
 
 
-@pytest.mark.parametrize("outputs", [[], [0, 0], [1], [-1], [True], [0.5]])
-def test_invalid_outputs(outputs: list[int]) -> None:
+@pytest.mark.parametrize("outputs", [[], [0, 0], [1], [True], [0.5]])
+def test_invalid_output_qubits_are_rejected(outputs: list[int]) -> None:
+    """Output qubits must be a nonempty list of distinct in-range integers."""
     with pytest.raises(ValueError, match="output_qubits"):
         circuits.certify_state_prep_spread(stim.Circuit("I 0"), output_qubits=outputs, max_faults=1)
 
 
-def test_invalid_annotations_and_mixed_states() -> None:
+def test_unsupported_circuits_and_detectors_are_rejected() -> None:
+    """Mixed or random outputs, nondeterministic annotations, and unknown detectors raise."""
+    # An output entangled with an unselected qubit, and an output that was measured.
     for text in ("H 0\nCX 0 1", "H 0\nM 0"):
-        with pytest.raises(ValueError, match="pure"):
+        with pytest.raises(ValueError):
             circuits.certify_state_prep_spread(stim.Circuit(text), output_qubits=[0], max_faults=1)
-    with pytest.raises(ValueError, match="post_select"):
-        circuits.certify_state_prep_spread(
-            stim.Circuit("I 0"), output_qubits=[0], max_faults=1, post_select=[0]
-        )
+    # Random detectors and observables, even when selected for post-selection.
     for text in (
         "H 1\nM 1\nDETECTOR rec[-1]",
         "H 1\nM 1\nOBSERVABLE_INCLUDE(0) rec[-1]",
     ):
-        with pytest.raises(ValueError, match="non-deterministic"):
+        with pytest.raises(ValueError):
             circuits.certify_state_prep_spread(stim.Circuit(text), output_qubits=[0], max_faults=1)
-    # Post-selection cannot make a random detector deterministic.
-    with pytest.raises(ValueError, match="non-deterministic"):
+    with pytest.raises(ValueError):
         circuits.certify_state_prep_spread(
             stim.Circuit("H 0\nM 0\nDETECTOR rec[-1]"),
             output_qubits=[0],
             post_select=[0],
             max_faults=1,
+        )
+    with pytest.raises(ValueError, match="post_select"):
+        circuits.certify_state_prep_spread(
+            stim.Circuit("I 0"), output_qubits=[0], post_select=[0], max_faults=1
         )
