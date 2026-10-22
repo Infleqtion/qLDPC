@@ -13,12 +13,11 @@ import stim
 
 from qldpc import codes, math
 
-from .._common import restrict_to_qubits
+from .._common import get_postselection_masks, restrict_to_qubits
 from ..bookkeeping import DetectorRecord, QubitIDs
 from ..common import get_pauli_product_measurements, get_unaddressed_measurements
 from ..encoding import get_logical_state_stabilizers, get_state_stabilizers
 from ..noise_model import DepolarizingNoiseModel, NoiseModel, as_noiseless_circuit
-from ._postselection import get_postselection_masks
 
 ####################################################################################################
 # state preparation diagnostics

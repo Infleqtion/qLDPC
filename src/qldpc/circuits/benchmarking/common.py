@@ -15,8 +15,8 @@ from qldpc import codes, decoders
 from qldpc.codes.distance import DistanceMethod
 from qldpc.objects import Pauli
 
+from .._common import get_postselection_masks
 from ..bookkeeping import DetectorRecord
-from ._postselection import get_postselection_masks
 
 ####################################################################################################
 # exact circuit fault distance
