@@ -83,6 +83,7 @@ def test_compile_interblock_pair_steane_truth_table(
 
     logical = tuple(int(value) for value in code.get_logical_ops(basis)[0].tolist())
     assert compiled.resolved_operators == (logical, logical)
+    assert compiled.resources.syndrome_rounds == 2
 
 
 def test_compile_interblock_pair_matches_existing_public_builder() -> None:
