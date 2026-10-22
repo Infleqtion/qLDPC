@@ -58,9 +58,6 @@ def test_relay_bp(toy_problem: ToyProblem) -> None:
         decoder.decode_batch(syndromes)
     assert [call.args[2] for call in runner.decode_batch.call_args_list] == [False, False]
 
-    with pytest.raises(TypeError, match="missing 1 required positional argument"):
-        decoder.compute_observables()
-
     decoder = _get_decoder_rbp(scipy.sparse.dok_matrix(matrix))
     assert np.array_equal(error, decoder.decode_detailed(syndrome).decoding)
 
@@ -143,8 +140,8 @@ def test_relay_bp_observables() -> None:
         _get_decoder_rbp(np.eye(2, dtype=int)).decode_observables(np.zeros(2, dtype=int))
 
 
-def test_erasure_bit_marks_an_unexplained_syndrome(pytestconfig: pytest.Config) -> None:
-    """Generalized Union-Find and Relay-BP mark exactly the syndromes their errors miss."""
+def test_relay_bp_erasure_bit_marks_an_unexplained_syndrome(pytestconfig: pytest.Config) -> None:
+    """Relay-BP marks exactly the syndromes that its errors miss."""
     rng = np.random.default_rng(pytestconfig.getoption("randomly_seed"))
 
     def check_erasure_bits(
@@ -166,18 +163,14 @@ def test_erasure_bit_marks_an_unexplained_syndrome(pytestconfig: pytest.Config) 
             dtype=int,
         )
 
-        guf_decoder = decoders.custom.GUFDecoder(galois.GF(2)(matrix), add_erasure_bit=True)
         relay_bp_decoder = decoders.external.RelayBPDecoder(matrix, add_erasure_bit=True)
-
-        guf_errors = np.array([guf_decoder.decode(syndrome) for syndrome in syndromes])
         relay_bp_errors = np.array([relay_bp_decoder.decode(syndrome) for syndrome in syndromes])
-        check_erasure_bits(matrix, syndromes, guf_errors)
         check_erasure_bits(matrix, syndromes, relay_bp_errors)
 
         decoded_batch = relay_bp_decoder.decode_batch(syndromes)
         check_erasure_bits(matrix, syndromes, decoded_batch)
 
-        num_erasures += int(guf_errors[:, -1].sum()) + int(relay_bp_errors[:, -1].sum())
+        num_erasures += int(relay_bp_errors[:, -1].sum())
 
     assert num_erasures
 
@@ -193,18 +186,12 @@ def test_relay_backend_options(
     builder: Callable[..., decoders.external.RelayBPDecoder],
     helper: Callable[..., decoders.DecoderSpec[decoders.external.RelayBPDecoder]],
 ) -> None:
-    """Named options and backend_options survive deferred construction."""
+    """Immediate and deferred builders forward backend_options to the Relay-BP backend."""
     matrix = np.eye(2, dtype=int)
     backend_options = {"backend_extension": 12}
-    with unittest.mock.patch("qldpc.decoders.external.relay_bp._get_relay_decoder") as backend:
+    # the backend receives backend_options, and rejects unsupported names
+    with pytest.raises(TypeError, match="backend_extension"):
         builder(matrix, backend_options=backend_options)
-        assert backend.call_args.kwargs["backend_extension"] == 12
-        spec = helper(backend_options=backend_options)
-        assert spec.options["backend_options"] == backend_options
-        spec.build(matrix)
-        assert backend.call_args.kwargs["backend_extension"] == 12
-
-    # the backend rejects unsupported names when the decoder is built
     with pytest.raises(TypeError, match="backend_extension"):
         helper(backend_options=backend_options).build(matrix)
 

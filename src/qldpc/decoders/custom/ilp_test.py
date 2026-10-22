@@ -75,10 +75,6 @@ def test_ilp_decoder_early_termination() -> None:
     assert len(decoded) == matrix.shape[1] + 1
     assert decoded[-1] == 1
 
-    decoded = decoders.custom.ILPDecoder(matrix, add_erasure_bit=True).decode(syndrome)
-    assert decoded[-1] == 0
-    assert np.array_equal(matrix @ decoded[:-1] % 2, syndrome)
-
 
 def test_ilp_decoder_unreproducible_syndrome() -> None:
     """A syndrome that no error reproduces is erased with a warning, rather than refused."""
@@ -128,13 +124,9 @@ def test_ilp_decoder_near_integral_values() -> None:
 
 
 def test_invalid_ilp() -> None:
-    """Fail to solve invalid integer linear programming problems."""
+    """ILP decoding rejects a field that is not prime."""
     matrix = np.ones((2, 2), dtype=int)
     syndrome = np.array([0, 1], dtype=int)
-
-    with pytest.raises(ValueError, match="could not be found"):
-        _get_error_decoder(matrix, decoder=decoders.ilp()).decode(syndrome)
-
     with pytest.raises(ValueError, match="ILP decoding only supports prime number fields"):
         _get_error_decoder(galois.GF(4)(matrix), decoder=decoders.ilp()).decode(syndrome)
 

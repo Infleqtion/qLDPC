@@ -84,7 +84,7 @@ def test_validate_decoder_output() -> None:
         np.array([0, 2, 1]), 2, 1, field, "A decoder returned"
     )
 
-    with pytest.raises(ValueError, match=r"shape \(2,\).+2 value\(s\) and 1 erasure flag"):
+    with pytest.raises(ValueError, match=r"expected shape \(3,\)"):
         observable_decoders.validate_decoder_output(
             np.array([0, 1]), 2, 1, field, "A decoder returned"
         )

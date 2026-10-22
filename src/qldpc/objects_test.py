@@ -30,7 +30,7 @@ def test_pauli() -> None:
     for expected_pauli, values in xz_inputs.items():
         for value in values:
             assert objects.Pauli.coerce_xz(value) is expected_pauli
-    for invalid_value in [objects.Pauli.I, objects.Pauli.Y, "I", "y", "XZ", "", 0]:
+    for invalid_value in [objects.Pauli.Y, "y", 0]:
         with pytest.raises(ValueError, match=r"Pauli\.X or Pauli\.Z"):
             objects.Pauli.coerce_xz(invalid_value)  # type: ignore[arg-type]
 

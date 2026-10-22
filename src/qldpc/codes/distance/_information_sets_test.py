@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import itertools
-from unittest import mock
 
 import numpy as np
 import numpy.typing as npt
@@ -27,15 +26,8 @@ PARTIAL_BASIS = np.hstack(
 EVEN_BASIS = np.array([[1, 1, 0, 0], [0, 1, 1, 0], [1, 0, 0, 1]], dtype=np.uint8)
 
 
-def test_binary_row_reduction_and_information_sets() -> None:
-    """Binary elimination transforms quotient labels and retains the residual rank."""
-    matrix = np.array([[0, 1, 1], [1, 1, 0]], dtype=np.uint8)
-    labels = np.eye(2, dtype=np.uint8)
-    reduced, reduced_labels, pivots = binary._row_reduce_binary(matrix, labels)
-    np.testing.assert_array_equal(reduced, [[1, 0, 1], [0, 1, 1]])
-    np.testing.assert_array_equal(reduced_labels, [[1, 1], [1, 0]])
-    np.testing.assert_array_equal(pivots, [0, 1])
-
+def test_information_set_packing() -> None:
+    """Information sets pack full blocks first and retain the residual rank."""
     information_sets = _information_sets._get_information_set_generators(
         PARTIAL_BASIS, np.eye(3, dtype=np.uint8)
     )
@@ -138,18 +130,16 @@ def test_overlapping_family_guards() -> None:
         _information_sets._get_overlapping_family(shortened, None, disjoint, upper_bound=26) is None
     )
 
-    # Repeatedly rediscovering the same pivots must terminate without selecting a family.
-    basis = basis[:, :40]
-    first = _information_sets._get_disjoint_family(basis, None).information_sets[0]
-    family = _information_sets._BasisFamily.from_information_sets(
-        [first], dimension=25, weight_divisor=1
+    # Only three pivot pairs exist, so later attempts rediscover them.  The search must terminate
+    # without a replacement that beats the disjoint family.
+    small = np.array([[1, 1, 0], [0, 1, 1]], dtype=np.uint8)
+    disjoint = _information_sets._get_disjoint_family(small, None)
+    assert (
+        _information_sets._get_overlapping_family(
+            small, None, disjoint, upper_bound=2, minimum_work=0
+        )
+        is None
     )
-    with mock.patch.object(
-        _information_sets,
-        "_row_reduce_binary",
-        return_value=(first.generators, first.labels, first.pivots),
-    ):
-        assert _information_sets._get_overlapping_family(basis, None, family, upper_bound=8) is None
 
 
 def _assert_certificate_bounds_unvisited_words(

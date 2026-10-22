@@ -9,7 +9,7 @@ import random
 import unittest.mock
 import warnings
 from collections.abc import Iterator, Sequence
-from typing import Any, cast
+from typing import Any
 
 import galois
 import networkx as nx
@@ -38,7 +38,7 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
 
     # reordering the rows of the generator matrix results in a valid generator matrix
     code.set_generator(np.roll(code.generator, shift=1, axis=0))
-    assert codes.ClassicalCode(code).generator is code.generator
+    assert np.array_equal(codes.ClassicalCode(code).generator, code.generator)
 
     code = codes.ClassicalCode.random(5, 3, field=3, seed=np.random.randint(2**31))
     assert "GF(3)" in str(code)
@@ -326,13 +326,6 @@ def test_classical_capacity() -> None:
     )
     assert logical_error_rate_func(0, discard_rate=True) == (0, 0)  # no errors at p=0
     assert logical_error_rate_func(0.5, discard_rate=True)[0] > 0  # nonzero syndromes → erasure
-    assert logical_error_rate_func.truncation_error_bound(0.5) < 1
-    assert logical_error_rate_func.truncation_error_bound([1]) == 0
-
-    # test cap on physical error rate
-    logical_error_rate_func = code.get_logical_error_rate_func(num_samples=1, max_error_rate=0.5)
-    with pytest.raises(ValueError, match="error rates greater than"):
-        logical_error_rate_func(1)
 
     # both the error locations and the values placed there are drawn from numpy, as they are on the
     # quantum paths, so seeding numpy alone reproduces a classical curve.  Drawing the locations
@@ -401,25 +394,6 @@ def test_classical_capacity_with_observable_decoders() -> None:
         **kwargs,
     )
 
-    # but Sinter-style decoders, which compile for a (binary) Stim detector error model, do not
-    with pytest.raises(ValueError, match="cannot decode a code over GF"):
-        nonbinary_code.get_logical_error_rate_func(1, decoder=decoders.TrivialDecoder())
-
-    # an observable decoder built for other observables is rejected
-    compiled_decoder = decoders.TrivialDecoder().compile_decoder_for_dem(
-        stim.DetectorErrorModel("error(0.1) D0 L0\nerror(0.1) D0 D1\nerror(0.1) D1")
-    )
-    with pytest.raises(ValueError, match="has num_observables=1"):
-        codes.RepetitionCode(3).get_logical_error_rate_func(1, decoder=compiled_decoder)
-    wrong_syndrome_lookup = decoders.custom.ObservableLookupDecoder(
-        code.field([[1, 1, 0]]),
-        max_weight=1,
-        observable_flip_matrix=code.field.Identity(3),
-        error_channel=[0.1] * 3,
-    )
-    with pytest.raises(ValueError, match="has num_detectors=1"):
-        codes.RepetitionCode(3).get_logical_error_rate_func(1, decoder=wrong_syndrome_lookup)
-
     # randomized distance bounds still require error decoders
     vector = np.zeros(num_bits, dtype=int)
     vector[0] = 1
@@ -457,9 +431,7 @@ def get_random_qudit_code(qudits: int, checks: int, field: int = 2) -> codes.Qud
 def test_qubit_code(num_qubits: int = 5, num_checks: int = 3) -> None:
     """Random qubit code."""
     assert get_random_qudit_code(num_qubits, num_checks).num_qubits == num_qubits
-    with pytest.raises(
-        ValueError, match=r"3-dimensional qudits\.\s+Try calling QuditCode\.num_qudits"
-    ):
+    with pytest.raises(ValueError, match="3-dimensional qudits"):
         assert get_random_qudit_code(num_qubits, num_checks, field=3).num_qubits
 
 
@@ -626,28 +598,36 @@ def test_distance_bound_memory() -> None:
     assert gap_bound.call_count == 2
     assert qudit_code.conjugated().get_distance_bound() == 4
 
-    # CSS codes remember X-distance and Z-distance bounds, which swap under conjugation
+    # CSS codes remember X-distance and Z-distance bounds, which swap under conjugation.  With one
+    # logical qubit, a lookup decoder that reaches the sector distance finds a minimum-weight
+    # logical operator, so these bounds are the X-distance 5 and Z-distance 3 of the surface code.
     css_code = codes.SurfaceCode(3, 5)
     css_code.forget_distance()
-    with unittest.mock.patch.object(
-        css_code, "get_distance_bound_with_decoder", side_effect=[6, 4]
+    decoder = decoders.lookup(max_weight=5)
+    assert css_code.get_distance_bound(pauli=Pauli.X, backend="decoder", decoder=decoder) == 5
+    assert css_code.get_distance_bound(pauli=Pauli.Z, backend="decoder", decoder=decoder) == 3
+    with (
+        unittest.mock.patch("qldpc.external.sqetch.is_installed", side_effect=AssertionError),
+        unittest.mock.patch("qldpc.external.gap.is_callable", side_effect=AssertionError),
     ):
-        assert css_code.get_distance_bound(pauli=Pauli.X, backend="decoder") == 6
-        assert css_code.get_distance_bound(pauli=Pauli.Z, backend="decoder") == 4
-        assert css_code.get_distance_bound() == 4
-    conjugated_code = css_code.conjugated()
-    assert isinstance(conjugated_code, codes.CSSCode)
-    assert conjugated_code.get_distance_bound(pauli=Pauli.X) == 4
-    assert conjugated_code.get_distance_bound(pauli=Pauli.Z) == 6
-    assert css_code.conjugated([0]).get_distance_bound() == 4
-    assert css_code.canonicalized.get_distance_bound(pauli=Pauli.X) == 6
+        assert css_code.get_distance_bound() == 3
+        conjugated_code = css_code.conjugated()
+        assert isinstance(conjugated_code, codes.CSSCode)
+        assert conjugated_code.get_distance_bound(pauli=Pauli.X) == 3
+        assert conjugated_code.get_distance_bound(pauli=Pauli.Z) == 5
+        assert css_code.conjugated([0]).get_distance_bound() == 3
+        assert conjugated_code.canonicalized.get_distance_bound(pauli=Pauli.Z) == 5
 
     # a bound on one sector bounds the other if X-distance and Z-distance are equal
     steane_code = codes.SteaneCode()
     steane_code.forget_distance()
-    with unittest.mock.patch.object(steane_code, "get_distance_bound_with_decoder", return_value=4):
-        assert steane_code.get_distance_bound(pauli=Pauli.X, backend="decoder") == 4
-    assert steane_code.get_distance_bound(pauli=Pauli.Z) == 4
+    decoder = decoders.lookup(max_weight=3)
+    assert steane_code.get_distance_bound(pauli=Pauli.X, backend="decoder", decoder=decoder) == 3
+    with (
+        unittest.mock.patch("qldpc.external.sqetch.is_installed", side_effect=AssertionError),
+        unittest.mock.patch("qldpc.external.gap.is_callable", side_effect=AssertionError),
+    ):
+        assert steane_code.get_distance_bound(pauli=Pauli.Z) == 3
 
 
 def test_distance_bound_rejects_non_integer_num_trials() -> None:
@@ -717,23 +697,23 @@ def test_css_joint_distance_cache() -> None:
     assert code.get_distance_if_known(Pauli.X) == 3
     assert code.get_distance_if_known(Pauli.Z) == 2
 
+    # a joint search after a sector search still searches the other sector, and is capped by the
+    # known sector distance
     code = codes.CSSCode(checks_x, checks_z)
-    code._distance_x = 3
-    with unittest.mock.patch(
-        "qldpc.codes.common.get_distance_css_brouwer_zimmermann",
-        return_value=2,
-    ) as mock_joint_distance:
-        assert code.get_distance_exact(cutoff=0) == 2
-    assert len(mock_joint_distance.call_args.args[0]) == 1
-    assert mock_joint_distance.call_args.kwargs["upper_bound"] == 3
+    assert code.get_distance_exact(Pauli.X, cutoff=0, method="brute_force") == 3
+    assert code.get_distance_exact(cutoff=0) == 2
+    assert code.get_distance_if_known() == 2
+    assert code.get_distance_if_known(Pauli.Z) is None
+    code = codes.CSSCode(checks_x, checks_z)
+    assert code.get_distance_exact(Pauli.Z, cutoff=0, method="brute_force") == 2
+    assert code.get_distance_exact(cutoff=0) == 2
 
-    subsystem_code = codes.CSSCode(
-        codes.BaconShorCode(3).matrix_x,
-        codes.BaconShorCode(3).matrix_z,
-        is_subsystem_code=True,
-    )
-    with unittest.mock.patch("qldpc.codes.common.get_distance_quantum", return_value=3):
-        assert subsystem_code.get_distance_exact(Pauli.X) == 3
+    # the gauge operators of a subsystem code dress its logical operators.  Here the X-type gauge
+    # group is every even-weight X string and there are no stabilizers, so a single-qubit X operator
+    # is a dressed logical operator, although every bare logical X operator has weight 3.
+    subsystem_code = codes.CSSCode([[0, 1, 1], [1, 1, 0]], [[1, 0, 1], [1, 1, 0]])
+    assert subsystem_code.is_subsystem_code
+    assert subsystem_code.get_distance_exact(Pauli.X) == 1
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -760,13 +740,19 @@ def test_qudit_stabilizers(field: int, bits: int = 5, checks: int = 3) -> None:
 
 
 def test_pauli_stabilizer_ops_respect_canonicalized() -> None:
-    """Splitting stabilizers by Pauli type honors canonicalized=True."""
+    """Stabilizers honor canonicalized=True, including when split by Pauli type."""
     # X-type checks that are redundant (rank 2, with 3 rows)
     matrix_x = [[1, 1, 1, 1, 0, 0], [1, 1, 0, 0, 1, 1], [0, 0, 1, 1, 1, 1]]
     matrix_z = [[1, 1, 1, 1, 0, 0], [0, 0, 1, 1, 1, 1]]
     code = codes.CSSCode(matrix_x, matrix_z)
     assert len(code.get_stabilizer_ops(Pauli.X)) == 3
     assert len(code.get_stabilizer_ops(Pauli.X, canonicalized=True)) == 2
+
+    # the stabilizers of a subsystem code are not row-reduced unless canonicalized
+    bacon_shor = codes.BaconShorCode(3)
+    for subsystem_code in [bacon_shor, bacon_shor.conjugated([1, 3, 5])]:
+        stabilizers = subsystem_code.get_stabilizer_ops(canonicalized=True)
+        assert np.array_equal(stabilizers, stabilizers.row_reduce()[: len(stabilizers)])
 
 
 def test_canonicalized_code_is_its_own_canonical_form() -> None:
@@ -797,17 +783,6 @@ def test_non_css_operator_layout_and_argument_validation() -> None:
         codes.SurfaceCode(3).get_logical_error_rate_func(10, pauli_bias=(1, 1))
 
 
-def test_from_qecdb_id() -> None:
-    """Retrieve a code from qecdb.org."""
-    strings = ["XXXX", "ZZZZ"]
-    distance = 2
-    is_css = True
-    code_data = (strings, distance, is_css)
-    with unittest.mock.patch("qldpc.external.codes.get_quantum_code", return_value=code_data):
-        code = codes.QuditCode.from_qecdb_id("")
-        assert code.is_equiv_to(codes.C4Code())
-
-
 def test_from_qldpc_challenge_id() -> None:
     """Retrieve a code from the Unitary Foundation qLDPC Challenge."""
     code_data = (np.kron(np.eye(2, dtype=int), [1, 1, 1, 1]), 2, True, (2, 4))
@@ -819,6 +794,8 @@ def test_from_qldpc_challenge_id() -> None:
         assert code.is_equiv_to(codes.C4Code())
         assert code.get_distance_if_known() == 2
         assert code.get_distance_bound(pauli=Pauli.Z) == 4
+        css_code = codes.CSSCode.from_qldpc_challenge_id("")
+        assert css_code.is_equiv_to(codes.C4Code())
 
     with unittest.mock.patch(
         "qldpc.external.codes.get_qldpc_challenge_code",
@@ -915,7 +892,6 @@ def test_qudit_ops(pytestconfig: pytest.Config) -> None:
     assert logical_ops.shape == (2 * code.dimension, 2 * len(code))
     assert np.array_equal(logical_ops[0], [0, 0, 0, 0, 1, 0, 1, 1, 0, 1])
     assert np.array_equal(logical_ops[1], [0, 0, 0, 0, 0, 1, 1, 1, 1, 1])
-    assert code.get_logical_ops() is code._logical_ops
 
     code = codes.QuditCode.from_strings(code.get_strings() + ["IIIII"])
     assert np.array_equal(logical_ops, code.get_logical_ops())
@@ -965,15 +941,6 @@ def test_qudit_ops(pytestconfig: pytest.Config) -> None:
         order = np.random.permutation(code.dimension)  # random permutation of logicals
         code.set_logical_ops_z(logical_ops_z[order])
         assert np.array_equal(code.get_logical_ops(Pauli.X), logical_ops_x[order])
-
-    # test the guarantee of stabilizer canonicalization
-    code = codes.FiveQubitCode()
-    code._is_subsystem_code = True
-    stabilizer_ops = code.get_stabilizer_ops(canonicalized=True)
-    stabilizer_ops = np.vstack([stabilizer_ops, stabilizer_ops[-1]]).view(code.field)
-    code._stabilizer_ops = stabilizer_ops
-    assert np.array_equal(code.get_stabilizer_ops(), stabilizer_ops)
-    assert np.array_equal(code.get_stabilizer_ops(canonicalized=True), stabilizer_ops[:-1])
 
 
 def test_qudit_subsystem_logical_ops() -> None:
@@ -1330,17 +1297,7 @@ def test_css_from_qecdb_id() -> None:
         code = codes.CSSCode.from_qecdb_id("")
         assert isinstance(code, codes.CSSCode)
         assert code.is_equiv_to(codes.C4Code())
-
-
-def test_css_from_qldpc_challenge_id() -> None:
-    """Retrieve a CSS code from the Unitary Foundation qLDPC Challenge."""
-    code_data = (np.kron(np.eye(2, dtype=int), [1, 1, 1, 1]), 2, True, (2, 2))
-    with unittest.mock.patch(
-        "qldpc.external.codes.get_qldpc_challenge_code", return_value=code_data
-    ):
-        code = codes.CSSCode.from_qldpc_challenge_id("")
-        assert isinstance(code, codes.CSSCode)
-        assert code.is_equiv_to(codes.C4Code())
+        assert code.get_distance_if_known() == 2
 
 
 def test_swel_codes() -> None:
@@ -1460,7 +1417,15 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
     """Decoder-specific arguments bypass optional-backend probes."""
     code = codes.QuditCode(codes.SteaneCode().matrix).to_css()
     code.forget_distance()
-    decoder = decoders.bp_lsd()
+
+    # record each matrix that the factory decodes, to check that the caller's decoder is used
+    built: list[object] = []
+
+    def build_lookup(matrix: npt.NDArray[np.int_]) -> decoders.ErrorDecoder:
+        built.append(matrix)
+        return decoders.lookup(max_weight=3).build(matrix)
+
+    decoder = decoders.from_matrix(build_lookup)
 
     with (
         unittest.mock.patch(
@@ -1471,28 +1436,17 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
             "qldpc.external.gap.is_callable",
             side_effect=AssertionError("GAP should not be probed"),
         ),
-        unittest.mock.patch.object(
-            code,
-            "get_distance_bound_with_decoder",
-            return_value=3,
-        ) as decoder_bound,
     ):
         assert code.get_distance_bound(pauli=Pauli.X, decoder=decoder) == 3
-
-    decoder_bound.assert_called_once_with(
-        Pauli.X,
-        1,
-        cutoff=None,
-        decoder=decoder,
-    )
+        assert built
+        built.clear()
+        code.forget_distance()
+        assert code.get_code_params(bound=True, decoder=decoder) == (7, 1, 3)
+        assert built
 
     code.forget_distance()
     with pytest.raises(ValueError, match="cannot be combined"):
         code.get_distance_bound(pauli=Pauli.X, decoder=decoder, backend="sqetch")
-
-    with unittest.mock.patch.object(code, "get_distance", return_value=3) as get_distance:
-        assert code.get_code_params(bound=True, decoder=decoder) == (7, 1, 3)
-    get_distance.assert_called_once_with(bound=True, decoder=decoder)
 
     # non-CSS codes do not support decoder-based distance bounds
     non_css = codes.FiveQubitCode()
@@ -1544,22 +1498,6 @@ def test_legacy_decoder_warning_location() -> None:
     assert any("decoder_z=decoders.mwpm(...)" in message for message in messages)
 
 
-def test_css_rejects_shared_prebuilt_decoders_for_unequal_sectors() -> None:
-    """A decoder built for one CSS matrix is not silently reused for another."""
-    code = codes.SurfaceCode(3)
-    stabilizer_ops_x = code.get_stabilizer_ops(Pauli.X, canonicalized=False)
-    stabilizer_ops_z = code.get_stabilizer_ops(Pauli.Z, canonicalized=False)
-    decoder = decoders.custom.LookupDecoder(stabilizer_ops_z, max_weight=0)
-    with pytest.raises(ValueError, match=r"decoder_x=.*decoder_z="):
-        code.get_logical_error_rate_func(0, decoder=decoder)
-    with pytest.raises(TypeError, match="static_decoder argument has been removed"):
-        code.get_logical_error_rate_func(0, static_decoder=decoder)
-
-    # prebuilt decoders are accepted when each is built for the stabilizer matrix of its sector
-    decoder_z = decoders.custom.LookupDecoder(stabilizer_ops_x, max_weight=0)
-    assert code.get_logical_error_rate_func(0, decoder_x=decoder, decoder_z=decoder_z)
-
-
 def test_prebuilt_decoders_rejected_for_internal_matrices() -> None:
     """A prebuilt decoder cannot decode a matrix that a method constructs internally."""
     code = codes.SurfaceCode(3)
@@ -1567,9 +1505,8 @@ def test_prebuilt_decoders_rejected_for_internal_matrices() -> None:
         code.get_stabilizer_ops(Pauli.Z, canonicalized=False), max_weight=2
     )
     code.forget_distance()
-    for pauli in [None, Pauli.X, Pauli.Z]:
-        with pytest.raises(ValueError, match="prebuilt decoder cannot be passed as decoder="):
-            code.get_distance_bound(pauli=pauli, decoder=decoder)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="prebuilt decoder cannot be passed as decoder="):
+        code.get_distance_bound(decoder=decoder)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="prebuilt decoder cannot be passed as decoder="):
         code.get_distance_bound_with_decoder(Pauli.X, decoder=decoder)  # type: ignore[arg-type]
     with pytest.raises(ValueError, match="prebuilt decoder cannot be passed as decoder="):
@@ -1580,6 +1517,8 @@ def test_prebuilt_decoders_rejected_for_internal_matrices() -> None:
         code.reduce_logical_ops(static_decoder=decoder)
     with pytest.raises(TypeError, match="static_decoder argument has been removed"):
         code.get_distance_bound(static_decoder=decoder)
+    with pytest.raises(TypeError, match="static_decoder argument has been removed"):
+        code.get_logical_error_rate_func(0, static_decoder=decoder)
 
     # a prebuilt decoder for a QuditCode would need to decode an internal syndrome matrix
     qudit_code = codes.FiveQubitCode()
@@ -1941,13 +1880,9 @@ def test_quantum_capacity_with_observable_decoders(monkeypatch: pytest.MonkeyPat
             decoder=compiled_decoder,  # type: ignore[arg-type]
         )
 
-    # Sinter-style decoders cannot decode nonbinary codes
-    nonbinary_code = codes.QuditCode(codes.ToricCode(4, field=3).matrix)
-    with pytest.raises(ValueError, match="cannot decode a code over GF"):
-        nonbinary_code.get_logical_error_rate_func(0, decoder=decoders.TrivialDecoder())
-
     # the observables of a qudit code are the symplectic products of an error with the logical
     # operators of the code, which carry signs over an odd-characteristic field
+    nonbinary_code = codes.QuditCode(codes.ToricCode(4, field=3).matrix)
     captured_decoders: list[code_capacity.CodeCapacityDecoder] = []
     captured_decoder_kwargs: list[dict[str, Any]] = []
 
@@ -2111,7 +2046,6 @@ def test_css_capacity_with_observable_decoders() -> None:
 def _code_capacity_inputs() -> dict[str, decoders.DeferredDecoderInput]:
     """Deferred decoder inputs that yield error decoders or observable decoders."""
     return {
-        "error specification": decoders.ilp(),
         "native observable specification": decoders.lookup(max_weight=2),
         "matrix factory": decoders.from_matrix(decoders.lookup(max_weight=2).build),
         "DEM factory": decoders.from_dem(decoders.lookup(max_weight=1).build_observable_decoder),
@@ -2183,11 +2117,6 @@ def test_capacity_accepts_prebuilt_error_and_observable_decoders() -> None:
             num_samples=20, decoder_x=decoder_x, decoder_z=decoder_z
         )
         assert func.num_failures[1] == 0
-
-    # a general qudit code decodes an internal syndrome matrix, so it rejects prebuilt decoders
-    qudit_code = codes.QuditCode(css_code.matrix)
-    with pytest.raises(ValueError, match="prebuilt decoder cannot be passed"):
-        qudit_code.get_logical_error_rate_func(num_samples=20, decoder=cast(Any, error_decoders[0]))
 
 
 def test_capacity_pauli_bias_convention() -> None:

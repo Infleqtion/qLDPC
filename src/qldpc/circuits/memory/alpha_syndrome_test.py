@@ -74,14 +74,6 @@ def test_alpha_reproducibility_and_tree_edges() -> None:
         seed=123,
     )
     assert first.get_circuit(code)[0] == second.get_circuit(code)[0]
-    functioning = circuits.AlphaSyndrome(
-        circuits.DepolarizingNoiseModel(0.001),
-        iters_per_step=2,
-        shots_per_iter=10,
-        verbose=False,
-        seed=9,
-    )
-    assert functioning.get_circuit(code)[0].num_measurements > 0
     verbose = circuits.AlphaSyndrome(
         circuits.DepolarizingNoiseModel(0.001), iters_per_step=2, verbose=True
     )
@@ -109,8 +101,8 @@ def test_alpha_reproducibility_and_tree_edges() -> None:
     assert child.best_child(1).value == 0
 
 
-def test_alpha_hoists_evaluation_invariants() -> None:
-    """Rollouts reuse schedule-independent stabilizer data and preserve circuit bytes."""
+def test_alpha_evaluation_data_and_empty_basis() -> None:
+    """Precomputed evaluation data gives the same circuit, and an empty basis has no schedule."""
     code = codes.CSSCode([[1, 1, 0]], [[1, 1, 0]])
     strategy = circuits.AlphaSyndrome(
         circuits.DepolarizingNoiseModel(0.001),
@@ -119,26 +111,21 @@ def test_alpha_hoists_evaluation_invariants() -> None:
         verbose=False,
         seed=7,
     )
-    with (
-        mock.patch.object(code, "get_stabilizer_ops", wraps=code.get_stabilizer_ops) as stabs,
-        mock.patch.object(code, "get_logical_ops", wraps=code.get_logical_ops) as logicals,
-    ):
-        schedule = strategy._build_schedule(code, Pauli.X)
-        assert stabs.call_count == 2
-        assert logicals.call_count == 2
-        data = strategy._get_evaluation_data(code, Pauli.X)
-        assert strategy._get_evaluation_circuit(
-            code, Pauli.X, schedule, data
-        ) == strategy._get_evaluation_circuit(code, Pauli.X, schedule)
+    schedule = strategy._build_schedule(code, Pauli.X)
+    data = strategy._get_evaluation_data(code, Pauli.X)
+    assert strategy._get_evaluation_circuit(
+        code, Pauli.X, schedule, data
+    ) == strategy._get_evaluation_circuit(code, Pauli.X, schedule)
 
     empty_x_code = codes.CSSCode(np.zeros((0, 2), dtype=int), [[1, 1]])
-    with mock.patch.object(strategy, "_get_evaluation_data") as evaluation_data:
-        assert strategy._build_schedule(empty_x_code, Pauli.X) == []
-        evaluation_data.assert_not_called()
+    assert strategy._build_schedule(empty_x_code, Pauli.X) == []
 
 
 def test_alpha_reward_matches_paper() -> None:
-    """The MCTS reward is the paper's finite-sample inverse logical error rate."""
+    """The MCTS reward is the finite-sample inverse logical error rate of the AlphaSyndrome paper.
+
+    See Section 4.4 of https://arxiv.org/abs/2601.12509.
+    """
     code = codes.CSSCode([[1, 1, 0]], [[1, 1, 0]])
     strategy = circuits.AlphaSyndrome(
         circuits.DepolarizingNoiseModel(0.2),

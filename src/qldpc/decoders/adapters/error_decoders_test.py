@@ -81,6 +81,11 @@ def test_expanded_error_decoder() -> None:
         assert np.array_equal(errors[:, [0, 1]].sum(axis=1), [1, 0])
         assert decoder.decode_errors_batch(syndromes[:0]).shape == (0, 3 + add_erasure_bit)
 
+    # a matching decoder merges equivalent mechanisms, and decodes in batches
+    matching_decoder = error_decoders.match_error_decoder_to_dem(decoders.mwpm().build(dem), dem)
+    assert isinstance(matching_decoder, error_decoders.ExpandedErrorDecoder)
+    assert matching_decoder.decode_errors_batch(syndromes).shape == (2, 3)
+
 
 def test_match_error_decoder_to_dem() -> None:
     """Output validation returns, expands, or rejects a decoder as appropriate."""

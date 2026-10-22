@@ -202,14 +202,3 @@ def test_state_stabilizer_failure_regressions() -> None:
     prep = circuits.with_remapped_qubits(circuits.get_encoding_circuit(code, only_zero=True), data)
     qids = circuits.QubitIDs(data, tuple(range(20, 20 + code.num_checks)))
     assert len(circuits.get_logical_state_stabilizers(prep, code, qids)) == code.dimension
-
-
-def test_only_zero_subsystem_generator_positions() -> None:
-    """Only-zero encoding places logical-Z generators after stabilizers, before gauges."""
-    for distance in (2, 3):
-        code = codes.BaconShorCode(distance)
-        tableau = circuits.get_encoding_tableau(code, only_zero=True)
-        stabilizer_count = len(code.get_stabilizer_ops())
-        assert tableau.z_output(stabilizer_count) == math.op_to_string(
-            code.get_logical_ops(Pauli.Z, symplectic=True)[0]
-        )

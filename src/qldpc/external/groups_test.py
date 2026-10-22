@@ -132,8 +132,11 @@ def test_maybe_get_generators_from_gap() -> None:
 
 def test_get_generators() -> None:
     """Retrieve generators for a GAP group somehow."""
-    # retrieve known groups
-    for group, generators in external.groups.KNOWN_GROUPS.items():
+    # retrieve a known group without calling GAP
+    group, generators = next(iter(external.groups.KNOWN_GROUPS.items()))
+    with unittest.mock.patch(
+        "qldpc.external.gap.is_callable", side_effect=AssertionError("GAP should not be called")
+    ):
         assert external.groups.get_generators(group) == generators
 
     # retrieve from GAP
@@ -339,8 +342,13 @@ def test_get_small_group_structure() -> None:
 
 def test_idempotents() -> None:
     """Find primitive central idempotents of a group algebra."""
-    # retrieve known PCIs
-    for (group, field_order), pcis in external.groups.KNOWN_PRIMITIVE_CENTRAL_IDEMPOTENTS.items():
+    # retrieve known PCIs without calling GAP
+    (group, field_order), pcis = next(
+        iter(external.groups.KNOWN_PRIMITIVE_CENTRAL_IDEMPOTENTS.items())
+    )
+    with unittest.mock.patch(
+        "qldpc.external.gap.require_package", side_effect=AssertionError("GAP should not be called")
+    ):
         assert external.groups.get_primitive_central_idempotents(group, field_order) == pcis
 
     z_2 = galois.GF(2).primitive_element

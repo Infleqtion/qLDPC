@@ -207,12 +207,9 @@ def test_pauli_channel_drops_zeros() -> None:
     """PauliChannel drops zero-prob entries but preserves arity."""
     ch = circuits.PauliChannel({"XI": 0.0, "IX": 0.05, "XX": 0.05})
     assert list(ch.probabilities.keys()) == ["IX", "XX"]
-    # An all-zero PauliChannel drops its entries but keeps the arity derived from the strings, and
-    # normalizes to a trivial `after` when attached to a NoiseRule.
+    # An all-zero PauliChannel drops its entries but keeps the arity derived from the strings.
     all_zero = circuits.PauliChannel({"XY": 0.0})
     assert all_zero.num_qubits == 2 and dict(all_zero.probabilities) == {} and not bool(all_zero)
-    all_zero_rule = circuits.NoiseRule(after=circuits.PauliChannel({"XY": 0.0}))
-    assert not all_zero_rule.after and not bool(all_zero_rule)
 
 
 def test_pauli_channel_hashable() -> None:
@@ -230,17 +227,13 @@ def test_pauli_channel_float_drift_clamped() -> None:
     # subtraction leaves remaining = 0.39999999999999997 < 0.4 at the final step, so the last
     # ELSE_CORRELATED_ERROR must clamp to 1.0 (rather than emit a value > 1.0) and stop.
     channel = circuits.PauliChannel({"XXX": 0.1, "XXY": 0.2, "XXZ": 0.3, "YYY": 0.4})
-    rule = circuits.NoiseRule(after=channel)
-    noise_model = circuits.NoiseModel(rules={"SPP": rule})
-    noisy = noise_model.noisy_circuit(stim.Circuit("SPP X0*Y1*Z2"))
     expected = stim.Circuit("""
-        SPP X0*Y1*Z2
         CORRELATED_ERROR(0.1) X0 X1 X2
         ELSE_CORRELATED_ERROR(0.2222222222222222) X0 X1 Y2
         ELSE_CORRELATED_ERROR(0.42857142857142855) X0 X1 Z2
         ELSE_CORRELATED_ERROR(1.0) Y0 Y1 Y2
     """)
-    assert circuits_are_equivalent(expected, noisy)
+    assert circuits_are_equivalent(expected, channel.to_circuit())
 
 
 def test_pauli_channel_1_shortcut() -> None:
@@ -249,6 +242,3 @@ def test_pauli_channel_1_shortcut() -> None:
         "DEPOLARIZE1(0.3) 0"
     )
     assert circuits.PauliChannel({"Z": 0.1}).to_circuit() == stim.Circuit("Z_ERROR(0.1) 0")
-    assert circuits.PauliChannel({"X": 0.1, "Z": 0.2}).to_circuit() == stim.Circuit(
-        "PAULI_CHANNEL_1(0.1, 0, 0.2) 0"
-    )

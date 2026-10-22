@@ -279,34 +279,6 @@ def _build_cone_maps(
     )
 
 
-def _assemble_merged_checks(
-    code: CSSCode,
-    support: tuple[int, ...],
-    data_checks: tuple[int | None, ...],
-    incidence: np.ndarray,
-    gauge: np.ndarray,
-    *,
-    basis: PauliXZ = Pauli.X,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Assemble HX_merged and HZ_merged from the Webster §II A pieces.
-
-    basis=X (default): χ rows added to HX_merged, G to HZ_merged.  basis=Z: χ rows added to
-    HZ_merged, G to HX_merged (basis-symmetric dual).
-    """
-    result = _build_cone_maps(
-        code,
-        support,
-        data_checks,
-        incidence,
-        gauge,
-        basis=basis,
-    ).build(code)
-    return (
-        np.asarray(result.code.matrix_x, dtype=np.uint8),
-        np.asarray(result.code.matrix_z, dtype=np.uint8),
-    )
-
-
 def _rebuild_with_added_ancillas(
     code: CSSCode,
     x: np.ndarray,

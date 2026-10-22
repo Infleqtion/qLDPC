@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 import stim
 
-from qldpc import codes, decoders
+from qldpc import decoders
 from qldpc.decoders.construction.resolution import _get_observable_decoder
 from qldpc.decoders.external import frontier
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
@@ -201,8 +201,9 @@ def test_frontier_degenerate_models(calls: list[_Call]) -> None:
     assert decoder.decode_observables(np.zeros(0, dtype=int)).tolist() == [0]
 
 
-def test_frontier_with_generic_decoding_apis(calls: list[_Call]) -> None:
-    """A Frontier specification works wherever an observable decoder can be compiled."""
+@pytest.mark.usefixtures("calls")
+def test_frontier_with_generic_decoding_apis() -> None:
+    """A Frontier specification works through generic decoder resolution and Sinter."""
     dem = stim.DetectorErrorModel("error(0.1) D0 L0\nerror(0.2) D0 D1\nerror(0.3) D1 L1")
     specification = decoders.frontier(add_erasure_bit=True)
     syndrome = np.array([1, 0])
@@ -220,14 +221,6 @@ def test_frontier_with_generic_decoding_apis(calls: list[_Call]) -> None:
     shots = np.array([[1, 0], [0, 1]], dtype=np.uint8)
     assert sinter_decoder.decode_shots(shots).tolist() == [[1, 0, 0], [0, 1, 0]]
     assert sinter_decoder.decode_shots(np.zeros((0, 2), dtype=np.uint8)).shape == (0, 3)
-
-    code = codes.RepetitionCode(3)
-    num_calls = len(calls)
-    logical_error_rate, _ = code.get_logical_error_rate_func(
-        num_samples=10, max_error_rate=0.1, decoder=specification
-    )(0.1)
-    assert 0 <= logical_error_rate <= 1
-    assert len(calls) > num_calls
 
 
 def test_frontier_validation(monkeypatch: pytest.MonkeyPatch) -> None:

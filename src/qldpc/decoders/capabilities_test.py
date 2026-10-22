@@ -4,44 +4,30 @@
 
 from __future__ import annotations
 
+import types
+
 import galois
 import numpy as np
-import numpy.typing as npt
 import stim
 
 from qldpc import decoders
 
-
-class _FixedObservableDecoder(decoders.ObservableDecoder):
-    def __init__(self, output: npt.ArrayLike) -> None:
-        self.output = np.asarray(output)
-
-    def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        return self.output
-
-
-class _FixedErrorDecoder(decoders.ErrorDecoder):
-    def __init__(self, output: npt.ArrayLike) -> None:
-        self.output = np.asarray(output)
-
-    def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        return self.output
-
-
-class _BitPackedCompiledDecoder:
-    def decode_shots_bit_packed(
-        self, *, bit_packed_detection_event_data: npt.NDArray[np.uint8]
-    ) -> npt.NDArray[np.uint8]:
-        return np.zeros((len(bit_packed_detection_event_data), 1), dtype=np.uint8)
+_OBSERVABLE_DECODER = types.SimpleNamespace(decode_observables=lambda syndrome: np.zeros(1))
+_ERROR_DECODER = types.SimpleNamespace(
+    decode_errors=lambda syndrome: np.zeros(2), decode=lambda syndrome: np.zeros(2)
+)
+_BIT_PACKED_COMPILED_DECODER = types.SimpleNamespace(
+    decode_shots_bit_packed=lambda **kwargs: np.zeros((1, 1), dtype=np.uint8)
+)
 
 
 def test_is_prebuilt_decoder() -> None:
     """Prebuilt decoders decode, and are not specifications, constructors, or compilers."""
     matrix = np.eye(2, dtype=int)
     prebuilt_decoders: list[object] = [
-        _FixedErrorDecoder([0, 0]),
-        _FixedObservableDecoder([0]),
-        _BitPackedCompiledDecoder(),
+        _ERROR_DECODER,
+        _OBSERVABLE_DECODER,
+        _BIT_PACKED_COMPILED_DECODER,
         decoders.TrivialDecoder().compile_decoder_for_dem(stim.DetectorErrorModel()),
         decoders.bp_osd().build(matrix),
     ]
@@ -51,9 +37,9 @@ def test_is_prebuilt_decoder() -> None:
         None,
         decoders.bp_osd(),
         decoders.custom.LookupDecoder,
-        lambda matrix: _FixedErrorDecoder([0, 0]),
-        decoders.from_matrix(lambda matrix: _FixedErrorDecoder([0, 0])),
-        decoders.from_dem(lambda dem: _FixedObservableDecoder([0])),
+        lambda matrix: _ERROR_DECODER,
+        decoders.from_matrix(lambda matrix: _ERROR_DECODER),
+        decoders.from_dem(lambda dem: _OBSERVABLE_DECODER),
         decoders.SinterDecoder(),
         decoders.TrivialDecoder(),
     ]
@@ -64,22 +50,9 @@ def test_is_prebuilt_decoder() -> None:
 def test_is_prebuilt_observable_decoder() -> None:
     """Classify decoder inputs by explicit capabilities."""
     matrix = galois.GF2([[1, 1]])
-    observable_decoder = _FixedObservableDecoder([0])
-    assert np.array_equal(observable_decoder.decode_observables(np.array([0])), [0])
-    assert decoders.is_prebuilt_observable_decoder(observable_decoder)
-
-    bit_packed_decoder = _BitPackedCompiledDecoder()
-    assert np.array_equal(
-        bit_packed_decoder.decode_shots_bit_packed(
-            bit_packed_detection_event_data=np.zeros((1, 1), dtype=np.uint8)
-        ),
-        [[0]],
-    )
-    assert decoders.is_prebuilt_observable_decoder(bit_packed_decoder)
-
-    error_decoder = _FixedErrorDecoder([0, 0])
-    assert np.array_equal(error_decoder.decode_errors(np.array([0])), [0, 0])
-    assert not decoders.is_prebuilt_observable_decoder(error_decoder)
+    assert decoders.is_prebuilt_observable_decoder(_OBSERVABLE_DECODER)
+    assert decoders.is_prebuilt_observable_decoder(_BIT_PACKED_COMPILED_DECODER)
+    assert not decoders.is_prebuilt_observable_decoder(_ERROR_DECODER)
     assert not decoders.is_prebuilt_observable_decoder(decoders.lookup(max_weight=1))
     assert not decoders.is_prebuilt_observable_decoder(decoders.custom.ObservableLookupDecoder)
     sinter_decoder = decoders.TrivialDecoder()

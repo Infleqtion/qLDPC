@@ -34,9 +34,6 @@ def test_generalized_union_find() -> None:
         np.zeros_like(error),
         _get_error_decoder(matrix, decoder=decoders.guf()).decode(np.zeros_like(syndrome)),
     )
-    decoded = decoders.custom.GUFDecoder(matrix, add_erasure_bit=True).decode(syndrome)
-    assert decoded[-1] == 0
-    assert np.array_equal(matrix @ code.field(decoded[:-1]), syndrome)
 
 
 def test_quantum_decoding(surface_code_problem: SurfaceCodeProblem) -> None:

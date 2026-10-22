@@ -324,7 +324,7 @@ def test_post_selection() -> None:
     dem_arrays = decoders.DetectorErrorModelArrays(dem)
     assert dem_arrays.post_selected_on([0, 1], order=2).to_dem() == post_selected_dem
 
-    # setting order=3 will recover combinations of four error mechanisms
+    # setting order=3 will recover combinations of three error mechanisms
     prob = 0.1
     dem = stim.DetectorErrorModel(f"""
         detector D0

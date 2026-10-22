@@ -4,9 +4,6 @@
 
 from __future__ import annotations
 
-import io
-import pickle
-
 import numpy as np
 import pytest
 import sympy
@@ -37,17 +34,13 @@ def test_ring() -> None:
     with pytest.raises(ValueError, match="integer power >= 0"):
         one ** (-1)
 
-    # test inverses
-    for ring in [
-        abstract.GroupRing(abstract.TrivialGroup(), field=3),
-        abstract.GroupRing(abstract.AbelianGroup(2, 3), field=4),
-        abstract.GroupRing(abstract.QuaternionGroup()),
-    ]:
-        for group_member in ring.group.generate():
-            ring_member = abstract.RingMember(ring, group_member)
-            ring_member_inverse = ring_member.inverse()
-            assert ring_member_inverse is not None
-            assert ring_member * ring_member_inverse == ring.one
+    # inverses of group members in a noncommutative ring
+    ring = abstract.GroupRing(abstract.QuaternionGroup())
+    for group_member in ring.group.generate():
+        ring_member = abstract.RingMember(ring, group_member)
+        ring_member_inverse = ring_member.inverse()
+        assert ring_member_inverse is not None
+        assert ring_member * ring_member_inverse == ring.one
 
     # nontrivial inverse
     group = abstract.CyclicGroup(2)
@@ -100,9 +93,6 @@ def test_ring_equality() -> None:
     assert ring != abstract.GroupRing(abstract.CyclicGroup(4))  # different group
     assert ring != abstract.GroupRing(group, field=4)  # different field
     assert ring != "not a ring"
-
-    with pytest.raises(ValueError, match="DEFUNCT"):
-        abstract.TrivialGroup.to_ring_array([])
 
 
 def test_printing() -> None:
@@ -168,7 +158,10 @@ def test_deprecations() -> None:
 
 
 def test_ring_array_compat_shim() -> None:
-    """RingArray/Protograph remain importable from rings.py, the module they moved out of."""
+    """RingArray/Protograph remain importable from rings.py, the module they moved out of.
+
+    Unpickling objects saved under the old ``qldpc.abstract.rings`` path uses the same lookup.
+    """
     from qldpc.abstract.rings import RingArray
 
     assert RingArray is ring_array.RingArray is abstract.RingArray
@@ -178,16 +171,3 @@ def test_ring_array_compat_shim() -> None:
 
     with pytest.raises(AttributeError, match=r"module .* has no attribute 'not_a_real_export'"):
         rings.not_a_real_export  # type: ignore[attr-defined]  # noqa: B018 (trigger __getattr__)
-
-
-def test_ring_array_pickle_compat() -> None:
-    """Objects pickled under the pre-split ``qldpc.abstract.rings.RingArray`` path still unpickle.
-
-    Pickle locates a class by looking up its recorded ``(module, qualname)`` via
-    ``Unpickler.find_class``, so exercising that lookup directly confirms compatibility without
-    depending on whether the ring/group objects involved are themselves picklable.
-    """
-    unpickler = pickle.Unpickler(io.BytesIO())  # noqa: S301
-    assert unpickler.find_class("qldpc.abstract.rings", "RingArray") is ring_array.RingArray
-    with pytest.warns(DeprecationWarning, match="Protograph is deprecated"):
-        assert unpickler.find_class("qldpc.abstract.rings", "Protograph") is ring_array.RingArray

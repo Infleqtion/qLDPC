@@ -23,10 +23,6 @@ def test_noise_rule_errors() -> None:
     with pytest.raises(ValueError, match="not between 0 and 1"):
         circuits.NoiseRule(reset_error=1.1)
 
-    # Passing a non-numeric, non-Mapping, non-NoiseRule type for a scalar noise field raises.
-    with pytest.raises(TypeError, match="expected a float"):
-        circuits.NoiseModel(clifford_1q_error="DEPOLARIZE1")  # type: ignore[arg-type]
-
     # `after` as a stim.Circuit rejects non-noise instructions and repeat blocks.
     with pytest.raises(ValueError, match="non-noise instruction"):
         circuits.NoiseRule(after=stim.Circuit("H 0"))

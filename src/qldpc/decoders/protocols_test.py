@@ -11,7 +11,6 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 import pytest
-import stim
 
 from qldpc import decoders
 
@@ -101,17 +100,9 @@ def test_error_decoder_coercion() -> None:
     assert decoders.batch_decode_errors(error_decoder, syndromes[:0]).shape == (0, 4)
 
     # objects that predict observable flips, or that do not decode, are rejected
-    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
-    with pytest.warns(DeprecationWarning):
-        legacy_decoder = decoders.custom.LookupDecoder(
-            dem, max_weight=1, predict_observable_flips=True
-        )
-
     observable_decoders = [
-        decoders.custom.ObservableLookupDecoder(dem, max_weight=1),
-        legacy_decoder,
-        decoders.TrivialDecoder().compile_decoder_for_dem(dem),
         types.SimpleNamespace(decode_observables=lambda syndrome: syndrome),
+        types.SimpleNamespace(decode=lambda syndrome: syndrome, decode_returns_observables=True),
     ]
     for observable_decoder in observable_decoders:
         with pytest.raises(TypeError, match="observable flips rather than errors"):

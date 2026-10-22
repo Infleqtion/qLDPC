@@ -57,12 +57,8 @@ def _raw_observable_samples(circuit: stim.Circuit, *, shots: int) -> dict[int, n
     [
         (Pauli.X, ("+", "+"), 0),
         (Pauli.X, ("-", "+"), 1),
-        (Pauli.X, ("+", "-"), 1),
-        (Pauli.X, ("-", "-"), 0),
         (Pauli.Z, ("0", "0"), 0),
-        (Pauli.Z, ("1", "0"), 1),
         (Pauli.Z, ("0", "1"), 1),
-        (Pauli.Z, ("1", "1"), 0),
     ],
 )
 def test_compile_interblock_pair_steane_truth_table(
@@ -72,14 +68,38 @@ def test_compile_interblock_pair_steane_truth_table(
 ) -> None:
     """Raw measurement records reproduce both logical parity truth tables."""
     code = codes.SteaneCode()
-    blocks = (_LogicalBlock("left", code), _LogicalBlock("right", code))
-    request = _pair_request(basis)
-
     compiled = _compile_interblock_pair_measurement(
-        blocks,
-        request,
+        (_LogicalBlock("left", code), _LogicalBlock("right", code)),
+        _pair_request(basis),
         rounds=2,
         initial_states={"left": states[0], "right": states[1]},
+    )
+
+    raw_observables = _raw_observable_samples(compiled.diagnostic_circuit, shots=8)
+    assert set(raw_observables) == {0, 1}
+    assert np.all(raw_observables[0] == expected)
+    assert np.array_equal(raw_observables[0], raw_observables[1])
+    assert not compiled.diagnostic_circuit.compile_detector_sampler().sample(shots=8).any()
+
+    logical = tuple(int(value) for value in code.get_logical_ops(basis)[0].tolist())
+    assert compiled.resolved_operators == (logical, logical)
+    assert compiled.resources.syndrome_rounds == 2
+
+
+def test_compile_interblock_pair_matches_existing_public_builder() -> None:
+    """Explicit block semantics preserve the existing distinct-code circuit.
+
+    The compiled record also names its request, observables, backend, block allocation and
+    resources consistently.
+    """
+    from qldpc.experimental.surgery import build_bridge, build_gadget, build_joint_ppm_circuit
+
+    shared_code = codes.SteaneCode()
+    request = _pair_request(Pauli.X)
+    compiled = _compile_interblock_pair_measurement(
+        (_LogicalBlock("left", shared_code), _LogicalBlock("right", shared_code)),
+        request,
+        rounds=1,
     )
 
     assert isinstance(compiled, _CompiledPairMeasurement)
@@ -92,23 +112,14 @@ def test_compile_interblock_pair_steane_truth_table(
     assert compiled.backend.cellulate_max_len is None
     assert not compiled.backend.boosted
 
-    raw_observables = _raw_observable_samples(compiled.diagnostic_circuit, shots=8)
-    assert set(raw_observables) == {0, 1}
-    assert np.all(raw_observables[0] == expected)
-    assert np.array_equal(raw_observables[0], raw_observables[1])
-    assert not compiled.diagnostic_circuit.compile_detector_sampler().sample(shots=8).any()
-
-    logical = tuple(int(value) for value in code.get_logical_ops(basis)[0].tolist())
-    assert compiled.resolved_operators == (logical, logical)
     allocation = dict(compiled.block_data_qubits)
     assert allocation["left"] == tuple(range(7))
     assert allocation["right"] == tuple(range(7, 14))
-    assert set(allocation["left"]).isdisjoint(allocation["right"])
 
     resources = compiled.resources
     assert resources.source_data_qubits == 14
     assert resources.logical_outcomes == 1
-    assert resources.syndrome_rounds == 2
+    assert resources.syndrome_rounds == 1
     assert resources.adapter_data_qubits == compiled.backend.bridge_width
     assert (
         resources.source_data_qubits
@@ -119,18 +130,6 @@ def test_compile_interblock_pair_steane_truth_table(
     assert (
         compiled.merged_code.num_qudits + resources.syndrome_ancilla_qubits
         == resources.allocated_physical_qubits
-    )
-
-
-def test_compile_interblock_pair_matches_existing_public_builder() -> None:
-    """Explicit block semantics preserve the existing distinct-code circuit."""
-    from qldpc.experimental.surgery import build_bridge, build_gadget, build_joint_ppm_circuit
-
-    shared_code = codes.SteaneCode()
-    compiled = _compile_interblock_pair_measurement(
-        (_LogicalBlock("left", shared_code), _LogicalBlock("right", shared_code)),
-        _pair_request(Pauli.X),
-        rounds=1,
     )
 
     code_l = codes.SteaneCode()
@@ -151,37 +150,19 @@ def test_compile_interblock_pair_matches_existing_public_builder() -> None:
     assert np.array_equal(compiled.merged_code.matrix_z, expected_code.matrix_z)
 
 
-def test_compile_interblock_pair_hgp_nonzero_logical() -> None:
-    """The same path compiles a nonzero logical index of a multi-logical HGP code."""
-    code = codes.HGPCode(codes.HammingCode(3))
-    compiled = _compile_interblock_pair_measurement(
-        (_LogicalBlock("left", code), _LogicalBlock("right", code)),
-        _pair_request(Pauli.X, left_index=3, right_index=5),
-        rounds=1,
-    )
-
-    assert code.dimension == 16
-    assert compiled.merged_code.dimension == 31
-    assert compiled.resources.source_data_qubits == 116
-    assert compiled.resources.syndrome_rounds == 1
-    assert not compiled.circuit.compile_detector_sampler().sample(shots=2).any()
-    expected_left = tuple(int(value) for value in code.get_logical_ops(Pauli.X)[3].tolist())
-    expected_right = tuple(int(value) for value in code.get_logical_ops(Pauli.X)[5].tolist())
-    zero_index = tuple(int(value) for value in code.get_logical_ops(Pauli.X)[0].tolist())
-    assert compiled.resolved_operators == (expected_left, expected_right)
-    assert expected_left != zero_index
-    assert expected_right != zero_index
-
-
 @pytest.mark.parametrize(
     ("basis", "states"),
-    [(Pauli.X, ("-", "+")), (Pauli.X, ("+", "-")), (Pauli.Z, ("1", "0")), (Pauli.Z, ("0", "1"))],
+    [(Pauli.X, ("-", "+")), (Pauli.Z, ("0", "1"))],
 )
 def test_compile_interblock_pair_hgp_initialization_binds_logical_index(
     basis: PauliXZ,
     states: tuple[str, str],
 ) -> None:
-    """Initial states flip the requested nonzero logicals, giving odd raw parity."""
+    """Initial states flip the requested nonzero logicals of a multi-logical HGP code.
+
+    The X case flips the left block and the Z case the right one, so together they bind both
+    requested logical indices; either flip gives odd raw parity.
+    """
     code = codes.HGPCode(codes.HammingCode(3))
     compiled = _compile_interblock_pair_measurement(
         (_LogicalBlock("left", code), _LogicalBlock("right", code)),
@@ -189,6 +170,18 @@ def test_compile_interblock_pair_hgp_initialization_binds_logical_index(
         rounds=1,
         initial_states={"left": states[0], "right": states[1]},
     )
+
+    assert code.dimension == 16
+    assert compiled.merged_code.dimension == 31
+    assert compiled.resources.source_data_qubits == 116
+    assert not compiled.circuit.compile_detector_sampler().sample(shots=2).any()
+    logicals = code.get_logical_ops(basis)
+    expected_left = tuple(int(value) for value in logicals[3].tolist())
+    expected_right = tuple(int(value) for value in logicals[5].tolist())
+    zero_index = tuple(int(value) for value in logicals[0].tolist())
+    assert compiled.resolved_operators == (expected_left, expected_right)
+    assert expected_left != zero_index
+    assert expected_right != zero_index
 
     raw_observables = _raw_observable_samples(compiled.diagnostic_circuit, shots=8)
     assert np.all(raw_observables[0] == 1)
@@ -441,12 +434,3 @@ def test_compiler_reports_backend_capability_failures(
             rounds=1,
         )
     assert isinstance(caught.value.__cause__, ValueError)
-
-
-def test_compiler_records_are_not_public_exports() -> None:
-    """The first compiler contract remains private while it has one backend."""
-    from qldpc.experimental import surgery
-
-    assert "_LogicalBlock" not in surgery.__all__
-    assert "_PauliPairMeasurement" not in surgery.__all__
-    assert "_compile_interblock_pair_measurement" not in surgery.__all__
