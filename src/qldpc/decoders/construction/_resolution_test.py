@@ -22,17 +22,6 @@ from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.external.pymatching import MatchingObservableDecoder
 
 
-def test_deprecated_decoder_args() -> None:
-    """Deprecated keyword arguments are translated, but cannot be combined with a decoder."""
-    matrix = np.eye(1, dtype=int)
-    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
-    with pytest.warns(DeprecationWarning, match="with_lookup"):
-        decoder = _resolution.resolve_decoder(matrix, None, {"with_lookup": True, "max_weight": 1})
-    assert decoder.decode_errors(np.array([1])).tolist() == [1]
-    with pytest.raises(ValueError, match="Cannot combine decoder"):
-        _resolution.resolve_observable_decoder(dem, decoders.lookup(1), {"with_lookup": True})
-
-
 def test_decoding() -> None:
     """Decode a simple problem."""
     matrix = np.eye(3, 2, dtype=int)

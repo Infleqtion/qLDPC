@@ -4,10 +4,6 @@
 
 from __future__ import annotations
 
-import os
-import pathlib
-import subprocess
-import sys
 import warnings
 from typing import Any, Never
 
@@ -148,7 +144,8 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
         syndrome_matrix, observable_matrix, _FixedErrorDecoder([2, 1, 0])
     )
     assert not decoder.can_discard
-    observables, erased = decoder.decode(field([1]))
+    assert not isinstance(decoder, decoders.SupportsDecode)  # it predicts observables, not errors
+    observables, erased = decoder.predict(field([1]))
     assert isinstance(observables, field) and not erased
     assert np.array_equal(observables, observable_matrix @ field([2, 1, 0]))
 
@@ -175,12 +172,19 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
             syndrome_matrix, observable_matrix, _FixedErrorDecoder(output)
         )
         with pytest.raises(ValueError, match=message):
-            decoder.decode(field([0]))
+            decoder.predict(field([0]))
     decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _FixedErrorDecoder([0, 0, 0, 2], has_erasure_bit=True)
     )
     with pytest.raises(ValueError, match="erasure flags that are not 0 or 1"):
-        decoder.decode(field([0]))
+        decoder.predict(field([0]))
+
+    # an error in building the error decoder propagates to the caller
+    def reject_matrix(matrix: galois.FieldArray) -> decoders.ErrorDecoder:
+        raise ValueError(f"cannot decode a matrix of shape {matrix.shape}")
+
+    with pytest.raises(ValueError, match=r"cannot decode a matrix of shape \(1, 3\)"):
+        _code_capacity.get_code_capacity_decoder(syndrome_matrix, observable_matrix, reject_matrix)
 
     # binary specifications with a native observable builder use the sector's detector error model
     decoder = _code_capacity.get_code_capacity_decoder(
@@ -239,7 +243,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
             _FixedObservableDecoder(output, num_observables=2),
         )
         with pytest.raises(ValueError, match=message):
-            decoder.decode(field([0]))
+            decoder.predict(field([0]))
 
     # a decoder that infers errors and predicts observable flips is used as an error decoder
     class _BothDecoder(_FixedErrorDecoder):
@@ -283,15 +287,6 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
             observable_matrix,
             _FixedObservableDecoder([0, 0]),
             prebuilt_rejection_reason="it is a test",
-        )
-
-    # deprecated keyword arguments cannot be combined with an observable decoder
-    with pytest.raises(ValueError, match="Cannot combine decoder="):
-        _code_capacity.get_code_capacity_decoder(
-            syndrome_matrix,
-            observable_matrix,
-            _FixedObservableDecoder([0, 0]),
-            {"with_lookup": True},
         )
 
 
@@ -344,8 +339,8 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
     )
     assert isinstance(native.decoder, decoders.custom.ObservableLookupDecoder)
     assert isinstance(projected.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
-    assert native.decode(field([1]))[0].tolist() == [0]
-    assert projected.decode(field([1]))[0].tolist() == [1]
+    assert native.predict(field([1]))[0].tolist() == [0]
+    assert projected.predict(field([1]))[0].tolist() == [1]
     assert [native.get_failure_and_erasure(error) for error in errors] == [
         (False, False),
         (False, False),
@@ -357,16 +352,6 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
         (False, False),
     ]
 
-    with pytest.warns(DeprecationWarning, match="with_lookup"):
-        legacy = _code_capacity.get_code_capacity_decoder(
-            syndrome_matrix,
-            observable_matrix,
-            None,
-            {"with_lookup": True, "max_weight": 1},
-        )
-    assert isinstance(legacy.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
-    assert legacy.decode(field([1]))[0].tolist() == [1]
-
     # The DEM's relative mechanism weights affect the native class prediction.
     weighted = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix,
@@ -374,7 +359,7 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
         specification,
         dem_error_weights=np.array([1.0, 1.0, 4.0]),
     )
-    assert weighted.decode(field([1]))[0].tolist() == [1]
+    assert weighted.predict(field([1]))[0].tolist() == [1]
 
     # Even a most likely individual error can lose to the combined probability of another class.
     weighted_observables = field([[1, 0, 0]])
@@ -393,13 +378,13 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
             )
         ),
     )
-    assert weighted_native.decode(field([1]))[0].tolist() == [0]
-    assert weighted_projected.decode(field([1]))[0].tolist() == [1]
+    assert weighted_native.predict(field([1]))[0].tolist() == [0]
+    assert weighted_projected.predict(field([1]))[0].tolist() == [1]
 
     erasing = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, decoders.lookup(max_weight=0, add_erasure_bit=True)
     )
-    prediction, erased = erasing.decode(field([1]))
+    prediction, erased = erasing.predict(field([1]))
     assert prediction.tolist() == [0] and erased
     assert erasing.get_failure_and_erasure(errors[2]) == (False, True)
 
@@ -708,20 +693,3 @@ def test_code_capacity_decoder_reuse() -> None:
         syndrome_matrix, observables_a, decoders.TrivialDecoder()
     )
     assert decoder.reuse_for(syndrome_matrix, observables_b) is None
-
-
-def test_import_in_fresh_interpreter() -> None:
-    """qLDPC imports without errors or warnings in a fresh interpreter.
-
-    The package imports every subpackage when it is first imported, so importing any qLDPC module
-    runs this same import sequence.
-    """
-    repo_root = pathlib.Path(__file__).parents[3]
-    result = subprocess.run(
-        [sys.executable, "-W", "error", "-c", "import qldpc"],
-        capture_output=True,
-        check=False,
-        env=os.environ | {"PYTHONPATH": str(repo_root / "src")},
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr

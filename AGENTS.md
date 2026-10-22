@@ -101,11 +101,11 @@ Plumbing that one subpackage uses is an underscore name in that subpackage, and 
 
 - Build decoders from typed specifications, as in `decoders.bp_osd(...).build(pcm_or_dem)` or `decoders.mwpm(...).build_observable_decoder(dem)`.
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
-  Code that consumes a user-supplied error decoder coerces it with `_as_error_decoder` from [`decoders/protocols.py`](src/qldpc/decoders/protocols.py), or outside `qldpc.decoders` with `resolve_decoder` (below), and calls `decode_errors`.
+  Code that consumes a user-supplied error decoder coerces it with `_as_error_decoder` from [`decoders/protocols.py`](src/qldpc/decoders/protocols.py), or outside `qldpc.decoders` with `build_error_decoder` (below), and calls `decode_errors`.
 - A method that decodes a matrix it constructs itself must reject prebuilt decoders with `reject_prebuilt_decoder` from `decoders/construction/_resolution.py`.
 - Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with `get_code_capacity_decoder` from [`codes/_code_capacity.py`](src/qldpc/codes/_code_capacity.py).
   It always yields an observable decoder: on binary codes, specifications that predict observables natively build it from a DEM; otherwise inferred errors are projected onto logical predictions.
-- Keep `resolve_decoder` in `decoders/construction/_resolution.py` specific to error decoders.
+- Keep `build_error_decoder` in `decoders/construction/_resolution.py` specific to error decoders.
   Dispatch on explicit capabilities (`compile_decoder_for_dem`, `decode_observables`, the `ErrorDecoder` protocol), never on output length.
 - Only decoders that declare erasure support may append an erasure flag.
   They append that flag as the last entry of each inferred error; unsupported decoders must reject `add_erasure_bit=True`.

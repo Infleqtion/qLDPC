@@ -23,15 +23,12 @@ import scipy.linalg
 import scipy.sparse
 import stim
 
-from qldpc import _deprecations, abstract, decoders, external, math
-from qldpc._deprecations.decoders import (
-    get_legacy_decoder_migration_message,
-    reject_removed_decoder_args,
-)
+from qldpc import abstract, decoders, external, math
+from qldpc._deprecations.decoders import merge_legacy_css_decoder_args, merge_legacy_decoder_args
 from qldpc._utils import format_docstring, get_external_caller_stacklevel
 from qldpc._utils import networkx as nx
 from qldpc.decoders._capabilities import is_prebuilt_decoder, is_prebuilt_observable_decoder
-from qldpc.decoders.construction._resolution import reject_prebuilt_decoder, resolve_decoder
+from qldpc.decoders.construction._resolution import build_error_decoder, reject_prebuilt_decoder
 from qldpc.external import _codes
 from qldpc.math import IntegerArray, resolve_field
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, PauliXZLike, QuditPauli
@@ -644,7 +641,9 @@ class ClassicalCode(AbstractCode):
         else:
             check_matrix = np.vstack([self.matrix, self.generator]).view(self.field)
             syndrome = np.zeros(len(check_matrix), dtype=int).view(self.field)
-        error_decoder = resolve_decoder(check_matrix, decoder, decoder_kwargs)
+        if decoder_kwargs:
+            decoder = merge_legacy_decoder_args(check_matrix, decoder, decoder_kwargs)
+        error_decoder = build_error_decoder(check_matrix, decoder=decoder)
 
         def get_syndrome() -> npt.NDArray[np.int_]:
             """Get a syndrome to decode, randomizing its overlap with code words if necessary."""
@@ -897,9 +896,9 @@ class ClassicalCode(AbstractCode):
         declared to be decoded perfectly.  The sum runs only as far as the heaviest weight the
         budget reached, and ``F_k = 0`` is assumed above that.
         """
-        code_capacity_decoder = get_code_capacity_decoder(
-            self.matrix, None, decoder, decoder_kwargs
-        )
+        if decoder_kwargs:
+            decoder = merge_legacy_decoder_args(self.matrix, decoder, decoder_kwargs)
+        code_capacity_decoder = get_code_capacity_decoder(self.matrix, None, decoder)
 
         # sample errors of fixed weight and record failure/discard counts
         return ErrorRateFunc.from_sampler(
@@ -2341,11 +2340,12 @@ class QuditCode(AbstractCode):
         if pauli_bias_zxy is not None:
             weights_xzy = 3 * pauli_bias_zxy[[1, 0, 2]]
             dem_error_weights = np.repeat(weights_xzy, len(self))
+        if decoder_kwargs:
+            decoder = merge_legacy_decoder_args(syndrome_matrix, decoder, decoder_kwargs)
         code_capacity_decoder = get_code_capacity_decoder(
             syndrome_matrix,
             observable_matrix,
             decoder,
-            decoder_kwargs,
             symplectic_dem_errors=True,
             dem_error_weights=dem_error_weights,
             prebuilt_rejection_reason=_QUDIT_SYNDROME_MATRIX_REASON,
@@ -3621,7 +3621,9 @@ class CSSCode(QuditCode):
 
         # initialize a decoder and a trivial effective syndrome
         effective_check_matrix = np.vstack([matrix_z, logical_ops_z])
-        error_decoder = resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
+        if decoder_kwargs:
+            decoder = merge_legacy_decoder_args(effective_check_matrix, decoder, decoder_kwargs)
+        error_decoder = build_error_decoder(effective_check_matrix, decoder=decoder)
         effective_syndrome = np.zeros(len(effective_check_matrix), dtype=int)
 
         def get_effective_syndrome() -> npt.NDArray[np.int_]:
@@ -3693,7 +3695,9 @@ class CSSCode(QuditCode):
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[dual_op_index] = 1
 
-        error_decoder = resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
+        if decoder_kwargs:
+            decoder = merge_legacy_decoder_args(effective_check_matrix, decoder, decoder_kwargs)
+        error_decoder = build_error_decoder(effective_check_matrix, decoder=decoder)
         candidate_logical_op = _decode_consistently(
             error_decoder, effective_check_matrix, lambda: effective_syndrome, self.field
         )
@@ -3925,30 +3929,20 @@ class CSSCode(QuditCode):
                 " decoder=decoders.bp_osd(...)"
             )
 
-        # Construct decoders.  Sector-specific decoder inputs override the shared input: decoder_x
-        # and decoder_z override decoder, and the legacy decoder_x_kwargs and decoder_z_kwargs
-        # override shared legacy keyword arguments.  The two decoders can be shared when their
-        # matrices, decoder inputs, and legacy arguments coincide.
+        # Construct decoders.  Sector-specific decoder inputs override the shared input, and the two
+        # decoders can be shared when their matrices and decoder inputs coincide.
         decoder_x_input = decoder if decoder_x is None else decoder_x
         decoder_z_input = decoder if decoder_z is None else decoder_z
-
-        # reject removed arguments, and warn about deprecated arguments, naming their replacements
-        for removed_args in [decoder_kwargs, decoder_x_kwargs or {}, decoder_z_kwargs or {}]:
-            reject_removed_decoder_args(removed_args)
-        for argument_name, matrix, legacy_args in [
-            ("decoder", stabilizer_ops_z, decoder_kwargs),
-            ("decoder_x", stabilizer_ops_z, decoder_x_kwargs),
-            ("decoder_z", stabilizer_ops_x, decoder_z_kwargs),
-        ]:
-            if legacy_args:
-                _deprecations.warn_deprecated(
-                    get_legacy_decoder_migration_message(
-                        matrix, legacy_args, argument_name=argument_name
-                    ),
-                    stacklevel=get_external_caller_stacklevel(),
-                )
-        decoder_x_kwargs = decoder_kwargs | (decoder_x_kwargs or {})
-        decoder_z_kwargs = decoder_kwargs | (decoder_z_kwargs or {})
+        if decoder_kwargs or decoder_x_kwargs or decoder_z_kwargs:
+            decoder_x_input, decoder_z_input = merge_legacy_css_decoder_args(
+                stabilizer_ops_z,
+                stabilizer_ops_x,
+                decoder_x_input,
+                decoder_z_input,
+                decoder_kwargs,
+                decoder_x_kwargs,
+                decoder_z_kwargs,
+            )
 
         # identify logical operators
         logicals_x = self.get_logical_ops(Pauli.X)
@@ -3957,10 +3951,9 @@ class CSSCode(QuditCode):
         same_x_and_z = (
             np.array_equal(stabilizer_ops_x, stabilizer_ops_z)
             and decoder_x_input is decoder_z_input
-            and decoder_x_kwargs == decoder_z_kwargs
         )
         code_capacity_decoder_x = get_code_capacity_decoder(
-            stabilizer_ops_z, logicals_z, decoder_x_input, decoder_x_kwargs, warn_deprecated=False
+            stabilizer_ops_z, logicals_z, decoder_x_input
         )
         code_capacity_decoder_z = (
             code_capacity_decoder_x.reuse_for(stabilizer_ops_x, logicals_x)
@@ -3976,11 +3969,7 @@ class CSSCode(QuditCode):
                     " such as decoder=decoders.bp_osd(...)"
                 )
             code_capacity_decoder_z = get_code_capacity_decoder(
-                stabilizer_ops_x,
-                logicals_x,
-                decoder_z_input,
-                decoder_z_kwargs,
-                warn_deprecated=False,
+                stabilizer_ops_x, logicals_x, decoder_z_input
             )
 
         # sample errors of fixed weight and record failure/discard counts

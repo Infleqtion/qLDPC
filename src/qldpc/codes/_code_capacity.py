@@ -12,7 +12,6 @@ from __future__ import annotations
 import dataclasses
 import functools
 import warnings
-from collections.abc import Mapping
 
 import galois
 import numpy as np
@@ -30,8 +29,8 @@ from qldpc.decoders.adapters._observable_decoders import (
 from qldpc.decoders.common import ObservableDecodingFallbackWarning
 from qldpc.decoders.construction._resolution import (
     PLACEHOLDER_ERROR_RATE,
+    build_error_decoder,
     reject_prebuilt_decoder,
-    resolve_decoder,
 )
 from qldpc.decoders.construction.factories import DEMDecoderFactory
 from qldpc.decoders.construction.specs import (
@@ -110,7 +109,7 @@ class CodeCapacityDecoder:
             int(observable_decoder.has_erasure_bit),
         )
 
-    def decode(self, syndrome: galois.FieldArray) -> tuple[galois.FieldArray, bool]:
+    def predict(self, syndrome: galois.FieldArray) -> tuple[galois.FieldArray, bool]:
         """Predict the observable values of an error from its syndrome, and whether it was erased.
 
         Raises:
@@ -134,7 +133,7 @@ class CodeCapacityDecoder:
         Decoding fails if the predicted observable values differ from those of the error.  An erased
         sample is not a failure.
         """
-        predicted_observables, erased = self.decode(self.syndrome_matrix @ error)
+        predicted_observables, erased = self.predict(self.syndrome_matrix @ error)
         if erased:
             return False, True
         actual_observables = (
@@ -169,13 +168,11 @@ def get_code_capacity_decoder(
     syndrome_matrix: galois.FieldArray,
     observable_matrix: galois.FieldArray | None,
     decoder: DecoderInput,
-    decoder_args: Mapping[str, object] | None = None,
     *,
     dem_errors: galois.FieldArray | None = None,
     symplectic_dem_errors: bool = False,
     dem_error_weights: npt.NDArray[np.floating] | None = None,
     prebuilt_rejection_reason: str | None = None,
-    warn_deprecated: bool = True,
 ) -> CodeCapacityDecoder:
     """Build an observable decoder for one sector of a code-capacity experiment.
 
@@ -195,7 +192,6 @@ def get_code_capacity_decoder(
         observable_matrix: The matrix that maps an error to its observable values, or None if every
             error location is itself an observable.
         decoder: A decoder specification for this sector, or None for the default decoder.
-        decoder_args: Deprecated keyword-based decoder options, which build an error decoder.
         dem_errors: The errors of the error mechanisms of the detector error model for which a
             Sinter-style decoder is compiled, as columns of a matrix.  Defaults to the identity
             matrix, making each error location an error mechanism.
@@ -208,12 +204,10 @@ def get_code_capacity_decoder(
         prebuilt_rejection_reason: If not None, reject a prebuilt (error or observable) decoder,
             with this reason in the error message.  A Sinter-style decoder is compiled here, so it
             is not rejected.
-        warn_deprecated: Whether to warn when decoder_args is nonempty.
 
     Returns:
         A CodeCapacityDecoder.
     """
-    decoder_args = decoder_args or {}
     dem_error_probs: npt.NDArray[np.floating] | float = PLACEHOLDER_ERROR_RATE
     if dem_error_weights is not None:
         dem_error_probs = PLACEHOLDER_ERROR_RATE * np.asarray(dem_error_weights, dtype=float)
@@ -225,7 +219,7 @@ def get_code_capacity_decoder(
         symplectic_errors=symplectic_dem_errors,
         error_probs=dem_error_probs,
     )
-    if not decoder_args and compiles_for_dem(decoder):
+    if compiles_for_dem(decoder):
         compiled_decoder = decoder.compile_decoder_for_dem(dem=build_dem())
         return _get_observable_code_capacity_decoder(
             compiled_decoder,
@@ -238,7 +232,7 @@ def get_code_capacity_decoder(
     if prebuilt_rejection_reason is not None:
         reject_prebuilt_decoder(decoder, prebuilt_rejection_reason)
 
-    if not decoder_args and is_prebuilt_observable_decoder(decoder):
+    if is_prebuilt_observable_decoder(decoder):
         return _get_observable_code_capacity_decoder(
             decoder,
             syndrome_matrix,
@@ -247,7 +241,7 @@ def get_code_capacity_decoder(
             require_dimensions=True,
         )
 
-    if not decoder_args and isinstance(decoder, DEMDecoderFactory):
+    if isinstance(decoder, DEMDecoderFactory):
         return _get_observable_code_capacity_decoder(
             decoder.build(build_dem()),
             syndrome_matrix,
@@ -257,7 +251,7 @@ def get_code_capacity_decoder(
         )
 
     native_error: Exception | None = None
-    if not decoder_args and isinstance(decoder, DecoderSpec):
+    if isinstance(decoder, DecoderSpec):
         is_binary = getattr(type(syndrome_matrix), "order", 2) == 2
         if not decoder.infers_errors or (is_binary and decoder.predicts_observables_natively):
             dem = build_dem()
@@ -290,11 +284,9 @@ def get_code_capacity_decoder(
             )
 
     try:
-        error_decoder = resolve_decoder(
+        error_decoder = build_error_decoder(
             syndrome_matrix,
-            decoder,  # type:ignore[arg-type]
-            decoder_args,
-            warn_deprecated=warn_deprecated,
+            decoder=decoder,  # type:ignore[arg-type]
         )
     except ValueError as error:
         if native_error is not None:

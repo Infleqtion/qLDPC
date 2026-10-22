@@ -4,12 +4,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 import galois
 import stim
-
-from qldpc._deprecations.decoders import merge_legacy_decoder_args
 
 from .._capabilities import compiles_for_dem, is_prebuilt_decoder
 from ..adapters._observable_decoders import BitPackedObservableDecoder, validate_observable_decoder
@@ -35,72 +31,14 @@ PLACEHOLDER_ERROR_RATE = _PLACEHOLDER_ERROR_RATE
 # decoder input resolution
 
 
-def resolve_decoder(
-    pcm_or_dem: PcmOrDem,
-    decoder: ErrorDecoderInput,
-    decoder_args: Mapping[str, object],
-    *,
-    warn_deprecated: bool = True,
-) -> ErrorDecoder:
-    """Resolve a decoder input into a decoder that infers errors from a syndrome.
+def build_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
+    """Build or retrieve a decoder that maps a syndrome to an inferred error.
 
     Args:
         pcm_or_dem: The parity-check matrix or detector error model to decode.
         decoder: A decoder specification such as ``decoders.bp_osd(...)``, a constructor or
             ``decoders.from_matrix(...)`` factory that builds an error decoder, a prebuilt error
             decoder, or None to select GUF for a nonbinary FieldArray and BP+OSD otherwise.
-        decoder_args: Deprecated keyword arguments, which are translated into a decoder input.  If
-            nonempty, decoder must be None.
-        warn_deprecated: Whether to warn about nonempty decoder_args.
-
-    Returns:
-        An ErrorDecoder.
-    """
-    if decoder_args:
-        decoder = merge_legacy_decoder_args(
-            pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
-        )
-    return build_error_decoder(pcm_or_dem, decoder=decoder)
-
-
-def resolve_observable_decoder(
-    dem: stim.DetectorErrorModel,
-    decoder: DecoderInput,
-    decoder_args: Mapping[str, object],
-    *,
-    warn_deprecated: bool = True,
-) -> ObservableDecoder:
-    """Resolve a decoder input into a decoder that predicts observable flips from a syndrome.
-
-    Args:
-        dem: The detector error model to decode.
-        decoder: A decoder specification such as ``decoders.mwpm(...)``, which builds a native
-            observable decoder when supported; a ``decoders.from_dem(...)`` factory; an object with
-            a compile_decoder_for_dem method, such as a ``decoders.SinterDecoder``; a constructor
-            that builds an error or observable decoder from dem; a prebuilt error or observable
-            decoder; or None to select BP+OSD.
-        decoder_args: Deprecated keyword arguments, which are translated into a decoder input.  If
-            nonempty, decoder must be None.
-        warn_deprecated: Whether to warn about nonempty decoder_args.
-
-    Returns:
-        An ObservableDecoder.  An error decoder is wrapped so that the observable flips of the
-        errors that it infers become its predictions.
-    """
-    if decoder_args:
-        decoder = merge_legacy_decoder_args(
-            dem, decoder, decoder_args, warn_deprecated=warn_deprecated
-        )
-    return build_observable_decoder(dem, decoder=decoder)
-
-
-def build_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
-    """Build or retrieve a decoder that maps a syndrome to an inferred error.
-
-    Args:
-        pcm_or_dem: The parity-check matrix or detector error model to decode.
-        decoder: An error-decoder specification such as ``decoders.bp_osd(...)``, or None to select
-            the default: GUF for a nonbinary FieldArray and BP+OSD otherwise.
 
     Returns:
         An ErrorDecoder.
@@ -116,11 +54,14 @@ def build_observable_decoder(
     Args:
         dem: The detector error model to decode.
         decoder: A decoder specification such as ``decoders.mwpm(...)``, which builds a native
-            observable decoder when supported, or None to select the default decoder.  If a
-            specification infers errors instead, those errors are projected onto the observables.
+            observable decoder when supported; a ``decoders.from_dem(...)`` factory; an object with
+            a compile_decoder_for_dem method, such as a ``decoders.SinterDecoder``; a constructor
+            that builds an error or observable decoder from dem; a prebuilt error or observable
+            decoder; or None to select BP+OSD.
 
     Returns:
-        An ObservableDecoder.
+        An ObservableDecoder.  An error decoder is wrapped so that the observable flips of the
+        errors that it infers become its predictions.
     """
     if isinstance(decoder, DecoderSpec):
         return decoder.build_observable_decoder(dem)

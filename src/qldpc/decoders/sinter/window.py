@@ -13,7 +13,7 @@ import numpy.typing as npt
 import stim
 
 from ..adapters.error_decoders import _match_error_decoder_to_dem
-from ..construction._resolution import resolve_decoder
+from ..construction._resolution import build_error_decoder
 from ..construction.specs import DeferredErrorDecoderInput
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, _batch_decode_errors
@@ -144,12 +144,7 @@ class SequentialWindowDecoder(SinterDecoder):
                 dem_arrays.error_probs[d_errors],
             )
             window_dem = window_dem_arrays.to_dem()
-            window_decoder = resolve_decoder(
-                window_dem,
-                self.decoder_input,
-                self.decoder_kwargs.copy(),
-                warn_deprecated=False,
-            )
+            window_decoder = build_error_decoder(window_dem, decoder=self.decoder_input)
             # Windows commit inferred errors, so they need error decoders.  Restricting the DEM to
             # this window may leave equivalent error mechanisms, which the window_decoder may merge
             # into one, so align the errors that it infers with the error mechanisms of the window.
@@ -432,6 +427,8 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
                         f"detector {detector} has an invalid (non-integer) time index: {time}"
                     )
                 time_to_dets[int(time)].append(detector)
+            if not time_to_dets:
+                continue
 
             # add one window at a time (except the last window)
             start_time = min(time_to_dets)

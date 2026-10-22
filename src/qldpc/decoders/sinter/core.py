@@ -13,14 +13,10 @@ import sinter
 import stim
 
 from qldpc import _deprecations
-from qldpc._deprecations.decoders import (
-    get_legacy_decoder_migration_message,
-    reject_removed_decoder_args,
-)
-from qldpc._utils import get_external_caller_stacklevel
+from qldpc._deprecations.decoders import merge_legacy_decoder_args, reject_removed_decoder_args
 
 from ..adapters.error_decoders import ErrorsToObservablesDecoder
-from ..construction._resolution import reject_prebuilt_decoder, resolve_observable_decoder
+from ..construction._resolution import build_observable_decoder, reject_prebuilt_decoder
 from ..construction.specs import DecoderSpec, DeferredDecoderInput
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, ObservableDecoder, _as_error_decoder
@@ -98,10 +94,7 @@ class SinterDecoder(_SinterDecoder):
         self.decoder_input = decoder
         self.decoder_kwargs = decoder_kwargs
         if decoder_kwargs:
-            _deprecations.warn_deprecated(
-                get_legacy_decoder_migration_message(None, decoder_kwargs),
-                stacklevel=get_external_caller_stacklevel(),
-            )
+            self.decoder_input = merge_legacy_decoder_args(None, decoder, decoder_kwargs)
 
     def compile_decoder_for_dem(self, dem: stim.DetectorErrorModel) -> CompiledSinterDecoder:
         """Creates a decoder preconfigured for the given detector error model.
@@ -111,11 +104,8 @@ class SinterDecoder(_SinterDecoder):
         dem_arrays = DetectorErrorModelArrays(
             dem, simplify=self.simplify, decompose_errors=self.decompose_errors
         )
-        observable_decoder = resolve_observable_decoder(
-            dem_arrays.to_dem(),
-            self.decoder_input,
-            self.decoder_kwargs.copy(),
-            warn_deprecated=False,
+        observable_decoder = build_observable_decoder(
+            dem_arrays.to_dem(), decoder=self.decoder_input
         )
         return CompiledSinterDecoder(dem_arrays, observable_decoder)
 

@@ -4,8 +4,8 @@
 
 The registry in qldpc._deprecations serves the deprecated functions of this module at their
 package-root paths in qldpc.decoders.  Decoder modules import this module for
-deprecate_error_rate_option, so this module imports decoder builders and resolution functions where
-it uses them, rather than at import time.
+deprecate_error_rate_option, so this module imports qldpc.decoders only within the functions that
+use it, never at import time.
 """
 
 from __future__ import annotations
@@ -22,26 +22,19 @@ import stim
 
 from qldpc import _deprecations
 from qldpc._utils import get_external_caller_stacklevel
-from qldpc.decoders._capabilities import (
-    compiles_for_dem,
-    is_prebuilt_decoder,
-    is_prebuilt_observable_decoder,
-)
-from qldpc.decoders.construction.factories import DEMDecoderFactory, MatrixDecoderFactory
-from qldpc.decoders.construction.specs import (
-    DecoderInput,
-    DecoderSpec,
-    ErrorDecoderConstructor,
-    ErrorDecoderInput,
-    PcmOrDem,
-)
-from qldpc.decoders.protocols import BatchErrorDecoder, ErrorDecoder, ObservableDecoder
 
 if TYPE_CHECKING:
+    from qldpc.decoders.construction.specs import (
+        DecoderInput,
+        ErrorDecoderConstructor,
+        ErrorDecoderInput,
+        PcmOrDem,
+    )
     from qldpc.decoders.custom.guf import GUFDecoder
     from qldpc.decoders.custom.ilp import ILPDecoder
     from qldpc.decoders.custom.lookup import LookupDecoder
     from qldpc.decoders.external.relay_bp import RelayBPDecoder
+    from qldpc.decoders.protocols import BatchErrorDecoder, ErrorDecoder, ObservableDecoder
 
 _DecoderT = TypeVar("_DecoderT")
 
@@ -91,7 +84,9 @@ def decode(
 
 def get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
     """Build or retrieve an error decoder."""
-    from qldpc.decoders.construction._resolution import resolve_decoder
+    from qldpc.decoders._capabilities import is_prebuilt_decoder
+    from qldpc.decoders.construction._resolution import build_error_decoder
+    from qldpc.decoders.construction.specs import DecoderSpec
 
     if isinstance(decoder, DecoderSpec):
         replacement = f"{decoder!r}.build(pcm_or_dem)"
@@ -104,19 +99,19 @@ def get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None
     else:
         replacement = "a decoder specification such as decoders.bp_osd(...).build(pcm_or_dem)"
     _warn_deprecated_function("decoders.get_error_decoder", replacement)
-    return resolve_decoder(pcm_or_dem, decoder, {})
+    return build_error_decoder(pcm_or_dem, decoder=decoder)
 
 
 def get_observable_decoder(
     dem: stim.DetectorErrorModel, *, decoder: DecoderInput = None
 ) -> ObservableDecoder:
     """Build or retrieve an observable decoder."""
-    from qldpc.decoders.construction._resolution import resolve_observable_decoder
+    from qldpc.decoders.construction._resolution import build_observable_decoder
 
     expression, note = _get_observable_decoder_expression(decoder)
     replacement = "the prebuilt observable decoder directly" if expression is None else expression
     _warn_deprecated_function("decoders.get_observable_decoder", replacement + note)
-    return resolve_observable_decoder(dem, decoder, {})
+    return build_observable_decoder(dem, decoder=decoder)
 
 
 def decode_observables(
@@ -126,7 +121,7 @@ def decode_observables(
     decoder: DecoderInput = None,
 ) -> npt.NDArray[np.int_]:
     """Predict the observable flips of one syndrome."""
-    from qldpc.decoders.construction._resolution import resolve_observable_decoder
+    from qldpc.decoders.construction._resolution import build_observable_decoder
 
     expression, note = _get_observable_decoder_expression(decoder)
     replacement = (
@@ -135,7 +130,41 @@ def decode_observables(
         else f"{expression}.decode_observables(syndrome)"
     )
     _warn_deprecated_function("decoders.decode_observables", replacement + note)
-    return resolve_observable_decoder(dem, decoder, {}).decode_observables(syndrome)
+    return build_observable_decoder(dem, decoder=decoder).decode_observables(syndrome)
+
+
+def resolve_decoder(
+    pcm_or_dem: PcmOrDem,
+    decoder: ErrorDecoderInput,
+    decoder_args: Mapping[str, object],
+    *,
+    warn_deprecated: bool = True,
+) -> ErrorDecoder:
+    """Resolve an error decoder input, together with deprecated keyword-based decoder arguments."""
+    from qldpc.decoders.construction._resolution import build_error_decoder
+
+    if decoder_args:
+        decoder = merge_legacy_decoder_args(
+            pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
+        )
+    return build_error_decoder(pcm_or_dem, decoder=decoder)
+
+
+def resolve_observable_decoder(
+    dem: stim.DetectorErrorModel,
+    decoder: DecoderInput,
+    decoder_args: Mapping[str, object],
+    *,
+    warn_deprecated: bool = True,
+) -> ObservableDecoder:
+    """Resolve an observable decoder input, together with deprecated keyword-based arguments."""
+    from qldpc.decoders.construction._resolution import build_observable_decoder
+
+    if decoder_args:
+        decoder = merge_legacy_decoder_args(
+            dem, decoder, decoder_args, warn_deprecated=warn_deprecated
+        )
+    return build_observable_decoder(dem, decoder=decoder)
 
 
 def get_decoder_bp_osd(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> ErrorDecoder:
@@ -177,7 +206,9 @@ def get_decoder_lookup(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> LookupDecod
 def get_decoder_mwpm(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> BatchErrorDecoder:
     """Build an MWPM decoder."""
     _warn_deprecated_builder("get_decoder_mwpm", "mwpm")
-    return cast(BatchErrorDecoder, _get_decoder_constructors()["MWPM"](pcm_or_dem, **decoder_args))
+    return cast(
+        "BatchErrorDecoder", _get_decoder_constructors()["MWPM"](pcm_or_dem, **decoder_args)
+    )
 
 
 def get_decoder_rbp(
@@ -235,6 +266,15 @@ def _get_observable_decoder_expression(decoder: DecoderInput) -> tuple[str | Non
     that predicts observable flips, and is therefore used as is.  The accompanying note, which may
     be empty, qualifies the expression when it is unknown what kind of decoder a constructor builds.
     """
+    from qldpc.decoders._capabilities import (
+        compiles_for_dem,
+        is_prebuilt_decoder,
+        is_prebuilt_observable_decoder,
+    )
+    from qldpc.decoders.construction.factories import DEMDecoderFactory, MatrixDecoderFactory
+    from qldpc.decoders.construction.specs import DecoderSpec
+    from qldpc.decoders.protocols import ObservableDecoder
+
     if isinstance(decoder, DecoderSpec):
         return f"{decoder!r}.build_observable_decoder(dem)", ""
     if decoder is None:
@@ -281,24 +321,87 @@ def _warn_deprecated_function(function_name: str, replacement: str) -> None:
 
 
 def merge_legacy_decoder_args(
-    pcm_or_dem: PcmOrDem,
+    pcm_or_dem: PcmOrDem | None,
     decoder: DecoderInput,
     decoder_args: Mapping[str, object],
     *,
     warn_deprecated: bool = True,
 ) -> ErrorDecoderConstructor:
-    """Translate nonempty deprecated keyword arguments into a decoder input."""
+    """Translate nonempty deprecated keyword arguments into a decoder input.
+
+    Args:
+        pcm_or_dem: The parity-check matrix or detector error model to decode, which the warning
+            uses to name a replacement, or None if it is not known yet.
+        decoder: The decoder input passed alongside the deprecated arguments, which must be None.
+        decoder_args: Nonempty deprecated keyword arguments.
+        warn_deprecated: Whether to warn that the arguments are deprecated.
+
+    Returns:
+        A constructor that builds the selected decoder for a matrix or detector error model.
+    """
     reject_removed_decoder_args(decoder_args)
-    if decoder is not None:
-        raise ValueError(
-            "Cannot combine decoder= with deprecated decoder-selection or construction arguments"
-        )
+    _reject_decoder_with_legacy_args(decoder)
     if warn_deprecated:
         _deprecations.warn_deprecated(
             get_legacy_decoder_migration_message(pcm_or_dem, decoder_args),
             stacklevel=get_external_caller_stacklevel(),
         )
-    return _get_legacy_decoder_input(pcm_or_dem, decoder_args)
+    return _get_legacy_decoder_input(decoder_args)
+
+
+def merge_legacy_css_decoder_args(
+    matrix_x: galois.FieldArray,
+    matrix_z: galois.FieldArray,
+    decoder_x: DecoderInput,
+    decoder_z: DecoderInput,
+    decoder_args: Mapping[str, object],
+    decoder_x_args: Mapping[str, object] | None,
+    decoder_z_args: Mapping[str, object] | None,
+) -> tuple[DecoderInput, DecoderInput]:
+    """Translate deprecated keyword arguments for the two sectors of a CSS code into decoder inputs.
+
+    Sector-specific arguments override the shared arguments.  Each nonempty argument mapping warns
+    separately, naming the decoder= argument that replaces it.  If the two sectors get the same
+    decoder input and the same arguments, they also get the same translated decoder input.
+
+    Args:
+        matrix_x: The syndrome matrix of the sector that decodes X-type errors.
+        matrix_z: The syndrome matrix of the sector that decodes Z-type errors.
+        decoder_x: The decoder input for X-type errors, before translation.
+        decoder_z: The decoder input for Z-type errors, before translation.
+        decoder_args: Deprecated keyword arguments for both sectors.
+        decoder_x_args: Deprecated keyword arguments for X-type errors, or None.
+        decoder_z_args: Deprecated keyword arguments for Z-type errors, or None.
+
+    Returns:
+        The decoder inputs for X-type and Z-type errors.
+    """
+    for removed_args in [decoder_args, decoder_x_args or {}, decoder_z_args or {}]:
+        reject_removed_decoder_args(removed_args)
+    for argument_name, matrix, legacy_args in [
+        ("decoder", matrix_x, decoder_args),
+        ("decoder_x", matrix_x, decoder_x_args),
+        ("decoder_z", matrix_z, decoder_z_args),
+    ]:
+        if legacy_args:
+            _deprecations.warn_deprecated(
+                get_legacy_decoder_migration_message(
+                    matrix, legacy_args, argument_name=argument_name
+                ),
+                stacklevel=get_external_caller_stacklevel(),
+            )
+    sector_args_x = {**decoder_args, **(decoder_x_args or {})}
+    sector_args_z = {**decoder_args, **(decoder_z_args or {})}
+    same_x_and_z = decoder_x is decoder_z and sector_args_x == sector_args_z
+    if sector_args_x:
+        _reject_decoder_with_legacy_args(decoder_x)
+        decoder_x = _get_legacy_decoder_input(sector_args_x)
+    if same_x_and_z:
+        return decoder_x, decoder_x
+    if sector_args_z:
+        _reject_decoder_with_legacy_args(decoder_z)
+        decoder_z = _get_legacy_decoder_input(sector_args_z)
+    return decoder_x, decoder_z
 
 
 def reject_removed_decoder_args(decoder_args: Mapping[str, object]) -> None:
@@ -367,7 +470,7 @@ def _get_decoder_constructors() -> dict[str, Callable[..., ErrorDecoder]]:
         _get_decoder_bp_osd,
     )
     from qldpc.decoders.external.pymatching import _get_decoder_mwpm
-    from qldpc.decoders.external.relay_bp import _get_decoder_rbp
+    from qldpc.decoders.external.relay_bp import RelayBPDecoder
 
     return {
         "BF": functools.partial(_call_with_flat_backend_options, _get_decoder_bf),
@@ -376,7 +479,7 @@ def _get_decoder_constructors() -> dict[str, Callable[..., ErrorDecoder]]:
         "GUF": _get_decoder_guf,
         "ILP": _get_decoder_ilp,
         "MWPM": functools.partial(_call_with_flat_backend_options, _get_decoder_mwpm),
-        "RBP": _get_decoder_rbp,
+        "RBP": RelayBPDecoder,
         "lookup": _get_decoder_lookup,
     }
 
@@ -407,16 +510,16 @@ def _get_legacy_decoder(pcm_or_dem: PcmOrDem, decoder_args: Mapping[str, object]
         if len(decoder_args) > 1:
             raise ValueError("If passed a static decoder, we cannot process decoding arguments")
         return static_decoder
-    return _get_legacy_decoder_input(pcm_or_dem, decoder_args)(pcm_or_dem)
+    return _get_legacy_decoder_input(decoder_args)(pcm_or_dem)
 
 
-def _get_legacy_decoder_input(
-    pcm_or_dem: PcmOrDem, decoder_args: Mapping[str, object]
-) -> ErrorDecoderConstructor:
+def _get_legacy_decoder_input(decoder_args: Mapping[str, object]) -> ErrorDecoderConstructor:
     """Translate deprecated decoder arguments into a decoder constructor.
 
     Free-form decoder options are passed through to the selected builder unchecked, as they were in
-    qLDPC 0.3.3, so they become a constructor rather than a typed decoder specification.
+    qLDPC 0.3.3, so they become a constructor rather than a typed decoder specification.  If no
+    decoder is selected, the constructor selects the default decoder for the matrix or detector
+    error model that it is called with.
     """
     decoder_args = dict(decoder_args)
     if (decoder_constructor := decoder_args.pop("decoder_constructor", None)) is not None:
@@ -432,13 +535,25 @@ def _get_legacy_decoder_input(
             "Only one decoder can be requested at a time, but received requests for: "
             + ", ".join(decoder_names)
         )
-    if decoder_names:
-        (decoder_name,) = decoder_names
-    elif isinstance(pcm_or_dem, galois.FieldArray) and type(pcm_or_dem).order != 2:
-        decoder_name = "GUF"
-    else:
-        decoder_name = "BP_OSD"
+    if not decoder_names:
+        return functools.partial(_get_default_legacy_decoder, **decoder_args)
+    (decoder_name,) = decoder_names
     return functools.partial(_get_decoder_constructors()[decoder_name], **decoder_args)
+
+
+def _get_default_legacy_decoder(pcm_or_dem: PcmOrDem, /, **decoder_args: object) -> ErrorDecoder:
+    """Build the default decoder, GUF for a nonbinary FieldArray and BP+OSD otherwise."""
+    is_nonbinary = isinstance(pcm_or_dem, galois.FieldArray) and type(pcm_or_dem).order != 2
+    decoder_name = "GUF" if is_nonbinary else "BP_OSD"
+    return _get_decoder_constructors()[decoder_name](pcm_or_dem, **decoder_args)
+
+
+def _reject_decoder_with_legacy_args(decoder: DecoderInput) -> None:
+    """Reject a decoder input that is passed alongside deprecated keyword arguments."""
+    if decoder is not None:
+        raise ValueError(
+            "Cannot combine decoder= with deprecated decoder-selection or construction arguments"
+        )
 
 
 def _get_legacy_decoder_replacement(

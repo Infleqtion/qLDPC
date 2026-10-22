@@ -550,7 +550,7 @@ def test_distance_bound_memory() -> None:
     ):
         assert classical_code.get_distance_bound() == 4
         assert classical_code.get_distance_bound(num_trials=1) == 4  # never worse than known
-    with unittest.mock.patch("qldpc.codes.common.resolve_decoder", side_effect=AssertionError):
+    with unittest.mock.patch("qldpc.codes.common.build_error_decoder", side_effect=AssertionError):
         assert classical_code.get_distance_bound() == 4
         assert classical_code.canonicalized.get_distance_bound() == 4
 
@@ -1480,6 +1480,28 @@ def test_deprecated_decoder_kwargs_warning_location() -> None:
     assert all(warning.filename == __file__ for warning in caught)
     assert any("decoder_x=decoders.lookup(...)" in message for message in messages)
     assert any("decoder_z=decoders.mwpm(...)" in message for message in messages)
+
+
+def test_deprecated_decoder_kwargs() -> None:
+    """Deprecated decoder keyword arguments configure the decoder of each method that takes them."""
+    built_for: list[tuple[str, tuple[int, ...]]] = []
+
+    def build_decoder(matrix: galois.FieldArray, tag: str) -> decoders.ErrorDecoder:
+        built_for.append((tag, matrix.shape))
+        return decoders.custom.LookupDecoder(matrix, max_weight=3)
+
+    classical_code = codes.HammingCode(3)
+    classical_code.forget_distance()
+    with pytest.warns(DeprecationWarning, match="decoder_constructor"):
+        classical_code.get_distance_bound(decoder_constructor=build_decoder, tag="classical")
+    with pytest.warns(DeprecationWarning, match="decoder_constructor"):
+        codes.FiveQubitCode().get_logical_error_rate_func(
+            1, decoder_constructor=build_decoder, tag="qudit"
+        )
+    assert built_for == [("classical", (7, 7)), ("qudit", (4, 10))]
+
+    with pytest.raises(ValueError, match="Cannot combine decoder="):
+        classical_code.get_logical_error_rate_func(1, decoder=decoders.lookup(1), with_lookup=True)
 
 
 def test_prebuilt_decoders_rejected_for_internal_matrices() -> None:

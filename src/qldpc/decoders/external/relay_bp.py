@@ -18,7 +18,7 @@ import stim
 from qldpc._utils import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
-from ..common import _PLACEHOLDER_ERROR_RATE, _erasure_bit_support, with_erasure_bits
+from ..common import _PLACEHOLDER_ERROR_RATE, with_erasure_bits
 from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import BatchErrorDecoder, ErrorDecodeResult, ObservableDecodeResult
@@ -445,33 +445,6 @@ def _as_relay_bp_matrix(matrix: IntegerArray) -> IntegerArray:
 # decoder specifications
 
 
-@_erasure_bit_support("RBP", supported=True)
-def _get_decoder_rbp(
-    pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
-    error_priors: npt.NDArray[np.floating] | Sequence[float] | None = None,
-    **decoder_args: object,
-) -> RelayBPDecoder:
-    """Build a Relay-BP decoder.
-
-    See the `relay-bp package documentation <https://pypi.org/project/relay-bp>`_ and
-    `arXiv:2506.01779 <https://arxiv.org/abs/2506.01779>`_.
-
-    Args:
-        pcm_or_dem: A parity-check matrix or detector error model (DEM) to decode.
-        error_priors: Prior probabilities for each error.  A DEM supplies these by default.
-        **decoder_args: Arguments passed to :class:`RelayBPDecoder`, including the backend class
-            ``name``, observable matrix, and ``add_erasure_bit``.
-
-    Returns:
-        A :class:`RelayBPDecoder`, which can infer errors and, when observable metadata is
-        available, predict observable flips.
-
-    With ``add_erasure_bit=True``, the decoder appends a flag set when the inferred error does not
-    reproduce the syndrome.
-    """
-    return RelayBPDecoder(pcm_or_dem, error_priors, **decoder_args)  # type: ignore[arg-type]
-
-
 def _get_decoder_relay_bp(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     *,
@@ -536,10 +509,9 @@ def _get_decoder_relay_bp(
         "gamma_dist_interval": gamma_dist_interval,
         "stopping_criterion": stopping_criterion,
     }
-    return _get_relay_decoder(
+    return RelayBPDecoder(
         pcm_or_dem,
-        decoder_class_prefix="RelayDecoder",
-        precision=precision,
+        name=f"RelayDecoder{precision}",
         error_priors=error_priors,
         observable_error_matrix=observable_error_matrix,
         include_decode_result=include_decode_result,
@@ -609,10 +581,9 @@ def _get_decoder_min_sum_bp(
         A :class:`~qldpc.decoders.external.relay_bp.RelayBPDecoder`, which infers errors and, when
         observable metadata is available, predicts observable flips.
     """
-    return _get_relay_decoder(
+    return RelayBPDecoder(
         pcm_or_dem,
-        decoder_class_prefix="MinSumBPDecoder",
-        precision=precision,
+        name=f"MinSumBPDecoder{precision}",
         error_priors=error_priors,
         observable_error_matrix=observable_error_matrix,
         include_decode_result=include_decode_result,
@@ -703,14 +674,3 @@ Returns:
     :class:`~qldpc.decoders.external.relay_bp.RelayBPDecoder`.
 """,
 )
-
-
-def _get_relay_decoder(
-    pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
-    *,
-    decoder_class_prefix: str,
-    precision: str,
-    **decoder_args: Any,
-) -> RelayBPDecoder:
-    """Build a RelayBPDecoder from a class-name prefix and precision."""
-    return RelayBPDecoder(pcm_or_dem, name=f"{decoder_class_prefix}{precision}", **decoder_args)
