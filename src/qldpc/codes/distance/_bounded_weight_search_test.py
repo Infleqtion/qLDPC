@@ -22,12 +22,26 @@ from ._bounded_weight_search import (
 
 Metric = Literal["pauli", "css"]
 
-# A 10-vertex graph state with a syndrome (1019) whose minimum weight is 3, found by searching
-# thresholds in increasing order for a recomputation that once discarded a proved bound.
+# A 10-vertex graph state whose syndrome 1019 has minimum weight 3.  It was found by searching for
+# a recomputation at a higher threshold that discarded a lower bound proved at a lower threshold.
 GRAPH_10_EDGES = (
-    (0, 2), (0, 3), (0, 6), (0, 7), (1, 8), (2, 5), (2, 8), (3, 4),
-    (3, 6), (3, 7), (4, 6), (4, 7), (4, 9), (5, 6), (6, 8), (7, 8),
-)  # fmt: skip
+    (0, 2),
+    (0, 3),
+    (0, 6),
+    (0, 7),
+    (1, 8),
+    (2, 5),
+    (2, 8),
+    (3, 4),
+    (3, 6),
+    (3, 7),
+    (4, 6),
+    (4, 7),
+    (4, 9),
+    (5, 6),
+    (6, 8),
+    (7, 8),
+)
 
 
 def _graph_state(
