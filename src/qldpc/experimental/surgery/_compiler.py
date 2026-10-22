@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Private compiler-facing records and lowering for lattice surgery."""
 
 from __future__ import annotations

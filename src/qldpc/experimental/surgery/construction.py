@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Internal algebraic seam for CSS surgery constructions."""
 
 from __future__ import annotations

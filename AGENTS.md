@@ -40,29 +40,18 @@ Plumbing that several modules share lives in private modules; helpers that one f
 
 - A name is public if it is broadly useful to researchers and engineers, and private if it is plumbing that makes qLDPC work.
   Where a name is used, such as in other modules or in notebooks, does not decide this.
-- Plain names defined in public modules (no underscore anywhere in the import path) are public.
+- Plain names defined in public modules (no underscore anywhere in the import path) are public API.
   Keep them working, and retire a released public name through a tested shim rather than breaking its import (see [Deprecations](#deprecations)).
-- [`src/qldpc/__init__.py`](src/qldpc/__init__.py) exports subpackages rather than flattening their classes and functions.
-- Each stable subpackage lists its public classes and functions (or, for `qldpc` and `qldpc.external`, its public submodules) in the `__all__` of its `__init__.py`.
-  Decoder specification helpers such as `bp_osd` are listed only in `qldpc.decoders.__all__`.
-  `qldpc.decoders.construction` has no `__all__`: `qldpc.decoders` re-exports its user-facing names, and the helpers for backend authors (`decoder_spec`, `observable_decoder_spec`) are public at `qldpc.decoders.construction.specs`.
-  Type aliases and type variables used in public signatures are public without being listed.
-  Keep `__all__` complete and preserve these import paths when moving implementation code.
-- AutoAPI lists every public symbol except the generated decoder specification helpers, which [`decoders.rst`](docs/source/decoders.rst) documents instead.
-  Other human-written docs therefore explain what packages do and show representative tasks rather than catalogue classes.
-- A private module has an underscore somewhere in its import path, and is private as a whole.
-  It uses plain names for definitions that other modules use, and underscore names for helpers that only its own file uses.
-- A module-level underscore name is used only in its own file and that file's `*_test.py`.
-  A class's underscore attributes and methods may be used anywhere in the package that defines the class, but not outside it.
-  The only exception is [`_deprecations/decoders.py`](src/qldpc/_deprecations/decoders.py), which imports private decoder builders so that deprecated APIs pass options to them unchecked.
-- Public objects are defined in public modules.
-  A public module may use a private module's implementation, but never re-exports a private module's object as public API.
-- Everything under [`src/qldpc/experimental/`](src/qldpc/experimental/) is explicitly unstable, can change without a deprecation period, and is exempt from the private-name rules above.
-  Do not infer that these weaker rules apply elsewhere.
+- [`src/qldpc/__init__.py`](src/qldpc/__init__.py) exports subpackages, and each subpackage's `__all__` lists its public names.
+  Keep `__all__` complete, and preserve public import paths when moving implementation code.
+- A private module, with an underscore anywhere in its import path, uses plain names for what other modules use and underscore names for helpers that only its own file uses.
+- A module-level underscore name is used only in its own file and that file's `*_test.py`, and a class's underscore attributes and methods only within the package that defines the class.
+- Public objects are defined in public modules; never re-export a private module's object as public API.
+- Everything under [`src/qldpc/experimental/`](src/qldpc/experimental/) is unstable, can change without a deprecation period, and is exempt from these private-name rules.
 
 ## Code style and organization
 
-- Every source file outside `experimental/` starts with `# SPDX-License-Identifier: Apache-2.0`, a blank line, and a module docstring whose first line summarizes the module.
+- Every source file starts with `# SPDX-License-Identifier: Apache-2.0`, a blank line, and a module docstring whose first line summarizes the module.
 - Docstrings follow the Google convention, and lines are at most 100 columns long.
 - Python comments and docstrings use ordinary paragraphs: separate sentences with two spaces and fill lines to the 100-column limit.
 - Keep one prose sentence per physical source line in `.rst`, `.md`, and Markdown notebook cells.
@@ -197,7 +186,7 @@ In addition, do not change generic resolution for an ordinary backend, and decid
 1. Put explanations that span packages in [`docs/source/library_map.rst`](docs/source/library_map.rst), exact API behavior in docstrings, and executable workflows in [`examples/`](examples/).
 2. The notebooks under `docs/source/examples/` are links to the canonical files under `examples/`.
    Edit the canonical notebook, not the documentation-tree link.
-3. Keep README and the library map selective.
+3. Keep README and the library map selective; AutoAPI lists the public symbols.
 4. When a public limitation changes, update the relevant function or class docstring and every README or guide that repeats it in the same pull request.
 5. Run the strict documentation build before considering the change complete.
 
@@ -209,6 +198,7 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
 - All deprecated code and APIs live under the private package [`qldpc/_deprecations/`](src/qldpc/_deprecations/).
   [`core.py`](src/qldpc/_deprecations/core.py) holds the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes; its module docstring explains the mechanics.
   [`decoders.py`](src/qldpc/_deprecations/decoders.py) holds the deprecated decoder API and its translation into decoder specifications.
+  It is the one module allowed to import other modules' underscore names: it calls private decoder builders, so that deprecated APIs pass options to them unchecked.
 - Only the following deprecation code lives outside `qldpc/_deprecations/`:
   1. Each module that still serves a deprecated name ends with this identical marked stub, which looks the name up in the registry:
 
