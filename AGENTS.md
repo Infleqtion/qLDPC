@@ -63,11 +63,11 @@ Plumbing that one subpackage uses is an underscore name in that subpackage, and 
 - Preserve a module's existing section headings and organization when adding code, and add a section when new functionality does not fit an existing one.
 - Start each section with a line of 100 `#` characters followed by a one-line `# title` comment.
 - Put important user-facing APIs first within modules and sections, and keep related public entry points together.
-- Place file-internal helpers at the bottom of the section that they serve, so that sections group code by topic rather than by visibility.
-  Reserve a final helper section for helpers that several sections share.
-  Private constants and types may sit near the imports, and helpers that code uses at import time must precede that use.
-- In private modules, put plain names (used by other modules) before underscore names (used only within the file) within each section.
+- Within each section, put plain names before underscore names, except where code that runs at import time (a base class, decorator, default argument, or module-level call) needs an underscore name first.
+  Put a helper in the section of the code that mainly uses it, or in a final helper section if several sections share it, and do not move existing helpers merely because their usage changes.
+  Private constants and types may sit near the imports.
 - Within a class, put public methods first (for decoders, the decode methods) and private helper methods after them.
+- [`code_style_test.py`](src/qldpc/code_style_test.py) checks license headers, section headers, and the order of plain and underscore names.
 
 ## Core invariants
 
