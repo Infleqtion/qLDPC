@@ -72,6 +72,11 @@ def test_special_codes() -> None:
     with pytest.raises(ValueError, match=rf"block lengths {field}\^m - 1"):
         codes.BCHCode(bits - 1, dimension, field)
 
+    # with block length q - 1, a BCH code is a Reed-Solomon code, which is MDS: [q - 1, k, q - k]
+    code = codes.BCHCode(2, 1, field=3)
+    assert code.dimension == 1
+    assert codes.ClassicalCode(code.matrix).get_code_params() == (2, 1, 2)
+
     order, size, field = 1, 3, 2
     code = codes.ReedMullerCode(order, size, field)
     assert (code.order, code.size) == (order, size)
