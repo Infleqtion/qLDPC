@@ -23,6 +23,12 @@ def isolate_gap_probe_state() -> Iterator[None]:
     external.gap.clear_cache()
 
 
+@pytest.fixture(autouse=True)
+def block_clipboard(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep tests of the manual GAP and MAGMA workflows from overwriting the user's clipboard."""
+    monkeypatch.setattr("pyperclip.copy", lambda text: None)
+
+
 @pytest.fixture(scope="session")
 def ring_cyclic3_gf2(pytestconfig: pytest.Config) -> abstract.GroupRing:
     """Construct a small ring with a pre-built Wedderburn-Artin transformer."""
