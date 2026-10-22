@@ -6,14 +6,14 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable, Sequence
-from typing import ParamSpec, TypeAlias, TypeVar, cast
+from typing import ParamSpec, TypeAlias, TypeVar
 
 import galois
 import numpy as np
 import numpy.typing as npt
 import stim
 
-from qldpc._deprecations.decoders import deprecate_error_rate_option
+from qldpc._deprecations.decoders import translate_error_rate
 from qldpc.math import IntegerArray
 
 from .dems import DetectorErrorModelArrays
@@ -127,10 +127,7 @@ def _get_matrix_error_channel(
         return None
 
     if error_rate is not None:  # DEPRECATED: see qldpc._deprecations
-        options: dict[str, object] = {"error_channel": error_channel, "error_rate": error_rate}
-        explicit = frozenset(name for name, value in options.items() if value is not None)
-        options = deprecate_error_rate_option(options, explicit)
-        error_channel = cast(_ErrorChannel, options["error_channel"])
+        error_channel = translate_error_rate(error_rate, error_channel is not None)
     if error_channel is None:
         error_channel = _PLACEHOLDER_ERROR_RATE
 

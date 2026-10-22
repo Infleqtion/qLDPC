@@ -2,10 +2,7 @@
 
 """Check that the qLDPC package imports cleanly."""
 
-import os
-import pathlib
-import subprocess
-import sys
+from qldpc.conftest import run_python
 
 
 def test_import_in_fresh_interpreter() -> None:
@@ -14,12 +11,4 @@ def test_import_in_fresh_interpreter() -> None:
     The package imports every subpackage when it is first imported, so importing any qLDPC module
     runs this same import sequence.
     """
-    source_dir = pathlib.Path(__file__).parents[1]
-    result = subprocess.run(
-        [sys.executable, "-W", "error", "-c", "import qldpc"],
-        capture_output=True,
-        check=False,
-        env=os.environ | {"PYTHONPATH": str(source_dir)},
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
+    run_python("import qldpc", "-W", "error")

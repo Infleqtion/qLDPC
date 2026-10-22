@@ -98,7 +98,7 @@ def test_match_error_decoder_to_dem() -> None:
         error_decoders._match_error_decoder_to_dem(_FixedDecoder([0]), dem)
 
     decomposed = _FixedDecoder([0, 0])
-    decomposed._infers_decomposed_errors = True  # type: ignore[attr-defined]
+    decomposed._infers_decomposed_errors = True  # type: ignore[attr-defined]  # a stand-in flag
     with pytest.raises(ValueError, match="components of decomposed error mechanisms"):
         error_decoders._match_error_decoder_to_dem(decomposed, dem)
 

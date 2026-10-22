@@ -306,11 +306,13 @@ def test_deprecated_argument_order() -> None:
 
     vector = ring.field.Random(2 * ring.group.order)
     with pytest.warns(DeprecationWarning, match="DEPRECATED"):
+        # the deprecated argument order does not match the typed signature
         ring_array = abstract.RingArray.from_field_vector(ring, vector)  # type:ignore[arg-type]
     assert np.array_equal(ring_array.to_field_vector(), vector)
 
     matrix = ring.field.Random((1, 2, ring.group.order))
     with pytest.warns(DeprecationWarning, match="DEPRECATED"):
+        # the deprecated argument order does not match the typed signature
         ring_array = abstract.RingArray.from_field_array(ring, matrix)  # type:ignore[arg-type]
     assert np.array_equal(ring_array.to_field_array(), matrix)
 

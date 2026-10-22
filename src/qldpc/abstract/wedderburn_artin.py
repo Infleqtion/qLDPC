@@ -747,6 +747,7 @@ class WedderburnArtinComponentTransformer:
         quotient_coeff: galois.Poly
         gcd: galois.Poly
         for factor, quotient in zip(factors, quotients):
+            # mypy sees only the integer signature of galois.egcd, which also handles polynomials
             gcd, _factor_coeff, quotient_coeff = galois.egcd(factor, quotient)  # type:ignore[assignment,arg-type]
             idempotent_poly = quotient_coeff * quotient // gcd  # <- G_j(x)
             new_idempotent = idempotent_poly.coeffs[::-1] @ powers[: len(idempotent_poly)]  # <- e_j

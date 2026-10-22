@@ -8,7 +8,6 @@ import dataclasses
 import inspect
 import itertools
 import math
-import subprocess
 import sys
 import types
 from typing import Any
@@ -18,6 +17,7 @@ import pytest
 import stim
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.construction._resolution import build_observable_decoder
 from qldpc.decoders.external import frontier
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
@@ -228,7 +228,7 @@ from qldpc import decoders
 decoders.frontier(committee=True)
 assert "frontier" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)
 
 
 @dataclasses.dataclass(frozen=True)

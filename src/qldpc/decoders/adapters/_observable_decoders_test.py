@@ -42,7 +42,7 @@ def test_bit_packed_observable_decoder() -> None:
 
     compiled_decoder = _BitPackedCompiledDecoder(np.array([[1]], dtype=np.uint8))
     decoder = _observable_decoders.BitPackedObservableDecoder(compiled_decoder, num_observables=9)
-    with pytest.raises(ValueError, match=r"shape \(1, 1\) for one shot"):
+    with pytest.raises(ValueError, match=r"of shape \(1, 1\)"):
         decoder.decode_observables(syndrome)
 
 

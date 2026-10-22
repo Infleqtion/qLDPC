@@ -6,8 +6,6 @@ from __future__ import annotations
 
 import copy
 import functools
-import subprocess
-import sys
 import unittest.mock
 import warnings
 from collections.abc import Callable
@@ -21,6 +19,7 @@ import scipy.sparse
 import stim
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.conftest import ToyProblem
 from qldpc.decoders.construction._resolution import build_error_decoder
 from qldpc.decoders.external.relay_bp import (
@@ -203,7 +202,7 @@ import sys
 import qldpc.decoders.external.relay_bp
 assert "relay_bp" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)
 
 
 def test_relay_bp_nested_import_failure() -> None:

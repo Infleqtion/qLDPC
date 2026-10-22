@@ -81,6 +81,7 @@ class EdgeColoring(SyndromeMeasurementStrategy):
             circuits.MeasurementRecord: The record of measurements in the circuit.
         """
         qubit_ids = _validate_syndrome_qubit_ids(code, qubit_ids)
+        # subgraph_kwargs are meant for custom overrides, whose signatures mypy cannot know
         subgraphs = code.get_syndrome_subgraphs(**self.subgraph_kwargs)  # type:ignore[arg-type]
         return self._get_circuit_from_subgraphs(qubit_ids, subgraphs)
 

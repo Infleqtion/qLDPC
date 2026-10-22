@@ -7,7 +7,6 @@ from __future__ import annotations
 import concurrent.futures
 import inspect
 import pickle
-import subprocess
 import sys
 import threading
 import warnings
@@ -21,6 +20,7 @@ import stim
 from ldpc import bplsd_decoder
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.external import ldpc as ldpc_integration
 from qldpc.decoders.external.ldpc import (
     _get_decoder_bf,
@@ -247,4 +247,4 @@ import sys
 import qldpc.decoders.external.ldpc
 assert "ldpc" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)

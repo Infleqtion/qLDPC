@@ -254,7 +254,7 @@ def _gap_string(value: object) -> str:
     if isinstance(value, str):
         return value
     try:
-        converted = value.sage()  # type: ignore[attr-defined]
+        converted = value.sage()  # type: ignore[attr-defined]  # caught below if absent
     except (AttributeError, NotImplementedError, ValueError):
         converted = str(value)
     return converted if isinstance(converted, str) else str(converted)

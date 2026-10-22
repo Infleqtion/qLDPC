@@ -8,7 +8,6 @@ import builtins
 import importlib
 import importlib.util
 import inspect
-import subprocess
 import sys
 import types
 from typing import Any, cast
@@ -21,6 +20,7 @@ import scipy.sparse
 import stim
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.construction._resolution import build_error_decoder, build_observable_decoder
 from qldpc.decoders.external.tesseract import _get_decoder_tesseract
 from qldpc.decoders.protocols import _batch_decode_errors, _supports_batch_decoding
@@ -311,7 +311,7 @@ def test_real_tesseract_package() -> None:
     """
     installed = importlib.util.find_spec("tesseract_decoder") is not None
     script = _REAL_PACKAGE_CHECKS if installed else ""
-    subprocess.run([sys.executable, "-c", script], check=True)
+    run_python(script)
 
 
 def test_tesseract_import_is_lazy() -> None:
@@ -321,7 +321,7 @@ import sys
 import qldpc.decoders.external.tesseract
 assert "tesseract_decoder" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)
 
 
 def test_tesseract_missing_dependency_error(monkeypatch: pytest.MonkeyPatch) -> None:

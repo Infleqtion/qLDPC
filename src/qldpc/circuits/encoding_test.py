@@ -26,7 +26,7 @@ def test_encoding_circuit(pytestconfig: pytest.Config) -> None:
         if not only_zero:
             # choose random logical and gauge Paulis that should be +1 after encoding
             bases = np.random.choice(
-                [Pauli.Z, Pauli.X, Pauli.Y],  # type:ignore[arg-type]
+                [Pauli.Z, Pauli.X, Pauli.Y],  # type:ignore[arg-type]  # NumPy expects array-likes
                 size=code.dimension + code.gauge_dimension,
             )
             basis_prep = stim.Circuit()

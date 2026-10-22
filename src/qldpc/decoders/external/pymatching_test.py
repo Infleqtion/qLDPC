@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import concurrent.futures
 import pickle
-import subprocess
 import sys
 import threading
 import types
@@ -21,6 +20,7 @@ import pytest
 import stim
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.external import pymatching
 from qldpc.decoders.external.pymatching import (
     _get_decoder_mwpm,
@@ -193,7 +193,7 @@ import types
 import qldpc.decoders.external.pymatching
 assert "pymatching" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)
 
 
 def test_pymatching_protocol_adapter_is_created_once(monkeypatch: pytest.MonkeyPatch) -> None:

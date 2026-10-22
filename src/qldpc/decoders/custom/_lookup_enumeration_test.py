@@ -149,7 +149,7 @@ def _enumerate(
             max_weight,
             syndrome_mask,
             symplectic,
-            **kwargs,  # type: ignore[arg-type]
+            **kwargs,  # type: ignore[arg-type]  # forwarded untyped from the caller
         )
     ]
 

@@ -981,6 +981,7 @@ def _get_decoder_lookup(
     ``add_erasure_bit=True`` appends a flag for syndromes absent from the table.  A positive
     ``confidence_ratio`` also enables the flag and erases ambiguous syndromes.
     """
+    # the typed signature of the specification helper, not this builder, checks the options
     return LookupDecoder(pcm_or_dem, **decoder_args)  # type: ignore[arg-type]
 
 
@@ -988,6 +989,7 @@ def _get_observable_decoder_lookup(
     dem: stim.DetectorErrorModel, **decoder_args: object
 ) -> ObservableDecoder:
     """Build a lookup table that maps DEM syndromes directly to observable flips."""
+    # the typed signature of the specification helper, not this builder, checks the options
     return ObservableLookupDecoder(dem, **decoder_args)  # type: ignore[call-overload]
 
 

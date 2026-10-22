@@ -195,6 +195,7 @@ def _get_decoder_guf(
     :class:`~qldpc.decoders.custom.guf.GUFDecoder` and
     `arXiv:2103.08049 <https://arxiv.org/abs/2103.08049>`_.
     """
+    # the typed signature of the specification helper, not this builder, checks the options
     return GUFDecoder(_to_pcm(pcm_or_dem), **decoder_args)  # type: ignore[arg-type]
 
 

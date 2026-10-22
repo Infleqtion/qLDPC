@@ -145,6 +145,7 @@ def test_rejected_decoder_arguments() -> None:
             decoder=decoders.from_matrix(lambda matrix: decoders.custom.LookupDecoder(matrix, 1))
         ).compile_decoder_for_dem(dem)
 
+    # a window decoder needs error decoders, so an observable-decoder factory is invalid on purpose
     window_decoder = decoders.SequentialWindowDecoder(
         [[0], [1]],
         decoder=build_observable_decoder,  # type: ignore[arg-type]
@@ -316,7 +317,7 @@ def test_predict_observables_with_erasure(num_observables: int) -> None:
             compiled = super().compile_decoder_for_dem(dem)
             return WideCompiledDecoder(compiled.dem_arrays, compiled.decoder)
 
-    with pytest.raises(ValueError, match="bytes of observable flips per shot"):
+    with pytest.raises(ValueError, match="with a byte added to signal discards"):
         sinter.predict_observables(
             dem=dem,
             dets=detection_events,

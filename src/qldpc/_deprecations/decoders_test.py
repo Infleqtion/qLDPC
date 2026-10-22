@@ -5,12 +5,8 @@
 from __future__ import annotations
 
 import functools
-import os
-import pathlib
 import pickle
 import re
-import subprocess
-import sys
 import warnings
 from collections.abc import Callable
 from typing import Any, cast
@@ -23,6 +19,7 @@ import stim
 
 from qldpc import decoders
 from qldpc._deprecations import decoders as deprecated_decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.custom.ilp import ILPDecoder
 from qldpc.decoders.custom.lookup import LookupDecoder, ObservableLookupDecoder
@@ -468,7 +465,6 @@ def test_merge_legacy_css_decoder_args() -> None:
 
 def test_import_order() -> None:
     """Importing this module before the rest of qLDPC does not break the import of qLDPC."""
-    source_dir = pathlib.Path(__file__).parents[2]
     code = (
         "import importlib.util, sys\n"
         "spec = importlib.util.find_spec('qldpc')\n"
@@ -477,14 +473,7 @@ def test_import_order() -> None:
         "import qldpc._deprecations.decoders\n"
         "spec.loader.exec_module(package)\n"
     )
-    result = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True,
-        check=False,
-        env=os.environ | {"PYTHONPATH": str(source_dir)},
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
+    run_python(code)
 
 
 def test_deprecate_error_rate_option() -> None:

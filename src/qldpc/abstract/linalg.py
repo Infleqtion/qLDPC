@@ -314,8 +314,10 @@ def _get_ring(
     """Identify the ring that at least one of the matrices is over."""
     ring_a = matrix_a._ring if isinstance(matrix_a, RingArray) else None
     ring_b = matrix_b._ring if isinstance(matrix_b, RingArray) else None
-    if ring_a is None and ring_b is None:
-        raise ValueError("At least one of the provided matrices must be a RingArray")
-    if ring_a is not None and ring_b is not None and ring_a != ring_b:
+    if ring_a is None:
+        if ring_b is None:
+            raise ValueError("At least one of the provided matrices must be a RingArray")
+        return ring_b
+    if ring_b is not None and ring_a != ring_b:
         raise ValueError("The provided matrices are over different rings")
-    return ring_a if ring_a is not None else ring_b  # type:ignore[return-value]
+    return ring_a

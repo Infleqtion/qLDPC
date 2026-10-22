@@ -376,6 +376,7 @@ def test_observable_decoder_compilers() -> None:
         def compile_decoder_for_dem(self, dem: stim.DetectorErrorModel) -> object:
             return _BitPackedOnly(lookup_compiler.compile_decoder_for_dem(dem))
 
+    # this compiler builds an untyped object, and the protocols do not declare has_erasure_bit
     bit_packed_decoder = build_observable_decoder(
         dem,
         decoder=BitPackedCompiler(),  # type: ignore[arg-type]

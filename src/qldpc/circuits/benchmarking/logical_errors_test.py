@@ -123,7 +123,7 @@ def test_erasure_counts_as_a_discard() -> None:
             compiled.packed_observable_size += 2
             return compiled
 
-    with pytest.raises(ValueError, match="bytes of observable flips per shot"):
+    with pytest.raises(ValueError, match="with a byte added to signal discards"):
         circuits.get_logical_error_and_discard_rate(
             circuit, sinter_decoder=WideDecoder(), num_samples=2
         )

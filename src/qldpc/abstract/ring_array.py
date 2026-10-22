@@ -575,7 +575,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
                 aa_poly = galois.Poly(aa_vec[pivot_col, ::-1], field=self.field)
                 bb_poly = galois.Poly(bb_vec[pivot_col, ::-1], field=self.field)
 
-                # find gg, ss, tt, uu, vv, and work around some typing bugs/errors in galois/mypy
+                # find gg, ss, tt, uu, vv; mypy sees only the integer signature of galois.egcd,
+                # which also handles polynomials
                 gg_poly: galois.Poly
                 ss_poly: galois.Poly
                 tt_poly: galois.Poly
@@ -600,6 +601,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
             pivot_poly = galois.Poly(field_array[pivot_row, pivot_col, ::-1], field=self.field)
             gcd_poly: galois.Poly
             ff_poly: galois.Poly
+            # mypy sees only the integer signature of galois.egcd, which also handles polynomials
             gcd_poly, ff_poly, _ = galois.egcd(pivot_poly, modulus_poly)  # type:ignore[assignment,arg-type]
             if pivot_poly != gcd_poly:
                 quotient_poly = pivot_poly // gcd_poly

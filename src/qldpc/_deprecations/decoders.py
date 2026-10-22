@@ -3,9 +3,8 @@
 """Deprecated decoder construction: package-root functions, keyword translation, and options.
 
 The registry in qldpc._deprecations serves the deprecated functions of this module at their
-package-root paths in qldpc.decoders.  Decoder modules import this module for
-deprecate_error_rate_option, so this module imports qldpc.decoders only within the functions that
-use it, never at import time.
+package-root paths in qldpc.decoders.  Decoder modules import this module when they are imported,
+so this module imports qldpc.decoders only within the functions that use it, never at import time.
 """
 
 from __future__ import annotations
@@ -37,6 +36,7 @@ if TYPE_CHECKING:
     from qldpc.decoders.protocols import BatchErrorDecoder, ErrorDecoder, ObservableDecoder
 
 _DecoderT = TypeVar("_DecoderT")
+_ErrorRateT = TypeVar("_ErrorRateT")
 
 # the NAME of each with_<NAME> keyword, mapped to the specification helper that replaces it
 _LEGACY_HELPER_NAMES = {
@@ -594,16 +594,30 @@ def deprecate_error_rate_option(
 
     An explicit error_rate=None is the default value, so it is dropped as if it were omitted.
     """
-    if "error_rate" not in explicitly_provided or options.get("error_rate") is None:
-        options.pop("error_rate", None)
-        return options
-    if "error_channel" in explicitly_provided:
+    error_rate = options.pop("error_rate", None)
+    if "error_rate" in explicitly_provided and error_rate is not None:
+        error_channel_given = "error_channel" in explicitly_provided
+        options["error_channel"] = translate_error_rate(error_rate, error_channel_given)
+    return options
+
+
+def translate_error_rate(error_rate: _ErrorRateT, error_channel_given: bool) -> _ErrorRateT:
+    """Warn that an error_rate value is deprecated, and return the error_channel that replaces it.
+
+    Args:
+        error_rate: A value that was supplied as error_rate, other than the default value None.
+        error_channel_given: Whether error_channel was also supplied, which is an error.
+
+    Returns:
+        The value to use as error_channel.
+
+    Raises:
+        ValueError: If error_channel was also supplied.
+    """
+    if error_channel_given:
         raise ValueError("error_rate and error_channel cannot both be specified")
-    error_rate = options["error_rate"]
     _deprecations.warn_deprecated(
         f"error_rate={error_rate!r} is deprecated; use error_channel={error_rate!r} instead",
         stacklevel=get_external_caller_stacklevel(),
     )
-    options.pop("error_rate")
-    options["error_channel"] = error_rate
-    return options
+    return error_rate

@@ -15,6 +15,7 @@ import stim
 from qldpc import _deprecations
 from qldpc._deprecations.decoders import merge_legacy_decoder_args, reject_removed_decoder_args
 
+from ..adapters._observable_decoders import split_discard_byte
 from ..adapters.error_decoders import ErrorsToObservablesDecoder
 from ..construction._resolution import build_observable_decoder, reject_prebuilt_decoder
 from ..construction.specs import DecoderSpec, DeferredDecoderInput
@@ -131,20 +132,13 @@ class SinterDecoder(_SinterDecoder):
         shots discarded instead of predicted.
         """
         num_detector_bytes = -(-num_dets // 8)
-        num_observable_bytes = -(-num_obs // 8)
         detection_event_data = np.fromfile(
             dets_b8_in_path, dtype=np.uint8, count=num_shots * num_detector_bytes
         ).reshape(num_shots, num_detector_bytes)
 
         compiled_decoder = self.compile_decoder_for_dem(stim.DetectorErrorModel.from_file(dem_path))
         predicted_flips = compiled_decoder.decode_shots_bit_packed(detection_event_data)
-        if predicted_flips.shape[1] not in (num_observable_bytes, num_observable_bytes + 1):
-            raise ValueError(
-                f"This decoder predicted {predicted_flips.shape[1]} bytes of observable flips per"
-                f" shot, but {num_obs} observables take {num_observable_bytes} bytes, or"
-                f" {num_observable_bytes + 1} bytes with a byte added to signal discards"
-            )
-        observable_flips = predicted_flips[:, :num_observable_bytes]
+        observable_flips, _ = split_discard_byte(predicted_flips, num_shots, num_obs)
         observable_flips.tofile(obs_predictions_b8_out_path)
 
 

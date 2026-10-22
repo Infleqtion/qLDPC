@@ -14,6 +14,7 @@ import stim
 
 from qldpc import codes, decoders
 from qldpc.codes.distance import DistanceMethod
+from qldpc.decoders.adapters._observable_decoders import split_discard_byte
 from qldpc.objects import Pauli
 
 ####################################################################################################
@@ -191,19 +192,13 @@ def get_logical_error_and_discard_rate(
     )
     predicted_flips = compiled_sinter_decoder.decode_shots_bit_packed(det_data)
 
-    # a prediction one byte wider than the sampled observables need signals discards in that byte
-    if predicted_flips.shape[1] == obs_data.shape[1] + 1:
-        discarded = predicted_flips[:, -1] != 0
-        obs_data = obs_data[~discarded]
-        predicted_flips = predicted_flips[~discarded, :-1]
-        num_discards += int(np.sum(discarded))
-    elif predicted_flips.shape[1] != obs_data.shape[1]:
-        raise ValueError(
-            f"The decoder predicted {predicted_flips.shape[1]} bytes of observable flips per shot,"
-            f" but the {dem.num_observables} observables of the sampled detector error model take"
-            f" {obs_data.shape[1]} bytes, or {obs_data.shape[1] + 1} bytes with a byte added to"
-            " signal discards"
-        )
+    # the decoder may ask for shots to be discarded in a byte added to its predictions
+    predicted_flips, discarded = split_discard_byte(
+        predicted_flips, len(det_data), dem.num_observables
+    )
+    obs_data = obs_data[~discarded]
+    predicted_flips = predicted_flips[~discarded]
+    num_discards += int(np.sum(discarded))
 
     incorrectly_predicted_flips = obs_data ^ predicted_flips
 
