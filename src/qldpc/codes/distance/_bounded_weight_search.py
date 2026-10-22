@@ -407,14 +407,16 @@ def _iter_fixed_weight_supports(
             yield supports
         return
 
-    # Stream supports when their ranks exceed int64.
-    combinations = itertools.combinations(range(dimension), weight)
-    flattened = itertools.chain.from_iterable(combinations)
+    yield from _stream_fixed_weight_supports(dimension, weight, batch_size)
+
+
+def _stream_fixed_weight_supports(
+    dimension: int, weight: int, batch_size: int
+) -> Iterator[npt.NDArray[np.int_]]:
+    """Yield supports in lexicographic order, without ranking them, for counts beyond int64."""
+    flattened = itertools.chain.from_iterable(itertools.combinations(range(dimension), weight))
     while True:
-        flat_batch = np.fromiter(
-            itertools.islice(flattened, batch_size * weight),
-            dtype=np.int_,
-        )
+        flat_batch = np.fromiter(itertools.islice(flattened, batch_size * weight), dtype=np.int_)
         if not len(flat_batch):
             return
         yield flat_batch.reshape(-1, weight)
