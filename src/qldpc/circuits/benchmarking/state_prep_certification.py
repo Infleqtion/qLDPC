@@ -1,31 +1,43 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact bounded-spread certification for pure Clifford states.
+"""Exact certification of bounded fault spread in state-preparation circuits.
 
-Let ``P`` map faults to rejection flags, ``S`` map them to complete state syndromes, and ``mu(s)``
-be the minimum chosen Pauli weight with syndrome ``s``.  The test proves ``mu(S f) <= |f|`` for
-``P f = 0`` and ``1 <= |f| <= max_faults``:
+A *fault* is one error mechanism of the circuit's detector error model (DEM), and a *pattern* is a
+set ``f`` of faults, of size ``|f|``.  Write ``P f`` for the post-selected detectors that the
+pattern flips, and ``S f`` for the syndrome that it leaves on the prepared state, measured against
+all stabilizers of that state, logical ones included.  Let ``mu(s)`` be the smallest weight of an
+error with syndrome ``s``.  The certificate proves ``mu(S f) <= |f|`` for every pattern with
+``P f = 0`` and ``1 <= |f| <= max_faults``.  The argument rests on these facts:
 
-- Equal complete syndromes differ by a prepared-state stabilizer, including logical stabilizers,
-  since that space is maximal isotropic.  Thus ``mu`` depends only on the syndrome.
-- Both weights are subadditive: product support lies in the union of supports, and CSS weight
-  satisfies ``max(a+c, b+d) <= max(a, b) + max(c, d)``.
-- Removing proper accepted subsets partitions any accepted pattern into disjoint minimal ones.
-  Subadditivity then extends their bounds to the whole pattern.  An accepted support ``J`` is
-  minimal exactly when ``nullity(P[:, J]) = 1``, so ``|J| <= rank(P) + 1``.  Flag-free faults are
-  minimal only as singletons.
-- Identical joint (flag, syndrome) columns cancel in pairs; zero columns have no effect.  Merging
-  them cannot hide violations, and merged patterns still name original DEM mechanisms.
-- If distinct nonzero flag types are independent, acceptance requires even multiplicities.
-  The flagged minimal patterns are therefore equal-flag pairs, at any rank and budget.
+- Syndromes identify equivalent errors.  Two errors with the same syndrome differ by an operator
+  that commutes with all ``n`` independent stabilizers of the ``n``-qubit state, and every such
+  operator is itself a stabilizer (up to a phase).  So the two errors leave the same state, and
+  ``mu(S f)`` is the weight of the lightest error equivalent to the one that the faults cause.
+- Weight is subadditive: a product of two errors is no heavier than the sum of their weights, so
+  ``mu(s + t) <= mu(s) + mu(t)``.  For physical weight, the product acts on no more qubits than the
+  two errors together.  For CSS weight, ``max(a+c, b+d) <= max(a, b) + max(c, d)``.
+- It is enough to check minimal patterns.  A pattern with ``P f = 0`` is *accepted*.  Removing an
+  accepted subset from an accepted pattern leaves an accepted pattern, so every accepted pattern
+  splits into disjoint *minimal* ones, which contain no smaller accepted pattern.  If each minimal
+  pattern meets the bound, subadditivity gives the bound for their union.  A pattern on the faults
+  ``J`` is minimal exactly when ``P[:, J]`` has a null space of dimension one, so
+  ``|J| <= rank(P) + 1``.  A fault that flips no post-selected detector is minimal only by itself.
+- Faults with identical (flag, syndrome) columns cancel in pairs, and a fault with no flags and no
+  syndrome does nothing.  Dropping them keeps the symptoms and lowers the fault count, so it cannot
+  hide a violation, and every remaining fault still names an original DEM mechanism.
+- If the distinct nonzero flag columns are linearly independent, an accepted pattern uses each flag
+  column an even number of times.  The minimal flagged patterns are then pairs of faults with equal
+  flags, for any rank and any budget.
 
-Two complete searches cover the remaining patterns.  Brouwer--Zimmermann (BZ) visits all words of
-``ker(P)`` through the weight bound, regardless of the nonlinear spread predicate; a rank test
-removes nonminimal words.  Independent-prefix closure uses the fact that a sorted minimal dependence
-is exactly an independent prefix plus its XOR as the last column.  Requiring a later closing index
-emits each minimal support once; dependent prefixes cannot extend to minimal supports.  A cost
-heuristic chooses between these complete searches without a runtime guarantee.  One shared exact
-``_PauliCosetSearch`` oracle decides all patterns.
+Two complete searches enumerate the remaining minimal patterns.  Brouwer--Zimmermann (BZ) coverage
+visits every vector in the kernel of ``P`` up to a weight bound, whatever test is applied to it
+afterwards, and a rank check then discards the non-minimal ones.  Independent-prefix search builds
+sets of independent columns in increasing order.  Sorted by index, a minimal pattern is an
+independent prefix plus a last column whose flags equal the XOR of the prefix's flags, and every
+such pair is a minimal pattern.  Requiring the closing column to have the largest index lists each
+minimal pattern once, and a prefix that already contains a dependency never extends to one.  A cost
+heuristic chooses between the two searches and affects speed only, not the result.  One shared exact
+oracle, ``_PauliCosetSearch``, computes ``mu`` for every pattern.
 """
 
 from __future__ import annotations
@@ -63,50 +75,62 @@ def certify_state_prep_spread(
 ) -> StatePrepSpreadCertificate:
     r"""Certify bounded error spread of a noisy Clifford state preparation.
 
-    Check that every accepted pattern of one through ``max_faults`` faults leaves an output error
-    equivalent, modulo the complete prepared-state stabilizers (including logical stabilizers), to
-    an error whose weight is at most the number of faults.  Physical weight counts qubits with X, Y,
-    or Z; CSS-sector weight is ``max(|x|, |z|)``.  Both minimize jointly over one representative,
-    not separately over X and Z.
+    Check that, for every set of one through ``max_faults`` faults that passes post-selection, the
+    error left on the output is equivalent to an error of weight at most the number of faults.  Two
+    errors are equivalent if they leave the prepared state unchanged, that is, if they differ by a
+    stabilizer of that state (logical stabilizers included).  The weight is either the physical
+    weight, the number of qubits that an error acts on, or the CSS weight ``max(|x|, |z|)``, where
+    ``x`` and ``z`` are the X and Z parts of the error.  The minimum is over whole errors, not
+    separately over the X and Z parts.
 
-    Faults are independent unit-cost mechanisms of the undecomposed binary detector error model
-    (DEM), not mutually exclusive physical alternatives.  Correlated mechanisms stay intact.  Stim's
-    disjoint-channel approximation supplies the mechanisms; probabilities play no role, and the
-    certificate makes no sampling-distribution claim.
+    A fault is one error mechanism of the circuit's detector error model (DEM), and every fault
+    costs one.  Mechanisms are treated as independent, even when they come from one noise channel
+    and could not physically occur together.  A mechanism that flips several detectors at once stays
+    one fault.  Stim converts the circuit with ``approximate_disjoint_errors=True``; probabilities
+    play no role, and nothing is claimed about the sampling distribution.
 
-    The selected output must be a definite pure stabilizer state, independent of random measurement
-    branches.  All detector and observable annotations, even unselected ones, must be deterministic.
-    Random post-selected branches are unsupported.  Stabilizer signs and physical frames are
-    preserved; appended diagnostics are noiseless.
+    The output qubits must end in one definite stabilizer state, the same for every measurement
+    outcome.  Every detector and observable in the circuit, including those you do not post-select
+    on, must be deterministic.  Branches that depend on random measurement outcomes are not
+    supported.  Stabilizer signs and qubit labels are kept as given, and the diagnostics that the
+    function appends to read out the output state are noiseless.
 
-    Automatic CSS detection uses the complete stabilizer row space in the physical Pauli basis, not
-    local-Clifford equivalence.  A CSS code can prepare a non-CSS logical state, so sector-wise use
-    may require explicit ``css_weight=True``.
+    With ``css_weight=None``, CSS weight is chosen when the prepared state is a CSS state in the
+    physical Pauli basis, that is, when its stabilizer group is generated by pure-X and pure-Z
+    operators.  A state that becomes CSS only after local Clifford gates counts as non-CSS.  A CSS
+    code can also prepare a non-CSS state, such as a logical Y eigenstate; if you use that state
+    sector by sector, pass ``css_weight=True`` yourself.
 
-    This is a sufficient resource-state property, not a downstream-composition certificate.
-    Downstream gadgets must propagate weight-r inputs and added faults within an r-plus-fault
-    budget, or correct them; CSS use also requires suitable sector-preserving operations.  The
-    caller must justify a CSS override.  Acceptance probability and necessary-and-sufficient fault
-    tolerance are not certified.  The exact, nonsampling search can take exponential time.  See the
-    module docstring for the proof.
+    Passing is a sufficient condition on the prepared state, not a proof that a protocol using it is
+    fault tolerant.  It helps only if the next gadget still works when an input error of weight
+    ``r`` is combined with further faults, as long as ``r`` plus the number of further faults is
+    within the gadget's limit.  A result for CSS weight also needs that gadget to keep X and Z
+    errors separate, which you must justify when passing ``css_weight=True``.  The certificate says
+    nothing about the acceptance probability, and it is not a necessary condition for fault
+    tolerance.  The search is exact and can take exponential time.  See the module docstring for the
+    proof.
 
     Args:
         circuit: Noisy Stim Clifford circuit starting in Stim's all-zero state.
-        output_qubits: Nonempty, distinct physical output indices in the desired Pauli frame.
-        max_faults: Positive integer unit-cost DEM fault budget.
-        post_select: Circuit detector indices whose events must vanish relative to their ideal
-            reference; appended output diagnostics do not reject.
-        css_weight: True for CSS-sector weight, False for physical weight, or None to select CSS
-            weight exactly when the complete state has a pure-X/pure-Z stabilizer decomposition.
+        output_qubits: Distinct indices of the output qubits, at least one, in the desired Pauli
+            frame.
+        max_faults: Largest number of faults to consider, a positive integer.
+        post_select: Indices of circuit detectors that must not fire, relative to their ideal
+            values, for a pattern to be accepted.  The diagnostics appended to read out the output
+            state never reject.
+        css_weight: True for CSS weight, False for physical weight, or None to choose CSS weight
+            when the prepared state is a CSS state.
 
     Returns:
-        The decision, model, and resolved metric.  Failure includes an accepted counterexample
-        with a proved weight lower bound exceeding its fault count; its indices refer to error
-        instructions in the returned DEM, before compression.
+        A certificate with the decision, the DEM, and the weight that was used.  A failure comes
+        with a counterexample: a pattern that passes post-selection, and a proved lower bound on
+        the weight of the output error that exceeds the number of faults.  Fault indices count the
+        error instructions of the returned DEM.
 
     Raises:
-        ValueError: Invalid inputs, mixed or incomplete outputs, nondeterministic annotations or
-            diagnostics, or unsupported circuit-to-DEM conversion.
+        ValueError: For invalid inputs, an output that is not one definite pure state,
+            nondeterministic detectors or observables, or a circuit that Stim cannot convert to a
+            DEM.
     """
     if css_weight is not None and not isinstance(css_weight, bool):
         raise ValueError("css_weight must be a bool or None")
@@ -152,13 +176,15 @@ def certify_state_prep_spread(
 
 @dataclass(frozen=True)
 class StatePrepSpreadCounterexample:
-    """An accepted DEM pattern violating the spread bound.
+    """A set of faults that passes post-selection but spreads into a heavier output error.
 
-    ``fault_indices`` index error instructions, not all instructions, in the returned flattened,
-    undecomposed DEM.  ``output_syndrome`` follows ``target_stabilizers`` order.
-    ``effective_weight_lower_bound`` is proved.  ``output_pauli`` is a Stim string in output-qubit
-    order and the caller's frame, not necessarily a minimizer or the propagated error.  The witness
-    need not have the smallest violating fault count.
+    ``fault_indices`` number the error instructions of the certificate's DEM, counting only error
+    instructions.  ``output_syndrome`` lists the syndrome bits in the order of
+    ``target_stabilizers``.  ``effective_weight_lower_bound`` is a proved lower bound on the weight
+    of any equivalent error, and it exceeds the number of faults.  ``output_pauli`` is one Pauli
+    with that syndrome, written as a Stim string over the output qubits in the caller's order.  It
+    is not necessarily the lightest such Pauli or the error that the faults actually cause.  The set
+    need not be the smallest violating one.
     """
 
     fault_indices: tuple[int, ...]
