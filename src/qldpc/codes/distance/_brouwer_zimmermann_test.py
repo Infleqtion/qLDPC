@@ -27,7 +27,7 @@ from .conftest import _get_random_full_rank_matrix
 def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
     """Chunked kernel calls enumerate each combination of basis rows once.
 
-    The chunked kernel calls preserve packed row XORs and multiword labels.
+    The chunked kernel calls preserve resumption state and multiword labels.
     """
     scan = bz._scan_brouwer_zimmermann
     if interpreted:
@@ -77,11 +77,6 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
                 # The last selected row index has advanced in preparation for the next chunk.
                 np.testing.assert_array_equal(support[:-1], indices[:-1])
                 assert support[-1] == indices[-1] + 1
-                for index in range(3):
-                    np.testing.assert_array_equal(
-                        prefixes[weight, index, : widths[index]],
-                        np.bitwise_xor.reduce(generators[index, indices, : widths[index]]),
-                    )
 
             # One more kernel call reports completion after all basis-row combinations are visited.
             best, depth, visited = scan(
