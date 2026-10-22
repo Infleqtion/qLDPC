@@ -133,7 +133,7 @@ def _scan_brouwer_zimmermann(
         widths: Number of packed generator words used by each information-set block.
         label_widths: Number of packed label words used by each information-set block.
         support: Mutable row indices for the current coefficient support.
-        prefixes: Mutable prefix XORs for every support depth and information-set block.
+        prefixes: Mutable prefix XORs for internal support depths and information-set blocks.
         depth: Current support-tree depth, or ``-1`` when the coefficient layer is complete.
         best: Current upper bound; only strictly lighter eligible candidates replace it.
         cutoff: Weight threshold that stops this chunk once ``best <= cutoff``.
@@ -153,16 +153,13 @@ def _scan_brouwer_zimmermann(
                 support[depth] += 1
             continue
 
-        # Extend the prefix XOR by the row selected at this depth, in every information set.
         row = support[depth]
-        for set_index in range(len(ranks)):
-            for word in range(widths[set_index]):
-                prefixes[depth + 1, set_index, word] = (
-                    prefixes[depth, set_index, word] ^ generators[set_index, row, word]
-                )
-
-        # Descend until every row of the support has been selected.
         if depth + 1 < weight:
+            for set_index in range(len(ranks)):
+                for word in range(widths[set_index]):
+                    prefixes[depth + 1, set_index, word] = (
+                        prefixes[depth, set_index, word] ^ generators[set_index, row, word]
+                    )
             depth += 1
             support[depth] = row + 1
             continue
@@ -177,7 +174,8 @@ def _scan_brouwer_zimmermann(
                     if support[selected] < ranks[set_index]:
                         candidate_weight += 1
             for word in range(widths[set_index]):
-                candidate_weight += _popcount_word(prefixes[weight, set_index, word])
+                value = prefixes[depth, set_index, word] ^ generators[set_index, row, word]
+                candidate_weight += _popcount_word(value)
                 if candidate_weight >= best:
                     break
             if candidate_weight >= best:
