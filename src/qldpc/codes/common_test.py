@@ -132,7 +132,7 @@ def test_named_codes(order: int = 2) -> None:
     checks = [list(row) for row in code.matrix.view(np.ndarray)]
 
     with unittest.mock.patch(
-        "qldpc.external.codes.get_classical_code", return_value=(checks, None)
+        "qldpc.external._codes.get_classical_code", return_value=(checks, None)
     ):
         assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
 
@@ -227,7 +227,6 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
     with (
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
-        unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
         unittest.mock.patch(
             "qldpc.external.gap.subprocess.run",
             side_effect=AssertionError("GAP executable must not be called by this test"),
@@ -240,7 +239,7 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
     # intentionally wraps a loop of warning-emitting calls
     with (  # noqa: PT031
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
-        unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
+        unittest.mock.patch("qldpc.external.gap.require_package", return_value=True),
         unittest.mock.patch(
             "qldpc.external.gap.subprocess.run",
             side_effect=AssertionError("GAP executable must not be called by this test"),
@@ -520,7 +519,7 @@ def test_distance_qudit() -> None:
     # mock computing distance with GAP
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=-1),
+        unittest.mock.patch("qldpc.external._codes.get_distance_bound", return_value=-1),
     ):
         assert code.get_distance(bound=True) == -1
 
@@ -555,7 +554,7 @@ def test_distance_bound_memory() -> None:
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external.codes.get_distance_bound", side_effect=[4, 5]
+            "qldpc.external._codes.get_distance_bound", side_effect=[4, 5]
         ) as gap_bound,
     ):
         assert qudit_code.get_distance_bound() == qudit_code.get_distance_bound() == 4
@@ -753,7 +752,7 @@ def test_from_qldpc_challenge_id() -> None:
     """Retrieve a code from the Unitary Foundation qLDPC Challenge."""
     code_data = (np.kron(np.eye(2, dtype=int), [1, 1, 1, 1]), 2, True, (2, 4))
     with unittest.mock.patch(
-        "qldpc.external.codes.get_qldpc_challenge_code", return_value=code_data
+        "qldpc.external._codes.get_qldpc_challenge_code", return_value=code_data
     ):
         code = codes.QuditCode.from_qldpc_challenge_id("")
         assert isinstance(code, codes.CSSCode)
@@ -764,7 +763,7 @@ def test_from_qldpc_challenge_id() -> None:
         assert css_code.is_equiv_to(codes.C4Code())
 
     with unittest.mock.patch(
-        "qldpc.external.codes.get_qldpc_challenge_code",
+        "qldpc.external._codes.get_qldpc_challenge_code",
         return_value=(np.array([[1, 0, 1, 0]]), None, False, (1,)),
     ):
         code = codes.QuditCode.from_qldpc_challenge_id("")
@@ -1259,7 +1258,7 @@ def test_css_from_qecdb_id() -> None:
     distance = 2
     is_css = True
     code_data = (strings, distance, is_css)
-    with unittest.mock.patch("qldpc.external.codes.get_quantum_code", return_value=code_data):
+    with unittest.mock.patch("qldpc.external._codes.get_quantum_code", return_value=code_data):
         code = codes.CSSCode.from_qecdb_id("")
         assert isinstance(code, codes.CSSCode)
         assert code.is_equiv_to(codes.C4Code())
@@ -1363,7 +1362,7 @@ def test_distance_css() -> None:
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=-1),
+        unittest.mock.patch("qldpc.external._codes.get_distance_bound", return_value=-1),
     ):
         assert code.get_distance(bound=True) == -1
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
@@ -1557,7 +1556,9 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         unittest.mock.patch("qldpc.external.sqetch.is_installed", return_value=False),
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=4) as gap_bound,
+        unittest.mock.patch(
+            "qldpc.external._codes.get_distance_bound", return_value=4
+        ) as gap_bound,
     ):
         assert code.get_distance_bound(pauli=Pauli.Z) == 4
     gap_bound.assert_called_once_with(code, 1, cutoff=None, maxav="fail")
@@ -1587,7 +1588,7 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external.codes.get_distance_bound", return_value=2
+            "qldpc.external._codes.get_distance_bound", return_value=2
         ) as qudit_gap_bound,
     ):
         assert qudit_code.get_distance_bound(pauli=Pauli.Z) == 2
@@ -1630,7 +1631,9 @@ def test_css_distance_bound_backend_selection() -> None:
     code.forget_distance()
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=4) as gap_bound,
+        unittest.mock.patch(
+            "qldpc.external._codes.get_distance_bound", return_value=4
+        ) as gap_bound,
     ):
         assert (
             code.get_distance_bound(

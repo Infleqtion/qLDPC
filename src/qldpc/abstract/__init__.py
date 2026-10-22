@@ -6,10 +6,6 @@ from qldpc import _deprecations
 
 from . import ring_array as ring_array
 from . import rings as rings
-from ._monomials import (
-    get_coefficient_and_exponents,
-    iter_monomial_terms,
-)
 from .groups import (
     GL,
     PGL,
@@ -30,13 +26,16 @@ from .groups import (
     SymmetricGroup,
     TrivialGroup,
     WreathProductGroup,
-    resolve_field,
 )
 from .linalg import (
     block_diag,
     get_howell_dual,
     kron,
     matmul,
+)
+from .monomials import (
+    get_coefficient_and_exponents,
+    iter_monomial_terms,
 )
 from .ring_array import (
     RingArray,
@@ -81,7 +80,6 @@ __all__ = [
     "iter_monomial_terms",
     "kron",
     "matmul",
-    "resolve_field",
 ]
 __all__.extend(_deprecations.deprecated_names(__name__))
 

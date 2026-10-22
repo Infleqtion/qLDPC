@@ -37,19 +37,8 @@ import sympy.abc
 import sympy.combinatorics as comb
 import sympy.core
 
-from ._monomials import get_coefficient_and_exponents
-
-
-def resolve_field(
-    field: int | type[galois.FieldArray] | None,
-) -> type[galois.FieldArray]:
-    """Parse a finite field argument to obtain an actual finite field."""
-    if field is None:
-        return galois.GF2
-    if isinstance(field, int):
-        return galois.GF(field)
-    return field
-
+from ._fields import resolve_field
+from .monomials import get_coefficient_and_exponents
 
 NestedSequence = Sequence[object | Sequence["NestedSequence"]]
 
@@ -578,17 +567,23 @@ class Group:
 
         ... unless ``from_magma=True``, in which case retrieve a group from the MAGMA CAS.
 
-        This may run GAP, install GAP packages, access GroupNames.org, or prompt on standard input;
-        see help(qldpc.external.groups.get_generators) and
-        help(qldpc.external.groups.get_generators_from_magma).
+        A GAP group is retrieved from a small local database if possible, else from GAP if GAP can
+        be called without user interaction, else from GroupNames.org (for a SmallGroup), and
+        finally by a manual workflow.  The manual workflow prints GAP commands, copies them to the
+        system clipboard, and reads the output that the user pastes into standard input (blocking,
+        and raising EOFError if standard input is closed); before falling back to it, qLDPC asks on
+        standard input whether GAP is available for copy/paste.  Calling GAP may install the GAP
+        GUAVA package, after asking for consent on standard input, and raises the warning
+        warning_to_raise_if_calling_gap, if provided.  A MAGMA group is always retrieved by such a
+        manual copy/paste workflow.  Retrieved generators are cached to disk.
         """
-        from qldpc import external  # avoid circular import
+        from qldpc.external import _groups  # avoid circular import
 
         name = "".join(name.split())  # strip whitespace
         if from_magma:
-            generators = external.groups.get_generators_from_magma(name)
+            generators = _groups.get_generators_from_magma(name)
         else:
-            generators = external.groups.get_generators(
+            generators = _groups.get_generators(
                 name, warning_to_raise_if_calling_gap=warning_to_raise_if_calling_gap
             )
         return Group(*[GroupMember(generator) for generator in generators], name=name)
@@ -888,10 +883,15 @@ class SmallGroup(Group):
 
     @staticmethod
     def number(order: int) -> int:
-        """The number of groups of a given order."""
-        from qldpc import external  # avoid circular import
+        """The number of groups of a given order.
 
-        return external.groups.get_small_group_number(order)
+        This number is retrieved from the GAP SmallGrp package if GAP can be called without user
+        interaction, else from GroupNames.org, and finally by the manual copy/paste GAP workflow
+        described in Group.from_name.  Results are cached to disk.
+        """
+        from qldpc.external import _groups  # avoid circular import
+
+        return _groups.get_small_group_number(order)
 
     @staticmethod
     def generator(order: int) -> Iterator[SmallGroup]:
@@ -901,10 +901,15 @@ class SmallGroup(Group):
 
     @staticmethod
     def get_structure(order: int, index: int) -> str:
-        """Retrieve a description of the structure of a group."""
-        from qldpc import external  # avoid circular import
+        """Retrieve a description of the structure of a group.
 
-        return external.groups.get_small_group_structure(order, index)
+        The structure is retrieved from GAP and cached to disk if GAP can be called without user
+        interaction.  Otherwise, this method returns the name of the group,
+        "SmallGroup(order,index)".
+        """
+        from qldpc.external import _groups  # avoid circular import
+
+        return _groups.get_small_group_structure(order, index)
 
 
 ####################################################################################################

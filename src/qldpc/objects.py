@@ -17,6 +17,7 @@ import numpy.typing as npt
 
 from qldpc import abstract
 from qldpc._util import networkx as nx
+from qldpc.abstract._fields import resolve_field
 
 
 class Pauli(enum.Enum):
@@ -415,7 +416,7 @@ class ChainComplex:
             raise ValueError("Invalid or inconsistent operator types provided for a ChainComplex")
 
         # identify the base field and/or ring for the boundary operators of this chain complex
-        fields = {abstract.resolve_field(field)} if field is not None else set()
+        fields = {resolve_field(field)} if field is not None else set()
         rings = set()
         for op in ops:
             if isinstance(op, abstract.RingArray):

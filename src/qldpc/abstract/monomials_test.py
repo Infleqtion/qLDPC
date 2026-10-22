@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for _monomials.py."""
+"""Unit tests for monomials.py."""
 
 from __future__ import annotations
 

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import collections
+import inspect
 import warnings
 
 import galois
@@ -16,7 +17,7 @@ import stim
 from qldpc import codes, decoders, math
 from qldpc._deprecations import decoders as deprecated_decoders
 from qldpc.decoders.conftest import SurfaceCodeProblem, ToyProblem
-from qldpc.decoders.construction._resolution import get_error_decoder
+from qldpc.decoders.construction._resolution import build_error_decoder
 from qldpc.decoders.custom._lookup_enumeration import iter_errors_and_syndromes
 from qldpc.decoders.custom.lookup import (
     _FieldVectorPacker,
@@ -44,6 +45,14 @@ def test_lookup(toy_problem: ToyProblem) -> None:
 
     observable_decoder = _get_observable_decoder_lookup(dem, max_weight=2)
     assert np.array_equal(observable_decoder.decode_observables(syndrome), [])
+
+
+def test_lookup_builder_docstring() -> None:
+    """The lookup builder describes the decoder that it builds, not a decoder specification."""
+    docstring = inspect.getdoc(_get_decoder_lookup)
+    assert docstring is not None and docstring.startswith("Build ")
+    returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
+    assert "decoder specification" not in returns
 
 
 def test_tie_breaking() -> None:
@@ -366,7 +375,7 @@ def test_explicit_observable_lookup_decoders() -> None:
     assert weighted.decode_observables_batch(no_syndromes).shape == (0, 1)
 
     with pytest.raises(TypeError, match="observable flips rather than errors"):
-        get_error_decoder(dem, decoder=decoder)  # type: ignore[arg-type]
+        build_error_decoder(dem, decoder=decoder)  # type: ignore[arg-type]
 
     # deprecated lookup decoders that predict observable flips are marked as such, so they are
     # rejected where an error decoder is required
@@ -385,7 +394,7 @@ def test_explicit_observable_lookup_decoders() -> None:
         assert legacy_decoder.decode_returns_observables
         assert np.array_equal(legacy_decoder.decode(syndrome), [1])
         with pytest.raises(TypeError, match="observable flips rather than errors"):
-            get_error_decoder(dem, decoder=legacy_decoder)
+            build_error_decoder(dem, decoder=legacy_decoder)
     assert not decoders.custom.LookupDecoder(dem, max_weight=1).decode_returns_observables
     with pytest.warns(DeprecationWarning, match=r"ObservableLookupDecoder\(matrix, max_weight="):
         decoders.custom.LookupDecoder(

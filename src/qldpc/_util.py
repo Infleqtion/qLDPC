@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, TypeVar
 
 import numpy as np
 
-CallableType = TypeVar("CallableType", bound=Callable[..., object])
+_CallableType = TypeVar("_CallableType", bound=Callable[..., object])
 
 
 ####################################################################################################
@@ -54,7 +54,7 @@ class _LoaderWithCleanup(importlib.abc.Loader):
             raise
 
 
-def lazy_import(name: str) -> ModuleType:
+def _lazy_import(name: str) -> ModuleType:
     """Import a module lazily, deferring its execution until its first attribute access.
 
     Uses importlib.util.LazyLoader so a heavy but rarely-used dependency stays out of ``import
@@ -79,14 +79,14 @@ def lazy_import(name: str) -> ModuleType:
 if TYPE_CHECKING:
     import networkx
 else:
-    networkx = lazy_import("networkx")
+    networkx = _lazy_import("networkx")
 
 
 ####################################################################################################
 # docstrings and warnings
 
 
-def format_docstring(**substitutions: object) -> Callable[[CallableType], CallableType]:
+def format_docstring(**substitutions: object) -> Callable[[_CallableType], _CallableType]:
     """Substitute named values into a function's docstring via str.format.
 
     This lets a docstring reference values (such as module-level constants) by name, for example
@@ -95,7 +95,7 @@ def format_docstring(**substitutions: object) -> Callable[[CallableType], Callab
     silently discarding the documentation.
     """
 
-    def decorator(func: CallableType) -> CallableType:
+    def decorator(func: _CallableType) -> _CallableType:
         if func.__doc__ is not None:
             func.__doc__ = func.__doc__.format(**substitutions)
         return func

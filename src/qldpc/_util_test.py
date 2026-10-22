@@ -12,10 +12,10 @@ import numpy as np
 import pytest
 
 from qldpc._util import (
+    _lazy_import,
     format_docstring,
     get_external_caller_stacklevel,
     get_scrambled_seed,
-    lazy_import,
 )
 
 
@@ -24,11 +24,11 @@ def test_lazy_import() -> None:
     name = "colorsys"  # a small stdlib module not otherwise imported by the test suite
     sys.modules.pop(name, None)
 
-    module = lazy_import(name)  # uncached path
+    module = _lazy_import(name)  # uncached path
     assert isinstance(module, ModuleType)
     assert callable(module.rgb_to_hls)  # force the deferred execution
 
-    assert lazy_import(name) is module  # cached path returns the same module
+    assert _lazy_import(name) is module  # cached path returns the same module
 
 
 def test_lazy_import_failure(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -38,7 +38,7 @@ def test_lazy_import_failure(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyP
     module_path.write_text('value = 1\nraise RuntimeError("broken install")\n')
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    module = lazy_import(name)
+    module = _lazy_import(name)
     for _ in range(2):
         with pytest.raises(RuntimeError, match="broken install"):
             _ = module.value
@@ -47,11 +47,11 @@ def test_lazy_import_failure(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyP
     module_path.write_text("value = 2\n")
     importlib.invalidate_caches()
     assert module.value == 2
-    assert lazy_import(name) is module
+    assert _lazy_import(name) is module
     sys.modules.pop(name, None)
 
     with pytest.raises(ModuleNotFoundError, match="No module named"):
-        lazy_import(f"missing_{name}")
+        _lazy_import(f"missing_{name}")
 
 
 def test_format_docstring() -> None:

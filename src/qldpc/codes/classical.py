@@ -14,6 +14,7 @@ import sympy
 
 from qldpc import abstract
 from qldpc._util import networkx as nx
+from qldpc.abstract._fields import resolve_field
 
 from .common import ClassicalCode
 
@@ -27,7 +28,7 @@ class RepetitionCode(ClassicalCode):
     """
 
     def __init__(self, bits: int, field: int | type[galois.FieldArray] | None = None) -> None:
-        self._field = abstract.resolve_field(field)
+        self._field = resolve_field(field)
         self._matrix = self.field.Zeros((bits - 1, bits))
         for row in range(bits - 1):
             self._matrix[row, row] = 1
@@ -49,7 +50,7 @@ class RingCode(ClassicalCode):
     """
 
     def __init__(self, bits: int, field: int | type[galois.FieldArray] | None = None) -> None:
-        self._field = abstract.resolve_field(field)
+        self._field = resolve_field(field)
         self._matrix = self.field.Zeros((bits, bits))
         for row in range(bits):
             self._matrix[row, row] += self.field(1)
@@ -134,7 +135,7 @@ class HammingCode(ClassicalCode):
         """Construct a Hamming code of a given rank."""
         if size < 2:
             raise ValueError(f"Hamming codes require a rank of at least 2 (provided: {size})")
-        self._field = abstract.resolve_field(field)
+        self._field = resolve_field(field)
         if self.field is galois.GF2:
             # collect all nonzero bitstrings
             bitstrings = list(itertools.product([0, 1], repeat=size))
@@ -205,7 +206,7 @@ class ReedMullerCode(ClassicalCode):
 
         generator = ReedMullerCode.get_generator(order, size)
         self._matrix = ClassicalCode(generator, field).generator
-        self._field = abstract.resolve_field(field)
+        self._field = resolve_field(field)
 
         self._dimension = len(generator)
         self._distance = 2 ** (size - order)
@@ -274,7 +275,7 @@ class BCHCode(ClassicalCode):
     def __init__(
         self, length: int, dimension: int, field: int | type[galois.FieldArray] | None = None
     ) -> None:
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
         if not BCHCode._is_valid_bch_length(length, field.order):
             raise ValueError(
                 f"BCH codes over F_{field.order} are only defined for block lengths"
@@ -330,7 +331,7 @@ class SimplexCode(ClassicalCode):
     """
 
     def __init__(self, dim: int, field: int | type[galois.FieldArray] | None = None) -> None:
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
         if dim < 2:
             raise ValueError(f"Simplex codes require a dimension of at least 2 (provided: {dim})")
 
@@ -367,7 +368,7 @@ class SimplexCode(ClassicalCode):
         A dimension of at least 2 is required: a one-dimensional simplex code has block length
         ``field.order - 1 == 1``, for which no nontrivial check polynomial exists.
         """
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
         if dim < 2:
             raise ValueError(f"Simplex codes require a dimension of at least 2 (provided: {dim})")
 

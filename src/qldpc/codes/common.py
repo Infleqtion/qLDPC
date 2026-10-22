@@ -30,8 +30,10 @@ from qldpc._deprecations.decoders import (
 )
 from qldpc._util import format_docstring, get_external_caller_stacklevel, get_scrambled_seed
 from qldpc._util import networkx as nx
+from qldpc.abstract._fields import resolve_field
 from qldpc.decoders._capabilities import is_prebuilt_decoder, is_prebuilt_observable_decoder
 from qldpc.decoders.construction._resolution import reject_prebuilt_decoder, resolve_decoder
+from qldpc.external import _codes
 from qldpc.math import IntegerArray
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, PauliXZLike, QuditPauli
 
@@ -106,7 +108,7 @@ class AbstractCode(abc.ABC):
             self._distance = matrix._distance
             self._distance_bound = matrix._distance_bound
 
-            if field is not None and abstract.resolve_field(field) is not matrix._field:
+            if field is not None and resolve_field(field) is not matrix._field:
                 raise ValueError(
                     f"Field argument {field} is inconsistent with the given code, which is defined"
                     f" over F_{self._field.order}"
@@ -117,7 +119,7 @@ class AbstractCode(abc.ABC):
         elif isinstance(matrix, galois.FieldArray):
             # preserve or canonically embed explicitly typed finite-field arrays
             matrix_field = type(matrix)
-            self._field = abstract.resolve_field(field) if field is not None else type(matrix)
+            self._field = resolve_field(field) if field is not None else type(matrix)
             if self._field is matrix_field:
                 self._matrix = matrix.view(self._field)
             elif (
@@ -133,7 +135,7 @@ class AbstractCode(abc.ABC):
                 )
 
         else:
-            self._field = abstract.resolve_field(field)
+            self._field = resolve_field(field)
             if scipy.sparse.issparse(matrix):
                 matrix = matrix.todense()  # type:ignore[union-attr]
             array = np.asanyarray(matrix)
@@ -678,7 +680,7 @@ class ClassicalCode(AbstractCode):
         Reject any code with trivial checks or unchecked bits, identified by an all-zero row or
         column in the code's parity check matrix.
         """
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
 
         def nontrivial(matrix: galois.FieldArray) -> bool:
             """Return True iff all rows and columns are nonzero."""
@@ -699,7 +701,7 @@ class ClassicalCode(AbstractCode):
     def from_name(name: str) -> ClassicalCode:
         """Named code in the GAP computer algebra system."""
         standardized_name = name.strip().replace(" ", "")  # strip whitespace
-        matrix, field = external.codes.get_classical_code(standardized_name)
+        matrix, field = _codes.get_classical_code(standardized_name)
         code = ClassicalCode(matrix, field)
         code._name = name
         return code
@@ -1197,7 +1199,7 @@ class QuditCode(AbstractCode):
         the Galois field ``GF(field)``, such as "Z(1) _ Y(3) X(2)".  In this case "Y(a)" is an alias
         for "X(a)*Z(a)", and strings such as "Z(1) _ X(1)*Z(3) X(2)" are also valid.
         """
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
         operator: type[Pauli | QuditPauli] = Pauli if field is galois.GF2 else QuditPauli
 
         def parse_check(check: str) -> list[str]:
@@ -1228,7 +1230,7 @@ class QuditCode(AbstractCode):
     @staticmethod
     def from_qecdb_id(code_id: str) -> QuditCode:
         """Retrieve a code by ID from qecdb.org."""
-        strings, distance, is_css = external.codes.get_quantum_code(code_id)
+        strings, distance, is_css = _codes.get_quantum_code(code_id)
         code = QuditCode.from_strings(strings, field=2)
         if is_css:
             code = code.to_css()
@@ -1242,7 +1244,7 @@ class QuditCode(AbstractCode):
         The code remembers the upper bounds on distance from its submission, but its exact distance
         is recorded only if the challenge has certified it.
         """
-        matrix, distance, is_css, distance_bounds = external.codes.get_qldpc_challenge_code(code_id)
+        matrix, distance, is_css, distance_bounds = _codes.get_qldpc_challenge_code(code_id)
         code = QuditCode(matrix)
         if is_css:
             css_code = code.to_css()
@@ -2048,7 +2050,7 @@ class QuditCode(AbstractCode):
             )
 
         maxav = bound_kwargs.get("maxav", "fail")
-        bound = external.codes.get_distance_bound(self, num_trials, cutoff=cutoff, maxav=maxav)
+        bound = _codes.get_distance_bound(self, num_trials, cutoff=cutoff, maxav=maxav)
         self._distance_bound = min(best_bound, bound)
         return self._distance_bound
 
@@ -3462,7 +3464,7 @@ class CSSCode(QuditCode):
             else CSSCode(self.matrix_z, self.matrix_x, is_subsystem_code=self._is_subsystem_code)
         )
         maxav = bound_kwargs.get("maxav", "fail")
-        bound = external.codes.get_distance_bound(code, num_trials, cutoff=cutoff, maxav=maxav)
+        bound = _codes.get_distance_bound(code, num_trials, cutoff=cutoff, maxav=maxav)
         return self._update_distance_bound(bound, pauli)
 
     def get_distance_bound_with_decoder(

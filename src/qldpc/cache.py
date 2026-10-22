@@ -14,11 +14,11 @@ from typing import Any, Generic, ParamSpec, TypeVar, cast
 import diskcache
 import platformdirs
 
-Params = ParamSpec("Params")
-Result = TypeVar("Result")
+_Params = ParamSpec("_Params")
+_Result = TypeVar("_Result")
 
 
-class CachedFunction(Generic[Params, Result]):
+class CachedFunction(Generic[_Params, _Result]):
     """A function whose results are cached to disk.
 
     Calling the function retrieves its result from the cache if available, and otherwise computes
@@ -26,11 +26,11 @@ class CachedFunction(Generic[Params, Result]):
     recomputes the result, and saves the new result to the cache.
     """
 
-    __wrapped__: Callable[Params, Result]
+    __wrapped__: Callable[_Params, _Result]
 
     def __init__(
         self,
-        function: Callable[Params, Result],
+        function: Callable[_Params, _Result],
         cache_name: str,
         *,
         cache_dir: pathlib.Path | str | None = None,
@@ -42,17 +42,17 @@ class CachedFunction(Generic[Params, Result]):
         self._key_func = key_func
         functools.update_wrapper(self, function)
 
-    def __call__(self, *args: Params.args, **kwargs: Params.kwargs) -> Result:
+    def __call__(self, *args: _Params.args, **kwargs: _Params.kwargs) -> _Result:
         """Retrieve a result from the cache if available, and otherwise compute and cache it."""
         cache = get_disk_cache(self._cache_name, cache_dir=self._cache_dir)
         key = self._get_key(*args, **kwargs)
         if key in cache:
-            return cast(Result, cache[key])
+            return cast(_Result, cache[key])
         result = self._function(*args, **kwargs)
         cache[key] = result
         return result
 
-    def refresh(self, *args: Params.args, **kwargs: Params.kwargs) -> Result:
+    def refresh(self, *args: _Params.args, **kwargs: _Params.kwargs) -> _Result:
         """Recompute the result for these arguments and overwrite the cached value."""
         cache = get_disk_cache(self._cache_name, cache_dir=self._cache_dir)
         key = self._get_key(*args, **kwargs)
@@ -60,7 +60,7 @@ class CachedFunction(Generic[Params, Result]):
         cache[key] = result
         return result
 
-    def _get_key(self, *args: Params.args, **kwargs: Params.kwargs) -> Hashable:
+    def _get_key(self, *args: _Params.args, **kwargs: _Params.kwargs) -> Hashable:
         """Get the cache key for the given arguments."""
         if self._key_func is not None:
             return self._key_func(*args, **kwargs)
@@ -87,7 +87,7 @@ def get_disk_cache(
 
     While pytest is imported, this returns a new, empty dict rather than a persistent disk cache.
     """
-    if running_with_pytest():
+    if _running_with_pytest():
         return {}
     return diskcache.Cache(get_disk_cache_path(cache_name, cache_dir=cache_dir))
 
@@ -97,7 +97,7 @@ def use_disk_cache(
     *,
     cache_dir: pathlib.Path | str | None = None,
     key_func: Callable[..., Hashable] | None = None,
-) -> Callable[[Callable[Params, Result]], CachedFunction[Params, Result]]:
+) -> Callable[[Callable[_Params, _Result]], CachedFunction[_Params, _Result]]:
     """Decorator to cache results to disk.
 
     By default, the cache key is the tuple of positional arguments followed by (keyword, value)
@@ -114,15 +114,10 @@ def use_disk_cache(
     Disk caching is bypassed when running with pytest.
     """
 
-    def decorator(function: Callable[Params, Result]) -> CachedFunction[Params, Result]:
+    def decorator(function: Callable[_Params, _Result]) -> CachedFunction[_Params, _Result]:
         return CachedFunction(function, cache_name, cache_dir=cache_dir, key_func=key_func)
 
     return decorator
-
-
-def running_with_pytest() -> bool:
-    """Are we currently running with pytest?"""
-    return "pytest" in sys.modules
 
 
 def clear_entry(
@@ -140,3 +135,12 @@ def clear_entry(
             + ", but this entry does not exist.",
             stacklevel=2,
         )
+
+
+####################################################################################################
+# helper methods
+
+
+def _running_with_pytest() -> bool:
+    """Are we currently running with pytest?"""
+    return "pytest" in sys.modules

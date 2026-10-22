@@ -537,7 +537,7 @@ def test_quotient_generating_mats_are_homomorphic(
     exhaustively enumerating ``SL(d, q)/GL(d, q)``, which is impractically slow at these dimensions
     (e.g. ``|SL(3, 3)| = 5616``).
     """
-    field_type = abstract.resolve_field(field)
+    field_type = galois.GF(field)
     gen_a, gen_b, *_ = base_cls.get_generating_mats(dimension, field_type)
     assert not np.array_equal(gen_a @ gen_b, gen_b @ gen_a)  # confirm noncommuting generators
 
@@ -553,14 +553,6 @@ def test_quotient_generating_mats_are_homomorphic(
         assert np.array_equal(rep, conjugation_rep(word))
 
 
-def test_resolve_field() -> None:
-    """resolve_field accepts None (GF2 default), a field order, or a galois field type."""
-    assert abstract.resolve_field(None) is galois.GF2
-    assert abstract.resolve_field(3).order == 3
-    field = galois.GF(4)
-    assert abstract.resolve_field(field) is field
-
-
 def test_small_group() -> None:
     """Groups indexed by the GAP computer algebra system."""
     order, index = 2, 1
@@ -571,15 +563,15 @@ def test_small_group() -> None:
         abstract.SmallGroup(0, 1)
     with (
         pytest.raises(ValueError, match="Index for SmallGroup"),
-        unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=index),
+        unittest.mock.patch("qldpc.external._groups.get_small_group_number", return_value=index),
     ):
         abstract.SmallGroup(order, 0)
 
     # everything works as expected
     generators = [tuple(gen.array_form) for gen in desired_group.generators]
     with (
-        unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=index),
-        unittest.mock.patch("qldpc.external.groups.get_generators", return_value=generators),
+        unittest.mock.patch("qldpc.external._groups.get_small_group_number", return_value=index),
+        unittest.mock.patch("qldpc.external._groups.get_generators", return_value=generators),
     ):
         group = abstract.SmallGroup(order, index)
         assert group.generators == desired_group.generators
@@ -589,12 +581,12 @@ def test_small_group() -> None:
         # retrieve group structure
         structure = "test"
         with unittest.mock.patch(
-            "qldpc.external.groups.get_small_group_structure", return_value=structure
+            "qldpc.external._groups.get_small_group_structure", return_value=structure
         ):
             assert group.structure == structure
 
     # cover a special case
-    with unittest.mock.patch("qldpc.external.groups.get_small_group_number", return_value=1):
+    with unittest.mock.patch("qldpc.external._groups.get_small_group_number", return_value=1):
         group = abstract.SmallGroup(1, 1)
     assert group.equiv(abstract.TrivialGroup())
     assert group.random() == group.identity

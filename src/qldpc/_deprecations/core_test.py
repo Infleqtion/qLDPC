@@ -7,7 +7,9 @@ from __future__ import annotations
 import importlib
 import inspect
 import pickle
+import sys
 import warnings
+from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -24,12 +26,16 @@ def test_aliases() -> None:
                 warnings.simplefilter("always")
                 value = getattr(module, name)
             target_module, _, attribute = target.partition(":")
-            replacement = getattr(importlib.import_module(target_module), attribute)
+            replacement = importlib.import_module(target_module)
+            replacement = getattr(replacement, attribute) if attribute else replacement
             assert value is replacement
 
             # a renamed object is named by its new name, and a moved one by its full path
             path = f"{target_module}.{attribute}"
-            if attribute != name:
+            if not attribute:
+                assert target_module.rpartition(".")[2].startswith("_")
+                expected = f"{name} is deprecated and will be removed from the public API"
+            elif attribute != name:
                 expected = f"{name} is deprecated; use {attribute} instead"
                 assert _get_from_package(module_name, attribute) is replacement
             elif "._" in path:
@@ -86,6 +92,24 @@ def test_deprecated_pickle_paths() -> None:
     assert cls is abstract.RingArray
 
 
+def test_deprecated_modules() -> None:
+    """Deprecated submodules can be imported, and old pickles that reference them still load."""
+    for package, aliases in _deprecations.ALIASES.items():
+        for name, target in aliases.items():
+            if ":" in target:
+                continue
+            path = f"{package}.{name}"
+            replacement = importlib.import_module(target)
+            loaders: list[Callable[[str], object]] = [__import__, _unpickle_module_name]
+            for load in loaders:
+                with pytest.warns(DeprecationWarning, match=f"{name} is deprecated") as caught:
+                    load(path)
+                assert len(caught) == 1 and caught[0].filename == __file__
+                assert sys.modules[path] is replacement
+                assert replacement.__spec__ is not None and replacement.__spec__.name == target
+                del sys.modules[path], vars(sys.modules[package])[name]
+
+
 def test_deprecated_methods() -> None:
     """Deprecated methods warn and delegate to their replacements."""
     classical_code = codes.RepetitionCode(3)
@@ -134,3 +158,8 @@ def _get_from_package(module_name: str, name: str) -> object:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         return next(getattr(module, name) for module in modules if hasattr(module, name))
+
+
+def _unpickle_module_name(module_name: str) -> object:
+    """Unpickle the name of a module from a pickle that references it by its module path."""
+    return pickle.loads(f"c{module_name}\n__name__\n.".encode())  # noqa: S301

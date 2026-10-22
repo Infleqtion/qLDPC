@@ -24,6 +24,7 @@ import qldpc
 from qldpc import abstract
 from qldpc._util import get_scrambled_seed
 from qldpc._util import networkx as nx
+from qldpc.abstract._fields import resolve_field
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
 
 from .classical import (
@@ -69,7 +70,7 @@ class TrivialCode(CSSCode):
         qubits, so that ``matrix_x == matrix_z``.  It is enough to specify just one of
         ``num_stabs_x`` and ``num_stabs_z`` in this case; the other defaults to the same value.
         """
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
 
         if self_dual:
             if num_stabs_x and num_stabs_z and num_stabs_x != num_stabs_z:
@@ -128,7 +129,7 @@ class FiveQuditCode(QuditCode):
     """
 
     def __init__(self, field: int | type[galois.FieldArray] | None = None) -> None:
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
         matrix = [
             [1, 0, 0, -1, 0, 0, 1, -1, 0, 0],
             [0, 1, 0, 0, -1, 0, 0, 1, -1, 0],
@@ -2446,7 +2447,7 @@ class SurfaceCode(CSSCode):
             ]
 
             # invert Z-type Pauli on every other qubit
-            field = abstract.resolve_field(field)
+            field = resolve_field(field)
             if field is not galois.GF2:
                 matrix_z = matrix_z.view(field)
                 matrix_z[:, self.bias_tailoring_qubits] *= -1
@@ -2615,7 +2616,7 @@ class ToricCode(CSSCode):
             ]
 
             # invert Z-type Pauli on every other qubit
-            field = abstract.resolve_field(field)
+            field = resolve_field(field)
             if field is not galois.GF2:
                 matrix_z = matrix_z.view(field)
                 matrix_z[:, self.bias_tailoring_qubits] *= -1
@@ -2772,7 +2773,7 @@ class T4Code(CSSCode):
         A unimodular basis tiles the torus with a single cell, for which every boundary operator
         vanishes identically and the resulting code has no parity checks at all.
         """
-        self._field = abstract.resolve_field(field)
+        self._field = resolve_field(field)
 
         determinant = int(sympy.Matrix(matrix).det())
         if abs(determinant) < 2:

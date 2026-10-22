@@ -22,7 +22,7 @@ import stim
 
 from qldpc import decoders
 from qldpc.decoders._common import batch_decode_errors, supports_batch_decoding
-from qldpc.decoders.construction._resolution import get_error_decoder, get_observable_decoder
+from qldpc.decoders.construction._resolution import build_error_decoder, build_observable_decoder
 from qldpc.decoders.external.tesseract import _get_decoder_tesseract
 
 
@@ -302,8 +302,8 @@ def test_tesseract_specs_and_sinter(fake_tesseract: None) -> None:
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     spec = decoders.tesseract(det_beam=7)
     assert spec.predicts_observables_natively
-    assert isinstance(get_error_decoder(dem, decoder=spec), decoders.external.TesseractDecoder)
-    observable_decoder = get_observable_decoder(dem, decoder=spec)
+    assert isinstance(build_error_decoder(dem, decoder=spec), decoders.external.TesseractDecoder)
+    observable_decoder = build_observable_decoder(dem, decoder=spec)
     assert isinstance(observable_decoder, decoders.external.TesseractDecoder)
     assert np.array_equal(observable_decoder.decode_observables(np.array([1])), [1])
 
@@ -318,7 +318,7 @@ import stim
 
 from qldpc import decoders
 from qldpc.decoders._common import batch_decode_errors
-from qldpc.decoders.construction._resolution import get_error_decoder, get_observable_decoder
+from qldpc.decoders.construction._resolution import build_error_decoder, build_observable_decoder
 from qldpc.decoders.external.tesseract import _get_decoder_tesseract
 
 # A matrix keeps the most likely of two identical columns.

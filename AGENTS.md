@@ -63,6 +63,7 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
   A name is public if a package `__all__` listed it, or if examples or docs used it.
   Names added since the last release may change without a shim.
 - Register a renamed or moved name in `ALIASES`, which warns on access and names the replacement.
+  A registry target without an attribute, such as `"qldpc.external._codes"`, serves a moved submodule, also to import statements and old pickles, through a finder that `core.py` appends to `sys.meta_path`.
   `SILENT_ALIASES` serves deprecated functions that warn when called, and moved objects that old pickles reference, without an access warning.
 - Type checkers must reject deprecated names.
   Do not add `TYPE_CHECKING` aliases; the stub defines `__getattr__` only under `if not TYPE_CHECKING`.

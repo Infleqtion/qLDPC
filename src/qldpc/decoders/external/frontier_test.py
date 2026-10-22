@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import itertools
 import math
 import subprocess
@@ -17,7 +18,7 @@ import pytest
 import stim
 
 from qldpc import decoders
-from qldpc.decoders.construction._resolution import get_observable_decoder
+from qldpc.decoders.construction._resolution import build_observable_decoder
 from qldpc.decoders.external import frontier
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
 
@@ -170,6 +171,21 @@ def test_frontier_decoding(calls: list[_Call]) -> None:
     assert decoder.decode_observables(syndromes[0]).tolist() == [0, 0, 0]
 
 
+def test_frontier_builder() -> None:
+    """The frontier helper has the defaults of the builder, which describes what it builds."""
+    builder_parameters = inspect.signature(_get_observable_decoder_frontier).parameters
+    helper_parameters = inspect.signature(decoders.frontier).parameters
+    assert {name: parameter.default for name, parameter in helper_parameters.items()} == {
+        name: parameter.default
+        for name, parameter in builder_parameters.items()
+        if parameter.default is not inspect.Parameter.empty
+    }
+    docstring = inspect.getdoc(_get_observable_decoder_frontier)
+    assert docstring is not None and docstring.startswith("Build ")
+    returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
+    assert "decoder specification" not in returns
+
+
 def test_frontier_scan_orders(calls: list[_Call]) -> None:
     """Frontier reorders columns on request, and the committee's reverse scan is precomputed."""
     dem = stim.DetectorErrorModel("error(0.1) D0\nerror(0.2) D0 D1\nerror(0.3) D1")
@@ -208,7 +224,7 @@ def test_frontier_with_generic_decoding_apis() -> None:
     specification = decoders.frontier(add_erasure_bit=True)
     syndrome = np.array([1, 0])
 
-    assert get_observable_decoder(dem, decoder=specification).decode_observables(
+    assert build_observable_decoder(dem, decoder=specification).decode_observables(
         syndrome
     ).tolist() == [
         1,

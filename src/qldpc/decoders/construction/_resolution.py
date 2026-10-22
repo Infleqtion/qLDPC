@@ -56,7 +56,7 @@ def resolve_decoder(
         decoder = merge_legacy_decoder_args(
             pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
-    return get_error_decoder(pcm_or_dem, decoder=decoder)
+    return build_error_decoder(pcm_or_dem, decoder=decoder)
 
 
 def resolve_observable_decoder(
@@ -87,7 +87,7 @@ def resolve_observable_decoder(
         decoder = merge_legacy_decoder_args(
             dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
-    return get_observable_decoder(dem, decoder=decoder)
+    return build_observable_decoder(dem, decoder=decoder)
 
 
 def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
@@ -99,7 +99,7 @@ def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
         )
 
 
-def get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
+def build_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
     """Build or retrieve a decoder that maps a syndrome to an inferred error.
 
     Args:
@@ -113,7 +113,7 @@ def get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None
     return as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
 
 
-def get_observable_decoder(
+def build_observable_decoder(
     dem: stim.DetectorErrorModel, *, decoder: DecoderInput = None
 ) -> ObservableDecoder:
     """Build or retrieve a decoder that maps a syndrome to predicted observable flips.

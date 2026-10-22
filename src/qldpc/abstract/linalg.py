@@ -20,8 +20,9 @@ import scipy.linalg
 
 from qldpc import math
 
+from ._coefficients import coefficient_matmul
 from .groups import Group, GroupMember
-from .ring_array import RingArray, _coefficient_matmul
+from .ring_array import RingArray
 from .rings import GroupRing
 
 if TYPE_CHECKING:
@@ -58,7 +59,7 @@ def matmul(
     if ring.is_commutative or not right:
         return (matrix_a @ matrix_b).view(RingArray)
 
-    if (matrix := _coefficient_matmul(matrix_a, matrix_b, ring=ring, right=True)) is not None:
+    if (matrix := coefficient_matmul(matrix_a, matrix_b, ring=ring, right=True)) is not None:
         assert isinstance(matrix, RingArray)
         return matrix
 
@@ -79,14 +80,14 @@ def kron(
     """Take the Kronecker product of two matrices over a ring.
 
     If the base ring R is commutative, this is the ordinary Kronecker product.  Otherwise, matrix
-    entries of the Kronecker product live in the bimodule of R.  See get_bimodule for additional
-    information.
+    entries of the Kronecker product live in the bimodule R ⨂ R of R, whose elements r ⨂ s act on
+    elements t of R as (r ⨂ s)(t) = r·t·s⁻¹.
     """
     ring = _get_ring(matrix_a, matrix_b)
 
     if not ring.is_commutative:
         # keep left and right multiplication in separate halves of the bimodule representation
-        bimodule = get_bimodule(ring)
+        bimodule = _get_bimodule(ring)
         sector_size = ring.group.identity.size
         swap_sectors = GroupMember(
             list(range(sector_size, 2 * sector_size)) + list(range(sector_size))
@@ -95,31 +96,6 @@ def kron(
         matrix_b = swap_sectors * ~RingArray.build(matrix_b, bimodule) * swap_sectors
 
     return np.kron(matrix_a, matrix_b).view(RingArray)
-
-
-@functools.cache
-def get_bimodule(ring: GroupRing) -> GroupRing:
-    """Map a group algebra ``F[G]`` to its induced bimodule ``F[G ⨂ G]``.
-
-    Elements ``r ⨂ s ∈ F[G ⨂ G]`` of the bimodule act on elements of the base ring as::
-
-        (r ⨂ s)(t) = r·t·s⁻¹.
-
-    (The right sector lifts to an anti-representation of the inverse, hence ``s⁻¹`` rather than
-    ``s``.)
-
-    When lifting a RingArray matrix over a bimodule, the "left" entries of ``G ⨂ G`` get lifted to
-    an ordinary representation, while the "right" entries get lifted to an anti-representation.
-    """
-    size = ring.group.identity.size
-
-    def lift(member: GroupMember) -> npt.NDArray[np.int_]:
-        part_l = GroupMember(member.array_form[:size])
-        part_r = GroupMember([val - size for val in member.array_form[size:]])
-        return ring.group.lift(part_l) @ ring.group.lift(~part_r, right=True)
-
-    bimodule_group = Group(ring.group.to_sympy() * ring.group.to_sympy(), lift=lift)
-    return GroupRing(bimodule_group, ring.field)
 
 
 def block_diag(
@@ -250,6 +226,31 @@ def get_howell_dual(
 
 ####################################################################################################
 # helper methods
+
+
+@functools.cache
+def _get_bimodule(ring: GroupRing) -> GroupRing:
+    """Map a group algebra ``F[G]`` to its induced bimodule ``F[G ⨂ G]``.
+
+    Elements ``r ⨂ s ∈ F[G ⨂ G]`` of the bimodule act on elements of the base ring as::
+
+        (r ⨂ s)(t) = r·t·s⁻¹.
+
+    (The right sector lifts to an anti-representation of the inverse, hence ``s⁻¹`` rather than
+    ``s``.)
+
+    When lifting a RingArray matrix over a bimodule, the "left" entries of ``G ⨂ G`` get lifted to
+    an ordinary representation, while the "right" entries get lifted to an anti-representation.
+    """
+    size = ring.group.identity.size
+
+    def lift(member: GroupMember) -> npt.NDArray[np.int_]:
+        part_l = GroupMember(member.array_form[:size])
+        part_r = GroupMember([val - size for val in member.array_form[size:]])
+        return ring.group.lift(part_l) @ ring.group.lift(~part_r, right=True)
+
+    bimodule_group = Group(ring.group.to_sympy() * ring.group.to_sympy(), lift=lift)
+    return GroupRing(bimodule_group, ring.field)
 
 
 def _validate_howell_dual(

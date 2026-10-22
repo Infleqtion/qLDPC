@@ -18,22 +18,9 @@ def isolate_gap_probe_state() -> Iterator[None]:
     These caches and registries are process-wide, so without a reset, one test's mocked (or real)
     GAP availability would leak into later tests that run in the same worker process.
     """
-    _reset_gap_probe_state()
+    external.gap.clear_cache()
     yield
-    _reset_gap_probe_state()
-
-
-def _reset_gap_probe_state() -> None:
-    """Clear the GAP availability caches and the libgap/subprocess package registries."""
-    for probe in (
-        external.gap.is_callable,
-        external.gap.is_installed,
-        external.gap._is_gap_executable,
-        external.gap.require_package,
-    ):
-        probe.cache_clear()
-    external.gap._libgap_packages.clear()
-    external.gap._subprocess_packages.clear()
+    external.gap.clear_cache()
 
 
 @pytest.fixture(scope="session")

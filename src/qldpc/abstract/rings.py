@@ -29,8 +29,9 @@ import sympy.core
 
 from qldpc import _deprecations
 
-from ._monomials import iter_monomial_terms
-from .groups import AbelianGroup, Group, GroupMember, resolve_field
+from ._fields import resolve_field
+from .groups import AbelianGroup, Group, GroupMember
+from .monomials import iter_monomial_terms
 
 if TYPE_CHECKING:
     from .wedderburn_artin import WedderburnArtinTransformer
@@ -182,15 +183,18 @@ class GroupRing:
         See `Idempotent (ring theory)
         <https://en.wikipedia.org/wiki/Idempotent_%28ring_theory%29>`_.
 
-        Unless they are already known, the idempotents are computed with GAP, which may install GAP
-        packages or prompt on standard input; see help(qldpc.external.gap.get_output).
+        Unless they are already known, the idempotents are computed with the GAP Wedderga package
+        and cached to disk.  If GAP can be called but lacks Wedderga, qLDPC asks for consent on
+        standard input to install it.  If GAP cannot be called directly, qLDPC asks on standard
+        input whether GAP is available for copy/paste, and then prints the GAP commands, copies
+        them to the system clipboard, and reads the output that the user pastes into standard input.
         """
         if not self.is_semisimple:
             raise ValueError("Only semisimple rings have primitive central idempotents")
         if self._idempotents is None:
-            from qldpc import external  # avoid circular import
+            from qldpc.external import _groups  # avoid circular import
 
-            idempotents_as_tuples = external.groups.get_primitive_central_idempotents(
+            idempotents_as_tuples = _groups.get_primitive_central_idempotents(
                 self.group.to_gap_group(), self.field.order
             )
             idempotents = []

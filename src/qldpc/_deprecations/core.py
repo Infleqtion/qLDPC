@@ -15,6 +15,10 @@ A deprecated name thereby refers to the same object as its replacement, which pr
 checks, subclassing, and unpickling.  Type checkers do not see the stub, so they reject deprecated
 names.  A package that must keep deprecated names in its __all__ extends it with deprecated_names.
 
+A registry target without an attribute names a module that replaces a deprecated submodule.  Such a
+submodule is served both as an attribute of its package and, by a finder that this module appends
+to sys.meta_path, to import statements and to old pickles that reference objects by its path.
+
 Registry targets are lazy "module:attribute" strings, and this module imports no qLDPC subpackage
 at import time, so that every module can import it without an import cycle.  Deprecated methods are
 defined at the bottom of this module, and attached to their classes by install_deprecated_methods,
@@ -25,9 +29,13 @@ are handled where they are accepted, by calling warn_deprecated or raising defun
 from __future__ import annotations
 
 import importlib
+import importlib.abc
+import importlib.machinery
+import importlib.util
 import sys
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
+from types import ModuleType
 from typing import TYPE_CHECKING, TypeVar
 
 from qldpc._util import get_external_caller_stacklevel
@@ -48,11 +56,13 @@ _FunctionT = TypeVar("_FunctionT", bound=Callable[..., object])
 # registry and attribute lookup
 
 
-# Deprecated names that warn when accessed, by module, mapped to "module:attribute" targets.
+# Deprecated names that warn when accessed, by module, mapped to "module:attribute" targets, or to
+# "module" targets for deprecated submodules.
 ALIASES: dict[str, dict[str, str]] = {
     "qldpc.abstract": {
         "Element": "qldpc.abstract.rings:RingMember",
         "Protograph": "qldpc.abstract.ring_array:RingArray",
+        "resolve_field": "qldpc.abstract._fields:resolve_field",
     },
     "qldpc.abstract.ring_array": {
         "Protograph": "qldpc.abstract.ring_array:RingArray",
@@ -168,6 +178,10 @@ ALIASES: dict[str, dict[str, str]] = {
         "SequentialSinterDecoder": "qldpc.decoders.sinter.window:SequentialWindowDecoder",
         "SubgraphSinterDecoder": "qldpc.decoders.sinter.subgraph:SubgraphDecoder",
     },
+    "qldpc.external": {
+        "codes": "qldpc.external._codes",
+        "groups": "qldpc.external._groups",
+    },
 }
 
 # Names served without warning when accessed: deprecated functions, which warn when called instead,
@@ -233,15 +247,19 @@ def deprecated_names(module_name: str) -> list[str]:
 
 
 def _import_target(target: str) -> object:
-    """Import the object at a "module:attribute" target."""
+    """Import the object at a "module:attribute" target, or the module at a "module" target."""
     module_name, _, attribute = target.partition(":")
-    return getattr(importlib.import_module(module_name), attribute)
+    module = importlib.import_module(module_name)
+    return getattr(module, attribute) if attribute else module
 
 
 def _get_alias_warning(name: str, target: str) -> str:
-    """Describe the replacement for a deprecated name with the given "module:attribute" target."""
+    """Describe the replacement for a deprecated name with the given registry target."""
     module_name, _, attribute = target.partition(":")
-    replacement = attribute if attribute != name else f"{module_name}.{attribute}"
+    if not attribute:
+        replacement = module_name
+    else:
+        replacement = attribute if attribute != name else f"{module_name}.{attribute}"
     if any(part.startswith("_") for part in replacement.split(".")):
         return f"{name} is deprecated and will be removed from the public API"
     return f"{name} is deprecated; use {replacement} instead"
@@ -258,6 +276,42 @@ def _is_import_probe(frame: FrameType | None) -> bool:
         and frame.f_code.co_name == "_handle_fromlist"
         and frame.f_globals.get("__name__") == "importlib._bootstrap"
     )
+
+
+class _DeprecatedModuleFinder(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    """Import a deprecated submodule as the module that replaces it, warning about the import."""
+
+    def find_spec(
+        self,
+        fullname: str,
+        path: Sequence[str] | None,
+        target: ModuleType | None = None,
+    ) -> importlib.machinery.ModuleSpec | None:
+        """Find a deprecated submodule that the registry lists with a "module" target."""
+        package, _, name = fullname.rpartition(".")
+        target_name = ALIASES.get(package, {}).get(name)
+        if target_name is None or ":" in target_name:
+            return None
+        return importlib.util.spec_from_loader(fullname, self)
+
+    def create_module(self, spec: importlib.machinery.ModuleSpec) -> ModuleType:
+        """Warn about the import of a deprecated submodule, and return its replacement."""
+        package, _, name = spec.name.rpartition(".")
+        target = ALIASES[package][name]
+        # warnings skip the frames of the import system, which leads to the importing code
+        warn_deprecated(_get_alias_warning(name, target), stacklevel=2)
+        module = importlib.import_module(target)
+        spec.loader_state = module.__spec__  # the import system replaces it, so keep it to restore
+        return module
+
+    def exec_module(self, module: ModuleType) -> None:
+        """Restore the spec of the replacement module, which is otherwise executed already."""
+        spec = module.__spec__
+        assert spec is not None
+        module.__spec__ = spec.loader_state
+
+
+sys.meta_path.append(_DeprecatedModuleFinder())
 
 
 ####################################################################################################

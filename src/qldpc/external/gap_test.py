@@ -230,6 +230,21 @@ def test_is_installed(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
         assert external.gap.is_installed()
 
 
+def test_clear_cache() -> None:
+    """After clearing the cache, qLDPC checks again whether GAP is available."""
+    external.gap._subprocess_packages.add("package")
+    with (
+        unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
+        unittest.mock.patch("subprocess.run", side_effect=FileNotFoundError),
+    ):
+        assert not external.gap.is_callable()
+    with unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=MockLibGap()):
+        assert not external.gap.is_callable()
+        external.gap.clear_cache()
+        assert external.gap.is_callable()
+    assert not external.gap._subprocess_packages
+
+
 def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     """Run GAP commands and retrieve the GAP output."""
     # GAP is not installed...
@@ -411,7 +426,7 @@ def test_require_package(capsys: pytest.CaptureFixture[str]) -> None:
                     "git",
                     "clone",
                     "https://example.com/gap-package",
-                    os.path.join(external.gap.GAP_ROOT, "pkg", "example"),
+                    os.path.join(external.gap._GAP_ROOT, "pkg", "example"),
                 ],
                 capture_output=True,
                 text=True,

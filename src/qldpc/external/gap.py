@@ -21,7 +21,7 @@ import qldpc
 import qldpc.cache
 
 # GAP root directory for packages that qLDPC installs for the GAP executable, in qLDPC's user cache
-GAP_ROOT = str(qldpc.cache.get_disk_cache_path("gap"))
+_GAP_ROOT = str(qldpc.cache.get_disk_cache_path("gap"))
 
 
 class GAPError(ValueError):
@@ -79,18 +79,6 @@ def is_installed() -> bool:
     print("Can you manually copy/paste commands and outputs between here and GAP? [y/N]")
     answer = input().lower()
     return answer == "y" or answer == "yes"
-
-
-def sanitize_commands(commands: Sequence[str]) -> tuple[str, ...]:
-    """Sanitize GAP commands: don't format Print statements, and quit at the end."""
-    stream = "__stream__"
-    prefix = [
-        f"{stream} := OutputTextUser();;",
-        f"SetPrintFormattingStatus({stream},false);;",
-    ]
-    suffix = ["QUIT;;"]
-    commands = [cmd.replace("Print(", f"PrintTo({stream}, ") for cmd in commands]
-    return tuple(prefix + commands + suffix)
 
 
 def get_output(*commands: str, use_pipe: bool = False) -> str:
@@ -175,8 +163,8 @@ def require_package(name: str, repo: str | None = None) -> bool:
     the user package directory visible to libgap.  If that installation fails but a GAP executable
     is available, qLDPC prints instructions for installing the package for libgap before falling
     back to the executable backend.  With the executable backend, qLDPC installs a missing package
-    by cloning its repository into the ``pkg`` directory of ``GAP_ROOT``, a ``gap`` directory in
-    qLDPC's user cache directory (see :func:`qldpc.cache.get_disk_cache_path`).
+    by cloning its repository into the ``gap/pkg`` subdirectory of qLDPC's user cache directory
+    (see :func:`qldpc.cache.get_disk_cache_path`), which qLDPC adds to the GAP root directories.
 
     Args:
         name: The GAP package name.
@@ -241,6 +229,18 @@ def require_package(name: str, repo: str | None = None) -> bool:
             )
         return _require_package_subprocess(name, repo, availability)
     return True
+
+
+def clear_cache() -> None:
+    """Forget which GAP backends and packages are available, so that later calls check again.
+
+    Call this function after installing or removing GAP or a GAP package in a running Python
+    session, or after declining a prompt that asks whether GAP is available.
+    """
+    for function in (is_callable, is_installed, _is_gap_executable, require_package):
+        function.cache_clear()
+    _libgap_packages.clear()
+    _subprocess_packages.clear()
 
 
 ####################################################################################################
@@ -316,13 +316,25 @@ def _get_output_libgap(commands: Sequence[str], libgap: _LibGap) -> str:
     return _gap_string(result)
 
 
+def _sanitize_commands(commands: Sequence[str]) -> tuple[str, ...]:
+    """Sanitize GAP commands: don't format Print statements, and quit at the end."""
+    stream = "__stream__"
+    prefix = [
+        f"{stream} := OutputTextUser();;",
+        f"SetPrintFormattingStatus({stream},false);;",
+    ]
+    suffix = ["QUIT;;"]
+    commands = [cmd.replace("Print(", f"PrintTo({stream}, ") for cmd in commands]
+    return tuple(prefix + commands + suffix)
+
+
 def _get_output_subprocess(commands: Sequence[str], use_pipe: bool = False) -> str:
     """Evaluate commands through the GAP executable."""
-    commands = sanitize_commands(commands)
+    commands = _sanitize_commands(commands)
     shell_commands = [
         "gap",
         "-l",
-        f";{GAP_ROOT}",
+        f";{_GAP_ROOT}",
         "-q",
         "--quitonbreak",
     ]
@@ -361,7 +373,7 @@ def _confirm_package_install(name: str) -> None:
 
 def _install_package_subprocess(name: str, repo: str) -> None:
     """Install a GAP package for the executable backend."""
-    commands = ["git", "clone", repo, os.path.join(GAP_ROOT, "pkg", name.lower())]
+    commands = ["git", "clone", repo, os.path.join(_GAP_ROOT, "pkg", name.lower())]
     print(" ".join(commands))
     install_result = subprocess.run(commands, capture_output=True, text=True, check=False)
     if install_result.returncode:

@@ -10,7 +10,7 @@ import numpy as np
 
 from qldpc import codes, decoders, math
 from qldpc.decoders.conftest import SurfaceCodeProblem
-from qldpc.decoders.construction._resolution import get_error_decoder
+from qldpc.decoders.construction._resolution import build_error_decoder
 from qldpc.decoders.custom.guf import _get_decoder_guf
 
 
@@ -22,17 +22,19 @@ def test_generalized_union_find() -> None:
     error[[3, 4]] = 1
     matrix = code.matrix_z
     syndrome = matrix @ error
-    assert np.count_nonzero(get_error_decoder(matrix, decoder=decoders.guf()).decode(syndrome)) > 2
+    assert (
+        np.count_nonzero(build_error_decoder(matrix, decoder=decoders.guf()).decode(syndrome)) > 2
+    )
     assert (
         np.count_nonzero(
-            get_error_decoder(matrix, decoder=decoders.guf(max_weight=2)).decode(syndrome)
+            build_error_decoder(matrix, decoder=decoders.guf(max_weight=2)).decode(syndrome)
         )
         == 2
     )
 
     assert np.array_equal(
         np.zeros_like(error),
-        get_error_decoder(matrix, decoder=decoders.guf()).decode(np.zeros_like(syndrome)),
+        build_error_decoder(matrix, decoder=decoders.guf()).decode(np.zeros_like(syndrome)),
     )
 
 
