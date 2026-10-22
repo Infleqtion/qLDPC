@@ -6,13 +6,14 @@ from __future__ import annotations
 
 import functools
 from collections.abc import Callable, Sequence
-from typing import ParamSpec, TypeAlias, TypeVar
+from typing import ParamSpec, TypeAlias, TypeVar, cast
 
 import galois
 import numpy as np
 import numpy.typing as npt
 import stim
 
+from qldpc._deprecations.decoders import deprecate_error_rate_option
 from qldpc.math import IntegerArray
 
 from .dems import DetectorErrorModelArrays
@@ -125,17 +126,11 @@ def _get_matrix_error_channel(
         _reject_dem_error_probabilities(error_channel, error_rate)
         return None
 
-    if error_rate is not None:
-        # imported here because qldpc._deprecations.decoders imports modules that import this one
-        from qldpc._deprecations.decoders import deprecate_error_rate_option
-
-        deprecate_error_rate_option(
-            {"error_channel": error_channel, "error_rate": error_rate},
-            frozenset(
-                {"error_rate", "error_channel"} if error_channel is not None else {"error_rate"}
-            ),
-        )
-        error_channel = error_rate
+    if error_rate is not None:  # DEPRECATED: see qldpc._deprecations
+        options: dict[str, object] = {"error_channel": error_channel, "error_rate": error_rate}
+        explicit = frozenset(name for name, value in options.items() if value is not None)
+        options = deprecate_error_rate_option(options, explicit)
+        error_channel = cast(_ErrorChannel, options["error_channel"])
     if error_channel is None:
         error_channel = _PLACEHOLDER_ERROR_RATE
 

@@ -482,8 +482,6 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
                 stacklevel=get_external_caller_stacklevel(),
             )
         self._outputs_observables = predict_observable_flips
-        self.predict_observable_flips = predict_observable_flips
-        self.decode_returns_observables = predict_observable_flips
         super().__init__(
             pcm_or_dem,
             max_weight,
@@ -511,6 +509,18 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
         return self._decode_batch(syndromes)
 
     decode_batch = decode_errors_batch
+
+    # DEPRECATED: these attributes report the deprecated predict_observable_flips option
+
+    @property
+    def predict_observable_flips(self) -> bool:
+        """Whether the decoding methods return observable flips rather than errors."""
+        return self._outputs_observables
+
+    @property
+    def decode_returns_observables(self) -> bool:
+        """Whether the decoding methods return observable flips rather than errors."""
+        return self._outputs_observables
 
 
 class ObservableLookupDecoder(_LookupDecoderBase):
@@ -826,8 +836,6 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
                 stacklevel=get_external_caller_stacklevel(),
             )
         self._outputs_observables = predict_observable_flips
-        self.predict_observable_flips = predict_observable_flips
-        self.decode_returns_observables = predict_observable_flips
         super().__init__(
             pcm_or_dem,
             max_weight,

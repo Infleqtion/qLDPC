@@ -391,11 +391,14 @@ def test_explicit_observable_lookup_decoders() -> None:
             dem, max_weight=1, predict_observable_flips=True
         )
     for legacy_decoder in [legacy, legacy_weighted]:
+        assert legacy_decoder.predict_observable_flips
         assert legacy_decoder.decode_returns_observables
         assert np.array_equal(legacy_decoder.decode(syndrome), [1])
         with pytest.raises(TypeError, match="observable flips rather than errors"):
             build_error_decoder(dem, decoder=legacy_decoder)
-    assert not decoders.custom.LookupDecoder(dem, max_weight=1).decode_returns_observables
+    plain_decoder = decoders.custom.LookupDecoder(dem, max_weight=1)
+    assert not plain_decoder.predict_observable_flips
+    assert not plain_decoder.decode_returns_observables
     with pytest.warns(DeprecationWarning, match=r"ObservableLookupDecoder\(matrix, max_weight="):
         decoders.custom.LookupDecoder(
             np.array([[1]], dtype=int),

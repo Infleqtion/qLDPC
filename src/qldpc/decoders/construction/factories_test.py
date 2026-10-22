@@ -64,10 +64,12 @@ def test_factories_validate_and_are_immutable() -> None:
         from_matrix(None)  # type: ignore[arg-type]
     with pytest.raises(TypeError, match="from_dem requires a callable factory"):
         from_dem("lookup")  # type: ignore[arg-type]
+    # type checkers also reject a factory that build() cannot call with its one input
+    from_matrix(LookupDecoder)  # type: ignore[arg-type]
 
     factory = from_matrix(functools.partial(LookupDecoder, max_weight=1))
     with pytest.raises(dataclasses.FrozenInstanceError):
-        factory.factory = LookupDecoder  # type: ignore[misc]
+        factory.factory = factory.factory  # type: ignore[misc]
 
 
 def test_factories_pickle() -> None:

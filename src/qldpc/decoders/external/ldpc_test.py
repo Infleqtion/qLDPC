@@ -4,10 +4,12 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import inspect
 import pickle
 import subprocess
 import sys
+import threading
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -162,6 +164,31 @@ def test_ldpc_protocol_adapters() -> None:
     assert second.diagnostics["ldpc.iterations"] == 1
     assert np.array_equal(second_ratios, decoder.log_prob_ratios)
     assert np.array_equal(first_ratios, [1, 0])
+
+
+def test_ldpc_protocol_adapters_are_created_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Concurrent first uses share one set of adapter classes, as pickling requires."""
+    # create the original classes, which monkeypatch restores after the test
+    ldpc_integration._get_backend_class("BpOsdDecoder")
+    num_threads = 8
+
+    def get_adapter_type(barrier: threading.Barrier) -> type[Any]:
+        barrier.wait()
+        return ldpc_integration._get_backend_class("BpOsdDecoder")
+
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads often, so that an unguarded race is likely
+    try:
+        for _ in range(5):
+            monkeypatch.setattr(ldpc_integration, "_BACKEND_CLASSES", None)
+            for name in ("BeliefFindDecoder", "BpLsdDecoder", "BpOsdDecoder"):
+                monkeypatch.delattr(ldpc_integration, name)
+            barriers = [threading.Barrier(num_threads)] * num_threads
+            with concurrent.futures.ThreadPoolExecutor(num_threads) as executor:
+                adapter_types = set(executor.map(get_adapter_type, barriers))
+            assert adapter_types == {ldpc_integration.BpOsdDecoder}
+    finally:
+        sys.setswitchinterval(switch_interval)
 
 
 @pytest.mark.parametrize(

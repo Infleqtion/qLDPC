@@ -51,7 +51,7 @@ def test_error_decoder_protocols() -> None:
 
 
 def test_error_decoder_coercion() -> None:
-    """Objects with a decode method are wrapped to provide decode_errors."""
+    """Objects with only one of the decode and decode_errors methods are wrapped to provide both."""
     syndromes = np.eye(2, dtype=int)
 
     class BareDecoder:
@@ -82,6 +82,17 @@ def test_error_decoder_coercion() -> None:
     assert np.array_equal(decoder.decode_errors_batch(syndromes), 3 * syndromes)
     assert protocols._supports_batch_decoding(decoder)
     assert np.array_equal(protocols._batch_decode_errors(decoder, syndromes), 3 * syndromes)
+
+    # an object that implements only decode_errors is wrapped to provide decode
+    decoder = protocols._as_error_decoder(
+        types.SimpleNamespace(
+            decode_errors=lambda syndrome: 2 * syndrome,
+            decode_errors_batch=lambda syndromes: 3 * syndromes,
+        )
+    )
+    assert np.array_equal(decoder.decode(syndromes[0]), [2, 0])
+    assert np.array_equal(protocols._batch_decode_errors(decoder, syndromes), 3 * syndromes)
+    assert np.array_equal(decoder.decode_batch(syndromes), 3 * syndromes)
 
     # an error decoder is returned as is, and its native batch method is used
     lookup_decoder = decoders.custom.LookupDecoder(np.eye(2, dtype=int), max_weight=1)

@@ -10,6 +10,7 @@ first use in the private lazy-backend section at the bottom of this module.
 
 from __future__ import annotations
 
+import threading
 import warnings
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
@@ -400,10 +401,12 @@ def _to_ldpc_inputs(
 #
 # These classes cannot be declared at module scope without importing ldpc during every qldpc import.
 # Create them together on first use, then cache them as ordinary module globals so introspection,
-# isinstance checks, copying, and pickling behave like normal module-level classes.
+# isinstance checks, copying, and pickling behave like normal module-level classes.  They are
+# created under a lock so that concurrent first uses share one set of classes, which pickling needs.
 
 _BACKEND_CLASS_NAMES = frozenset({"BeliefFindDecoder", "BpLsdDecoder", "BpOsdDecoder"})
 _BACKEND_CLASSES: dict[str, type[Any]] | None = None
+_BACKEND_CLASSES_LOCK = threading.Lock()
 
 
 class _DetailedLdpcDecoderMixin(ErrorDecoder):
@@ -437,28 +440,33 @@ def _build_ldpc_decoder(
 def _get_backend_class(name: str) -> type[Any]:
     """Return a protocol-compatible ldpc subclass, creating all three on first use."""
     global _BACKEND_CLASSES
-    if _BACKEND_CLASSES is None:
-        import ldpc
-        import ldpc.bplsd_decoder
+    if _BACKEND_CLASSES is not None:
+        return _BACKEND_CLASSES[name]
+    with _BACKEND_CLASSES_LOCK:
+        if _BACKEND_CLASSES is None:
+            import ldpc
+            import ldpc.bplsd_decoder
 
-        class BpOsdDecoder(_DetailedLdpcDecoderMixin, ldpc.BpOsdDecoder, ErrorDecoder):
-            """An ldpc.BpOsdDecoder with qLDPC error-decoding protocols."""
+            class BpOsdDecoder(_DetailedLdpcDecoderMixin, ldpc.BpOsdDecoder, ErrorDecoder):
+                """An ldpc.BpOsdDecoder with qLDPC error-decoding protocols."""
 
-        class BpLsdDecoder(
-            _DetailedLdpcDecoderMixin, ldpc.bplsd_decoder.BpLsdDecoder, ErrorDecoder
-        ):
-            """An ldpc.bplsd_decoder.BpLsdDecoder with qLDPC error-decoding protocols."""
+            class BpLsdDecoder(
+                _DetailedLdpcDecoderMixin, ldpc.bplsd_decoder.BpLsdDecoder, ErrorDecoder
+            ):
+                """An ldpc.bplsd_decoder.BpLsdDecoder with qLDPC error-decoding protocols."""
 
-        class BeliefFindDecoder(_DetailedLdpcDecoderMixin, ldpc.BeliefFindDecoder, ErrorDecoder):
-            """An ldpc.BeliefFindDecoder with qLDPC error-decoding protocols."""
+            class BeliefFindDecoder(
+                _DetailedLdpcDecoderMixin, ldpc.BeliefFindDecoder, ErrorDecoder
+            ):
+                """An ldpc.BeliefFindDecoder with qLDPC error-decoding protocols."""
 
-        classes = (BpOsdDecoder, BpLsdDecoder, BeliefFindDecoder)
-        for decoder_type in classes:
-            decoder_type.__module__ = __name__
-            decoder_type.__qualname__ = decoder_type.__name__
-            globals()[decoder_type.__name__] = decoder_type
-        _BACKEND_CLASSES = {decoder_type.__name__: decoder_type for decoder_type in classes}
-    return _BACKEND_CLASSES[name]
+            classes = (BpOsdDecoder, BpLsdDecoder, BeliefFindDecoder)
+            for decoder_type in classes:
+                decoder_type.__module__ = __name__
+                decoder_type.__qualname__ = decoder_type.__name__
+                globals()[decoder_type.__name__] = decoder_type
+            _BACKEND_CLASSES = {decoder_type.__name__: decoder_type for decoder_type in classes}
+        return _BACKEND_CLASSES[name]
 
 
 if not TYPE_CHECKING:

@@ -11,6 +11,7 @@ by the file-internal helpers at the end of the decoder section.
 from __future__ import annotations
 
 import inspect
+import threading
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias
 
@@ -105,65 +106,56 @@ class MatchingObservableDecoder(ObservableDecoder):
 
 
 # Matching is an error decoder only when it has no faults matrix.  Create that protocol-compatible
-# subclass on first use instead of importing PyMatching during every qldpc import.
+# subclass on first use instead of importing PyMatching during every qldpc import, and create it
+# under a lock so that concurrent first uses share one class, which pickling requires.
 
 _MATCHING_TYPE: type[Any] | None = None
-
-
-def _get_pymatching() -> Any:
-    """Import PyMatching or report a broken qLDPC installation."""
-    try:
-        import pymatching
-    except ModuleNotFoundError as error:
-        if error.name != "pymatching":
-            raise
-        raise ModuleNotFoundError(
-            "PyMatching is a required qLDPC dependency but is not installed. Reinstall qLDPC"
-        ) from None
-    return pymatching
+_MATCHING_TYPE_LOCK = threading.Lock()
 
 
 def _get_matching_type() -> type[Any]:
     """Return the protocol-compatible PyMatching subclass, creating it on first use."""
     global _MATCHING_TYPE
-    if _MATCHING_TYPE is None:
-        pymatching_module = _get_pymatching()
+    if _MATCHING_TYPE is not None:
+        return _MATCHING_TYPE
+    with _MATCHING_TYPE_LOCK:
+        if _MATCHING_TYPE is None:
+            import pymatching
 
-        def decode_errors_detailed(
-            matching: Any, syndrome: npt.NDArray[np.int_]
-        ) -> ErrorDecodeResult:
-            return decode_errors_detailed_batch(matching, np.asarray(syndrome)[None, :])[0]
+            def decode_errors_detailed(
+                matching: Any, syndrome: npt.NDArray[np.int_]
+            ) -> ErrorDecodeResult:
+                return decode_errors_detailed_batch(matching, np.asarray(syndrome)[None, :])[0]
 
-        def decode_errors_detailed_batch(
-            matching: Any, syndromes: npt.NDArray[np.int_]
-        ) -> tuple[ErrorDecodeResult, ...]:
-            syndromes = np.asarray(syndromes)
-            if len(syndromes) == 0:
-                return ()
-            predictions, weights = matching.decode_batch(syndromes, return_weights=True)
-            return tuple(
-                ErrorDecodeResult(
-                    np.asarray(prediction),
-                    diagnostics={"pymatching.objective_weight": float(weight)},
+            def decode_errors_detailed_batch(
+                matching: Any, syndromes: npt.NDArray[np.int_]
+            ) -> tuple[ErrorDecodeResult, ...]:
+                syndromes = np.asarray(syndromes)
+                if len(syndromes) == 0:
+                    return ()
+                predictions, weights = matching.decode_batch(syndromes, return_weights=True)
+                return tuple(
+                    ErrorDecodeResult(
+                        np.asarray(prediction),
+                        diagnostics={"pymatching.objective_weight": float(weight)},
+                    )
+                    for prediction, weight in zip(predictions, weights, strict=True)
                 )
-                for prediction, weight in zip(predictions, weights, strict=True)
-            )
 
-        matching_type = type(
-            "Matching",
-            (pymatching_module.Matching, BatchErrorDecoder),
-            {
-                "__module__": __name__,
-                "__doc__": "A pymatching.Matching that is also a BatchErrorDecoder.",
-                "decode_errors_detailed": decode_errors_detailed,
-                "decode_errors_detailed_batch": decode_errors_detailed_batch,
-            },
-        )
-        matching_type.__qualname__ = matching_type.__name__
-        Matching = matching_type
-        globals()["Matching"] = Matching
-        _MATCHING_TYPE = Matching
-    return _MATCHING_TYPE
+            matching_type = type(
+                "Matching",
+                (pymatching.Matching, BatchErrorDecoder),
+                {
+                    "__module__": __name__,
+                    "__doc__": "A pymatching.Matching that is also a BatchErrorDecoder.",
+                    "decode_errors_detailed": decode_errors_detailed,
+                    "decode_errors_detailed_batch": decode_errors_detailed_batch,
+                },
+            )
+            matching_type.__qualname__ = matching_type.__name__
+            globals()["Matching"] = matching_type
+            _MATCHING_TYPE = matching_type
+        return _MATCHING_TYPE
 
 
 if not TYPE_CHECKING:
@@ -271,7 +263,8 @@ def _get_observable_decoder_mwpm(
     other matching-construction arguments are unused.
     """
     if enable_correlations:
-        pymatching = _get_pymatching()
+        import pymatching
+
         matching = pymatching.Matching.from_detector_error_model(dem, enable_correlations=True)
         return MatchingObservableDecoder(matching, enable_correlations=True)
     return MatchingObservableDecoder(
@@ -353,7 +346,8 @@ def _build_matching(
     **decoder_args: object,
 ) -> Any:
     """Build a Matching that predicts errors or, from a DEM, observable flips."""
-    pymatching = _get_pymatching()
+    import pymatching
+
     backend_options = dict(backend_options or {})
     _validate_backend_options(pymatching, backend_options)
     decoder_args |= backend_options

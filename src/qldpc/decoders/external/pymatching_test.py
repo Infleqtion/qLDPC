@@ -4,14 +4,15 @@
 
 from __future__ import annotations
 
-import builtins
+import concurrent.futures
 import pickle
 import subprocess
 import sys
+import threading
 import types
 import unittest.mock
 from collections.abc import Callable
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import galois
 import numpy as np
@@ -187,6 +188,7 @@ def test_pymatching_import_is_lazy() -> None:
     """Importing the integration does not import pymatching until a matching is requested."""
     code = """
 import sys
+import threading
 import types
 import qldpc.decoders.external.pymatching
 assert "pymatching" not in sys.modules
@@ -194,31 +196,25 @@ assert "pymatching" not in sys.modules
     subprocess.run([sys.executable, "-c", code], check=True)
 
 
-def test_pymatching_missing_dependency_message(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A missing required dependency identifies a broken qLDPC installation."""
-    monkeypatch.setitem(sys.modules, "pymatching", None)
-    with pytest.raises(ModuleNotFoundError, match="required qLDPC dependency"):
-        pymatching._get_observable_decoder_mwpm(
-            stim.DetectorErrorModel("error(0.1) D0 L0"),
-            enable_correlations=True,
-        )
+def test_pymatching_protocol_adapter_is_created_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Concurrent first uses share one adapter class, as pickling requires."""
+    # create the original classes, which monkeypatch restores after the test
+    pymatching._get_matching_type()
+    num_threads = 8
 
+    def get_adapter_type(barrier: threading.Barrier) -> type[Any]:
+        barrier.wait()
+        return pymatching._get_matching_type()
 
-def test_pymatching_transitive_import_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """An import failure inside PyMatching is preserved instead of mislabeled as a missing extra."""
-
-    def import_with_missing_dependency(
-        name: str,
-        globals: dict[str, object] | None = None,
-        locals: dict[str, object] | None = None,
-        fromlist: tuple[str, ...] = (),
-        level: int = 0,
-    ) -> object:
-        del globals, locals, fromlist, level
-        assert name == "pymatching"
-        raise ModuleNotFoundError("No module named 'backend_dependency'", name="backend_dependency")
-
-    monkeypatch.delitem(sys.modules, "pymatching")
-    monkeypatch.setattr(builtins, "__import__", import_with_missing_dependency)
-    with pytest.raises(ModuleNotFoundError, match="backend_dependency"):
-        pymatching._get_pymatching()
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads often, so that an unguarded race is likely
+    try:
+        for _ in range(5):
+            monkeypatch.setattr(pymatching, "_MATCHING_TYPE", None)
+            monkeypatch.delattr(pymatching, "Matching")
+            barriers = [threading.Barrier(num_threads)] * num_threads
+            with concurrent.futures.ThreadPoolExecutor(num_threads) as executor:
+                adapter_types = set(executor.map(get_adapter_type, barriers))
+            assert adapter_types == {pymatching.Matching}
+    finally:
+        sys.setswitchinterval(switch_interval)

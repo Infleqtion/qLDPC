@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Sequence
 from typing import Any, Literal, cast
 
@@ -433,20 +434,8 @@ def tesseract_preset(
             " 'surface-code-like', or 'color-code-like'"
         ) from None
 
-    explicitly_provided: set[str] = set()
-    if error_channel is not None:
-        explicitly_provided.add("error_channel")
-    if error_rate is not None:
-        explicitly_provided.add("error_rate")
-    probability_options = deprecate_error_rate_option(
-        {"error_channel": error_channel, "error_rate": error_rate},
-        frozenset(explicitly_provided),
-    )
-    return tesseract(
-        error_channel=cast(
-            float | npt.NDArray[np.floating] | Sequence[float] | None,
-            probability_options["error_channel"],
-        ),
+    make_spec = functools.partial(
+        tesseract,
         add_erasure_bit=add_erasure_bit,
         det_beam=det_beam,
         beam_climbing=True,
@@ -457,3 +446,6 @@ def tesseract_preset(
         det_order_method="index",
         seed=2_384_753,
     )
+    if error_channel is None:  # the default, which error_rate may replace
+        return make_spec(error_rate=error_rate)
+    return make_spec(error_channel=error_channel, error_rate=error_rate)
