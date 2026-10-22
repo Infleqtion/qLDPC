@@ -79,12 +79,6 @@ def test_augmented_decoders(toy_problem: ToyProblem) -> None:
     unbatched_decoder = decoders.custom.DirectDecoder(direct_decoder.correct)
     assert np.array_equal(np.zeros_like(errors), unbatched_decoder.correct_batch(errors))
 
-    # a DirectDecoder corrects code words, so it must not pass for a syndrome decoder
-    with pytest.raises(ValueError, match="DEFUNCT"):
-        direct_decoder.decode(error)
-    with pytest.raises(ValueError, match="DEFUNCT"):
-        direct_decoder.decode_batch(errors)
-
     composite_decoder = decoders.custom.CompositeDecoder.from_copies(decoder, syndrome.size, 2)
     composite_error = np.concatenate([error] * 2)
     composite_syndrome = np.concatenate([syndrome] * 2)

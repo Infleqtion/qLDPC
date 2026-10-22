@@ -170,17 +170,3 @@ class DirectDecoder:
         if self.correct_batch_func is not None:
             return self.correct_batch_func(words)
         return np.array([self.correct(word) for word in words])
-
-    def decode(self, word: npt.NDArray[np.int_]) -> None:
-        """DEFUNCT alias for DirectDecoder.correct."""
-        raise ValueError(
-            "DirectDecoder.decode is DEFUNCT; use DirectDecoder.correct instead.  A DirectDecoder"
-            " corrects code words, and is not a syndrome decoder"
-        )
-
-    def decode_batch(self, words: npt.NDArray[np.int_]) -> None:
-        """DEFUNCT alias for DirectDecoder.correct_batch."""
-        raise ValueError(
-            "DirectDecoder.decode_batch is DEFUNCT; use DirectDecoder.correct_batch instead.  A"
-            " DirectDecoder corrects code words, and is not a syndrome decoder"
-        )

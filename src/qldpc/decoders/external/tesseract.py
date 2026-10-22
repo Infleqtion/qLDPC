@@ -13,12 +13,12 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
+from qldpc._deprecations.decoders import deprecate_error_rate_option
 from qldpc._util import format_docstring
 from qldpc.math import IntegerArray
 
 from ..common import (
     PLACEHOLDER_ERROR_RATE,
-    _deprecate_error_rate_option,
     _erasure_bit_support,
     _get_matrix_error_channel,
     _reject_dem_error_probabilities,
@@ -262,7 +262,7 @@ tesseract = decoder_spec(
     _get_decoder_tesseract,
     _get_decoder_tesseract,
     signature_source=TesseractDecoder,
-    option_transform=_deprecate_error_rate_option,
+    option_transform=deprecate_error_rate_option,
     doc="""Configure Tesseract decoding for a binary code.
 
 Tesseract searches for likely errors within beam and priority-queue limits.  Its native
@@ -362,7 +362,7 @@ def tesseract_preset(
         explicitly_provided.add("error_channel")
     if error_rate is not None:
         explicitly_provided.add("error_rate")
-    probability_options = _deprecate_error_rate_option(
+    probability_options = deprecate_error_rate_option(
         {"error_channel": error_channel, "error_rate": error_rate},
         frozenset(explicitly_provided),
     )

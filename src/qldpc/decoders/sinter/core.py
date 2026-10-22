@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import pathlib
-import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -13,13 +12,14 @@ import numpy.typing as npt
 import sinter
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
-
-from ..adapters.error_decoders import ErrorsToObservablesDecoder
-from ..construction.legacy import (
+from qldpc import _deprecations
+from qldpc._deprecations.decoders import (
     get_legacy_decoder_migration_message,
     reject_removed_decoder_args,
 )
+from qldpc._util import get_external_caller_stacklevel
+
+from ..adapters.error_decoders import ErrorsToObservablesDecoder
 from ..construction.resolution import reject_prebuilt_decoder, resolve_observable_decoder
 from ..construction.specs import DecoderSpec, DeferredDecoderInput
 from ..dems import DetectorErrorModelArrays
@@ -77,7 +77,7 @@ class SinterDecoder(_SinterDecoder):
         """
         reject_removed_decoder_args(decoder_kwargs)
         if "priors_arg" in decoder_kwargs or "log_likelihood_priors" in decoder_kwargs:
-            raise ValueError(
+            raise _deprecations.defunct(
                 "The 'priors_arg' and 'log_likelihood_priors' arguments to a SinterDecoder are"
                 " DEFUNCT and should no longer be necessary.\nIf you need these arguments restored,"
                 " please open an issue at https://github.com/qLDPCOrg/qLDPC/issues"
@@ -98,9 +98,8 @@ class SinterDecoder(_SinterDecoder):
         self.decoder_input = decoder
         self.decoder_kwargs = decoder_kwargs
         if decoder_kwargs:
-            warnings.warn(
+            _deprecations.warn_deprecated(
                 get_legacy_decoder_migration_message(None, decoder_kwargs),
-                DeprecationWarning,
                 stacklevel=get_external_caller_stacklevel(),
             )
 

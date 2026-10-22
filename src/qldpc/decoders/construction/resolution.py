@@ -9,6 +9,8 @@ from collections.abc import Mapping
 import galois
 import stim
 
+from qldpc._deprecations.decoders import merge_legacy_decoder_args
+
 from ..adapters.error_decoders import ErrorsToObservablesDecoder as _ErrorsToObservablesDecoder
 from ..adapters.observable_decoders import (
     BitPackedObservableDecoder as _BitPackedObservableDecoder,
@@ -17,8 +19,8 @@ from ..adapters.observable_decoders import (
     validate_observable_decoder,
 )
 from ..capabilities import compiles_for_dem, is_prebuilt_decoder
-from ..custom.guf import _get_decoder_guf
-from ..external.ldpc import _get_decoder_bp_osd
+from ..custom.guf import guf
+from ..external.ldpc import bp_osd
 from ..protocols import ErrorDecoder, ObservableDecoder, as_error_decoder
 from .factories import DEMDecoderFactory, MatrixDecoderFactory
 from .specs import (
@@ -55,9 +57,7 @@ def resolve_decoder(
         An ErrorDecoder.
     """
     if decoder_args:
-        from .legacy import _merge_legacy_decoder_args
-
-        decoder = _merge_legacy_decoder_args(
+        decoder = merge_legacy_decoder_args(
             pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
     return _get_error_decoder(pcm_or_dem, decoder=decoder)
@@ -88,9 +88,7 @@ def resolve_observable_decoder(
         errors that it infers become its predictions.
     """
     if decoder_args:
-        from .legacy import _merge_legacy_decoder_args
-
-        decoder = _merge_legacy_decoder_args(
+        decoder = merge_legacy_decoder_args(
             dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
     return _get_observable_decoder(dem, decoder=decoder)
@@ -154,8 +152,8 @@ def _build_decoder(pcm_or_dem: PcmOrDem, decoder: DecoderInput) -> tuple[object,
     built_decoder: object
     if decoder is None:
         is_nonbinary = isinstance(pcm_or_dem, galois.FieldArray) and type(pcm_or_dem).order != 2
-        default_builder = _get_decoder_guf if is_nonbinary else _get_decoder_bp_osd
-        built_decoder, source = default_builder(pcm_or_dem), "The default decoder"
+        default_spec = guf() if is_nonbinary else bp_osd()
+        built_decoder, source = default_spec.build(pcm_or_dem), "The default decoder"
     elif isinstance(decoder, DecoderSpec):
         built_decoder = decoder.build(pcm_or_dem)
         source = "A decoder specification"

@@ -2,7 +2,18 @@
 
 import importlib.metadata
 
-from . import abstract, cache, circuits, codes, decoders, experimental, external, math, objects
+from . import (
+    _deprecations,
+    abstract,
+    cache,
+    circuits,
+    codes,
+    decoders,
+    experimental,
+    external,
+    math,
+    objects,
+)
 
 __version__ = importlib.metadata.version("qldpc")
 
@@ -18,3 +29,5 @@ __all__ = [
     "math",
     "objects",
 ]
+
+_deprecations.install_deprecated_methods()

@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import collections
-import warnings
 from collections.abc import Callable, Collection, Iterator, Sequence
 from typing import TypeAlias, cast, overload
 
@@ -15,7 +14,7 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc import math
+from qldpc import _deprecations, math
 from qldpc._util import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
@@ -468,16 +467,20 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         """Initialize an error lookup table."""
-        advice = (
-            "use decoders.lookup(max_weight=...).build_observable_decoder(dem) instead"
-            if isinstance(pcm_or_dem, stim.DetectorErrorModel)
-            else (
-                "use qldpc.decoders.custom.lookup.ObservableLookupDecoder(matrix, max_weight=...,"
-                " observable_flip_matrix=..., error_channel=...).decode_observables(syndrome)"
-                " instead"
+        if predict_observable_flips:
+            advice = (
+                "use decoders.lookup(max_weight=...).build_observable_decoder(dem) instead"
+                if isinstance(pcm_or_dem, stim.DetectorErrorModel)
+                else (
+                    "use qldpc.decoders.custom.lookup.ObservableLookupDecoder(matrix,"
+                    " max_weight=..., observable_flip_matrix=..., error_channel=...)"
+                    ".decode_observables(syndrome) instead"
+                )
             )
-        )
-        _warn_deprecated_observable_prediction(predict_observable_flips, advice)
+            _deprecations.warn_deprecated(
+                f"predict_observable_flips=True is deprecated; {advice}",
+                stacklevel=get_external_caller_stacklevel(),
+            )
         self._outputs_observables = predict_observable_flips
         self.predict_observable_flips = predict_observable_flips
         self.decode_returns_observables = predict_observable_flips
@@ -765,11 +768,13 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         add_erasure_bit: bool = False,
         symplectic: bool = False,
     ) -> None:
-        _warn_deprecated_observable_prediction(
-            predict_observable_flips,
-            "use qldpc.decoders.custom.lookup.WeightedObservableLookupDecoder(...)"
-            ".decode_observables(syndrome, penalty_func) instead",
-        )
+        if predict_observable_flips:
+            _deprecations.warn_deprecated(
+                "predict_observable_flips=True is deprecated; use"
+                " qldpc.decoders.custom.lookup.WeightedObservableLookupDecoder(...)"
+                ".decode_observables(syndrome, penalty_func) instead",
+                stacklevel=get_external_caller_stacklevel(),
+            )
         self._outputs_observables = predict_observable_flips
         self.predict_observable_flips = predict_observable_flips
         self.decode_returns_observables = predict_observable_flips
@@ -1070,10 +1075,9 @@ def _prepare_error_channel(
             raise ValueError(
                 "Cannot specify both an error_channel and a penalty_func in a LookupDecoder"
             )
-        warnings.warn(
+        _deprecations.warn_deprecated(
             "LookupDecoder penalty_func is deprecated; pass a callable error_channel that returns"
             " the full error log probability instead",
-            DeprecationWarning,
             stacklevel=get_external_caller_stacklevel(),
         )
         # legacy penalties are not validated as normalized log probabilities
@@ -1245,17 +1249,3 @@ def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
     if symplectic:
         return int(math.symplectic_weight(np.asarray(error)))
     return int(np.count_nonzero(error))
-
-
-####################################################################################################
-# deprecated compatibility helpers
-
-
-def _warn_deprecated_observable_prediction(enabled: bool, advice: str) -> None:
-    """Warn about the legacy mode in which an error decoder predicts observable flips."""
-    if enabled:
-        warnings.warn(
-            f"predict_observable_flips=True is deprecated; {advice}",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )

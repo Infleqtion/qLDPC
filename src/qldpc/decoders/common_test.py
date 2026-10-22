@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import re
-import warnings
 from typing import Any
 
 import galois
@@ -15,8 +14,8 @@ import pytest
 import stim
 
 from qldpc import decoders
+from qldpc._deprecations import decoders as deprecated_decoders
 from qldpc.decoders import common
-from qldpc.decoders.common import _deprecate_error_rate_option
 
 
 def test_get_error_and_erasure() -> None:
@@ -151,45 +150,9 @@ def test_dem_error_probabilities_through_public_paths() -> None:
     with pytest.raises(ValueError, match=match):
         legacy_sinter_decoder.compile_decoder_for_dem(dem)
     with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match=match):
-        decoders.get_decoder(dem, with_BP_LSD=True, error_rate=0.1)
+        deprecated_decoders.get_decoder(dem, with_BP_LSD=True, error_rate=0.1)
 
     # the suggested alternative decodes the detector-flip matrix with the given probabilities
     matrix = decoders.DetectorErrorModelArrays(dem).detector_flip_matrix
     decoder: Any = decoders.bp_osd(error_channel=0.3).build(matrix)
     assert np.array_equal(decoder.error_channel, [0.3, 0.3, 0.3])
-
-
-def test_deprecate_error_rate_option() -> None:
-    """Deferred options translate explicit error_rate values and reject ambiguity."""
-    options: dict[str, object] = {"error_channel": None, "error_rate": None}
-    assert _deprecate_error_rate_option(options, frozenset()) == {"error_channel": None}
-
-    with pytest.warns(DeprecationWarning, match="error_rate=0.2.*error_channel=0.2") as caught:
-        translated = _deprecate_error_rate_option(
-            {"error_channel": None, "error_rate": 0.2},
-            frozenset({"error_rate"}),
-        )
-    assert caught[0].filename == __file__
-    assert translated == {"error_channel": 0.2}
-
-    with pytest.raises(ValueError, match="cannot both be specified"):
-        _deprecate_error_rate_option(
-            {"error_channel": 0.1, "error_rate": 0.2},
-            frozenset({"error_channel", "error_rate"}),
-        )
-
-    # an explicit error_rate=None is equivalent to omitting it
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        translated = _deprecate_error_rate_option(
-            {"error_channel": 0.1, "error_rate": None},
-            frozenset({"error_channel", "error_rate"}),
-        )
-        assert translated == {"error_channel": 0.1}
-        for helper in (decoders.bp_osd, decoders.tesseract):
-            assert helper(error_rate=None).options == helper().options
-            assert helper(error_rate=None, error_channel=0.1).options["error_channel"] == 0.1
-        assert (
-            decoders.tesseract_preset(error_rate=None, error_channel=0.1).options["error_channel"]
-            == 0.1
-        )

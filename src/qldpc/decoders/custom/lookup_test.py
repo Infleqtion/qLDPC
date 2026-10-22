@@ -14,6 +14,7 @@ import scipy.sparse
 import stim
 
 from qldpc import codes, decoders, math
+from qldpc._deprecations import decoders as deprecated_decoders
 from qldpc.decoders.conftest import SurfaceCodeProblem, ToyProblem
 from qldpc.decoders.construction.resolution import _get_error_decoder
 from qldpc.decoders.custom._lookup_enumeration import _iter_errors_and_syndromes
@@ -684,12 +685,12 @@ def test_field_vector_packer(order: int, length: int) -> None:
     assert np.array_equal(packer.unpack(packer.pack(vectors[1])), vectors[1])
 
 
-def test_observable_lookup_deprecation_warning_location() -> None:
+def test_deprecated_observable_lookup_warning_location() -> None:
     """Legacy observable lookup warnings identify the user call and its typed replacement."""
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        decoder = decoders.get_decoder(
+        decoder = deprecated_decoders.get_decoder(
             dem,
             with_lookup=True,
             max_weight=1,

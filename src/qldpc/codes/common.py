@@ -23,7 +23,11 @@ import scipy.linalg
 import scipy.sparse
 import stim
 
-from qldpc import abstract, decoders, external, math
+from qldpc import _deprecations, abstract, decoders, external, math
+from qldpc._deprecations.decoders import (
+    get_legacy_decoder_migration_message,
+    reject_removed_decoder_args,
+)
 from qldpc._util import format_docstring, get_external_caller_stacklevel
 from qldpc._util import networkx as nx
 from qldpc.math import IntegerArray
@@ -813,15 +817,6 @@ class ClassicalCode(AbstractCode):
             new_matrix = np.delete(new_matrix, bit, axis=1).view(self.field)
         return ClassicalCode(new_matrix)
 
-    def puncture(self, bits: Collection[int]) -> ClassicalCode:
-        """Deprecated alias for ClassicalCode.punctured."""
-        warnings.warn(
-            "ClassicalCode.puncture is DEPRECATED; use ClassicalCode.punctured instead",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        return self.punctured(bits)
-
     def shortened(self, bits: Collection[int]) -> ClassicalCode:
         """Shorten a code to the words that are zero on the specified bits, and delete those bits.
 
@@ -834,15 +829,6 @@ class ClassicalCode(AbstractCode):
         bits = _get_sorted_unique_bits(bits, len(self))
         new_matrix = np.delete(self.matrix, bits, axis=1).view(self.field)
         return ClassicalCode(new_matrix)
-
-    def shorten(self, bits: Collection[int]) -> ClassicalCode:
-        """Deprecated alias for ClassicalCode.shortened."""
-        warnings.warn(
-            "ClassicalCode.shorten is DEPRECATED; use ClassicalCode.shortened instead",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        return self.shortened(bits)
 
     def get_logical_error_rate_func(
         self,
@@ -1887,15 +1873,6 @@ class QuditCode(AbstractCode):
         code._gauge_ops = self._logical_ops
         return code
 
-    def get_dual_subsystem_code(self) -> QuditCode:
-        """Deprecated alias for self.dual()."""
-        warnings.warn(
-            "QuditCode.get_dual_subsystem_code is DEPRECATED; use QuditCode.dual instead",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        return self.dual()
-
     @functools.cached_property
     def dimension(self) -> int:
         """The number of logical qudits encoded by this code."""
@@ -2124,16 +2101,6 @@ class QuditCode(AbstractCode):
         code._distance = self._distance
         code._distance_bound = self._distance_bound
         return code
-
-    def conjugate(self) -> QuditCode:
-        """Deprecated alias for ``conjugated()``."""
-        warnings.warn(
-            f"{type(self).__name__}.conjugate is DEPRECATED; use {type(self).__name__}.conjugated "
-            "instead",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        return self.conjugated()
 
     def deformed(
         self, circuit: str | stim.Circuit, *, preserve_logicals: bool = False
@@ -3748,16 +3715,6 @@ class CSSCode(QuditCode):
                 code._distance_bound_z = self._distance_bound_x
         return code
 
-    def conjugate(self) -> CSSCode:
-        """Deprecated alias for ``conjugated()``."""
-        warnings.warn(
-            f"{type(self).__name__}.conjugate is DEPRECATED; use {type(self).__name__}.conjugated "
-            "instead",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        return self.conjugated().to_css()
-
     def deformed(
         self, circuit: str | stim.Circuit, *, preserve_logicals: bool = False
     ) -> QuditCode:
@@ -3937,18 +3894,17 @@ class CSSCode(QuditCode):
 
         # reject removed arguments, and warn about deprecated arguments, naming their replacements
         for removed_args in [decoder_kwargs, decoder_x_kwargs or {}, decoder_z_kwargs or {}]:
-            decoders.reject_removed_decoder_args(removed_args)
+            reject_removed_decoder_args(removed_args)
         for argument_name, matrix, legacy_args in [
             ("decoder", stabilizer_ops_z, decoder_kwargs),
             ("decoder_x", stabilizer_ops_z, decoder_x_kwargs),
             ("decoder_z", stabilizer_ops_x, decoder_z_kwargs),
         ]:
             if legacy_args:
-                warnings.warn(
-                    decoders.get_legacy_decoder_migration_message(
+                _deprecations.warn_deprecated(
+                    get_legacy_decoder_migration_message(
                         matrix, legacy_args, argument_name=argument_name
                     ),
-                    DeprecationWarning,
                     stacklevel=get_external_caller_stacklevel(),
                 )
         decoder_x_kwargs = decoder_kwargs | (decoder_x_kwargs or {})

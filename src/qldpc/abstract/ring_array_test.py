@@ -384,8 +384,8 @@ def test_howell_form_poly_preserves_module() -> None:
             assert np.array_equal(howell, howell.howell_normal_form_poly())
 
 
-def test_deprecations() -> None:
-    """Deprecated call signatures emit DeprecationWarning."""
+def test_deprecated_argument_order() -> None:
+    """Deprecated argument orders emit DeprecationWarning."""
     ring = abstract.GroupRing(abstract.TrivialGroup())
 
     vector = ring.field.Random(2 * ring.group.order)
@@ -398,8 +398,8 @@ def test_deprecations() -> None:
         ring_array = abstract.RingArray.from_field_array(ring, matrix)  # type:ignore[arg-type]
     assert np.array_equal(ring_array.to_field_array(), matrix)
 
-    # the Protograph alias warns on use, and refers to RingArray itself
-    with pytest.warns(DeprecationWarning, match="Protograph is deprecated; use RingArray"):
-        assert abstract.Protograph is abstract.RingArray
-    with pytest.warns(DeprecationWarning, match="Protograph is deprecated; use RingArray"):
-        assert abstract.ring_array.Protograph is abstract.RingArray
+
+def test_unknown_attribute() -> None:
+    """The module-level lookup of deprecated names rejects other names."""
+    with pytest.raises(AttributeError, match="has no attribute 'not_a_real_export'"):
+        ring_array_module.not_a_real_export  # type: ignore[attr-defined]  # noqa: B018

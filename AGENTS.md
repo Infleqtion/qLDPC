@@ -22,16 +22,51 @@ Do not copy transient project history, machine-specific paths, or local-session 
 - Each stable subpackage has an explicit `__all__` in its `__init__.py`.
   Preserve those import paths when moving implementation code.
 - Treat imports from ordinary `qldpc.*` packages as public and keep them working.
-  Use a tested `DeprecationWarning` shim for a necessary rename or move rather than breaking an import.
-  For a renamed module-level name, see [`qldpc._util.get_deprecated_alias`](src/qldpc/_util.py).
+  Use a tested `DeprecationWarning` shim for a necessary rename or move rather than breaking an import (see [Deprecations](#deprecations)).
 - Everything under [`src/qldpc/experimental/`](src/qldpc/experimental/) is explicitly unstable and can change without a deprecation period.
   Do not infer that this weaker guarantee applies elsewhere.
 - Keep complete lists of public symbols in `__all__` and AutoAPI.
   Human-written docs should explain what packages do and show representative tasks, not duplicate a class catalogue.
 - A module should not use a private (underscore-prefixed) name from another module unless it is a narrowly shared internal helper or an intentional decoder-composition boundary.
-  For example, `decoders/construction/resolution.py` calls private backend builders kept beside their implementations; they are not public APIs merely because the resolver imports them.
+  For example, `_deprecations/decoders.py` calls private backend builders kept beside their implementations, so that deprecated APIs pass options to them unchecked; they are not public APIs merely because the legacy module imports them.
   Otherwise, needing a cross-module private name indicates that it should be public and documented.
   A test module may use private names of the module that it tests.
+
+### Deprecations
+
+Keep deprecated code in one place, so that it is easy to find and to remove.
+
+- All deprecated code and APIs live under the private package [`qldpc/_deprecations/`](src/qldpc/_deprecations/).
+  [`core.py`](src/qldpc/_deprecations/core.py) holds the generic infrastructure: the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes.
+  [`decoders.py`](src/qldpc/_deprecations/decoders.py) holds the deprecated decoder API and its translation into decoder specifications.
+  To avoid import cycles, `_deprecations/__init__.py` and `core.py` import neither `decoders.py` nor any qLDPC subpackage at import time, and registry targets are lazy `"module:attribute"` strings.
+- Only the following deprecation code lives outside `qldpc/_deprecations/`:
+  1. Each module that still serves a deprecated name ends with this identical marked stub, which looks the name up in the registry:
+
+     ```python
+     if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
+
+         def __getattr__(name: str) -> object:
+             return _deprecations.get_deprecated_attribute(__name__, name)
+     ```
+
+  2. A package whose `__all__` must keep released names extends it with `__all__.extend(_deprecations.deprecated_names(__name__))`.
+  3. Deprecated arguments, modes, and calling conventions of functions that are not themselves deprecated are handled inline, as small blocks that call `_deprecations.warn_deprecated` or raise `_deprecations.defunct(...)`.
+     Substantial translation logic, such as that for deprecated decoder keywords, belongs in `qldpc/_deprecations/`, and the inline block calls into it.
+  4. [`qldpc/__init__.py`](src/qldpc/__init__.py) calls `_deprecations.install_deprecated_methods()` once, after importing all subpackages.
+- Add a shim only for a name that was public in a released version, at its released path.
+  A name is public if a package `__all__` listed it, or if examples or docs used it.
+  Names added since the last release may change without a shim.
+- Register a renamed or moved name in `ALIASES`, which warns on access and names the replacement.
+  `SILENT_ALIASES` serves deprecated functions that warn when called, and moved objects that old pickles reference, without an access warning.
+- Type checkers must reject deprecated names.
+  Do not add `TYPE_CHECKING` aliases; the stub defines `__getattr__` only under `if not TYPE_CHECKING`.
+- Docstrings carry no deprecation notes.
+- Pytest turns every `DeprecationWarning` into an error, so test a deprecated path with `pytest.warns(DeprecationWarning, ...)`.
+  The data-driven tests in [`core_test.py`](src/qldpc/_deprecations/core_test.py) cover every registry entry and the attached methods, and [`decoders_test.py`](src/qldpc/_deprecations/decoders_test.py) covers the deprecated decoder API.
+  Tests of inline deprecations stay beside their modules and are named `test_deprecated_*`.
+- To remove deprecations, grep for `_deprecations` to find every stub, inline block, and `__all__` extension.
+  Delete the registry entries, attached methods, and inline blocks, the stubs of modules that no longer serve deprecated names, and the matching tests.
 
 ## Module organization and ordering
 
@@ -59,11 +94,12 @@ Do not copy transient project history, machine-specific paths, or local-session 
 | [`src/qldpc/math.py`](src/qldpc/math.py) | Symplectic and finite-field array helpers | [`math_test.py`](src/qldpc/math_test.py) |
 | [`src/qldpc/objects.py`](src/qldpc/objects.py) | Pauli labels, graph nodes, Cayley complexes, and chain complexes | [`objects_test.py`](src/qldpc/objects_test.py) |
 | [`src/qldpc/decoders/external/`](src/qldpc/decoders/external/) | Integrations and immediate builders for ldpc, PyMatching, Relay-BP, Tesseract, and Frontier | Co-located `*_test.py` files |
-| [`src/qldpc/decoders/custom/`](src/qldpc/decoders/custom/) | qLDPC-owned decoder implementations and their immediate builders | Co-located `*_test.py` files; [`custom_test.py`](src/qldpc/decoders/custom_test.py) covers deprecated aliases |
-| [`src/qldpc/decoders/construction/`](src/qldpc/decoders/construction/) | Typed decoder specs, generic resolution, and legacy keyword translation | Co-located `*_test.py` files |
-| [`src/qldpc/decoders/`](src/qldpc/decoders/) | Decoder protocols, capability checks, adapters, DEM arrays, Sinter, and windowed decoding | Co-located tests, [`decoders_test.py`](src/qldpc/decoders_test.py) and [`sinter_test.py`](src/qldpc/decoders/sinter_test.py) for deprecated aliases, plus [`logical_error_rates/`](examples/logical_error_rates/) |
+| [`src/qldpc/decoders/custom/`](src/qldpc/decoders/custom/) | qLDPC-owned decoder implementations and their immediate builders | Co-located `*_test.py` files |
+| [`src/qldpc/decoders/construction/`](src/qldpc/decoders/construction/) | Typed decoder specs and generic resolution | Co-located `*_test.py` files |
+| [`src/qldpc/decoders/`](src/qldpc/decoders/) | Decoder protocols, capability checks, adapters, DEM arrays, Sinter, and windowed decoding | Co-located tests, [`legacy_api_test.py`](src/qldpc/decoders/legacy_api_test.py) for the package-root names of tagged releases, plus [`logical_error_rates/`](examples/logical_error_rates/) |
 | [`src/qldpc/circuits/`](src/qldpc/circuits/) | Stim circuits, bookkeeping, encoders, memory experiments, noise, benchmarking, and transversal operations | Co-located tests plus [`noise_models.ipynb`](examples/noise_models.ipynb) and [`transversal_gates.ipynb`](examples/transversal_gates.ipynb) |
 | [`src/qldpc/external/`](src/qldpc/external/) | GAP, GUAVA, QDistRnd, GroupNames, and code-database integrations | Co-located tests use controlled substitutes for processes, input, and network access |
+| [`src/qldpc/_deprecations/`](src/qldpc/_deprecations/) | Registry of deprecated names, deprecated methods, warning helpers, and deprecated decoder construction | Co-located `*_test.py` files |
 | [`src/qldpc/cache.py`](src/qldpc/cache.py) | Persistent disk-cache helpers for expensive computations | [`cache_test.py`](src/qldpc/cache_test.py) |
 | [`src/qldpc/experimental/`](src/qldpc/experimental/) | Unstable research implementations | Co-located tests and [`examples/experimental/`](examples/experimental/) |
 | [`examples/`](examples/) | Canonical executable notebooks and small helper scripts | Sphinx links to these files; do not edit generated or duplicate notebook copies |
@@ -85,8 +121,8 @@ Free-standing statistical Monte Carlo helpers live in `codes/monte_carlo.py`.
 Code-capacity detector-error-model and decoder orchestration lives in `codes/code_capacity.py`.
 Generic decoder-input checks live in `decoders/capabilities.py`; field-valued and bit-packed observable-decoder adapters live in `decoders/adapters/observable_decoders.py`.
 Immediate builders live beside their implementations: external-package integrations under `decoders/external/`, and qLDPC-owned implementations under `decoders/custom/`.
-Typed decoder specifications, generic input resolution, and deprecated keyword translation live under `decoders/construction/`.
-Modern decoder inputs resolve directly in `decoders/construction/resolution.py`; nonempty deprecated keywords enter `decoders/construction/legacy.py` for translation, and the package-root compatibility calls remain there.
+Typed decoder specifications and generic input resolution live under `decoders/construction/`.
+Modern decoder inputs resolve directly in `decoders/construction/resolution.py`; nonempty deprecated keywords enter `_deprecations/decoders.py` for translation, and the deprecated package-root functions live there too.
 
 ## Core invariants
 
@@ -121,7 +157,7 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
 ### Decoders
 
 - Build decoders from typed specifications, as in `decoders.bp_osd(...).build(pcm_or_dem)` or `decoders.mwpm(...).build_observable_decoder(dem)`.
-  Builders named `get_decoder_<NAME>`, `get_error_decoder`, and `get_observable_decoder` are deprecated and live only in [`construction/legacy.py`](src/qldpc/decoders/construction/legacy.py).
+  Builders named `get_decoder_<NAME>`, `get_error_decoder`, and `get_observable_decoder` are deprecated and live only in [`_deprecations/decoders.py`](src/qldpc/_deprecations/decoders.py).
 - `decoder=None` selects GUF for a nonbinary `FieldArray` and BP+OSD otherwise (see [`construction/resolution.py`](src/qldpc/decoders/construction/resolution.py)).
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
   Code that consumes a user-supplied error decoder coerces it with `decoders.as_error_decoder` and calls `decode_errors`.
@@ -163,7 +199,7 @@ Modern decoder inputs resolve directly in `decoders/construction/resolution.py`;
   Co-located `*_test.py` files are the strong convention, although a thin helper can be covered through its consumer's test module.
   Reach a hard-to-reach branch with a focused test rather than a broad scenario.
 - Pytest turns every `DeprecationWarning` into an error, so tests must use the modern API.
-  A test of a deprecated path must assert its warning with `pytest.warns(DeprecationWarning, ...)`.
+  Test deprecated paths as described in [Deprecations](#deprecations).
 - A test should guard behavior that matters: results, invariants, documented errors, and contracts between modules.
   Do not pin implementation choices such as internal call order, private attributes, cache layouts, or incidental error-message wording.
   Testing a private helper directly is fine when that is the simplest way to check its contract or reach coverage.
@@ -199,7 +235,7 @@ Follow the [adding a decoder guide](docs/source/adding_decoders.rst) for a custo
    Do not change generic resolution for an ordinary backend.
    Export concrete backend classes at qualified `custom` or `external` paths, and export public specification helpers from [`decoders/__init__.py`](src/qldpc/decoders/__init__.py).
    Derive each specification helper's signature from one typed builder or constructor, write its public docstring explicitly, and add it to the `autofunction` inventory in [`decoders.rst`](docs/source/decoders.rst).
-   Keep deprecated keyword translation isolated in `construction/legacy.py`.
+   Keep deprecated keyword translation isolated in `_deprecations/decoders.py`.
 3. Decide and test batch behavior, nonbinary support, detector-error-model support, and erasure signaling explicitly.
 4. Use direct syndrome/error reproductions in addition to factory-selection tests.
 

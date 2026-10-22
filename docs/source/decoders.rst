@@ -343,6 +343,8 @@ The following usage remains available during a deprecation period, and each use 
    * - ``decoders.lookup_table(...)``
      - ``decoders.lookup(...)``
 
+The internal helpers ``decoders.get_legacy_decoder_migration_message`` and ``decoders.reject_removed_decoder_args`` emit a ``DeprecationWarning`` when accessed, and will be removed from the public API.
+
 Migrating custom code-capacity factories
 ----------------------------------------
 

@@ -18,12 +18,12 @@ import numpy as np
 import numpy.typing as npt
 import stim
 
+from qldpc._deprecations.decoders import deprecate_error_rate_option
 from qldpc._util import format_docstring, get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
 from ..common import (
     PLACEHOLDER_ERROR_RATE,
-    _deprecate_error_rate_option,
     _erasure_bit_support,
     _get_matrix_error_channel,
 )
@@ -263,7 +263,7 @@ def _get_decoder_bf(
 bp_osd = decoder_spec(
     "bp_osd",
     _get_decoder_bp_osd,
-    option_transform=_deprecate_error_rate_option,
+    option_transform=deprecate_error_rate_option,
     doc="""Configure belief propagation with ordered-statistics decoding.
 
 See the `ldpc BP+OSD documentation
@@ -294,7 +294,7 @@ Returns:
 bp_lsd = decoder_spec(
     "bp_lsd",
     _get_decoder_bp_lsd,
-    option_transform=_deprecate_error_rate_option,
+    option_transform=deprecate_error_rate_option,
     doc="""Configure belief propagation with localized-statistics decoding.
 
 See the `ldpc BP+LSD documentation
@@ -330,7 +330,7 @@ Returns:
 bf = decoder_spec(
     "bf",
     _get_decoder_bf,
-    option_transform=_deprecate_error_rate_option,
+    option_transform=deprecate_error_rate_option,
     doc="""Configure belief-find decoding.
 
 See the `ldpc belief-find documentation

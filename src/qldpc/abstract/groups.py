@@ -726,14 +726,6 @@ class TrivialGroup(Group):
     def _trivial_lift(cls, member: GroupMember) -> npt.NDArray[np.int_]:
         return np.array(1, ndmin=2, dtype=int)
 
-    @staticmethod
-    def to_ring_array(data: npt.NDArray[np.int_] | NestedSequence) -> None:
-        """DEFUNCT alias for qldpc.abstract.RingArray.build(data)."""
-        raise ValueError(
-            "TrivialGroup.to_ring_array(data) is DEFUNCT; use"
-            " qldpc.abstract.RingArray.build(data) instead"
-        )
-
 
 class AbelianGroup(Group):
     """Direct product of cyclic groups of the specified orders.

@@ -9,7 +9,7 @@ import pytest
 import sympy
 
 from qldpc import abstract
-from qldpc.abstract import ring_array, rings
+from qldpc.abstract import rings
 
 
 def test_ring() -> None:
@@ -141,8 +141,8 @@ def test_transpose() -> None:
         assert element.T.T == element
 
 
-def test_deprecations() -> None:
-    """Deprecated call signatures emit DeprecationWarning."""
+def test_deprecated_argument_order() -> None:
+    """Deprecated argument orders emit DeprecationWarning."""
     ring = abstract.GroupRing(abstract.TrivialGroup())
 
     vector = ring.field.Random(ring.group.order)
@@ -150,24 +150,8 @@ def test_deprecations() -> None:
         ring_member = abstract.RingMember.from_vector(ring, vector)  # type:ignore[arg-type]
     assert np.array_equal(ring_member.to_vector(), vector)
 
-    # the Element alias warns on use, and refers to RingMember itself
-    with pytest.warns(DeprecationWarning, match="Element is deprecated; use RingMember"):
-        assert abstract.Element is abstract.RingMember
-    with pytest.warns(DeprecationWarning, match="Element is deprecated; use RingMember"):
-        assert rings.Element is abstract.RingMember
 
-
-def test_ring_array_compat_shim() -> None:
-    """RingArray/Protograph remain importable from rings.py, the module they moved out of.
-
-    Unpickling objects saved under the old ``qldpc.abstract.rings`` path uses the same lookup.
-    """
-    from qldpc.abstract.rings import RingArray
-
-    assert RingArray is ring_array.RingArray is abstract.RingArray
-    with pytest.warns(DeprecationWarning, match="Protograph is deprecated"):
-        from qldpc.abstract.rings import Protograph
-    assert Protograph is abstract.RingArray
-
-    with pytest.raises(AttributeError, match=r"module .* has no attribute 'not_a_real_export'"):
-        rings.not_a_real_export  # type: ignore[attr-defined]  # noqa: B018 (trigger __getattr__)
+def test_unknown_attribute() -> None:
+    """The module-level lookup of deprecated names rejects other names."""
+    with pytest.raises(AttributeError, match="has no attribute 'not_a_real_export'"):
+        rings.not_a_real_export  # type: ignore[attr-defined]  # noqa: B018

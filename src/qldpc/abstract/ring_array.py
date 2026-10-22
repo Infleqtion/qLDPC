@@ -11,7 +11,6 @@
 from __future__ import annotations
 
 import functools
-import warnings
 from collections.abc import Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, Literal, NamedTuple, Self
 
@@ -20,7 +19,7 @@ import numpy as np
 import numpy.typing as npt
 
 import qldpc
-from qldpc._util import get_deprecated_alias
+from qldpc import _deprecations
 
 from .groups import CyclicGroup, Group, GroupMember, NestedSequence, TrivialGroup
 from .rings import GroupRing, RingMember
@@ -271,10 +270,9 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         This method is the inverse of ``RingArray.to_field_array``.
         """
         if isinstance(array, (GroupRing, Group)):
-            warnings.warn(
+            _deprecations.warn_deprecated(
                 "Check argument order: it should be RingArray.from_field_array(array, ring)."
                 "  The order (ring, array) is DEPRECATED and will throw an error in the future!",
-                DeprecationWarning,
                 stacklevel=2,
             )
             array, ring = ring, array
@@ -300,10 +298,9 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         This method is the inverse of ``RingArray.to_field_vector``.
         """
         if isinstance(vector, (GroupRing, Group)):
-            warnings.warn(
+            _deprecations.warn_deprecated(
                 "Check argument order: it should be RingArray.from_field_vector(vector, ring)."
                 "  The order (ring, vector) is DEPRECATED and will throw an error in the future!",
-                DeprecationWarning,
                 stacklevel=2,
             )
             vector, ring = ring, vector
@@ -921,18 +918,7 @@ def _get_block_howell_form(matrix: galois.FieldArray, *, right: bool = False) ->
     return matrix
 
 
-####################################################################################################
-# deprecated aliases
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
 
-
-DEPRECATED_ALIASES = {"Protograph": RingArray}
-
-# Deprecated names resolve at runtime through a module-level __getattr__ that warns when accessed.
-# Type checkers instead see plain aliases, so that they still flag misspelled attributes.
-if TYPE_CHECKING:
-    Protograph = RingArray
-else:
-
-    def __getattr__(name: str) -> Any:
-        """Resolve deprecated names of ring arrays, with a DeprecationWarning."""
-        return get_deprecated_alias(__name__, name, DEPRECATED_ALIASES)
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

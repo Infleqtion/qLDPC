@@ -188,13 +188,15 @@ def test_historical_root_class_has_qualified_import(name: str, qualified_name: s
 def test_tagged_root_function_signatures() -> None:
     """Keep the legacy calling forms, even if a shim supplies their implementation."""
     root = qldpc.decoders
-    assert list(inspect.signature(root.get_decoder).parameters) == ["pcm_or_dem", "decoder_args"]
-    assert list(inspect.signature(root.decode).parameters) == [
+    # type checkers reject deprecated names, so retrieve them dynamically
+    get_decoder, decode = (getattr(root, name) for name in ["get_decoder", "decode"])
+    assert list(inspect.signature(get_decoder).parameters) == ["pcm_or_dem", "decoder_args"]
+    assert list(inspect.signature(decode).parameters) == [
         "pcm_or_dem",
         "syndrome",
         "decoder_args",
     ]
-    assert inspect.signature(root.get_decoder).parameters["decoder_args"].kind is (
+    assert inspect.signature(get_decoder).parameters["decoder_args"].kind is (
         inspect.Parameter.VAR_KEYWORD
     )
     for name in [
@@ -214,12 +216,12 @@ def test_tagged_root_function_signatures() -> None:
         assert signature.parameters["decoder_args"].kind is inspect.Parameter.VAR_KEYWORD
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        rbp = root.get_decoder_RBP
         # each uppercase alias names the same builder as its lowercase counterpart
         for suffix in ["BF", "BP_LSD", "BP_OSD", "GUF", "ILP", "MWPM", "RBP"]:
             alias = getattr(root, f"get_decoder_{suffix}")
             assert alias is getattr(root, f"get_decoder_{suffix.lower()}")
-    assert "error_priors" in inspect.signature(rbp).parameters
+    # the last alias, get_decoder_RBP, accepts error priors
+    assert "error_priors" in inspect.signature(alias).parameters
     assert list(inspect.signature(root.resolve_decoder).parameters) == [
         "pcm_or_dem",
         "decoder",

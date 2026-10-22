@@ -13,6 +13,7 @@ import pytest
 import stim
 
 from qldpc import decoders
+from qldpc._deprecations import decoders as deprecated_decoders
 from qldpc.decoders.adapters import error_decoders
 from qldpc.decoders.construction import resolution
 from qldpc.decoders.construction.resolution import _get_error_decoder, _get_observable_decoder
@@ -228,14 +229,14 @@ def test_erasure_bit_request() -> None:
             pytest.warns(DeprecationWarning),
             pytest.raises(ValueError, match=rf"The {decoder_name} decoder cannot signal erasure"),
         ):
-            decoders.get_decoder(matrix, add_erasure_bit=True, **decoder_args)
+            deprecated_decoders.get_decoder(matrix, add_erasure_bit=True, **decoder_args)
 
     # BP+OSD is the default for a binary matrix
     with (
         pytest.warns(DeprecationWarning),
         pytest.raises(ValueError, match=r"The BP_OSD decoder cannot signal erasure"),
     ):
-        decoders.get_decoder(matrix, add_erasure_bit=True)
+        deprecated_decoders.get_decoder(matrix, add_erasure_bit=True)
 
 
 def test_decomposed_error_mechanisms() -> None:

@@ -9,10 +9,9 @@ import importlib.machinery
 import importlib.util
 import inspect
 import sys
-import warnings
-from collections.abc import Callable, Mapping
-from types import FrameType, ModuleType
-from typing import TYPE_CHECKING, Any, TypeVar
+from collections.abc import Callable
+from types import ModuleType
+from typing import TYPE_CHECKING, TypeVar
 
 CallableType = TypeVar("CallableType", bound=Callable[..., object])
 
@@ -82,7 +81,7 @@ else:
 
 
 ####################################################################################################
-# docstrings and deprecation
+# docstrings and warnings
 
 
 def format_docstring(**substitutions: object) -> Callable[[CallableType], CallableType]:
@@ -121,72 +120,3 @@ def get_external_caller_stacklevel() -> int:
         stacklevel += 1
         frame = frame.f_back
     return stacklevel
-
-
-def get_deprecated_alias(
-    module_name: str,
-    name: str,
-    aliases: Mapping[str, Any],
-    replacement_names: Mapping[str, str] | None = None,
-) -> Any:
-    """Retrieve the replacement for a deprecated name, and warn that the name is deprecated.
-
-    This function backs module-level __getattr__ functions (PEP 562), which Python calls only for
-    names that a module does not define.  A deprecated name thereby refers to the same object as its
-    replacement, which preserves isinstance checks, subclassing, and unpickling, while still warning
-    whenever the deprecated name is accessed.  For example::
-
-        DEPRECATED_ALIASES = {"OldName": NewName}
-
-        if TYPE_CHECKING:
-            OldName = NewName  # so that type checkers still flag misspelled names
-        else:
-
-            def __getattr__(name: str) -> Any:
-                return get_deprecated_alias(__name__, name, DEPRECATED_ALIASES)
-
-    A package that re-exports a deprecated name should define the same kind of __getattr__ in its
-    __init__.py, rather than importing the deprecated name (which would warn at import time), and
-    may list the deprecated name in __all__ so that star imports still define it.
-
-    Args:
-        module_name: The name of the module whose attribute is being retrieved.
-        name: The name of the attribute being retrieved.
-        aliases: A map from each deprecated name in the module to its replacement.
-        replacement_names: Optional user-facing names for replacements whose Python ``__name__`` is
-            ambiguous, such as an object moved without being renamed.
-
-    Returns:
-        The replacement for the deprecated name.
-
-    Raises:
-        AttributeError: If the name is not a deprecated alias.
-    """
-    if name not in aliases:
-        raise AttributeError(f"module {module_name!r} has no attribute {name!r}")
-    replacement = aliases[name]
-    replacement_name = (replacement_names or {}).get(name, replacement.__name__)
-    if not _is_import_probe(sys._getframe(2)):
-        warnings.warn(
-            f"{name} is deprecated; use {replacement_name} instead",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )
-    return replacement
-
-
-####################################################################################################
-# helper methods
-
-
-def _is_import_probe(frame: FrameType | None) -> bool:
-    """Is a frame the probe that checks for names before a ``from package import ...`` statement?
-
-    Python checks that a package provides each name in ``from package import name`` before it
-    retrieves the name, so a module-level __getattr__ is called twice for one such statement.
-    """
-    return (
-        frame is not None
-        and frame.f_code.co_name == "_handle_fromlist"
-        and frame.f_globals.get("__name__") == "importlib._bootstrap"
-    )

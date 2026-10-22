@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import functools
-import warnings
 from collections.abc import Callable, Sequence
 from typing import ParamSpec, TypeAlias, TypeVar
 
@@ -14,7 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._deprecations.decoders import deprecate_error_rate_option
 from qldpc.math import IntegerArray
 
 from .dems import DetectorErrorModelArrays
@@ -125,7 +124,7 @@ def _get_matrix_error_channel(
         return None
 
     if error_rate is not None:
-        _deprecate_error_rate_option(
+        deprecate_error_rate_option(
             {"error_channel": error_channel, "error_rate": error_rate},
             frozenset(
                 {"error_rate", "error_channel"} if error_channel is not None else {"error_rate"}
@@ -161,30 +160,3 @@ def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -
             " error_channel with the detector-flip matrix of the model,"
             " decoders.DetectorErrorModelArrays(dem).detector_flip_matrix"
         )
-
-
-####################################################################################################
-# deprecated compatibility helpers
-
-
-def _deprecate_error_rate_option(
-    options: dict[str, object], explicitly_provided: frozenset[str]
-) -> dict[str, object]:
-    """Replace an explicitly supplied error_rate option with error_channel.
-
-    An explicit error_rate=None is the default value, so it is dropped as if it were omitted.
-    """
-    if "error_rate" not in explicitly_provided or options.get("error_rate") is None:
-        options.pop("error_rate", None)
-        return options
-    if "error_channel" in explicitly_provided:
-        raise ValueError("error_rate and error_channel cannot both be specified")
-    error_rate = options["error_rate"]
-    warnings.warn(
-        f"error_rate={error_rate!r} is deprecated; use error_channel={error_rate!r} instead",
-        DeprecationWarning,
-        stacklevel=get_external_caller_stacklevel(),
-    )
-    options.pop("error_rate")
-    options["error_channel"] = error_rate
-    return options
