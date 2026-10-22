@@ -11,8 +11,6 @@ import stim
 from qldpc import circuits, decoders
 from qldpc.codes.distance import DistanceMethod
 
-from . import common
-
 
 @pytest.mark.parametrize("method", ["brouwer_zimmermann", "brute_force"])
 @pytest.mark.parametrize("measurement, expected_distance", [(-7, 3), (-4, 4)])
@@ -128,16 +126,3 @@ def test_erasure_counts_as_a_discard() -> None:
         circuits.get_logical_error_and_discard_rate(
             circuit, sinter_decoder=WideDecoder(), num_samples=2
         )
-
-
-def test_postselection_masks() -> None:
-    """Automatic selection chooses flags, while explicit out-of-range detectors are rejected."""
-    record = circuits.DetectorRecord({"prep": [0], "flags": [1]})
-    detector_mask, observable_mask = common._get_postselection_masks(True, (), record, 0)
-    assert detector_mask is not None
-    assert np.array_equal(detector_mask, [2])
-    assert observable_mask is None
-    with pytest.raises(ValueError, match="2 selectable prep/flag detectors"):
-        common._get_postselection_masks([2], (), record, 0)
-    with pytest.raises(ValueError, match="Observable post-selection"):
-        common._get_postselection_masks((), [1], record, 1)

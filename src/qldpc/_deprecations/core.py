@@ -67,6 +67,7 @@ ALIASES: dict[str, dict[str, str]] = {
         "Protograph": "qldpc.abstract.ring_array:RingArray",
     },
     "qldpc.circuits": {
+        "restrict_to_qubits": "qldpc.circuits._common:restrict_to_qubits",
         "validate_syndrome_qubit_ids": "qldpc.circuits.memory._common:validate_syndrome_qubit_ids",
     },
     "qldpc.circuits.memory": {

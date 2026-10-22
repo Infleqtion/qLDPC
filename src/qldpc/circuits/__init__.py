@@ -24,7 +24,6 @@ from .common import (
     get_pauli_product_measurements,
     get_unaddressed_measurements,
     remap_qubit_target,
-    restrict_to_qubits,
     with_remapped_qubits,
 )
 from .encoding import (
@@ -114,7 +113,6 @@ __all__ = [
     "get_unaddressed_measurements",
     "remap_qubit_target",
     "restrict_tableau",
-    "restrict_to_qubits",
     "with_remapped_qubits",
 ]
 

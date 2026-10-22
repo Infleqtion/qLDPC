@@ -13,8 +13,8 @@ from qldpc import codes
 from qldpc._util import networkx as nx
 from qldpc.objects import Pauli
 
+from .._common import restrict_to_qubits
 from ..bookkeeping import MeasurementRecord, QubitIDs
-from ..common import restrict_to_qubits
 from ._common import validate_syndrome_qubit_ids
 
 

@@ -14,8 +14,9 @@ from qldpc import codes
 from qldpc._util import format_docstring
 from qldpc.objects import Node, Pauli, PauliXZ, PauliXZLike
 
+from .._common import restrict_to_qubits
 from ..bookkeeping import DetectorRecord, MeasurementRecord, QubitIDs
-from ..common import get_pauli_product_measurements, restrict_to_qubits, with_remapped_qubits
+from ..common import get_pauli_product_measurements, with_remapped_qubits
 from ..encoding import get_encoding_circuit
 from ..noise_model import (
     DEFAULT_IMMUNE_OP_TAG,

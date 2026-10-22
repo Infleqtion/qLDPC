@@ -13,9 +13,10 @@ import stim
 from qldpc import codes, math
 from qldpc.objects import Pauli
 
+from ._common import restrict_to_qubits
 from ._encoding import get_logical_tableau_from_code_data
 from .bookkeeping import QubitIDs
-from .common import restrict_to_qubits, with_remapped_qubits
+from .common import with_remapped_qubits
 
 ####################################################################################################
 # encoding circuits, logical tableaus, and logical states

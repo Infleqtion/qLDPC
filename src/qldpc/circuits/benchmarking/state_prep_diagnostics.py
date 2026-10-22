@@ -13,15 +13,12 @@ import stim
 
 from qldpc import codes, math
 
+from .._common import restrict_to_qubits
 from ..bookkeeping import DetectorRecord, QubitIDs
-from ..common import (
-    get_pauli_product_measurements,
-    get_unaddressed_measurements,
-    restrict_to_qubits,
-)
+from ..common import get_pauli_product_measurements, get_unaddressed_measurements
 from ..encoding import get_logical_state_stabilizers, get_state_stabilizers
 from ..noise_model import DepolarizingNoiseModel, NoiseModel, as_noiseless_circuit
-from .common import _get_postselection_masks
+from ._postselection import get_postselection_masks
 
 ####################################################################################################
 # state preparation diagnostics
@@ -246,7 +243,7 @@ def get_state_prep_diagnostic_tasks(
         observables=observables,
         skip_validation=skip_validation,
     )
-    postselection_mask, postselected_observables_mask = _get_postselection_masks(
+    postselection_mask, postselected_observables_mask = get_postselection_masks(
         post_select, post_select_observables, detector_record, diagnostic_circuit.num_observables
     )
     return [

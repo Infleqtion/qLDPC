@@ -15,8 +15,8 @@ from qldpc import abstract, cache, codes
 from qldpc.math import op_to_string
 from qldpc.objects import Pauli
 
+from ._common import restrict_to_qubits
 from ._encoding import get_logical_tableau_from_code_data
-from .common import restrict_to_qubits
 from .encoding import get_encoder_and_decoder
 
 ####################################################################################################

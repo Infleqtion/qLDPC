@@ -17,19 +17,6 @@ from qldpc.math import symplectic_conjugate
 from qldpc.objects import Pauli
 
 
-def test_restriction() -> None:
-    """restrict_to_qubits passes through for qubit codes and raises for qudit codes."""
-
-    @circuits.restrict_to_qubits
-    def get_empty_circuit(code: codes.QuditCode) -> stim.Circuit:
-        return stim.Circuit()
-
-    get_empty_circuit(codes.SurfaceCode(2, field=2))  # this does not raise an error
-
-    with pytest.raises(ValueError, match="only supported for qubit codes"):
-        get_empty_circuit(codes.SurfaceCode(2, field=3))
-
-
 def test_pauli_product_measurements(pytestconfig: pytest.Config) -> None:
     """get_pauli_product_measurements correctly measures the syndrome of Pauli errors."""
     np.random.seed(pytestconfig.getoption("randomly_seed"))

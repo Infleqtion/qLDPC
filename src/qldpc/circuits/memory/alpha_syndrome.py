@@ -19,8 +19,9 @@ import tqdm
 from qldpc import codes, decoders
 from qldpc.objects import Pauli, PauliXZ
 
+from .._common import restrict_to_qubits
 from ..bookkeeping import MeasurementRecord, QubitIDs
-from ..common import get_pauli_product_measurements, restrict_to_qubits, with_remapped_qubits
+from ..common import get_pauli_product_measurements, with_remapped_qubits
 from ..noise_model import NoiseModel, as_noiseless_circuit
 from ._common import validate_syndrome_qubit_ids
 from .syndrome_measurement import SyndromeMeasurementStrategy

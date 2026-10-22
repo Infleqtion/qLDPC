@@ -112,7 +112,7 @@ Plumbing that several modules share lives in private modules; helpers that one f
 
 ### Circuits
 
-- Circuit and tableau constructors are qubit-only and should use the existing `restrict_to_qubits` guard.
+- Circuit and tableau constructors are qubit-only and should use the `restrict_to_qubits` guard from [`circuits/_common.py`](src/qldpc/circuits/_common.py).
 - `get_encoding_circuit` constructs a valid encoder but is not fault-tolerant.
   Do not present it as a fault-tolerant state-preparation procedure.
 - Keep data, check, reference, and ancilla roles explicit through `QubitIDs` and bookkeeping types.
