@@ -18,8 +18,8 @@ import pytest
 import stim
 
 from qldpc import decoders
-from qldpc.decoders import _common
 from qldpc.decoders.adapters import error_decoders
+from qldpc.decoders.common import _PLACEHOLDER_ERROR_RATE
 from qldpc.decoders.construction import specs
 from qldpc.decoders.construction._resolution import build_error_decoder
 
@@ -353,7 +353,7 @@ def test_decoder_spec_helper_defaults() -> None:
     ]
     for helper, constructor, attributes in ldpc_decoders:
         helper_decoder = helper().build(matrix)
-        default_channel = [_common.PLACEHOLDER_ERROR_RATE] * matrix.shape[1]
+        default_channel = [_PLACEHOLDER_ERROR_RATE] * matrix.shape[1]
         ldpc_decoder = constructor(matrix, error_channel=default_channel)
         for attribute in shared_attributes + attributes:
             assert getattr(helper_decoder, attribute) == getattr(ldpc_decoder, attribute), (
@@ -469,3 +469,12 @@ def test_deprecated_error_rate_option_is_last_and_warns() -> None:
         spec = decoders.bp_osd(error_rate=0.2)
     assert "error_rate" not in spec.options
     assert spec.options["error_channel"] == 0.2
+
+
+def test_is_default_value() -> None:
+    """Only the default itself, or a plain copy of it of the same type, is a default value."""
+    default = object()
+    assert specs._is_default_value(default, default)
+    assert specs._is_default_value(float("1"), 1.0)
+    assert not specs._is_default_value(1, 1.0)
+    assert not specs._is_default_value(object(), default)

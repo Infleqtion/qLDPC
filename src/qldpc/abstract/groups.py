@@ -37,7 +37,8 @@ import sympy.abc
 import sympy.combinatorics as comb
 import sympy.core
 
-from ._fields import resolve_field
+from qldpc.math import resolve_field
+
 from .monomials import get_coefficient_and_exponents
 
 NestedSequence = Sequence[object | Sequence["NestedSequence"]]

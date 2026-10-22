@@ -17,14 +17,13 @@ from qldpc._deprecations.decoders import (
     get_legacy_decoder_migration_message,
     reject_removed_decoder_args,
 )
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 
-from .._common import as_error_decoder
 from ..adapters.error_decoders import ErrorsToObservablesDecoder
 from ..construction._resolution import reject_prebuilt_decoder, resolve_observable_decoder
 from ..construction.specs import DecoderSpec, DeferredDecoderInput
 from ..dems import DetectorErrorModelArrays
-from ..protocols import ErrorDecoder, ObservableDecoder
+from ..protocols import ErrorDecoder, ObservableDecoder, _as_error_decoder
 
 # sinter does not ship type information, so mypy treats sinter.Decoder and sinter.CompiledDecoder as
 # Any.  A subclass of Any is assumed to have every attribute, so it would structurally satisfy the
@@ -206,7 +205,7 @@ class CompiledSinterDecoder(_SinterCompiledDecoder, ObservableDecoder):
         else:
             self.decoder = decoder
             self.observable_decoder = ErrorsToObservablesDecoder(
-                as_error_decoder(decoder, "The decoder"), dem_arrays.to_dem()
+                _as_error_decoder(decoder, "The decoder"), dem_arrays.to_dem()
             )
         self.num_detectors = dem_arrays.num_detectors
         self.num_observables = dem_arrays.num_observables

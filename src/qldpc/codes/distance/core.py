@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Exact binary distance calculations, and distance method and backend types."""
+"""Exact binary distance calculations, and distance method and backend types and validation."""
 
 from __future__ import annotations
 
@@ -23,10 +23,17 @@ from ._brouwer_zimmermann import (
 from ._brute_force import (
     get_distance_quantum_brute_force,
 )
-from ._methods import validate_distance_method
 
 DistanceBackend = Literal["auto", "decoder", "gap", "sqetch"]
 DistanceMethod = Literal["brouwer_zimmermann", "brute_force", "information_sets"]
+
+# The canonical name of every accepted exact-distance method name, including aliases.  Logical
+# counts accept the same names.
+_DISTANCE_METHODS: dict[str, Literal["brouwer_zimmermann", "brute_force"]] = {
+    "brouwer_zimmermann": "brouwer_zimmermann",
+    "brute_force": "brute_force",
+    "information_sets": "brouwer_zimmermann",
+}
 
 
 ####################################################################################################
@@ -57,7 +64,7 @@ def get_distance_classical(
         The minimum Hamming distance between different code words, or equivalently the minimum
         Hamming weight of a nontrivial code word.
     """
-    method = validate_distance_method(method)
+    method = _validate_distance_method(method)
     assert_binary(generators, "generators")
     matrix = as_binary_matrix(generators)
     basis = get_independent_rows(matrix)
@@ -129,7 +136,7 @@ def get_distance_quantum(
             qubits) with the first and second halves indicating the X and Z Pauli support; and
         (b) the weight of a Pauli string is the symplectic weight of the corresponding bitstring.
     """
-    method = validate_distance_method(method)
+    method = _validate_distance_method(method)
     assert_binary(logical_ops, "logical_ops")
     assert_binary(stabilizers, "stabilizers")
     logical_matrix = as_binary_matrix(logical_ops)
@@ -182,3 +189,31 @@ def get_distance_quantum(
         weight_divisor=divisor,
     )
     return distance // divisor
+
+
+####################################################################################################
+# method and backend selectors
+
+
+def _validate_distance_backend(backend: DistanceBackend) -> None:
+    """Validate a distance-bound backend selector."""
+    if backend not in ("auto", "decoder", "gap", "sqetch"):
+        raise ValueError(
+            f"Unknown distance backend {backend!r}; choose from 'auto', 'decoder', 'gap', or "
+            "'sqetch'."
+        )
+
+
+def _validate_distance_method(
+    method: DistanceMethod,
+) -> Literal["brouwer_zimmermann", "brute_force"]:
+    """Validate an exact-distance method selector, and return its canonical name.
+
+    The alias ``"information_sets"`` resolves to ``"brouwer_zimmermann"``.
+    """
+    if method not in _DISTANCE_METHODS:
+        raise ValueError(
+            f"Unknown distance method {method!r}; choose from 'brouwer_zimmermann' or "
+            "'brute_force'."
+        )
+    return _DISTANCE_METHODS[method]

@@ -19,12 +19,10 @@ import tqdm
 from qldpc import codes, decoders
 from qldpc.objects import Pauli, PauliXZ
 
-from .._common import restrict_to_qubits
 from ..bookkeeping import MeasurementRecord, QubitIDs
-from ..common import get_pauli_product_measurements, with_remapped_qubits
+from ..common import _restrict_to_qubits, get_pauli_product_measurements, with_remapped_qubits
 from ..noise_model import NoiseModel, as_noiseless_circuit
-from ._common import validate_syndrome_qubit_ids
-from .syndrome_measurement import SyndromeMeasurementStrategy
+from .syndrome_measurement import SyndromeMeasurementStrategy, _validate_syndrome_qubit_ids
 
 # Scrappy type to represent a schedule of two-qubit gates: A list whose t-th entry is a list of
 # gates to apply at time t.  For the purposes of this schedule, a "gate" is just an ordered pair of
@@ -110,7 +108,7 @@ class AlphaSyndrome(SyndromeMeasurementStrategy):
                 "custom_decoders": {"custom": decoder},
             }
 
-    @restrict_to_qubits
+    @_restrict_to_qubits
     def get_circuit(
         self, code: codes.QuditCode, qubit_ids: QubitIDs | None = None
     ) -> tuple[stim.Circuit, MeasurementRecord]:
@@ -129,7 +127,7 @@ class AlphaSyndrome(SyndromeMeasurementStrategy):
             raise TypeError(
                 "The AlphaSyndrome strategy for syndrome measurement only supports CSS codes"
             )
-        qubit_ids = validate_syndrome_qubit_ids(code, qubit_ids)
+        qubit_ids = _validate_syndrome_qubit_ids(code, qubit_ids)
 
         # the heavy lifting: schedule gates
         schedule_cx = self._build_schedule(code, Pauli.X)

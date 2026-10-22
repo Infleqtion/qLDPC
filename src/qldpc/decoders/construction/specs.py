@@ -24,7 +24,6 @@ import stim
 
 from qldpc.math import IntegerArray
 
-from .._common import is_default_value
 from ..adapters._observable_decoders import validate_observable_decoder
 from ..adapters.error_decoders import ErrorsToObservablesDecoder as _ErrorsToObservablesDecoder
 from ..protocols import ErrorDecoder, ObservableDecoder, SupportsDecode
@@ -74,7 +73,7 @@ class DecoderSpec(Generic[_DecoderT_co]):
         options = ", ".join(
             f"{name}={value!r}"
             for name, value in self._options
-            if name not in defaults or not is_default_value(value, defaults[name])
+            if name not in defaults or not _is_default_value(value, defaults[name])
         )
         return f"decoders.{self._helper_name}({options})"
 
@@ -378,3 +377,11 @@ def _normalize_backend_options(helper_name: str, options: dict[str, object]) -> 
             + " directly rather than in backend_options"
         )
     options["backend_options"] = dict(backend_options) or None
+
+
+def _is_default_value(value: object, default: object) -> bool:
+    """Whether an option is a plain copy of its default value."""
+    if value is default:
+        return True
+    plain_types = (bool, int, float, str)
+    return type(value) is type(default) and isinstance(value, plain_types) and value == default

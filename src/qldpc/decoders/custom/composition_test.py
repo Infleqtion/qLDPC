@@ -9,9 +9,9 @@ import numpy.typing as npt
 import pytest
 
 from qldpc import decoders
-from qldpc.decoders._common import batch_decode_errors
 from qldpc.decoders.conftest import ToyProblem
 from qldpc.decoders.construction._resolution import build_error_decoder
+from qldpc.decoders.protocols import _batch_decode_errors
 
 
 def test_batch_decoding_by_alias() -> None:
@@ -28,7 +28,7 @@ def test_batch_decoding_by_alias() -> None:
 
     old_decoder = OldDecoder()
     assert np.array_equal(old_decoder.decode_errors(syndromes[0]), syndromes[0])
-    assert np.array_equal(batch_decode_errors(old_decoder, syndromes), syndromes)
+    assert np.array_equal(_batch_decode_errors(old_decoder, syndromes), syndromes)
 
     composite_decoder = decoders.custom.CompositeDecoder((old_decoder, 1), (old_decoder, 1))
     assert composite_decoder.decoders == (old_decoder, old_decoder)

@@ -11,12 +11,11 @@ import numpy as np
 import stim
 
 from qldpc import codes
-from qldpc._util import format_docstring
+from qldpc._utils import format_docstring
 from qldpc.objects import Node, Pauli, PauliXZ, PauliXZLike
 
-from .._common import restrict_to_qubits
 from ..bookkeeping import DetectorRecord, MeasurementRecord, QubitIDs
-from ..common import get_pauli_product_measurements, with_remapped_qubits
+from ..common import _restrict_to_qubits, get_pauli_product_measurements, with_remapped_qubits
 from ..encoding import get_encoding_circuit
 from ..noise_model import (
     DEFAULT_IMMUNE_OP_TAG,
@@ -204,7 +203,7 @@ def get_memory_experiment(
     return initialization + qec_cycle + readout
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_memory_experiment_parts(
     code: codes.QuditCode | codes.ClassicalCode,
     basis: PauliXZLike | None,
@@ -281,7 +280,7 @@ def get_qubit_coordinates(
     return circuit
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_observables(
     code: codes.QuditCode,
     data_qubits: Sequence[int] | None = None,
@@ -349,7 +348,7 @@ def get_observables(
     return circuit
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_logical_bell_prep(
     code: codes.QuditCode,
     data_qubits: Sequence[int] | None = None,

@@ -13,8 +13,8 @@ import numpy.typing as npt
 import sympy
 
 from qldpc import abstract
-from qldpc._util import networkx as nx
-from qldpc.abstract._fields import resolve_field
+from qldpc._utils import networkx as nx
+from qldpc.math import resolve_field
 
 from .common import ClassicalCode
 

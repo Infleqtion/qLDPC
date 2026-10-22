@@ -12,7 +12,7 @@ import sinter
 import stim
 
 from qldpc import decoders
-from qldpc.decoders._common import as_error_decoder
+from qldpc.decoders.protocols import _as_error_decoder
 
 
 def test_sinter_decoder() -> None:
@@ -84,9 +84,9 @@ def test_sinter_decoder_classes() -> None:
     compiled = decoder.compile_decoder_for_dem(dem)
     assert not hasattr(compiled, "decode")
     with pytest.raises(TypeError, match="cannot decode until it is compiled"):
-        as_error_decoder(decoder)
+        _as_error_decoder(decoder)
     with pytest.raises(TypeError, match="predicts observable flips rather than errors"):
-        as_error_decoder(compiled)
+        _as_error_decoder(compiled)
     assert np.array_equal(compiled.decode_observables(np.array([1], dtype=int)), [1])
 
 

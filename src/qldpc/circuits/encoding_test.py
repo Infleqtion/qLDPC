@@ -192,3 +192,21 @@ def test_state_stabilizer_failure_regressions() -> None:
     prep = circuits.with_remapped_qubits(circuits.get_encoding_circuit(code, only_zero=True), data)
     qids = circuits.QubitIDs(data, tuple(range(20, 20 + code.num_checks)))
     assert len(circuits.get_logical_state_stabilizers(prep, code, qids)) == code.dimension
+
+
+def test_get_logical_tableau_from_code_data() -> None:
+    """Identify a logical tableau, and reject invalid encoders and non-logical circuits."""
+    code = codes.FiveQubitCode()
+    encoder, decoder = circuits.get_encoder_and_decoder(code)
+    logical_x = math.op_to_string(code.get_logical_ops(Pauli.X, symplectic=True)[0])
+    logical_tableau = encoding._get_logical_tableau_from_code_data(
+        1, 0, encoder, decoder, logical_x.to_tableau().to_circuit()
+    )
+    assert logical_tableau == stim.Tableau.from_named_gate("X")
+
+    with pytest.raises(ValueError, match="does not implement a logical operation"):
+        encoding._get_logical_tableau_from_code_data(1, 0, encoder, decoder, stim.Circuit("X 0"))
+    with pytest.raises(ValueError, match="incompatible dimensions"):
+        encoding._get_logical_tableau_from_code_data(
+            1, 0, stim.Tableau(1), stim.Tableau(2), stim.Circuit()
+        )

@@ -15,11 +15,10 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
-from .._common import PLACEHOLDER_ERROR_RATE, erasure_bit_support
-from ..common import with_erasure_bits
+from ..common import _PLACEHOLDER_ERROR_RATE, _erasure_bit_support, with_erasure_bits
 from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import BatchErrorDecoder, ErrorDecodeResult, ObservableDecodeResult
@@ -144,7 +143,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         else:
             pcm = pcm_or_dem
             if error_priors is None:
-                error_priors = [PLACEHOLDER_ERROR_RATE] * pcm.shape[1]
+                error_priors = [_PLACEHOLDER_ERROR_RATE] * pcm.shape[1]
 
         pcm = _as_relay_bp_matrix(pcm)
         self.has_observable_error_matrix = observable_error_matrix is not None
@@ -392,7 +391,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         return np.all(residuals == detectors, axis=1)
 
 
-@erasure_bit_support("RBP", supported=True)
+@_erasure_bit_support("RBP", supported=True)
 def _get_decoder_rbp(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     error_priors: npt.NDArray[np.floating] | Sequence[float] | None = None,

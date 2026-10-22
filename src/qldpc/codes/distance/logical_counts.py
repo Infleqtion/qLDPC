@@ -34,7 +34,7 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from qldpc._util import format_docstring
+from qldpc._utils import format_docstring
 
 from . import _information_sets
 from ._binary import (
@@ -48,8 +48,7 @@ from ._binary import (
 from ._brouwer_zimmermann import get_distance_brouwer_zimmermann_many
 from ._brute_force import get_distance_quantum_brute_force
 from ._macwilliams import CheckEnumerators
-from ._methods import DISTANCE_METHODS
-from .core import DistanceMethod
+from .core import _DISTANCE_METHODS, DistanceMethod
 
 # codes.common imports this package, so CSSCode is imported only where it is used.
 if TYPE_CHECKING:
@@ -78,7 +77,7 @@ LogicalCountMethod = Literal[
 
 # The canonical name of every accepted logical-count method name, including aliases.
 _LOGICAL_COUNT_METHODS: dict[str, Literal["brouwer_zimmermann", "macwilliams", "brute_force"]] = {
-    **DISTANCE_METHODS,
+    **_DISTANCE_METHODS,
     "macwilliams": "macwilliams",
     "weight_enumerator": "macwilliams",
 }

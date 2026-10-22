@@ -24,8 +24,8 @@ import sympy.abc
 import sympy.core
 
 from qldpc import _deprecations
+from qldpc.math import resolve_field
 
-from ._fields import resolve_field
 from .groups import AbelianGroup, Group, GroupMember
 from .monomials import iter_monomial_terms
 

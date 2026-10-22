@@ -12,7 +12,7 @@ import pytest
 import stim
 
 from qldpc import circuits, codes, decoders
-from qldpc.decoders.adapters._dem_matching import ExpandedErrorDecoder
+from qldpc.decoders.adapters.error_decoders import _ExpandedErrorDecoder
 
 
 def test_sequential_decoding() -> None:
@@ -66,7 +66,7 @@ def test_sequential_decoding_with_merged_window_errors() -> None:
     compiled_sinter_decoder = sinter_decoder.compile_decoder_for_dem(dem)
     assert isinstance(
         compiled_sinter_decoder.window_decoders[0],
-        ExpandedErrorDecoder,
+        _ExpandedErrorDecoder,
     )
 
     shots = np.array(
@@ -133,7 +133,7 @@ def test_sequential_window_decoder_erasure_with_merged_window_errors() -> None:
     ).compile_decoder_for_dem(dem)
 
     window_decoder = compiled.window_decoders[0]
-    assert isinstance(window_decoder, ExpandedErrorDecoder)
+    assert isinstance(window_decoder, _ExpandedErrorDecoder)
     assert window_decoder.has_erasure_bit
 
     explained = window_decoder.decode(np.array([1, 1, 0]))

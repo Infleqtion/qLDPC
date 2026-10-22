@@ -8,6 +8,7 @@ import pickle
 
 import numpy as np
 import numpy.typing as npt
+import pytest
 import stim
 
 from qldpc import decoders
@@ -57,3 +58,60 @@ def test_errors_to_observables_decoder() -> None:
     assert result.erasure
     assert result.diagnostics == {"fixed": 1}
     assert type(pickle.loads(pickle.dumps(detailed))) is type(detailed)  # noqa: S301
+
+
+def test_expanded_error_decoder() -> None:
+    """Merged errors are expanded to the original DEM width, preserving erasure bits."""
+    dem = stim.DetectorErrorModel("""
+        error(0.1) D0 L0
+        error(0.1) D0 L0
+        error(0.1) D1
+    """)
+    syndromes = np.array([[1, 0], [0, 1]], dtype=int)
+
+    for add_erasure_bit in [False, True]:
+        merging_decoder = decoders.custom.GUFDecoder(
+            decoders.DetectorErrorModelArrays(dem).detector_flip_matrix.toarray(),
+            add_erasure_bit=add_erasure_bit,
+        )
+        decoder = error_decoders._ExpandedErrorDecoder(merging_decoder, dem)
+        errors = decoder.decode_errors_batch(syndromes)
+        assert errors.shape == (2, 3 + add_erasure_bit)
+        assert np.array_equal(errors, [decoder.decode_errors(syndrome) for syndrome in syndromes])
+        assert np.array_equal(errors[:, [0, 1]].sum(axis=1), [1, 0])
+        assert decoder.decode_errors_batch(syndromes[:0]).shape == (0, 3 + add_erasure_bit)
+
+    # a matching decoder merges equivalent mechanisms, and decodes in batches
+    matching_decoder = error_decoders._match_error_decoder_to_dem(decoders.mwpm().build(dem), dem)
+    assert isinstance(matching_decoder, error_decoders._ExpandedErrorDecoder)
+    assert matching_decoder.decode_errors_batch(syndromes).shape == (2, 3)
+
+    # the diagnostics of a detailed decoder are kept, and its error is expanded
+    detailed = error_decoders._ExpandedErrorDecoder(_DetailedFixedDecoder([1, 0, 1]), dem)
+    assert isinstance(detailed, decoders.DetailedErrorDecoder)
+    result = detailed.decode_errors_detailed(syndromes[0])
+    assert result.error.tolist() == [0, 1, 0, 1]
+    assert result.erasure
+    assert result.diagnostics == {"fixed": 1}
+
+
+def test_match_error_decoder_to_dem() -> None:
+    """Output validation returns, expands, or rejects a decoder as appropriate."""
+    dem = stim.DetectorErrorModel("""
+        error(0.1) D0 L0
+        error(0.1) D0 L0
+        error(0.1) D1
+    """)
+    full_width = _FixedDecoder([0, 0, 0])
+    assert error_decoders._match_error_decoder_to_dem(full_width, dem) is full_width
+
+    merged = error_decoders._match_error_decoder_to_dem(_FixedDecoder([0, 0]), dem)
+    assert isinstance(merged, error_decoders._ExpandedErrorDecoder)
+
+    with pytest.raises(ValueError, match="inferred an error of length 1"):
+        error_decoders._match_error_decoder_to_dem(_FixedDecoder([0]), dem)
+
+    decomposed = _FixedDecoder([0, 0])
+    decomposed._infers_decomposed_errors = True  # type: ignore[attr-defined]
+    with pytest.raises(ValueError, match="components of decomposed error mechanisms"):
+        error_decoders._match_error_decoder_to_dem(decomposed, dem)

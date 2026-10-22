@@ -21,8 +21,8 @@ import stim
 
 from qldpc.math import IntegerArray
 
-from .._common import erasure_bit_support, is_default_value
-from ..construction.specs import decoder_spec
+from ..common import _erasure_bit_support
+from ..construction.specs import _is_default_value, decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import (
     BatchErrorDecoder,
@@ -104,7 +104,7 @@ class MatchingObservableDecoder(ObservableDecoder):
         )
 
 
-@erasure_bit_support("MWPM", supported=False)
+@_erasure_bit_support("MWPM", supported=False)
 def _get_decoder_mwpm(
     pcm_or_dem: _PcmOrDem,
     *,
@@ -221,7 +221,7 @@ def _validate_mwpm_options(
         return options
     parameters = inspect.signature(_get_decoder_mwpm).parameters
     for name, value in options.items():
-        if name != "enable_correlations" and not is_default_value(value, parameters[name].default):
+        if name != "enable_correlations" and not _is_default_value(value, parameters[name].default):
             raise ValueError(
                 f"The MWPM option {name}={value!r} is not supported with enable_correlations=True"
             )

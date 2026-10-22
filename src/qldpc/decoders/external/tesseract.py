@@ -14,16 +14,16 @@ import scipy.sparse
 import stim
 
 from qldpc._deprecations.decoders import deprecate_error_rate_option
-from qldpc._util import format_docstring
+from qldpc._utils import format_docstring
 from qldpc.math import IntegerArray
 
-from .._common import (
-    PLACEHOLDER_ERROR_RATE,
-    erasure_bit_support,
-    get_matrix_error_channel,
-    reject_dem_error_probabilities,
+from ..common import (
+    _PLACEHOLDER_ERROR_RATE,
+    _erasure_bit_support,
+    _get_matrix_error_channel,
+    _reject_dem_error_probabilities,
+    with_erasure_bits,
 )
-from ..common import with_erasure_bits
 from ..construction.specs import DecoderSpec, decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import (
@@ -68,7 +68,7 @@ class TesseractDecoder(ErrorDecoder, BatchObservableDecoder):
     could report a column other than the most likely one, and it is disabled by default.
     """
 
-    @format_docstring(PLACEHOLDER_ERROR_RATE=PLACEHOLDER_ERROR_RATE)
+    @format_docstring(PLACEHOLDER_ERROR_RATE=_PLACEHOLDER_ERROR_RATE)
     def __init__(
         self,
         pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
@@ -239,7 +239,7 @@ class TesseractDecoder(ErrorDecoder, BatchObservableDecoder):
         return validated_syndromes
 
 
-@erasure_bit_support("Tesseract", supported=True)
+@_erasure_bit_support("Tesseract", supported=True)
 def _get_decoder_tesseract(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: Any
 ) -> TesseractDecoder:
@@ -410,13 +410,13 @@ def _get_dem_and_num_errors(
 ) -> tuple[stim.DetectorErrorModel, int]:
     """Convert an input to Tesseract's DEM while preserving its error indexing."""
     if isinstance(pcm_or_dem, stim.DetectorErrorModel):
-        reject_dem_error_probabilities(error_channel, error_rate)
+        _reject_dem_error_probabilities(error_channel, error_rate)
         return pcm_or_dem, pcm_or_dem.num_errors
 
     _validate_binary_matrix(pcm_or_dem)
     probabilities = cast(
         npt.NDArray[np.floating],
-        get_matrix_error_channel(pcm_or_dem, error_channel, error_rate),
+        _get_matrix_error_channel(pcm_or_dem, error_channel, error_rate),
     )
     dem_arrays = DetectorErrorModelArrays.from_arrays(pcm_or_dem, None, probabilities)
     return dem_arrays.to_dem(), dem_arrays.num_errors

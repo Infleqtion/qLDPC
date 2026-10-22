@@ -9,6 +9,7 @@ import pytest
 
 import qldpc
 
+from . import core
 from .conftest import get_random_full_rank_matrix
 
 
@@ -179,3 +180,17 @@ def test_brouwer_zimmermann_random_cross_checks() -> None:
             logical_ops, stabilizers, cutoff=0, method="brute_force"
         )
         assert qldpc.codes.get_distance_quantum(logical_ops, stabilizers, cutoff=0) == expected
+
+
+def test_distance_backend_validation() -> None:
+    """Distance backend and exact-method selectors are restricted to documented values."""
+    for backend in ["auto", "decoder", "gap", "sqetch"]:
+        core._validate_distance_backend(backend)  # type: ignore[arg-type]
+    with pytest.raises(ValueError, match="Unknown distance backend"):
+        core._validate_distance_backend("other")  # type: ignore[arg-type]
+
+    for method in ["brouwer_zimmermann", "brute_force"]:
+        assert core._validate_distance_method(method) == method  # type: ignore[arg-type]
+    assert core._validate_distance_method("information_sets") == "brouwer_zimmermann"
+    with pytest.raises(ValueError, match="Unknown distance method"):
+        core._validate_distance_method("other")  # type: ignore[arg-type]

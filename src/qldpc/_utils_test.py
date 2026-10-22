@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for _util.py."""
+"""Unit tests for _utils.py."""
 
 import importlib
 import pathlib
@@ -8,14 +8,12 @@ import sys
 import uuid
 from types import FunctionType, ModuleType
 
-import numpy as np
 import pytest
 
-from qldpc._util import (
+from qldpc._utils import (
     _lazy_import,
     format_docstring,
     get_external_caller_stacklevel,
-    get_scrambled_seed,
 )
 
 
@@ -88,10 +86,3 @@ def test_get_external_caller_stacklevel() -> None:
         "get_external_caller_stacklevel": get_external_caller_stacklevel,
     }
     assert FunctionType(get_stacklevel.__code__, namespace)() == 2
-
-
-def test_get_scrambled_seed() -> None:
-    """Scrambled seeds are deterministic, and leave the global random state untouched."""
-    state = np.random.get_state()
-    assert get_scrambled_seed(0) == get_scrambled_seed(0) != get_scrambled_seed(1)
-    assert np.array_equal(np.random.get_state()[1], state[1])

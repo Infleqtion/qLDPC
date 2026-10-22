@@ -12,8 +12,13 @@ import numpy.typing as npt
 
 from qldpc.math import IntegerArray
 
-from .._common import as_error_decoder, batch_decode_errors, supports_batch_decoding
-from ..protocols import ErrorDecoder, SupportsDecode
+from ..protocols import (
+    ErrorDecoder,
+    SupportsDecode,
+    _as_error_decoder,
+    _batch_decode_errors,
+    _supports_batch_decoding,
+)
 
 
 class CompositeDecoder(ErrorDecoder):
@@ -36,7 +41,7 @@ class CompositeDecoder(ErrorDecoder):
         self, *decoders_and_syndrome_lengths: tuple[ErrorDecoder | SupportsDecode, int]
     ) -> None:
         self.decoders, syndrome_lengths = zip(*decoders_and_syndrome_lengths)
-        self._error_decoders = tuple(as_error_decoder(decoder) for decoder in self.decoders)
+        self._error_decoders = tuple(_as_error_decoder(decoder) for decoder in self.decoders)
         self.erasing_decoders = tuple(
             bool(getattr(decoder, "has_erasure_bit", False)) for decoder in self.decoders
         )
@@ -47,7 +52,7 @@ class CompositeDecoder(ErrorDecoder):
         )
 
         self.decode_batch_implemented = all(
-            supports_batch_decoding(decoder) for decoder in self._error_decoders
+            _supports_batch_decoding(decoder) for decoder in self._error_decoders
         )
         if self.decode_batch_implemented:
             self.decode_errors_batch = self.decode_batch = self._decode_batch
@@ -72,7 +77,7 @@ class CompositeDecoder(ErrorDecoder):
         """Decode a batch of error syndromes by parts."""
         return self._join_segments(
             [
-                batch_decode_errors(decoder, syndromes[:, slice])
+                _batch_decode_errors(decoder, syndromes[:, slice])
                 for decoder, slice in zip(self._error_decoders, self.slices)
             ]
         )
@@ -124,7 +129,7 @@ class DirectDecoder:
         """Instantiate a DirectDecoder from an indirect decoder and a parity check matrix."""
         field = type(matrix) if isinstance(matrix, galois.FieldArray) else galois.GF2
         field_matrix = matrix.view(field)
-        error_decoder = as_error_decoder(decoder)
+        error_decoder = _as_error_decoder(decoder)
 
         def check_subtractable(errors: npt.NDArray[np.int_], words: npt.NDArray[np.int_]) -> None:
             """Reject inferred errors that cannot be subtracted from candidate code words."""
@@ -145,12 +150,12 @@ class DirectDecoder:
 
         correct_batch_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]] | None = None
 
-        if supports_batch_decoding(error_decoder):
+        if _supports_batch_decoding(error_decoder):
 
             def correct_batch_func(candidate_words: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
                 candidate_words = candidate_words.view(field)
                 syndromes = candidate_words @ field_matrix.T
-                errors = batch_decode_errors(error_decoder, syndromes.view(np.ndarray)).view(field)
+                errors = _batch_decode_errors(error_decoder, syndromes.view(np.ndarray)).view(field)
                 check_subtractable(errors, candidate_words)
                 return (candidate_words - errors).view(np.ndarray)
 

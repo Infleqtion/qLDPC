@@ -12,12 +12,12 @@ import stim
 from qldpc._deprecations.decoders import merge_legacy_decoder_args
 
 from .._capabilities import compiles_for_dem, is_prebuilt_decoder
-from .._common import as_error_decoder
 from ..adapters._observable_decoders import BitPackedObservableDecoder, validate_observable_decoder
 from ..adapters.error_decoders import ErrorsToObservablesDecoder
+from ..common import _PLACEHOLDER_ERROR_RATE
 from ..custom.guf import guf
 from ..external.ldpc import bp_osd
-from ..protocols import ErrorDecoder, ObservableDecoder
+from ..protocols import ErrorDecoder, ObservableDecoder, _as_error_decoder
 from .factories import DEMDecoderFactory, MatrixDecoderFactory
 from .specs import (
     DecoderInput,
@@ -26,6 +26,10 @@ from .specs import (
     ObservableDecoderCompiler,
     PcmOrDem,
 )
+
+# The error rate that decoders assume when none is given, which qldpc.codes also uses to build
+# detector error models for code-capacity estimates.
+PLACEHOLDER_ERROR_RATE = _PLACEHOLDER_ERROR_RATE
 
 ####################################################################################################
 # decoder input resolution
@@ -110,7 +114,7 @@ def build_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = No
     Returns:
         An ErrorDecoder.
     """
-    return as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
+    return _as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
 
 
 def build_observable_decoder(
@@ -136,7 +140,7 @@ def build_observable_decoder(
     built_decoder, source = _build_decoder(dem, decoder)
     if isinstance(built_decoder, ObservableDecoder):
         return built_decoder
-    return ErrorsToObservablesDecoder(as_error_decoder(built_decoder, source), dem)
+    return ErrorsToObservablesDecoder(_as_error_decoder(built_decoder, source), dem)
 
 
 def _build_decoder(pcm_or_dem: PcmOrDem, decoder: DecoderInput) -> tuple[object, str]:

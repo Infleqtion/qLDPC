@@ -2182,3 +2182,11 @@ def test_capacity_min_error_weight() -> None:
         num_samples=100, max_error_rate=0.2, min_error_weight=6
     )
     assert func(0.1) == (0, 0)
+
+
+def test_get_scrambled_seed() -> None:
+    """Scrambled seeds are deterministic, and leave the global random state untouched."""
+    state = np.random.get_state()
+    assert common._get_scrambled_seed(0) == common._get_scrambled_seed(0)
+    assert common._get_scrambled_seed(0) != common._get_scrambled_seed(1)
+    assert np.array_equal(np.random.get_state()[1], state[1])

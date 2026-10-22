@@ -20,16 +20,19 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.decoders._capabilities import compiles_for_dem, is_prebuilt_observable_decoder
-from qldpc.decoders._common import PLACEHOLDER_ERROR_RATE
 from qldpc.decoders.adapters._observable_decoders import (
     BitPackedObservableDecoder,
     ErrorsToFieldObservablesDecoder,
     validate_decoder_output,
 )
 from qldpc.decoders.common import ObservableDecodingFallbackWarning
-from qldpc.decoders.construction._resolution import reject_prebuilt_decoder, resolve_decoder
+from qldpc.decoders.construction._resolution import (
+    PLACEHOLDER_ERROR_RATE,
+    reject_prebuilt_decoder,
+    resolve_decoder,
+)
 from qldpc.decoders.construction.factories import DEMDecoderFactory
 from qldpc.decoders.construction.specs import (
     DecoderInput,

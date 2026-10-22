@@ -13,7 +13,7 @@ import itertools
 
 import numpy as np
 
-from qldpc._util import networkx as nx
+from qldpc._utils import networkx as nx
 from qldpc.codes.common import CSSCode
 from qldpc.objects import Pauli, PauliXZ
 

@@ -4,10 +4,18 @@
 
 from __future__ import annotations
 
+import re
+from typing import Any
+
 import galois
 import numpy as np
+import numpy.typing as npt
+import pytest
+import stim
 
 from qldpc import decoders
+from qldpc._deprecations import decoders as deprecated_decoders
+from qldpc.decoders import common
 
 
 def test_get_error_and_erasure() -> None:
@@ -49,3 +57,102 @@ def test_with_erasure_bits() -> None:
     errors = np.array([[1, 0], [0, 1]], dtype=int)
     erased = np.array([False, True])
     assert np.array_equal(decoders.with_erasure_bits(errors, erased), [[1, 0, 0], [0, 1, 1]])
+
+
+def test_erasure_bit_support_decorator() -> None:
+    """Erasure support declarations enforce capabilities and use an explicit display name."""
+
+    class NoErasureDecoder(decoders.ErrorDecoder):
+        def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+            return syndrome
+
+    @common._erasure_bit_support("Friendly Name", supported=True)
+    def unusually_named_builder(
+        matrix: npt.NDArray[np.int_], *, add_erasure_bit: bool = False
+    ) -> decoders.ErrorDecoder:
+        del matrix, add_erasure_bit
+        return NoErasureDecoder()
+
+    with pytest.raises(ValueError, match="The Friendly Name decoder cannot signal erasure"):
+        unusually_named_builder(np.eye(1, dtype=int), add_erasure_bit=True)
+
+    @common._erasure_bit_support("unsupported", supported=False)
+    def unsupported_builder(
+        matrix: npt.NDArray[np.int_], *, add_erasure_bit: bool = False
+    ) -> decoders.ErrorDecoder:
+        del matrix, add_erasure_bit
+        return NoErasureDecoder()
+
+    decoder = unsupported_builder(np.eye(1, dtype=int), add_erasure_bit=False)
+    assert np.array_equal(decoder.decode_errors(np.array([1])), [1])
+    with pytest.raises(ValueError, match="The unsupported decoder cannot signal erasure"):
+        unsupported_builder(np.eye(1, dtype=int), add_erasure_bit=True)
+
+
+def test_to_pcm() -> None:
+    """Matrices pass through unchanged and DEM detector matrices are densified."""
+    matrix = np.array([[1, 1, 0], [0, 1, 1]], dtype=np.int32)
+    assert common._to_pcm(matrix) is matrix
+
+    dem = decoders.DetectorErrorModelArrays.from_arrays(matrix, None, 0.1).to_dem()
+    assert np.array_equal(common._to_pcm(dem), matrix)
+
+
+def test_get_matrix_error_channel() -> None:
+    """Matrix probabilities are normalized and DEM-owned probabilities are protected."""
+    matrix = np.eye(2, dtype=int)
+    default_channel = common._get_matrix_error_channel(matrix, None, None)
+    assert default_channel is not None
+    assert np.array_equal(
+        default_channel,
+        [common._PLACEHOLDER_ERROR_RATE] * 2,
+    )
+    channel = np.array([0.1, 0.2])
+    normalized_channel = common._get_matrix_error_channel(matrix, channel, None)
+    assert normalized_channel is not None
+    assert np.array_equal(normalized_channel, channel)
+
+    with pytest.warns(DeprecationWarning, match="error_rate=0.3.*error_channel=0.3") as caught:
+        deprecated_channel = common._get_matrix_error_channel(matrix, None, 0.3)
+    assert deprecated_channel is not None
+    assert np.array_equal(deprecated_channel, [0.3, 0.3])
+    assert caught[0].filename == __file__
+
+    with pytest.raises(ValueError, match="cannot both be specified"):
+        common._get_matrix_error_channel(matrix, 0.2, 0.3)
+    with pytest.raises(ValueError, match="error probabilities of shape"):
+        common._get_matrix_error_channel(matrix, [0.1], None)
+    for invalid_channel in ([np.nan, 0.2], [-0.1, 0.2], [0.1, 1.1]):
+        with pytest.raises(ValueError, match="finite and between 0 and 1"):
+            common._get_matrix_error_channel(matrix, invalid_channel, None)
+
+    dem = stim.DetectorErrorModel("error(0.1) D0")
+    assert common._get_matrix_error_channel(dem, None, None) is None
+    for error_channel, error_rate, specified in (
+        (None, 0.2, "error_rate=0.2"),
+        (0.2, None, "error_channel=0.2"),
+        (0.2, 0.3, "error_channel=0.2 and error_rate=0.3"),
+    ):
+        with pytest.raises(ValueError, match=f"so {re.escape(specified)} cannot"):
+            common._get_matrix_error_channel(dem, error_channel, error_rate)
+
+
+def test_dem_error_probabilities_through_public_paths() -> None:
+    """Explicit probabilities for a DEM fail with migration advice through every entry point."""
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0\nerror(0.2) D0 D1\nerror(0.1) D1")
+    match = r"supplies its own error probabilities.*detector_flip_matrix"
+    with pytest.raises(ValueError, match=match):
+        decoders.bp_osd(error_channel=0.1).build(dem)
+    with pytest.raises(ValueError, match=match):
+        decoders.SinterDecoder(decoder=decoders.bf(error_channel=0.1)).compile_decoder_for_dem(dem)
+    with pytest.warns(DeprecationWarning, match="free-form decoder options"):
+        legacy_sinter_decoder = decoders.SinterDecoder(error_rate=0.1)
+    with pytest.raises(ValueError, match=match):
+        legacy_sinter_decoder.compile_decoder_for_dem(dem)
+    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match=match):
+        deprecated_decoders.get_decoder(dem, with_BP_LSD=True, error_rate=0.1)
+
+    # the suggested alternative decodes the detector-flip matrix with the given probabilities
+    matrix = decoders.DetectorErrorModelArrays(dem).detector_flip_matrix
+    decoder: Any = decoders.bp_osd(error_channel=0.3).build(matrix)
+    assert np.array_equal(decoder.error_channel, [0.3, 0.3, 0.3])

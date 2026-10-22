@@ -13,11 +13,10 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
-from .._common import erasure_bit_support, to_pcm
-from ..common import with_erasure_bits
+from ..common import _erasure_bit_support, _to_pcm, with_erasure_bits
 from ..construction.specs import decoder_spec
 from ..protocols import ErrorDecoder, ErrorDecodeResult
 
@@ -168,7 +167,7 @@ class ILPDecoder(ErrorDecoder):
         return error, not reproduces_syndrome, problem
 
 
-@erasure_bit_support("ILP", supported=True)
+@_erasure_bit_support("ILP", supported=True)
 def _get_decoder_ilp(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     *,
@@ -190,7 +189,7 @@ def _get_decoder_ilp(
     ILP decoding supports prime fields.  Without an erasure bit, an unexplained syndrome is rejected
     rather than returned as an ordinary inferred error.
     """
-    return ILPDecoder(to_pcm(pcm_or_dem), add_erasure_bit=add_erasure_bit, **decoder_args)
+    return ILPDecoder(_to_pcm(pcm_or_dem), add_erasure_bit=add_erasure_bit, **decoder_args)
 
 
 ilp = decoder_spec(

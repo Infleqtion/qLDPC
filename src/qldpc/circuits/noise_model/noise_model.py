@@ -12,7 +12,7 @@ from collections.abc import Callable, Collection, Iterable, Mapping
 
 import stim
 
-from qldpc._util import format_docstring
+from qldpc._utils import format_docstring
 
 from ..common import StimCircuitLike
 from ._moments import (
@@ -40,15 +40,16 @@ from ._operations import (
     known_gate_shape,
     op_type,
 )
-from ._rules import (
-    as_noise_rule,
-    normalize_clifford_nq_error,
-    rule_with_immunity,
-    validate_custom_rule,
-    validate_rule_for_arity,
-)
 from .channels import PauliChannel, PauliChannelSequence
-from .rules import ErrorSpec, NoiseRule
+from .rules import (
+    ErrorSpec,
+    NoiseRule,
+    _as_noise_rule,
+    _normalize_clifford_nq_error,
+    _rule_with_immunity,
+    _validate_custom_rule,
+    _validate_rule_for_arity,
+)
 
 # Tags that, by default, make an operation or repeat block noiseless, or declare that the qubits of
 # a tagged QUBIT_COORDS annotation are immune to noise.
@@ -162,7 +163,7 @@ class NoiseModel:
                 shape = known_gate_shape(canonical_name)
                 if shape is not None:
                     arity, can_measure, can_reset = shape
-                    validate_rule_for_arity(
+                    _validate_rule_for_arity(
                         rule,
                         arity,
                         f"rules[{op_name!r}]",
@@ -191,16 +192,16 @@ class NoiseModel:
                     f"`{name}` are set.  Specify one or the other."
                 )
         merged_nq_input: dict[int, ErrorSpec] = dict(clifford_nq_error) if clifford_nq_error else {}
-        rule_1q = as_noise_rule(clifford_1q_error, 1)
-        rule_2q = as_noise_rule(clifford_2q_error, 2)
+        rule_1q = _as_noise_rule(clifford_1q_error, 1)
+        rule_2q = _as_noise_rule(clifford_2q_error, 2)
         if rule_1q is not None:
             merged_nq_input[1] = rule_1q
         if rule_2q is not None:
             merged_nq_input[2] = rule_2q
-        self.clifford_nq_error = normalize_clifford_nq_error(merged_nq_input)
+        self.clifford_nq_error = _normalize_clifford_nq_error(merged_nq_input)
 
-        self.idle_error = as_noise_rule(idle_error, 1)
-        self.additional_error_waiting_for_m_or_r = as_noise_rule(
+        self.idle_error = _as_noise_rule(idle_error, 1)
+        self.additional_error_waiting_for_m_or_r = _as_noise_rule(
             additional_error_waiting_for_m_or_r, 1
         )
         # Idle noise is applied per-qubit, so anything with a declared arity != 1 has no natural
@@ -311,7 +312,7 @@ class NoiseModel:
         if self.rule_func is not None and op_type(op.name) in GATE_OP_TYPES:
             rule = self.rule_func(op)
             if rule is not None:
-                validate_custom_rule(rule, op)
+                _validate_custom_rule(rule, op)
                 return rule
 
         if self.rules is not None:
@@ -494,7 +495,7 @@ class NoiseModel:
             ):
                 circuit.append(op)
                 continue
-            effective_rule = rule_with_immunity(
+            effective_rule = _rule_with_immunity(
                 rule, op, immune_qubits, immunize_gates=immunize_gates
             )
             if effective_rule is None:

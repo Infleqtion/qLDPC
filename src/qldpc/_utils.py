@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Miscellaneous internal utilities."""
+"""Python-level plumbing: lazy imports, warning stack levels, and docstring formatting."""
 
 from __future__ import annotations
 
@@ -12,8 +12,6 @@ import sys
 from collections.abc import Callable
 from types import ModuleType
 from typing import TYPE_CHECKING, TypeVar
-
-import numpy as np
 
 _CallableType = TypeVar("_CallableType", bound=Callable[..., object])
 
@@ -75,7 +73,7 @@ def _lazy_import(name: str) -> ModuleType:
 
 
 # networkx is loaded lazily to keep it and its ~110 ms import out of ``import qldpc``.  Call sites
-# import it as ``from qldpc._util import networkx as nx``.
+# import it as ``from qldpc._utils import networkx as nx``.
 if TYPE_CHECKING:
     import networkx
 else:
@@ -122,16 +120,3 @@ def get_external_caller_stacklevel() -> int:
         stacklevel += 1
         frame = frame.f_back
     return stacklevel
-
-
-####################################################################################################
-# random seeds
-
-
-def get_scrambled_seed(seed: int) -> int:
-    """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
-    state = np.random.get_state()
-    np.random.seed(seed)
-    new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
-    np.random.set_state(state)
-    return new_seed

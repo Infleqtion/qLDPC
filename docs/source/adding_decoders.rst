@@ -82,7 +82,7 @@ Add a public decoder to qLDPC
    Use :mod:`qldpc.decoders.custom` for a qLDPC-owned algorithm or :mod:`qldpc.decoders.external` for a third-party integration.
    Implement :class:`~qldpc.decoders.protocols.ErrorDecoder` (``decode_errors``) and/or :class:`~qldpc.decoders.protocols.ObservableDecoder` (``decode_observables``).
    Keep a module-level builder with a typed signature: its first input is a matrix or DEM, followed by the options for this algorithm.
-   The builder stays private to its module, with a name that starts with an underscore, and the public specification helper of the next step is its entry point.
+   The builder stays private, with a name that starts with an underscore, and the public specification helper of the next step is its entry point.
    For an optional backend, import its dependency inside the builder and report how to install it.
 3. **Expose a specification.**
    Use :func:`~qldpc.decoders.construction.specs.decoder_spec` with an error builder, and optionally a DEM-based native observable builder.

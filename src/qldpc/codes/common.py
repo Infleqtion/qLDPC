@@ -28,13 +28,12 @@ from qldpc._deprecations.decoders import (
     get_legacy_decoder_migration_message,
     reject_removed_decoder_args,
 )
-from qldpc._util import format_docstring, get_external_caller_stacklevel, get_scrambled_seed
-from qldpc._util import networkx as nx
-from qldpc.abstract._fields import resolve_field
+from qldpc._utils import format_docstring, get_external_caller_stacklevel
+from qldpc._utils import networkx as nx
 from qldpc.decoders._capabilities import is_prebuilt_decoder, is_prebuilt_observable_decoder
 from qldpc.decoders.construction._resolution import reject_prebuilt_decoder, resolve_decoder
 from qldpc.external import _codes
-from qldpc.math import IntegerArray
+from qldpc.math import IntegerArray, resolve_field
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, PauliXZLike, QuditPauli
 
 from ._code_capacity import CodeCapacityDecoder, get_code_capacity_decoder
@@ -45,7 +44,7 @@ from .distance import (
     get_distance_quantum,
 )
 from .distance._brouwer_zimmermann import get_distance_css_brouwer_zimmermann
-from .distance._methods import validate_distance_backend, validate_distance_method
+from .distance.core import _validate_distance_backend, _validate_distance_method
 from .monte_carlo import ErrorRateFunc
 
 Slice = slice | npt.NDArray[np.int_] | list[int]
@@ -497,7 +496,7 @@ class ClassicalCode(AbstractCode):
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        method = validate_distance_method(method)
+        method = _validate_distance_method(method)
         if not bound:
             if decoder is not None or bound_kwargs:
                 warnings.warn(
@@ -529,7 +528,7 @@ class ClassicalCode(AbstractCode):
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        method = validate_distance_method(method)
+        method = _validate_distance_method(method)
         if (known_distance := self.get_distance_if_known(vector)) is not None:
             return known_distance
 
@@ -623,7 +622,7 @@ class ClassicalCode(AbstractCode):
             distance, the returned bound is never worse than the best bound already known for this
             code, and the best bound is remembered for later calls.
         """
-        validate_distance_backend(backend)
+        _validate_distance_backend(backend)
         _validate_num_trials(num_trials)
         if backend not in ("auto", "decoder"):
             raise ValueError(
@@ -1972,7 +1971,7 @@ class QuditCode(AbstractCode):
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        method = validate_distance_method(method)
+        method = _validate_distance_method(method)
         if not bound:
             if bound_kwargs:
                 warnings.warn(
@@ -1999,7 +1998,7 @@ class QuditCode(AbstractCode):
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        method = validate_distance_method(method)
+        method = _validate_distance_method(method)
         if (known_distance := self.get_distance_if_known()) is not None:
             return known_distance
 
@@ -2081,7 +2080,7 @@ class QuditCode(AbstractCode):
             never worse than the best bound already known for this code, and the best bound is
             remembered for later calls.
         """
-        validate_distance_backend(backend)
+        _validate_distance_backend(backend)
         _validate_num_trials(num_trials)
         if backend not in ("auto", "gap"):
             raise ValueError(
@@ -3265,7 +3264,7 @@ class CSSCode(QuditCode):
         Returns:
             An integer distance (or bound) if it is defined, and np.nan otherwise.
         """
-        method = validate_distance_method(method)
+        method = _validate_distance_method(method)
         if not bound:
             if decoder is not None or bound_kwargs:
                 warnings.warn(
@@ -3299,7 +3298,7 @@ class CSSCode(QuditCode):
         Returns:
             An integer distance if it is defined, or np.nan otherwise.
         """
-        method = validate_distance_method(method)
+        method = _validate_distance_method(method)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
         if (known_distance := self.get_distance_if_known(pauli)) is not None:
             return known_distance
@@ -3470,7 +3469,7 @@ class CSSCode(QuditCode):
             never worse than the best bound already known for this code, and the best bound is
             remembered for later calls.
         """
-        validate_distance_backend(backend)
+        _validate_distance_backend(backend)
         _validate_num_trials(num_trials)
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
         reject_prebuilt_decoder(decoder, _CSS_DISTANCE_BOUND_REASON)
@@ -4095,7 +4094,7 @@ def _get_random_array(
 
     If passed a condition that the array must satisfy, re-sample until the condition is met.
     """
-    seed = get_scrambled_seed(seed) if seed is not None else None
+    seed = _get_scrambled_seed(seed) if seed is not None else None
     while not satisfy(array := field.Random(shape, seed=seed)):
         seed = seed + 1 if seed is not None else None  # pragma: no cover
     return array
@@ -4208,3 +4207,12 @@ def _require_symplectic(symplectic: bool) -> None:
     """Reject non-symplectic operator layouts, which only CSS codes support."""
     if not symplectic:
         raise ValueError("Non-CSS codes only support symplectic=True; use a CSSCode instead")
+
+
+def _get_scrambled_seed(seed: int) -> int:
+    """Scramble a seed, allowing us to safely increment seeds in repeat-until-success protocols."""
+    state = np.random.get_state()
+    np.random.seed(seed)
+    new_seed = np.random.randint(np.iinfo(np.int32).max + 1)
+    np.random.set_state(state)
+    return new_seed

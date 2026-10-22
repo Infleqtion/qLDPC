@@ -22,9 +22,8 @@ from sympy.matrices.normalforms import hermite_normal_form
 
 import qldpc
 from qldpc import abstract
-from qldpc._util import get_scrambled_seed
-from qldpc._util import networkx as nx
-from qldpc.abstract._fields import resolve_field
+from qldpc._utils import networkx as nx
+from qldpc.math import resolve_field
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
 
 from .classical import (
@@ -37,7 +36,7 @@ from .classical import (
     SimplexCode,
     TannerCode,
 )
-from .common import ClassicalCode, CSSCode, QuditCode
+from .common import ClassicalCode, CSSCode, QuditCode, _get_scrambled_seed
 
 ####################################################################################################
 # small named codes
@@ -2326,7 +2325,7 @@ class QTCode(CSSCode):
             # scramble the seed so that the second subset is drawn independently of the first, while
             # keeping the construction as a whole reproducible from the given seed.  Reduce it
             # first, so that a seed of any magnitude is accepted, as it is for the first subset.
-            seed_b = get_scrambled_seed(seed % 2**32) if seed is not None else None
+            seed_b = _get_scrambled_seed(seed % 2**32) if seed is not None else None
             subset_b = group.random_symmetric_subset(code_b.num_bits, seed=seed_b)
         return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite)
 

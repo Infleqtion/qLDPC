@@ -12,6 +12,14 @@ import stim
 import qldpc
 
 
+def test_resolve_field() -> None:
+    """A field argument may be None (for GF(2)), the order of a field, or a Galois field class."""
+    assert qldpc.math.resolve_field(None) is galois.GF2
+    assert qldpc.math.resolve_field(3).order == 3
+    field = galois.GF(4)
+    assert qldpc.math.resolve_field(field) is field
+
+
 def test_pauli_strings() -> None:
     """Conversion between symplectic vectors and stim.PauliString objects."""
     code = qldpc.codes.FiveQubitCode()

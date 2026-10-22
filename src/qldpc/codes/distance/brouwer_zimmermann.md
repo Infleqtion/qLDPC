@@ -458,8 +458,7 @@ Heuristic tunables are identified by parameter name so that their current values
 
 | File | Responsibility | Key functions |
 | --- | --- | --- |
-| [core.py](core.py) | Public interfaces, input validation, adapted bases, method selection, and conversion between symplectic and Hamming units | `get_distance_classical`, `get_distance_quantum` |
-| [_methods.py](_methods.py) | Validation of exact-distance method and distance-bound backend selectors | `validate_distance_method`, `validate_distance_backend` |
+| [core.py](core.py) | Public interfaces, input validation, adapted bases, method selection, validation of exact-distance method and distance-bound backend selectors, and conversion between symplectic and Hamming units | `get_distance_classical`, `get_distance_quantum`, `_validate_distance_method`, `_validate_distance_backend` |
 | [_brouwer_zimmermann.py](_brouwer_zimmermann.py) | The BZ distance search: preparation exits, witness discovery, scanning, sharing between CSS sectors, and exhaustive cost models | `get_distance_css_brouwer_zimmermann`, `get_distance_brouwer_zimmermann_many`, `_prepare_brouwer_zimmermann_search`, `_BrouwerZimmermannSearch`, `_scan_brouwer_zimmermann` |
 | [_information_sets.py](_information_sets.py) | Families of search bases and their certificates, shared by distance and counting: disjoint packing, pruning, overlapping replacement, parity inference, the lower certificate, and the work estimate | `get_disjoint_family`, `prune_family`, `get_overlapping_family`, `prepare_family`, `BasisFamily`, `Certificate` |
 | [_brute_force.py](_brute_force.py) | Exhaustive enumeration | `get_distance_quantum_brute_force` |

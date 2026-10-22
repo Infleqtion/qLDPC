@@ -33,7 +33,7 @@ import warnings
 from collections.abc import Callable
 from typing import TYPE_CHECKING, TypeVar
 
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 
 if TYPE_CHECKING:
     from collections.abc import Collection
@@ -57,7 +57,7 @@ ALIASES: dict[str, dict[str, str]] = {
     "qldpc.abstract": {
         "Element": "qldpc.abstract.rings:RingMember",
         "Protograph": "qldpc.abstract.ring_array:RingArray",
-        "resolve_field": "qldpc.abstract._fields:resolve_field",
+        "resolve_field": "qldpc.math:resolve_field",
     },
     "qldpc.abstract.ring_array": {
         "Protograph": "qldpc.abstract.ring_array:RingArray",
@@ -67,26 +67,30 @@ ALIASES: dict[str, dict[str, str]] = {
         "Protograph": "qldpc.abstract.ring_array:RingArray",
     },
     "qldpc.circuits": {
-        "restrict_to_qubits": "qldpc.circuits._common:restrict_to_qubits",
-        "validate_syndrome_qubit_ids": "qldpc.circuits.memory._common:validate_syndrome_qubit_ids",
+        "restrict_to_qubits": "qldpc.circuits.common:_restrict_to_qubits",
+        "validate_syndrome_qubit_ids": (
+            "qldpc.circuits.memory.syndrome_measurement:_validate_syndrome_qubit_ids"
+        ),
     },
     "qldpc.circuits.memory": {
-        "validate_syndrome_qubit_ids": "qldpc.circuits.memory._common:validate_syndrome_qubit_ids",
+        "validate_syndrome_qubit_ids": (
+            "qldpc.circuits.memory.syndrome_measurement:_validate_syndrome_qubit_ids"
+        ),
     },
     "qldpc.codes": {
         "code_capacity": "qldpc.codes._code_capacity",
         "get_distance_css_brouwer_zimmermann": (
             "qldpc.codes.distance._brouwer_zimmermann:get_distance_css_brouwer_zimmermann"
         ),
-        "validate_distance_backend": "qldpc.codes.distance._methods:validate_distance_backend",
-        "validate_distance_method": "qldpc.codes.distance._methods:validate_distance_method",
+        "validate_distance_backend": "qldpc.codes.distance.core:_validate_distance_backend",
+        "validate_distance_method": "qldpc.codes.distance.core:_validate_distance_method",
     },
     "qldpc.codes.distance": {
         "get_distance_css_brouwer_zimmermann": (
             "qldpc.codes.distance._brouwer_zimmermann:get_distance_css_brouwer_zimmermann"
         ),
-        "validate_distance_backend": "qldpc.codes.distance._methods:validate_distance_backend",
-        "validate_distance_method": "qldpc.codes.distance._methods:validate_distance_method",
+        "validate_distance_backend": "qldpc.codes.distance.core:_validate_distance_backend",
+        "validate_distance_method": "qldpc.codes.distance.core:_validate_distance_method",
     },
     "qldpc.decoders": {
         "BatchDecoder": "qldpc.decoders.protocols:BatchErrorDecoder",
@@ -99,7 +103,7 @@ ALIASES: dict[str, dict[str, str]] = {
         "CompositeDecoder": "qldpc.decoders.custom.composition:CompositeDecoder",
         "Decoder": "qldpc.decoders.protocols:ErrorDecoder",
         "DirectDecoder": "qldpc.decoders.custom.composition:DirectDecoder",
-        "ExpandedErrorDecoder": "qldpc.decoders.adapters._dem_matching:ExpandedErrorDecoder",
+        "ExpandedErrorDecoder": ("qldpc.decoders.adapters.error_decoders:_ExpandedErrorDecoder"),
         "FlipPattern": "qldpc.decoders.dems:FlipPattern",
         "FrontierObservableDecoder": "qldpc.decoders.external.frontier:FrontierObservableDecoder",
         "GUFDecoder": "qldpc.decoders.custom.guf:GUFDecoder",
@@ -114,9 +118,9 @@ ALIASES: dict[str, dict[str, str]] = {
         "WeightedObservableLookupDecoder": (
             "qldpc.decoders.custom.lookup:WeightedObservableLookupDecoder"
         ),
-        "WrappedErrorDecoder": "qldpc.decoders._common:WrappedErrorDecoder",
-        "as_error_decoder": "qldpc.decoders._common:as_error_decoder",
-        "batch_decode_errors": "qldpc.decoders._common:batch_decode_errors",
+        "WrappedErrorDecoder": "qldpc.decoders.protocols:_WrappedErrorDecoder",
+        "as_error_decoder": "qldpc.decoders.protocols:_as_error_decoder",
+        "batch_decode_errors": "qldpc.decoders.protocols:_batch_decode_errors",
         "compiles_for_dem": "qldpc.decoders._capabilities:compiles_for_dem",
         "get_decoder_BF": "qldpc._deprecations.decoders:get_decoder_bf",
         "get_decoder_BP_LSD": "qldpc._deprecations.decoders:get_decoder_bp_lsd",
@@ -134,7 +138,7 @@ ALIASES: dict[str, dict[str, str]] = {
         ),
         "lookup_table": "qldpc.decoders.custom.lookup:lookup",
         "match_error_decoder_to_dem": (
-            "qldpc.decoders.adapters._dem_matching:match_error_decoder_to_dem"
+            "qldpc.decoders.adapters.error_decoders:_match_error_decoder_to_dem"
         ),
         "reject_prebuilt_decoder": (
             "qldpc.decoders.construction._resolution:reject_prebuilt_decoder"
@@ -144,7 +148,7 @@ ALIASES: dict[str, dict[str, str]] = {
         "resolve_observable_decoder": (
             "qldpc.decoders.construction._resolution:resolve_observable_decoder"
         ),
-        "supports_batch_decoding": "qldpc.decoders._common:supports_batch_decoding",
+        "supports_batch_decoding": "qldpc.decoders.protocols:_supports_batch_decoding",
     },
     "qldpc.decoders.adapters": {
         "BitPackedObservableDecoder": (
@@ -153,9 +157,9 @@ ALIASES: dict[str, dict[str, str]] = {
         "ErrorsToFieldObservablesDecoder": (
             "qldpc.decoders.adapters._observable_decoders:ErrorsToFieldObservablesDecoder"
         ),
-        "ExpandedErrorDecoder": "qldpc.decoders.adapters._dem_matching:ExpandedErrorDecoder",
+        "ExpandedErrorDecoder": ("qldpc.decoders.adapters.error_decoders:_ExpandedErrorDecoder"),
         "match_error_decoder_to_dem": (
-            "qldpc.decoders.adapters._dem_matching:match_error_decoder_to_dem"
+            "qldpc.decoders.adapters.error_decoders:_match_error_decoder_to_dem"
         ),
         "validate_decoder_output": (
             "qldpc.decoders.adapters._observable_decoders:validate_decoder_output"
@@ -167,7 +171,7 @@ ALIASES: dict[str, dict[str, str]] = {
     "qldpc.decoders.custom": {
         "BatchDecoder": "qldpc.decoders.protocols:BatchErrorDecoder",
         "Decoder": "qldpc.decoders.protocols:ErrorDecoder",
-        "PLACEHOLDER_ERROR_RATE": "qldpc.decoders._common:PLACEHOLDER_ERROR_RATE",
+        "PLACEHOLDER_ERROR_RATE": "qldpc.decoders.common:_PLACEHOLDER_ERROR_RATE",
         "RelayBPDecoder": "qldpc.decoders.external.relay_bp:RelayBPDecoder",
     },
     "qldpc.decoders.sinter": {
@@ -239,12 +243,10 @@ def _import_target(target: str) -> object:
 def _get_alias_warning(name: str, target: str) -> str:
     """Describe the replacement for a deprecated name with the given registry target."""
     module_name, _, attribute = target.partition(":")
-    if not attribute:
-        replacement = module_name
-    else:
-        replacement = attribute if attribute != name else f"{module_name}.{attribute}"
-    if any(part.startswith("_") for part in replacement.split(".")):
+    path = f"{module_name}.{attribute}" if attribute else module_name
+    if any(part.startswith("_") for part in path.split(".")):
         return f"{name} is deprecated and will be removed from the public API"
+    replacement = attribute if attribute and attribute != name else path
     return f"{name} is deprecated; use {replacement} instead"
 
 

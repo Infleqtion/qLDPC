@@ -15,11 +15,10 @@ import scipy.sparse
 import stim
 
 from qldpc import _deprecations, math
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
-from .._common import erasure_bit_support
-from ..common import with_erasure_bits
+from ..common import _erasure_bit_support, with_erasure_bits
 from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, ObservableDecoder
@@ -894,7 +893,7 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
 # decoder specifications
 
 
-@erasure_bit_support("lookup", supported=True)
+@_erasure_bit_support("lookup", supported=True)
 def _get_decoder_lookup(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: object
 ) -> LookupDecoder:

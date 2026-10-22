@@ -16,8 +16,8 @@ import numpy as np
 import numpy.typing as npt
 
 from qldpc import abstract
-from qldpc._util import networkx as nx
-from qldpc.abstract._fields import resolve_field
+from qldpc._utils import networkx as nx
+from qldpc.math import resolve_field
 
 
 class Pauli(enum.Enum):

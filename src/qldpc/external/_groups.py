@@ -17,7 +17,7 @@ import pyperclip
 
 import qldpc.cache
 import qldpc.external.gap
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 
 _GeneratorsList = list[list[tuple[int, ...]]]
 _IdempotentsList = list[tuple[tuple[int, tuple[tuple[int, ...], ...]], ...]]

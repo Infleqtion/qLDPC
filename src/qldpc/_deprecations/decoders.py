@@ -21,7 +21,7 @@ import numpy.typing as npt
 import stim
 
 from qldpc import _deprecations
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.decoders._capabilities import (
     compiles_for_dem,
     is_prebuilt_decoder,

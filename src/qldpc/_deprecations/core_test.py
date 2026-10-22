@@ -27,16 +27,14 @@ def test_aliases() -> None:
             replacement = getattr(replacement, attribute) if attribute else replacement
             assert value is replacement
 
-            # a renamed object is named by its new name, and a moved one by its full path
-            path = f"{target_module}.{attribute}"
-            if not attribute:
-                assert target_module.rpartition(".")[2].startswith("_")
+            # a private replacement is not named, a renamed object is named by its new name, and a
+            # moved one by its full path
+            path = f"{target_module}.{attribute}" if attribute else target_module
+            if any(part.startswith("_") for part in path.split(".")):
                 expected = f"{name} is deprecated and will be removed from the public API"
             elif attribute != name:
                 expected = f"{name} is deprecated; use {attribute} instead"
                 assert _get_from_package(module_name, attribute) is replacement
-            elif "._" in path:
-                expected = f"{name} is deprecated and will be removed from the public API"
             else:
                 expected = f"{name} is deprecated; use {path} instead"
             assert [str(warning.message) for warning in caught] == [expected]

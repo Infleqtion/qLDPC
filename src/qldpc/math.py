@@ -37,6 +37,26 @@ def log_choose(n: int, k: int) -> float:
 
 
 ####################################################################################################
+# finite fields
+
+
+def resolve_field(field: int | type[galois.FieldArray] | None) -> type[galois.FieldArray]:
+    """Resolve a finite-field argument to a Galois field class.
+
+    Args:
+        field: A Galois field class, the order of a finite field, or None for GF(2).
+
+    Returns:
+        The Galois field class.
+    """
+    if field is None:
+        return galois.GF2
+    if isinstance(field, int):
+        return galois.GF(field)
+    return field
+
+
+####################################################################################################
 # manipulating Pauli strings and their symplectic vector representations
 
 

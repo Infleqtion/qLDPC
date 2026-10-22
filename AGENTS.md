@@ -34,7 +34,7 @@ AbstractCode
 The methods in `codes/common.py` share cached and mutable state for standard form, logical and gauge operators, parameters, and code transformations.
 Do not split them into mixins merely to reduce the file length.
 Each decoder backend defines its builder and its specification helper (with `decoder_spec` or `observable_decoder_spec`) beside its implementation, under `decoders/external/` or `decoders/custom/`.
-Plumbing that several modules share lives in private modules; helpers that one file uses are underscore names in that file.
+Plumbing that one subpackage uses is an underscore name in that subpackage, and plumbing that several subpackages share lives in private modules (see [Public API and private code](#public-api-and-private-code)).
 
 ## Public API and private code
 
@@ -44,8 +44,11 @@ Plumbing that several modules share lives in private modules; helpers that one f
   Keep them working, and retire a released public name through a tested shim rather than breaking its import (see [Deprecations](#deprecations)).
 - [`src/qldpc/__init__.py`](src/qldpc/__init__.py) exports subpackages, and each subpackage's `__all__` lists its public names.
   Keep `__all__` complete, and preserve public import paths when moving implementation code.
-- A private module, with an underscore anywhere in its import path, uses plain names for what other modules use and underscore names for helpers that only its own file uses.
-- A module-level underscore name is used only in its own file and that file's `*_test.py`, and a class's underscore attributes and methods only within the package that defines the class.
+- Module-level underscore names, and a class's underscore attributes and methods, may be used anywhere in their top-level subpackage, such as `qldpc.codes` or `qldpc.decoders`, but not outside it.
+  Each top-level module, such as `qldpc.math`, is its own scope.
+- Private modules, with an underscore anywhere in their import path, exist only for plumbing shared across subpackages or for a substantial standalone topic.
+  Name them by topic, never `_common`, `_util`, `_helpers`, or `_misc`, and use plain names for what other modules use.
+- [`qldpc/_utils.py`](src/qldpc/_utils.py) holds Python-level plumbing only: lazy imports, warning stack levels, and docstring formatting.
 - Public objects are defined in public modules; never re-export a private module's object as public API.
 - Everything under [`src/qldpc/experimental/`](src/qldpc/experimental/) is unstable, can change without a deprecation period, and is exempt from these private-name rules.
 
@@ -97,7 +100,7 @@ Plumbing that several modules share lives in private modules; helpers that one f
 
 - Build decoders from typed specifications, as in `decoders.bp_osd(...).build(pcm_or_dem)` or `decoders.mwpm(...).build_observable_decoder(dem)`.
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
-  Code that consumes a user-supplied error decoder coerces it with `as_error_decoder` from `decoders/_common.py` and calls `decode_errors`.
+  Code that consumes a user-supplied error decoder coerces it with `_as_error_decoder` from [`decoders/protocols.py`](src/qldpc/decoders/protocols.py), or outside `qldpc.decoders` with `resolve_decoder` (below), and calls `decode_errors`.
 - A method that decodes a matrix it constructs itself must reject prebuilt decoders with `reject_prebuilt_decoder` from `decoders/construction/_resolution.py`.
 - Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with `get_code_capacity_decoder` from [`codes/_code_capacity.py`](src/qldpc/codes/_code_capacity.py).
   It always yields an observable decoder: on binary codes, specifications that predict observables natively build it from a DEM; otherwise inferred errors are projected onto logical predictions.
@@ -112,7 +115,7 @@ Plumbing that several modules share lives in private modules; helpers that one f
 
 ### Circuits
 
-- Circuit and tableau constructors are qubit-only and should use the `restrict_to_qubits` guard from [`circuits/_common.py`](src/qldpc/circuits/_common.py).
+- Circuit and tableau constructors are qubit-only and should use the `_restrict_to_qubits` guard from [`circuits/common.py`](src/qldpc/circuits/common.py).
 - `get_encoding_circuit` constructs a valid encoder but is not fault-tolerant.
   Do not present it as a fault-tolerant state-preparation procedure.
 - Keep data, check, reference, and ancilla roles explicit through `QubitIDs` and bookkeeping types.
@@ -198,7 +201,7 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
 - All deprecated code and APIs live under the private package [`qldpc/_deprecations/`](src/qldpc/_deprecations/).
   [`core.py`](src/qldpc/_deprecations/core.py) holds the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes; its module docstring explains the mechanics.
   [`decoders.py`](src/qldpc/_deprecations/decoders.py) holds the deprecated decoder API and its translation into decoder specifications.
-  It is the one module allowed to import other modules' underscore names: it calls private decoder builders, so that deprecated APIs pass options to them unchecked.
+  It is the one module allowed to import other subpackages' underscore names: it calls private decoder builders, so that deprecated APIs pass options to them unchecked.
 - Only the following deprecation code lives outside `qldpc/_deprecations/`:
   1. Each module that still serves a deprecated name ends with this identical marked stub, which looks the name up in the registry:
 
