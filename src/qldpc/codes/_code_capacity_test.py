@@ -710,23 +710,15 @@ def test_code_capacity_decoder_reuse() -> None:
     assert decoder.reuse_for(syndrome_matrix, observables_b) is None
 
 
-@pytest.mark.parametrize(
-    "module",
-    [
-        "qldpc.codes._code_capacity",
-        "qldpc.codes.monte_carlo",
-        "qldpc.decoders._capabilities",
-        "qldpc.decoders.custom",
-        "qldpc.decoders.custom.lookup",
-        "qldpc.decoders.adapters._observable_decoders",
-        "qldpc.circuits",
-    ],
-)
-def test_decoder_import_order(module: str) -> None:
-    """Decoder-related modules can each be the first qLDPC import in a fresh interpreter."""
+def test_import_in_fresh_interpreter() -> None:
+    """qLDPC imports without errors or warnings in a fresh interpreter.
+
+    The package imports every subpackage when it is first imported, so importing any qLDPC module
+    runs this same import sequence.
+    """
     repo_root = pathlib.Path(__file__).parents[3]
     result = subprocess.run(
-        [sys.executable, "-c", f"import {module}"],
+        [sys.executable, "-W", "error", "-c", "import qldpc"],
         capture_output=True,
         check=False,
         env=os.environ | {"PYTHONPATH": str(repo_root / "src")},
