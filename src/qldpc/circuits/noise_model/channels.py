@@ -427,49 +427,6 @@ class PauliChannelSequence(AbstractPauliChannel):
 _ABSOLUTE_ERROR_TOLERANCE = 1e-9
 
 
-def _repeated_idle_channel(
-    channel: PauliChannel | PauliChannelSequence, repetitions: int
-) -> PauliChannel | PauliChannelSequence:
-    """Compose ``repetitions`` independent applications of a one-qubit Pauli channel."""
-    if isinstance(channel, PauliChannelSequence):
-        # an independent Pauli event that fires with probability p in each of n repetitions has a
-        # net effect with probability (1 - (1 - 2p)^n) / 2
-        return PauliChannelSequence(
-            {
-                pauli: (1 - (1 - 2 * probability) ** repetitions) / 2
-                for pauli, probability in channel.probabilities.items()
-            }
-        )
-
-    # compose the distribution over (I, X, Y, Z) by repeated squaring
-    probabilities = tuple(channel.probabilities.get(pauli, 0.0) for pauli in "XYZ")
-    single: tuple[float, ...] = (max(0.0, 1 - math.fsum(probabilities)), *probabilities)
-    result: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0)
-    while repetitions:
-        if repetitions & 1:
-            result = _compose_pauli_distributions(result, single)
-        repetitions >>= 1
-        if repetitions:
-            single = _compose_pauli_distributions(single, single)
-    return PauliChannel(dict(zip("XYZ", result[1:], strict=True)))
-
-
-def _compose_pauli_distributions(
-    left: tuple[float, ...], right: tuple[float, ...]
-) -> tuple[float, ...]:
-    """Distribution of the product of independent Paulis, indexed as (I, X, Y, Z).
-
-    Up to phase, Paulis multiply by XOR-ing their indices: e.g. X * Z ~ (1 ^ 3) = 2 ~ Y.  The result
-    is renormalized to prevent rounding errors from compounding over repeated compositions.
-    """
-    distribution = [
-        math.fsum(left[index] * right[index ^ outcome] for index in range(4))
-        for outcome in range(4)
-    ]
-    total = math.fsum(distribution)
-    return tuple(probability / total for probability in distribution)
-
-
 _PAULI_CHANNEL_1_ORDER = ("X", "Y", "Z")
 
 

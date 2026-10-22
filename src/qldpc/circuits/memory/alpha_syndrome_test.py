@@ -13,7 +13,7 @@ import stim
 
 from qldpc import circuits, codes, math
 from qldpc.circuits.memory import alpha_syndrome
-from qldpc.circuits.memory.alpha_syndrome import TreeNode, TreeState
+from qldpc.circuits.memory.alpha_syndrome import _TreeNode, _TreeState
 from qldpc.objects import Pauli
 
 # default (fast, low-fidelity) strategy used by the validity-checking helper below
@@ -83,9 +83,9 @@ def test_alpha_reproducibility_and_tree_edges() -> None:
     strategy = circuits.AlphaSyndrome(
         circuits.DepolarizingNoiseModel(0.001), iters_per_step=2, verbose=False
     )
-    assert TreeState.head([]).target_to_min_time == []
+    assert _TreeState.head([]).target_to_min_time == []
     gates = [(len(code), 0)]
-    root = TreeNode(TreeState.head(gates))
+    root = _TreeNode(_TreeState.head(gates))
     root.visits = strategy.iters_per_step
     measurements = strategy._get_evaluation_circuit(code, Pauli.X, [], None)
     assert measurements.num_measurements > 0
@@ -96,7 +96,7 @@ def test_alpha_reproducibility_and_tree_edges() -> None:
         step=0,
         evaluation_data=(stim.Circuit(), 0, 0),
     )
-    child = TreeNode(TreeState.head(gates))
+    child = _TreeNode(_TreeState.head(gates))
     child.expand()
     assert child.best_child(1).value == 0
 
@@ -135,18 +135,18 @@ def test_alpha_reward_matches_paper() -> None:
         seed=11,
     )
     rewards: list[float] = []
-    original_backpropagate = TreeNode.backpropagate
+    original_backpropagate = _TreeNode.backpropagate
     graph = code.get_graph(Pauli.X)
     gates = [(check.index + len(code), data.index) for data, check in map(sorted, graph.edges)]
-    root = TreeNode(TreeState.head(gates))
+    root = _TreeNode(_TreeState.head(gates))
     evaluation_data = strategy._get_evaluation_data(code, Pauli.X)
 
-    def record_reward(node: TreeNode, reward: float) -> None:
+    def record_reward(node: _TreeNode, reward: float) -> None:
         rewards.append(reward)
         original_backpropagate(node, reward)
 
     with (
-        mock.patch.object(TreeNode, "backpropagate", autospec=True, side_effect=record_reward),
+        mock.patch.object(_TreeNode, "backpropagate", autospec=True, side_effect=record_reward),
         mock.patch.object(alpha_syndrome.np, "sum", side_effect=[0, 10, 0]),
     ):
         strategy._schedule_one_gate(

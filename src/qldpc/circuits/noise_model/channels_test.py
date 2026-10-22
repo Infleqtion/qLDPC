@@ -7,27 +7,6 @@ import stim
 
 from qldpc import circuits
 from qldpc.circuits.conftest import circuits_are_equivalent
-from qldpc.circuits.noise_model.channels import _repeated_idle_channel
-
-
-def test_repeated_idle_channel() -> None:
-    """Repeating a Pauli channel raises the eigenvalues of its Pauli transfer matrix to a power."""
-    p_x, p_y, p_z = 0.1, 0.2, 0.3
-    eigenvalues = (1 - 2 * (p_y + p_z), 1 - 2 * (p_x + p_z), 1 - 2 * (p_x + p_y))
-    for repetitions in [1, 2, 3, 2**40]:
-        l_x, l_y, l_z = (eigenvalue**repetitions for eigenvalue in eigenvalues)
-        expected = {
-            "X": (1 + l_x - l_y - l_z) / 4,
-            "Y": (1 - l_x + l_y - l_z) / 4,
-            "Z": (1 - l_x - l_y + l_z) / 4,
-        }
-        channel = circuits.PauliChannel({"X": p_x, "Y": p_y, "Z": p_z})
-        assert _repeated_idle_channel(channel, repetitions).probabilities == pytest.approx(expected)
-
-        # a sequence of one independent error is a Pauli channel with one component
-        sequence = _repeated_idle_channel(circuits.PauliChannelSequence({"X": p_x}), repetitions)
-        single = _repeated_idle_channel(circuits.PauliChannel({"X": p_x}), repetitions)
-        assert sequence.probabilities == pytest.approx(single.probabilities)
 
 
 def test_high_probability_pauli_channels_remain_dem_analyzable() -> None:

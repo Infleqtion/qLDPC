@@ -15,27 +15,7 @@ from qldpc.objects import Pauli
 
 from ..bookkeeping import MeasurementRecord, QubitIDs
 from ..common import restrict_to_qubits
-
-
-def validate_syndrome_qubit_ids(
-    code: codes.QuditCode, qubit_ids: QubitIDs | None = None
-) -> QubitIDs:
-    """Validate the qubit layout for a syndrome-measurement strategy.
-
-    Args:
-        code: The code whose syndromes will be measured.
-        qubit_ids: Integer indices for the data and check qubits.  Defaults to
-            ``QubitIDs.from_code(code)``.
-
-    Returns:
-        A validated qubit layout.
-
-    Raises:
-        ValueError: If the code is a subsystem code or the qubit layout is invalid.
-    """
-    if code.is_subsystem_code:
-        raise ValueError("Syndrome measurement strategies require a non-subsystem code")
-    return QubitIDs.validated(qubit_ids or QubitIDs.from_code(code), code)
+from ._common import validate_syndrome_qubit_ids
 
 
 class SyndromeMeasurementStrategy(abc.ABC):

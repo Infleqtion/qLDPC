@@ -20,15 +20,14 @@ from ..encoding import get_encoding_circuit
 from ..noise_model import (
     DEFAULT_IMMUNE_OP_TAG,
     DEFAULT_IMMUNE_QUBIT_TAG,
-    GATE_OP_TYPES,
     NoiseModel,
     as_noiseless_circuit,
-    op_type,
 )
+from ..noise_model._operations import GATE_OP_TYPES, op_type
 from .syndrome_measurement import EdgeColoring, SyndromeMeasurementStrategy
 
 # default strategy used to schedule the two-qubit gates of a syndrome measurement circuit
-DEFAULT_STRATEGY = EdgeColoring()
+_DEFAULT_STRATEGY = EdgeColoring()
 
 
 ####################################################################################################
@@ -54,7 +53,7 @@ def get_memory_experiment(
     *,
     noise_model: NoiseModel | None = None,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> stim.Circuit:
     """Construct a circuit for testing the performance of a code as a quantum memory.
 
@@ -211,7 +210,7 @@ def get_memory_experiment_parts(
     num_rounds: int = 1,
     *,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> MemoryExperimentParts:
     """Noiseless components of a memory experiment.
 
@@ -398,7 +397,7 @@ def _get_basis_memory_experiment_parts(
     num_rounds: int = 1,
     *,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> MemoryExperimentParts:
     """Components of a memory experiment that tracks logical operators of a fixed type (basis).
 
@@ -463,7 +462,7 @@ def _get_combined_memory_simulation_parts(
     num_rounds: int = 1,
     *,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> MemoryExperimentParts:
     """Components of a memory experiment that tracks all logical operators.
 

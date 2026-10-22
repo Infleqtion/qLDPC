@@ -13,6 +13,7 @@ import stim
 from qldpc import codes, math
 from qldpc.objects import Pauli
 
+from ._encoding import get_logical_tableau_from_code_data
 from .bookkeeping import QubitIDs
 from .common import restrict_to_qubits, with_remapped_qubits
 
@@ -80,7 +81,33 @@ def get_encoding_circuit(code: codes.QuditCode, *, only_zero: bool = False) -> s
 def get_encoder_and_decoder(
     code: codes.QuditCode, deformation: stim.Circuit | stim.Tableau | None = None
 ) -> tuple[stim.Tableau, stim.Tableau]:
-    """Encoder for a code, and decoder either the same code or a deformed code."""
+    """Encoder for a code, and decoder for either the same code or a deformed code.
+
+    The encoder is the tableau of :func:`get_encoding_tableau`, which maps weight-one ``X_j`` and
+    ``Z_j`` operators at its input to the logical operators, gauge operators, stabilizers, and
+    destabilizers of the code.  Without a deformation, the decoder is the inverse of the encoder.
+    With a deformation, the decoder is the inverse of the encoding tableau of the deformed code
+    ``code.deformed(deformation, preserve_logicals=True)``, whose stabilizers are those of the code
+    transformed by the deformation, and whose logical operators are those of the original code.
+
+    Use this pair to view a physical circuit in the encoded frame: the first ``code.dimension``
+    qubits of ``encoder.then(physical_tableau).then(decoder)`` carry the logical operation that the
+    physical circuit implements, as in :func:`get_logical_tableau`.  Pass the physical circuit as
+    the deformation if it maps the code to a different code, rather than to itself.
+
+    Args:
+        code: The qubit code to encode and decode.
+        deformation: A physical circuit or tableau that deforms the code before decoding, or None
+            (the default) to decode the original code.
+
+    Returns:
+        stim.Tableau: The encoder of the code.
+        stim.Tableau: The decoder of the code, or of the deformed code if a deformation is given.
+
+    Raises:
+        ValueError: If the code is not a qubit code, or if the logical operators of the code are not
+            valid logical operators of the deformed code.
+    """
     encoder = get_encoding_tableau(code)
     if deformation is None:
         return encoder, encoder.inverse()
@@ -111,7 +138,7 @@ def get_logical_tableau(
         else physical_circuit_or_tableau.to_circuit()
     )
     encoder, decoder = get_encoder_and_decoder(code, physical_circuit if deform_code else None)
-    return _get_logical_tableau_from_code_data(
+    return get_logical_tableau_from_code_data(
         code.dimension, code.gauge_dimension, encoder, decoder, physical_circuit
     )
 
@@ -279,57 +306,3 @@ def get_logical_state_stabilizers(
     decoded_stabilizers = get_state_stabilizers(circuit, qubit_ids.data[: code.dimension])
     identity = stim.PauliString(num_qubits=len(code))
     return [(string * identity).after(encoder) for string in decoded_stabilizers]
-
-
-####################################################################################################
-# helper methods
-
-
-def _get_logical_tableau_from_code_data(
-    dimension: int,  # number of logical qubits of a QuditCode
-    gauge_dimension: int,  # number of gauge qubits of a QuditCode
-    encoder: stim.Tableau,
-    decoder: stim.Tableau,
-    physical_circuit: stim.Circuit,
-    skip_validation: bool = False,
-) -> stim.Tableau:
-    """Identify the logical tableau implemented by the physical circuit."""
-    if len(encoder) != len(decoder) or len(encoder) < dimension + gauge_dimension:
-        raise ValueError("Encoder and decoder have incompatible dimensions")
-    identity_phys = stim.Circuit(f"I {len(encoder) - 1}")
-    physical_tableau = (physical_circuit + identity_phys).to_tableau()
-
-    # Validate the decoded physical action before restricting it.  Restriction can itself fail for
-    # an invalid action, obscuring the useful public error below.
-    decoded_tableau = encoder.then(physical_tableau).then(decoder)
-    if not skip_validation:
-        # identify sectors that address logical, gauge, and stabilizer qubits
-        sector_l = slice(dimension)
-        sector_g = slice(dimension, dimension + gauge_dimension)
-        sector_s = slice(dimension + gauge_dimension, len(encoder))
-        x2x, x2z, z2x, z2z, _, z_signs = decoded_tableau.to_numpy()
-
-        # sanity check: stabilizers, logicals, and gauge operators should not pick up destabilizers
-        ops_acquired_destabilizers = (
-            np.any(z2x[:, sector_s])
-            or np.any(x2x[sector_l, sector_s])
-            or np.any(x2x[sector_g, sector_s])
-        )
-
-        # sanity check: gauge operators should not pick up logical factors
-        gauges_acquired_logicals = (
-            np.any(x2x[sector_g, sector_l])
-            or np.any(x2z[sector_g, sector_l])
-            or np.any(z2x[sector_g, sector_l])
-            or np.any(z2z[sector_g, sector_l])
-        )
-
-        # sanity check: no stabilizers get flipped
-        stabilizers_flipped = np.any(z_signs[sector_s])
-
-        if ops_acquired_destabilizers or gauges_acquired_logicals or stabilizers_flipped:
-            raise ValueError("The provided physical circuit does not implement a logical operation")
-
-    # compute the "upper left" block of the decoded tableau that acts on all logical qubits
-    logical_tableau = restrict_tableau(decoded_tableau, range(dimension))
-    return logical_tableau

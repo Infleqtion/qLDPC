@@ -61,6 +61,12 @@ ALIASES: dict[str, dict[str, str]] = {
         "Element": "qldpc.abstract.rings:RingMember",
         "Protograph": "qldpc.abstract.ring_array:RingArray",
     },
+    "qldpc.circuits": {
+        "validate_syndrome_qubit_ids": "qldpc.circuits.memory._common:validate_syndrome_qubit_ids",
+    },
+    "qldpc.circuits.memory": {
+        "validate_syndrome_qubit_ids": "qldpc.circuits.memory._common:validate_syndrome_qubit_ids",
+    },
     "qldpc.codes": {
         "get_distance_css_brouwer_zimmermann": (
             "qldpc.codes.distance._brouwer_zimmermann:get_distance_css_brouwer_zimmermann"

@@ -129,6 +129,7 @@ Field-valued and bit-packed observable-decoder adapters live in `decoders/adapte
 Immediate builders live beside their implementations: external-package integrations under `decoders/external/`, and qLDPC-owned implementations under `decoders/custom/`.
 Typed decoder specifications and generic input resolution live under `decoders/construction/`.
 Modern decoder inputs resolve directly in `decoders/construction/_resolution.py`; nonempty deprecated keywords enter `_deprecations/decoders.py` for translation, and the deprecated package-root functions live there too.
+Noise-model plumbing lives in private modules under `circuits/noise_model/`: instruction classification and rule keys in `_operations.py`, moments and idle-error composition in `_moments.py`, and the normalization and validation of noise rules in `_rules.py`.
 
 ## Core invariants
 

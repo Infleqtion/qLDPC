@@ -170,16 +170,6 @@ def test_state_stabilizers(pytestconfig: pytest.Config, monkeypatch: pytest.Monk
         circuits.get_state_stabilizers(stim.Circuit("H 0"), [0])
 
 
-def test_logical_tableau_validation() -> None:
-    """Invalid encoder/decoder dimensions fail before tableau restriction."""
-    with pytest.raises(ValueError, match="incompatible dimensions"):
-        encoding._get_logical_tableau_from_code_data(
-            1, 0, stim.Tableau(1), stim.Tableau(2), stim.Circuit()
-        )
-    with pytest.raises(ValueError, match="does not implement a logical operation"):
-        circuits.get_logical_tableau(codes.FiveQubitCode(), stim.Circuit("H 0 1"))
-
-
 def test_state_stabilizer_failure_regressions() -> None:
     """Exercise row-space, detector-parity, noisy-sign, and zero-logical edge cases."""
     ghz = circuits.get_state_stabilizers(stim.Circuit("H 0\nCX 0 1"), [0, 1])

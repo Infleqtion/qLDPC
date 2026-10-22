@@ -148,33 +148,12 @@ from .channels import (
     PauliChannelSequence,
 )
 from .noise_model import (
+    DEFAULT_IMMUNE_OP_TAG,
+    DEFAULT_IMMUNE_QUBIT_TAG,
     DepolarizingNoiseModel,
     NoiseModel,
     SI1000NoiseModel,
     as_noiseless_circuit,
-)
-from .operations import (
-    ALL_STIM_GATE_NAMES,
-    ANNOTATION,
-    CLIFFORD_1Q,
-    CLIFFORD_2Q,
-    CLIFFORD_PP,
-    COLLAPSING_OPS,
-    DEFAULT_IMMUNE_OP_TAG,
-    DEFAULT_IMMUNE_QUBIT_TAG,
-    GATE_OP_TYPES,
-    IDLE_OPS,
-    JUST_MEASURE_1Q,
-    JUST_MEASURE_2Q,
-    JUST_MEASURE_OPS,
-    JUST_MEASURE_PP,
-    JUST_RESET_1Q,
-    JUST_RESET_OPS,
-    MEASURE_AND_RESET_OPS,
-    MEASURE_RESET_1Q,
-    NOISE,
-    UNSUPPORTED,
-    op_type,
 )
 from .rules import (
     ErrorSpec,
@@ -182,26 +161,8 @@ from .rules import (
 )
 
 __all__ = [
-    "ALL_STIM_GATE_NAMES",
-    "ANNOTATION",
-    "CLIFFORD_1Q",
-    "CLIFFORD_2Q",
-    "CLIFFORD_PP",
-    "COLLAPSING_OPS",
     "DEFAULT_IMMUNE_OP_TAG",
     "DEFAULT_IMMUNE_QUBIT_TAG",
-    "GATE_OP_TYPES",
-    "IDLE_OPS",
-    "JUST_MEASURE_1Q",
-    "JUST_MEASURE_2Q",
-    "JUST_MEASURE_OPS",
-    "JUST_MEASURE_PP",
-    "JUST_RESET_1Q",
-    "JUST_RESET_OPS",
-    "MEASURE_AND_RESET_OPS",
-    "MEASURE_RESET_1Q",
-    "NOISE",
-    "UNSUPPORTED",
     "AbstractPauliChannel",
     "DepolarizingNoiseModel",
     "ErrorSpec",
@@ -211,5 +172,4 @@ __all__ = [
     "PauliChannelSequence",
     "SI1000NoiseModel",
     "as_noiseless_circuit",
-    "op_type",
 ]

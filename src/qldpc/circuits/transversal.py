@@ -15,8 +15,9 @@ from qldpc import abstract, cache, codes
 from qldpc.math import op_to_string
 from qldpc.objects import Pauli
 
+from ._encoding import get_logical_tableau_from_code_data
 from .common import restrict_to_qubits
-from .encoding import _get_logical_tableau_from_code_data, get_encoder_and_decoder
+from .encoding import get_encoder_and_decoder
 
 ####################################################################################################
 # transversal logical Clifford gates
@@ -476,7 +477,7 @@ def _get_transversal_automorphism_data(
     physical_circuit = _get_pauli_circuit(correction) + physical_circuit
 
     # identify the logical tableau implemented by the physical circuit
-    logical_tableau = _get_logical_tableau_from_code_data(
+    logical_tableau = get_logical_tableau_from_code_data(
         code.dimension, code.gauge_dimension, encoder, decoder, physical_circuit
     )
 
