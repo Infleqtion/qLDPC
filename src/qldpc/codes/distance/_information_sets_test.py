@@ -57,14 +57,14 @@ def test_information_set_packing() -> None:
 def test_family_certificates(basis: npt.NDArray[np.uint8]) -> None:
     """Rank-deficient blocks and inferred parity give certificates valid for every word."""
     # A target above every weight keeps the rank-deficient block.
-    family = _information_sets._prepare_family(basis, None, upper_bound=basis.shape[1] + 1)
+    family = _information_sets.prepare_family(basis, None, upper_bound=basis.shape[1] + 1)
     _assert_certificate_bounds_unvisited_words(basis, family)
 
 
 def test_weight_divisor_inference() -> None:
     """Even rows span only even weights, and a divisor proven by the caller is retained."""
     odd = np.array([[1, 0, 0, 0], [0, 1, 1, 0]], dtype=np.uint8)
-    get_family = _information_sets._get_disjoint_family
+    get_family = _information_sets.get_disjoint_family
     assert get_family(EVEN_BASIS, None).certificate.weight_divisor == 2
     assert get_family(odd, None).certificate.weight_divisor == 1
     assert get_family(odd, None, weight_divisor=2).certificate.weight_divisor == 2
@@ -76,12 +76,12 @@ def test_prune_family(ranks: list[int], upper_bound: int) -> None:
     generators = np.empty((10, 0), dtype=np.uint8)
     pivots = np.empty(0, dtype=int)
     information_sets = tuple(
-        _information_sets._InformationSet(generators, None, rank, pivots) for rank in ranks
+        _information_sets.InformationSet(generators, None, rank, pivots) for rank in ranks
     )
-    family = _information_sets._BasisFamily(
-        information_sets, _information_sets._Certificate(10, tuple(ranks))
+    family = _information_sets.BasisFamily(
+        information_sets, _information_sets.Certificate(10, tuple(ranks))
     )
-    pruned = _information_sets._prune_family(family, upper_bound=upper_bound)
+    pruned = _information_sets.prune_family(family, upper_bound=upper_bound)
     assert pruned.information_sets
     assert pruned.certificate.work(upper_bound) <= family.certificate.work(upper_bound)
 
@@ -91,17 +91,17 @@ def test_overlapping_family_certificates() -> None:
 
     # Label each row separately so its row operations can be checked.
     basis = np.asarray(qldpc.codes.HammingCode(4).generator, dtype=np.uint8)
-    basis = binary._get_independent_rows(basis)
+    basis = binary.get_independent_rows(basis)
     labels = np.eye(len(basis), dtype=np.uint8)
-    disjoint = _information_sets._get_disjoint_family(basis, labels)
+    disjoint = _information_sets.get_disjoint_family(basis, labels)
     # One full set certifies a target of one after its first layer, which no replacement improves.
     assert (
-        _information_sets._get_overlapping_family(
+        _information_sets.get_overlapping_family(
             basis, labels, disjoint, upper_bound=1, minimum_work=0
         )
         is None
     )
-    family = _information_sets._get_overlapping_family(
+    family = _information_sets.get_overlapping_family(
         basis, labels, disjoint, upper_bound=3, minimum_work=0
     )
     assert family is not None
@@ -122,20 +122,20 @@ def test_overlapping_family_guards() -> None:
 
     # Complete or nearly complete disjoint coverage leaves no cheaper family within the size budget.
     basis = np.hstack([np.eye(25, dtype=np.uint8)] * 4)
-    complete = _information_sets._get_disjoint_family(basis, None)
-    assert _information_sets._get_overlapping_family(basis, None, complete, upper_bound=26) is None
+    complete = _information_sets.get_disjoint_family(basis, None)
+    assert _information_sets.get_overlapping_family(basis, None, complete, upper_bound=26) is None
     shortened = basis[:, :-1]
-    disjoint = _information_sets._get_disjoint_family(shortened, None)
+    disjoint = _information_sets.get_disjoint_family(shortened, None)
     assert (
-        _information_sets._get_overlapping_family(shortened, None, disjoint, upper_bound=26) is None
+        _information_sets.get_overlapping_family(shortened, None, disjoint, upper_bound=26) is None
     )
 
     # Only three pivot pairs exist, so later attempts rediscover them.  The search must terminate
     # without a replacement that beats the disjoint family.
     small = np.array([[1, 1, 0], [0, 1, 1]], dtype=np.uint8)
-    disjoint = _information_sets._get_disjoint_family(small, None)
+    disjoint = _information_sets.get_disjoint_family(small, None)
     assert (
-        _information_sets._get_overlapping_family(
+        _information_sets.get_overlapping_family(
             small, None, disjoint, upper_bound=2, minimum_work=0
         )
         is None
@@ -143,7 +143,7 @@ def test_overlapping_family_guards() -> None:
 
 
 def _assert_certificate_bounds_unvisited_words(
-    basis: npt.NDArray[np.uint8], family: _information_sets._BasisFamily
+    basis: npt.NDArray[np.uint8], family: _information_sets.BasisFamily
 ) -> None:
     """Check a family's certificate against every word that its search bases span.
 

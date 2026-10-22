@@ -10,7 +10,8 @@ import pytest
 
 from qldpc import decoders
 from qldpc.decoders.conftest import ToyProblem
-from qldpc.decoders.construction.resolution import _get_error_decoder
+from qldpc.decoders.construction._resolution import build_error_decoder
+from qldpc.decoders.protocols import _batch_decode_errors
 
 
 def test_batch_decoding_by_alias() -> None:
@@ -27,7 +28,7 @@ def test_batch_decoding_by_alias() -> None:
 
     old_decoder = OldDecoder()
     assert np.array_equal(old_decoder.decode_errors(syndromes[0]), syndromes[0])
-    assert np.array_equal(decoders.batch_decode_errors(old_decoder, syndromes), syndromes)
+    assert np.array_equal(_batch_decode_errors(old_decoder, syndromes), syndromes)
 
     composite_decoder = decoders.custom.CompositeDecoder((old_decoder, 1), (old_decoder, 1))
     assert composite_decoder.decoders == (old_decoder, old_decoder)
@@ -69,7 +70,7 @@ def test_composite_erasure() -> None:
 def test_augmented_decoders(toy_problem: ToyProblem) -> None:
     """Composite and direct decoders can be built from other decoders."""
     matrix, error, syndrome = toy_problem
-    decoder = _get_error_decoder(matrix, decoder=decoders.mwpm())
+    decoder = build_error_decoder(matrix, decoder=decoders.mwpm())
 
     direct_decoder = decoders.custom.DirectDecoder.from_indirect(decoder, matrix)
     assert np.array_equal(np.zeros_like(error), direct_decoder.correct(error))
@@ -78,12 +79,6 @@ def test_augmented_decoders(toy_problem: ToyProblem) -> None:
     assert np.array_equal(np.zeros_like(errors), direct_decoder.correct_batch(errors))
     unbatched_decoder = decoders.custom.DirectDecoder(direct_decoder.correct)
     assert np.array_equal(np.zeros_like(errors), unbatched_decoder.correct_batch(errors))
-
-    # a DirectDecoder corrects code words, so it must not pass for a syndrome decoder
-    with pytest.raises(ValueError, match="DEFUNCT"):
-        direct_decoder.decode(error)
-    with pytest.raises(ValueError, match="DEFUNCT"):
-        direct_decoder.decode_batch(errors)
 
     composite_decoder = decoders.custom.CompositeDecoder.from_copies(decoder, syndrome.size, 2)
     composite_error = np.concatenate([error] * 2)

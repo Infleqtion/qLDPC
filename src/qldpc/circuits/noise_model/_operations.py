@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Classification of Stim instructions for noise models.
+"""Classification of Stim instructions for noise models, and the names that noise rules match.
 
 See :mod:`qldpc.circuits.noise_model` for attribution and license information.
 """
@@ -13,10 +13,7 @@ import re
 import stim
 
 ####################################################################################################
-# global constants and instruction classification
-
-DEFAULT_IMMUNE_OP_TAG = "__IMMUNE_TO_NOISE__"
-DEFAULT_IMMUNE_QUBIT_TAG = "__IMMUNE_QUBIT_TO_NOISE__"
+# instruction classification
 
 CLIFFORD_1Q = "C1"
 CLIFFORD_2Q = "C2"
@@ -104,11 +101,26 @@ COLLAPSING_OPS = JUST_MEASURE_OPS | JUST_RESET_OPS | MEASURE_AND_RESET_OPS
 IDLE_OPS = frozenset({"I", "II"})
 
 
+def involves_classical_bits(op: stim.CircuitInstruction) -> bool:
+    """Determines if an operation involves classical bits.
+
+    Args:
+        op: The circuit instruction to check.
+
+    Returns:
+        True if the operation involves classical control bits.  False otherwise.
+    """
+    return any(
+        target.is_measurement_record_target or target.is_sweep_bit_target
+        for target in op.targets_copy()
+    )
+
+
 ####################################################################################################
-# helper methods
+# names and keys of noise rules
 
 
-def _get_gate_aliases(op: stim.CircuitInstruction) -> tuple[str, ...]:
+def get_gate_aliases(op: stim.CircuitInstruction) -> tuple[str, ...]:
     """Return the names by which ``op`` can be matched in ``rules`` and ``rule_func``.
 
     For a single-product MPP / SPP / SPP_DAG op, the basis-suffixed name (e.g. ``"MXYZ"`` for ``MPP
@@ -139,16 +151,7 @@ def _get_gate_aliases(op: stim.CircuitInstruction) -> tuple[str, ...]:
     return ("M" if basis_name == "MZ" else basis_name, *aliases)
 
 
-@functools.cache
-def _stim_aliases(op_name: str) -> tuple[str, ...]:
-    """Cached stim aliases of a gate name."""
-    return tuple(stim.gate_data(op_name).aliases)
-
-
-_BASIS_SUFFIXED_RULE_KEY = re.compile(r"([MS])([XYZ]+)(?:(_DAG))?")
-
-
-def _canonical_rule_key(op_name: str) -> str:
+def canonical_rule_key(op_name: str) -> str:
     """Canonicalize and validate a user-provided noise-rule key."""
     if not isinstance(op_name, str):
         raise TypeError(f"Noise rule keys must be strings, got {type(op_name).__name__}")
@@ -171,7 +174,7 @@ def _canonical_rule_key(op_name: str) -> str:
         return canonical
 
 
-def _known_gate_shape(op_name: str) -> tuple[int, bool, bool] | None:
+def known_gate_shape(op_name: str) -> tuple[int, bool, bool] | None:
     """Return ``(arity, can_measure, can_reset)`` for a rule key with statically-known shape.
 
     Applies to fixed-arity stim gates (e.g. ``"H"``, ``"CX"``, ``"M"``, ``"R"``, ``"MR"``) and to
@@ -196,16 +199,10 @@ def _known_gate_shape(op_name: str) -> tuple[int, bool, bool] | None:
     return len(basis), gate_data.produces_measurements, gate_data.is_reset
 
 
-def _involves_classical_bits(op: stim.CircuitInstruction) -> bool:
-    """Determines if an operation involves classical bits.
+@functools.cache
+def _stim_aliases(op_name: str) -> tuple[str, ...]:
+    """Cached stim aliases of a gate name."""
+    return tuple(stim.gate_data(op_name).aliases)
 
-    Args:
-        op: The circuit instruction to check.
 
-    Returns:
-        True if the operation involves classical control bits.  False otherwise.
-    """
-    return any(
-        target.is_measurement_record_target or target.is_sweep_bit_target
-        for target in op.targets_copy()
-    )
+_BASIS_SUFFIXED_RULE_KEY = re.compile(r"([MS])([XYZ]+)(?:(_DAG))?")

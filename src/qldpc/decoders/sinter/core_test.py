@@ -12,7 +12,7 @@ import sinter
 import stim
 
 from qldpc import decoders
-from qldpc.decoders.custom.lookup import _get_decoder_lookup
+from qldpc.decoders.protocols import _as_error_decoder
 
 
 def test_sinter_decoder() -> None:
@@ -50,7 +50,7 @@ def test_sinter_decoder() -> None:
     compiled_decoder = decoders.SinterDecoder(decoder=decoders.mwpm()).compile_decoder_for_dem(dem)
     assert compiled_decoder.decoder is compiled_decoder.observable_decoder
 
-    error_decoder = _get_decoder_lookup(dem, max_weight=3)
+    error_decoder = decoders.lookup(max_weight=3).build(dem)
     compiled_decoder = decoders.sinter.CompiledSinterDecoder(
         decoders.DetectorErrorModelArrays(dem), error_decoder
     )
@@ -84,9 +84,9 @@ def test_sinter_decoder_classes() -> None:
     compiled = decoder.compile_decoder_for_dem(dem)
     assert not hasattr(compiled, "decode")
     with pytest.raises(TypeError, match="cannot decode until it is compiled"):
-        decoders.as_error_decoder(decoder)
+        _as_error_decoder(decoder)
     with pytest.raises(TypeError, match="predicts observable flips rather than errors"):
-        decoders.as_error_decoder(compiled)
+        _as_error_decoder(compiled)
     assert np.array_equal(compiled.decode_observables(np.array([1], dtype=int)), [1])
 
 
@@ -202,7 +202,10 @@ def test_observable_decoders_reject_prebuilt_decoders() -> None:
             "each subgraph",
         ),
         (
-            lambda: decoders.SequentialWindowDecoder([[0]], decoder=prebuilt),  # type: ignore[arg-type]
+            lambda: decoders.SequentialWindowDecoder(
+                [[0]],
+                decoder=prebuilt,  # type: ignore[arg-type]
+            ),
             "each window",
         ),
         (

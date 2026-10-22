@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import pathlib
-import warnings
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -13,17 +12,18 @@ import numpy.typing as npt
 import sinter
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
-
-from ..adapters.error_decoders import ErrorsToObservablesDecoder
-from ..construction.legacy import (
+from qldpc import _deprecations
+from qldpc._deprecations.decoders import (
     get_legacy_decoder_migration_message,
     reject_removed_decoder_args,
 )
-from ..construction.resolution import reject_prebuilt_decoder, resolve_observable_decoder
+from qldpc._utils import get_external_caller_stacklevel
+
+from ..adapters.error_decoders import ErrorsToObservablesDecoder
+from ..construction._resolution import reject_prebuilt_decoder, resolve_observable_decoder
 from ..construction.specs import DecoderSpec, DeferredDecoderInput
 from ..dems import DetectorErrorModelArrays
-from ..protocols import ErrorDecoder, ObservableDecoder, as_error_decoder
+from ..protocols import ErrorDecoder, ObservableDecoder, _as_error_decoder
 
 # sinter does not ship type information, so mypy treats sinter.Decoder and sinter.CompiledDecoder as
 # Any.  A subclass of Any is assumed to have every attribute, so it would structurally satisfy the
@@ -77,7 +77,7 @@ class SinterDecoder(_SinterDecoder):
         """
         reject_removed_decoder_args(decoder_kwargs)
         if "priors_arg" in decoder_kwargs or "log_likelihood_priors" in decoder_kwargs:
-            raise ValueError(
+            raise _deprecations.defunct(
                 "The 'priors_arg' and 'log_likelihood_priors' arguments to a SinterDecoder are"
                 " DEFUNCT and should no longer be necessary.\nIf you need these arguments restored,"
                 " please open an issue at https://github.com/qLDPCOrg/qLDPC/issues"
@@ -98,9 +98,8 @@ class SinterDecoder(_SinterDecoder):
         self.decoder_input = decoder
         self.decoder_kwargs = decoder_kwargs
         if decoder_kwargs:
-            warnings.warn(
+            _deprecations.warn_deprecated(
                 get_legacy_decoder_migration_message(None, decoder_kwargs),
-                DeprecationWarning,
                 stacklevel=get_external_caller_stacklevel(),
             )
 
@@ -206,7 +205,7 @@ class CompiledSinterDecoder(_SinterCompiledDecoder, ObservableDecoder):
         else:
             self.decoder = decoder
             self.observable_decoder = ErrorsToObservablesDecoder(
-                as_error_decoder(decoder, "The decoder"), dem_arrays.to_dem()
+                _as_error_decoder(decoder, "The decoder"), dem_arrays.to_dem()
             )
         self.num_detectors = dem_arrays.num_detectors
         self.num_observables = dem_arrays.num_observables

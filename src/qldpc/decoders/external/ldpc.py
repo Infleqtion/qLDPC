@@ -18,15 +18,11 @@ import numpy as np
 import numpy.typing as npt
 import stim
 
-from qldpc._util import format_docstring, get_external_caller_stacklevel
+from qldpc._deprecations.decoders import deprecate_error_rate_option
+from qldpc._utils import format_docstring, get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
-from ..common import (
-    PLACEHOLDER_ERROR_RATE,
-    _deprecate_error_rate_option,
-    _erasure_bit_support,
-    _get_matrix_error_channel,
-)
+from ..common import _PLACEHOLDER_ERROR_RATE, _erasure_bit_support, _get_matrix_error_channel
 from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, ErrorDecodeResult
@@ -49,7 +45,7 @@ if TYPE_CHECKING:
 
 
 @_erasure_bit_support("BP_OSD", supported=False)
-@format_docstring(PLACEHOLDER_ERROR_RATE=PLACEHOLDER_ERROR_RATE)
+@format_docstring(PLACEHOLDER_ERROR_RATE=_PLACEHOLDER_ERROR_RATE)
 def _get_decoder_bp_osd(
     pcm_or_dem: _PcmOrDem,
     *,
@@ -115,7 +111,7 @@ def _get_decoder_bp_osd(
 
 
 @_erasure_bit_support("BP_LSD", supported=False)
-@format_docstring(PLACEHOLDER_ERROR_RATE=PLACEHOLDER_ERROR_RATE)
+@format_docstring(PLACEHOLDER_ERROR_RATE=_PLACEHOLDER_ERROR_RATE)
 def _get_decoder_bp_lsd(
     pcm_or_dem: _PcmOrDem,
     *,
@@ -193,7 +189,7 @@ def _get_decoder_bp_lsd(
 
 
 @_erasure_bit_support("BF", supported=False)
-@format_docstring(PLACEHOLDER_ERROR_RATE=PLACEHOLDER_ERROR_RATE)
+@format_docstring(PLACEHOLDER_ERROR_RATE=_PLACEHOLDER_ERROR_RATE)
 def _get_decoder_bf(
     pcm_or_dem: _PcmOrDem,
     *,
@@ -263,7 +259,7 @@ def _get_decoder_bf(
 bp_osd = decoder_spec(
     "bp_osd",
     _get_decoder_bp_osd,
-    option_transform=_deprecate_error_rate_option,
+    option_transform=deprecate_error_rate_option,
     doc="""Configure belief propagation with ordered-statistics decoding.
 
 See the `ldpc BP+OSD documentation
@@ -294,7 +290,7 @@ Returns:
 bp_lsd = decoder_spec(
     "bp_lsd",
     _get_decoder_bp_lsd,
-    option_transform=_deprecate_error_rate_option,
+    option_transform=deprecate_error_rate_option,
     doc="""Configure belief propagation with localized-statistics decoding.
 
 See the `ldpc BP+LSD documentation
@@ -330,7 +326,7 @@ Returns:
 bf = decoder_spec(
     "bf",
     _get_decoder_bf,
-    option_transform=_deprecate_error_rate_option,
+    option_transform=deprecate_error_rate_option,
     doc="""Configure belief-find decoding.
 
 See the `ldpc belief-find documentation
@@ -359,9 +355,6 @@ Returns:
 """,
 )
 
-
-####################################################################################################
-# private input helpers
 
 # Options that ldpc.BpLsdDecoder reads, other than those listed by _get_decoder_bp_lsd, including
 # osd_method and osd_order, which it accepts as aliases of lsd_method and lsd_order.  Unlike the

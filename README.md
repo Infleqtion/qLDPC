@@ -168,7 +168,8 @@ Some searches are expensive, some bounds are heuristic, experimental APIs can ch
   Fault-tolerant encoding is tracked in [issue #327](https://github.com/qLDPCOrg/qLDPC/issues/327).
 - Exact distance calculations and transversal-gate searches can be exponential.
   When a method returns a bound rather than an exact distance, its docstring explains what kind of bound it is.
-- Features that use GAP may start subprocesses, use local disk caches, access online resources, or ask for manual input or permission to install a package.
+- Features that use GAP may start subprocesses, access online resources, or ask for manual input or permission to install a package.
+- Code lookups such as `QuditCode.from_qecdb_id` access online resources and cache results on disk; pass `refresh=True` to fetch the latest data.
 - Everything under `qldpc.experimental` has an unstable public API and may change without deprecation.
 - Lattice-surgery support in `qldpc.experimental.surgery` is experimental and unstable, and its implementation is still pending careful expert review.
   Validate its results independently, and pin the qLDPC version if you depend on it.

@@ -9,17 +9,15 @@ from collections.abc import Mapping
 import galois
 import stim
 
-from ..adapters.error_decoders import ErrorsToObservablesDecoder as _ErrorsToObservablesDecoder
-from ..adapters.observable_decoders import (
-    BitPackedObservableDecoder as _BitPackedObservableDecoder,
-)
-from ..adapters.observable_decoders import (
-    validate_observable_decoder,
-)
-from ..capabilities import compiles_for_dem, is_prebuilt_decoder
-from ..custom.guf import _get_decoder_guf
-from ..external.ldpc import _get_decoder_bp_osd
-from ..protocols import ErrorDecoder, ObservableDecoder, as_error_decoder
+from qldpc._deprecations.decoders import merge_legacy_decoder_args
+
+from .._capabilities import compiles_for_dem, is_prebuilt_decoder
+from ..adapters._observable_decoders import BitPackedObservableDecoder, validate_observable_decoder
+from ..adapters.error_decoders import ErrorsToObservablesDecoder
+from ..common import _PLACEHOLDER_ERROR_RATE
+from ..custom.guf import guf
+from ..external.ldpc import bp_osd
+from ..protocols import ErrorDecoder, ObservableDecoder, _as_error_decoder
 from .factories import DEMDecoderFactory, MatrixDecoderFactory
 from .specs import (
     DecoderInput,
@@ -28,6 +26,10 @@ from .specs import (
     ObservableDecoderCompiler,
     PcmOrDem,
 )
+
+# The error rate that decoders assume when none is given, which qldpc.codes also uses to build
+# detector error models for code-capacity estimates.
+PLACEHOLDER_ERROR_RATE = _PLACEHOLDER_ERROR_RATE
 
 ####################################################################################################
 # decoder input resolution
@@ -55,12 +57,10 @@ def resolve_decoder(
         An ErrorDecoder.
     """
     if decoder_args:
-        from .legacy import _merge_legacy_decoder_args
-
-        decoder = _merge_legacy_decoder_args(
+        decoder = merge_legacy_decoder_args(
             pcm_or_dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
-    return _get_error_decoder(pcm_or_dem, decoder=decoder)
+    return build_error_decoder(pcm_or_dem, decoder=decoder)
 
 
 def resolve_observable_decoder(
@@ -88,28 +88,13 @@ def resolve_observable_decoder(
         errors that it infers become its predictions.
     """
     if decoder_args:
-        from .legacy import _merge_legacy_decoder_args
-
-        decoder = _merge_legacy_decoder_args(
+        decoder = merge_legacy_decoder_args(
             dem, decoder, decoder_args, warn_deprecated=warn_deprecated
         )
-    return _get_observable_decoder(dem, decoder=decoder)
+    return build_observable_decoder(dem, decoder=decoder)
 
 
-def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
-    """Raise if a decoder input is prebuilt and cannot be rebuilt for a new matrix."""
-    if is_prebuilt_decoder(decoder):
-        raise ValueError(
-            f"A prebuilt decoder cannot be passed as decoder= here because {reason}.  Pass a decoder"
-            " specification such as decoder=decoders.bp_osd(...), or a decoder constructor, instead"
-        )
-
-
-####################################################################################################
-# helper methods
-
-
-def _get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
+def build_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
     """Build or retrieve a decoder that maps a syndrome to an inferred error.
 
     Args:
@@ -120,10 +105,10 @@ def _get_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = Non
     Returns:
         An ErrorDecoder.
     """
-    return as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
+    return _as_error_decoder(*_build_decoder(pcm_or_dem, decoder))
 
 
-def _get_observable_decoder(
+def build_observable_decoder(
     dem: stim.DetectorErrorModel, *, decoder: DecoderInput = None
 ) -> ObservableDecoder:
     """Build or retrieve a decoder that maps a syndrome to predicted observable flips.
@@ -146,7 +131,17 @@ def _get_observable_decoder(
     built_decoder, source = _build_decoder(dem, decoder)
     if isinstance(built_decoder, ObservableDecoder):
         return built_decoder
-    return _ErrorsToObservablesDecoder(as_error_decoder(built_decoder, source), dem)
+    return ErrorsToObservablesDecoder(_as_error_decoder(built_decoder, source), dem)
+
+
+def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
+    """Raise if a decoder input is prebuilt and cannot be rebuilt for a new matrix."""
+    if is_prebuilt_decoder(decoder):
+        raise ValueError(
+            f"A prebuilt decoder cannot be passed as decoder= here because {reason}.  Pass a"
+            " decoder specification such as decoder=decoders.bp_osd(...), or a decoder"
+            " constructor, instead"
+        )
 
 
 def _build_decoder(pcm_or_dem: PcmOrDem, decoder: DecoderInput) -> tuple[object, str]:
@@ -154,8 +149,8 @@ def _build_decoder(pcm_or_dem: PcmOrDem, decoder: DecoderInput) -> tuple[object,
     built_decoder: object
     if decoder is None:
         is_nonbinary = isinstance(pcm_or_dem, galois.FieldArray) and type(pcm_or_dem).order != 2
-        default_builder = _get_decoder_guf if is_nonbinary else _get_decoder_bp_osd
-        built_decoder, source = default_builder(pcm_or_dem), "The default decoder"
+        default_spec = guf() if is_nonbinary else bp_osd()
+        built_decoder, source = default_spec.build(pcm_or_dem), "The default decoder"
     elif isinstance(decoder, DecoderSpec):
         built_decoder = decoder.build(pcm_or_dem)
         source = "A decoder specification"
@@ -195,7 +190,7 @@ def _compile_observable_decoder(
     if isinstance(compiled_decoder, ObservableDecoder):
         return compiled_decoder
     if callable(getattr(compiled_decoder, "decode_shots_bit_packed", None)):
-        return _BitPackedObservableDecoder(compiled_decoder, dem.num_observables)
+        return BitPackedObservableDecoder(compiled_decoder, dem.num_observables)
     raise TypeError(
         "A decoder compiled by compile_decoder_for_dem must provide a decode_observables or"
         " decode_shots_bit_packed method"

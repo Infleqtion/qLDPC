@@ -13,7 +13,7 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
 from ..common import _erasure_bit_support, _to_pcm, with_erasure_bits
@@ -209,10 +209,6 @@ Returns:
     its dense detector-flip matrix.
 """,
 )
-
-
-####################################################################################################
-# helper methods
 
 
 def _get_cvxpy() -> Any:

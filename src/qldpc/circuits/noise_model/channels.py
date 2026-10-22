@@ -18,6 +18,16 @@ import stim
 
 from ..common import StimCircuitLike
 
+# Floating-point tolerance used for probability comparisons throughout this module.  Small enough to
+# catch real bugs, large enough to absorb the ~O(n * eps) drift that accumulates when summing or
+# renormalizing many probabilities.
+_ABSOLUTE_ERROR_TOLERANCE = 1e-9
+
+# the order of the probability arguments of Stim's PAULI_CHANNEL_1 and PAULI_CHANNEL_2 instructions
+_PAULI_CHANNEL_1_ORDER = ("X", "Y", "Z")
+_PAULI_CHANNEL_2_ORDER = tuple(a + b for a in "IXYZ" for b in "IXYZ" if (a, b) != ("I", "I"))
+
+
 ####################################################################################################
 # Pauli channels
 
@@ -194,7 +204,7 @@ class PauliChannel(AbstractPauliChannel):
         super().__init__(probabilities, num_qubits=num_qubits)
 
         # Ensure the sum of all probabilities does not exceed 1.  Use math.fsum for a precise sum,
-        # and allow a small tolerance so a mathematically- normalized input isn't rejected due to
+        # and allow a small tolerance so a mathematically normalized input isn't rejected due to
         # per-value rounding (e.g., ``[p_i / sum(p_i) for p_i in ...]`` can accumulate to
         # ~1 + O(n * eps)).
         total = math.fsum(self._probabilities.values())
@@ -416,64 +426,6 @@ class PauliChannelSequence(AbstractPauliChannel):
             pauli_targets = _pauli_string_to_targets(string, qubits)
             circuit.append("CORRELATED_ERROR", pauli_targets, [prob], tag=tag)
         return circuit
-
-
-####################################################################################################
-# helper methods
-
-# Floating-point tolerance used for probability comparisons throughout this module.  Small enough to
-# catch real bugs, large enough to absorb the ~O(n * eps) drift that accumulates when summing or
-# renormalizing many probabilities.
-_ABSOLUTE_ERROR_TOLERANCE = 1e-9
-
-
-def _repeated_idle_channel(
-    channel: PauliChannel | PauliChannelSequence, repetitions: int
-) -> PauliChannel | PauliChannelSequence:
-    """Compose ``repetitions`` independent applications of a one-qubit Pauli channel."""
-    if isinstance(channel, PauliChannelSequence):
-        # an independent Pauli event that fires with probability p in each of n repetitions has a
-        # net effect with probability (1 - (1 - 2p)^n) / 2
-        return PauliChannelSequence(
-            {
-                pauli: (1 - (1 - 2 * probability) ** repetitions) / 2
-                for pauli, probability in channel.probabilities.items()
-            }
-        )
-
-    # compose the distribution over (I, X, Y, Z) by repeated squaring
-    probabilities = tuple(channel.probabilities.get(pauli, 0.0) for pauli in "XYZ")
-    single: tuple[float, ...] = (max(0.0, 1 - math.fsum(probabilities)), *probabilities)
-    result: tuple[float, ...] = (1.0, 0.0, 0.0, 0.0)
-    while repetitions:
-        if repetitions & 1:
-            result = _compose_pauli_distributions(result, single)
-        repetitions >>= 1
-        if repetitions:
-            single = _compose_pauli_distributions(single, single)
-    return PauliChannel(dict(zip("XYZ", result[1:], strict=True)))
-
-
-def _compose_pauli_distributions(
-    left: tuple[float, ...], right: tuple[float, ...]
-) -> tuple[float, ...]:
-    """Distribution of the product of independent Paulis, indexed as (I, X, Y, Z).
-
-    Up to phase, Paulis multiply by XOR-ing their indices: e.g. X * Z ~ (1 ^ 3) = 2 ~ Y.  The result
-    is renormalized to prevent rounding errors from compounding over repeated compositions.
-    """
-    distribution = [
-        math.fsum(left[index] * right[index ^ outcome] for index in range(4))
-        for outcome in range(4)
-    ]
-    total = math.fsum(distribution)
-    return tuple(probability / total for probability in distribution)
-
-
-_PAULI_CHANNEL_1_ORDER = ("X", "Y", "Z")
-
-
-_PAULI_CHANNEL_2_ORDER = tuple(a + b for a in "IXYZ" for b in "IXYZ" if (a, b) != ("I", "I"))
 
 
 def _pauli_channel_1_shortcut(args: list[float]) -> tuple[str, list[float]]:

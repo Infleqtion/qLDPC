@@ -113,7 +113,7 @@ def test_get_max_error_weight() -> None:
 
 def test_get_sample_allocation() -> None:
     """Allocation of samples across error weights."""
-    allocation = monte_carlo.get_sample_allocation(1000, block_length=10, max_error_rate=0.2)
+    allocation = monte_carlo._get_sample_allocation(1000, block_length=10, max_error_rate=0.2)
     assert allocation[0] == 0  # weight 0 (no error) is not sampled
     assert np.sum(allocation) >= 1000  # every requested sample is allocated
     assert np.all(allocation[1:] > 0)  # no sampled weight is left without data
@@ -121,7 +121,7 @@ def test_get_sample_allocation() -> None:
     # the budget is apportioned in proportion to the envelope of the weight distribution: each
     # weight receives its share rounded up or down, but at least one sample, and no sample is lost
     num_samples, block_length, max_error_rate = 10**6, 40, 0.2
-    allocation = monte_carlo.get_sample_allocation(num_samples, block_length, max_error_rate)
+    allocation = monte_carlo._get_sample_allocation(num_samples, block_length, max_error_rate)
     probs = monte_carlo._get_max_error_probs_by_weight(
         block_length, max_error_rate, allocation.size - 1
     )
@@ -135,39 +135,39 @@ def test_get_sample_allocation() -> None:
     # floor of each share is what makes that hold, which these parameters are chosen to expose:
     # rounding to nearest instead would spend more than the budget, leaving nothing to redistribute
     num_samples, block_length = 1000, 5
-    allocation = monte_carlo.get_sample_allocation(num_samples, block_length, 0.2)
+    allocation = monte_carlo._get_sample_allocation(num_samples, block_length, 0.2)
     probs = monte_carlo._get_max_error_probs_by_weight(block_length, 0.2, allocation.size - 1)
     shares = probs[1:] / probs.sum() * num_samples
     assert np.min(shares) > 1 and np.round(shares).sum() > num_samples
     assert np.sum(allocation) == num_samples
 
     # weights that the decoder is taken to decode perfectly get no samples at all
-    allocation = monte_carlo.get_sample_allocation(1000, 40, 0.2, min_error_weight=4)
+    allocation = monte_carlo._get_sample_allocation(1000, 40, 0.2, min_error_weight=4)
     assert not allocation[:4].any() and np.all(allocation[4:] > 0)
 
     # weight 0 is a no-error case, so a min_error_weight below one is rejected
     with pytest.raises(ValueError, match="min_error_weight must be at least 1"):
-        monte_carlo.get_sample_allocation(1000, 10, 0.2, min_error_weight=0)
+        monte_carlo._get_sample_allocation(1000, 10, 0.2, min_error_weight=0)
 
     # an empty budget measures nothing, so it covers exactly the weights a caller has declared
     # cannot fail and treats every heavier error as a failure: the whole reported rate is then
     # truncation, and the declared weights stay out of it
-    assert np.array_equal(monte_carlo.get_sample_allocation(0, 10, 0.2), [0])
-    assert np.array_equal(monte_carlo.get_sample_allocation(0, 10, 0.2, 4), np.zeros(4))
+    assert np.array_equal(monte_carlo._get_sample_allocation(0, 10, 0.2), [0])
+    assert np.array_equal(monte_carlo._get_sample_allocation(0, 10, 0.2, 4), np.zeros(4))
 
     # a claim reaching past the block length covers the same weights as one that stops there, and is
     # clamped to it rather than sizing the returned array by the claim
     assert np.array_equal(
-        monte_carlo.get_sample_allocation(0, 10, 0.2, 10**8),
-        monte_carlo.get_sample_allocation(1000, 10, 0.2, 10**8),
+        monte_carlo._get_sample_allocation(0, 10, 0.2, 10**8),
+        monte_carlo._get_sample_allocation(1000, 10, 0.2, 10**8),
     )
 
     # nothing worth sampling is a different statement: it says the weights in range do not fail, so
     # the range is covered without spending anything on it, and nothing in it is a failure
     for allocation, covered in [
-        (monte_carlo.get_sample_allocation(1000, 10, 0.0), 11),  # no error possible
-        (monte_carlo.get_sample_allocation(1000, 10, 0.05, 20), 11),  # none of them can fail
-        (monte_carlo.get_sample_allocation(1000, 0, 0.2), 1),  # no error locations to err
+        (monte_carlo._get_sample_allocation(1000, 10, 0.0), 11),  # no error possible
+        (monte_carlo._get_sample_allocation(1000, 10, 0.05, 20), 11),  # none of them can fail
+        (monte_carlo._get_sample_allocation(1000, 0, 0.2), 1),  # no error locations to err
     ]:
         assert np.array_equal(allocation, np.zeros(covered))
 
@@ -176,14 +176,14 @@ def test_get_sample_allocation() -> None:
     # would silently admit it, every nan comparison being false
     for max_error_rate in [1.5, float("nan")]:
         with pytest.raises(ValueError, match=r"must lie in \[0, 1\]"):
-            monte_carlo.get_sample_allocation(1000, 10, max_error_rate)
+            monte_carlo._get_sample_allocation(1000, 10, max_error_rate)
 
 
 def test_jeffreys_variance() -> None:
     """Posterior variance of a binomial rate under a Jeffreys prior."""
     events = np.array([0, 0, 5])
     trials = np.array([0, 100, 100])
-    variances = monte_carlo.jeffreys_variance(events, trials)
+    variances = monte_carlo._jeffreys_variance(events, trials)
 
     # no data reverts to the prior variance 1/8 (Beta(1/2, 1/2))
     assert np.isclose(variances[0], 1 / 8)
@@ -202,7 +202,7 @@ def test_error_rate_func_from_sampler() -> None:
         return num_samples // 2, num_samples % 2
 
     func = monte_carlo.ErrorRateFunc.from_sampler(sample, 100, 10, 0.1, min_error_weight=2)
-    allocation = monte_carlo.get_sample_allocation(100, 10, 0.1, min_error_weight=2)
+    allocation = monte_carlo._get_sample_allocation(100, 10, 0.1, min_error_weight=2)
     assert calls == [(weight, allocation[weight]) for weight in np.nonzero(allocation)[0]]
     assert np.array_equal(func.num_samples, allocation)
     assert np.array_equal(func.num_failures, allocation // 2)

@@ -1,22 +1,19 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for _util.py."""
+"""Unit tests for _utils.py."""
 
 import importlib
 import pathlib
 import sys
 import uuid
-import warnings
-from types import ModuleType
+from types import FunctionType, ModuleType
 
 import pytest
 
-from qldpc import decoders
-from qldpc._util import (
+from qldpc._utils import (
+    _lazy_import,
     format_docstring,
-    get_deprecated_alias,
     get_external_caller_stacklevel,
-    lazy_import,
 )
 
 
@@ -25,11 +22,11 @@ def test_lazy_import() -> None:
     name = "colorsys"  # a small stdlib module not otherwise imported by the test suite
     sys.modules.pop(name, None)
 
-    module = lazy_import(name)  # uncached path
+    module = _lazy_import(name)  # uncached path
     assert isinstance(module, ModuleType)
     assert callable(module.rgb_to_hls)  # force the deferred execution
 
-    assert lazy_import(name) is module  # cached path returns the same module
+    assert _lazy_import(name) is module  # cached path returns the same module
 
 
 def test_lazy_import_failure(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -39,7 +36,7 @@ def test_lazy_import_failure(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyP
     module_path.write_text('value = 1\nraise RuntimeError("broken install")\n')
     monkeypatch.syspath_prepend(str(tmp_path))
 
-    module = lazy_import(name)
+    module = _lazy_import(name)
     for _ in range(2):
         with pytest.raises(RuntimeError, match="broken install"):
             _ = module.value
@@ -48,11 +45,11 @@ def test_lazy_import_failure(tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyP
     module_path.write_text("value = 2\n")
     importlib.invalidate_caches()
     assert module.value == 2
-    assert lazy_import(name) is module
+    assert _lazy_import(name) is module
     sys.modules.pop(name, None)
 
     with pytest.raises(ModuleNotFoundError, match="No module named"):
-        lazy_import(f"missing_{name}")
+        _lazy_import(f"missing_{name}")
 
 
 def test_format_docstring() -> None:
@@ -76,43 +73,16 @@ def test_format_docstring_without_docstring() -> None:
     assert func() is None
 
 
-def test_get_deprecated_alias() -> None:
-    """A deprecated alias resolves to its replacement, warning at the caller's line."""
-
-    class NewName: ...
-
-    aliases = {"OldName": NewName}
-    with pytest.warns(DeprecationWarning, match="OldName is deprecated; use NewName instead") as w:
-        assert get_deprecated_alias("some.module", "OldName", aliases) is NewName
-    assert w[0].filename == __file__
-
-    with pytest.raises(AttributeError, match=r"module 'some\.module' has no attribute 'Other'"):
-        get_deprecated_alias("some.module", "Other", aliases)
-
-    with pytest.warns(DeprecationWarning, match="use canonical.module.NewName instead"):
-        assert (
-            get_deprecated_alias(
-                "some.module",
-                "OldName",
-                aliases,
-                {"OldName": "canonical.module.NewName"},
-            )
-            is NewName
-        )
-
-
-def test_deprecated_alias_import_warns_once() -> None:
-    """Importing a deprecated name from a package warns once, although Python looks it up twice."""
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        from qldpc.decoders import Decoder
-    assert Decoder is decoders.ErrorDecoder
-    assert [str(record.message) for record in records] == [
-        "Decoder is deprecated; use ErrorDecoder instead"
-    ]
-    assert records[0].filename == __file__
-
-
 def test_get_external_caller_stacklevel() -> None:
     """Test modules are external callers, so a call from here has stacklevel 1."""
     assert get_external_caller_stacklevel() == 1
+
+    # a call from a qLDPC module is attributed to the caller of that module
+    def get_stacklevel() -> int:
+        return get_external_caller_stacklevel()
+
+    namespace = {
+        "__name__": "qldpc.module",
+        "get_external_caller_stacklevel": get_external_caller_stacklevel,
+    }
+    assert FunctionType(get_stacklevel.__code__, namespace)() == 2

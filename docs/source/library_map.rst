@@ -1,282 +1,257 @@
 Library map
 ===========
 
-This page explains how qLDPC represents codes, what each package does, and how common tasks fit together.
-It fills the gap between the :doc:`example notebooks <examples/index>` and the :doc:`API reference <autoapi/index>`.
+This page explains how qLDPC represents codes, what each package does, and how the packages work together.
 
-Choose the right documentation
-------------------------------
+Overview and which page to read
+-------------------------------
 
-* Use this page to understand how the library fits together and which part owns a task.
-* Use the :doc:`examples <examples/index>` for complete workflows that can be executed and adapted.
-* Use the :doc:`API reference <autoapi/index>` for exact signatures, details about each class and function, and construction-specific literature.
-* Use the `agent and contributor guide <https://github.com/qLDPCOrg/qLDPC/blob/main/AGENTS.md>`_ when changing the repository.
+* Read this page to learn the data model, how the packages connect, and what qLDPC supports.
+* Read :doc:`Choosing a decoder <decoders>` to select, build, and use decoders, including with Sinter.
+* Follow the :doc:`examples <examples/index>` for complete workflows that you can run and adapt.
+* Use the :doc:`API reference <autoapi/index>` for exact signatures, every public name, and construction-specific literature.
+* Read the `agent and contributor guide <https://github.com/qLDPCOrg/qLDPC/blob/main/AGENTS.md>`_ before changing qLDPC itself.
 
-Public APIs and experimental features
--------------------------------------
+Most user-facing names are exported from their subpackage, as in ``qldpc.codes.SurfaceCode``.
+Concrete decoder backends live in ``qldpc.decoders.custom`` and ``qldpc.decoders.external``, and tool integrations live in ``qldpc.external.gap`` and ``qldpc.external.sqetch``.
+Modules and names that start with an underscore are internal, and everything under ``qldpc.experimental`` can change without notice.
 
-The top-level ``qldpc`` package contains subpackages such as ``qldpc.codes``, ``qldpc.decoders``, and ``qldpc.circuits``.
-Their public classes and functions are available directly from those subpackages; for example, construct a surface code as ``qldpc.codes.SurfaceCode(...)`` rather than importing its defining module.
-
-Imports from these ordinary subpackages are public API and should remain compatible.
-Everything under ``qldpc.experimental`` is different: it is under active development and can change without notice or deprecation.
-Pin the qLDPC version and validate results independently before depending on an experimental feature.
-
-Core representations
+Packages at a glance
 --------------------
-
-Finite fields
-~~~~~~~~~~~~~
-
-Code matrices are ``galois.FieldArray`` objects.
-Constructors use :math:`GF(2)` by default and accept either a field order or a ``galois`` field class where nonbinary behavior is supported.
-Extension-field values are field elements, not ordinary integers modulo the field order; preserve the array's field type when transforming a matrix.
-
-Classical codes
-~~~~~~~~~~~~~~~
-
-A ``qldpc.codes.ClassicalCode`` is defined by a parity-check matrix :math:`H`.
-A word :math:`x` is in the code exactly when :math:`Hx = 0`.
-Built-in classical families and custom matrices share this representation, so generators, Tanner graphs, distances, puncturing, shortening, and code products use the same core interface.
-
-Quantum and subsystem codes
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A ``qldpc.codes.QuditCode`` stores each Pauli check as a symplectic row :math:`[P_X\mid P_Z]`.
-For a stabilizer code these rows commute and generate the stabilizer group.
-For a subsystem code they can fail to commute and instead generate the gauge group; stabilizers are derived from its center.
-
-A ``qldpc.codes.CSSCode`` keeps separate matrices :math:`H_X` and :math:`H_Z`.
-When :math:`H_X H_Z^T = 0`, their rows define commuting X- and Z-type stabilizers.
-A nonzero product is valid only when the object is intentionally a subsystem code.
-
-Some built-in families carry known parameters from their construction or the literature.
-Some methods also accept explicit promises, such as equal X and Z distances.
-These values and promises are trusted rather than recomputed automatically; exact distance calculations can be exponential.
-
-Exact distances
-~~~~~~~~~~~~~~~
-
-The distance of a classical code is the minimum Hamming weight of a nonzero codeword.
-The distance of a stabilizer or subsystem code is the minimum weight of a nontrivial logical operator.
-CSS codes additionally have separate X and Z distances, which are the minimum weights of X-type and Z-type logical operators.
-
-qLDPC computes the exact distance of binary codes with the Brouwer--Zimmermann algorithm, following `Algorithm 994 <https://arxiv.org/abs/1603.06757>`_ and its `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_.
-The algorithm forms candidate vectors by XORing generator rows and seeks the lightest one that is a nonzero codeword or a nontrivial logical operator.
-qLDPC adds some minor optimizations:
-
-* Candidates are evaluated by a compiled Numba kernel that reuses XORs of shared row prefixes.
-* Contributions to a candidate's weight that are already known are not recalculated.
-* The search tries different choices of coordinates to obtain stronger lower bounds and omits searches that do not help certify the result.
-* Overlapping information sets are used when a bounded coverage-balanced search predicts less enumeration work.
-  Their lower bound accounts for repeated coordinates instead of treating overlapping blocks as disjoint.
-* Exhaustive enumeration is used instead when doing so is estimated to be cheaper.
-* When computing the overall distance of a CSS code, the X and Z searches share the lightest logical-operator weight found so far.
-* A candidate is checked for nontrivial logical action only if its weight could improve the current bound.
-* If all vectors in the search space have even weight, rounding the lower bound up to an even value can allow the search to stop sooner.
-
-Distance-finding methods exit early once an observed upper bound on distance is at most ``cutoff``; the default cutoff of one gives an exact result for nontrivial codes.
-Pass ``method="brute_force"`` to distance-finding methods to instead compute distance via brute-force enumeration.
-The default ``method="brouwer_zimmermann"`` also has the alias ``"information_sets"``.
-
-:class:`qldpc.codes.CSSLogicalCounter <qldpc.codes.distance.logical_counts.CSSLogicalCounter>` counts the nontrivial X-only and Z-only logical operators of a given weight in a binary CSS code.
-The weight defaults to the code distance, at which the counter can also count all nontrivial logical operators, including those of mixed type.
-Available ``method=`` options are ``brouwer_zimmermann`` (the default), ``macwilliams``, and ``brute_force`` (a reference for small codes), with aliases ``information_sets`` for ``brouwer_zimmermann`` and ``weight_enumerator`` for ``macwilliams``.
-Subsystem codes are supported by the ``brouwer_zimmermann`` and ``brute_force`` methods, but not by the ``macwilliams`` method.
-For details and supported options, see ``help(qldpc.codes.CSSLogicalCounter.count_logical_ops)``.
-For a one-off count, :func:`qldpc.codes.count_logical_ops_css(code) <qldpc.codes.distance.logical_counts.count_logical_ops_css>` builds a counter and calls its ``count_logical_ops`` method; pass ``count_pauli=True`` to also count operators of mixed type.
-
-Distance bounds
-~~~~~~~~~~~~~~~
-
-``CSSCode.get_distance_bound`` accepts a typed ``backend`` selector.
-Set ``backend="gap"`` to use GAP/QDistRnd, ``backend="sqetch"`` to use the optional GPU-accelerated random-ISD estimator for binary CSS codes, or ``backend="decoder"`` to use qLDPC's decoder-based estimator.
-By default, ``backend="auto"`` chooses the first applicable backend in this order: an installed ``sqetch`` for binary CSS codes, available GAP/QDistRnd, then the decoder.
-``sqetch`` is not published on PyPI; install the version that qLDPC is tested against with:
-
-.. code-block:: bash
-
-   python -m pip install 'sqetch[gpu] @ git+https://github.com/a7b/yarn.git@e9ce9d0fcecc973988558bfee27fab6d6b8d7f97#subdirectory=sqetch'
-
-The backend requires a CUDA-enabled PyTorch installation and a visible CUDA GPU.
-
-``sqetch`` estimates the X- and Z-distance sectors separately.
-The lowest logical weight it observes is an upper bound on the corresponding distance.
-
-Codes remember the best upper bound on distance that they have found or been given, such as the witness-certified bounds loaded by ``QuditCode.from_qldpc_challenge_id``.
-CSS codes remember X and Z bounds separately.
-With the default ``num_trials=None``, ``get_distance_bound`` returns the exact distance or best known bound if there is one, and otherwise computes a single bound.
-An explicit ``num_trials`` always runs that many trials and never returns a worse bound than the best known one.
-
-Graphs, complexes, and lifted matrices
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Code matrices can be converted to Tanner graphs whose nodes distinguish data and checks.
-The ``qldpc.objects`` module also provides Pauli labels, Cayley complexes, and chain complexes used by geometric and product constructions.
-
-The ``qldpc.abstract`` package provides finite groups, group rings, semisimple-ring linear algebra, and ``RingArray``.
-A ``RingArray`` is a matrix over a group algebra whose entries can be lifted to blocks over a finite field; lifted-product and related code families build on this representation.
-
-What each package does
-----------------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 18 39 43
+   :widths: 16 32 32 20
 
    * - Package
      - What it does
+     - Entry points
      - Start here
    * - ``qldpc.codes``
-     - Core classical, quantum, CSS, and subsystem code models; built-in constructions; distance and code-capacity estimation.
-       Fixed-weight statistics and allocation live separately from code-capacity detector-error-model and decoder orchestration.
-     - :doc:`qLDPC basics <examples/basics>` and :doc:`codes API <autoapi/qldpc/codes/index>`.
+     - Classical, quantum, CSS, and subsystem codes; built-in families; distances; code-capacity logical error rates.
+     - ``ClassicalCode``, ``QuditCode``, ``CSSCode``, families such as ``SurfaceCode`` and ``BBCode``, and the methods ``get_code_params``, ``get_distance``, and ``get_logical_error_rate_func``.
+     - :doc:`qLDPC basics <examples/basics>`
    * - ``qldpc.decoders``
-     - Decoder protocol and adapters; lookup, ILP, BP-family, Frontier, MWPM, Relay-BP, detector-error-model, Sinter, and windowed decoding support.
-     - :doc:`logical-error-rate examples <examples/index>` and :doc:`decoders API <autoapi/qldpc/decoders/index>`.
+     - Decoder specifications, error and observable decoders, detector-error-model arrays, and Sinter and windowed decoding.
+     - Specifications such as ``bp_osd``, ``mwpm``, ``guf``, and ``tesseract``; their ``build`` and ``build_observable_decoder`` methods; ``SinterDecoder``.
+     - :doc:`Choosing a decoder <decoders>` and the :doc:`decoders notebook <examples/decoders>`
    * - ``qldpc.circuits``
-     - Qubit-only Stim circuits, memory experiments, benchmarking, state-preparation diagnostics, encoders, noise models, scheduling, and transversal operations.
-     - :doc:`noise models <examples/noise_models>`, :doc:`transversal gates <examples/transversal_gates>`, and :doc:`circuits API <autoapi/qldpc/circuits/index>`.
+     - Qubit-only Stim circuits: memory experiments, noise models, encoders, state-preparation diagnostics, and transversal gates.
+     - ``get_memory_experiment``, ``DepolarizingNoiseModel``, ``SI1000NoiseModel``, ``get_encoding_circuit``, and ``get_transversal_ops``.
+     - :doc:`Noise models <examples/noise_models>` and :doc:`transversal gates <examples/transversal_gates>`
    * - ``qldpc.abstract``
-     - Groups, group rings, lifted matrices, Howell-form linear algebra, and Wedderburn--Artin tools.
-     - :doc:`abstract API <autoapi/qldpc/abstract/index>`.
-   * - ``qldpc.math`` and ``qldpc.objects``
-     - Finite-field and symplectic helpers, Pauli labels, graph nodes, Cayley complexes, and chain complexes.
-     - :doc:`math API <autoapi/qldpc/math/index>` and :doc:`objects API <autoapi/qldpc/objects/index>`.
+     - Finite groups, group rings, matrices over group algebras, and semisimple-ring linear algebra.
+     - ``Group``, ``GroupRing``, and ``RingArray``.
+     - :doc:`abstract API <autoapi/qldpc/abstract/index>`
+   * - ``qldpc.objects`` and ``qldpc.math``
+     - Pauli labels, Tanner-graph nodes, Cayley and chain complexes, and symplectic and finite-field array helpers.
+     - ``Pauli``, ``CayleyComplex``, ``ChainComplex``, and ``symplectic_conjugate``.
+     - :doc:`objects API <autoapi/qldpc/objects/index>` and :doc:`math API <autoapi/qldpc/math/index>`
    * - ``qldpc.external`` and ``qldpc.cache``
-     - Optional GAP, GUAVA, QDistRnd, GroupNames, and code-database integration, plus persistent caches for expensive results.
-     - :doc:`external API <autoapi/qldpc/external/index>` and :doc:`cache API <autoapi/qldpc/cache/index>`.
+     - Access to GAP (with GUAVA and QDistRnd) and the optional ``sqetch`` distance estimator, plus persistent disk caches.
+     - ``external.gap``, ``external.sqetch``, and ``cache.clear_entry``.
+     - `External tools, side effects, and caching`_
    * - ``qldpc.experimental``
-     - Unstable constructions under active development, currently including lattice-surgery tools.
-     - :doc:`lattice surgery <examples/lattice_surgery>` and :doc:`experimental API <autoapi/qldpc/experimental/index>`.
+     - Unstable research code, currently lattice surgery.
+     - ``experimental.surgery``.
+     - :doc:`Lattice surgery <examples/lattice_surgery>`
 
-How the packages work together
-------------------------------
-
-The packages call one another rather than following a strict one-way hierarchy.
-For example, code-level estimators use decoders, decoder adapters understand code and detector-error-model objects, and circuit workflows combine both.
+The arrows below show which objects pass between packages.
 
 .. code-block:: text
 
-   math / abstract / objects
-              |
-              v
-            codes <----------> decoders
-              \                  /
-               \                /
-                    circuits
-                       |
-                Stim circuits and
-             detector error models
+   qldpc.abstract, qldpc.objects  <-- groups --  qldpc.external
+   Group, RingArray, CayleyComplex               GAP (GUAVA, QDistRnd), sqetch
+                |                                          |
+                | construction inputs                      | named codes,
+                v                                          v distance bounds
+   +---------------------------- qldpc.codes ----------------------------+
+   |                 ClassicalCode, QuditCode, CSSCode                   |
+   +---------------------------------------------------------------------+
+                |                                          |
+                | qubit QuditCode                          | parity-check matrices
+                v                                          v
+         qldpc.circuits                              qldpc.decoders
+                |                                          ^
+                | stim.Circuit --> stim.DetectorErrorModel |
+                +------------------------------------------+
 
-   external integrations and disk caches support expensive algebra,
-   construction, and distance workflows across these packages.
+Code methods call decoders for code-capacity estimates and decoder-based distance bounds.
+Circuit workflows pass detector error models to decoders directly, or through a ``SinterDecoder`` and Sinter.
+``qldpc.cache`` stores the results of slow external lookups on disk.
 
-Common workflows
-----------------
+Data model
+----------
 
-Construct and inspect a code
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Fields
+~~~~~~
 
-Built-in and custom codes share the same basic interface:
+Code matrices are ``galois.FieldArray`` objects.
+Constructors use :math:`GF(2)` by default, and accept a field order or a ``galois`` field class as ``field=``.
+Extension-field values are field elements, not integers modulo the field order, so preserve the array's field type when transforming a matrix.
+
+Classical and quantum codes
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A :class:`~qldpc.codes.common.ClassicalCode` is defined by a parity-check matrix :math:`H`, and a word :math:`x` is in the code exactly when :math:`Hx = 0`.
+A :class:`~qldpc.codes.common.QuditCode` stores each Pauli check as a symplectic row :math:`[P_X\mid P_Z]`.
+A :class:`~qldpc.codes.common.CSSCode` stores X-type and Z-type checks as separate matrices :math:`H_X` and :math:`H_Z`, which commute when :math:`H_X H_Z^T = 0`.
+Built-in families and codes built from custom matrices share these classes and their methods.
+
+By default, qLDPC infers whether a code is a subsystem code from whether its checks commute.
+If they do not, the checks generate a gauge group, and the stabilizers are derived from its center.
+Check ``code.is_subsystem_code`` when you meant to build a stabilizer code.
+The :doc:`basics notebook <examples/basics>` builds classical, CSS, and subsystem codes from matrices.
+
+Known parameters and promises
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Some built-in families and online lookups record parameters known from their construction or source, such as a distance.
+Some constructor arguments are promises, such as ``CSSCode(..., promise_equal_distance_xz=True)``, which lets qLDPC compute the distance from one sector alone.
+qLDPC trusts recorded parameters and promises rather than verifying them, so a false promise gives wrong distances.
+
+Algebraic inputs of lifted and geometric families
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Lifted-product families such as :class:`~qldpc.codes.quantum.LPCode` take :class:`~qldpc.abstract.ring_array.RingArray` matrices, whose entries belong to a :class:`~qldpc.abstract.rings.GroupRing` over a finite field.
+Each entry lifts to a block matrix over that field, and ``RingArray.lift()`` returns the resulting ``galois.FieldArray``.
+Every ``RingArray`` has one base ring, and arithmetic between arrays over different rings raises an error.
+:class:`~qldpc.codes.quantum.QTCode` builds a :class:`~qldpc.objects.CayleyComplex` from two subsets of a group, and families such as :class:`~qldpc.codes.quantum.T4Code` (built from a 4×4 integer lattice matrix) build a :class:`~qldpc.objects.ChainComplex` internally and expose it as ``code.chain``.
+The API reference documents each family's conventions and literature.
+
+Distances across packages
+-------------------------
+
+``get_distance()`` computes an exact distance, and ``get_distance_bound`` computes a randomized upper bound; CSS codes also have separate X and Z distances.
+Exact distances of binary codes use an optimized `Brouwer--Zimmermann search <https://github.com/qLDPCOrg/qLDPC/blob/main/src/qldpc/codes/distance/brouwer_zimmermann.md>`_, and nonbinary codes use exhaustive enumeration; both can take exponential time.
+``get_distance_exact(cutoff=c)`` stops once it finds a nontrivial word of weight at most ``c``.
+A result of at most ``c`` is therefore only an upper bound, while a larger result, or any result with ``cutoff <= 1`` (the default is 1), is exact.
+Distance-bound backends depend on the class: ``ClassicalCode`` uses a decoder, a non-CSS ``QuditCode`` uses GAP's QDistRnd, and ``CSSCode`` supports ``sqetch`` (binary only), GAP, and a decoder.
+For ``CSSCode``, the default ``backend="auto"`` tries those three in order and uses GAP only if a GAP binding or executable can be called, so it never falls back to the manual copy-and-paste workflow.
+It can still ask on standard input before installing a missing GUAVA or QDistRnd package.
+Codes remember the best distance bound that they have computed or been given, and CSS codes remember X and Z bounds separately.
+With ``num_trials=None``, ``get_distance_bound`` returns the exact distance or best known bound if there is one, and otherwise computes one bound.
+An explicit ``num_trials`` runs that many trials, and never returns a worse bound than the best known one.
+``forget_distance()`` discards remembered distances and bounds.
+:class:`~qldpc.codes.distance.logical_counts.CSSLogicalCounter` and :func:`~qldpc.codes.distance.logical_counts.count_logical_ops_css` count the logical operators of a given weight in a binary CSS code.
+
+From codes to logical error rates
+---------------------------------
+
+An error decoder infers an error from a syndrome with ``decode_errors``, while an observable decoder predicts observable flips with ``decode_observables``.
+A decoder specification such as ``decoders.mwpm()`` builds an error decoder for a parity-check matrix with ``.build(matrix)``, or an observable decoder for a Stim detector error model with ``.build_observable_decoder(dem)``.
+:doc:`Choosing a decoder <decoders>` explains both kinds, the available specifications, and custom decoders.
+
+In the code-capacity model, each qudit fails independently and checks are measured perfectly.
+:meth:`~qldpc.codes.common.CSSCode.get_logical_error_rate_func` returns a function from a physical error rate to an estimated logical error rate and its uncertainty:
 
 .. code-block:: python
-
-   from qldpc import codes
-
-   code = codes.SurfaceCode(5)
-   print(code.get_code_params())
-   logical_ops = code.get_logical_ops()
-
-Use ``code.matrix`` for a classical or general quantum check matrix, and ``code.matrix_x`` / ``code.matrix_z`` for the two CSS sectors.
-Use ``forget_distance()`` deliberately when a cached or construction-supplied distance (or distance bound) should be discarded before recomputation.
-
-Build a custom CSS code
-~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import numpy as np
-
-   from qldpc import codes
-
-   matrix_x = np.array([[1, 1, 0]])
-   matrix_z = np.array([[0, 0, 1]])
-   code = codes.CSSCode(matrix_x, matrix_z)
-
-For a stabilizer CSS code, verify ``matrix_x @ matrix_z.T == 0`` over the intended field.
-If the checks do not commute, make sure you intend to build a subsystem code and test that behavior.
-
-Choose or supply a decoder
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Create a decoder specification with a helper such as ``decoders.bp_lsd(...)`` or ``decoders.mwpm(...)``, then pass it as ``decoder=`` or build a decoder for a matrix with ``.build(matrix)``.
-Use ``.build_observable_decoder(dem)`` to predict observable flips from a Stim detector error model.
-Some specifications, such as ``decoders.frontier(...)``, predict observable flips but cannot infer errors, so they are accepted only where observable flips are wanted.
-The default decoder is BP+OSD for binary codes and GUF otherwise.
-``qldpc.decoders.SinterDecoder`` builds observable decoders for Sinter.
-Code-capacity estimators accept either kind of decoder.
-See :doc:`Choosing a decoder <decoders>` for the difference between error and observable decoders, custom decoders, and per-sector CSS choices.
-
-.. code-block:: python
-
-   import numpy as np
 
    from qldpc import codes, decoders
 
-   code = codes.RepetitionCode(5)
-   syndrome = np.array([1, 0, 0, 0])
-   decoder = decoders.bp_osd().build(code.matrix)
-   correction = decoder.decode_errors(syndrome)
+   code = codes.SurfaceCode(3)
+   estimate = code.get_logical_error_rate_func(num_samples=1000, decoder=decoders.mwpm())
+   logical_error_rate, uncertainty = estimate(0.01)
 
-Only some decoders can signal an erasure.
-Those decoders append the erasure flag as the last entry of each prediction.
+CSS codes also accept separate ``decoder_x=`` and ``decoder_z=`` specifications.
+Without a specification, the default decoder is BP+OSD for binary codes and GUF otherwise.
 
-Build and simulate a memory circuit
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+For circuit-level noise, ``qldpc.circuits`` builds a memory experiment as a ``stim.Circuit``, with errors inserted by a noise model.
+Stim converts the circuit into a ``stim.DetectorErrorModel`` with ``circuit.detector_error_model()``, and a :class:`~qldpc.decoders.sinter.core.SinterDecoder` builds an observable decoder for each detector error model that Sinter samples:
 
 .. code-block:: python
 
-   from qldpc import circuits, codes
+   from qldpc import circuits, codes, decoders
    from qldpc.objects import Pauli
 
    code = codes.SurfaceCode(3)
-   circuit = circuits.get_memory_experiment(code, basis=Pauli.Z, num_rounds=3)
+   noise_model = circuits.DepolarizingNoiseModel(1e-3)
+   circuit = circuits.get_memory_experiment(
+       code, basis=Pauli.Z, num_rounds=3, noise_model=noise_model
+   )
+   sinter_decoder = decoders.SinterDecoder(decoder=decoders.mwpm())
+   logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
+       circuit, sinter_decoder, num_samples=1000
+   )
 
-Circuit utilities reject nonbinary codes.
-Encoding circuits are not fault-tolerant, and transversal-gate searches can be exponential.
-For sliding-window decoding, detector coordinates are only a heuristic source of time; pass ``detector_to_time`` when a model uses another convention.
+For larger studies, pass the ``SinterDecoder`` to ``sinter.collect``.
+The :doc:`code-capacity <examples/logical_error_rates/1_code_capacity>`, :doc:`quantum-memory <examples/logical_error_rates/2_quantum_memory_x_or_z>`, and :doc:`sliding-window <examples/logical_error_rates/4_sliding_window_decoding>` notebooks develop these workflows, and the :doc:`noise-model notebook <examples/noise_models>` explains the noise models.
 
 Certify a state-preparation circuit
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``circuits.certify_state_prep_spread`` checks a noisy Clifford circuit that prepares a stabilizer state.
+:func:`qldpc.circuits.certify_state_prep_spread <qldpc.circuits.benchmarking.state_prep_certification.certify_state_prep_spread>` checks a noisy Clifford circuit that prepares a stabilizer state.
 It considers every set of up to ``max_faults`` faults that triggers none of the detectors you post-select on.
 For each such set, the error left on the output must be equivalent to an error whose weight is at most the number of faults.
 Errors that differ by a stabilizer of the prepared state count as equivalent.
 Weight is physical Pauli weight or CSS weight (the larger of the X weight and the Z weight), chosen automatically for the prepared state unless you set ``css_weight=``.
 The check is exact, and a failure comes with a concrete set of faults.
-See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` for examples and the :func:`API documentation <qldpc.circuits.benchmarking.state_prep_certification.certify_state_prep_spread>` for details.
+Only the prepared state is certified, not the circuits that use it next.
+The :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` shows examples.
 
-Optional integrations and side effects
---------------------------------------
+Support and limitations
+-----------------------
 
-* Install ``qldpc[gap]`` for the optional ``passagemath-gap`` libgap binding.
-  The binding requires non-Windows Python 3.13.
-  If neither option is available, some paths offer a manual copy/paste workflow that reads standard input and uses the system clipboard.
-* When a GAP package is unavailable to libgap, qLDPC asks for permission to install it with GAP's PackageManager so that the active libgap runtime can discover it.
-  If that attempt fails and a separate GAP executable is available, qLDPC prints manual installation instructions before using the executable instead.
-  Packages missing from the executable backend can trigger an installation prompt and ``git clone`` into a ``gap`` directory in qLDPC's user cache directory.
-* Group and code lookups may use online resources when local data and GAP cannot answer the request.
-* Expensive results can be cached under the user's platform cache directory.
-  A cached function ``func`` also has a ``func.refresh(...)`` method, which takes the same arguments, recomputes the result, and overwrites the cached value.
-  Disk caching is intentionally bypassed while pytest is running.
-* The test configuration disables network sockets.
-  Tests for optional integrations use mocks rather than live services.
+The following table summarizes support by field; the subsystem column applies to subsystem codes over any field.
 
-Where to go next
-----------------
+===============  ===========================  ==============================  ===================================  ========================================
+Capability       :math:`GF(2)`                Prime field :math:`GF(p)`       Extension field :math:`GF(p^m)`      Subsystem codes
+===============  ===========================  ==============================  ===================================  ========================================
+Codes            Yes                          Yes                             Yes                                  Yes, inferred from non-commuting checks
+Exact distance   Brouwer--Zimmermann          Exhaustive enumeration          Exhaustive enumeration               Yes
+Distance bounds  Decoder, GAP, or ``sqetch``  Decoder or GAP                  Decoder or GAP                       CSS codes only
+Decoders         All built-in decoders        GUF (default), ILP, and lookup  GUF (default) and lookup             Yes, in code-capacity estimates
+Circuits         Yes                          No                              No                                   No memory experiments
+===============  ===========================  ==============================  ===================================  ========================================
 
-* Follow the :doc:`examples <examples/index>` for runnable workflows.
-* Browse the :doc:`API reference <autoapi/index>` for exact behavior and literature.
-* Read `AGENTS.md <https://github.com/qLDPCOrg/qLDPC/blob/main/AGENTS.md>`_ before modifying the implementation.
+Other limitations:
+
+* Circuit and tableau tools work only with qubit codes, and memory experiments for non-CSS codes need ``basis=None``.
+* :func:`~qldpc.circuits.encoding.get_encoding_circuit` builds a valid encoder that is not fault-tolerant.
+* Transversal-gate searches enumerate code automorphisms, can take exponential time, and may run GAP or prompt on standard input.
+* Windowed decoders such as :class:`~qldpc.decoders.sinter.window.SlidingWindowDecoder` infer each detector's time from its coordinates by a heuristic; pass ``detector_to_time`` when a detector error model uses another convention.
+
+What qLDPC computes exactly, bounds, and trusts
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+* Exact: ``get_distance_exact`` with ``cutoff <= 1`` (the default is 1), or whenever its result exceeds the cutoff, which ``get_distance`` calls unless it is given ``bound=``, and logical-operator counts.
+* Upper bounds: ``get_distance_bound`` with every backend.
+* Estimates: code-capacity and circuit-level logical error rates are sampled.
+  A code-capacity estimate treats unsampled heavy errors as failures, so it can be high by up to the amount that its ``truncation_error_bound`` method reports.
+* Trusted, not verified: recorded parameters of built-in families and online lookups, promises such as ``promise_equal_distance_xz``, an explicit ``CSSCode(..., is_subsystem_code=...)``, a code-capacity ``min_error_weight`` below which errors are assumed to be corrected, and an explicit ``detector_to_time`` mapping.
+
+External tools, side effects, and caching
+-----------------------------------------
+
+GAP backends
+~~~~~~~~~~~~
+
+qLDPC calls GAP in process through the ``passagemath-gap`` libgap binding when it is installed, with ``pip install 'qldpc[gap]'`` on Python 3.13 outside Windows.
+Otherwise, qLDPC runs a ``gap`` executable on ``PATH`` in a subprocess.
+If neither backend is available, some functions offer a manual workflow that prints GAP commands, copies them to the system clipboard, and reads GAP's output from standard input.
+When a needed GAP package such as GUAVA or QDistRnd is missing, qLDPC asks on standard input before installing it: with GAP's PackageManager for libgap, or by cloning it with Git into qLDPC's user cache directory for the executable.
+
+Functions that can use GAP include :meth:`ClassicalCode.from_name <qldpc.codes.common.ClassicalCode.from_name>`, :meth:`ClassicalCode.get_automorphism_group <qldpc.codes.common.ClassicalCode.get_automorphism_group>`, :meth:`abstract.Group.from_name <qldpc.abstract.groups.Group.from_name>`, distance bounds with the GAP backend, and transversal-gate searches such as :func:`~qldpc.circuits.transversal.get_transversal_ops`.
+
+Code and group lookups
+~~~~~~~~~~~~~~~~~~~~~~
+
+* :meth:`QuditCode.from_qecdb_id <qldpc.codes.common.QuditCode.from_qecdb_id>` and :meth:`QuditCode.from_qldpc_challenge_id <qldpc.codes.common.QuditCode.from_qldpc_challenge_id>` download code data on their first call for each ID, and later calls reuse the copy cached on disk.
+* ``ClassicalCode.from_name`` runs GAP and GUAVA rather than an online lookup, and also caches its result on disk.
+* ``Group.from_name`` tries a small local database, then GAP if a GAP binding or executable can be called (GAP may ask before installing a missing package), then GroupNames.org for a ``SmallGroup``, and finally the manual GAP workflow.
+
+Pass ``refresh=True`` to ``ClassicalCode.from_name``, ``QuditCode.from_qecdb_id``, or ``QuditCode.from_qldpc_challenge_id`` to bypass and replace its cached result.
+
+``sqetch``
+~~~~~~~~~~
+
+The optional ``sqetch`` distance-bound backend for binary CSS codes requires a CUDA GPU and is not published on PyPI.
+See the `README <https://github.com/qLDPCOrg/qLDPC#sqetch-distance-estimation>`_ for the tested installation command.
+
+Disk caches
+~~~~~~~~~~~
+
+qLDPC caches the results of slow or interactive lookups, such as named codes, groups, downloaded code data, and pasted GAP output, in a ``qldpc`` directory under the user's platform cache directory.
+A function decorated with :func:`qldpc.cache.use_disk_cache` has a ``refresh`` method, which takes the same arguments, recomputes the result, and overwrites the cached value.
+:func:`qldpc.cache.clear_entry(cache_name, key) <qldpc.cache.clear_entry>` removes a single cached entry.
+Any process that has imported ``pytest`` bypasses the disk caches, so every call recomputes its result and nothing is saved.

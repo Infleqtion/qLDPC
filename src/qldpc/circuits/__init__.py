@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Stim circuits: encoders, memory experiments, noise models, benchmarks, and transversal gates."""
+
+from typing import TYPE_CHECKING
+
+from qldpc import _deprecations
+
 from .benchmarking import (
     StatePrepSpreadCertificate,
     StatePrepSpreadCounterexample,
@@ -22,7 +28,6 @@ from .common import (
     get_pauli_product_measurements,
     get_unaddressed_measurements,
     remap_qubit_target,
-    restrict_to_qubits,
     with_remapped_qubits,
 )
 from .encoding import (
@@ -45,7 +50,6 @@ from .memory import (
     get_memory_experiment_parts,
     get_observables,
     get_qubit_coordinates,
-    validate_syndrome_qubit_ids,
 )
 from .noise_model import (
     DEFAULT_IMMUNE_OP_TAG,
@@ -117,7 +121,10 @@ __all__ = [
     "get_unaddressed_measurements",
     "remap_qubit_target",
     "restrict_tableau",
-    "restrict_to_qubits",
-    "validate_syndrome_qubit_ids",
     "with_remapped_qubits",
 ]
+
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
+
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

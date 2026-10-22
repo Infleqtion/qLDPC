@@ -17,29 +17,32 @@ from numba.core.registry import cpu_target
 import qldpc
 
 from . import _binary as binary
-from .conftest import _bitwise_count
+from .conftest import count_set_bits
+
+####################################################################################################
+# binary matrices, weights, and array helpers
 
 
 def test_binary_matrices_and_nested_bases() -> None:
     """Check matrix conversion and basis ownership independently of distance dispatch."""
-    assert binary._as_binary_matrix(np.empty((0, 3))).shape == (0, 3)
-    assert binary._as_binary_matrix([], num_cols=3).shape == (0, 3)
+    assert binary.as_binary_matrix(np.empty((0, 3))).shape == (0, 3)
+    assert binary.as_binary_matrix([], num_cols=3).shape == (0, 3)
     with pytest.raises(ValueError, match="infer the width"):
-        binary._as_binary_matrix([])
+        binary.as_binary_matrix([])
     with pytest.raises(ValueError, match="two-dimensional"):
-        binary._as_binary_matrix(np.zeros((1, 1, 1)))
+        binary.as_binary_matrix(np.zeros((1, 1, 1)))
     with pytest.raises(ValueError, match="incompatible widths"):
-        binary._as_binary_matrix([[1, 0]], num_cols=3)
+        binary.as_binary_matrix([[1, 0]], num_cols=3)
 
     matrix = np.array([[0, 1, 1], [1, 1, 0], [1, 0, 1], [0, 0, 0]], dtype=np.uint8)
     labels = np.eye(4, dtype=np.uint8)
-    reduced, transformed, pivots = binary._row_reduce_binary(matrix, labels)
+    reduced, transformed, pivots = binary.row_reduce_binary(matrix, labels)
     np.testing.assert_array_equal(pivots, [0, 1])
     assert transformed is not None
     np.testing.assert_array_equal(transformed @ matrix % 2, reduced)
     np.testing.assert_array_equal(labels, np.eye(4, dtype=np.uint8))
-    np.testing.assert_array_equal(binary._get_independent_rows(matrix), [[1, 0, 1], [0, 1, 1]])
-    basis, tags = binary._get_nested_code_basis(matrix, np.array([[1, 0, 1]], dtype=np.uint8))
+    np.testing.assert_array_equal(binary.get_independent_rows(matrix), [[1, 0, 1], [0, 1, 1]])
+    basis, tags = binary.get_nested_code_basis(matrix, np.array([[1, 0, 1]], dtype=np.uint8))
     np.testing.assert_array_equal(basis, [[1, 0, 1], [0, 1, 1]])
     np.testing.assert_array_equal(tags, [[0], [1]])
 
@@ -49,21 +52,21 @@ def test_get_kernel(shape: tuple[int, int]) -> None:
     """The kernel basis is independent, annihilated by the matrix, and of full nullity."""
     matrix = np.random.default_rng(shape[1]).integers(0, 2, shape, dtype=np.uint8)
     matrix[-1:] = matrix[:1]
-    kernel = binary._get_kernel(matrix)
-    rank = len(binary._get_independent_rows(matrix))
+    kernel = binary.get_kernel(matrix)
+    rank = len(binary.get_independent_rows(matrix))
     assert kernel.dtype == np.uint8 and kernel.shape == (shape[1] - rank, shape[1])
     assert not np.any(matrix.astype(int) @ kernel.T % 2)
-    assert len(binary._get_independent_rows(kernel)) == len(kernel)
+    assert len(binary.get_independent_rows(kernel)) == len(kernel)
 
 
 def test_riffle_and_symplectic_isometry() -> None:
     symplectic = np.array(list(itertools.product((0, 1), repeat=6)), dtype=np.uint8)
     expected = np.stack((symplectic[:, :3], symplectic[:, 3:]), axis=2).reshape(-1, 6)
-    np.testing.assert_array_equal(binary._riffle(symplectic), expected)
-    assert np.shape(binary._riffle(np.empty((0, 6)))) == (0, 6)
+    np.testing.assert_array_equal(binary.riffle(symplectic), expected)
+    assert np.shape(binary.riffle(np.empty((0, 6)))) == (0, 6)
     with pytest.raises(AssertionError):
-        binary._riffle(np.zeros((1, 3)))
-    transformed = binary._symplectic_to_hamming(symplectic)
+        binary.riffle(np.zeros((1, 3)))
+    transformed = binary.symplectic_to_hamming(symplectic)
     np.testing.assert_array_equal(
         np.count_nonzero(transformed, axis=1),
         2 * np.count_nonzero(symplectic[:, :3] | symplectic[:, 3:], axis=1),
@@ -71,26 +74,26 @@ def test_riffle_and_symplectic_isometry() -> None:
 
 
 def test_symplectic_weight() -> None:
-    """Validate _symplectic_weight against the reference bit-counting implementation."""
+    """Validate symplectic_weight against the reference bit-counting implementation."""
     rng = np.random.default_rng(64)
     vals = rng.integers(0, 2**64, size=(7, 11), dtype=np.uint64)
-    expected_weights = _bitwise_count((vals | (vals >> np.uint64(1))) & 0x5555555555555555)
-    weights = binary._symplectic_weight(vals)
+    expected_weights = count_set_bits((vals | (vals >> np.uint64(1))) & 0x5555555555555555)
+    weights = binary.symplectic_weight(vals)
     assert weights.dtype == np.uint64
     np.testing.assert_array_equal(weights, expected_weights)
 
     out = rng.integers(0, 2**64, size=vals.shape, dtype=vals.dtype)
-    weights = binary._symplectic_weight(vals, out=out)
+    weights = binary.symplectic_weight(vals, out=out)
     np.testing.assert_array_equal(weights, expected_weights)
     assert weights is out
 
 
 @pytest.mark.parametrize("width", range(1, 8))
 def test_inplace_rowsum(width: int) -> None:
-    """_inplace_rowsum reduces each row to its sum and stores the result in the first column."""
+    """inplace_rowsum reduces each row to its sum and stores the result in the first column."""
     arr = np.random.default_rng(width).integers(2**31, size=(10, width), dtype=np.uint64)
     expected = arr.sum(-1)
-    actual = binary._inplace_rowsum(arr)
+    actual = binary.inplace_rowsum(arr)
     np.testing.assert_array_equal(actual, expected)
     np.testing.assert_array_equal(actual, arr[:, 0])
 
@@ -127,7 +130,7 @@ def test_distance_requires_binary_input() -> None:
 def _popcounts(values: npt.NDArray[np.uint64]) -> npt.NDArray[np.int64]:
     counts = np.empty(len(values), dtype=np.int64)
     for index, value in enumerate(values):
-        counts[index] = binary._popcount_word(value)
+        counts[index] = binary.popcount_word(value)
     return counts
 
 
@@ -135,7 +138,7 @@ def _popcounts(values: npt.NDArray[np.uint64]) -> npt.NDArray[np.int64]:
 def _trailing_zeros(values: npt.NDArray[np.uint64]) -> npt.NDArray[np.int64]:
     counts = np.empty(len(values), dtype=np.int64)
     for index, value in enumerate(values):
-        counts[index] = binary._trailing_zeros_word(value)
+        counts[index] = binary.trailing_zeros_word(value)
     return counts
 
 
@@ -183,7 +186,7 @@ def test_word_lowering(name: str) -> None:
 def binary_kernels(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
     """Run the compiled packing and row-reduction kernels, or their Python versions for coverage."""
     if request.param:
-        for name in ("_pack_bits", "_unpack_bits", "_row_reduce_packed"):
+        for name in ("pack_bits", "_unpack_bits", "_row_reduce_packed"):
             monkeypatch.setattr(binary, name, getattr(binary, name).py_func)
 
 
@@ -192,7 +195,7 @@ def binary_kernels(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPat
 def test_pack_bits(width: int) -> None:
     """Column j goes to bit j % 64 of word j // 64, and unpacking inverts packing."""
     matrix = np.random.default_rng(width).integers(0, 2, (3, width), dtype=np.uint8)
-    packed = binary._pack_bits(matrix)
+    packed = binary.pack_bits(matrix)
     for row, words in zip(matrix, packed, strict=True):
         integer = sum(int(bit) << column for column, bit in enumerate(row))
         expected = [(integer >> (64 * index)) & (2**64 - 1) for index in range(len(words))]
@@ -205,7 +208,7 @@ def test_pack_bits(width: int) -> None:
 def test_row_reduction_matches_galois(height: int, width: int) -> None:
     """In the default column order, row reduction gives the reduced row echelon form."""
     matrix = np.random.default_rng(width).integers(0, 2, (height, width), dtype=np.uint8)
-    reduced, _, _ = binary._row_reduce_binary(matrix)
+    reduced, _, _ = binary.row_reduce_binary(matrix)
     np.testing.assert_array_equal(reduced, galois.GF(2)(matrix).row_reduce())
 
 
@@ -219,7 +222,7 @@ def test_row_reduction_over_selected_columns(columns: str) -> None:
     order = rng.permutation(65)[:30] if columns == "subset" else np.tile(np.arange(65), 2)
     original_matrix = matrix.copy()
 
-    reduced, transform, pivots = binary._row_reduce_binary(matrix, labels, columns=order)
+    reduced, transform, pivots = binary.row_reduce_binary(matrix, labels, columns=order)
     assert transform is not None
     np.testing.assert_array_equal(transform.astype(int) @ matrix % 2, reduced)
     rank = len(pivots)
@@ -233,4 +236,4 @@ def test_row_reduction_over_selected_columns(columns: str) -> None:
 def test_row_reduction_rejects_out_of_range_columns() -> None:
     for columns in (np.array([-1]), np.array([2])):
         with pytest.raises(IndexError, match="out of range"):
-            binary._row_reduce_binary(np.eye(2, dtype=np.uint8), columns=columns)
+            binary.row_reduce_binary(np.eye(2, dtype=np.uint8), columns=columns)

@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import dataclasses
+import inspect
 import itertools
 import math
 import subprocess
@@ -17,76 +18,9 @@ import pytest
 import stim
 
 from qldpc import decoders
-from qldpc.decoders.construction.resolution import _get_observable_decoder
+from qldpc.decoders.construction._resolution import build_observable_decoder
 from qldpc.decoders.external import frontier
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
-
-
-@dataclasses.dataclass(frozen=True)
-class _Column:
-    family: str
-    index: int
-    label: str
-    instruction_offset: int
-    prior_probs: tuple[float, float]
-    detector_response_masks: tuple[int, int]
-    logical_response_masks: tuple[int, int]
-    detector_support_mask: int
-    original_column_index: int = -1
-
-
-@dataclasses.dataclass(frozen=True)
-class _Model:
-    columns: tuple[_Column, ...]
-    layout: tuple[_Column, ...]
-    num_detectors: int
-    num_observables: int = 1
-    backward_columns: tuple[_Column, ...] | None = None
-    backward_layout: tuple[_Column, ...] | None = None
-
-
-@dataclasses.dataclass(frozen=True)
-class _Result:
-    status: str
-    logical_hat: int | None
-    log_evidence: float = 1.0
-    terminal_log_masses: dict[int, float] = dataclasses.field(default_factory=lambda: {0: 1.0})
-    terminal_top_log_mass_gap: float = 0.25
-    direction: str = "forward"
-    engine: str = "python"
-    committee_members: tuple[object, ...] = ()
-    stats: dict[str, int] = dataclasses.field(default_factory=lambda: {"processed_columns": 2})
-
-
-_Call = tuple[str, _Model, list[int], dict[str, object]]
-
-
-def _decode_exactly(model: _Model, syndrome: np.ndarray, **options: object) -> _Result:
-    """Return the most likely observable flips, as unpruned Frontier would."""
-    target = sum(int(bit) << index for index, bit in enumerate(syndrome))
-    class_probs: dict[int, float] = {}
-    for outcomes in itertools.product((0, 1), repeat=len(model.columns)):
-        detectors = logicals = 0
-        prob = 1.0
-        for column, outcome in zip(model.columns, outcomes):
-            detectors ^= column.detector_response_masks[outcome]
-            logicals ^= column.logical_response_masks[outcome]
-            prob *= column.prior_probs[outcome]
-        if detectors == target:
-            class_probs[logicals] = class_probs.get(logicals, 0) + prob
-    if not class_probs:
-        return _Result("no_path", None)
-    return _Result("ok", max(class_probs, key=lambda logicals: class_probs[logicals]))
-
-
-def _optimize_column_order(
-    columns: list[_Column], *, num_detectors: int
-) -> tuple[list[_Column], tuple[int, ...]]:
-    """Reorder columns, reindexing them as Frontier does."""
-    ordering = tuple(reversed(range(len(columns))))
-    return [
-        dataclasses.replace(columns[old], index=new) for new, old in enumerate(ordering)
-    ], ordering
 
 
 @pytest.fixture
@@ -170,6 +104,21 @@ def test_frontier_decoding(calls: list[_Call]) -> None:
     assert decoder.decode_observables(syndromes[0]).tolist() == [0, 0, 0]
 
 
+def test_frontier_builder() -> None:
+    """The frontier helper has the defaults of the builder, which describes what it builds."""
+    builder_parameters = inspect.signature(_get_observable_decoder_frontier).parameters
+    helper_parameters = inspect.signature(decoders.frontier).parameters
+    assert {name: parameter.default for name, parameter in helper_parameters.items()} == {
+        name: parameter.default
+        for name, parameter in builder_parameters.items()
+        if parameter.default is not inspect.Parameter.empty
+    }
+    docstring = inspect.getdoc(_get_observable_decoder_frontier)
+    assert docstring is not None and docstring.startswith("Build ")
+    returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
+    assert "decoder specification" not in returns
+
+
 def test_frontier_scan_orders(calls: list[_Call]) -> None:
     """Frontier reorders columns on request, and the committee's reverse scan is precomputed."""
     dem = stim.DetectorErrorModel("error(0.1) D0\nerror(0.2) D0 D1\nerror(0.3) D1")
@@ -208,7 +157,7 @@ def test_frontier_with_generic_decoding_apis() -> None:
     specification = decoders.frontier(add_erasure_bit=True)
     syndrome = np.array([1, 0])
 
-    assert _get_observable_decoder(dem, decoder=specification).decode_observables(
+    assert build_observable_decoder(dem, decoder=specification).decode_observables(
         syndrome
     ).tolist() == [
         1,
@@ -280,3 +229,70 @@ decoders.frontier(committee=True)
 assert "frontier" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Column:
+    family: str
+    index: int
+    label: str
+    instruction_offset: int
+    prior_probs: tuple[float, float]
+    detector_response_masks: tuple[int, int]
+    logical_response_masks: tuple[int, int]
+    detector_support_mask: int
+    original_column_index: int = -1
+
+
+@dataclasses.dataclass(frozen=True)
+class _Model:
+    columns: tuple[_Column, ...]
+    layout: tuple[_Column, ...]
+    num_detectors: int
+    num_observables: int = 1
+    backward_columns: tuple[_Column, ...] | None = None
+    backward_layout: tuple[_Column, ...] | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class _Result:
+    status: str
+    logical_hat: int | None
+    log_evidence: float = 1.0
+    terminal_log_masses: dict[int, float] = dataclasses.field(default_factory=lambda: {0: 1.0})
+    terminal_top_log_mass_gap: float = 0.25
+    direction: str = "forward"
+    engine: str = "python"
+    committee_members: tuple[object, ...] = ()
+    stats: dict[str, int] = dataclasses.field(default_factory=lambda: {"processed_columns": 2})
+
+
+_Call = tuple[str, _Model, list[int], dict[str, object]]
+
+
+def _decode_exactly(model: _Model, syndrome: np.ndarray, **options: object) -> _Result:
+    """Return the most likely observable flips, as unpruned Frontier would."""
+    target = sum(int(bit) << index for index, bit in enumerate(syndrome))
+    class_probs: dict[int, float] = {}
+    for outcomes in itertools.product((0, 1), repeat=len(model.columns)):
+        detectors = logicals = 0
+        prob = 1.0
+        for column, outcome in zip(model.columns, outcomes):
+            detectors ^= column.detector_response_masks[outcome]
+            logicals ^= column.logical_response_masks[outcome]
+            prob *= column.prior_probs[outcome]
+        if detectors == target:
+            class_probs[logicals] = class_probs.get(logicals, 0) + prob
+    if not class_probs:
+        return _Result("no_path", None)
+    return _Result("ok", max(class_probs, key=lambda logicals: class_probs[logicals]))
+
+
+def _optimize_column_order(
+    columns: list[_Column], *, num_detectors: int
+) -> tuple[list[_Column], tuple[int, ...]]:
+    """Reorder columns, reindexing them as Frontier does."""
+    ordering = tuple(reversed(range(len(columns))))
+    return [
+        dataclasses.replace(columns[old], index=new) for new, old in enumerate(ordering)
+    ], ordering

@@ -2,13 +2,10 @@
 
 """Custom decoder classes."""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
-from qldpc._util import get_deprecated_alias
+from qldpc import _deprecations
 
-from ..common import PLACEHOLDER_ERROR_RATE
-from ..external.relay_bp import RelayBPDecoder as _RelayBPDecoder
-from ..protocols import BatchErrorDecoder, ErrorDecoder
 from .composition import CompositeDecoder, DirectDecoder
 from .guf import GUFDecoder
 from .ilp import ILPDecoder
@@ -20,40 +17,17 @@ from .lookup import (
 )
 
 __all__ = [
-    "PLACEHOLDER_ERROR_RATE",
-    "BatchDecoder",
     "CompositeDecoder",
-    "Decoder",
     "DirectDecoder",
     "GUFDecoder",
     "ILPDecoder",
     "LookupDecoder",
     "ObservableLookupDecoder",
-    "RelayBPDecoder",
     "WeightedLookupDecoder",
     "WeightedObservableLookupDecoder",
 ]
 
-####################################################################################################
-# deprecated compatibility aliases
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
 
-DEPRECATED_ALIASES = {
-    "Decoder": ErrorDecoder,
-    "BatchDecoder": BatchErrorDecoder,
-    "RelayBPDecoder": _RelayBPDecoder,
-}
-
-if TYPE_CHECKING:
-    Decoder = ErrorDecoder
-    BatchDecoder = BatchErrorDecoder
-    RelayBPDecoder = _RelayBPDecoder
-else:
-
-    def __getattr__(name: str) -> Any:
-        """Resolve deprecated custom-package names with a DeprecationWarning."""
-        return get_deprecated_alias(
-            __name__,
-            name,
-            DEPRECATED_ALIASES,
-            {"RelayBPDecoder": "qldpc.decoders.external.relay_bp.RelayBPDecoder"},
-        )
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

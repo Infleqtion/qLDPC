@@ -25,7 +25,7 @@ from ..dems import DetectorErrorModelArrays
 from ..protocols import ObservableDecoder, ObservableDecodeResult
 
 ####################################################################################################
-# public decoder and specifications
+# Frontier decoder
 
 
 class FrontierObservableDecoder(ObservableDecoder):
@@ -109,6 +109,10 @@ class FrontierObservableDecoder(ObservableDecoder):
             raise RuntimeError(f"Frontier returned an unexpected status: {result.status!r}")
         flips = [(logical_hat >> index) & 1 for index in range(self.num_observables)]
         return flips, erased, result
+
+
+####################################################################################################
+# decoder specifications
 
 
 def _get_observable_decoder_frontier(
@@ -234,9 +238,6 @@ Returns:
 """,
 )
 
-
-####################################################################################################
-# private builder helpers
 
 # PyPI rejects direct-URL dependencies, so frontier cannot be a qldpc extra.
 _INSTALL_COMMAND = (

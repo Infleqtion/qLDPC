@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """L=1 gadget construction (Webster, Smith, Cohen arXiv:2511.15989 §II A).
 
 The construction restricts complementary checks to the logical support, computes a gauge basis for
@@ -14,20 +16,6 @@ For a logical measured on support V_0::
     κ    — gadget ancilla qubits (one per row of F)
     χ    — added meas-basis checks (one per support qubit)
     G    — a basis of ker(F^T); the gadget gauge checks      → ``gauge``
-
-Copyright 2026 The qLDPC Authors
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
 """
 
 from __future__ import annotations

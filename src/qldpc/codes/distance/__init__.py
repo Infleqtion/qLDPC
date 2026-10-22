@@ -2,21 +2,21 @@
 
 """Exact binary distance calculations, logical-operator counts, and distance method selectors."""
 
+from typing import TYPE_CHECKING
+
+from qldpc import _deprecations
+
 from .core import (
     DistanceBackend,
     DistanceMethod,
     get_distance_classical,
-    get_distance_css_brouwer_zimmermann,
     get_distance_quantum,
-    validate_distance_backend,
-    validate_distance_method,
 )
 from .logical_counts import (
     CSSLogicalCounter,
     CSSLogicalCounts,
     LogicalCountMethod,
     count_logical_ops_css,
-    validate_logical_count_method,
 )
 
 __all__ = [
@@ -27,9 +27,10 @@ __all__ = [
     "LogicalCountMethod",
     "count_logical_ops_css",
     "get_distance_classical",
-    "get_distance_css_brouwer_zimmermann",
     "get_distance_quantum",
-    "validate_distance_backend",
-    "validate_distance_method",
-    "validate_logical_count_method",
 ]
+
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
+
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

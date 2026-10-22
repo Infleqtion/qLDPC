@@ -19,7 +19,7 @@ import pytest
 import stim
 
 from qldpc import abstract, codes, decoders, external, math
-from qldpc.codes import code_capacity, common
+from qldpc.codes import _code_capacity, common
 from qldpc.objects import PAULIS_XZ, Pauli
 
 ####################################################################################################
@@ -126,49 +126,21 @@ def test_field_array_construction() -> None:
         codes.ClassicalCode(galois.GF(4)([[0, 1, 2, 3]]), field=16)
 
 
-def test_deprecated_aliases() -> None:
-    """Deprecated code method aliases warn and delegate to their replacements."""
-    classical_code = codes.RepetitionCode(3)
-    for alias, replacement in [
-        (classical_code.puncture, classical_code.punctured),
-        (classical_code.shorten, classical_code.shortened),
-    ]:
-        with pytest.warns(DeprecationWarning, match="DEPRECATED") as warnings:
-            deprecated = alias([0])
-        assert len(warnings) == 1
-        assert str(warnings[0].message).startswith("ClassicalCode.")
-        assert deprecated == replacement([0])
-
-    qudit_code = codes.QuditCode(codes.FiveQubitCode())
-    with pytest.warns(DeprecationWarning, match="DEPRECATED") as warnings:
-        dual_subsystem_code = qudit_code.get_dual_subsystem_code()
-    assert len(warnings) == 1
-    assert dual_subsystem_code == qudit_code.dual()
-
-    with pytest.warns(DeprecationWarning, match="DEPRECATED") as warnings:
-        conjugated_qudit_code = qudit_code.conjugate()
-    assert len(warnings) == 1
-    assert str(warnings[0].message).startswith("QuditCode.")
-    assert conjugated_qudit_code == qudit_code.conjugated()
-
-    css_code = codes.SteaneCode()
-    with pytest.warns(DeprecationWarning, match="DEPRECATED") as warnings:
-        conjugated_css_code = css_code.conjugate()
-    assert len(warnings) == 1
-    assert str(warnings[0].message).startswith("SteaneCode.")
-    assert isinstance(conjugated_css_code, codes.CSSCode)
-    assert conjugated_css_code == css_code.conjugated().to_css()
-
-
 def test_named_codes(order: int = 2) -> None:
     """Named codes from the GAP computer algebra system."""
     code = codes.RepetitionCode(order)
     checks = [list(row) for row in code.matrix.view(np.ndarray)]
 
     with unittest.mock.patch(
-        "qldpc.external.codes.get_classical_code", return_value=(checks, None)
+        "qldpc.external._codes.get_classical_code", return_value=(checks, None)
     ):
         assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
+
+    # refresh=True replaces cached data with the latest data
+    with unittest.mock.patch("qldpc.external._codes.get_classical_code") as get_code:
+        get_code.return_value = ([[1]], None)
+        get_code.refresh.return_value = (checks, None)
+        assert codes.ClassicalCode.from_name("", refresh=True) == code
 
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
@@ -261,7 +233,6 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
     with (
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
-        unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
         unittest.mock.patch(
             "qldpc.external.gap.subprocess.run",
             side_effect=AssertionError("GAP executable must not be called by this test"),
@@ -274,7 +245,7 @@ def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFix
     # intentionally wraps a loop of warning-emitting calls
     with (  # noqa: PT031
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
-        unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=None),
+        unittest.mock.patch("qldpc.external.gap.require_package", return_value=True),
         unittest.mock.patch(
             "qldpc.external.gap.subprocess.run",
             side_effect=AssertionError("GAP executable must not be called by this test"),
@@ -554,7 +525,7 @@ def test_distance_qudit() -> None:
     # mock computing distance with GAP
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=-1),
+        unittest.mock.patch("qldpc.external._codes.get_distance_bound", return_value=-1),
     ):
         assert code.get_distance(bound=True) == -1
 
@@ -579,7 +550,7 @@ def test_distance_bound_memory() -> None:
     ):
         assert classical_code.get_distance_bound() == 4
         assert classical_code.get_distance_bound(num_trials=1) == 4  # never worse than known
-    with unittest.mock.patch("qldpc.decoders.resolve_decoder", side_effect=AssertionError):
+    with unittest.mock.patch("qldpc.codes.common.resolve_decoder", side_effect=AssertionError):
         assert classical_code.get_distance_bound() == 4
         assert classical_code.canonicalized.get_distance_bound() == 4
 
@@ -589,7 +560,7 @@ def test_distance_bound_memory() -> None:
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external.codes.get_distance_bound", side_effect=[4, 5]
+            "qldpc.external._codes.get_distance_bound", side_effect=[4, 5]
         ) as gap_bound,
     ):
         assert qudit_code.get_distance_bound() == qudit_code.get_distance_bound() == 4
@@ -787,7 +758,7 @@ def test_from_qldpc_challenge_id() -> None:
     """Retrieve a code from the Unitary Foundation qLDPC Challenge."""
     code_data = (np.kron(np.eye(2, dtype=int), [1, 1, 1, 1]), 2, True, (2, 4))
     with unittest.mock.patch(
-        "qldpc.external.codes.get_qldpc_challenge_code", return_value=code_data
+        "qldpc.external._codes.get_qldpc_challenge_code", return_value=code_data
     ):
         code = codes.QuditCode.from_qldpc_challenge_id("")
         assert isinstance(code, codes.CSSCode)
@@ -798,13 +769,20 @@ def test_from_qldpc_challenge_id() -> None:
         assert css_code.is_equiv_to(codes.C4Code())
 
     with unittest.mock.patch(
-        "qldpc.external.codes.get_qldpc_challenge_code",
+        "qldpc.external._codes.get_qldpc_challenge_code",
         return_value=(np.array([[1, 0, 1, 0]]), None, False, (1,)),
     ):
         code = codes.QuditCode.from_qldpc_challenge_id("")
         assert not isinstance(code, codes.CSSCode)
         assert code.get_distance_if_known() is None
         assert code.get_distance_bound() == 1
+
+    # refresh=True replaces cached data with the latest data
+    with unittest.mock.patch("qldpc.external._codes.get_qldpc_challenge_code") as get_code:
+        get_code.return_value = (code_data[0], None, True, (2, 4))
+        get_code.refresh.return_value = code_data
+        css_code = codes.CSSCode.from_qldpc_challenge_id("", refresh=True)
+        assert css_code.get_distance_if_known() == 2
 
 
 def test_qudit_deformations() -> None:
@@ -1293,11 +1271,17 @@ def test_css_from_qecdb_id() -> None:
     distance = 2
     is_css = True
     code_data = (strings, distance, is_css)
-    with unittest.mock.patch("qldpc.external.codes.get_quantum_code", return_value=code_data):
+    with unittest.mock.patch("qldpc.external._codes.get_quantum_code", return_value=code_data):
         code = codes.CSSCode.from_qecdb_id("")
         assert isinstance(code, codes.CSSCode)
         assert code.is_equiv_to(codes.C4Code())
         assert code.get_distance_if_known() == 2
+
+    # refresh=True replaces cached data with the latest data
+    with unittest.mock.patch("qldpc.external._codes.get_quantum_code") as get_code:
+        get_code.return_value = (strings, None, is_css)
+        get_code.refresh.return_value = code_data
+        assert codes.CSSCode.from_qecdb_id("", refresh=True).get_distance_if_known() == 2
 
 
 def test_swel_codes() -> None:
@@ -1397,7 +1381,7 @@ def test_distance_css() -> None:
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=-1),
+        unittest.mock.patch("qldpc.external._codes.get_distance_bound", return_value=-1),
     ):
         assert code.get_distance(bound=True) == -1
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
@@ -1458,7 +1442,7 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
         non_css.get_code_params(bound=True, decoder=decoder)
 
 
-def test_legacy_decoder_warning_location() -> None:
+def test_deprecated_decoder_kwargs_warning_location() -> None:
     """A high-level legacy decoder warning points to the user's call site."""
     code = codes.RepetitionCode(3)
     with warnings.catch_warnings(record=True) as caught:
@@ -1591,7 +1575,9 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         unittest.mock.patch("qldpc.external.sqetch.is_installed", return_value=False),
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=4) as gap_bound,
+        unittest.mock.patch(
+            "qldpc.external._codes.get_distance_bound", return_value=4
+        ) as gap_bound,
     ):
         assert code.get_distance_bound(pauli=Pauli.Z) == 4
     gap_bound.assert_called_once_with(code, 1, cutoff=None, maxav="fail")
@@ -1621,7 +1607,7 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external.codes.get_distance_bound", return_value=2
+            "qldpc.external._codes.get_distance_bound", return_value=2
         ) as qudit_gap_bound,
     ):
         assert qudit_code.get_distance_bound(pauli=Pauli.Z) == 2
@@ -1664,7 +1650,9 @@ def test_css_distance_bound_backend_selection() -> None:
     code.forget_distance()
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external.codes.get_distance_bound", return_value=4) as gap_bound,
+        unittest.mock.patch(
+            "qldpc.external._codes.get_distance_bound", return_value=4
+        ) as gap_bound,
     ):
         assert (
             code.get_distance_bound(
@@ -1883,12 +1871,12 @@ def test_quantum_capacity_with_observable_decoders(monkeypatch: pytest.MonkeyPat
     # the observables of a qudit code are the symplectic products of an error with the logical
     # operators of the code, which carry signs over an odd-characteristic field
     nonbinary_code = codes.QuditCode(codes.ToricCode(4, field=3).matrix)
-    captured_decoders: list[code_capacity.CodeCapacityDecoder] = []
+    captured_decoders: list[_code_capacity.CodeCapacityDecoder] = []
     captured_decoder_kwargs: list[dict[str, Any]] = []
 
-    def get_code_capacity_decoder(*args: Any, **kwargs: Any) -> code_capacity.CodeCapacityDecoder:
+    def get_code_capacity_decoder(*args: Any, **kwargs: Any) -> _code_capacity.CodeCapacityDecoder:
         captured_decoder_kwargs.append(kwargs)
-        captured_decoders.append(code_capacity.get_code_capacity_decoder(*args, **kwargs))
+        captured_decoders.append(_code_capacity.get_code_capacity_decoder(*args, **kwargs))
         return captured_decoders[-1]
 
     monkeypatch.setattr(common, "get_code_capacity_decoder", get_code_capacity_decoder)
@@ -2194,3 +2182,11 @@ def test_capacity_min_error_weight() -> None:
         num_samples=100, max_error_rate=0.2, min_error_weight=6
     )
     assert func(0.1) == (0, 0)
+
+
+def test_get_scrambled_seed() -> None:
+    """Scrambled seeds are deterministic, and leave the global random state untouched."""
+    state = np.random.get_state()
+    assert common._get_scrambled_seed(0) == common._get_scrambled_seed(0)
+    assert common._get_scrambled_seed(0) != common._get_scrambled_seed(1)
+    assert np.array_equal(np.random.get_state()[1], state[1])

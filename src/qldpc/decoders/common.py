@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared helpers for decoders."""
+"""Erasure signaling, warnings, and decoder-builder helpers shared by decoders."""
 
 from __future__ import annotations
 
 import functools
-import warnings
 from collections.abc import Callable, Sequence
 from typing import ParamSpec, TypeAlias, TypeVar
 
@@ -14,13 +13,21 @@ import numpy as np
 import numpy.typing as npt
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
 from .dems import DetectorErrorModelArrays
-from .protocols import ErrorDecoder, SupportsDecode, as_error_decoder
+from .protocols import ErrorDecoder, SupportsDecode, _as_error_decoder
 
-PLACEHOLDER_ERROR_RATE = 1e-3  # required for some decoding methods
+_PLACEHOLDER_ERROR_RATE = 1e-3  # required for some decoding methods
+
+_PcmOrDem: TypeAlias = IntegerArray | stim.DetectorErrorModel
+_Parameters = ParamSpec("_Parameters")
+_Decoder = TypeVar("_Decoder", bound=ErrorDecoder)
+_ErrorChannel: TypeAlias = float | npt.NDArray[np.floating] | Sequence[float] | None
+
+
+####################################################################################################
+# warnings
 
 
 class ObservableDecodingFallbackWarning(UserWarning):
@@ -28,12 +35,6 @@ class ObservableDecodingFallbackWarning(UserWarning):
 
     Filter this category with ``warnings.filterwarnings`` to silence the notice.
     """
-
-
-_PcmOrDem: TypeAlias = IntegerArray | stim.DetectorErrorModel
-_Parameters = ParamSpec("_Parameters")
-_Decoder = TypeVar("_Decoder", bound=ErrorDecoder)
-_ErrorChannel: TypeAlias = float | npt.NDArray[np.floating] | Sequence[float] | None
 
 
 ####################################################################################################
@@ -51,7 +52,7 @@ def get_error_and_erasure(
     bit: 1 means the syndrome was not recognized and the sample should be discarded, 0 means a
     correction was found normally.  The erasure bit is stripped before returning the error.
     """
-    error = as_error_decoder(decoder).decode_errors(syndrome.view(np.ndarray))
+    error = _as_error_decoder(decoder).decode_errors(syndrome.view(np.ndarray))
     if getattr(decoder, "has_erasure_bit", False):
         return error[:-1].view(type(syndrome)), bool(error[-1])
     return error.view(type(syndrome)), False
@@ -71,7 +72,7 @@ def with_erasure_bits(
 
 
 ####################################################################################################
-# private builder helpers
+# decoder builders and their options
 
 
 def _erasure_bit_support(
@@ -125,7 +126,10 @@ def _get_matrix_error_channel(
         return None
 
     if error_rate is not None:
-        _deprecate_error_rate_option(
+        # imported here because qldpc._deprecations.decoders imports modules that import this one
+        from qldpc._deprecations.decoders import deprecate_error_rate_option
+
+        deprecate_error_rate_option(
             {"error_channel": error_channel, "error_rate": error_rate},
             frozenset(
                 {"error_rate", "error_channel"} if error_channel is not None else {"error_rate"}
@@ -133,7 +137,7 @@ def _get_matrix_error_channel(
         )
         error_channel = error_rate
     if error_channel is None:
-        error_channel = PLACEHOLDER_ERROR_RATE
+        error_channel = _PLACEHOLDER_ERROR_RATE
 
     if np.isscalar(error_channel):
         probabilities = np.full(pcm_or_dem.shape[1], error_channel, dtype=float)
@@ -161,30 +165,3 @@ def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -
             " error_channel with the detector-flip matrix of the model,"
             " decoders.DetectorErrorModelArrays(dem).detector_flip_matrix"
         )
-
-
-####################################################################################################
-# deprecated compatibility helpers
-
-
-def _deprecate_error_rate_option(
-    options: dict[str, object], explicitly_provided: frozenset[str]
-) -> dict[str, object]:
-    """Replace an explicitly supplied error_rate option with error_channel.
-
-    An explicit error_rate=None is the default value, so it is dropped as if it were omitted.
-    """
-    if "error_rate" not in explicitly_provided or options.get("error_rate") is None:
-        options.pop("error_rate", None)
-        return options
-    if "error_channel" in explicitly_provided:
-        raise ValueError("error_rate and error_channel cannot both be specified")
-    error_rate = options["error_rate"]
-    warnings.warn(
-        f"error_rate={error_rate!r} is deprecated; use error_channel={error_rate!r} instead",
-        DeprecationWarning,
-        stacklevel=get_external_caller_stacklevel(),
-    )
-    options.pop("error_rate")
-    options["error_channel"] = error_rate
-    return options

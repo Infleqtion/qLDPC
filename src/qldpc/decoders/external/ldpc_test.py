@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import inspect
 import pickle
 import subprocess
 import sys
@@ -42,6 +43,28 @@ def test_ldpc_builders(
         decoded = np.asarray(builder(pcm_or_dem).decode(syndrome), dtype=int)
         assert decoded.shape == error.shape
         assert np.array_equal(matrix @ decoded % 2, syndrome)
+
+
+def test_ldpc_builder_docstrings() -> None:
+    """Builders describe the decoders that they build, and keep error_rate as their last option."""
+    builders: list[Callable[..., decoders.ErrorDecoder]] = [
+        _get_decoder_bp_osd,
+        _get_decoder_bp_lsd,
+        _get_decoder_bf,
+    ]
+    for builder in builders:
+        assert list(inspect.signature(builder).parameters)[-1] == "error_rate"
+        docstring = inspect.getdoc(builder)
+        assert docstring is not None and docstring.startswith("Build ")
+        arguments = docstring.split("Args:\n", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
+        documented_names = [
+            line.strip().split(":", maxsplit=1)[0]
+            for line in arguments.splitlines()
+            if line.startswith("    ") and not line.startswith("        ")
+        ]
+        assert documented_names[-1] == "error_rate"
+        returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
+        assert "decoder specification" not in returns
 
 
 @pytest.mark.parametrize(

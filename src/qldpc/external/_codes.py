@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Module for loading error-correcting codes from the GAP computer algebra system."""
+"""Loading codes from GAP, QECDB, and the qLDPC Challenge, and QDistRnd distance bounds in GAP."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ import qldpc.cache
 import qldpc.external.gap
 
 ####################################################################################################
-# codes and distance bounds from external sources
+# codes from databases
 
 
 @qldpc.cache.use_disk_cache(
@@ -46,7 +46,10 @@ def get_classical_code(code: str) -> tuple[list[list[int]], int]:
         "z := PrimitiveRoot(LeftActingDomain(code));;",
         r'Print(LeftActingDomain(code), "\n");;',
         "for vec in mat do",
-        r'  Print(List(vec, function(x) if IsZero(x) then return -1; else return LogFFE(x, z); fi; end), "\n");;',
+        (
+            "  Print(List(vec, function(x) if IsZero(x) then return -1;"
+            r' else return LogFFE(x, z); fi; end), "\n");;'
+        ),
         "od;;",
     ]
     code_str = qldpc.external.gap.get_output(*commands)
@@ -143,6 +146,18 @@ def get_qldpc_challenge_code(
     return matrix.reshape(len(supports), 2 * num_qubits), distance, is_css, distance_bounds
 
 
+def _get_json(url: str) -> Any:
+    """Retrieve JSON data from a URL."""
+    try:
+        return json.loads(urllib.request.urlopen(url, timeout=10).read().decode("utf-8"))
+    except (urllib.error.URLError, TimeoutError) as exception:
+        raise RuntimeError(f"Cannot access {url}") from exception
+
+
+####################################################################################################
+# QDistRnd distance bounds
+
+
 def get_distance_bound(
     code: qldpc.codes.QuditCode,
     num_trials: int = 1,
@@ -177,8 +192,8 @@ def get_distance_bound(
         args = ",".join([f"{one}*matrix_x", f"{one}*matrix_z", f"{num_trials}", f"{cutoff}"])
         commands = [
             'LoadPackage("QDistRnd", false);;',
-            *_gap_define_sparse_matrix("matrix_x", code.field.order, code_x.matrix),
-            *_gap_define_sparse_matrix("matrix_z", code.field.order, code_z.matrix),
+            *_get_gap_sparse_matrix_commands("matrix_x", code.field.order, code_x.matrix),
+            *_get_gap_sparse_matrix_commands("matrix_z", code.field.order, code_z.matrix),
             f"Print(DistRandCSS({args}:{kwargs}));;",
         ]
 
@@ -192,7 +207,7 @@ def get_distance_bound(
         args = ",".join([f"{one}*matrix", f"{num_trials}", f"{cutoff}"])
         commands = [
             'LoadPackage("QDistRnd", false);',
-            *_gap_define_sparse_matrix("matrix", code.field.order, riffled_code.matrix),
+            *_get_gap_sparse_matrix_commands("matrix", code.field.order, riffled_code.matrix),
             f"Print(DistRandStab({args}:{kwargs}));",
         ]
 
@@ -210,21 +225,14 @@ def get_distance_bound(
     return int(bound)
 
 
-####################################################################################################
-# helper methods
-
-
-def _get_json(url: str) -> Any:
-    """Retrieve JSON data from a URL."""
-    try:
-        return json.loads(urllib.request.urlopen(url, timeout=10).read().decode("utf-8"))
-    except (urllib.error.URLError, TimeoutError) as exception:
-        raise RuntimeError(f"Cannot access {url}") from exception
-
-
-def _gap_define_sparse_matrix(
+def _get_gap_sparse_matrix_commands(
     matrix_var: str, field_order: int, matrix: npt.NDArray[np.int_]
 ) -> list[str]:
+    """Get GAP commands that define a variable as a matrix over a finite field.
+
+    The commands transfer the matrix in a sparse representation and assign it to the GAP variable
+    named matrix_var.  Matrix entries are integers that encode elements of GF(field_order).
+    """
     _, matrix_width = matrix.shape
     # Turn matrix into sparse representation where `nonzero_entries[i][j]` is a list of integers
     # where, for all values `l` in that list, `matrix[i,l] == j+1`.  Example:

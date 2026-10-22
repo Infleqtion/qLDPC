@@ -22,7 +22,8 @@ from sympy.matrices.normalforms import hermite_normal_form
 
 import qldpc
 from qldpc import abstract
-from qldpc._util import networkx as nx
+from qldpc._utils import networkx as nx
+from qldpc.math import resolve_field
 from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
 
 from .classical import (
@@ -35,7 +36,7 @@ from .classical import (
     SimplexCode,
     TannerCode,
 )
-from .common import ClassicalCode, CSSCode, QuditCode, get_scrambled_seed
+from .common import ClassicalCode, CSSCode, QuditCode, _get_scrambled_seed
 
 ####################################################################################################
 # small named codes
@@ -68,7 +69,7 @@ class TrivialCode(CSSCode):
         qubits, so that ``matrix_x == matrix_z``.  It is enough to specify just one of
         ``num_stabs_x`` and ``num_stabs_z`` in this case; the other defaults to the same value.
         """
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
 
         if self_dual:
             if num_stabs_x and num_stabs_z and num_stabs_x != num_stabs_z:
@@ -127,7 +128,7 @@ class FiveQuditCode(QuditCode):
     """
 
     def __init__(self, field: int | type[galois.FieldArray] | None = None) -> None:
-        field = abstract.resolve_field(field)
+        field = resolve_field(field)
         matrix = [
             [1, 0, 0, -1, 0, 0, 1, -1, 0, 0],
             [0, 1, 0, 0, -1, 0, 0, 1, -1, 0],
@@ -2324,7 +2325,7 @@ class QTCode(CSSCode):
             # scramble the seed so that the second subset is drawn independently of the first, while
             # keeping the construction as a whole reproducible from the given seed.  Reduce it
             # first, so that a seed of any magnitude is accepted, as it is for the first subset.
-            seed_b = get_scrambled_seed(seed % 2**32) if seed is not None else None
+            seed_b = _get_scrambled_seed(seed % 2**32) if seed is not None else None
             subset_b = group.random_symmetric_subset(code_b.num_bits, seed=seed_b)
         return QTCode(subset_a, subset_b, code_a, code_b, bipartite=bipartite)
 
@@ -2445,7 +2446,7 @@ class SurfaceCode(CSSCode):
             ]
 
             # invert Z-type Pauli on every other qubit
-            field = abstract.resolve_field(field)
+            field = resolve_field(field)
             if field is not galois.GF2:
                 matrix_z = matrix_z.view(field)
                 matrix_z[:, self.bias_tailoring_qubits] *= -1
@@ -2614,7 +2615,7 @@ class ToricCode(CSSCode):
             ]
 
             # invert Z-type Pauli on every other qubit
-            field = abstract.resolve_field(field)
+            field = resolve_field(field)
             if field is not galois.GF2:
                 matrix_z = matrix_z.view(field)
                 matrix_z[:, self.bias_tailoring_qubits] *= -1
@@ -2771,7 +2772,7 @@ class T4Code(CSSCode):
         A unimodular basis tiles the torus with a single cell, for which every boundary operator
         vanishes identically and the resulting code has no parity checks at all.
         """
-        self._field = abstract.resolve_field(field)
+        self._field = resolve_field(field)
 
         determinant = int(sympy.Matrix(matrix).det())
         if abs(determinant) < 2:
@@ -2859,10 +2860,6 @@ class T4Code(CSSCode):
         return self._ones_vec(
             self.num_faces, [top_face, back_face, left_face], [bottom_face, front_face, right_face]
         )
-
-
-####################################################################################################
-# helper methods
 
 
 def _get_check_pauli(row: int, col: int) -> PauliXZ:

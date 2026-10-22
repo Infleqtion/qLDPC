@@ -1,19 +1,6 @@
-"""Tests for src/qldpc/experimental/surgery/circuit.py (single + joint PPM).
+# SPDX-License-Identifier: Apache-2.0
 
-Copyright 2026 The qLDPC Authors
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-"""
+"""Tests for src/qldpc/experimental/surgery/circuit.py (single + joint PPM)."""
 
 from __future__ import annotations
 
@@ -706,7 +693,12 @@ def test_data_init_validation(bad_init: object, error_substr: str) -> None:
     x = np.asarray(code.get_logical_ops(Pauli.X)[0]).astype(np.uint8)
     g = build_gadget(code, x, basis=Pauli.X)
     with pytest.raises(ValueError, match=error_substr):
-        build_single_ppm_circuit(g, rounds=3, noise_model=None, data_init=bad_init)  # type: ignore[arg-type]
+        build_single_ppm_circuit(
+            g,
+            rounds=3,
+            noise_model=None,
+            data_init=bad_init,  # type: ignore[arg-type]
+        )
 
 
 def test_qubit_coords_layout_steane() -> None:
@@ -1357,7 +1349,12 @@ def test_expand_joint_data_init_rejects_non_str_non_seq_type() -> None:
     from qldpc.experimental.surgery.circuit import _expand_joint_data_init
 
     with pytest.raises(TypeError, match="data_init must be"):
-        _expand_joint_data_init({"bad": "input"}, n_l=4, n_r=4, intercode=True)  # type: ignore[arg-type]
+        _expand_joint_data_init(
+            {"bad": "input"},  # type: ignore[arg-type]
+            n_l=4,
+            n_r=4,
+            intercode=True,
+        )
 
 
 def test_single_ppm_dem_ok_bb_36_8_with_boost() -> None:

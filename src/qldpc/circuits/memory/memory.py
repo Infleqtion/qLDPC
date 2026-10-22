@@ -11,24 +11,23 @@ import numpy as np
 import stim
 
 from qldpc import codes
-from qldpc._util import format_docstring
+from qldpc._utils import format_docstring
 from qldpc.objects import Node, Pauli, PauliXZ, PauliXZLike
 
 from ..bookkeeping import DetectorRecord, MeasurementRecord, QubitIDs
-from ..common import get_pauli_product_measurements, restrict_to_qubits, with_remapped_qubits
+from ..common import _restrict_to_qubits, get_pauli_product_measurements, with_remapped_qubits
 from ..encoding import get_encoding_circuit
 from ..noise_model import (
     DEFAULT_IMMUNE_OP_TAG,
     DEFAULT_IMMUNE_QUBIT_TAG,
-    GATE_OP_TYPES,
     NoiseModel,
     as_noiseless_circuit,
-    op_type,
 )
+from ..noise_model._operations import GATE_OP_TYPES, op_type
 from .syndrome_measurement import EdgeColoring, SyndromeMeasurementStrategy
 
 # default strategy used to schedule the two-qubit gates of a syndrome measurement circuit
-DEFAULT_STRATEGY = EdgeColoring()
+_DEFAULT_STRATEGY = EdgeColoring()
 
 
 ####################################################################################################
@@ -54,7 +53,7 @@ def get_memory_experiment(
     *,
     noise_model: NoiseModel | None = None,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> stim.Circuit:
     """Construct a circuit for testing the performance of a code as a quantum memory.
 
@@ -132,7 +131,7 @@ def get_memory_experiment(
     - The K-th detector in measurement round M gets coordinate (M, 0, K).
 
     Args:
-        code: An error-correcting code.  Must be a qubit stabilizer (non-subsystem) codes.  If
+        code: An error-correcting code.  Must be a qubit stabilizer (non-subsystem) code.  If
             passed a classical code, treat it as a quantum CSS code that protects only basis-type
             logical operators (or X-type logicals, if basis is None).
         basis: Pauli.X, Pauli.Z, or None to indicate which type of logical operators to track (where
@@ -204,14 +203,14 @@ def get_memory_experiment(
     return initialization + qec_cycle + readout
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_memory_experiment_parts(
     code: codes.QuditCode | codes.ClassicalCode,
     basis: PauliXZLike | None,
     num_rounds: int = 1,
     *,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> MemoryExperimentParts:
     """Noiseless components of a memory experiment.
 
@@ -281,7 +280,7 @@ def get_qubit_coordinates(
     return circuit
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_observables(
     code: codes.QuditCode,
     data_qubits: Sequence[int] | None = None,
@@ -349,7 +348,7 @@ def get_observables(
     return circuit
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_logical_bell_prep(
     code: codes.QuditCode,
     data_qubits: Sequence[int] | None = None,
@@ -388,17 +387,13 @@ def get_logical_bell_prep(
     return as_noiseless_circuit(circuit)
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_basis_memory_experiment_parts(
     code: codes.QuditCode,
     basis: PauliXZ,
     num_rounds: int = 1,
     *,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> MemoryExperimentParts:
     """Components of a memory experiment that tracks logical operators of a fixed type (basis).
 
@@ -463,7 +458,7 @@ def _get_combined_memory_simulation_parts(
     num_rounds: int = 1,
     *,
     qubit_ids: QubitIDs | None = None,
-    syndrome_measurement_strategy: SyndromeMeasurementStrategy = DEFAULT_STRATEGY,
+    syndrome_measurement_strategy: SyndromeMeasurementStrategy = _DEFAULT_STRATEGY,
 ) -> MemoryExperimentParts:
     """Components of a memory experiment that tracks all logical operators.
 
@@ -562,7 +557,7 @@ def _get_qec_cycle(
             of QEC measures the parity checks of the code.
 
     Returns:
-        stim.Circuit: The noiseless circuit of num_rounds syndorme measurements.
+        stim.Circuit: The noiseless circuit of num_rounds syndrome measurements.
         MeasurementRecord: The record of all measurements in the constructed circuit.
         DetectorRecord: The record of all detectors in the constructed circuit.
     """

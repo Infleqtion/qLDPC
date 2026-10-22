@@ -14,13 +14,13 @@ from qldpc import codes, math
 from qldpc.objects import Pauli
 
 from .bookkeeping import QubitIDs
-from .common import restrict_to_qubits, with_remapped_qubits
+from .common import _restrict_to_qubits, with_remapped_qubits
 
 ####################################################################################################
 # encoding circuits, logical tableaus, and logical states
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_encoding_tableau(code: codes.QuditCode, *, only_zero: bool = False) -> stim.Tableau:
     """Tableau to encode physical states at its input into logical states of the given code.
 
@@ -59,7 +59,7 @@ def get_encoding_tableau(code: codes.QuditCode, *, only_zero: bool = False) -> s
     return stim.Tableau.from_conjugated_generators(xs=strings_x, zs=strings_z)
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_encoding_circuit(code: codes.QuditCode, *, only_zero: bool = False) -> stim.Circuit:
     """Circuit to encode physical states at its input into logical states of the given code.
 
@@ -76,11 +76,37 @@ def get_encoding_circuit(code: codes.QuditCode, *, only_zero: bool = False) -> s
     return get_encoding_tableau(code, only_zero=only_zero).to_circuit()
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_encoder_and_decoder(
     code: codes.QuditCode, deformation: stim.Circuit | stim.Tableau | None = None
 ) -> tuple[stim.Tableau, stim.Tableau]:
-    """Encoder for a code, and decoder either the same code or a deformed code."""
+    """Encoder for a code, and decoder for either the same code or a deformed code.
+
+    The encoder is the tableau of :func:`get_encoding_tableau`, which maps weight-one ``X_j`` and
+    ``Z_j`` operators at its input to the logical operators, gauge operators, stabilizers, and
+    destabilizers of the code.  Without a deformation, the decoder is the inverse of the encoder.
+    With a deformation, the decoder is the inverse of the encoding tableau of the deformed code
+    ``code.deformed(deformation, preserve_logicals=True)``, whose stabilizers are those of the code
+    transformed by the deformation, and whose logical operators are those of the original code.
+
+    Use this pair to view a physical circuit in the encoded frame: the first ``code.dimension``
+    qubits of ``encoder.then(physical_tableau).then(decoder)`` carry the logical operation that the
+    physical circuit implements, as in :func:`get_logical_tableau`.  Pass the physical circuit as
+    the deformation if it maps the code to a different code, rather than to itself.
+
+    Args:
+        code: The qubit code to encode and decode.
+        deformation: A physical circuit or tableau that deforms the code before decoding, or None
+            (the default) to decode the original code.
+
+    Returns:
+        stim.Tableau: The encoder of the code.
+        stim.Tableau: The decoder of the code, or of the deformed code if a deformation is given.
+
+    Raises:
+        ValueError: If the code is not a qubit code, or if the logical operators of the code are not
+            valid logical operators of the deformed code.
+    """
     encoder = get_encoding_tableau(code)
     if deformation is None:
         return encoder, encoder.inverse()
@@ -90,7 +116,7 @@ def get_encoder_and_decoder(
     return encoder, decoder
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_logical_tableau(
     code: codes.QuditCode,
     physical_circuit_or_tableau: stim.Circuit | stim.Tableau,
@@ -256,7 +282,7 @@ def get_state_stabilizers(
     return stabilizers
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_logical_state_stabilizers(
     state_prep_circuit: stim.Circuit, code: codes.QuditCode, qubit_ids: QubitIDs | None = None
 ) -> list[stim.PauliString]:
@@ -279,10 +305,6 @@ def get_logical_state_stabilizers(
     decoded_stabilizers = get_state_stabilizers(circuit, qubit_ids.data[: code.dimension])
     identity = stim.PauliString(num_qubits=len(code))
     return [(string * identity).after(encoder) for string in decoded_stabilizers]
-
-
-####################################################################################################
-# helper methods
 
 
 def _get_logical_tableau_from_code_data(
