@@ -396,7 +396,7 @@ def test_boost_distance_accepts_a_bound_equal_to_the_target(
 
 
 def test_boost_distance_skips_a_sample_with_no_fresh_pair(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A sample yielding no fresh degree-2 row is skipped, so the search ends in its own error.
+    """When no sample yields a fresh degree-2 row, the search ends in its own error.
 
     Steane's F already contains every pair of its 3 support columns, so every sample comes back
     empty.  With the bound scripted to fail, the search must exhaust its budget and raise.
@@ -412,6 +412,33 @@ def test_boost_distance_skips_a_sample_with_no_fresh_pair(monkeypatch: pytest.Mo
         _boost_gadget_distance(
             g, target_distance=5, max_extra_qubits=1, num_trials_per_step=1, seed=0
         )
+
+
+def test_boost_distance_moves_past_an_empty_sample(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A sample yielding no fresh degree-2 rows is skipped, and the search moves to the next sample.
+
+    The first sample returns None and the second delegates to the real sampler, so a boosted gadget
+    comes back only if the empty sample is skipped rather than ending the search.  The bound is
+    scripted so that the bare gadget fails and the next candidate passes.
+    """
+    from qldpc.experimental.surgery import cheeger as cheeger_module
+
+    real_augment = cheeger_module._augment_incidence_with_random_edges
+    calls = [0]
+
+    def _augment(
+        incidence_base: np.ndarray, n_new_edges: int, rng: np.random.Generator
+    ) -> np.ndarray | None:
+        calls[0] += 1
+        return None if calls[0] == 1 else real_augment(incidence_base, n_new_edges, rng)
+
+    g = _webster0_gadget()
+    _stub_distance_bound(monkeypatch, [0, 999])
+    monkeypatch.setattr(cheeger_module, "_augment_incidence_with_random_edges", _augment)
+    boosted = cheeger_module._boost_gadget_distance(
+        g, target_distance=5, max_extra_qubits=1, num_trials_per_step=2, seed=0
+    )
+    assert boosted.incidence.shape[0] > g.incidence.shape[0]
 
 
 def test_boost_distance_returns_the_first_passing_augmentation(
