@@ -20,19 +20,20 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc._util import get_external_caller_stacklevel
-from qldpc.decoders.adapters.observable_decoders import (
+from qldpc._utils import get_external_caller_stacklevel
+from qldpc.decoders._capabilities import compiles_for_dem, is_prebuilt_observable_decoder
+from qldpc.decoders.adapters._observable_decoders import (
     BitPackedObservableDecoder,
     ErrorsToFieldObservablesDecoder,
     validate_decoder_output,
 )
-from qldpc.decoders.capabilities import (
-    compiles_for_dem,
-    is_prebuilt_observable_decoder,
+from qldpc.decoders.common import ObservableDecodingFallbackWarning
+from qldpc.decoders.construction._resolution import (
+    PLACEHOLDER_ERROR_RATE,
+    reject_prebuilt_decoder,
+    resolve_decoder,
 )
-from qldpc.decoders.common import PLACEHOLDER_ERROR_RATE, ObservableDecodingFallbackWarning
 from qldpc.decoders.construction.factories import DEMDecoderFactory
-from qldpc.decoders.construction.resolution import reject_prebuilt_decoder, resolve_decoder
 from qldpc.decoders.construction.specs import (
     DecoderInput,
     DecoderSpec,
@@ -45,77 +46,7 @@ _MAX_SPEC_REPR_LENGTH = 80  # truncate long option values in warnings
 
 
 ####################################################################################################
-# code-capacity detector error models and decoders
-
-
-def get_code_capacity_dem(
-    syndrome_matrix: galois.FieldArray,
-    observable_matrix: galois.FieldArray | None,
-    dem_errors: galois.FieldArray | None = None,
-    *,
-    symplectic_errors: bool = False,
-    error_probs: npt.NDArray[np.floating] | float = PLACEHOLDER_ERROR_RATE,
-) -> stim.DetectorErrorModel:
-    """Build the detector error model of one sector of a code-capacity experiment.
-
-    Error mechanism j of the model is the error in column j of dem_errors.  By default, each error
-    location is an error mechanism.  With symplectic_errors, the mechanisms are instead the
-    single-qudit X, Z, and Y errors, in that order.  An error mechanism flips the detectors of its
-    syndrome ``syndrome_matrix @ error``, and the observables of its observable values
-    ``observable_matrix @ error``.  If observable_matrix is None, every error location is itself an
-    observable.
-
-    Args:
-        syndrome_matrix: The matrix that maps an error to its syndrome.
-        observable_matrix: The matrix that maps an error to its observable values, or None if every
-            error location is itself an observable.
-        dem_errors: The errors of the error mechanisms, as columns of a matrix, or None to make each
-            error location an error mechanism.
-        symplectic_errors: Whether the error mechanisms are single-qudit X, Z, and Y errors.  This
-            requires an observable_matrix, and cannot be combined with dem_errors.
-        error_probs: The probability of each error mechanism, or one probability for all of them.
-            Code-capacity decoders use fixed placeholder probabilities, since an estimate reuses the
-            decoding outcomes of fixed-weight errors at every physical error rate.
-
-    Returns:
-        A stim.DetectorErrorModel.
-
-    Raises:
-        ValueError: If the matrices are not binary, since Stim detector error models are binary.
-    """
-    field = type(syndrome_matrix)
-    if getattr(field, "order", 2) != 2:
-        raise ValueError(
-            "An observable decoder built from a Stim detector error model requires a binary code, so"
-            f" it cannot decode a code over {field.name}.  Pass a decoder specification such as"
-            " decoders.guf(), or a prebuilt observable decoder (such as an ObservableLookupDecoder)"
-            " built for this code, instead"
-        )
-    if symplectic_errors:
-        if dem_errors is not None:
-            raise ValueError("dem_errors and symplectic_errors cannot both be specified")
-        if observable_matrix is None:
-            raise ValueError("symplectic_errors requires an observable_matrix")
-        detector_flip_matrix = _get_single_qudit_error_effects(syndrome_matrix)
-        observable_flip_matrix = _get_single_qudit_error_effects(observable_matrix)
-    elif dem_errors is not None:
-        detector_flip_matrix = syndrome_matrix @ dem_errors
-        observable_flip_matrix = (
-            dem_errors if observable_matrix is None else observable_matrix @ dem_errors
-        )
-    else:
-        detector_flip_matrix = syndrome_matrix
-        observable_flip_matrix = (
-            observable_matrix
-            if observable_matrix is not None
-            else scipy.sparse.identity(syndrome_matrix.shape[1], dtype=np.uint8, format="csc")
-        )
-    dem_arrays = DetectorErrorModelArrays.from_arrays(
-        np.asarray(detector_flip_matrix, dtype=np.uint8),
-        observable_flip_matrix,
-        error_probs,
-    )
-    return dem_arrays.to_dem()
+# code-capacity decoders
 
 
 @dataclasses.dataclass(frozen=True)
@@ -275,8 +206,8 @@ def get_code_capacity_decoder(
             are scaled by a fixed placeholder error rate, so decoder decisions do not change when
             the returned estimator is evaluated at different physical error rates.
         prebuilt_rejection_reason: If not None, reject a prebuilt (error or observable) decoder,
-            with this reason; see help(qldpc.decoders.reject_prebuilt_decoder).  A Sinter-style
-            decoder is compiled here, so it is not rejected.
+            with this reason in the error message.  A Sinter-style decoder is compiled here, so it
+            is not rejected.
         warn_deprecated: Whether to warn when decoder_args is nonempty.
 
     Returns:
@@ -287,7 +218,7 @@ def get_code_capacity_decoder(
     if dem_error_weights is not None:
         dem_error_probs = PLACEHOLDER_ERROR_RATE * np.asarray(dem_error_weights, dtype=float)
     build_dem = functools.partial(
-        get_code_capacity_dem,
+        _get_code_capacity_dem,
         syndrome_matrix,
         observable_matrix,
         dem_errors,
@@ -372,25 +303,6 @@ def get_code_capacity_decoder(
     return CodeCapacityDecoder.from_error_decoder(error_decoder, syndrome_matrix, observable_matrix)
 
 
-####################################################################################################
-# helper methods
-
-
-def _get_single_qudit_error_effects(matrix: galois.FieldArray) -> galois.FieldArray:
-    """Apply a symplectic map to single-qudit X, Z, and Y errors without forming those errors."""
-    components_x, components_z = np.hsplit(matrix, 2)
-    return np.hstack([components_x, components_z, components_x + components_z]).view(type(matrix))
-
-
-def _observable_matrices_equal(
-    matrix_a: galois.FieldArray | None, matrix_b: galois.FieldArray | None
-) -> bool:
-    """Whether two observable maps, where None denotes the identity, are equal."""
-    if matrix_a is None or matrix_b is None:
-        return matrix_a is matrix_b
-    return bool(np.array_equal(matrix_a, matrix_b))
-
-
 def _get_observable_code_capacity_decoder(
     decoder: object,
     syndrome_matrix: galois.FieldArray,
@@ -454,3 +366,92 @@ def _get_observable_code_capacity_decoder(
     return CodeCapacityDecoder(
         observable_decoder, syndrome_matrix, observable_matrix, num_erasure_flags
     )
+
+
+def _observable_matrices_equal(
+    matrix_a: galois.FieldArray | None, matrix_b: galois.FieldArray | None
+) -> bool:
+    """Whether two observable maps, where None denotes the identity, are equal."""
+    if matrix_a is None or matrix_b is None:
+        return matrix_a is matrix_b
+    return bool(np.array_equal(matrix_a, matrix_b))
+
+
+####################################################################################################
+# code-capacity detector error models
+
+
+def _get_code_capacity_dem(
+    syndrome_matrix: galois.FieldArray,
+    observable_matrix: galois.FieldArray | None,
+    dem_errors: galois.FieldArray | None = None,
+    *,
+    symplectic_errors: bool = False,
+    error_probs: npt.NDArray[np.floating] | float = PLACEHOLDER_ERROR_RATE,
+) -> stim.DetectorErrorModel:
+    """Build the detector error model of one sector of a code-capacity experiment.
+
+    Error mechanism j of the model is the error in column j of dem_errors.  By default, each error
+    location is an error mechanism.  With symplectic_errors, the mechanisms are instead the
+    single-qudit X, Z, and Y errors, in that order.  An error mechanism flips the detectors of its
+    syndrome ``syndrome_matrix @ error``, and the observables of its observable values
+    ``observable_matrix @ error``.  If observable_matrix is None, every error location is itself an
+    observable.
+
+    Args:
+        syndrome_matrix: The matrix that maps an error to its syndrome.
+        observable_matrix: The matrix that maps an error to its observable values, or None if every
+            error location is itself an observable.
+        dem_errors: The errors of the error mechanisms, as columns of a matrix, or None to make each
+            error location an error mechanism.
+        symplectic_errors: Whether the error mechanisms are single-qudit X, Z, and Y errors.  This
+            requires an observable_matrix, and cannot be combined with dem_errors.
+        error_probs: The probability of each error mechanism, or one probability for all of them.
+            Code-capacity decoders use fixed placeholder probabilities, since an estimate reuses the
+            decoding outcomes of fixed-weight errors at every physical error rate.
+
+    Returns:
+        A stim.DetectorErrorModel.
+
+    Raises:
+        ValueError: If the matrices are not binary, since Stim detector error models are binary.
+    """
+    field = type(syndrome_matrix)
+    if getattr(field, "order", 2) != 2:
+        raise ValueError(
+            "An observable decoder built from a Stim detector error model requires a binary code,"
+            f" so it cannot decode a code over {field.name}.  Pass a decoder specification such as"
+            " decoders.guf(), or a prebuilt observable decoder (such as an ObservableLookupDecoder)"
+            " built for this code, instead"
+        )
+    if symplectic_errors:
+        if dem_errors is not None:
+            raise ValueError("dem_errors and symplectic_errors cannot both be specified")
+        if observable_matrix is None:
+            raise ValueError("symplectic_errors requires an observable_matrix")
+        detector_flip_matrix = _get_single_qudit_error_effects(syndrome_matrix)
+        observable_flip_matrix = _get_single_qudit_error_effects(observable_matrix)
+    elif dem_errors is not None:
+        detector_flip_matrix = syndrome_matrix @ dem_errors
+        observable_flip_matrix = (
+            dem_errors if observable_matrix is None else observable_matrix @ dem_errors
+        )
+    else:
+        detector_flip_matrix = syndrome_matrix
+        observable_flip_matrix = (
+            observable_matrix
+            if observable_matrix is not None
+            else scipy.sparse.identity(syndrome_matrix.shape[1], dtype=np.uint8, format="csc")
+        )
+    dem_arrays = DetectorErrorModelArrays.from_arrays(
+        np.asarray(detector_flip_matrix, dtype=np.uint8),
+        observable_flip_matrix,
+        error_probs,
+    )
+    return dem_arrays.to_dem()
+
+
+def _get_single_qudit_error_effects(matrix: galois.FieldArray) -> galois.FieldArray:
+    """Apply a symplectic map to single-qudit X, Z, and Y errors without forming those errors."""
+    components_x, components_z = np.hsplit(matrix, 2)
+    return np.hstack([components_x, components_z, components_x + components_z]).view(type(matrix))

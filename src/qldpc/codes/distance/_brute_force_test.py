@@ -14,7 +14,7 @@ import pytest
 import qldpc
 
 from . import _binary as binary
-from .conftest import _bitwise_count
+from .conftest import count_set_bits
 
 
 @pytest.mark.parametrize("block_size", [1, 3, 13])
@@ -40,7 +40,7 @@ def test_get_distance_classical(block_size: int) -> None:
             method="brute_force",
         )
 
-    int_generators = binary._pack_bits(np.asarray(generators, dtype=np.uint8))
+    int_generators = binary.pack_bits(np.asarray(generators, dtype=np.uint8))
     expected_bitstrings = [
         tuple(np.bitwise_xor.reduce(np.vstack(gens)).tolist())
         for n in range(1, len(generators) + 1)
@@ -51,7 +51,7 @@ def test_get_distance_classical(block_size: int) -> None:
     assert set(observed_bitstrings) == set(expected_bitstrings)
 
     observed_array = np.array(observed_bitstrings, dtype=np.uint64)
-    expected_distance = _bitwise_count(observed_array).sum(-1).min()
+    expected_distance = count_set_bits(observed_array).sum(-1).min()
     assert distance == expected_distance
 
 
@@ -61,7 +61,7 @@ def test_get_distance_quantum(homogeneous: bool, block_size: int) -> None:
     """get_distance_quantum visits every stabilizer + logical-op combination exactly once.
 
     The spy records each enumerated word through its weight function: ``np.bitwise_count`` for
-    Hamming weights, and ``_symplectic_weight`` for symplectic weights.
+    Hamming weights, and ``symplectic_weight`` for symplectic weights.
     """
     rng = np.random.default_rng(97)
     num_stabilizers, num_bits = (8, 97) if homogeneous else (3, 98)
@@ -71,7 +71,7 @@ def test_get_distance_quantum(homogeneous: bool, block_size: int) -> None:
     # The weight spy records every nonzero logical combination combined with every stabilizer
     # combination, including the empty one.
     observed_bitstrings: list[tuple[int, ...]] = []
-    weight_function = np.bitwise_count if homogeneous else binary._symplectic_weight
+    weight_function = np.bitwise_count if homogeneous else binary.symplectic_weight
 
     def _spy_weight(
         arr: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
@@ -82,7 +82,7 @@ def test_get_distance_quantum(homogeneous: bool, block_size: int) -> None:
     spy = (
         mock.patch.object(np, "bitwise_count", _spy_weight)
         if homogeneous
-        else mock.patch("qldpc.codes.distance.brute_force._symplectic_weight", _spy_weight)
+        else mock.patch("qldpc.codes.distance._brute_force.symplectic_weight", _spy_weight)
     )
     with spy:
         distance = qldpc.codes.distance.get_distance_quantum(
@@ -94,10 +94,10 @@ def test_get_distance_quantum(homogeneous: bool, block_size: int) -> None:
         )
 
     # Symplectic words are packed with their X and Z bits interleaved.
-    stabilizer_bits = stabilizers if homogeneous else binary._riffle(stabilizers)
-    logical_bits = logical_ops if homogeneous else binary._riffle(logical_ops)
-    int_stabilizers = binary._pack_bits(np.asarray(stabilizer_bits, dtype=np.uint8))
-    int_logical_ops = binary._pack_bits(np.asarray(logical_bits, dtype=np.uint8))
+    stabilizer_bits = stabilizers if homogeneous else binary.riffle(stabilizers)
+    logical_bits = logical_ops if homogeneous else binary.riffle(logical_ops)
+    int_stabilizers = binary.pack_bits(np.asarray(stabilizer_bits, dtype=np.uint8))
+    int_logical_ops = binary.pack_bits(np.asarray(logical_bits, dtype=np.uint8))
     expected_bitstrings = np.array(
         [
             np.bitwise_xor.reduce(np.vstack(stabs + ops))
@@ -113,7 +113,7 @@ def test_get_distance_quantum(homogeneous: bool, block_size: int) -> None:
 
     if not homogeneous:
         expected_bitstrings = (expected_bitstrings | expected_bitstrings >> 1) & 0x5555555555555555
-    expected_distance = _bitwise_count(expected_bitstrings).sum(-1).min()
+    expected_distance = count_set_bits(expected_bitstrings).sum(-1).min()
     assert distance == expected_distance
 
 

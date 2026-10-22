@@ -220,17 +220,13 @@ def get_logical_error_and_discard_rate(
     return logical_error_rate, discard_rate
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_postselection_masks(
     post_select: bool | Collection[int],
     post_select_observables: Collection[int],
     detector_record: DetectorRecord,
     num_observables: int,
 ) -> tuple[npt.NDArray[np.uint8] | None, npt.NDArray[np.uint8] | None]:
-    """Build a post-selection mask for sinter."""
+    """Build the bit-packed detector and observable post-selection masks for sinter."""
     if isinstance(post_select, bool):
         post_select = detector_record.get_events("flags") if post_select else ()
     post_select = list(post_select)

@@ -12,11 +12,11 @@ import numpy as np
 import numpy.typing as npt
 import stim
 
-from ..adapters.error_decoders import match_error_decoder_to_dem
-from ..construction.resolution import resolve_decoder
+from ..adapters.error_decoders import _match_error_decoder_to_dem
+from ..construction._resolution import resolve_decoder
 from ..construction.specs import DeferredErrorDecoderInput
 from ..dems import DetectorErrorModelArrays
-from ..protocols import ErrorDecoder, batch_decode_errors
+from ..protocols import ErrorDecoder, _batch_decode_errors
 from .core import CompiledSinterDecoder, SinterDecoder
 
 
@@ -153,7 +153,7 @@ class SequentialWindowDecoder(SinterDecoder):
             # Windows commit inferred errors, so they need error decoders.  Restricting the DEM to
             # this window may leave equivalent error mechanisms, which the window_decoder may merge
             # into one, so align the errors that it infers with the error mechanisms of the window.
-            window_decoder = match_error_decoder_to_dem(window_decoder, window_dem)
+            window_decoder = _match_error_decoder_to_dem(window_decoder, window_dem)
 
             # identify errors in the commit region
             c_errors = dem_arrays.detector_flip_matrix[c_detectors].getnnz(axis=0) != 0
@@ -272,7 +272,7 @@ class CompiledSequentialWindowDecoder(CompiledSinterDecoder):
             ) % 2
 
             # decode this syndrome and update the net error appropriately
-            decoded_error = batch_decode_errors(decoder, syndromes)
+            decoded_error = _batch_decode_errors(decoder, syndromes)
             if getattr(decoder, "has_erasure_bit", False):
                 erased |= decoded_error[:, -1] != 0
                 decoded_error = decoded_error[:, :-1]
@@ -457,10 +457,6 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
         windows = [(d_dets, c_dets) for d_dets, c_dets in windows if c_dets]
 
         return self._compile_windows(dem, windows)
-
-
-####################################################################################################
-# helper methods
 
 
 def _time_coordinate(dem_coords: dict[int, list[float]]) -> int:

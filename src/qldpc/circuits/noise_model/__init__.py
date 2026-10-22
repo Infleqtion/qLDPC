@@ -111,9 +111,9 @@ flattened is dropped.
 ``idle_error`` applies to every qubit that is not operated on during a circuit moment.  When
 ``idle_error`` is a Pauli channel, consecutive idle errors on the same qubit are combined into one
 equivalent error that is emitted before the qubit is next used.  Custom Stim noise fragments are
-applied once per idle moment.
-``additional_error_waiting_for_m_or_r`` applies additional noise to non-collapsing qubits during a
-moment that contains a measurement or reset; it is always applied once per such moment.
+applied once per idle moment.  ``additional_error_waiting_for_m_or_r`` applies additional noise to
+non-collapsing qubits during a moment that contains a measurement or reset; it is always applied
+once per such moment.
 
 Explicit identity gates (``I`` and ``II``) are treated as idle for this accounting.  ``rules`` can
 append errors after these gates, and ``rule_func`` can select errors based on an identity's tag or
@@ -148,33 +148,12 @@ from .channels import (
     PauliChannelSequence,
 )
 from .noise_model import (
+    DEFAULT_IMMUNE_OP_TAG,
+    DEFAULT_IMMUNE_QUBIT_TAG,
     DepolarizingNoiseModel,
     NoiseModel,
     SI1000NoiseModel,
     as_noiseless_circuit,
-)
-from .operations import (
-    ALL_STIM_GATE_NAMES,
-    ANNOTATION,
-    CLIFFORD_1Q,
-    CLIFFORD_2Q,
-    CLIFFORD_PP,
-    COLLAPSING_OPS,
-    DEFAULT_IMMUNE_OP_TAG,
-    DEFAULT_IMMUNE_QUBIT_TAG,
-    GATE_OP_TYPES,
-    IDLE_OPS,
-    JUST_MEASURE_1Q,
-    JUST_MEASURE_2Q,
-    JUST_MEASURE_OPS,
-    JUST_MEASURE_PP,
-    JUST_RESET_1Q,
-    JUST_RESET_OPS,
-    MEASURE_AND_RESET_OPS,
-    MEASURE_RESET_1Q,
-    NOISE,
-    UNSUPPORTED,
-    op_type,
 )
 from .rules import (
     ErrorSpec,
@@ -182,26 +161,8 @@ from .rules import (
 )
 
 __all__ = [
-    "ALL_STIM_GATE_NAMES",
-    "ANNOTATION",
-    "CLIFFORD_1Q",
-    "CLIFFORD_2Q",
-    "CLIFFORD_PP",
-    "COLLAPSING_OPS",
     "DEFAULT_IMMUNE_OP_TAG",
     "DEFAULT_IMMUNE_QUBIT_TAG",
-    "GATE_OP_TYPES",
-    "IDLE_OPS",
-    "JUST_MEASURE_1Q",
-    "JUST_MEASURE_2Q",
-    "JUST_MEASURE_OPS",
-    "JUST_MEASURE_PP",
-    "JUST_RESET_1Q",
-    "JUST_RESET_OPS",
-    "MEASURE_AND_RESET_OPS",
-    "MEASURE_RESET_1Q",
-    "NOISE",
-    "UNSUPPORTED",
     "AbstractPauliChannel",
     "DepolarizingNoiseModel",
     "ErrorSpec",
@@ -211,5 +172,4 @@ __all__ = [
     "PauliChannelSequence",
     "SI1000NoiseModel",
     "as_noiseless_circuit",
-    "op_type",
 ]

@@ -16,7 +16,6 @@ p satisfies L(p.T) = L(p).T, and p.T equals the inverse ~p = p**-1.  Some custom
 (SpecialLinearGroup, ProjectiveSpecialLinearGroup, GeneralLinearGroup, ProjectiveGeneralLinearGroup,
 QuaternionGroup) are generally not orthogonal, so that transpose/inverse identity does not hold for
 them.
-
 """
 
 from __future__ import annotations
@@ -37,19 +36,9 @@ import sympy.abc
 import sympy.combinatorics as comb
 import sympy.core
 
-from ._monomials import get_coefficient_and_exponents
+from qldpc.math import resolve_field
 
-
-def resolve_field(
-    field: int | type[galois.FieldArray] | None,
-) -> type[galois.FieldArray]:
-    """Parse a finite field argument to obtain an actual finite field."""
-    if field is None:
-        return galois.GF2
-    if isinstance(field, int):
-        return galois.GF(field)
-    return field
-
+from .monomials import get_coefficient_and_exponents
 
 NestedSequence = Sequence[object | Sequence["NestedSequence"]]
 
@@ -153,26 +142,6 @@ class Group:
         lift: Lift | None = None,
     ) -> None:
         self._init_from_group(comb.PermutationGroup(*generators), name, generate_func, lift)
-
-    def _init_from_group(
-        self,
-        group: comb.PermutationGroup | Group,
-        name: str | None = None,
-        generate_func: GenerateFunc | None = None,
-        lift: Lift | None = None,
-    ) -> None:
-        """Initialize from an existing group."""
-        if isinstance(group, comb.PermutationGroup):
-            self._group = group
-            self._name = name
-            self._generate_func = generate_func
-            self._lift = lift
-        else:
-            assert isinstance(group, Group)
-            self._group = group._group
-            self._name = name or group._name
-            self._generate_func = generate_func or group._generate_func
-            self._lift = lift or group._lift
 
     def __eq__(self, other: object) -> bool:
         # Two groups are equal only if they share a representation as well as an underlying group:
@@ -578,17 +547,23 @@ class Group:
 
         ... unless ``from_magma=True``, in which case retrieve a group from the MAGMA CAS.
 
-        This may run GAP, install GAP packages, access GroupNames.org, or prompt on standard input;
-        see help(qldpc.external.groups.get_generators) and
-        help(qldpc.external.groups.get_generators_from_magma).
+        A GAP group is retrieved from a small local database if possible, else from GAP if GAP can
+        be called without user interaction, else from GroupNames.org (for a SmallGroup), and
+        finally by a manual workflow.  The manual workflow prints GAP commands, copies them to the
+        system clipboard, and reads the output that the user pastes into standard input (blocking,
+        and raising EOFError if standard input is closed); before falling back to it, qLDPC asks on
+        standard input whether GAP is available for copy/paste.  Calling GAP may install the GAP
+        GUAVA package, after asking for consent on standard input, and raises the warning
+        warning_to_raise_if_calling_gap, if provided.  A MAGMA group is always retrieved by such a
+        manual copy/paste workflow.  Retrieved generators are cached to disk.
         """
-        from qldpc import external  # avoid circular import
+        from qldpc.external import _groups  # avoid circular import
 
         name = "".join(name.split())  # strip whitespace
         if from_magma:
-            generators = external.groups.get_generators_from_magma(name)
+            generators = _groups.get_generators_from_magma(name)
         else:
-            generators = external.groups.get_generators(
+            generators = _groups.get_generators(
                 name, warning_to_raise_if_calling_gap=warning_to_raise_if_calling_gap
             )
         return Group(*[GroupMember(generator) for generator in generators], name=name)
@@ -614,6 +589,26 @@ class Group:
         for base, exponent in exponents:
             output *= symbols[base] ** exponent
         return output
+
+    def _init_from_group(
+        self,
+        group: comb.PermutationGroup | Group,
+        name: str | None = None,
+        generate_func: GenerateFunc | None = None,
+        lift: Lift | None = None,
+    ) -> None:
+        """Initialize from an existing group."""
+        if isinstance(group, comb.PermutationGroup):
+            self._group = group
+            self._name = name
+            self._generate_func = generate_func
+            self._lift = lift
+        else:
+            assert isinstance(group, Group)
+            self._group = group._group
+            self._name = name or group._name
+            self._generate_func = generate_func or group._generate_func
+            self._lift = lift or group._lift
 
     def _random_member(self, rng: Random) -> GroupMember:
         """A random element of this group, drawn with the given random number generator."""
@@ -709,6 +704,11 @@ class WreathProductGroup(Group):
         )
 
 
+def _get_rng(seed: int | None) -> Random:
+    """A new random number generator with the given seed, or SymPy's global one if seed is None."""
+    return Random(seed) if seed is not None else sympy.core.random.rng
+
+
 ####################################################################################################
 # "simple" named groups
 
@@ -725,14 +725,6 @@ class TrivialGroup(Group):
     @classmethod
     def _trivial_lift(cls, member: GroupMember) -> npt.NDArray[np.int_]:
         return np.array(1, ndmin=2, dtype=int)
-
-    @staticmethod
-    def to_ring_array(data: npt.NDArray[np.int_] | NestedSequence) -> None:
-        """DEFUNCT alias for qldpc.abstract.RingArray.build(data)."""
-        raise ValueError(
-            "TrivialGroup.to_ring_array(data) is DEFUNCT; use"
-            " qldpc.abstract.RingArray.build(data) instead"
-        )
 
 
 class AbelianGroup(Group):
@@ -896,10 +888,15 @@ class SmallGroup(Group):
 
     @staticmethod
     def number(order: int) -> int:
-        """The number of groups of a given order."""
-        from qldpc import external  # avoid circular import
+        """The number of groups of a given order.
 
-        return external.groups.get_small_group_number(order)
+        This number is retrieved from the GAP SmallGrp package if GAP can be called without user
+        interaction, else from GroupNames.org, and finally by the manual copy/paste GAP workflow
+        described in Group.from_name.  Results are cached to disk.
+        """
+        from qldpc.external import _groups  # avoid circular import
+
+        return _groups.get_small_group_number(order)
 
     @staticmethod
     def generator(order: int) -> Iterator[SmallGroup]:
@@ -909,10 +906,15 @@ class SmallGroup(Group):
 
     @staticmethod
     def get_structure(order: int, index: int) -> str:
-        """Retrieve a description of the structure of a group."""
-        from qldpc import external  # avoid circular import
+        """Retrieve a description of the structure of a group.
 
-        return external.groups.get_small_group_structure(order, index)
+        The structure is retrieved from GAP and cached to disk if GAP can be called without user
+        interaction.  Otherwise, this method returns the name of the group,
+        "SmallGroup(order,index)".
+        """
+        from qldpc.external import _groups  # avoid circular import
+
+        return _groups.get_small_group_structure(order, index)
 
 
 ####################################################################################################
@@ -968,7 +970,10 @@ class SpecialLinearGroup(Group):
     def get_generating_mats(
         dimension: int, field: int | type[galois.FieldArray] | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
-        """Generating matrices for the Special Linear group, based on https://arxiv.org/abs/2201.09155."""
+        """Generating matrices for the Special Linear group.
+
+        Based on https://arxiv.org/abs/2201.09155.
+        """
         field = resolve_field(field)
         minus_one = -field(1)
         gen_w = minus_one * np.diag(np.ones(dimension - 1, dtype=int), k=-1).view(field)
@@ -1027,8 +1032,8 @@ class ProjectiveSpecialLinearGroup(Group):
         self._field = resolve_field(field)
 
         # The linear representation of PSL exists only when SL has a trivial center.  The center is
-        # the scalar matrices in SL, of size gcd(d, q - 1), so this happens exactly when that
-        # gcd is 1.  See the class docstring for how linear_rep selects the representation.
+        # the scalar matrices in SL, of size gcd(d, q - 1), so this happens exactly when the size is
+        # one.  See the class docstring for how linear_rep selects the representation.
         num_roots = math.gcd(self.dimension, self.field.order - 1)
         has_linear_rep = num_roots == 1
         if linear_rep and not has_linear_rep:
@@ -1333,8 +1338,3 @@ def _get_linear_rep(
         return field(np.vstack(rows, dtype=int))
 
     return generators, lift
-
-
-def _get_rng(seed: int | None) -> Random:
-    """A new random number generator with the given seed, or SymPy's global one if seed is None."""
-    return Random(seed) if seed is not None else sympy.core.random.rng

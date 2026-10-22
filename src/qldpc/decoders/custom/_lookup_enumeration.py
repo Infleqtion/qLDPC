@@ -39,7 +39,11 @@ class _ErrorSelection(NamedTuple):
     error: tuple[int, ...]
 
 
-def _iter_errors_and_syndromes(
+####################################################################################################
+# error and syndrome enumeration
+
+
+def iter_errors_and_syndromes(
     matrix: IntegerArray,
     max_weight: int,
     syndrome_mask: npt.NDArray[np.bool_] | None,

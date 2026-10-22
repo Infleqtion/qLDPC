@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Miscellaneous circuit utilities."""
+"""Circuit types, qubit remapping, measurement utilities, and the guard for qubit-only methods."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ import stim
 
 from qldpc import codes, math
 
-ReturnType = TypeVar("ReturnType")
-Params = ParamSpec("Params")
+_ReturnType = TypeVar("_ReturnType")
+_Params = ParamSpec("_Params")
 
 
 class StimCircuitProtocol(Protocol):
@@ -64,23 +64,6 @@ class StimCircuitProtocol(Protocol):
 # type functions that are generic over stim.Circuit and stim-wrapping circuits while preserving the
 # concrete circuit type of their input.
 StimCircuitLike = TypeVar("StimCircuitLike", bound=StimCircuitProtocol)
-
-
-def restrict_to_qubits(
-    func: Callable[Params, ReturnType],
-) -> Callable[Params, ReturnType]:
-    """Restrict a circuit or tableau constructor to qubit-based codes."""
-
-    @functools.wraps(func)
-    def qubit_func(*args: Params.args, **kwargs: Params.kwargs) -> ReturnType:
-        if any(
-            isinstance(arg, codes.QuditCode) and arg.field is not galois.GF2
-            for arg in itertools.chain(args, kwargs.values())
-        ):
-            raise ValueError("Circuit methods are only supported for qubit codes")
-        return func(*args, **kwargs)
-
-    return qubit_func
 
 
 def with_remapped_qubits(
@@ -217,3 +200,20 @@ def get_unaddressed_measurements(circuit: stim.Circuit) -> list[int]:
                 if target.is_measurement_record_target
             }
     return sorted(set(measurements) - addressed_measurements)
+
+
+def _restrict_to_qubits(
+    func: Callable[_Params, _ReturnType],
+) -> Callable[_Params, _ReturnType]:
+    """Restrict a circuit or tableau constructor to qubit-based codes."""
+
+    @functools.wraps(func)
+    def qubit_func(*args: _Params.args, **kwargs: _Params.kwargs) -> _ReturnType:
+        if any(
+            isinstance(arg, codes.QuditCode) and arg.field is not galois.GF2
+            for arg in itertools.chain(args, kwargs.values())
+        ):
+            raise ValueError("Circuit methods are only supported for qubit codes")
+        return func(*args, **kwargs)
+
+    return qubit_func

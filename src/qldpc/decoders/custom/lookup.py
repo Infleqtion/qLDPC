@@ -1,11 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Lookup-table decoder classes."""
+"""Lookup-table decoders and their decoder specification."""
 
 from __future__ import annotations
 
 import collections
-import warnings
 from collections.abc import Callable, Collection, Iterator, Sequence
 from typing import TypeAlias, cast, overload
 
@@ -15,15 +14,15 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc import math
-from qldpc._util import get_external_caller_stacklevel
+from qldpc import _deprecations, math
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.math import IntegerArray
 
 from ..common import _erasure_bit_support, with_erasure_bits
 from ..construction.specs import decoder_spec
 from ..dems import DetectorErrorModelArrays
 from ..protocols import ErrorDecoder, ObservableDecoder
-from ._lookup_enumeration import _iter_errors_and_syndromes
+from ._lookup_enumeration import iter_errors_and_syndromes
 
 _LOOKUP_CHUNK_SIZE = 4096
 
@@ -119,7 +118,7 @@ class _LookupDecoderBase:
         self._packed_syndrome_to_prediction: dict[bytes, bytes] = {}
 
         # enumerate errors and their syndromes, and use them to build the decoding map
-        errors_and_syndromes = _iter_errors_and_syndromes(
+        errors_and_syndromes = iter_errors_and_syndromes(
             pcm,
             max_weight,
             syndrome_mask,
@@ -468,16 +467,20 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         """Initialize an error lookup table."""
-        advice = (
-            "use decoders.lookup(max_weight=...).build_observable_decoder(dem) instead"
-            if isinstance(pcm_or_dem, stim.DetectorErrorModel)
-            else (
-                "use qldpc.decoders.custom.lookup.ObservableLookupDecoder(matrix, max_weight=...,"
-                " observable_flip_matrix=..., error_channel=...).decode_observables(syndrome)"
-                " instead"
+        if predict_observable_flips:
+            advice = (
+                "use decoders.lookup(max_weight=...).build_observable_decoder(dem) instead"
+                if isinstance(pcm_or_dem, stim.DetectorErrorModel)
+                else (
+                    "use qldpc.decoders.custom.lookup.ObservableLookupDecoder(matrix,"
+                    " max_weight=..., observable_flip_matrix=..., error_channel=...)"
+                    ".decode_observables(syndrome) instead"
+                )
             )
-        )
-        _warn_deprecated_observable_prediction(predict_observable_flips, advice)
+            _deprecations.warn_deprecated(
+                f"predict_observable_flips=True is deprecated; {advice}",
+                stacklevel=get_external_caller_stacklevel(),
+            )
         self._outputs_observables = predict_observable_flips
         self.predict_observable_flips = predict_observable_flips
         self.decode_returns_observables = predict_observable_flips
@@ -642,6 +645,56 @@ class ObservableLookupDecoder(_LookupDecoderBase):
         return np.column_stack([packed_predictions[:, :num_observable_bytes], erased])
 
 
+class _FieldVectorPacker:
+    """Pack fixed-length vectors over a finite field into compact, hashable bytes.
+
+    Over GF(2), vectors are bit-packed with np.packbits.  Over any other field, each entry is stored
+    as the smallest unsigned integer that holds the integer representation of a field element that
+    galois uses, which is lossless for both prime and extension fields.  Fields with more than 2**64
+    elements are out of scope, since iter_errors_and_syndromes builds a tuple of every element.
+    """
+
+    def __init__(self, field_order: int, vector_length: int, unpacked_dtype: npt.DTypeLike) -> None:
+        self.field_order = field_order
+        self.vector_length = vector_length
+        self.unpacked_dtype = np.dtype(unpacked_dtype)
+        self.element_dtype = np.dtype(np.min_scalar_type(field_order - 1)).newbyteorder("<")
+        self.num_packed_bytes = (
+            -(-vector_length // 8)
+            if field_order == 2
+            else vector_length * self.element_dtype.itemsize
+        )
+
+    def pack(self, vector: npt.NDArray[np.integer]) -> bytes:
+        """Pack a vector of field elements."""
+        if self.field_order == 2:
+            return np.packbits(vector, bitorder="little").tobytes()
+        return np.asarray(vector, dtype=self.element_dtype).tobytes()
+
+    def unpack(self, packed: bytes) -> npt.NDArray[np.int_]:
+        """Unpack a vector into a new array."""
+        if self.field_order == 2:
+            buffer = np.frombuffer(packed, dtype=np.uint8)
+            bits = np.unpackbits(buffer, count=self.vector_length, bitorder="little")
+            return bits.astype(self.unpacked_dtype)
+        return np.frombuffer(packed, dtype=self.element_dtype).astype(self.unpacked_dtype)
+
+    def pack_rows(self, vectors: npt.NDArray[np.integer]) -> npt.NDArray[np.uint8]:
+        """Pack a two-dimensional array of vectors, one vector per row."""
+        if self.field_order == 2:
+            return np.packbits(vectors, bitorder="little", axis=1)
+        elements = np.ascontiguousarray(vectors, dtype=self.element_dtype)
+        return elements.view(np.uint8).reshape(len(vectors), self.num_packed_bytes)
+
+    def unpack_rows(self, packed: npt.NDArray[np.uint8]) -> npt.NDArray[np.int_]:
+        """Unpack fixed-width byte rows into vectors, one vector per row."""
+        if self.field_order == 2:
+            bits = np.unpackbits(packed, count=self.vector_length, bitorder="little", axis=1)
+            return bits.astype(self.unpacked_dtype)
+        elements = np.ascontiguousarray(packed).view(self.element_dtype)
+        return elements.reshape(len(packed), self.vector_length).astype(self.unpacked_dtype)
+
+
 ####################################################################################################
 # weighted lookup decoders
 
@@ -699,7 +752,7 @@ class _WeightedLookupDecoderBase(_LookupDecoderBase):
             get_observable_flip = _build_observable_flip_func(
                 pcm, observable_flip_matrix, symplectic
             )
-        for error, syndrome in _iter_errors_and_syndromes(
+        for error, syndrome in iter_errors_and_syndromes(
             pcm, max_weight, syndrome_mask, symplectic
         ):
             output = (
@@ -765,11 +818,13 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         add_erasure_bit: bool = False,
         symplectic: bool = False,
     ) -> None:
-        _warn_deprecated_observable_prediction(
-            predict_observable_flips,
-            "use qldpc.decoders.custom.lookup.WeightedObservableLookupDecoder(...)"
-            ".decode_observables(syndrome, penalty_func) instead",
-        )
+        if predict_observable_flips:
+            _deprecations.warn_deprecated(
+                "predict_observable_flips=True is deprecated; use"
+                " qldpc.decoders.custom.lookup.WeightedObservableLookupDecoder(...)"
+                ".decode_observables(syndrome, penalty_func) instead",
+                stacklevel=get_external_caller_stacklevel(),
+            )
         self._outputs_observables = predict_observable_flips
         self.predict_observable_flips = predict_observable_flips
         self.decode_returns_observables = predict_observable_flips
@@ -884,6 +939,19 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
         )
 
 
+def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
+    """The weight of an error: the number of qudits, or of bits, that it addresses nontrivially.
+
+    This is the weight that ``iter_errors_and_syndromes`` enumerates by, so ranking errors by it
+    keeps the lighter of two that a penalty scores equally.  A symplectic error assigns both an X
+    and a Z component to each qudit, and a qudit carrying both counts once, so the number of nonzero
+    entries would count it twice.
+    """
+    if symplectic:
+        return int(math.symplectic_weight(np.asarray(error)))
+    return int(np.count_nonzero(error))
+
+
 ####################################################################################################
 # decoder specifications
 
@@ -955,7 +1023,7 @@ observable output contract.
 
 
 ####################################################################################################
-# lookup-table construction
+# helper methods for lookup-table construction
 
 
 def _organize_lookup_table_initialization_data(
@@ -1070,10 +1138,9 @@ def _prepare_error_channel(
             raise ValueError(
                 "Cannot specify both an error_channel and a penalty_func in a LookupDecoder"
             )
-        warnings.warn(
+        _deprecations.warn_deprecated(
             "LookupDecoder penalty_func is deprecated; pass a callable error_channel that returns"
             " the full error log probability instead",
-            DeprecationWarning,
             stacklevel=get_external_caller_stacklevel(),
         )
         # legacy penalties are not validated as normalized log probabilities
@@ -1113,8 +1180,8 @@ def _build_observable_flip_func(
     With ``symplectic=True``, an error assigns both an X and a Z component to each qudit, and the
     flip that it induces in an observable is their symplectic product,
     ``observable @ symplectic_conjugate(error)``.  That product is obtained by multiplying the error
-    by -symplectic_conjugate(observable_flip_matrix), in the same way that
-    _iter_errors_and_syndromes obtains a syndrome from a parity check matrix.
+    by -symplectic_conjugate(observable_flip_matrix), in the same way that iter_errors_and_syndromes
+    obtains a syndrome from a parity check matrix.
     """
     field = type(pcm) if isinstance(pcm, galois.FieldArray) else galois.GF2
     if isinstance(observable_flip_matrix, galois.FieldArray) and (
@@ -1178,84 +1245,3 @@ def _build_error_log_probability(
         return float(np.sum(log_probs[events]) + np.sum(log_non_probs[~events]))
 
     return error_log_probability
-
-
-####################################################################################################
-# supporting objects
-
-
-class _FieldVectorPacker:
-    """Pack fixed-length vectors over a finite field into compact, hashable bytes.
-
-    Over GF(2), vectors are bit-packed with np.packbits.  Over any other field, each entry is stored
-    as the smallest unsigned integer that holds the integer representation of a field element that
-    galois uses, which is lossless for both prime and extension fields.  Fields with more than 2**64
-    elements are out of scope, since _iter_errors_and_syndromes builds a tuple of every element.
-    """
-
-    def __init__(self, field_order: int, vector_length: int, unpacked_dtype: npt.DTypeLike) -> None:
-        self.field_order = field_order
-        self.vector_length = vector_length
-        self.unpacked_dtype = np.dtype(unpacked_dtype)
-        self.element_dtype = np.dtype(np.min_scalar_type(field_order - 1)).newbyteorder("<")
-        self.num_packed_bytes = (
-            -(-vector_length // 8)
-            if field_order == 2
-            else vector_length * self.element_dtype.itemsize
-        )
-
-    def pack(self, vector: npt.NDArray[np.integer]) -> bytes:
-        """Pack a vector of field elements."""
-        if self.field_order == 2:
-            return np.packbits(vector, bitorder="little").tobytes()
-        return np.asarray(vector, dtype=self.element_dtype).tobytes()
-
-    def unpack(self, packed: bytes) -> npt.NDArray[np.int_]:
-        """Unpack a vector into a new array."""
-        if self.field_order == 2:
-            buffer = np.frombuffer(packed, dtype=np.uint8)
-            bits = np.unpackbits(buffer, count=self.vector_length, bitorder="little")
-            return bits.astype(self.unpacked_dtype)
-        return np.frombuffer(packed, dtype=self.element_dtype).astype(self.unpacked_dtype)
-
-    def pack_rows(self, vectors: npt.NDArray[np.integer]) -> npt.NDArray[np.uint8]:
-        """Pack a two-dimensional array of vectors, one vector per row."""
-        if self.field_order == 2:
-            return np.packbits(vectors, bitorder="little", axis=1)
-        elements = np.ascontiguousarray(vectors, dtype=self.element_dtype)
-        return elements.view(np.uint8).reshape(len(vectors), self.num_packed_bytes)
-
-    def unpack_rows(self, packed: npt.NDArray[np.uint8]) -> npt.NDArray[np.int_]:
-        """Unpack fixed-width byte rows into vectors, one vector per row."""
-        if self.field_order == 2:
-            bits = np.unpackbits(packed, count=self.vector_length, bitorder="little", axis=1)
-            return bits.astype(self.unpacked_dtype)
-        elements = np.ascontiguousarray(packed).view(self.element_dtype)
-        return elements.reshape(len(packed), self.vector_length).astype(self.unpacked_dtype)
-
-
-def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
-    """The weight of an error: the number of qudits, or of bits, that it addresses nontrivially.
-
-    This is the weight that ``_iter_errors_and_syndromes`` enumerates by, so ranking errors by it
-    keeps the lighter of two that a penalty scores equally.  A symplectic error assigns both an X
-    and a Z component to each qudit, and a qudit carrying both counts once, so the number of nonzero
-    entries would count it twice.
-    """
-    if symplectic:
-        return int(math.symplectic_weight(np.asarray(error)))
-    return int(np.count_nonzero(error))
-
-
-####################################################################################################
-# deprecated compatibility helpers
-
-
-def _warn_deprecated_observable_prediction(enabled: bool, advice: str) -> None:
-    """Warn about the legacy mode in which an error decoder predicts observable flips."""
-    if enabled:
-        warnings.warn(
-            f"predict_observable_flips=True is deprecated; {advice}",
-            DeprecationWarning,
-            stacklevel=get_external_caller_stacklevel(),
-        )

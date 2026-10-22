@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import collections
+import inspect
 import warnings
 
 import galois
@@ -14,9 +15,10 @@ import scipy.sparse
 import stim
 
 from qldpc import codes, decoders, math
+from qldpc._deprecations import decoders as deprecated_decoders
 from qldpc.decoders.conftest import SurfaceCodeProblem, ToyProblem
-from qldpc.decoders.construction.resolution import _get_error_decoder
-from qldpc.decoders.custom._lookup_enumeration import _iter_errors_and_syndromes
+from qldpc.decoders.construction._resolution import build_error_decoder
+from qldpc.decoders.custom._lookup_enumeration import iter_errors_and_syndromes
 from qldpc.decoders.custom.lookup import (
     _FieldVectorPacker,
     _get_decoder_lookup,
@@ -43,6 +45,14 @@ def test_lookup(toy_problem: ToyProblem) -> None:
 
     observable_decoder = _get_observable_decoder_lookup(dem, max_weight=2)
     assert np.array_equal(observable_decoder.decode_observables(syndrome), [])
+
+
+def test_lookup_builder_docstring() -> None:
+    """The lookup builder describes the decoder that it builds, not a decoder specification."""
+    docstring = inspect.getdoc(_get_decoder_lookup)
+    assert docstring is not None and docstring.startswith("Build ")
+    returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
+    assert "decoder specification" not in returns
 
 
 def test_tie_breaking() -> None:
@@ -365,7 +375,7 @@ def test_explicit_observable_lookup_decoders() -> None:
     assert weighted.decode_observables_batch(no_syndromes).shape == (0, 1)
 
     with pytest.raises(TypeError, match="observable flips rather than errors"):
-        _get_error_decoder(dem, decoder=decoder)  # type: ignore[arg-type]
+        build_error_decoder(dem, decoder=decoder)  # type: ignore[arg-type]
 
     # deprecated lookup decoders that predict observable flips are marked as such, so they are
     # rejected where an error decoder is required
@@ -384,7 +394,7 @@ def test_explicit_observable_lookup_decoders() -> None:
         assert legacy_decoder.decode_returns_observables
         assert np.array_equal(legacy_decoder.decode(syndrome), [1])
         with pytest.raises(TypeError, match="observable flips rather than errors"):
-            _get_error_decoder(dem, decoder=legacy_decoder)
+            build_error_decoder(dem, decoder=legacy_decoder)
     assert not decoders.custom.LookupDecoder(dem, max_weight=1).decode_returns_observables
     with pytest.warns(DeprecationWarning, match=r"ObservableLookupDecoder\(matrix, max_weight="):
         decoders.custom.LookupDecoder(
@@ -412,7 +422,7 @@ def test_quantum_observable_flip_prediction() -> None:
         code = codes.SurfaceCode(3, field=order)
         logicals = code.get_logical_ops()
         achievable_flips: dict[tuple[int, ...], set[tuple[int, ...]]] = collections.defaultdict(set)
-        for error, syndrome_array in _iter_errors_and_syndromes(code.matrix, 1, None, True):
+        for error, syndrome_array in iter_errors_and_syndromes(code.matrix, 1, None, True):
             conjugate = math.symplectic_conjugate(error.view(code.field))
             flip = tuple((logicals @ conjugate).view(np.ndarray).tolist())
             achievable_flips[tuple(syndrome_array.tolist())].add(flip)
@@ -644,7 +654,7 @@ def test_observable_flip_matrix_arithmetic() -> None:
     pcm = field([[1, 1, 0], [0, 1, 1]])
     observable_flip_matrix = field([[2, 0, 2]])
     achievable_flips: dict[tuple[int, ...], set[int]] = collections.defaultdict(set)
-    for error, syndrome_array in _iter_errors_and_syndromes(pcm, 1, None, False):
+    for error, syndrome_array in iter_errors_and_syndromes(pcm, 1, None, False):
         flip = int((observable_flip_matrix @ error.view(field))[0])
         achievable_flips[tuple(syndrome_array.tolist())].add(flip)
     assert 3 in set.union(*achievable_flips.values())  # unreachable by an integer product
@@ -684,12 +694,12 @@ def test_field_vector_packer(order: int, length: int) -> None:
     assert np.array_equal(packer.unpack(packer.pack(vectors[1])), vectors[1])
 
 
-def test_observable_lookup_deprecation_warning_location() -> None:
+def test_deprecated_observable_lookup_warning_location() -> None:
     """Legacy observable lookup warnings identify the user call and its typed replacement."""
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        decoder = decoders.get_decoder(
+        decoder = deprecated_decoders.get_decoder(
             dem,
             with_lookup=True,
             max_weight=1,

@@ -15,9 +15,9 @@ from qldpc import codes, math
 
 from ..bookkeeping import DetectorRecord, QubitIDs
 from ..common import (
+    _restrict_to_qubits,
     get_pauli_product_measurements,
     get_unaddressed_measurements,
-    restrict_to_qubits,
 )
 from ..encoding import get_logical_state_stabilizers, get_state_stabilizers
 from ..noise_model import DepolarizingNoiseModel, NoiseModel, as_noiseless_circuit
@@ -27,7 +27,7 @@ from .common import _get_postselection_masks
 # state preparation diagnostics
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_state_prep_diagnostic_circuit(
     code: codes.QuditCode,
     state_prep_circuit: stim.Circuit,
@@ -258,10 +258,6 @@ def get_state_prep_diagnostic_tasks(
         )
         for error_rate in error_rates
     ]
-
-
-####################################################################################################
-# helper methods
 
 
 def _assert_pure_logical_state(

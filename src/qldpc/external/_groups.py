@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Module for loading groups from GroupNames or the GAP computer algebra system.
+"""Loading groups and their properties from GroupNames, GAP, or MAGMA.
 
 See https://groupnames.org and https://www.gap-system.org.
 """
@@ -17,12 +17,16 @@ import pyperclip
 
 import qldpc.cache
 import qldpc.external.gap
-from qldpc._util import get_external_caller_stacklevel
+from qldpc._utils import get_external_caller_stacklevel
 
-GeneratorsList = list[list[tuple[int, ...]]]
-IdempotentsList = list[tuple[tuple[int, tuple[tuple[int, ...], ...]], ...]]
+_GeneratorsList = list[list[tuple[int, ...]]]
+_IdempotentsList = list[tuple[tuple[int, tuple[tuple[int, ...], ...]], ...]]
 
-GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
+_GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
+
+
+####################################################################################################
+# group generators
 
 
 @qldpc.cache.use_disk_cache(
@@ -31,7 +35,7 @@ GROUPNAMES_URL = "https://people.maths.bris.ac.uk/~matyd/GroupNames/"
 )
 def get_generators(
     group: str, *, warning_to_raise_if_calling_gap: str | None = None
-) -> GeneratorsList:
+) -> _GeneratorsList:
     """Retrieve GAP group generators.
 
     This function tries a local database, then GAP if it can be called without user interaction,
@@ -39,23 +43,23 @@ def get_generators(
     on standard input).  It may therefore run GAP, access the network, and prompt for input.
     """
     # try retrieving a known group
-    if generators := KNOWN_GROUPS.get(group):
+    if generators := _KNOWN_GROUPS.get(group):
         return generators
 
     # try retrieving a group from GAP, if we can do so without prompting the user
     gap_is_callable = qldpc.external.gap.is_callable()
     if gap_is_callable and (
-        generators := maybe_get_generators_from_gap(group, warning=warning_to_raise_if_calling_gap)
+        generators := _maybe_get_generators_from_gap(group, warning=warning_to_raise_if_calling_gap)
     ):
         return generators
 
     # try retrieving a group from GroupNames
-    if generators := maybe_get_generators_from_groupnames(group):
+    if generators := _maybe_get_generators_from_groupnames(group):
         return generators
 
     # as a last resort, offer the manual copy/paste GAP workflow
     if not gap_is_callable and (
-        generators := maybe_get_generators_from_gap(group, warning=warning_to_raise_if_calling_gap)
+        generators := _maybe_get_generators_from_gap(group, warning=warning_to_raise_if_calling_gap)
     ):
         return generators
 
@@ -71,7 +75,7 @@ def get_generators(
     raise ValueError("\n".join(message))
 
 
-def get_generators_from_magma(group: str) -> GeneratorsList:
+def get_generators_from_magma(group: str) -> _GeneratorsList:
     """Retrieve group generators from MAGMA.
 
     This function uses a manual copy/paste workflow that prints the command, copies it to the system
@@ -136,9 +140,129 @@ def get_generators_from_magma(group: str) -> GeneratorsList:
     permutations = [re.sub(r"\s+", "", permutation) for permutation in permutations]
 
     # compute generators
-    generators = parse_gap_permutations("\n".join(permutations))
+    generators = _parse_gap_permutations("\n".join(permutations))
     cache[key] = generators
     return generators
+
+
+def _maybe_get_generators_from_gap(
+    group: str, *, warning: str | None = None
+) -> _GeneratorsList | None:
+    """Retrieve group generators from GAP, or return None if GAP is not available.
+
+    Checking whether GAP is available may prompt on standard input; see
+    help(qldpc.external.gap.is_installed).
+    """
+    if not qldpc.external.gap.is_installed():
+        return None
+    qldpc.external.gap.require_package("GUAVA")
+
+    # if provided a warning to raise before calling GAP, raise it now
+    if warning is not None:
+        warnings.warn(warning, stacklevel=get_external_caller_stacklevel())
+
+    # run GAP commands
+    commands = [
+        'LoadPackage("guava", false);;',
+        f"group := {group};;",
+        "iso := IsomorphismPermGroup(group);;",
+        "perm_group := Image(iso, group);;",
+        "gens := GeneratorsOfGroup(perm_group);;",
+        r'for gen in gens do Print(gen, "\n");; od;',
+    ]
+    permutations = qldpc.external.gap.get_output(*commands)
+    return _parse_gap_permutations(permutations)
+
+
+def _maybe_get_generators_from_groupnames(group: str) -> _GeneratorsList | None:
+    """Retrieve GAP group generators from GroupNames.org."""
+    # extract order and index of a SmallGroup
+    match = re.match(r"SmallGroup\(([0-9]+),([0-9]+)\)", group)
+    if match:
+        order, index = map(int, match.groups())
+    else:
+        # this group is not indexed in GroupNames.org
+        return None
+
+    # load web page for the specified group
+    group_url = _get_group_url(order, index)
+    if group_url is None:
+        # we cannot access the webpage
+        return None
+    try:
+        group_page = urllib.request.urlopen(group_url, timeout=10)
+    except (urllib.error.URLError, TimeoutError):
+        # we cannot access the webpage
+        return None
+    group_page_html = group_page.read().decode("utf-8")
+
+    # extract section with the generators we are after
+    loc = group_page_html.lower().find("permutation representation")
+    end = group_page_html[loc:].find("copytext")  # go until the first copy-able text
+    section = group_page_html[loc : loc + end]
+
+    # isolate generator text
+    section = section[section.find("<pre") :]
+    match = re.search(r">((?:.|\n)*?)<\/pre>", section)
+    if match is None:
+        raise ValueError(f"Generators for group {order},{index} not found")
+    permutations = match.group(1).replace("<br>", "")
+    return _parse_gap_permutations(permutations, cycle_sep=" ")
+
+
+def _parse_gap_permutations(permutations: str, cycle_sep: str = ",") -> _GeneratorsList:
+    """Parse newline-separated GAP permutations.
+
+    As an example, the permutation "(1,2)(3,4)" becomes [(0, 1), (2, 3)].  This function returns a
+    list of permutations; one for each line in the input string.
+    """
+    parsed_permutations = []
+    for line in permutations.strip().splitlines():
+        if not line.strip():
+            continue
+
+        # extract list of cycles, where each cycle is a tuple of integers
+        cycle_strings = line.strip()[1:-1].split(")(")
+        try:
+            cycles = [tuple(map(int, cycle.split(cycle_sep))) for cycle in cycle_strings if cycle]
+        except ValueError as error:
+            raise ValueError(f"Cannot extract cycles from string: {line}") from error
+
+        # decrement integers in the cycle by 1 to account for 0-indexing
+        cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
+        parsed_permutations.append(cycles)
+
+    return parsed_permutations
+
+
+def _get_group_url(order: int, index: int) -> str | None:
+    """Retrieve the webpage of an indexed GAP group on GroupNames.org."""
+    # get the HTML for the page with all groups
+    page_html = _maybe_get_webpage(order)
+    if page_html is None:
+        # we cannot access the webpage
+        return None
+
+    # extract section with the specified group
+    loc = page_html.find(f"<td>{order},{index}</td>")
+    if loc == -1:
+        raise ValueError(f"Group {order},{index} not found on GroupNames.org")
+
+    end = loc + page_html[loc:].find("\n")
+    start = loc - page_html[:loc][::-1].find("\n")
+    section = page_html[start:end]
+
+    # extract first link from this section
+    match = re.search(r'href="([^"]*)"', section)
+    if match is None:
+        raise ValueError(f"Webpage for group {order},{index} not found")
+
+    # return url for the desired group
+    return _GROUPNAMES_URL + match.group(1)
+
+
+####################################################################################################
+# small groups
 
 
 @qldpc.cache.use_disk_cache("small_group_number")
@@ -153,7 +277,7 @@ def get_small_group_number(order: int) -> int:
         return _get_small_group_number_from_gap(order)
 
     # get the HTML for the page with all groups
-    if (page_html := maybe_get_webpage(order)) is not None:
+    if (page_html := _maybe_get_webpage(order)) is not None:
         matches = re.findall(rf"<td>{order},([0-9]+)</td>", page_html)
         if matches:
             return max(int(match) for match in matches)
@@ -194,138 +318,22 @@ def get_small_group_structure(order: int, index: int) -> str:
     return name
 
 
-def maybe_get_generators_from_gap(
-    group: str, *, warning: str | None = None
-) -> GeneratorsList | None:
-    """Retrieve group generators from GAP, or return None if GAP is not available.
-
-    Checking whether GAP is available may prompt on standard input; see
-    help(qldpc.external.gap.is_installed).
-    """
-    if not qldpc.external.gap.is_installed():
-        return None
-    qldpc.external.gap.require_package("GUAVA")
-
-    # if provided a warning to raise before calling GAP, raise it now
-    if warning is not None:
-        warnings.warn(warning, stacklevel=get_external_caller_stacklevel())
-
-    # run GAP commands
-    commands = [
-        'LoadPackage("guava", false);;',
-        f"group := {group};;",
-        "iso := IsomorphismPermGroup(group);;",
-        "perm_group := Image(iso, group);;",
-        "gens := GeneratorsOfGroup(perm_group);;",
-        r'for gen in gens do Print(gen, "\n");; od;',
-    ]
-    permutations = qldpc.external.gap.get_output(*commands)
-    return parse_gap_permutations(permutations)
+def _get_small_group_number_from_gap(order: int) -> int:
+    """Get the number of 'SmallGroup's of a given order from GAP."""
+    qldpc.external.gap.require_package("SmallGrp")
+    command = f"Print(NumberSmallGroups({order}));;"
+    return int(qldpc.external.gap.get_output(command))
 
 
-def maybe_get_generators_from_groupnames(group: str) -> GeneratorsList | None:
-    """Retrieve GAP group generators from GroupNames.org."""
-    # extract order and index of a SmallGroup
-    match = re.match(r"SmallGroup\(([0-9]+),([0-9]+)\)", group)
-    if match:
-        order, index = map(int, match.groups())
-    else:
-        # this group is not indexed in GroupNames.org
-        return None
-
-    # load web page for the specified group
-    group_url = get_group_url(order, index)
-    if group_url is None:
-        # we cannot access the webpage
-        return None
-    try:
-        group_page = urllib.request.urlopen(group_url, timeout=10)
-    except (urllib.error.URLError, TimeoutError):
-        # we cannot access the webpage
-        return None
-    group_page_html = group_page.read().decode("utf-8")
-
-    # extract section with the generators we are after
-    loc = group_page_html.lower().find("permutation representation")
-    end = group_page_html[loc:].find("copytext")  # go until the first copy-able text
-    section = group_page_html[loc : loc + end]
-
-    # isolate generator text
-    section = section[section.find("<pre") :]
-    match = re.search(r">((?:.|\n)*?)<\/pre>", section)
-    if match is None:
-        raise ValueError(f"Generators for group {order},{index} not found")
-    permutations = match.group(1).replace("<br>", "")
-    return parse_gap_permutations(permutations, cycle_sep=" ")
-
-
-def parse_gap_permutations(permutations: str, cycle_sep: str = ",") -> GeneratorsList:
-    """Parse newline-separated GAP permutations.
-
-    As an example, the permutation "(1,2)(3,4)" becomes [(0, 1), (2, 3)].  This function returns a
-    list of permutations; one for each line in the input string.
-    """
-    parsed_permutations = []
-    for line in permutations.strip().splitlines():
-        if not line.strip():
-            continue
-
-        # extract list of cycles, where each cycle is a tuple of integers
-        cycle_strings = line.strip()[1:-1].split(")(")
-        try:
-            cycles = [tuple(map(int, cycle.split(cycle_sep))) for cycle in cycle_strings if cycle]
-        except ValueError as error:
-            raise ValueError(f"Cannot extract cycles from string: {line}") from error
-
-        # decrement integers in the cycle by 1 to account for 0-indexing
-        cycles = [tuple(index - 1 for index in cycle) for cycle in cycles]
-        parsed_permutations.append(cycles)
-
-    return parsed_permutations
-
-
-def get_group_url(order: int, index: int) -> str | None:
-    """Retrieve the webpage of an indexed GAP group on GroupNames.org."""
-    # get the HTML for the page with all groups
-    page_html = maybe_get_webpage(order)
-    if page_html is None:
-        # we cannot access the webpage
-        return None
-
-    # extract section with the specified group
-    loc = page_html.find(f"<td>{order},{index}</td>")
-    if loc == -1:
-        raise ValueError(f"Group {order},{index} not found on GroupNames.org")
-
-    end = loc + page_html[loc:].find("\n")
-    start = loc - page_html[:loc][::-1].find("\n")
-    section = page_html[start:end]
-
-    # extract first link from this section
-    match = re.search(r'href="([^"]*)"', section)
-    if match is None:
-        raise ValueError(f"Webpage for group {order},{index} not found")
-
-    # return url for the desired group
-    return GROUPNAMES_URL + match.group(1)
-
-
-def maybe_get_webpage(order: int) -> str | None:
-    """Try to retrieve the webpage listing all groups up to a given order."""
-    try:
-        url = GROUPNAMES_URL + ("index500.html" if order > 60 else "")
-        page = urllib.request.urlopen(url, timeout=10)
-        return page.read().decode("utf-8")
-    except (urllib.error.URLError, TimeoutError):
-        # we cannot access the webpage
-        return None
+####################################################################################################
+# primitive central idempotents
 
 
 @qldpc.cache.use_disk_cache(
     "idempotents",
     key_func=lambda group, field: ("".join(group.split()), field),  # strip whitespace
 )
-def get_primitive_central_idempotents(group: str, field: int) -> IdempotentsList:
+def get_primitive_central_idempotents(group: str, field: int) -> _IdempotentsList:
     """Get the primitive central idempotents of a group algebra over a finite field.
 
     This function uses the GAP Wedderga package (https://gap-packages.github.io/wedderga/), which it
@@ -350,7 +358,7 @@ def get_primitive_central_idempotents(group: str, field: int) -> IdempotentsList
     element of galois.GF(field) cast to an integer, and the permutation is expressed in cyclic form,
     namely as a tuple of tuples of integers.
     """
-    if pcis := KNOWN_PRIMITIVE_CENTRAL_IDEMPOTENTS.get((group, field)):
+    if pcis := _KNOWN_PRIMITIVE_CENTRAL_IDEMPOTENTS.get((group, field)):
         return pcis
 
     qldpc.external.gap.require_package("Wedderga")
@@ -412,14 +420,26 @@ def get_primitive_central_idempotents(group: str, field: int) -> IdempotentsList
     return idempotents
 
 
-def _get_small_group_number_from_gap(order: int) -> int:
-    """Get the number of 'SmallGroup's of a given order from GAP."""
-    qldpc.external.gap.require_package("SmallGrp")
-    command = f"Print(NumberSmallGroups({order}));;"
-    return int(qldpc.external.gap.get_output(command))
+####################################################################################################
+# helper methods shared by several sections
 
 
-KNOWN_GROUPS: dict[str, GeneratorsList] = {
+def _maybe_get_webpage(order: int) -> str | None:
+    """Try to retrieve the webpage listing all groups up to a given order."""
+    try:
+        url = _GROUPNAMES_URL + ("index500.html" if order > 60 else "")
+        page = urllib.request.urlopen(url, timeout=10)
+        return page.read().decode("utf-8")
+    except (urllib.error.URLError, TimeoutError):
+        # we cannot access the webpage
+        return None
+
+
+####################################################################################################
+# lookup tables
+
+
+_KNOWN_GROUPS: dict[str, _GeneratorsList] = {
     "SmallGroup(1,1)": [[]],
     "Group(())": [[]],
     "SmallGroup(21,1)": [[(1, 2, 4), (3, 6, 5)], [(0, 1, 2, 3, 4, 5, 6)]],
@@ -547,7 +567,7 @@ KNOWN_GROUPS: dict[str, GeneratorsList] = {
     ],
 }
 
-KNOWN_PRIMITIVE_CENTRAL_IDEMPOTENTS: dict[tuple[str, int], IdempotentsList] = {
+_KNOWN_PRIMITIVE_CENTRAL_IDEMPOTENTS: dict[tuple[str, int], _IdempotentsList] = {
     ("Group((1,2,3))", 2): [  # F2[C3]
         ((1, ((),)), (1, ((0, 1, 2),)), (1, ((0, 2, 1),))),
         ((1, ((0, 1, 2),)), (1, ((0, 2, 1),))),

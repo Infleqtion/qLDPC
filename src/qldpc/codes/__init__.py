@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Classical and quantum error-correcting codes, built-in code families, and code distances."""
+
+from typing import TYPE_CHECKING
+
+from qldpc import _deprecations
+
 from .classical import (
     BCHCode,
     CyclicCode,
@@ -28,11 +34,7 @@ from .distance import (
     LogicalCountMethod,
     count_logical_ops_css,
     get_distance_classical,
-    get_distance_css_brouwer_zimmermann,
     get_distance_quantum,
-    validate_distance_backend,
-    validate_distance_method,
-    validate_logical_count_method,
 )
 from .quantum import (
     BaconShorCode,
@@ -123,9 +125,10 @@ __all__ = [
     "TwoGrossCode",
     "count_logical_ops_css",
     "get_distance_classical",
-    "get_distance_css_brouwer_zimmermann",
     "get_distance_quantum",
-    "validate_distance_backend",
-    "validate_distance_method",
-    "validate_logical_count_method",
 ]
+
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
+
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

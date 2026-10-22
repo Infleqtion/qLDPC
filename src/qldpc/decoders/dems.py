@@ -17,7 +17,7 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-HashableType = TypeVar("HashableType", bound=Hashable)
+_HashableType = TypeVar("_HashableType", bound=Hashable)
 
 
 ####################################################################################################
@@ -502,51 +502,6 @@ class DetectorErrorModelArrays:
         return detector_flip_matrix.tocsc(), observable_flip_matrix.tocsc(), error_probs
 
 
-####################################################################################################
-# circuit errors
-
-
-@dataclasses.dataclass(frozen=True, init=False)
-class FlipPattern:
-    """A set of flipped detectors and observables."""
-
-    detectors: frozenset[int]
-    observables: frozenset[int]
-
-    def __init__(self, detectors: Iterable[int] = (), observables: Iterable[int] = ()) -> None:
-        object.__setattr__(self, "detectors", _xor_reduce(detectors))
-        object.__setattr__(self, "observables", _xor_reduce(observables))
-
-    def __xor__(self, other: FlipPattern) -> FlipPattern:
-        return FlipPattern.from_data(
-            self.detectors ^ other.detectors, self.observables ^ other.observables
-        )
-
-    def __bool__(self) -> bool:
-        return bool(self.detectors) or bool(self.observables)
-
-    @classmethod
-    def from_data(cls, detectors: AbstractSet[int], observables: AbstractSet[int]) -> FlipPattern:
-        """Construct from sets, skipping the mod-2 pass at normal initialization."""
-        instance = object.__new__(cls)
-        object.__setattr__(instance, "detectors", frozenset(detectors))
-        object.__setattr__(instance, "observables", frozenset(observables))
-        return instance
-
-    def dem_targets(self) -> tuple[list[stim.DemTarget], list[stim.DemTarget]]:
-        """Lists of stim.DemTarget objects for the flipped detectors and observables."""
-        det_targets = [stim.DemTarget.relative_detector_id(dd) for dd in sorted(self.detectors)]
-        obs_targets = [stim.DemTarget.logical_observable_id(oo) for oo in sorted(self.observables)]
-        return det_targets, obs_targets
-
-
-CircuitError = tuple[float, frozenset[FlipPattern]]
-
-
-####################################################################################################
-# private helpers
-
-
 def _validate_decompositions(
     suggested_decompositions: dict[int, frozenset[FlipPattern]],
     detector_flip_matrix: scipy.sparse.csc_matrix,
@@ -767,6 +722,51 @@ def _combined_flips(components: Iterable[FlipPattern]) -> FlipPattern:
     return combined
 
 
-def _xor_reduce(items: Iterable[HashableType]) -> frozenset[HashableType]:
+####################################################################################################
+# circuit errors
+
+
+@dataclasses.dataclass(frozen=True, init=False)
+class FlipPattern:
+    """A set of flipped detectors and observables."""
+
+    detectors: frozenset[int]
+    observables: frozenset[int]
+
+    def __init__(self, detectors: Iterable[int] = (), observables: Iterable[int] = ()) -> None:
+        object.__setattr__(self, "detectors", _xor_reduce(detectors))
+        object.__setattr__(self, "observables", _xor_reduce(observables))
+
+    def __xor__(self, other: FlipPattern) -> FlipPattern:
+        return FlipPattern.from_data(
+            self.detectors ^ other.detectors, self.observables ^ other.observables
+        )
+
+    def __bool__(self) -> bool:
+        return bool(self.detectors) or bool(self.observables)
+
+    @classmethod
+    def from_data(cls, detectors: AbstractSet[int], observables: AbstractSet[int]) -> FlipPattern:
+        """Construct from sets, skipping the mod-2 pass at normal initialization."""
+        instance = object.__new__(cls)
+        object.__setattr__(instance, "detectors", frozenset(detectors))
+        object.__setattr__(instance, "observables", frozenset(observables))
+        return instance
+
+    def dem_targets(self) -> tuple[list[stim.DemTarget], list[stim.DemTarget]]:
+        """Lists of stim.DemTarget objects for the flipped detectors and observables."""
+        det_targets = [stim.DemTarget.relative_detector_id(dd) for dd in sorted(self.detectors)]
+        obs_targets = [stim.DemTarget.logical_observable_id(oo) for oo in sorted(self.observables)]
+        return det_targets, obs_targets
+
+
+CircuitError = tuple[float, frozenset[FlipPattern]]
+
+
+####################################################################################################
+# helper methods shared by both sections
+
+
+def _xor_reduce(items: Iterable[_HashableType]) -> frozenset[_HashableType]:
     """Subset of items that occur an odd number of times."""
     return frozenset([item for item, count in collections.Counter(items).items() if count % 2])

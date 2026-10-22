@@ -7,48 +7,6 @@ import stim
 
 from qldpc import circuits
 from qldpc.circuits.conftest import circuits_are_equivalent
-from qldpc.circuits.noise_model.channels import _repeated_idle_channel
-
-
-def test_repeated_idle_channel() -> None:
-    """Repeating a Pauli channel raises the eigenvalues of its Pauli transfer matrix to a power."""
-    p_x, p_y, p_z = 0.1, 0.2, 0.3
-    eigenvalues = (1 - 2 * (p_y + p_z), 1 - 2 * (p_x + p_z), 1 - 2 * (p_x + p_y))
-    for repetitions in [1, 2, 3, 2**40]:
-        l_x, l_y, l_z = (eigenvalue**repetitions for eigenvalue in eigenvalues)
-        expected = {
-            "X": (1 + l_x - l_y - l_z) / 4,
-            "Y": (1 - l_x + l_y - l_z) / 4,
-            "Z": (1 - l_x - l_y + l_z) / 4,
-        }
-        channel = circuits.PauliChannel({"X": p_x, "Y": p_y, "Z": p_z})
-        assert _repeated_idle_channel(channel, repetitions).probabilities == pytest.approx(expected)
-
-        # a sequence of one independent error is a Pauli channel with one component
-        sequence = _repeated_idle_channel(circuits.PauliChannelSequence({"X": p_x}), repetitions)
-        single = _repeated_idle_channel(circuits.PauliChannel({"X": p_x}), repetitions)
-        assert sequence.probabilities == pytest.approx(single.probabilities)
-
-
-def test_high_probability_pauli_channels_remain_dem_analyzable() -> None:
-    """Avoid Stim's over-mixing rejection when simplifying uniform channels."""
-    channel_1 = circuits.PauliChannel.depolarizing(1, 0.8)
-    circuit_1 = channel_1.to_circuit() + stim.Circuit("M 0\nDETECTOR rec[-1]")
-    assert "PAULI_CHANNEL_1" in str(channel_1.to_circuit())
-    circuit_1.detector_error_model(approximate_disjoint_errors=True)
-
-    channel_2 = circuits.PauliChannel.depolarizing(2, 0.95)
-    circuit_2 = channel_2.to_circuit() + stim.Circuit("M 0 1\nDETECTOR rec[-1]")
-    assert "PAULI_CHANNEL_2" in str(channel_2.to_circuit())
-    circuit_2.detector_error_model(approximate_disjoint_errors=True)
-
-
-def test_pauli_channel_bias_and_probability_boundaries() -> None:
-    """Tiny bias is not collapsed, and Stim-invalid sums are rejected."""
-    biased = circuits.PauliChannel({"X": 1e-11, "Y": 5e-10, "Z": 9e-10})
-    assert "PAULI_CHANNEL_1" in str(biased.to_circuit())
-    with pytest.raises(ValueError, match="Sum of Pauli"):
-        circuits.PauliChannel({"X": 0.5, "Y": 0.5 + 2e-15})
 
 
 def test_pauli_channel_class() -> None:
@@ -106,6 +64,32 @@ def test_pauli_channel_class() -> None:
     assert empty_3q.num_qubits == 3
     assert repr(empty_3q) == "PauliChannel({}, num_qubits=3)"
     assert empty_3q != circuits.PauliChannel({})
+
+
+def test_pauli_channel_drops_zeros() -> None:
+    """PauliChannel drops zero-prob entries but preserves arity."""
+    ch = circuits.PauliChannel({"XI": 0.0, "IX": 0.05, "XX": 0.05})
+    assert list(ch.probabilities.keys()) == ["IX", "XX"]
+    # An all-zero PauliChannel drops its entries but keeps the arity derived from the strings.
+    all_zero = circuits.PauliChannel({"XY": 0.0})
+    assert all_zero.num_qubits == 2 and dict(all_zero.probabilities) == {} and not bool(all_zero)
+
+
+def test_pauli_channel_hashable() -> None:
+    """PauliChannel is hashable (equal channels hash equal), regardless of insertion order."""
+    ch1 = circuits.PauliChannel({"XI": 0.1, "IX": 0.2})
+    ch2 = circuits.PauliChannel({"IX": 0.2, "XI": 0.1})  # same channel, different insertion order
+    assert ch1 == ch2 and hash(ch1) == hash(ch2)
+    # Usable as a dict key / set member
+    assert {ch1: "a", ch2: "b"} == {ch1: "b"}
+
+
+def test_pauli_channel_bias_and_probability_boundaries() -> None:
+    """Tiny bias is not collapsed, and Stim-invalid sums are rejected."""
+    biased = circuits.PauliChannel({"X": 1e-11, "Y": 5e-10, "Z": 9e-10})
+    assert "PAULI_CHANNEL_1" in str(biased.to_circuit())
+    with pytest.raises(ValueError, match="Sum of Pauli"):
+        circuits.PauliChannel({"X": 0.5, "Y": 0.5 + 2e-15})
 
 
 def test_pauli_channel_conditioned_on() -> None:
@@ -185,40 +169,25 @@ def test_pauli_channel_to_circuit() -> None:
         channel.to_circuit(qubits=[0, 1])
 
 
-def test_pauli_channel_sequence() -> None:
-    """PauliChannelSequence emits independent errors and skips PauliChannel's normalization.
-
-    Only sequence-specific behavior is checked here; the storage / validation / dunders shared with
-    PauliChannel via AbstractPauliChannel are covered by ``test_pauli_channel_class``.
-    """
-
-    # One independent CORRELATED_ERROR per entry (no ELSE chain / PAULI_CHANNEL simplification) and,
-    # unlike PauliChannel, the probabilities need not sum to <= 1.
-    seq = circuits.PauliChannelSequence({"XX": 0.7, "ZZ": 0.7})
-    assert seq.to_circuit() == stim.Circuit(
-        "CORRELATED_ERROR(0.7) X0 X1\nCORRELATED_ERROR(0.7) Z0 Z1"
+def test_pauli_channel_1_shortcut() -> None:
+    """One-qubit Pauli channels are emitted with Stim's most specific instruction."""
+    assert circuits.PauliChannel.depolarizing(1, 0.3).to_circuit() == stim.Circuit(
+        "DEPOLARIZE1(0.3) 0"
     )
-
-    # A PauliChannel and a PauliChannelSequence with identical probabilities are unequal.
-    assert circuits.PauliChannelSequence({"X": 0.1}) != circuits.PauliChannel({"X": 0.1})
+    assert circuits.PauliChannel({"Z": 0.1}).to_circuit() == stim.Circuit("Z_ERROR(0.1) 0")
 
 
-def test_pauli_channel_drops_zeros() -> None:
-    """PauliChannel drops zero-prob entries but preserves arity."""
-    ch = circuits.PauliChannel({"XI": 0.0, "IX": 0.05, "XX": 0.05})
-    assert list(ch.probabilities.keys()) == ["IX", "XX"]
-    # An all-zero PauliChannel drops its entries but keeps the arity derived from the strings.
-    all_zero = circuits.PauliChannel({"XY": 0.0})
-    assert all_zero.num_qubits == 2 and dict(all_zero.probabilities) == {} and not bool(all_zero)
+def test_high_probability_pauli_channels_remain_dem_analyzable() -> None:
+    """Avoid Stim's over-mixing rejection when simplifying uniform channels."""
+    channel_1 = circuits.PauliChannel.depolarizing(1, 0.8)
+    circuit_1 = channel_1.to_circuit() + stim.Circuit("M 0\nDETECTOR rec[-1]")
+    assert "PAULI_CHANNEL_1" in str(channel_1.to_circuit())
+    circuit_1.detector_error_model(approximate_disjoint_errors=True)
 
-
-def test_pauli_channel_hashable() -> None:
-    """PauliChannel is hashable (equal channels hash equal), regardless of insertion order."""
-    ch1 = circuits.PauliChannel({"XI": 0.1, "IX": 0.2})
-    ch2 = circuits.PauliChannel({"IX": 0.2, "XI": 0.1})  # same channel, different insertion order
-    assert ch1 == ch2 and hash(ch1) == hash(ch2)
-    # Usable as a dict key / set member
-    assert {ch1: "a", ch2: "b"} == {ch1: "b"}
+    channel_2 = circuits.PauliChannel.depolarizing(2, 0.95)
+    circuit_2 = channel_2.to_circuit() + stim.Circuit("M 0 1\nDETECTOR rec[-1]")
+    assert "PAULI_CHANNEL_2" in str(channel_2.to_circuit())
+    circuit_2.detector_error_model(approximate_disjoint_errors=True)
 
 
 def test_pauli_channel_float_drift_clamped() -> None:
@@ -236,9 +205,19 @@ def test_pauli_channel_float_drift_clamped() -> None:
     assert circuits_are_equivalent(expected, channel.to_circuit())
 
 
-def test_pauli_channel_1_shortcut() -> None:
-    """One-qubit Pauli channels are emitted with Stim's most specific instruction."""
-    assert circuits.PauliChannel.depolarizing(1, 0.3).to_circuit() == stim.Circuit(
-        "DEPOLARIZE1(0.3) 0"
+def test_pauli_channel_sequence() -> None:
+    """PauliChannelSequence emits independent errors and skips PauliChannel's normalization.
+
+    Only sequence-specific behavior is checked here; the storage / validation / dunders shared with
+    PauliChannel via AbstractPauliChannel are covered by ``test_pauli_channel_class``.
+    """
+
+    # One independent CORRELATED_ERROR per entry (no ELSE chain / PAULI_CHANNEL simplification) and,
+    # unlike PauliChannel, the probabilities need not sum to <= 1.
+    seq = circuits.PauliChannelSequence({"XX": 0.7, "ZZ": 0.7})
+    assert seq.to_circuit() == stim.Circuit(
+        "CORRELATED_ERROR(0.7) X0 X1\nCORRELATED_ERROR(0.7) Z0 Z1"
     )
-    assert circuits.PauliChannel({"Z": 0.1}).to_circuit() == stim.Circuit("Z_ERROR(0.1) 0")
+
+    # A PauliChannel and a PauliChannelSequence with identical probabilities are unequal.
+    assert circuits.PauliChannelSequence({"X": 0.1}) != circuits.PauliChannel({"X": 0.1})

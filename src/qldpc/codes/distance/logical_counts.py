@@ -6,14 +6,13 @@ See :class:`CSSLogicalCounter` for the conventions.
 
 Each X/Z sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
 ``brouwer_zimmermann.md``).  Words are enumerated in layers over Brouwer--Zimmermann (BZ)
-information sets, whose family and certificate come from the stages in ``_information_sets.py``
-that the distance search shares.  Unlike a distance search, the scan stops only when the BZ lower
-bound exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several
-information sets is counted by only one of them.  Full Pauli counts are derived from the
-homogeneous words of weight ``d``, with one masked rank per word.  Self-dual codes scan only one
-sector, and have ``count_pauli = 3 * count_x``.  Counters for codes deformed by local
-CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
-recomputing them.
+information sets, whose family and certificate come from the stages in ``_information_sets.py`` that
+the distance search shares.  Unlike a distance search, the scan stops only when the BZ lower bound
+exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several information
+sets is counted by only one of them.  Full Pauli counts are derived from the homogeneous words of
+weight ``d``, with one masked rank per word.  Self-dual codes scan only one sector, and have
+``count_pauli = 3 * count_x``.  Counters for codes deformed by local CSS-preserving Cliffords
+transform the stored sector bases and information-set families rather than recomputing them.
 
 The default method is ``"brouwer_zimmermann"``.  The alternative ``"macwilliams"`` counts from
 check-space weight distributions; see ``_macwilliams.py`` for the algorithm.
@@ -34,20 +33,20 @@ import numpy as np
 import numpy.typing as npt
 from numba import njit
 
-from qldpc._util import format_docstring
+from qldpc._utils import format_docstring
 
 from . import _information_sets
 from ._binary import (
-    _get_independent_rows,
-    _get_kernel,
-    _get_nested_code_basis,
-    _pack_bits,
-    _popcount_word,
-    _row_reduce_binary,
+    get_independent_rows,
+    get_kernel,
+    get_nested_code_basis,
+    pack_bits,
+    popcount_word,
+    row_reduce_binary,
 )
-from ._brouwer_zimmermann import _get_distance_brouwer_zimmermann_many
-from ._macwilliams import _CheckEnumerators
-from .brute_force import _get_distance_quantum_brute_force
+from ._brouwer_zimmermann import get_distance_brouwer_zimmermann_many
+from ._brute_force import get_distance_quantum_brute_force
+from ._macwilliams import CheckEnumerators
 from .core import _DISTANCE_METHODS, DistanceMethod
 
 # codes.common imports this package, so CSSCode is imported only where it is used.
@@ -159,8 +158,8 @@ class CSSLogicalCounter:
         checks_x = code.matrix_x.view(np.ndarray).astype(np.uint8)
         checks_z = code.matrix_z.view(np.ndarray).astype(np.uint8)
         self._num_qubits = checks_x.shape[1]
-        self._gauge_x = _get_independent_rows(checks_x)
-        self._gauge_z = _get_independent_rows(checks_z)
+        self._gauge_x = get_independent_rows(checks_x)
+        self._gauge_z = get_independent_rows(checks_z)
         # Reduced row echelon form is unique, so the X and Z checks span the same space exactly when
         # these arrays are equal.  A self-dual code then shares one array for each X/Z pair.
         self._self_dual = np.array_equal(self._gauge_x, self._gauge_z)
@@ -175,8 +174,8 @@ class CSSLogicalCounter:
 
         # Work that is done on demand and kept for later counts.
         self._sectors: tuple[_Sector, _Sector] | None = None
-        self._disjoint_families: dict[int, _information_sets._BasisFamily] = {}
-        self._enumerators: _CheckEnumerators | None = None
+        self._disjoint_families: dict[int, _information_sets.BasisFamily] = {}
+        self._enumerators: CheckEnumerators | None = None
         self._canonical: tuple[_BinaryMatrix, _BinaryMatrix] | None = (self._gauge_x, self._gauge_z)
 
     @property
@@ -264,7 +263,7 @@ class CSSLogicalCounter:
                 or the request.
         """
         # Validate the inputs, resolving method aliases.
-        method = validate_logical_count_method(method)
+        method = _validate_logical_count_method(method)
         if weight is not None and (
             not isinstance(weight, (int, np.integer))
             or isinstance(weight, bool)
@@ -307,7 +306,7 @@ class CSSLogicalCounter:
             *sector_x,
             target,
             method,
-            _pack_bits(self._stabilizers_x if weigh else no_rows),
+            pack_bits(self._stabilizers_x if weigh else no_rows),
             complement=False,
             max_exponent=target if weigh else 0,
             reject_lighter=reject_above,
@@ -321,7 +320,7 @@ class CSSLogicalCounter:
                 *sector_z,
                 target,
                 method,
-                _pack_bits(self._gauge_x if weigh else no_rows),
+                pack_bits(self._gauge_x if weigh else no_rows),
                 complement=True,
                 max_exponent=len(self._gauge_x) if weigh else 0,
                 reject_lighter=reject_above,
@@ -349,8 +348,8 @@ class CSSLogicalCounter:
 
         The Clifford maps an X support ``x`` on the targets, as a column vector, to ``matrix_x @ x``
         and a Z support ``z`` to ``matrix_z @ z``, where ``matrix_z = (matrix_x^-1)^T`` over GF(2)
-        preserves commutation.  The packed matrices are cached by ``matrix_x``, so reusing a gate
-        is cheaper than its first use.
+        preserves commutation.  The packed matrices are cached by ``matrix_x``, so reusing a gate is
+        cheaper than its first use.
 
         Args:
             targets: Between one and 64 distinct qubit indices on which the Clifford acts, in order.
@@ -511,8 +510,8 @@ class CSSLogicalCounter:
         """Count logical operators by the weight enumerators of the checks of a stabilizer code.
 
         Each support of a nontrivial logical Pauli operator of weight ``d`` in a self-dual code
-        carries exactly three such operators: one X-only, one Z-only, and one Y-only.  The checks
-        of a self-dual code may share one weight distribution, even if a deformation gave them
+        carries exactly three such operators: one X-only, one Z-only, and one Y-only.  The checks of
+        a self-dual code may share one weight distribution, even if a deformation gave them
         different bases.  Equal check spaces have equal distributions, so whether they share one
         changes only the number of walks, never the counts.  The enumerators are kept, so that later
         counts at any weight, with any options, do not walk again.
@@ -526,7 +525,7 @@ class CSSLogicalCounter:
                 or self._self_dual
                 or (rank == len(self._gauge_z) >= _MIN_SHARED_WALK_RANK and self.is_self_dual)
             )
-            self._enumerators = _CheckEnumerators(
+            self._enumerators = CheckEnumerators(
                 self._gauge_x, self._gauge_x if share else self._gauge_z
             )
         enumerators = self._enumerators
@@ -551,23 +550,23 @@ class CSSLogicalCounter:
     def _get_sectors(self) -> tuple[_Sector, _Sector]:
         """The X and Z sectors: normalizer bases whose first rows span the gauge operators."""
         if self._sectors is None:
-            sector_x = _get_nested_code_basis(_get_kernel(self._stabilizers_z), self._gauge_x)
+            sector_x = get_nested_code_basis(get_kernel(self._stabilizers_z), self._gauge_x)
             sector_z = (
                 sector_x
                 if self._self_dual
-                else _get_nested_code_basis(_get_kernel(self._stabilizers_x), self._gauge_z)
+                else get_nested_code_basis(get_kernel(self._stabilizers_x), self._gauge_z)
             )
             self._sectors = (sector_x, sector_z)
         return self._sectors
 
-    def _get_disjoint_family(self, index: int) -> _information_sets._BasisFamily:
+    def _get_disjoint_family(self, index: int) -> _information_sets.BasisFamily:
         """The first stage of the information-set family of a sector, which is kept.
 
         This stage does not depend on the counted weight, so counting at another weight, as when a
         guessed weight fails, does not repeat it.
         """
         if index not in self._disjoint_families:
-            self._disjoint_families[index] = _information_sets._get_disjoint_family(
+            self._disjoint_families[index] = _information_sets.get_disjoint_family(
                 *self._get_sectors()[index]
             )
         return self._disjoint_families[index]
@@ -576,8 +575,8 @@ class CSSLogicalCounter:
         """The checks in reduced row echelon form, which deformation does not preserve."""
         if self._canonical is None:
             self._canonical = (
-                _get_independent_rows(self._gauge_x),
-                _get_independent_rows(self._gauge_z),
+                get_independent_rows(self._gauge_x),
+                get_independent_rows(self._gauge_z),
             )
         return self._canonical
 
@@ -614,7 +613,7 @@ def count_logical_ops_css(
     )
 
 
-def validate_logical_count_method(
+def _validate_logical_count_method(
     method: LogicalCountMethod,
 ) -> Literal["brouwer_zimmermann", "macwilliams", "brute_force"]:
     """Validate a logical-count method selector, and return its canonical name.
@@ -646,14 +645,14 @@ def _get_distance(sectors: Sequence[_Sector], method: DistanceMethod) -> int:
     """Minimum weight of a nontrivial word in any of the given sectors."""
     if method == "brute_force":
         return min(_get_brute_force_distance(sector) for sector in sectors)
-    return _get_distance_brouwer_zimmermann_many(sectors, cutoff=0, block_size=_BLOCK_SIZE)
+    return get_distance_brouwer_zimmermann_many(sectors, cutoff=0, block_size=_BLOCK_SIZE)
 
 
 def _get_brute_force_distance(sector: _Sector) -> int:
     """Minimum weight of a nontrivial word of one sector, by exhaustive enumeration."""
     basis, labels = sector
     eligible = np.any(labels, axis=1)
-    return _get_distance_quantum_brute_force(
+    return get_distance_quantum_brute_force(
         basis[eligible], basis[~eligible], cutoff=0, block_size=_BLOCK_SIZE, homogeneous=True
     )
 
@@ -668,7 +667,7 @@ def _count_words(
     complement: bool,
     max_exponent: int,
     reject_lighter: bool,
-    get_disjoint: Callable[[], _information_sets._BasisFamily],
+    get_disjoint: Callable[[], _information_sets.BasisFamily],
     max_sets: int,
 ) -> npt.NDArray[np.int64] | None:
     """Visit each nontrivial word of one sector with the given weight exactly once.
@@ -680,7 +679,7 @@ def _count_words(
     finds a nontrivial one.
     """
     # Select the information sets, or scan the whole basis as one set for brute force.
-    certificate: _information_sets._Certificate | None
+    certificate: _information_sets.Certificate | None
     if method == "brute_force":
         sets, certificate = [(basis, labels)], None
     else:
@@ -689,8 +688,8 @@ def _count_words(
         )
 
     # Pack the sets for the native scan.
-    rows = [_pack_bits(generators) for generators, _ in sets]
-    tags = [_pack_bits(set_labels) for _, set_labels in sets]
+    rows = [pack_bits(generators) for generators, _ in sets]
+    tags = [pack_bits(set_labels) for _, set_labels in sets]
     # Ownership compares sets, so a single set needs no decoder.
     decoders = (
         np.stack([_get_decoder(generators) for generators, _ in sets])
@@ -732,16 +731,16 @@ def _get_counting_information_sets(
     basis: _BinaryMatrix,
     labels: _BinaryMatrix,
     weight: int,
-    disjoint: _information_sets._BasisFamily,
+    disjoint: _information_sets.BasisFamily,
     max_sets: int,
-) -> tuple[list[_Sector], _information_sets._Certificate]:
+) -> tuple[list[_Sector], _information_sets.Certificate]:
     """Select BZ information sets that certify every word of the given weight.
 
     Returns the sets and the certificate that bounds the weight of unvisited words after each layer.
     The family stages aim at the counting stop ``L(t) >= weight + 1``; any family gives an exact
     count.
     """
-    family = _information_sets._prepare_family(
+    family = _information_sets.prepare_family(
         basis, labels, upper_bound=weight + 1, disjoint=disjoint, max_sets=max_sets
     )
     sets = []
@@ -752,11 +751,11 @@ def _get_counting_information_sets(
 
 
 def _transport_family(
-    family: _information_sets._BasisFamily,
+    family: _information_sets.BasisFamily,
     positions: npt.NDArray[np.int64],
     local: npt.NDArray[np.uint64],
     basis: _BinaryMatrix,
-) -> _information_sets._BasisFamily | None:
+) -> _information_sets.BasisFamily | None:
     """The family of a sector after a local gate, or None if one of its sets stops being a set.
 
     Each set is mapped through the gate and reduced again on its own pivot columns, so the pivots
@@ -766,16 +765,16 @@ def _transport_family(
     sets = []
     for information_set in family.information_sets:
         generators = _apply_local(information_set.generators, positions, local)
-        reduced, labels, pivots = _row_reduce_binary(
+        reduced, labels, pivots = row_reduce_binary(
             generators, information_set.labels, columns=information_set.pivots
         )
         if len(pivots) != information_set.rank:
             return None
-        sets.append(_information_sets._InformationSet(reduced, labels, len(pivots), pivots))
-    return _information_sets._BasisFamily.from_information_sets(
+        sets.append(_information_sets.InformationSet(reduced, labels, len(pivots), pivots))
+    return _information_sets.BasisFamily.from_information_sets(
         sets,
         dimension=family.certificate.dimension,
-        weight_divisor=_information_sets._infer_weight_divisor(basis),
+        weight_divisor=_information_sets.infer_weight_divisor(basis),
     )
 
 
@@ -787,11 +786,11 @@ def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:
     # Row reduction finds T with T @ generators = R, where R is the identity on its pivot columns P,
     # so that w[P] @ T recovers the coefficients of w.
     size = len(generators)
-    _, transform, pivots = _row_reduce_binary(generators, np.eye(size, dtype=np.uint8))
+    _, transform, pivots = row_reduce_binary(generators, np.eye(size, dtype=np.uint8))
     assert transform is not None
     decoder = np.zeros((generators.shape[1], size), dtype=np.uint8)
     decoder[pivots] = transform
-    return _pack_bits(decoder.T)
+    return pack_bits(decoder.T)
 
 
 ####################################################################################################
@@ -810,11 +809,11 @@ def _get_stabilizers(
     if not np.any(overlaps):
         return gauge_x, gauge_z
     # A combination c @ gauge_x commutes with every Z gauge generator exactly when c @ overlaps = 0.
-    stabilizers_x = _get_kernel(overlaps.T).astype(int) @ gauge_x % 2
-    stabilizers_z = _get_kernel(overlaps).astype(int) @ gauge_z % 2
+    stabilizers_x = get_kernel(overlaps.T).astype(int) @ gauge_x % 2
+    stabilizers_z = get_kernel(overlaps).astype(int) @ gauge_z % 2
     return (
-        _get_independent_rows(stabilizers_x.astype(np.uint8)),
-        _get_independent_rows(stabilizers_z.astype(np.uint8)),
+        get_independent_rows(stabilizers_x.astype(np.uint8)),
+        get_independent_rows(stabilizers_z.astype(np.uint8)),
     )
 
 
@@ -874,7 +873,7 @@ def _get_dual_local_matrix(matrix_x: _BinaryMatrix) -> _BinaryMatrix:
     """Return the matrix for Z supports, ``matrix_z``, with ``matrix_x @ matrix_z.T = I``."""
     size = len(matrix_x)
     # Row reduction finds T with T @ matrix_x = I, so that matrix_z = T.T.
-    _, inverse, pivots = _row_reduce_binary(matrix_x, np.eye(size, dtype=np.uint8))
+    _, inverse, pivots = row_reduce_binary(matrix_x, np.eye(size, dtype=np.uint8))
     if len(pivots) < size:
         raise ValueError("Local Clifford matrix_x must be invertible over GF(2)")
     assert inverse is not None
@@ -884,7 +883,7 @@ def _get_dual_local_matrix(matrix_x: _BinaryMatrix) -> _BinaryMatrix:
 def _pack_local(matrix: _BinaryMatrix) -> npt.NDArray[np.uint64]:
     """Pack each row of a local matrix into one word, whose bit j is column j."""
     # There are at most 64 targets, so each row fits in a single word.
-    return _pack_bits(matrix)[:, 0]
+    return pack_bits(matrix)[:, 0]
 
 
 ####################################################################################################
@@ -907,7 +906,7 @@ def _apply_local(
             word |= np.uint64(rows[row, positions[index]]) << np.uint64(index)
         if word:
             for index in range(len(positions)):
-                result[row, positions[index]] = _popcount_word(local[index] & word) & 1
+                result[row, positions[index]] = popcount_word(local[index] & word) & 1
     return result
 
 
@@ -976,7 +975,7 @@ def _count_chunk(
             weight = np.int64(0)
             for index in range(width):
                 word[index] = prefixes[depth, index] ^ rows[row, index]
-                weight += _popcount_word(word[index])
+                weight += popcount_word(word[index])
                 # A heavier word is rejected below, so its unwritten words are never read.
                 if weight > target:
                     break
@@ -1020,7 +1019,7 @@ def _is_owned(
         for decoder in decoders[other]:
             parity = np.int64(0)
             for index in range(len(word)):
-                parity += _popcount_word(word[index] & decoder[index])
+                parity += popcount_word(word[index] & decoder[index])
             size += int(parity & 1)
             if size > limit:
                 break

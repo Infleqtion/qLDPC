@@ -15,14 +15,14 @@ from qldpc import abstract, cache, codes
 from qldpc.math import op_to_string
 from qldpc.objects import Pauli
 
-from .common import restrict_to_qubits
+from .common import _restrict_to_qubits
 from .encoding import _get_logical_tableau_from_code_data, get_encoder_and_decoder
 
 ####################################################################################################
 # transversal logical Clifford gates
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_transversal_s(code: codes.CSSCode, *, validate: bool = True) -> stim.Circuit:
     """Get a physical circuit for a transversal logical ``S = diag(1, i)`` gate of the code.
 
@@ -73,7 +73,7 @@ def get_transversal_s(code: codes.CSSCode, *, validate: bool = True) -> stim.Cir
     return circuit
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_transversal_ops(
     code: codes.QuditCode,
     local_gates: Collection[str] = ("S", "H", "SWAP"),
@@ -124,7 +124,7 @@ def get_transversal_ops(
     return transversal_ops
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_transversal_automorphism_group(
     code: codes.QuditCode,
     local_gates: Collection[str] = ("S", "H", "SWAP"),
@@ -248,7 +248,7 @@ def get_transversal_automorphism_group(
     return abstract.Group(*map(abstract.GroupMember, group_aut_gens))
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def get_transversal_circuits(
     code: codes.QuditCode,
     logical_circuits_or_tableaus: Sequence[stim.Circuit | stim.Tableau],
@@ -272,7 +272,6 @@ def get_transversal_circuits(
     .. warning::
         This method performs a brute-force search over the Clifford automorphisms of a code, and
         thereby generally has exponential runtime.
-
     """
     physical_circuits = [None] * len(logical_circuits_or_tableaus)
 
@@ -371,10 +370,6 @@ def get_transversal_circuit(
     )[0]
 
 
-####################################################################################################
-# helper methods
-
-
 def _is_pauli_tableau(tableau: stim.Tableau) -> bool:
     """Does this Tableau represent a Pauli operator?
 
@@ -439,7 +434,7 @@ def _group_acting_on_points(group: abstract.Group, degree: int) -> abstract.Grou
     return abstract.Group(*generators)
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def _get_transversal_automorphism_data(
     code: codes.QuditCode,
     automorphism: abstract.GroupMember,
@@ -506,7 +501,7 @@ def _get_swap_circuit(code: codes.QuditCode, automorphism: abstract.GroupMember)
     return circuit
 
 
-@restrict_to_qubits
+@_restrict_to_qubits
 def _get_pauli_permutation_circuit(
     code: codes.QuditCode,
     automorphism: abstract.GroupMember,

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Protocols for error and observable decoders, and helpers that coerce objects into them."""
+"""Decoder protocols and detailed results, with helpers that coerce and batch error decoders."""
 
 from __future__ import annotations
 
@@ -171,11 +171,11 @@ class SupportsDecode(Protocol):
 # coercion into error decoders
 
 
-def as_error_decoder(decoder: object, source: str = "A decoder") -> ErrorDecoder:
+def _as_error_decoder(decoder: object, source: str = "A decoder") -> ErrorDecoder:
     """Coerce an object into an error decoder, or raise an error if it is not one.
 
     An ErrorDecoder is returned as is.  Another object with a decode method is wrapped in a
-    WrappedErrorDecoder.  An object that predicts observable flips is rejected; this includes an
+    _WrappedErrorDecoder.  An object that predicts observable flips is rejected; this includes an
     object whose decode_returns_observables attribute is True, which declares that its decode method
     returns observable flips.
 
@@ -195,19 +195,13 @@ def as_error_decoder(decoder: object, source: str = "A decoder") -> ErrorDecoder
     ):
         raise TypeError(f"{source} cannot decode until it is compiled for a detector error model")
     if isinstance(decoder, SupportsDecode):
-        return WrappedErrorDecoder(decoder)
+        return _WrappedErrorDecoder(decoder)
     if isinstance(decoder, ObservableDecoder):
         raise predicts_observables
     raise TypeError(f"{source} must be an ErrorDecoder, or have a decode method")
 
 
-_OBSERVABLE_DECODER_ADVICE = (
-    "Pass an error-decoder specification such as decoders.bp_osd(...), or pass the observable decoder where"
-    " one is accepted, such as to decoders.SinterDecoder"
-)
-
-
-class WrappedErrorDecoder(ErrorDecoder):
+class _WrappedErrorDecoder(ErrorDecoder):
     """Error decoder that wraps an object whose decode method returns an inferred error.
 
     The wrapped object is the .decoder attribute.  Its decode method provides decode_errors, its
@@ -238,11 +232,17 @@ class WrappedErrorDecoder(ErrorDecoder):
     decode = decode_errors
 
 
+_OBSERVABLE_DECODER_ADVICE = (
+    "Pass an error-decoder specification such as decoders.bp_osd(...), or pass the observable"
+    " decoder where one is accepted, such as to decoders.SinterDecoder"
+)
+
+
 ####################################################################################################
 # batch decoding
 
 
-def batch_decode_errors(
+def _batch_decode_errors(
     decoder: ErrorDecoder, syndromes: npt.NDArray[np.int_]
 ) -> npt.NDArray[np.int_]:
     """Decode a batch of syndromes, one per row, and return inferred errors, one per row.
@@ -259,7 +259,7 @@ def batch_decode_errors(
     return np.array([decoder.decode_errors(syndrome) for syndrome in syndromes])
 
 
-def supports_batch_decoding(decoder: ErrorDecoder) -> bool:
+def _supports_batch_decoding(decoder: ErrorDecoder) -> bool:
     """Whether an error decoder has a decode_errors_batch method, or its alias decode_batch."""
     return _get_batch_decoding_method(decoder) is not None
 

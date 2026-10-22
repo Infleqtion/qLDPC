@@ -22,10 +22,10 @@ _MASK55 = np.uint64(0x5555555555555555)
 
 
 ####################################################################################################
-# helper methods
+# binary matrices
 
 
-def _assert_binary(vectors: npt.ArrayLike, name: str) -> None:
+def assert_binary(vectors: npt.ArrayLike, name: str) -> None:
     """Assert that the given vectors are binary.
 
     The enumeration below packs each row into the bits of ``uint64`` words and combines rows by
@@ -46,7 +46,7 @@ def _assert_binary(vectors: npt.ArrayLike, name: str) -> None:
         )
 
 
-def _as_binary_matrix(
+def as_binary_matrix(
     vectors: npt.ArrayLike, *, num_cols: int | None = None
 ) -> npt.NDArray[np.uint8]:
     """Convert a collection of binary rows to a two-dimensional uint8 array."""
@@ -67,7 +67,7 @@ def _as_binary_matrix(
     return matrix
 
 
-def _row_reduce_binary(
+def row_reduce_binary(
     matrix: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None = None,
     *,
@@ -92,15 +92,15 @@ def _row_reduce_binary(
     return reduced, None if labels is None else reduced_tags, pivots.astype(int)
 
 
-def _get_independent_rows(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
+def get_independent_rows(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     """Return a row-reduced basis for the row space of a binary matrix."""
-    reduced, _, pivots = _row_reduce_binary(matrix)
+    reduced, _, pivots = row_reduce_binary(matrix)
     return reduced[: len(pivots)]
 
 
-def _get_kernel(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
+def get_kernel(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     """Return a basis of the null space of a binary matrix, from its reduced row echelon form."""
-    reduced, _, pivots = _row_reduce_binary(matrix)
+    reduced, _, pivots = row_reduce_binary(matrix)
     free = np.setdiff1d(np.arange(matrix.shape[1]), pivots)
     basis = np.zeros((len(free), matrix.shape[1]), dtype=np.uint8)
     basis[:, free] = np.eye(len(free), dtype=np.uint8)
@@ -108,25 +108,25 @@ def _get_kernel(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     return basis
 
 
-def _get_nested_code_basis(
+def get_nested_code_basis(
     logical_ops: npt.NDArray[np.uint8],
     stabilizers: npt.NDArray[np.uint8],
 ) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8]]:
     """Build an adapted basis for ``span(stabilizers, logical_ops) / span(stabilizers)``."""
-    stabilizer_basis = _get_independent_rows(stabilizers)
+    stabilizer_basis = get_independent_rows(stabilizers)
     stabilizer_pivots = [int(np.flatnonzero(row)[0]) for row in stabilizer_basis]
     reduced_logical_ops = logical_ops.copy()
     for row, pivot in zip(stabilizer_basis, stabilizer_pivots, strict=True):
         reduced_logical_ops[reduced_logical_ops[:, pivot] == 1] ^= row
 
-    logical_quotient = _get_independent_rows(reduced_logical_ops)
+    logical_quotient = get_independent_rows(reduced_logical_ops)
     basis = np.vstack([stabilizer_basis, logical_quotient]).astype(np.uint8, copy=False)
     labels = np.zeros((len(basis), len(logical_quotient)), dtype=np.uint8)
     labels[len(stabilizer_basis) :] = np.eye(len(logical_quotient), dtype=np.uint8)
     return basis, labels
 
 
-def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
+def symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
     """Map ``(X | Z)`` to ``(X | Z | X xor Z)``, doubling symplectic weight.
 
     This is the ``Saved_isometry`` reduction from https://arxiv.org/abs/2408.10743.
@@ -141,10 +141,10 @@ def _symplectic_to_hamming(vectors: npt.NDArray[np.uint8]) -> npt.NDArray[np.uin
 # weight functions
 
 
-def _symplectic_weight(
+def symplectic_weight(
     words: npt.NDArray[np.uint64], out: npt.NDArray[np.uint64] | None = None
 ) -> npt.NDArray[np.uint64]:
-    """Count the qubits in the support of each riffled word (see ``_riffle``).
+    """Count the qubits in the support of each riffled word (see ``riffle``).
 
     Each qubit occupies one aligned bit pair ``(2m, 2m + 1)`` of a word, so a qubit is in the
     support if either bit of its pair is set.  The result is uint64, and ``out`` doubles as scratch
@@ -160,12 +160,12 @@ def _symplectic_weight(
 # bit-packing and array helpers
 
 
-def _count_trailing_zeros(val: int) -> int:
+def count_trailing_zeros(val: int) -> int:
     """Returns the position of the least significant 1 in the binary representation of `val`."""
     return (val & -val).bit_length() - 1
 
 
-def _inplace_rowsum(arr: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
+def inplace_rowsum(arr: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
     """Destructively compute ``arr.sum(-1)``, placing the result in the first column of ``arr``.
 
     When complete, the returned sum will be stored in ``arr[..., 0]``, while other entries in
@@ -181,7 +181,7 @@ def _inplace_rowsum(arr: npt.NDArray[np.uint64]) -> npt.NDArray[np.uint64]:
     return arr[..., 0]
 
 
-def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
+def riffle(array: npt.ArrayLike) -> npt.ArrayLike:
     """'Riffle' Pauli strings, putting X and Z support bits for each qubit next to each other."""
     arr = np.asarray(array)
     num_bits = arr.shape[-1]
@@ -192,10 +192,10 @@ def _riffle(array: npt.ArrayLike) -> npt.ArrayLike:
 
 
 ####################################################################################################
-# native bit counting, packing and row reduction
+# native word intrinsics
 
 
-def _popcount_word(value: np.uint64) -> np.int64:
+def popcount_word(value: np.uint64) -> np.int64:
     """Count the set bits of one 64-bit word.
 
     Compiled code calls LLVM's population-count instruction instead of this Python fallback.
@@ -203,9 +203,17 @@ def _popcount_word(value: np.uint64) -> np.int64:
     return np.int64(int(value).bit_count())
 
 
-@type_callable(_popcount_word)
+def trailing_zeros_word(value: np.uint64 | int) -> np.int64:
+    """Count the trailing zero bits of one nonzero 64-bit word.
+
+    Compiled code calls LLVM's count-trailing-zeros instruction instead of this Python fallback.
+    """
+    return np.int64(count_trailing_zeros(int(value)))
+
+
+@type_callable(popcount_word)
 def _type_popcount_word(context: TypingContext) -> Callable[[types.Type], types.Type | None]:
-    """Declare that compiled code may call ``_popcount_word`` on a uint64 word."""
+    """Declare that compiled code may call ``popcount_word`` on a uint64 word."""
 
     def typer(value: types.Type) -> types.Type | None:
         return types.int64 if value == types.uint64 else None
@@ -213,30 +221,22 @@ def _type_popcount_word(context: TypingContext) -> Callable[[types.Type], types.
     return typer
 
 
-@lower_builtin(_popcount_word, types.uint64)
+@lower_builtin(popcount_word, types.uint64)
 def _lower_popcount_word(
     context: BaseContext, builder: ir.IRBuilder, signature: Signature, arguments: list[ir.Value]
 ) -> ir.Value:
-    """Compile ``_popcount_word`` to LLVM's population-count instruction.
+    """Compile ``popcount_word`` to LLVM's population-count instruction.
 
     The count is at most 64, so the 64-bit result is the same as a signed integer.
     """
     return builder.ctpop(arguments[0])
 
 
-def _trailing_zeros_word(value: np.uint64 | int) -> np.int64:
-    """Count the trailing zero bits of one nonzero 64-bit word.
-
-    Compiled code calls LLVM's count-trailing-zeros instruction instead of this Python fallback.
-    """
-    return np.int64(_count_trailing_zeros(int(value)))
-
-
-@type_callable(_trailing_zeros_word)
+@type_callable(trailing_zeros_word)
 def _type_trailing_zeros_word(
     context: TypingContext,
 ) -> Callable[[types.Type], types.Type | None]:
-    """Declare that compiled code may call ``_trailing_zeros_word`` on a uint64 word."""
+    """Declare that compiled code may call ``trailing_zeros_word`` on a uint64 word."""
 
     def typer(value: types.Type) -> types.Type | None:
         return types.int64 if value == types.uint64 else None
@@ -244,16 +244,20 @@ def _type_trailing_zeros_word(
     return typer
 
 
-@lower_builtin(_trailing_zeros_word, types.uint64)
+@lower_builtin(trailing_zeros_word, types.uint64)
 def _lower_trailing_zeros_word(
     context: BaseContext, builder: ir.IRBuilder, signature: Signature, arguments: list[ir.Value]
 ) -> ir.Value:
-    """Compile ``_trailing_zeros_word`` to LLVM's count-trailing-zeros instruction."""
+    """Compile ``trailing_zeros_word`` to LLVM's count-trailing-zeros instruction."""
     return builder.cttz(arguments[0], ir.Constant(ir.IntType(1), 0))
 
 
+####################################################################################################
+# native packing and row reduction
+
+
 @njit(cache=True)
-def _pack_bits(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
+def pack_bits(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
     """Pack binary rows into uint64 words, with column j in bit j % 64 of word j // 64.
 
     This is the only packed layout in the distance package.  Entries must be 0 or 1.
@@ -274,7 +278,7 @@ def _pack_bits(matrix: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint64]:
 
 @njit(cache=True)
 def _unpack_bits(packed: npt.NDArray[np.uint64], width: int) -> npt.NDArray[np.uint8]:
-    """Inverse of ``_pack_bits`` for rows with ``width`` columns."""
+    """Inverse of ``pack_bits`` for rows with ``width`` columns."""
     matrix = np.empty((len(packed), width), dtype=np.uint8)
     one = np.uint64(1)
     for row in range(len(packed)):
@@ -287,8 +291,8 @@ def _unpack_bits(packed: npt.NDArray[np.uint64], width: int) -> npt.NDArray[np.u
 def _row_reduce_packed(
     matrix: npt.NDArray[np.uint8], labels: npt.NDArray[np.uint8], columns: npt.NDArray[np.int64]
 ) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.uint8], npt.NDArray[np.int64]]:
-    """Implement ``_row_reduce_binary`` on packed copies, for in-range columns."""
-    rows, tags = _pack_bits(matrix), _pack_bits(labels)
+    """Implement ``row_reduce_binary`` on packed copies, for in-range columns."""
+    rows, tags = pack_bits(matrix), pack_bits(labels)
     num_rows = len(rows)
     pivots = np.empty(min(num_rows, len(columns)), dtype=np.int64)
     rank = 0

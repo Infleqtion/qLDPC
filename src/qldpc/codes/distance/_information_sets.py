@@ -9,14 +9,14 @@ certificate that bounds the Hamming weight of eligible words that a family has n
 
 Family construction runs in stages, so that a caller can take its own exits between them:
 
-1. :func:`_get_disjoint_family` packs disjoint information sets and infers ambient even parity.
-2. :func:`_prune_family` drops partial sets that cannot help certify a target.
-3. :func:`_get_overlapping_family` may propose a cheaper family of overlapping full sets.
+1. :func:`get_disjoint_family` packs disjoint information sets and infers ambient even parity.
+2. :func:`prune_family` drops partial sets that cannot help certify a target.
+3. :func:`get_overlapping_family` may propose a cheaper family of overlapping full sets.
 
 Each stage aims at a target ``upper_bound``.  Distance passes its current witness weight ``U`` and
 stops once the certificate reaches ``U``.  Counting at weight ``w`` must also visit every word of
 weight exactly ``w``, so it passes ``w + 1`` and stops only once the certificate exceeds ``w``.
-:func:`_prepare_family` runs every stage without exits.  Section 4.4 of ``brouwer_zimmermann.md``
+:func:`prepare_family` runs every stage without exits.  Section 4.4 of ``brouwer_zimmermann.md``
 describes the heuristics, and Sections 2.5 and 3.1 derive the certificate.
 """
 
@@ -30,13 +30,17 @@ from typing import NamedTuple
 import numpy as np
 import numpy.typing as npt
 
-from ._binary import _row_reduce_binary
+from ._binary import row_reduce_binary
 
-# Default limit on the number of sets in a replacement family (see _get_overlapping_family).
+# Default limit on the number of sets in a replacement family (see get_overlapping_family).
 MAX_SETS = 16
 
 
-class _InformationSet(NamedTuple):
+####################################################################################################
+# information-set families
+
+
+class InformationSet(NamedTuple):
     """Generators, labels, rank, and pivot columns for one systematic column block."""
 
     generators: npt.NDArray[np.uint8]
@@ -46,12 +50,12 @@ class _InformationSet(NamedTuple):
 
 
 @dataclass(frozen=True)
-class _Certificate:
+class Certificate:
     """Lower bound on the Hamming weight of eligible words that a family has not yet visited.
 
-    The bound holds only after every search basis of the family has completed each coefficient
-    layer through ``completed_weight``; an interrupted layer does not advance it.  It does not bound
-    the weights of witnesses already found, and it does not transfer to another basis or CSS sector.
+    The bound holds only after every search basis of the family has completed each coefficient layer
+    through ``completed_weight``; an interrupted layer does not advance it.  It does not bound the
+    weights of witnesses already found, and it does not transfer to another basis or CSS sector.
 
     Attributes:
         dimension: Number of rows of the searched basis.
@@ -95,11 +99,11 @@ class _Certificate:
 
 
 @dataclass(frozen=True)
-class _BasisFamily:
+class BasisFamily:
     """Search bases for one binary basis, and the certificate that their complete layers give."""
 
-    information_sets: tuple[_InformationSet, ...]
-    certificate: _Certificate
+    information_sets: tuple[InformationSet, ...]
+    certificate: Certificate
 
     def __post_init__(self) -> None:
         assert self.certificate.ranks == tuple(item.rank for item in self.information_sets)
@@ -108,14 +112,14 @@ class _BasisFamily:
     @classmethod
     def from_information_sets(
         cls,
-        information_sets: Sequence[_InformationSet],
+        information_sets: Sequence[InformationSet],
         *,
         dimension: int,
         weight_divisor: int,
-    ) -> _BasisFamily:
+    ) -> BasisFamily:
         """Certify a family with its ranks and its actual maximum pivot coverage."""
         sets = tuple(information_sets)
-        certificate = _Certificate(
+        certificate = Certificate(
             dimension,
             tuple(item.rank for item in sets),
             weight_divisor,
@@ -124,51 +128,58 @@ class _BasisFamily:
         return cls(sets, certificate)
 
 
+def _get_max_coverage(information_sets: Sequence[InformationSet]) -> int:
+    """Maximum number of pivot blocks containing any one coordinate, and at least one."""
+    pivots = [item.pivots for item in information_sets]
+    loads = np.bincount(np.concatenate(pivots)) if pivots else np.zeros(0, dtype=int)
+    return max(1, int(loads.max(initial=0)))
+
+
 ####################################################################################################
 # family stages
 
 
-def _prepare_family(
+def prepare_family(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
     *,
     upper_bound: int,
     weight_divisor: int = 1,
-    disjoint: _BasisFamily | None = None,
+    disjoint: BasisFamily | None = None,
     max_sets: int = MAX_SETS,
-) -> _BasisFamily:
+) -> BasisFamily:
     """Run every family stage, aimed at a fixed ``upper_bound``, without intermediate exits.
 
     The first stage does not depend on ``upper_bound``, so a caller that prepares several families
     for one basis can pass its result as ``disjoint`` instead of computing it again.
     """
     family = (
-        _get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
+        get_disjoint_family(basis, labels, weight_divisor=weight_divisor)
         if disjoint is None
         else disjoint
     )
-    family = _prune_family(family, upper_bound=upper_bound)
-    overlapping = _get_overlapping_family(
+    family = prune_family(family, upper_bound=upper_bound)
+    overlapping = get_overlapping_family(
         basis, labels, family, upper_bound=upper_bound, max_sets=max_sets
     )
     return family if overlapping is None else overlapping
 
 
-def _get_disjoint_family(
+def get_disjoint_family(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
     *,
     weight_divisor: int = 1,
-) -> _BasisFamily:
+) -> BasisFamily:
     """Stage one: pack disjoint information sets, and certify them with any inferred parity."""
-    return _BasisFamily.from_information_sets(
+    return BasisFamily.from_information_sets(
         _get_information_set_generators(basis, labels),
         dimension=len(basis),
-        weight_divisor=_infer_weight_divisor(basis, weight_divisor),
+        weight_divisor=infer_weight_divisor(basis, weight_divisor),
     )
 
 
-def _prune_family(family: _BasisFamily, *, upper_bound: int) -> _BasisFamily:
+def prune_family(family: BasisFamily, *, upper_bound: int) -> BasisFamily:
     """Stage two: retain partial sets that can strengthen certification of ``upper_bound``."""
     certificate = family.certificate
     dimension = certificate.dimension
@@ -190,25 +201,25 @@ def _prune_family(family: _BasisFamily, *, upper_bound: int) -> _BasisFamily:
         for item in family.information_sets
         if item.rank == dimension or dimension - item.rank < full_set_certifying_weight
     )
-    return _BasisFamily(retained, replace(certificate, ranks=tuple(item.rank for item in retained)))
+    return BasisFamily(retained, replace(certificate, ranks=tuple(item.rank for item in retained)))
 
 
-def _get_overlapping_family(
+def get_overlapping_family(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
-    family: _BasisFamily,
+    family: BasisFamily,
     *,
     upper_bound: int,
     max_sets: int = MAX_SETS,
     minimum_work: int = 100_000,
-) -> _BasisFamily | None:
+) -> BasisFamily | None:
     """Stage three: look for a lower-work replacement for a disjoint family.
 
-    ``family`` contains full or partial sets for one independent binary basis.
-    A replacement contains only full sets, with quotient labels transformed alongside rows.
-    ``max_sets`` bounds the size of a replacement family and the effort spent building it.
-    More sets can avoid costly coefficient layers in hard searches, while fewer reduce setup work.
-    Return a lower-work family certified with its maximum Hamming-coordinate coverage, or ``None``.
+    ``family`` contains full or partial sets for one independent binary basis.  A replacement
+    contains only full sets, with quotient labels transformed alongside rows.  ``max_sets`` bounds
+    the size of a replacement family and the effort spent building it.  More sets can avoid costly
+    coefficient layers in hard searches, while fewer reduce setup work.  Return a lower-work family
+    certified with its maximum Hamming-coordinate coverage, or ``None``.
     """
     # Start from full blocks; skip complete packings and families already at the size limit.
     certificate = family.certificate
@@ -246,7 +257,7 @@ def _get_overlapping_family(
     for _ in range(2 * (max_sets - len(full_sets))):
         # Prefer less-used columns; transform quotient labels with each candidate basis.
         order = columns[np.lexsort((rng.random(len(columns)), loads[columns]))]
-        generators, transformed_labels, pivots = _row_reduce_binary(basis, labels, columns=order)
+        generators, transformed_labels, pivots = row_reduce_binary(basis, labels, columns=order)
         assert len(pivots) == dimension
 
         # Do not add duplicate sets; their row reductions still count against the attempt limit.
@@ -254,7 +265,7 @@ def _get_overlapping_family(
         if signature in seen:
             continue
         seen.add(signature)
-        full_sets.append(_InformationSet(generators, transformed_labels, dimension, pivots))
+        full_sets.append(InformationSet(generators, transformed_labels, dimension, pivots))
         loads[pivots] += 1
         max_coverage = int(loads.max())
 
@@ -268,17 +279,13 @@ def _get_overlapping_family(
             break
     if best_sets is None:
         return None
-    return _BasisFamily(
+    return BasisFamily(
         tuple(best_sets),
         replace(certificate, ranks=(dimension,) * len(best_sets), max_coverage=best_coverage),
     )
 
 
-####################################################################################################
-# helper methods
-
-
-def _infer_weight_divisor(basis: npt.NDArray[np.uint8], weight_divisor: int = 1) -> int:
+def infer_weight_divisor(basis: npt.NDArray[np.uint8], weight_divisor: int = 1) -> int:
     """Combine a caller's proven Hamming-weight divisor with ambient even parity, if present."""
     # XOR preserves even parity, so an all-even basis spans only even Hamming weights.
     if np.all(np.count_nonzero(basis, axis=1) % 2 == 0):
@@ -286,17 +293,14 @@ def _infer_weight_divisor(basis: npt.NDArray[np.uint8], weight_divisor: int = 1)
     return weight_divisor
 
 
-def _get_max_coverage(information_sets: Sequence[_InformationSet]) -> int:
-    """Maximum number of pivot blocks containing any one coordinate, and at least one."""
-    pivots = [item.pivots for item in information_sets]
-    loads = np.bincount(np.concatenate(pivots)) if pivots else np.zeros(0, dtype=int)
-    return max(1, int(loads.max(initial=0)))
+####################################################################################################
+# disjoint information sets
 
 
 def _get_information_set_generators(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
-) -> list[_InformationSet]:
+) -> list[InformationSet]:
     """Construct a large deterministic packing of disjoint information sets."""
     nonzero_columns = np.flatnonzero(np.any(basis, axis=0))
     best = _get_information_set_generators_for_columns(
@@ -330,21 +334,21 @@ def _get_information_set_generators_for_columns(
     basis: npt.NDArray[np.uint8],
     labels: npt.NDArray[np.uint8] | None,
     columns: npt.NDArray[np.int_],
-) -> list[_InformationSet]:
+) -> list[InformationSet]:
     """Construct disjoint information sets in a specified column order."""
     dimension = len(basis)
     active_columns = columns
     working = basis
     working_labels = labels
-    information_sets: list[_InformationSet] = []
+    information_sets: list[InformationSet] = []
 
     while len(active_columns):
-        working, working_labels, pivots = _row_reduce_binary(
+        working, working_labels, pivots = row_reduce_binary(
             working, working_labels, columns=active_columns
         )
         rank = len(pivots)
         assert rank
-        information_sets.append(_InformationSet(working, working_labels, rank, pivots))
+        information_sets.append(InformationSet(working, working_labels, rank, pivots))
         if rank < dimension:
             break
 

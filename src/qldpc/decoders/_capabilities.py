@@ -9,6 +9,9 @@ from typing import TypeGuard
 from .construction.specs import DecoderSpec, ObservableDecoderCompiler
 from .protocols import ErrorDecoder, ObservableDecoder, SupportsDecode
 
+####################################################################################################
+# decoder input capabilities
+
 
 def is_prebuilt_decoder(decoder: object) -> bool:
     """Whether a decoder input is already built for a matrix or detector error model.
