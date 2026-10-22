@@ -280,7 +280,10 @@ class BCHCode(ClassicalCode):
                 f"BCH codes over F_{field.order} are only defined for block lengths"
                 f" {field.order}^m - 1 with integer m."
             )
-        super().__init__(galois.BCH(length, dimension, field=field).H)
+        # for m = 1 the extension field is the field itself, which galois cannot infer
+        extension_field = field if length == field.order - 1 else None
+        bch = galois.BCH(length, dimension, field=field, extension_field=extension_field)
+        super().__init__(bch.H)
         self._dimension = dimension
 
     @staticmethod
