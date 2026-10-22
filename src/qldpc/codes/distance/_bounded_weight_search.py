@@ -29,7 +29,7 @@ from ._binary import (
 # bounded kernel and affine Pauli searches
 
 
-class _BoundedKernelSearch:
+class BoundedKernelSearch:
     """Enumerate all nonzero binary kernel words through a weight bound with packed BZ coverage.
 
     Args:
@@ -111,7 +111,7 @@ class _BoundedKernelSearch:
 
 
 @dataclass(frozen=True)
-class _PauliWeightDecision:
+class PauliWeightDecision:
     """A checked representative and global coset lower bound in the oracle's fixed metric.
 
     ``representative`` packs X in the low ``n`` bits and Z in the next ``n``; it need not minimize
@@ -124,7 +124,7 @@ class _PauliWeightDecision:
     lower_bound: int
 
 
-class _PauliCosetSearch:
+class PauliCosetSearch:
     """Exact joint Pauli-weight oracle shared across queries for a pure stabilizer state.
 
     Args:
@@ -139,7 +139,7 @@ class _PauliCosetSearch:
     ``[X|Z]``, whose Hamming weight is at most twice ``max(|x|, |z|)``.
 
     Zero each affine offset on its basis pivots so pivot coordinates equal coefficient bits.  The
-    disjoint-set bound of :class:`_BoundedKernelSearch` then applies from coefficient weight zero.
+    disjoint-set bound of :class:`BoundedKernelSearch` then applies from coefficient weight zero.
     A negative decision requires both visited weights and the unseen bound to exceed the threshold.
     For minimum visited weight ``v`` and unseen Hamming bound ``L``, the global metric bound is
     ``min(v, ceil(L / 2))``; exhaustion gives the exact visited minimum.  An unseen-word bound alone
@@ -201,7 +201,7 @@ class _PauliCosetSearch:
         self.generated = 0
         self.preparations = 0
         self.coefficient_depth = 0
-        self._cache: dict[int, _PauliWeightDecision] = {}
+        self._cache: dict[int, PauliWeightDecision] = {}
         self._singles = {0: 0}
         self._x_singles = {0: 0}
         self._z_singles = {0: 0}
@@ -218,7 +218,7 @@ class _PauliCosetSearch:
         """Compute the complete syndrome of a packed symplectic Pauli."""
         return sum(((row & pauli).bit_count() & 1) << jj for jj, row in enumerate(self._checks))
 
-    def decide(self, syndrome: int, max_weight: int) -> _PauliWeightDecision:
+    def decide(self, syndrome: int, max_weight: int) -> PauliWeightDecision:
         """Decide whether the coset has a representative within the weight threshold."""
         if not 0 <= syndrome < 1 << self.num_qubits or max_weight < 0:
             raise ValueError("Syndrome out of range or negative weight threshold")
@@ -227,16 +227,16 @@ class _PauliCosetSearch:
             upper = self._weight(known.representative)
             if upper <= max_weight or known.lower_bound > max_weight:
                 self.cache_hits += 1
-                return _PauliWeightDecision(
+                return PauliWeightDecision(
                     upper <= max_weight, known.representative, known.lower_bound
                 )
         pauli = self._weight_one_representative(syndrome)
         if pauli is not None:
-            decision = _PauliWeightDecision(
+            decision = PauliWeightDecision(
                 self._weight(pauli) <= max_weight, pauli, int(bool(syndrome))
             )
         elif max_weight < 2:
-            decision = _PauliWeightDecision(False, self._representative(syndrome), 2)
+            decision = PauliWeightDecision(False, self._representative(syndrome), 2)
         else:
             decision = self._search(syndrome, max_weight)
         decision = self._merge_decisions(known, decision)
@@ -246,13 +246,13 @@ class _PauliCosetSearch:
         return decision
 
     def _merge_decisions(
-        self, known: _PauliWeightDecision | None, found: _PauliWeightDecision
-    ) -> _PauliWeightDecision:
+        self, known: PauliWeightDecision | None, found: PauliWeightDecision
+    ) -> PauliWeightDecision:
         """Keep the lightest checked representative and strongest proved bound."""
         if known is None:
             return found
         representative = min((known.representative, found.representative), key=self._weight)
-        return _PauliWeightDecision(
+        return PauliWeightDecision(
             found.within_bound, representative, max(known.lower_bound, found.lower_bound)
         )
 
@@ -328,7 +328,7 @@ class _PauliCosetSearch:
             )
         return offsets
 
-    def _search(self, syndrome: int, threshold: int) -> _PauliWeightDecision:
+    def _search(self, syndrome: int, threshold: int) -> PauliWeightDecision:
         """Scan affine layers for a witness or a proved global bound."""
         self._prepare_bases()
         pauli = self._representative(syndrome)
@@ -353,7 +353,7 @@ class _PauliCosetSearch:
                         # The low 2n bits of an embedded word are the packed (x|z) Pauli.
                         word = _packed_row_int(candidates[good[0]])
                         representative = word & ((1 << (2 * n)) - 1)
-                        return _PauliWeightDecision(True, representative, 2)
+                        return PauliWeightDecision(True, representative, 2)
                     batch_min = int(weights.min())
                     if batch_min < visited_min:
                         visited_min = batch_min
@@ -364,10 +364,10 @@ class _PauliCosetSearch:
             # Either metric is at least half of the embedded Hamming weight.
             unseen_lower = (unseen_hamming + 1) // 2
             if depth == n:
-                return _PauliWeightDecision(False, best_pauli, visited_min)
+                return PauliWeightDecision(False, best_pauli, visited_min)
             if unseen_lower > threshold:
                 global_lower = min(visited_min, unseen_lower)
-                return _PauliWeightDecision(False, best_pauli, global_lower)
+                return PauliWeightDecision(False, best_pauli, global_lower)
             depth += 1
 
 
