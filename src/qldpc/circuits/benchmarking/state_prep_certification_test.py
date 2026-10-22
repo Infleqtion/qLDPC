@@ -112,9 +112,9 @@ def _assert_valid_counterexample(
         assert failure.effective_weight_lower_bound <= minimum
 
 
-def test_certify_maps_matches_exhaustive_search() -> None:
+def test_certify_maps_matches_exhaustive_search(pytestconfig: pytest.Config) -> None:
     """Random maps with repeated columns and flag rank above the budget match brute force."""
-    rng = np.random.default_rng(612)
+    rng = np.random.default_rng(pytestconfig.getoption("randomly_seed"))
     maps: list[tuple[int, npt.NDArray[np.int_], npt.NDArray[np.int_], Sequence[int]]] = []
     for n, rank in itertools.product((3, 5), range(5)):
         for _ in range(12):
@@ -127,6 +127,10 @@ def test_certify_maps_matches_exhaustive_search() -> None:
     for _ in range(6):
         flag_array, syndrome_array = rng.integers(1, 32, size=24), rng.integers(1, 8, size=24)
         maps.append((3, flag_array, syndrome_array, (2, 3)))
+    # One fault of weight zero certifies and one of weight three on three qubits does not, so both
+    # outcomes occur whatever the random maps are.
+    maps.append((3, np.array([0]), np.array([0]), (1,)))
+    maps.append((3, np.array([0]), np.array([7]), (1,)))
     outcomes = {True: 0, False: 0}
     for n, flag_array, syndrome_array, budgets in maps:
         flags, syndromes = list(map(int, flag_array)), list(map(int, syndrome_array))
@@ -134,7 +138,7 @@ def test_certify_maps_matches_exhaustive_search() -> None:
             failure = _certify_map(flags, syndromes, budget, n)
             assert (failure is None) == _exhaustive(flags, syndromes, budget)
             outcomes[failure is None] += 1
-    assert min(outcomes.values()) > 20  # both outcomes occur often
+    assert all(outcomes.values())
 
 
 def test_hand_derived_dependency_cases() -> None:
@@ -173,9 +177,9 @@ def test_independent_flag_types_need_only_equal_flag_pairs() -> None:
     assert outcomes == {True, False}
 
 
-def test_minimal_patterns_match_exhaustive_enumeration() -> None:
+def test_minimal_patterns_match_exhaustive_enumeration(pytestconfig: pytest.Config) -> None:
     """Each minimal accepted pattern is produced once, with original indices and its syndrome."""
-    rng = np.random.default_rng(518)
+    rng = np.random.default_rng(pytestconfig.getoption("randomly_seed"))
     for width in range(10):
         for flag_bits in range(1, 5):
             flags = list(map(int, rng.integers(1, 1 << flag_bits, size=width)))

@@ -111,9 +111,9 @@ def _kernel_words(checks: npt.NDArray[np.uint8], max_weight: int) -> set[int]:
     return set(map(int, words[in_kernel & (bits.sum(axis=1) <= max_weight)]))
 
 
-def test_kernel_search_matches_brute_force() -> None:
+def test_kernel_search_matches_brute_force(pytestconfig: pytest.Config) -> None:
     """Every low-weight kernel word is yielded, for both storage layouts and early stopping."""
-    rng = np.random.default_rng(431)
+    rng = np.random.default_rng(pytestconfig.getoption("randomly_seed"))
     cases = [
         rng.integers(2, size=(height, width), dtype=np.uint8)
         for width in range(1, 10)
@@ -123,7 +123,19 @@ def test_kernel_search_matches_brute_force() -> None:
     structured = np.zeros((12, 16), dtype=np.uint8)
     for row in range(12):
         structured[row, row % 4] = structured[row, row + 4] = 1
-    cases.append(structured)
+    # The [8,4,4] extended Hamming code has two disjoint information sets, and some of its
+    # weight-four words have coefficient weight three or more in the first basis.
+    extended_hamming = np.array(
+        [
+            [1, 1, 1, 1, 0, 0, 0, 0],
+            [0, 0, 1, 1, 1, 1, 0, 0],
+            [0, 0, 0, 0, 1, 1, 1, 1],
+            [1, 0, 1, 0, 1, 0, 1, 0],
+        ],
+        dtype=np.uint8,
+    )
+    # The identity matrix has a trivial kernel.
+    cases += [structured, extended_hamming, np.eye(3, dtype=np.uint8)]
     for checks in cases:
         width = checks.shape[1]
         for max_weight in (1, 3, 4, width):
@@ -159,9 +171,9 @@ def test_fixed_weight_supports_stream_in_lexicographic_order() -> None:
 
 
 @pytest.mark.parametrize("metric", ["pauli", "css"])
-def test_decisions_match_exhaustive_minima(metric: Metric) -> None:
+def test_decisions_match_exhaustive_minima(metric: Metric, pytestconfig: pytest.Config) -> None:
     """Decisions agree with exhaustively computed minima for shuffled queries and a tiny cache."""
-    rng = np.random.default_rng(182)
+    rng = np.random.default_rng(pytestconfig.getoption("randomly_seed"))
     for num_qubits in range(1, 7):
         edges = [pair for pair in itertools.combinations(range(num_qubits), 2) if rng.integers(2)]
         matrix = _graph_state(num_qubits, edges, phase=num_qubits % 2 == 0)
@@ -244,6 +256,7 @@ def test_exhausted_search_gives_the_exact_minimum() -> None:
     """On |00000>, flipping every qubit has CSS weight five, which only exhaustion can prove."""
     zero_state = np.hstack([np.zeros((5, 5), dtype=np.uint8), np.eye(5, dtype=np.uint8)])
     oracle = PauliCosetSearch(zero_state, metric="css")
+    assert not oracle.decide(31, 1).within_bound  # no single-qubit error has this syndrome
     decision = oracle.decide(31, 4)
     assert not decision.within_bound and decision.lower_bound == 5
     assert oracle.decide(31, 5).within_bound
