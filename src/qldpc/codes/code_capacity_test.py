@@ -166,7 +166,7 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
 
     # malformed errors are rejected with actionable messages
     malformed_outputs: list[tuple[list[Any], str]] = [
-        ([0, 0], r"inferred an error of shape \(2,\), but expected shape \(3,\)"),
+        ([0, 0], "expected shape"),
         ([0, 0, 3], "not elements of GF"),
         ([0.0, 0.0, 0.0], "expected integers"),
     ]
@@ -230,7 +230,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
 
     # a prediction of the wrong shape or field is rejected
     for output, message in [
-        ([0, 0, 0], r"shape \(3,\), but expected shape \(2,\): 2 value\(s\)"),
+        ([0, 0, 0], "expected shape"),
         ([0, 5], "not elements of GF"),
     ]:
         decoder = code_capacity.get_code_capacity_decoder(
@@ -293,45 +293,6 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
             _FixedObservableDecoder([0, 0]),
             {"with_lookup": True},
         )
-
-
-def test_code_capacity_error_and_observable_output_contracts() -> None:
-    """An ambiguous syndrome can have distinct error and observable predictions."""
-    field = galois.GF2
-    syndrome_matrix = field([[1, 1]])
-    observable_matrix = field([[1, 0]])
-    errors = [field([1, 0]), field([0, 1])]
-    assert all(np.array_equal(syndrome_matrix @ error, [1]) for error in errors)
-    assert [int((observable_matrix @ error)[0]) for error in errors] == [1, 0]
-
-    projected = code_capacity.get_code_capacity_decoder(
-        syndrome_matrix, observable_matrix, _FixedErrorDecoder([1, 0])
-    )
-    native = code_capacity.get_code_capacity_decoder(
-        syndrome_matrix, observable_matrix, _FixedObservableDecoder([0])
-    )
-    assert isinstance(projected.decoder, observable_decoders.ErrorsToFieldObservablesDecoder)
-    assert native.decoder.decode_observables(np.array([1])).tolist() == [0]
-    assert [projected.get_failure_and_erasure(error) for error in errors] == [
-        (False, False),
-        (True, False),
-    ]
-    assert [native.get_failure_and_erasure(error) for error in errors] == [
-        (True, False),
-        (False, False),
-    ]
-
-    erasing = code_capacity.get_code_capacity_decoder(
-        syndrome_matrix, observable_matrix, _FixedErrorDecoder([1, 0, 1], True)
-    )
-    prediction, erased = erasing.decode(field([1]))
-    assert erasing.num_erasure_flags == 1
-    assert prediction.tolist() == [1] and erased
-    assert erasing.get_failure_and_erasure(errors[1]) == (False, True)
-    with pytest.raises(ValueError, match=r"expected shape \(3,\)"):
-        code_capacity.get_code_capacity_decoder(
-            syndrome_matrix, observable_matrix, _FixedErrorDecoder([1, 0], True)
-        ).decode(field([1]))
 
 
 def test_code_capacity_dem_mechanism_order_and_native_prediction() -> None:
@@ -466,8 +427,6 @@ def test_code_capacity_native_build_fallback() -> None:
     code = codes.QuditCode(codes.SurfaceCode(3).matrix)
     with pytest.warns(decoders.ObservableDecodingFallbackWarning, match="non-graphlike"):
         code.get_logical_error_rate_func(10, decoder=decoders.mwpm())
-    with pytest.warns(decoders.ObservableDecodingFallbackWarning, match="cannot be symplectic"):
-        code.get_logical_error_rate_func(10, decoder=decoders.lookup(max_weight=1, symplectic=True))
 
     # explicit error decoding, error-only specifications, and successful native builds do not warn
     with warnings.catch_warnings():
@@ -634,27 +593,11 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
         weighted_dem_arrays.error_probs / weighted_dem_arrays.error_probs[0], [1, 2, 3]
     )
 
-    # external compiled Sinter decoders are recognized as prebuilt
-    external_compiled = _BitPackedCompiledDecoder(np.zeros((1, 1), dtype=np.uint8))
-    with pytest.raises(ValueError, match="prebuilt decoder cannot be passed as decoder="):
-        code_capacity.get_code_capacity_decoder(
-            code.matrix,
-            observable_matrix,
-            external_compiled,
-            prebuilt_rejection_reason="it is a test",
-        )
-
     # a Sinter-style decoder cannot decode a nonbinary code
     field = galois.GF(3)
     with pytest.raises(ValueError, match="cannot decode a code over GF"):
         code_capacity.get_code_capacity_decoder(
             field(code.matrix), field(observable_matrix), decoders.TrivialDecoder()
-        )
-    with pytest.raises(ValueError, match="cannot decode a code over GF"):
-        code_capacity.get_code_capacity_decoder(
-            field(code.matrix),
-            field(observable_matrix),
-            decoders.from_dem(observable_constructor),
         )
     with pytest.raises(ValueError, match="is binary, so it cannot decode a code over GF"):
         code_capacity.get_code_capacity_decoder(

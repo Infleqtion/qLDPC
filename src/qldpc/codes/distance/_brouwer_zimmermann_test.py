@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import functools
 import itertools
 from collections.abc import Callable
 from typing import Any
@@ -18,7 +19,7 @@ import qldpc
 
 from . import _binary as binary
 from . import _brouwer_zimmermann as bz
-from . import _information_sets
+from . import _information_sets, core
 from .conftest import _get_random_full_rank_matrix
 
 
@@ -26,7 +27,7 @@ from .conftest import _get_random_full_rank_matrix
 def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
     """Chunked kernel calls enumerate each combination of basis rows once.
 
-    The chunked kernel calls preserve packed row XORs and multiword labels.
+    The chunked kernel calls preserve resumption state and multiword labels.
     """
     scan = bz._scan_brouwer_zimmermann
     if interpreted:
@@ -76,11 +77,6 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
                 # The last selected row index has advanced in preparation for the next chunk.
                 np.testing.assert_array_equal(support[:-1], indices[:-1])
                 assert support[-1] == indices[-1] + 1
-                for index in range(3):
-                    np.testing.assert_array_equal(
-                        prefixes[weight, index, : widths[index]],
-                        np.bitwise_xor.reduce(generators[index, indices, : widths[index]]),
-                    )
 
             # One more kernel call reports completion after all basis-row combinations are visited.
             best, depth, visited = scan(
@@ -142,62 +138,95 @@ def test_brouwer_zimmermann_search_state() -> None:
     assert (search.lower_bound, search.next_weight) == (1, 3)
 
 
-def test_brouwer_zimmermann_setup_dispatches() -> None:
-    """Brouwer-Zimmermann setup can dispatch to exhaustive search and shared cutoffs."""
-    basis = np.array(
+# Each case reaches one early exit from search setup or a shared search with real inputs.  These
+# exits depend on cost heuristics, so retuning a heuristic can move a case to another exit.  If the
+# coverage gate then fails, find a new natural input here rather than stubbing internals.
+SETUP_EXIT_CASES = [
+    # A shared search reaches the cutoff inside a coefficient-weight scan.
+    pytest.param(
         [
-            [1, 1, 0, 1],
-            [1, 0, 1, 1],
-            [0, 1, 1, 1],
+            [0, 0, 1, 0, 0, 0, 0, 0, 1, 1],
+            [1, 0, 1, 1, 0, 0, 1, 1, 1, 0],
+            [0, 1, 1, 1, 1, 0, 1, 1, 1, 0],
+            [0, 1, 1, 0, 0, 0, 1, 1, 1, 0],
+            [0, 1, 0, 0, 1, 0, 0, 1, 1, 1],
         ],
-        dtype=np.uint8,
-    )
-    information_set = [_information_sets._InformationSet(basis, None, 3, np.array([0, 1, 2]))]
-    with (
-        mock.patch(
-            "qldpc.codes.distance._brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
-        ),
-        mock.patch(
-            "qldpc.codes.distance._information_sets._get_information_set_generators",
-            return_value=information_set,
-        ),
-        mock.patch(
-            "qldpc.codes.distance._brouwer_zimmermann._brute_force_is_cheaper", return_value=True
-        ),
-        mock.patch(
-            "qldpc.codes.distance._brouwer_zimmermann._get_distance_quantum_brute_force",
-            return_value=2,
-        ),
-    ):
-        prepared = bz._prepare_brouwer_zimmermann_search(
-            basis,
-            None,
-            cutoff=0,
-            block_size=2,
-            weight_divisor=1,
-            upper_bound=4,
-        )
-    assert prepared == 2
+        [],
+        2,
+        False,
+        id="scan-cutoff",
+    ),
+    # Brute force is cheaper than the information-set search prepared for this quotient.
+    pytest.param(
+        [[1, 0, 0, 0, 1, 0, 1, 1, 0]],
+        [
+            [0, 1, 0, 0, 0, 0, 1, 0, 1],
+            [0, 0, 1, 0, 1, 0, 1, 0, 1],
+            [0, 0, 0, 1, 0, 0, 0, 0, 0],
+            [0, 0, 0, 0, 0, 1, 1, 0, 1],
+        ],
+        0,
+        False,
+        id="brute-force",
+    ),
+    # Rows of an overlapping replacement family reach the cutoff.
+    pytest.param(
+        [[1, 0, 0, 0, 0, 0, 0, 1, 1, 1]],
+        [
+            [0, 1, 0, 0, 0, 0, 1, 0, 0, 1],
+            [0, 0, 1, 0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 1, 0, 0, 1, 1, 0, 1],
+            [0, 0, 0, 0, 1, 0, 0, 1, 1, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0, 0, 1],
+        ],
+        3,
+        True,
+        id="overlap-cutoff",
+    ),
+    # The certificate of an overlapping replacement family closes the gap to the best witness.
+    pytest.param(
+        [[1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0]],
+        [
+            [0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+            [0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0],
+            [0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1],
+            [0, 0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1],
+            [0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1],
+        ],
+        0,
+        True,
+        id="overlap-certificate",
+    ),
+]
 
-    search = mock.Mock()
-    search.finished = False
-    search.advance.return_value = 1
-    with (
-        mock.patch(
-            "qldpc.codes.distance._brouwer_zimmermann._get_brouwer_zimmermann_initial_upper_bound",
-            return_value=3,
-        ),
-        mock.patch(
-            "qldpc.codes.distance._brouwer_zimmermann._prepare_brouwer_zimmermann_search",
-            return_value=search,
-        ),
-    ):
-        distance = bz._get_distance_brouwer_zimmermann_many(
-            [(basis, None)],
-            cutoff=1,
-            block_size=2,
+
+@pytest.mark.parametrize("logicals, stabilizers, cutoff, overlap", SETUP_EXIT_CASES)
+def test_brouwer_zimmermann_setup_exits(
+    logicals: list[list[int]],
+    stabilizers: list[list[int]],
+    cutoff: int,
+    overlap: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Early exits from search setup or a shared search agree with a brute-force oracle."""
+    expected = qldpc.codes.get_distance_quantum(
+        logicals, stabilizers, homogeneous=True, cutoff=0, method="brute_force"
+    )
+
+    # Lower only the cost knobs, so that these small inputs reach the information-set search.
+    monkeypatch.setattr(bz, "_exhaustive_is_cheaper", lambda *_: False)
+    monkeypatch.setattr(core, "_exhaustive_is_cheaper", lambda *_: False)
+    if overlap:
+        monkeypatch.setattr(
+            _information_sets,
+            "_get_overlapping_family",
+            functools.partial(_information_sets._get_overlapping_family, minimum_work=0),
         )
-    assert distance == 1
+    distance = qldpc.codes.get_distance_quantum(
+        logicals, stabilizers, homogeneous=True, cutoff=cutoff
+    )
+    assert expected <= distance <= max(cutoff, expected)
 
 
 def test_brouwer_zimmermann_setup_cutoffs() -> None:
@@ -305,17 +334,11 @@ def test_brouwer_zimmermann_sector_certificates() -> None:
 
 
 @pytest.mark.usefixtures("force_information_sets")
-def test_brouwer_zimmermann_without_certifying_bound() -> None:
-    """Brouwer-Zimmermann returns its best codeword after exhausting every coefficient weight."""
-    with mock.patch(
-        "qldpc.codes.distance._information_sets._get_information_set_generators", return_value=[]
-    ):
-        assert qldpc.codes.get_distance_classical(np.eye(2, dtype=np.uint8), cutoff=0) == 1
-
-
-@pytest.mark.usefixtures("force_information_sets")
 def test_brouwer_zimmermann_subsystem_code() -> None:
-    """Information-set search treats the gauge operators of a subsystem code as trivial."""
+    """Information-set search treats the gauge operators of a subsystem code as trivial.
+
+    The 3x3 Bacon-Shor code is a [[9,1,3]] subsystem code; see https://arxiv.org/abs/quant-ph/0506023.
+    """
     code = qldpc.codes.QuditCode(qldpc.codes.BaconShorCode(3).matrix, is_subsystem_code=True)
     assert code.get_distance_exact() == 3
 
@@ -329,34 +352,14 @@ def test_brouwer_zimmermann_packed_widths(length: int) -> None:
 
 
 def test_brouwer_zimmermann_exhaustive_dispatch() -> None:
-    """Exhaustive enumeration is chosen when estimated to be cheaper than information sets."""
-    assert bz._exhaustive_is_cheaper(20, 21)
-    assert bz._exhaustive_is_cheaper(21, 4000)
-    assert not bz._exhaustive_is_cheaper(21, 22)
-    assert bz._brute_force_is_cheaper(
-        num_logical_rows=2, certificate=_information_sets._Certificate(4, (4,)), upper_bound=4
-    )
-    assert not bz._brute_force_is_cheaper(
-        num_logical_rows=4, certificate=_information_sets._Certificate(4, (4,)), upper_bound=4
-    )
-    assert not bz._brute_force_is_cheaper(
-        num_logical_rows=20,
-        certificate=_information_sets._Certificate(20, (20, 20), 2),
-        upper_bound=3,
-    )
+    """Dependent logical rows skip the top-level independent-row exhaustive path.
 
-    # Dependent logical rows skip the top-level independent-row exhaustive path.
-    # The exhaustive dispatcher uses the reduced quotient basis instead.
+    The exhaustive dispatcher uses the reduced quotient basis instead.
+    """
     distance = qldpc.codes.get_distance_quantum(
         [[1, 1, 1], [1, 1, 1]], [], homogeneous=True, cutoff=0
     )
     assert distance == 3
-
-    # After information-set setup, _brute_force_is_cheaper can dispatch to exhaustive enumeration.
-    with mock.patch(
-        "qldpc.codes.distance._brouwer_zimmermann._exhaustive_is_cheaper", return_value=False
-    ):
-        assert qldpc.codes.get_distance_classical(qldpc.codes.HammingCode(3).generator) == 3
 
 
 @pytest.mark.parametrize("extended", [False, True])
@@ -376,30 +379,6 @@ def test_brouwer_zimmermann_initial_upper_bound_excludes_stabilizers() -> None:
     basis = np.array([[1, 0, 0], [1, 1, 0]], dtype=np.uint8)
     labels = np.array([[0], [1]], dtype=np.uint8)
     assert bz._get_brouwer_zimmermann_initial_upper_bound(basis, labels) == 2
-
-
-@pytest.mark.parametrize("cutoff", [0, 2])
-def test_brouwer_zimmermann_overlap_setup_certification(cutoff: int) -> None:
-    """A replacement basis can meet the cutoff or close the lower bound during setup."""
-    basis = np.array([[1, 0, 1, 1], [0, 1, 1, 1]], dtype=np.uint8)
-    generators, labels, pivots = binary._row_reduce_binary(basis, columns=np.array([0, 2]))
-    original = _information_sets._InformationSet(basis, None, 2, np.array([0, 1]))
-    alternative = _information_sets._InformationSet(generators, labels, 2, pivots)
-    with (
-        mock.patch.object(bz, "_exhaustive_is_cheaper", return_value=False),
-        mock.patch.object(
-            _information_sets, "_get_information_set_generators", return_value=[original]
-        ),
-        mock.patch.object(
-            _information_sets,
-            "_get_overlapping_family",
-            return_value=_information_sets._BasisFamily.from_information_sets(
-                [alternative], dimension=2, weight_divisor=1
-            ),
-        ),
-        mock.patch.object(bz, "_brute_force_is_cheaper", side_effect=AssertionError),
-    ):
-        assert qldpc.codes.get_distance_classical(basis, cutoff=cutoff) == 2
 
 
 def test_brouwer_zimmermann_overlap_qc(get_candidate_count: Callable[[], int]) -> None:

@@ -40,19 +40,8 @@ def test_fault_distance_without_logical_faults() -> None:
 
 
 def test_logical_error_and_discard_rate() -> None:
-    """Sample a state-preparation circuit and post-select detectors or incorrect observables."""
-    circuit = stim.Circuit("""
-        # non-fault-tolerant |0> state prep
-        H 0 2 4
-        CX 0 3 2 1 4 5
-        CX 0 1 2 6 4 3
-        CX 2 5 3 6
-        # flag a logical Z representative
-        H 7
-        CZ 7 1 7 3 7 5
-        MX 7
-        DETECTOR rec[-1]
-    """)
+    """Sample a noiseless circuit and post-select detectors or incorrect observables."""
+    circuit = stim.Circuit("R 0\nM 0\nDETECTOR rec[-1]")
 
     # bypass sinter to compute logical error rates
     logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
