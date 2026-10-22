@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Format the code base: ruff format + import sorting (checks-superstaq), then pyproject-fmt.
 
-Pass --check to report without modifying files (used by CI); otherwise fixes are applied in place.
+Pass --check to report without modifying files (used by CI), or --fix to apply Ruff's changes.
+Without --check, pyproject-fmt rewrites pyproject.toml in place.
 """
 
 import subprocess

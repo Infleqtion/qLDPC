@@ -6,20 +6,21 @@ For exact signatures and per-object literature, use the source docstrings or the
 
 ## What to trust when documents disagree
 
-When sources disagree, use this order:
+For what the code does, use this order:
 
 1. Current implementation and its invariant tests.
 2. Public docstrings and the `__all__` lists in package `__init__.py` files.
 3. The [library map](docs/source/library_map.rst) and executable [examples](examples/).
 4. Historical discussion, issues, or review notes.
 
+For how code should be written, this guide takes precedence over existing code: code that breaks a rule here is debt to fix, not a precedent to copy.
 Re-derive behavior from the current branch before documenting or changing it.
 Do not copy transient project history, machine-specific paths, or local-session instructions into production files.
 
 ## Orientation
 
 The source tree under `src/qldpc/` mirrors the library: each package and module starts with a docstring whose first line summarizes it, and the [library map](docs/source/library_map.rst) explains how the packages relate.
-Canonical executable notebooks live in [`examples/`](examples/), Sphinx pages and the library map in [`docs/source/`](docs/source/), and local wrappers for CI's quality gates in [`checks/`](checks/).
+Canonical executable notebooks live in [`examples/`](examples/), Sphinx pages and the library map in [`docs/source/`](docs/source/), local wrappers for CI's quality gates in [`checks/`](checks/), and untested research scripts in [`experiments/`](experiments/).
 
 The main code hierarchy is:
 
@@ -32,50 +33,51 @@ AbstractCode
 
 The methods in `codes/common.py` share cached and mutable state for standard form, logical and gauge operators, parameters, and code transformations.
 Do not split them into mixins merely to reduce the file length.
-Immediate decoder builders live beside their implementations under `decoders/external/` and `decoders/custom/`, and typed decoder specifications live under `decoders/construction/`.
-Plumbing lives in private modules, whose file names start with an underscore, beside the public code that it serves.
+Each decoder backend defines its builder and its specification helper (with `decoder_spec` or `observable_decoder_spec`) beside its implementation, under `decoders/external/` or `decoders/custom/`.
+Plumbing that several modules share lives in private modules; helpers that one file uses are underscore names in that file.
 
-## Public API and compatibility
+## Public API and private code
 
 - A name is public if it is broadly useful to researchers and engineers, and private if it is plumbing that makes qLDPC work.
   Where a name is used, such as in other modules or in notebooks, does not decide this.
+- Plain names defined in public modules (no underscore anywhere in the import path) are public.
+  Keep them working, and retire a released public name through a tested shim rather than breaking its import (see [Deprecations](#deprecations)).
 - [`src/qldpc/__init__.py`](src/qldpc/__init__.py) exports subpackages rather than flattening their classes and functions.
-- Each stable subpackage has an explicit `__all__` in its `__init__.py`.
-  Preserve those import paths when moving implementation code.
-- Treat plain names in public `qldpc.*` modules (no underscore anywhere in the import path) as public, and keep them working.
-  Retire a released public name through a tested shim rather than breaking its import (see [Deprecations](#deprecations)).
-- Everything under [`src/qldpc/experimental/`](src/qldpc/experimental/) is explicitly unstable and can change without a deprecation period.
-  Do not infer that this weaker guarantee applies elsewhere.
-- Keep complete lists of public symbols in `__all__` and AutoAPI.
-  Human-written docs should explain what packages do and show representative tasks, not duplicate a class catalogue.
-- An underscore-prefixed name is used only within its own file and that file's `*_test.py`.
-  Anything that another module uses is a plain name, either in a public module, where it is public API, or in a private module.
-  The single exception is that [`_deprecations/decoders.py`](src/qldpc/_deprecations/decoders.py) imports private backend builders, so that deprecated APIs pass options to them unchecked.
-- A module whose file name starts with an underscore is private as a whole.
-  It uses plain names for definitions that other modules use, and underscore names for helpers internal to the file.
+- Each stable subpackage lists its public names (or, for `qldpc` and `qldpc.external`, its public submodules) in the `__all__` of its `__init__.py`.
+  `qldpc.decoders.construction` has no `__all__`, because `qldpc.decoders` re-exports its public names.
+  Keep `__all__` complete and preserve these import paths when moving implementation code.
+- AutoAPI lists every public symbol, so human-written docs explain what packages do and show representative tasks rather than catalogue classes.
+- A private module has an underscore somewhere in its import path, and is private as a whole.
+  It uses plain names for definitions that other modules use, and underscore names for helpers that only its own file uses.
+- A module-level underscore name is used only in its own file and that file's `*_test.py`.
+  A class's underscore attributes and methods may be used anywhere in the package that defines the class, but not outside it.
+  The only exception is [`_deprecations/decoders.py`](src/qldpc/_deprecations/decoders.py), which imports private decoder builders so that deprecated APIs pass options to them unchecked.
 - Public objects are defined in public modules.
-  A public module may use a private module's implementation, but never re-exports a private module's object as public API, except as a temporary deprecation shim.
+  A public module may use a private module's implementation, but never re-exports a private module's object as public API.
+- Everything under [`src/qldpc/experimental/`](src/qldpc/experimental/) is explicitly unstable, can change without a deprecation period, and is exempt from the private-name rules above.
+  Do not infer that these weaker rules apply elsewhere.
 
-## Module organization and ordering
+## Code style and organization
 
-- Preserve a module's existing section headings and organization when adding code.
-- Add a section when new functionality does not fit an existing one.
+- Every source file starts with `# SPDX-License-Identifier: Apache-2.0`, a blank line, and a module docstring whose first line summarizes the module.
+- Docstrings follow the Google convention, and lines are at most 100 columns long.
+- Python comments and docstrings use ordinary paragraphs: separate sentences with two spaces and fill lines to the 100-column limit.
+- Keep one prose sentence per physical source line in `.rst`, `.md`, and Markdown notebook cells.
+  Put `First sentence.` and `Second sentence.` on separate source lines; leave code blocks, equations, and table syntax intact.
+- Preserve a module's existing section headings and organization when adding code, and add a section when new functionality does not fit an existing one.
 - Start each section with a line of 100 `#` characters followed by a one-line `# title` comment.
-- Put important user-facing APIs first within modules and sections.
-- Keep related public entry points together.
+- Put important user-facing APIs first within modules and sections, and keep related public entry points together.
 - Place file-internal helpers at the bottom of the section that they serve, so that sections group code by topic rather than by visibility.
-  Reserve a final `# helper methods` section for helpers that several sections share.
+  Reserve a final helper section for helpers that several sections share.
   Private constants and types may sit near the imports, and helpers that code uses at import time must precede that use.
-- Private modules follow the same rules: within each section, put plain names (used by other modules) before underscore names (used only within the file).
-- Keep user-facing decode methods near the top of decoder classes.
-- Place private helper methods after the public decode methods.
+- In private modules, put plain names (used by other modules) before underscore names (used only within the file) within each section.
+- Within a class, put public methods first (for decoders, the decode methods) and private helper methods after them.
 
 ## Core invariants
 
 ### Fields and arrays
 
 - Code arithmetic happens in a `galois.FieldArray`.
-  The default field is `GF(2)`.
 - Extension-field storage integers are not ordinary integers modulo the field order.
   Do not use `% field.order` as field coercion; construct or preserve values through the field class.
 - Preserve the concrete field when copying or transforming arrays.
@@ -95,34 +97,32 @@ Plumbing lives in private modules, whose file names start with an underscore, be
   Do not decode a subsystem code as though all gauge generators were stabilizers.
 - `CSSCode(..., promise_equal_distance_xz=True)` is trusted, not verified.
   A false promise can make distance results wrong and dependent on which sector was computed first.
-- Built-in families may cache construction- or literature-supplied parameters.
-  A test that compares `get_code_params()` only with those same cached values is tautological; use an independent rank, commutation, row-space, or bounded-distance oracle.
+- Built-in families may cache construction- or literature-supplied parameters, so test them against independent oracles (see [Tests](#tests)).
 - [`codes/distance/`](src/qldpc/codes/distance/) is explicitly binary.
   Use field-aware code methods and oracles for nonbinary constructions.
 
 ### Decoders
 
 - Build decoders from typed specifications, as in `decoders.bp_osd(...).build(pcm_or_dem)` or `decoders.mwpm(...).build_observable_decoder(dem)`.
-  Builders named `get_decoder_<NAME>`, `get_error_decoder`, and `get_observable_decoder` are deprecated and live only in [`_deprecations/decoders.py`](src/qldpc/_deprecations/decoders.py).
-- `decoder=None` selects GUF for a nonbinary `FieldArray` and BP+OSD otherwise (see [`construction/_resolution.py`](src/qldpc/decoders/construction/_resolution.py)).
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
   Code that consumes a user-supplied error decoder coerces it with `as_error_decoder` from `decoders/_common.py` and calls `decode_errors`.
 - A method that decodes a matrix it constructs itself must reject prebuilt decoders with `reject_prebuilt_decoder` from `decoders/construction/_resolution.py`.
-- Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with [`codes._code_capacity.get_code_capacity_decoder`](src/qldpc/codes/_code_capacity.py), which always yields an observable decoder: on binary codes, specifications with native observable support build it from a DEM; otherwise inferred errors can be projected onto logical predictions.
-  Keep `resolve_decoder` in `decoders/construction/_resolution.py` error-decoder-specific, and dispatch on explicit capabilities (`compile_decoder_for_dem`, `decode_observables`, the `ErrorDecoder` protocol), never on output length.
+- Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with `get_code_capacity_decoder` from [`codes/_code_capacity.py`](src/qldpc/codes/_code_capacity.py).
+  It always yields an observable decoder: on binary codes, specifications that predict observables natively build it from a DEM; otherwise inferred errors are projected onto logical predictions.
+- Keep `resolve_decoder` in `decoders/construction/_resolution.py` specific to error decoders.
+  Dispatch on explicit capabilities (`compile_decoder_for_dem`, `decode_observables`, the `ErrorDecoder` protocol), never on output length.
 - Only decoders that declare erasure support may append an erasure flag.
   They append that flag as the last entry of each inferred error; unsupported decoders must reject `add_erasure_bit=True`.
 - Detector-error-model decomposition indices and remaps must remain valid after cancellation and simplification.
   Test malformed components, not only happy-path Stim models.
-- Sliding-window time inference is heuristic.
-  Preserve the first nondecreasing detector coordinate convention, and use an explicit `detector_to_time` mapping when a model follows another layout.
+- Sliding-window decoders infer time from detector coordinates by a heuristic described in [`decoders/sinter/window.py`](src/qldpc/decoders/sinter/window.py).
+  Do not change that fallback; pass an explicit `detector_to_time` mapping for models with other layouts.
 
 ### Circuits
 
 - Circuit and tableau constructors are qubit-only and should use the existing `restrict_to_qubits` guard.
 - `get_encoding_circuit` constructs a valid encoder but is not fault-tolerant.
   Do not present it as a fault-tolerant state-preparation procedure.
-- Transversal-gate search enumerates automorphisms and can be exponential.
 - Keep data, check, reference, and ancilla roles explicit through `QubitIDs` and bookkeeping types.
   Do not infer roles from coincident integer indices.
 - qLDPC memory-circuit detectors use coordinates such as `(round, 0, check_index)`.
@@ -132,28 +132,27 @@ Plumbing lives in private modules, whose file names start with an underscore, be
 ### External systems and caching
 
 - GAP helpers may start subprocesses, read standard input, use the clipboard, access the network, or clone missing packages.
-  Keep these side effects explicit in docstrings and error messages.
-- Expensive reusable computations should use `qldpc.cache.use_disk_cache()`.
+  Keep these side effects explicit in the docstrings of the public entry points that can trigger them, and in error messages.
+- Expensive reusable computations should use `qldpc.cache.use_disk_cache(cache_name)`.
   Do not hide errors by returning a default value that looks successful.
 
-### Tests
+## Tests
 
+- Every module needs its own co-located `*_test.py`: the coverage gate requires each module to be fully covered by its own test file, and does not gate a module without one.
+  Reach a hard-to-reach branch with a focused test rather than a broad scenario.
 - Tests run with network sockets disabled.
   Mock only external boundaries such as web, subprocess, clipboard, prompt, and optional-package paths, or a module's own thin wrappers around them, never the logic under test, and do not add a live-service test.
 - Disk caches are bypassed while pytest is imported, so tests must not depend on cache persistence.
-- Statement coverage is gated at 100%.
-  Co-located `*_test.py` files are the strong convention, although a thin helper can be covered through its consumer's test module.
-  Reach a hard-to-reach branch with a focused test rather than a broad scenario.
-- Pytest turns every `DeprecationWarning` into an error, so tests must use the modern API.
-  Test deprecated paths as described in [Deprecations](#deprecations).
+- Pytest turns every `DeprecationWarning` into an error, so tests use the modern API and test deprecated paths with `pytest.warns(DeprecationWarning, ...)` (see [Deprecations](#deprecations)).
 - A test should guard behavior that matters: results, invariants, documented errors, and contracts between modules.
-  Do not pin implementation choices such as internal call order, private attributes, cache layouts, or incidental error-message wording.
-  Testing a private helper directly is fine when that is the simplest way to check its contract or reach coverage.
+  Do not pin implementation choices such as internal call order, cache layouts, or incidental error-message wording.
+  A test may call a private helper of the module that it tests to check the helper's contract or reach coverage, and may set private state of objects to construct a case, but should not assert on private state.
 - Keep each test minimal: use the smallest code, field, or circuit that exercises the behavior, do not parametrize over cases that take the same path, and delete tests implied by others.
 - Prefer independent oracles (rank, commutation, row-space identities, or brute force on small instances) over values that the code under test computed or cached.
   Checking a stored value against an independent expected value, such as one from the literature, is not tautological; deriving the expected value from the code under test is.
 - Keep tests that reproduce results from the literature, and cite the source in the test.
-- Seed or construct random inputs so that a test cannot fail by chance.
+- Tests run in random order with a per-run random seed (pytest-randomly), so they must not depend on order.
+  Seed random inputs from `pytestconfig.getoption("randomly_seed")` for reproducibility, and make sure that the assertions hold for every seed; otherwise use a fixed seed.
 - Check that a new or rewritten test fails when the behavior it guards is broken.
 
 ## Common change recipes
@@ -173,17 +172,8 @@ Plumbing lives in private modules, whose file names start with an underscore, be
 
 ### Add or adapt a decoder
 
-Follow the [adding a decoder guide](docs/source/adding_decoders.rst) for a custom-decoder example and a first-party backend checklist.
-
-1. Put integrations with third-party decoder packages under [`decoders/external/`](src/qldpc/decoders/external/), and qLDPC-owned implementations under [`decoders/custom/`](src/qldpc/decoders/custom/).
-2. Keep each immediate builder beside the implementation it constructs.
-   Add a typed specification under [`decoders/construction/`](src/qldpc/decoders/construction/) when exposing an algorithm.
-   Do not change generic resolution for an ordinary backend.
-   Export concrete backend classes at qualified `custom` or `external` paths, and export public specification helpers from [`decoders/__init__.py`](src/qldpc/decoders/__init__.py).
-   Derive each specification helper's signature from one typed builder or constructor, write its public docstring explicitly, and add it to the `autofunction` inventory in [`decoders.rst`](docs/source/decoders.rst).
-   Keep deprecated keyword translation isolated in `_deprecations/decoders.py`.
-3. Decide and test batch behavior, nonbinary support, detector-error-model support, and erasure signaling explicitly.
-4. Use direct syndrome/error reproductions in addition to factory-selection tests.
+Follow the [adding a decoder guide](docs/source/adding_decoders.rst).
+In addition, do not change generic resolution for an ordinary backend, and decide and test batch behavior, nonbinary support, detector-error-model support, and erasure signaling explicitly, with direct syndrome and error reproductions.
 
 ### Change a circuit workflow
 
@@ -205,21 +195,17 @@ Follow the [adding a decoder guide](docs/source/adding_decoders.rst) for a custo
 2. The notebooks under `docs/source/examples/` are links to the canonical files under `examples/`.
    Edit the canonical notebook, not the documentation-tree link.
 3. Keep README and the library map selective.
-   AutoAPI provides the complete list of public symbols.
 4. When a public limitation changes, update the relevant function or class docstring and every README or guide that repeats it in the same pull request.
-5. Keep one prose sentence per physical source line in `.rst`, `.md`, and Markdown notebook cells.
-   Put `First sentence.` and `Second sentence.` on separate source lines; leave code blocks, equations, and table syntax intact.
-   Python comments and docstrings instead use ordinary paragraphs: separate sentences with two spaces and fill lines to the 100-column limit.
-6. Run the strict documentation build before considering the change complete.
+5. Run the strict documentation build before considering the change complete.
 
 ## Deprecations
 
+Deprecated APIs remain supported, but the library and its documentation are written as if they do not exist.
 Keep deprecated code in one place, so that it is easy to find and to remove.
 
 - All deprecated code and APIs live under the private package [`qldpc/_deprecations/`](src/qldpc/_deprecations/).
-  [`core.py`](src/qldpc/_deprecations/core.py) holds the generic infrastructure: the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes.
+  [`core.py`](src/qldpc/_deprecations/core.py) holds the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes; its module docstring explains the mechanics.
   [`decoders.py`](src/qldpc/_deprecations/decoders.py) holds the deprecated decoder API and its translation into decoder specifications.
-  The module docstring of `core.py` explains how the registry serves names, modules, and old pickles without import cycles.
 - Only the following deprecation code lives outside `qldpc/_deprecations/`:
   1. Each module that still serves a deprecated name ends with this identical marked stub, which looks the name up in the registry:
 
@@ -230,57 +216,51 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
              return _deprecations.get_deprecated_attribute(__name__, name)
      ```
 
-  2. A package whose `__all__` must keep released names extends it with `__all__.extend(_deprecations.deprecated_names(__name__))`.
-  3. Deprecated arguments, modes, and calling conventions of functions that are not themselves deprecated are handled inline, as small blocks that call `_deprecations.warn_deprecated` or raise `_deprecations.defunct(...)`.
+  2. Deprecated arguments, modes, and calling conventions of functions that are not themselves deprecated are handled inline, as small blocks that call `_deprecations.warn_deprecated` or raise `_deprecations.defunct(...)`.
      Substantial translation logic, such as that for deprecated decoder keywords, belongs in `qldpc/_deprecations/`, and the inline block calls into it.
-  4. [`qldpc/__init__.py`](src/qldpc/__init__.py) calls `_deprecations.install_deprecated_methods()` once, after importing all subpackages.
-- Add a shim only for a name that was public in a released version, at its released path.
-  A name is public if a package `__all__` listed it, or if examples or docs used it.
+  3. [`qldpc/__init__.py`](src/qldpc/__init__.py) calls `_deprecations.install_deprecated_methods()` once, after importing all subpackages.
+- Add a shim only for a name that was public in a released version, at its released path: listed in a package `__all__`, or used in released examples or docs.
   Names added since the last release may change without a shim.
-- Register a renamed or moved name or submodule in `ALIASES`, which warns on access and names the replacement.
-  Use `SILENT_ALIASES` instead for deprecated functions that warn when called, and for moved objects that old pickles reference.
-  If the released `__all__` of a registered name's module did not list the name, also list it in `UNLISTED_NAMES`, so that `deprecated_names` leaves it out of `__all__`.
-- Type checkers must reject deprecated names.
-  Do not add `TYPE_CHECKING` aliases; the stub defines `__getattr__` only under `if not TYPE_CHECKING`.
-- Docstrings carry no deprecation notes.
-- Pytest turns every `DeprecationWarning` into an error, so test a deprecated path with `pytest.warns(DeprecationWarning, ...)`.
-  The data-driven tests in [`core_test.py`](src/qldpc/_deprecations/core_test.py) cover every registry entry and the attached methods, and [`decoders_test.py`](src/qldpc/_deprecations/decoders_test.py) covers the deprecated decoder API.
-  Tests of inline deprecations stay beside their modules and are named `test_deprecated_*`.
-- To remove deprecations, grep for `_deprecations` to find every stub, inline block, and `__all__` extension.
-  Delete the registry entries, attached methods, and inline blocks, the stubs of modules that no longer serve deprecated names, and the matching tests.
+- Register a renamed or moved name, or a moved submodule, in `ALIASES`, which warns on access.
+  The warning names the replacement if it is public, and otherwise says that the name will be removed from the public API.
+  Use `SILENT_ALIASES` instead for deprecated functions that warn when called.
+- No `__all__` lists a deprecated name, so star imports do not warn.
+  Type checkers must reject deprecated names, so do not add `TYPE_CHECKING` aliases; the stub defines `__getattr__` only under `if not TYPE_CHECKING`.
+- `.rst` pages and the README do not mention deprecated APIs.
+  Docstrings carry no deprecation notes, except one line in `Args` that calls out a deprecated option and what to use instead.
+- The data-driven tests in [`core_test.py`](src/qldpc/_deprecations/core_test.py) cover every registry entry and the attached methods, and [`decoders_test.py`](src/qldpc/_deprecations/decoders_test.py) covers the deprecated decoder API.
+  [`decoders/legacy_api_test.py`](src/qldpc/decoders/legacy_api_test.py) checks that the package-root names of tagged releases remain importable.
+  Tests of inline deprecations stay beside their modules; name new ones `test_deprecated_*`.
+- To remove deprecations, grep for `_deprecations` and, case-insensitively, for `deprecat`.
+  Delete the registry entries, attached methods, inline blocks, and `Args` notes, the stubs of modules that no longer serve deprecated names, and the matching tests.
 
 ## Validation commands
 
-Install the development environment:
-
-```bash
-python -m pip install -e '.[dev]'
-```
-
-Use the smallest targeted command while iterating, then the full gate before merging:
+Install the development environment with `python -m pip install -e '.[dev]'`.
+CI's exact environments and commands are in [`.github/workflows/`](.github/workflows/).
 
 | Command | Purpose |
 | --- | --- |
-| `python checks/all_.py` | Complete repository gate: formatting, lint, strict mypy, tests, 100% coverage, and docs |
-| `python checks/pytest_.py` | Full Python pytest suite; does not execute notebooks by default |
-| `python checks/pytest_.py src/qldpc/codes/` | Tests for one package |
-| `python checks/pytest_.py --notebook examples/decoders.ipynb examples/basics.ipynb examples/noise_models.ipynb` | Execute the three complete, CI-allowlisted notebooks with their dependencies installed |
-| `python -m pytest src/qldpc/codes/quantum_test.py::test_name -v` | One focused test |
-| `python checks/format_.py --check` | Verify Ruff and `pyproject.toml` formatting |
-| `python checks/format_.py` | Apply repository formatting |
+| `python checks/pytest_.py [paths]` | Pytest suite, or the tests under the given paths; does not execute notebooks by default |
+| `python -m pytest path/to/module_test.py::test_name -v` | One focused test |
+| `python checks/pytest_.py --notebook examples/decoders.ipynb examples/basics.ipynb examples/noise_models.ipynb` | Execute the notebooks that CI executes, with their dependencies installed |
+| `python checks/format_.py --check` / `--fix` | Check, or apply, Ruff and `pyproject.toml` formatting |
 | `python checks/lint_.py` | Ruff lint |
-| `python checks/mypy_.py` | Strict mypy over source and tests |
-| `python checks/coverage_.py` | Modular 100% statement-coverage gate |
+| `python checks/mypy_.py` | mypy with the repository's typing settings, over source and tests |
+| `python checks/coverage_.py` | 100% statement coverage of each module by its own test file, as in CI |
 | `python checks/build_docs.py` | Strict Sphinx and notebook documentation build |
+| `python checks/all_.py` | Combined gate: formatting, lint, mypy, tests with overall 100% coverage, and (on full runs) the docs build; it does not run the per-module coverage gate or `pyproject.toml` formatting |
 
 Run checks on what you changed while iterating, and save repository-wide runs for a finished change.
-Every check script accepts explicit files, as in `python checks/coverage_.py src/qldpc/codes/common.py`, or `-i/--incremental [REVISION]`, which checks only the files changed since `origin/main` or the given revision.
-For example, `python checks/coverage_.py -i` runs the modular coverage gate for changed modules only, which is much faster than the full gate.
+Every check script except `build_docs.py` accepts explicit files, as in `python checks/coverage_.py src/qldpc/codes/common.py`, or `-i/--incremental [REVISION ...]`.
+The incremental mode checks only the files changed since the merge base with `upstream/main`, `origin/main`, or `main` (the first that exists), or with the given revisions.
+For example, `python checks/coverage_.py -i` runs the per-module coverage gate for changed modules only, which is much faster than a full run.
+Before merging, run `python checks/all_.py` and `python checks/coverage_.py`.
 
 The docs build renders saved notebook outputs without executing code cells.
 Refresh outputs by executing the entire canonical notebook in an offline, editable installation before changing a notebook example.
 Pass an absolute path to this checkout's `src` directory in `PYTHONPATH` if a notebook runner starts its kernel from `examples/`.
-The TQEC notebook requires Python 3.11--3.13 because its pinned TQEC dependency does not support Python 3.14.
+The TQEC notebook (`examples/logical_error_rates/misc/decoding_tqec_circuits.ipynb`) requires Python 3.11--3.13 because its pinned TQEC dependency does not support Python 3.14.
 
 Some check wrappers discover files through Git.
 Add new source and test files to the index before relying on the full gate to include them.
