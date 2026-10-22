@@ -18,11 +18,11 @@ import numpy.typing as npt
 
 from . import _information_sets
 from ._binary import (
-    _as_binary_matrix,
-    _assert_binary,
-    _pack_bits,
-    _row_reduce_binary,
-    _symplectic_to_hamming,
+    as_binary_matrix,
+    assert_binary,
+    pack_bits,
+    row_reduce_binary,
+    symplectic_to_hamming,
 )
 
 ####################################################################################################
@@ -53,11 +53,11 @@ class BoundedKernelSearch:
     """
 
     def __init__(self, checks: npt.ArrayLike, max_weight: int, *, batch_size: int = 4096) -> None:
-        _assert_binary(checks, "checks")
-        matrix = _as_binary_matrix(checks)
+        assert_binary(checks, "checks")
+        matrix = as_binary_matrix(checks)
         if max_weight < 0 or batch_size < 1:
             raise ValueError("max_weight must be nonnegative and batch_size must be positive")
-        reduced, _, pivots = _row_reduce_binary(matrix)
+        reduced, _, pivots = row_reduce_binary(matrix)
         self.rank = len(pivots)
         self.length = matrix.shape[1]
         self.dimension = self.length - self.rank
@@ -73,14 +73,14 @@ class BoundedKernelSearch:
         self.ranks: tuple[int, ...]
         if self._systematic:
             self.ranks = (self.dimension,)
-            self._sets = [_pack_bits(pivot_parts)]
+            self._sets = [pack_bits(pivot_parts)]
         elif self.dimension:
             basis = np.zeros((self.dimension, self.length), dtype=np.uint8)
             basis[:, self._pivots] = pivot_parts
             basis[:, self._free] = np.eye(self.dimension, dtype=np.uint8)
-            information_sets = _information_sets._get_information_set_generators(basis, None)
+            information_sets = _information_sets.get_information_set_generators(basis, None)
             self.ranks = tuple(rank for _, _, rank, _ in information_sets)
-            self._sets = [_pack_bits(rows) for rows, _, _, _ in information_sets]
+            self._sets = [pack_bits(rows) for rows, _, _, _ in information_sets]
         else:
             self.ranks = ()
             self._sets = []
@@ -103,7 +103,7 @@ class BoundedKernelSearch:
                             ) | sum(1 << self._free[int(jj)] for jj in supports[index])
                         yield word
             self.coefficient_depth = depth
-            self.lower_bound = _information_sets._Certificate(
+            self.lower_bound = _information_sets.Certificate(
                 self.dimension, self.ranks
             ).lower_bound(depth)
             if self.lower_bound > self.max_weight:
@@ -166,14 +166,14 @@ class PauliCosetSearch:
         if metric not in ("pauli", "css"):
             raise ValueError("metric must be 'pauli' or 'css'")
         self.metric = metric
-        _assert_binary(stabilizers, "stabilizers")
-        matrix = _as_binary_matrix(stabilizers)
+        assert_binary(stabilizers, "stabilizers")
+        matrix = as_binary_matrix(stabilizers)
         self.num_qubits = len(matrix)
         n = self.num_qubits
         if not n or matrix.shape[1] != 2 * n:
             raise ValueError("Require a complete nonempty n by 2n stabilizer matrix")
         checks = np.roll(matrix, n, axis=1)
-        _, labels, pivots = _row_reduce_binary(checks, np.eye(n, dtype=np.uint8))
+        _, labels, pivots = row_reduce_binary(checks, np.eye(n, dtype=np.uint8))
         if len(pivots) != n or np.any((checks @ matrix.T) % 2):
             raise ValueError("Stabilizers must be independent and commute")
         if cache_size < 1 or batch_size < 1:
@@ -183,7 +183,7 @@ class PauliCosetSearch:
         inverse[:, pivots] = labels.T
         self._inverse = tuple(_binary_row_int(row) for row in inverse)
         self._checks = tuple(_binary_row_int(row) for row in checks)
-        self._embedded = _symplectic_to_hamming(matrix) if metric == "pauli" else matrix.copy()
+        self._embedded = symplectic_to_hamming(matrix) if metric == "pauli" else matrix.copy()
         mask = (1 << n) - 1
         self._sector_masks = tuple(
             np.array(
@@ -291,12 +291,12 @@ class PauliCosetSearch:
         """Pack embedded-stabilizer information sets at most once."""
         if self._bases:
             return
-        for generators, _, rank, pivots in _information_sets._get_information_set_generators(
+        for generators, _, rank, pivots in _information_sets.get_information_set_generators(
             self._embedded, None
         ):
             self._bases.append(
                 (
-                    _pack_bits(generators),
+                    pack_bits(generators),
                     tuple(_binary_row_int(row) for row in generators),
                     tuple(map(int, pivots)),
                 )
@@ -360,7 +360,7 @@ class PauliCosetSearch:
                         word = _packed_row_int(candidates[int(weights.argmin())])
                         best_pauli = word & ((1 << (2 * n)) - 1)
             self.coefficient_depth = max(self.coefficient_depth, depth)
-            unseen_hamming = _information_sets._Certificate(n, self.ranks).lower_bound(depth)
+            unseen_hamming = _information_sets.Certificate(n, self.ranks).lower_bound(depth)
             # Either metric is at least half of the embedded Hamming weight.
             unseen_lower = (unseen_hamming + 1) // 2
             if depth == n:
