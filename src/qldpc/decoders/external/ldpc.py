@@ -356,9 +356,6 @@ Returns:
 )
 
 
-####################################################################################################
-# private input helpers
-
 # Options that ldpc.BpLsdDecoder reads, other than those listed by _get_decoder_bp_lsd, including
 # osd_method and osd_order, which it accepts as aliases of lsd_method and lsd_order.  Unlike the
 # other ldpc decoders, BpLsdDecoder silently ignores unrecognized options.  This list cannot be read

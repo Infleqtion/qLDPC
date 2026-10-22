@@ -42,8 +42,9 @@ Plumbing that one subpackage uses is an underscore name in that subpackage, and 
   Where a name is used, such as in other modules or in notebooks, does not decide this.
 - Plain names defined in public modules (no underscore anywhere in the import path) are public API.
   Keep them working, and retire a released public name through a tested shim rather than breaking its import (see [Deprecations](#deprecations)).
-- [`src/qldpc/__init__.py`](src/qldpc/__init__.py) exports subpackages, and each subpackage's `__all__` lists its public names.
-  Keep `__all__` complete, and preserve public import paths when moving implementation code.
+- [`src/qldpc/__init__.py`](src/qldpc/__init__.py) exports subpackages, and each subpackage's `__all__` lists the public names that it re-exports.
+  Re-export only what typical users reach for, leave specialized public tools at their module path, give each public object one canonical public path, and put utilities that several packages share in a neutral top-level module such as `qldpc.math`.
+  Preserve public import paths when moving implementation code.
 - Module-level underscore names, and a class's underscore attributes and methods, may be used anywhere in their top-level subpackage, such as `qldpc.codes` or `qldpc.decoders`, but not outside it.
   Each top-level module, such as `qldpc.math`, is its own scope.
 - Private modules, with an underscore anywhere in their import path, exist only for plumbing shared across subpackages or for a substantial standalone topic.

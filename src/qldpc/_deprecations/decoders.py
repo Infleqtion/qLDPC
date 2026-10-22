@@ -194,6 +194,88 @@ def get_decoder_rbp(
     return cast("RelayBPDecoder", builder(pcm_or_dem, error_priors, **decoder_args))
 
 
+def _get_deprecated_function_message(
+    function_name: str,
+    pcm_or_dem: PcmOrDem,
+    decoder_args: Mapping[str, object],
+    *,
+    decodes_syndrome: bool = False,
+) -> str:
+    """Describe the replacement for deprecated get_decoder or decode."""
+    if (
+        decoder_args.get("predict_observable_flips")
+        and decoder_args.get("decoder_constructor") is None
+        and decoder_args.get("static_decoder") is None
+    ):
+        if isinstance(pcm_or_dem, stim.DetectorErrorModel):
+            replacement = "decoders.lookup(max_weight=...).build_observable_decoder(dem)"
+            if decodes_syndrome:
+                replacement += ".decode_observables(syndrome)"
+            return f"{function_name} is deprecated; use {replacement} instead"
+        return f"{function_name} is deprecated; {_MATRIX_OBSERVABLE_LOOKUP_ADVICE}"
+    if (decoder_constructor := decoder_args.get("decoder_constructor")) is not None:
+        other_args = ", ..." if len(decoder_args) > 1 else ""
+        replacement = f"{_get_constructor_name(decoder_constructor)}(pcm_or_dem{other_args})"
+    elif decoder_args.get("static_decoder") is not None:
+        replacement = "static_decoder"
+    elif decoder_args:
+        helper_name = _get_legacy_helper_name(pcm_or_dem, decoder_args)
+        replacement = f"decoders.{helper_name}(...).build(pcm_or_dem)"
+    else:
+        replacement = f"decoders.{_get_legacy_helper_name(pcm_or_dem, {})}().build(pcm_or_dem)"
+    if decodes_syndrome:
+        replacement += ".decode(syndrome)"
+    return f"{function_name} is deprecated; use {replacement} instead"
+
+
+def _get_observable_decoder_expression(decoder: DecoderInput) -> tuple[str | None, str]:
+    """Return an expression that builds the observable decoder for an input to a deprecated API.
+
+    The expression refers to the detector error model as ``dem``.  None indicates a prebuilt decoder
+    that predicts observable flips, and is therefore used as is.  The accompanying note, which may
+    be empty, qualifies the expression when it is unknown what kind of decoder a constructor builds.
+    """
+    if isinstance(decoder, DecoderSpec):
+        return f"{decoder!r}.build_observable_decoder(dem)", ""
+    if decoder is None:
+        return "decoders.bp_osd().build_observable_decoder(dem)", ""
+    if compiles_for_dem(decoder):
+        return "decoder.compile_decoder_for_dem(dem)", ""
+    if is_prebuilt_decoder(decoder):
+        if isinstance(decoder, ObservableDecoder) or is_prebuilt_observable_decoder(decoder):
+            return None, ""
+        return "decoders.ErrorsToObservablesDecoder(decoder, dem)", ""
+    if isinstance(decoder, DEMDecoderFactory):
+        return "decoder.build(dem)", ""
+    if isinstance(decoder, MatrixDecoderFactory):
+        return "a factory that accepts a detector error model", ""
+    if callable(decoder):
+        name = _get_callable_name(decoder)
+        error_decoder_expression = f"decoders.ErrorsToObservablesDecoder({name}(dem), dem)"
+        return f"{name}(dem)", f" (if it builds an error decoder, use {error_decoder_expression})"
+    return "a decoder specification such as decoders.mwpm(...).build_observable_decoder(dem)", ""
+
+
+def _get_callable_name(decoder: Callable[..., object]) -> str:
+    """Return the name of a decoder constructor for a migration message."""
+    return getattr(decoder, "__name__", "decoder_constructor")
+
+
+def _warn_deprecated_builder(function_name: str, helper_name: str) -> None:
+    """Warn that a deprecated builder is replaced by a decoder specification."""
+    _warn_deprecated_function(
+        f"decoders.{function_name}", f"decoders.{helper_name}(...).build(pcm_or_dem)"
+    )
+
+
+def _warn_deprecated_function(function_name: str, replacement: str) -> None:
+    """Warn that a deprecated decoder function has a replacement."""
+    _deprecations.warn_deprecated(
+        f"{function_name} is deprecated; use {replacement} instead",
+        stacklevel=get_external_caller_stacklevel(),
+    )
+
+
 ####################################################################################################
 # keyword-based decoder arguments
 
@@ -410,89 +492,3 @@ def deprecate_error_rate_option(
     options.pop("error_rate")
     options["error_channel"] = error_rate
     return options
-
-
-####################################################################################################
-# migration messages of deprecated functions
-
-
-def _get_deprecated_function_message(
-    function_name: str,
-    pcm_or_dem: PcmOrDem,
-    decoder_args: Mapping[str, object],
-    *,
-    decodes_syndrome: bool = False,
-) -> str:
-    """Describe the replacement for deprecated get_decoder or decode."""
-    if (
-        decoder_args.get("predict_observable_flips")
-        and decoder_args.get("decoder_constructor") is None
-        and decoder_args.get("static_decoder") is None
-    ):
-        if isinstance(pcm_or_dem, stim.DetectorErrorModel):
-            replacement = "decoders.lookup(max_weight=...).build_observable_decoder(dem)"
-            if decodes_syndrome:
-                replacement += ".decode_observables(syndrome)"
-            return f"{function_name} is deprecated; use {replacement} instead"
-        return f"{function_name} is deprecated; {_MATRIX_OBSERVABLE_LOOKUP_ADVICE}"
-    if (decoder_constructor := decoder_args.get("decoder_constructor")) is not None:
-        other_args = ", ..." if len(decoder_args) > 1 else ""
-        replacement = f"{_get_constructor_name(decoder_constructor)}(pcm_or_dem{other_args})"
-    elif decoder_args.get("static_decoder") is not None:
-        replacement = "static_decoder"
-    elif decoder_args:
-        helper_name = _get_legacy_helper_name(pcm_or_dem, decoder_args)
-        replacement = f"decoders.{helper_name}(...).build(pcm_or_dem)"
-    else:
-        replacement = f"decoders.{_get_legacy_helper_name(pcm_or_dem, {})}().build(pcm_or_dem)"
-    if decodes_syndrome:
-        replacement += ".decode(syndrome)"
-    return f"{function_name} is deprecated; use {replacement} instead"
-
-
-def _get_observable_decoder_expression(decoder: DecoderInput) -> tuple[str | None, str]:
-    """Return an expression that builds the observable decoder for an input to a deprecated API.
-
-    The expression refers to the detector error model as ``dem``.  None indicates a prebuilt decoder
-    that predicts observable flips, and is therefore used as is.  The accompanying note, which may
-    be empty, qualifies the expression when it is unknown what kind of decoder a constructor builds.
-    """
-    if isinstance(decoder, DecoderSpec):
-        return f"{decoder!r}.build_observable_decoder(dem)", ""
-    if decoder is None:
-        return "decoders.bp_osd().build_observable_decoder(dem)", ""
-    if compiles_for_dem(decoder):
-        return "decoder.compile_decoder_for_dem(dem)", ""
-    if is_prebuilt_decoder(decoder):
-        if isinstance(decoder, ObservableDecoder) or is_prebuilt_observable_decoder(decoder):
-            return None, ""
-        return "decoders.ErrorsToObservablesDecoder(decoder, dem)", ""
-    if isinstance(decoder, DEMDecoderFactory):
-        return "decoder.build(dem)", ""
-    if isinstance(decoder, MatrixDecoderFactory):
-        return "a factory that accepts a detector error model", ""
-    if callable(decoder):
-        name = _get_callable_name(decoder)
-        error_decoder_expression = f"decoders.ErrorsToObservablesDecoder({name}(dem), dem)"
-        return f"{name}(dem)", f" (if it builds an error decoder, use {error_decoder_expression})"
-    return "a decoder specification such as decoders.mwpm(...).build_observable_decoder(dem)", ""
-
-
-def _get_callable_name(decoder: Callable[..., object]) -> str:
-    """Return the name of a decoder constructor for a migration message."""
-    return getattr(decoder, "__name__", "decoder_constructor")
-
-
-def _warn_deprecated_builder(function_name: str, helper_name: str) -> None:
-    """Warn that a deprecated builder is replaced by a decoder specification."""
-    _warn_deprecated_function(
-        f"decoders.{function_name}", f"decoders.{helper_name}(...).build(pcm_or_dem)"
-    )
-
-
-def _warn_deprecated_function(function_name: str, replacement: str) -> None:
-    """Warn that a deprecated decoder function has a replacement."""
-    _deprecations.warn_deprecated(
-        f"{function_name} is deprecated; use {replacement} instead",
-        stacklevel=get_external_caller_stacklevel(),
-    )

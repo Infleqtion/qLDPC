@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for _deprecations.py."""
+"""Unit tests for core.py."""
 
 from __future__ import annotations
 

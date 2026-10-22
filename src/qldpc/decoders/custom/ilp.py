@@ -211,10 +211,6 @@ Returns:
 )
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_cvxpy() -> Any:
     """Import the optional cvxpy package or raise an actionable error."""
     try:

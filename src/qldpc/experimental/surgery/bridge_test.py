@@ -258,8 +258,8 @@ def test_adapter_cycle_check_weight_bounded() -> None:
 
     data = load_webster_seed_set(0)
     code = build_generalised_bicycle_code(data["l"], data["A"], data["B"])
-    # Use Z̄_1 for both sides (intra-code, same logical) — bridge.width =
-    # |V_0| = weight of Z̄_1, exercising the maximum-width cellulation path
+    # Use Z̄_1 for both sides (intra-code, same logical) — bridge.width = |V_0| = weight of Z̄_1,
+    # exercising the maximum-width cellulation path
     x = _webster_z_bar_operator(data, "Z_bar_1")
     g_l = build_gadget(code, x, basis=Pauli.Z)
     g_r = build_gadget(code, x, basis=Pauli.Z)

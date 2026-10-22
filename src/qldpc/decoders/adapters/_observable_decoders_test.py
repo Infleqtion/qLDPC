@@ -13,27 +13,6 @@ from qldpc import decoders
 from qldpc.decoders.adapters import _observable_decoders
 
 
-class _FixedErrorDecoder(decoders.ErrorDecoder):
-    def __init__(self, output: npt.ArrayLike, has_erasure_bit: bool = False) -> None:
-        self.output = np.asarray(output)
-        self.has_erasure_bit = has_erasure_bit
-
-    def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        return self.output
-
-
-class _BitPackedCompiledDecoder:
-    def __init__(self, packed_prediction: npt.NDArray[np.uint8]) -> None:
-        self.packed_prediction = packed_prediction
-        self.packed_syndromes: list[npt.NDArray[np.uint8]] = []
-
-    def decode_shots_bit_packed(
-        self, *, bit_packed_detection_event_data: npt.NDArray[np.uint8]
-    ) -> npt.NDArray[np.uint8]:
-        self.packed_syndromes.append(bit_packed_detection_event_data)
-        return self.packed_prediction
-
-
 def test_errors_to_field_observables_decoder() -> None:
     """An inferred field-valued error is projected onto the requested observables."""
     field = galois.GF(3)
@@ -100,3 +79,24 @@ def test_validate_decoder_output() -> None:
         _observable_decoders.validate_decoder_output(
             np.array([0, 2]), 1, 1, field, "A decoder returned"
         )
+
+
+class _FixedErrorDecoder(decoders.ErrorDecoder):
+    def __init__(self, output: npt.ArrayLike, has_erasure_bit: bool = False) -> None:
+        self.output = np.asarray(output)
+        self.has_erasure_bit = has_erasure_bit
+
+    def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        return self.output
+
+
+class _BitPackedCompiledDecoder:
+    def __init__(self, packed_prediction: npt.NDArray[np.uint8]) -> None:
+        self.packed_prediction = packed_prediction
+        self.packed_syndromes: list[npt.NDArray[np.uint8]] = []
+
+    def decode_shots_bit_packed(
+        self, *, bit_packed_detection_event_data: npt.NDArray[np.uint8]
+    ) -> npt.NDArray[np.uint8]:
+        self.packed_syndromes.append(bit_packed_detection_event_data)
+        return self.packed_prediction

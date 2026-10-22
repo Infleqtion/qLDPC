@@ -50,14 +50,6 @@ def test_get_classical_code() -> None:
         _codes.get_classical_code("")
 
 
-def test_get_gap_sparse_matrix_commands() -> None:
-    """Extension-field entries map to primitive-element powers, not integer multiples of One(F)."""
-    # over GF(4) the galois integers 1, 2, 3 are Z(4)^0, Z(4)^1, Z(4)^2 -- not 1, 2, 3 copies of One
-    commands = " ".join(_codes._get_gap_sparse_matrix_commands("m", 4, np.array([[0, 1, 2, 3]])))
-    assert "elements:=[Z(4)^0,Z(4)^1,Z(4)^2]" in commands
-    assert "v[i+1]:=elements[f]" in commands
-
-
 def get_mock_page(text: str) -> unittest.mock.MagicMock:
     """Fake webpage with the given text."""
     mock_page = unittest.mock.MagicMock()
@@ -141,3 +133,11 @@ def test_distance_bound() -> None:
             pytest.raises(ValueError, match="Could not parse a distance bound"),
         ):
             _codes.get_distance_bound(codes.FiveQubitCode())
+
+
+def test_get_gap_sparse_matrix_commands() -> None:
+    """Extension-field entries map to primitive-element powers, not integer multiples of One(F)."""
+    # over GF(4) the galois integers 1, 2, 3 are Z(4)^0, Z(4)^1, Z(4)^2 -- not 1, 2, 3 copies of One
+    commands = " ".join(_codes._get_gap_sparse_matrix_commands("m", 4, np.array([[0, 1, 2, 3]])))
+    assert "elements:=[Z(4)^0,Z(4)^1,Z(4)^2]" in commands
+    assert "v[i+1]:=elements[f]" in commands

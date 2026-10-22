@@ -94,15 +94,6 @@ def resolve_observable_decoder(
     return build_observable_decoder(dem, decoder=decoder)
 
 
-def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
-    """Raise if a decoder input is prebuilt and cannot be rebuilt for a new matrix."""
-    if is_prebuilt_decoder(decoder):
-        raise ValueError(
-            f"A prebuilt decoder cannot be passed as decoder= here because {reason}.  Pass a decoder"
-            " specification such as decoder=decoders.bp_osd(...), or a decoder constructor, instead"
-        )
-
-
 def build_error_decoder(pcm_or_dem: PcmOrDem, *, decoder: ErrorDecoderInput = None) -> ErrorDecoder:
     """Build or retrieve a decoder that maps a syndrome to an inferred error.
 
@@ -141,6 +132,16 @@ def build_observable_decoder(
     if isinstance(built_decoder, ObservableDecoder):
         return built_decoder
     return ErrorsToObservablesDecoder(_as_error_decoder(built_decoder, source), dem)
+
+
+def reject_prebuilt_decoder(decoder: object, reason: str) -> None:
+    """Raise if a decoder input is prebuilt and cannot be rebuilt for a new matrix."""
+    if is_prebuilt_decoder(decoder):
+        raise ValueError(
+            f"A prebuilt decoder cannot be passed as decoder= here because {reason}.  Pass a"
+            " decoder specification such as decoder=decoders.bp_osd(...), or a decoder"
+            " constructor, instead"
+        )
 
 
 def _build_decoder(pcm_or_dem: PcmOrDem, decoder: DecoderInput) -> tuple[object, str]:

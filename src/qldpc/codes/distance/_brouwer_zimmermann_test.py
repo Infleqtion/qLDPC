@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for exact-distance helpers in qldpc.codes.distance."""
+"""Unit tests for exact binary Brouwer-Zimmermann distance searches."""
 
 from __future__ import annotations
 
@@ -58,8 +58,8 @@ def test_brouwer_zimmermann_scan(interpreted: bool) -> None:
         scan = getattr(scan, "py_func", scan)
     rng = np.random.default_rng(120)
 
-    # The scan input uses full-rank, partial-rank, and rank-zero information sets.
-    # The last two information sets store labels only in their second packed word.
+    # The scan input uses full-rank, partial-rank, and rank-zero information sets.  The last two
+    # information sets store labels only in their second packed word.
     for dimension in range(1, 7):
         generators = rng.integers(0, 2**64, (3, dimension, 5), dtype=np.uint64)
         labels = np.zeros((3, dimension, 2), dtype=np.uint64)
@@ -124,8 +124,8 @@ def test_brouwer_zimmermann_search_state() -> None:
 
     The search state handles quotient labels, cutoffs, and lower-bound updates.
     """
-    # The input is one rank-zero information set with two basis rows.
-    # The two basis rows have Hamming weights 2 and 1, both outside the excluded subcode.
+    # The input is one rank-zero information set with two basis rows.  The two basis rows have
+    # Hamming weights 2 and 1, both outside the excluded subcode.
     search = bz._BrouwerZimmermannSearch(
         np.array([[[3], [2]]], dtype=np.uint64),
         np.ones((1, 2, 1), dtype=np.uint64),
@@ -361,7 +361,8 @@ def test_brouwer_zimmermann_sector_certificates() -> None:
 def test_brouwer_zimmermann_subsystem_code() -> None:
     """Information-set search treats the gauge operators of a subsystem code as trivial.
 
-    The 3x3 Bacon-Shor code is a [[9,1,3]] subsystem code; see https://arxiv.org/abs/quant-ph/0506023.
+    The 3x3 Bacon-Shor code is a [[9,1,3]] subsystem code; see
+    https://arxiv.org/abs/quant-ph/0506023.
     """
     code = qldpc.codes.QuditCode(qldpc.codes.BaconShorCode(3).matrix, is_subsystem_code=True)
     assert code.get_distance_exact() == 3

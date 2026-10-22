@@ -111,9 +111,9 @@ flattened is dropped.
 ``idle_error`` applies to every qubit that is not operated on during a circuit moment.  When
 ``idle_error`` is a Pauli channel, consecutive idle errors on the same qubit are combined into one
 equivalent error that is emitted before the qubit is next used.  Custom Stim noise fragments are
-applied once per idle moment.
-``additional_error_waiting_for_m_or_r`` applies additional noise to non-collapsing qubits during a
-moment that contains a measurement or reset; it is always applied once per such moment.
+applied once per idle moment.  ``additional_error_waiting_for_m_or_r`` applies additional noise to
+non-collapsing qubits during a moment that contains a measurement or reset; it is always applied
+once per such moment.
 
 Explicit identity gates (``I`` and ``II``) are treated as idle for this accounting.  ``rules`` can
 append errors after these gates, and ``rule_func`` can select errors based on an identity's tag or

@@ -15,20 +15,6 @@ from qldpc import decoders
 from qldpc.decoders.adapters import error_decoders
 
 
-class _FixedDecoder(decoders.ErrorDecoder):
-    def __init__(self, output: npt.ArrayLike, *, has_erasure_bit: bool = False) -> None:
-        self.output = np.asarray(output)
-        self.has_erasure_bit = has_erasure_bit
-
-    def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        return self.output.copy()
-
-
-class _DetailedFixedDecoder(_FixedDecoder):
-    def decode_errors_detailed(self, syndrome: npt.NDArray[np.int_]) -> decoders.ErrorDecodeResult:
-        return decoders.ErrorDecodeResult(self.output, bool(self.output[-1]), {"fixed": 1})
-
-
 def test_errors_to_observables_decoder() -> None:
     """Inferred errors are aligned with a DEM and projected onto its observables."""
     dem = stim.DetectorErrorModel("""
@@ -115,3 +101,17 @@ def test_match_error_decoder_to_dem() -> None:
     decomposed._infers_decomposed_errors = True  # type: ignore[attr-defined]
     with pytest.raises(ValueError, match="components of decomposed error mechanisms"):
         error_decoders._match_error_decoder_to_dem(decomposed, dem)
+
+
+class _FixedDecoder(decoders.ErrorDecoder):
+    def __init__(self, output: npt.ArrayLike, *, has_erasure_bit: bool = False) -> None:
+        self.output = np.asarray(output)
+        self.has_erasure_bit = has_erasure_bit
+
+    def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        return self.output.copy()
+
+
+class _DetailedFixedDecoder(_FixedDecoder):
+    def decode_errors_detailed(self, syndrome: npt.NDArray[np.int_]) -> decoders.ErrorDecodeResult:
+        return decoders.ErrorDecodeResult(self.output, bool(self.output[-1]), {"fixed": 1})

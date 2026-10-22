@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Typed decoder specifications for deferred construction."""
+"""Typed decoder specifications for deferred construction, and the decoder inputs they accept."""
 
 from __future__ import annotations
 
@@ -223,60 +223,6 @@ def observable_decoder_spec(
     return make_spec
 
 
-####################################################################################################
-# decoder inputs
-
-
-class ErrorDecoderConstructor(Protocol):
-    """Callable that builds an error decoder from a matrix or detector error model."""
-
-    def __call__(self, pcm_or_dem: PcmOrDem, /) -> ErrorDecoder | SupportsDecode:
-        """Build an error decoder."""
-
-
-class ObservableDecoderConstructor(Protocol):
-    """Callable that builds an observable decoder from a detector error model."""
-
-    def __call__(self, dem: stim.DetectorErrorModel, /) -> ObservableDecoder:
-        """Build an observable decoder."""
-
-
-class ObservableDecoderCompiler(Protocol):
-    """Object that compiles an observable decoder for a detector error model."""
-
-    def compile_decoder_for_dem(self, dem: stim.DetectorErrorModel) -> ObservableDecoder:
-        """Build an observable decoder specialized to one detector error model."""
-
-
-DeferredErrorDecoderInput: TypeAlias = (
-    DecoderSpec[ErrorDecoder] | ErrorDecoderConstructor | MatrixDecoderFactory | None
-)
-"""A deferred input for an error decoder; use a decoder specification for the model the
-receiving method constructs."""
-
-
-ErrorDecoderInput: TypeAlias = DeferredErrorDecoderInput | ErrorDecoder | SupportsDecode
-"""An input for a decoder that infers errors; configure it with a decoder specification."""
-
-
-DeferredDecoderInput: TypeAlias = (
-    DeferredErrorDecoderInput
-    | ObservableDecoderConstructor
-    | DEMDecoderFactory
-    | ObservableDecoderCompiler
-)
-"""A deferred input for error or observable decoding; configure it with a decoder specification
-for the receiving method's matrix or detector error model."""
-
-
-DecoderInput: TypeAlias = ErrorDecoderInput | DeferredDecoderInput | ObservableDecoder
-"""An input for error or observable decoding; use a decoder specification to select a backend."""
-
-
-####################################################################################################
-# private helpers
-
-
 def _set_helper_metadata(
     helper: Callable[..., object],
     helper_name: str,
@@ -385,3 +331,53 @@ def _is_default_value(value: object, default: object) -> bool:
         return True
     plain_types = (bool, int, float, str)
     return type(value) is type(default) and isinstance(value, plain_types) and value == default
+
+
+####################################################################################################
+# decoder inputs
+
+
+class ErrorDecoderConstructor(Protocol):
+    """Callable that builds an error decoder from a matrix or detector error model."""
+
+    def __call__(self, pcm_or_dem: PcmOrDem, /) -> ErrorDecoder | SupportsDecode:
+        """Build an error decoder."""
+
+
+class ObservableDecoderConstructor(Protocol):
+    """Callable that builds an observable decoder from a detector error model."""
+
+    def __call__(self, dem: stim.DetectorErrorModel, /) -> ObservableDecoder:
+        """Build an observable decoder."""
+
+
+class ObservableDecoderCompiler(Protocol):
+    """Object that compiles an observable decoder for a detector error model."""
+
+    def compile_decoder_for_dem(self, dem: stim.DetectorErrorModel) -> ObservableDecoder:
+        """Build an observable decoder specialized to one detector error model."""
+
+
+DeferredErrorDecoderInput: TypeAlias = (
+    DecoderSpec[ErrorDecoder] | ErrorDecoderConstructor | MatrixDecoderFactory | None
+)
+"""A deferred input for an error decoder; use a decoder specification for the model the
+receiving method constructs."""
+
+
+ErrorDecoderInput: TypeAlias = DeferredErrorDecoderInput | ErrorDecoder | SupportsDecode
+"""An input for a decoder that infers errors; configure it with a decoder specification."""
+
+
+DeferredDecoderInput: TypeAlias = (
+    DeferredErrorDecoderInput
+    | ObservableDecoderConstructor
+    | DEMDecoderFactory
+    | ObservableDecoderCompiler
+)
+"""A deferred input for error or observable decoding; configure it with a decoder specification
+for the receiving method's matrix or detector error model."""
+
+
+DecoderInput: TypeAlias = ErrorDecoderInput | DeferredDecoderInput | ObservableDecoder
+"""An input for error or observable decoding; use a decoder specification to select a backend."""

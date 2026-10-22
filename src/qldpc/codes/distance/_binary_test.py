@@ -19,6 +19,9 @@ import qldpc
 from . import _binary as binary
 from .conftest import count_set_bits
 
+####################################################################################################
+# binary matrices, weights, and array helpers
+
 
 def test_binary_matrices_and_nested_bases() -> None:
     """Check matrix conversion and basis ownership independently of distance dispatch."""

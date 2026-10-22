@@ -20,6 +20,26 @@ _CallableType = TypeVar("_CallableType", bound=Callable[..., object])
 # lazy imports
 
 
+def _lazy_import(name: str) -> ModuleType:
+    """Import a module lazily, deferring its execution until its first attribute access.
+
+    Uses importlib.util.LazyLoader so a heavy but rarely-used dependency stays out of ``import
+    qldpc`` while call sites keep using ``module.attr`` exactly as if it had been imported eagerly.
+    """
+    if (module := sys.modules.get(name)) is not None:
+        return module
+    spec = importlib.util.find_spec(name)
+    if spec is None or spec.loader is None:
+        raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+    loader = _LoaderWithCleanup(spec.loader)
+    spec.loader = importlib.util.LazyLoader(loader)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    loader.lazy_module_class = type(module)
+    return module
+
+
 class _LoaderWithCleanup(importlib.abc.Loader):
     """Loader proxy that restores lazy modules after failed execution."""
 
@@ -50,26 +70,6 @@ class _LoaderWithCleanup(importlib.abc.Loader):
             if sys.modules.get(spec.name) is module:
                 del sys.modules[spec.name]
             raise
-
-
-def _lazy_import(name: str) -> ModuleType:
-    """Import a module lazily, deferring its execution until its first attribute access.
-
-    Uses importlib.util.LazyLoader so a heavy but rarely-used dependency stays out of ``import
-    qldpc`` while call sites keep using ``module.attr`` exactly as if it had been imported eagerly.
-    """
-    if (module := sys.modules.get(name)) is not None:
-        return module
-    spec = importlib.util.find_spec(name)
-    if spec is None or spec.loader is None:
-        raise ModuleNotFoundError(f"No module named {name!r}", name=name)
-    loader = _LoaderWithCleanup(spec.loader)
-    spec.loader = importlib.util.LazyLoader(loader)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[name] = module
-    spec.loader.exec_module(module)
-    loader.lazy_module_class = type(module)
-    return module
 
 
 # networkx is loaded lazily to keep it and its ~110 ms import out of ``import qldpc``.  Call sites

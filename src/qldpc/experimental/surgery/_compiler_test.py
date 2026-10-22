@@ -284,7 +284,10 @@ def test_compiler_rejects_invalid_pair_requests() -> None:
     with pytest.raises(ValueError, match="requires exactly 2 factors"):
         _compile_interblock_pair_measurement(
             blocks,
-            _PauliPairMeasurement("parity", (_pair_request().factors[0],)),  # type: ignore[arg-type]
+            _PauliPairMeasurement(
+                "parity",
+                (_pair_request().factors[0],),  # type: ignore[arg-type]
+            ),
             rounds=1,
         )
     with pytest.raises(TypeError, match="must be _LogicalPauliRef"):

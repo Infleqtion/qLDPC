@@ -935,6 +935,13 @@ class ClassicalCode(AbstractCode):
         return num_failures, num_discards
 
 
+def _get_sorted_unique_bits(bits: Collection[int], num_bits: int) -> list[int]:
+    """Sort and deduplicate bit indices, rejecting any outside of range(num_bits)."""
+    if invalid := sorted({bit for bit in bits if not 0 <= bit < num_bits}):
+        raise ValueError(f"Bit indices must lie in range({num_bits}); invalid indices: {invalid}")
+    return sorted(set(bits))
+
+
 ####################################################################################################
 # quantum codes
 
@@ -1725,14 +1732,6 @@ class QuditCode(AbstractCode):
             np.vstack([new_logicals_x, logicals_ops_z]), skip_validation=skip_validation
         )
 
-    def _validate_logical_ops_shape(self, logical_ops: galois.FieldArray) -> None:
-        """Require a 2D matrix with one row per logical qudit."""
-        if logical_ops.ndim != 2 or len(logical_ops) != self.dimension:
-            raise ValueError(
-                f"Expected {self.dimension} logical operators, got an array of shape "
-                f"{logical_ops.shape}"
-            )
-
     def get_stabilizer_ops(
         self,
         pauli: PauliXZLike | None = None,
@@ -2267,73 +2266,6 @@ class QuditCode(AbstractCode):
             code._logical_ops = inner.get_logical_ops() @ outer.get_logical_ops()
         return code
 
-    @staticmethod
-    def _standardize_concatenation_inputs(
-        outer: QuditCode,
-        inner: QuditCode,
-        inner_physical_to_outer_logical: Mapping[int, int] | Sequence[int] | None,
-    ) -> tuple[QuditCode, QuditCode]:
-        """Helper function for code concatenation.
-
-        This method...
-        - stacks copies of the outer and inner codes as necessary to make the number of logical
-          qudits of the outer code equal to the number of physical qudits of the inner code, and
-        - permutes logical qudits of the outer code according to inner_physical_to_outer_logical.
-          If no inner_physical_to_outer_logical mapping is provided, then this method "interleaves"
-          intermediate qubits, using each logical qubit of an outer block as a physical qubit of a
-          different inner code block.
-        """
-        if outer.field is not inner.field:
-            raise ValueError("Cannot concatenate codes over different fields")
-
-        # convert inner_physical_to_outer_logical into a tuple that we can use to permute an array
-        if inner_physical_to_outer_logical is None:
-            inner_physical_to_outer_logical = tuple(
-                np.arange(len(inner) * outer.dimension, dtype=int)
-                .reshape(len(inner), outer.dimension)
-                .T.ravel()
-            )
-        else:
-            num_qudits = len(inner_physical_to_outer_logical)
-            if num_qudits % outer.dimension or num_qudits % len(inner):
-                raise ValueError(
-                    "Code concatenation requires the number of qudits mapped by"
-                    f" inner_physical_to_outer_logical ({num_qudits}) to be divisible by the number"
-                    f" of logical qudits of the outer code ({outer.dimension}) and the number of"
-                    f" physical qudits of the inner code ({len(inner)})"
-                )
-            try:
-                inner_physical_to_outer_logical = tuple(
-                    operator.index(inner_physical_to_outer_logical[qq]) for qq in range(num_qudits)
-                )
-            except (KeyError, TypeError) as error:
-                raise ValueError(
-                    "Code concatenation requires inner_physical_to_outer_logical to map every"
-                    " intermediate qudit with an integer index"
-                ) from error
-            if sorted(inner_physical_to_outer_logical) != list(range(num_qudits)):
-                raise ValueError(
-                    "Code concatenation requires inner_physical_to_outer_logical to be a"
-                    f" permutation of the intermediate qudit indices 0 through {num_qudits - 1}"
-                )
-
-        # stack copies of the outer and inner codes, if necessary
-        if (num_outer_blocks := len(inner_physical_to_outer_logical) // outer.dimension) > 1:
-            outer = outer.stack([outer] * num_outer_blocks)
-        if (num_inner_blocks := len(inner_physical_to_outer_logical) // len(inner)) > 1:
-            inner = inner.stack([inner] * num_inner_blocks)
-
-        # permute logical operators of the outer code, working on a copy so that the caller's code
-        # object is left unmodified
-        outer = copy.copy(outer)
-        outer._logical_ops = (
-            outer.get_logical_ops()
-            .reshape(2, outer.dimension, -1)[:, inner_physical_to_outer_logical, :]
-            .reshape(2 * outer.dimension, -1)
-        ).view(outer.field)
-
-        return outer, inner
-
     def get_logical_error_rate_func(
         self,
         num_samples: int,
@@ -2431,6 +2363,81 @@ class QuditCode(AbstractCode):
             max_error_rate,
             min_error_weight,
         )
+
+    def _validate_logical_ops_shape(self, logical_ops: galois.FieldArray) -> None:
+        """Require a 2D matrix with one row per logical qudit."""
+        if logical_ops.ndim != 2 or len(logical_ops) != self.dimension:
+            raise ValueError(
+                f"Expected {self.dimension} logical operators, got an array of shape "
+                f"{logical_ops.shape}"
+            )
+
+    @staticmethod
+    def _standardize_concatenation_inputs(
+        outer: QuditCode,
+        inner: QuditCode,
+        inner_physical_to_outer_logical: Mapping[int, int] | Sequence[int] | None,
+    ) -> tuple[QuditCode, QuditCode]:
+        """Helper function for code concatenation.
+
+        This method...
+        - stacks copies of the outer and inner codes as necessary to make the number of logical
+          qudits of the outer code equal to the number of physical qudits of the inner code, and
+        - permutes logical qudits of the outer code according to inner_physical_to_outer_logical.
+          If no inner_physical_to_outer_logical mapping is provided, then this method "interleaves"
+          intermediate qubits, using each logical qubit of an outer block as a physical qubit of a
+          different inner code block.
+        """
+        if outer.field is not inner.field:
+            raise ValueError("Cannot concatenate codes over different fields")
+
+        # convert inner_physical_to_outer_logical into a tuple that we can use to permute an array
+        if inner_physical_to_outer_logical is None:
+            inner_physical_to_outer_logical = tuple(
+                np.arange(len(inner) * outer.dimension, dtype=int)
+                .reshape(len(inner), outer.dimension)
+                .T.ravel()
+            )
+        else:
+            num_qudits = len(inner_physical_to_outer_logical)
+            if num_qudits % outer.dimension or num_qudits % len(inner):
+                raise ValueError(
+                    "Code concatenation requires the number of qudits mapped by"
+                    f" inner_physical_to_outer_logical ({num_qudits}) to be divisible by the number"
+                    f" of logical qudits of the outer code ({outer.dimension}) and the number of"
+                    f" physical qudits of the inner code ({len(inner)})"
+                )
+            try:
+                inner_physical_to_outer_logical = tuple(
+                    operator.index(inner_physical_to_outer_logical[qq]) for qq in range(num_qudits)
+                )
+            except (KeyError, TypeError) as error:
+                raise ValueError(
+                    "Code concatenation requires inner_physical_to_outer_logical to map every"
+                    " intermediate qudit with an integer index"
+                ) from error
+            if sorted(inner_physical_to_outer_logical) != list(range(num_qudits)):
+                raise ValueError(
+                    "Code concatenation requires inner_physical_to_outer_logical to be a"
+                    f" permutation of the intermediate qudit indices 0 through {num_qudits - 1}"
+                )
+
+        # stack copies of the outer and inner codes, if necessary
+        if (num_outer_blocks := len(inner_physical_to_outer_logical) // outer.dimension) > 1:
+            outer = outer.stack([outer] * num_outer_blocks)
+        if (num_inner_blocks := len(inner_physical_to_outer_logical) // len(inner)) > 1:
+            inner = inner.stack([inner] * num_inner_blocks)
+
+        # permute logical operators of the outer code, working on a copy so that the caller's code
+        # object is left unmodified
+        outer = copy.copy(outer)
+        outer._logical_ops = (
+            outer.get_logical_ops()
+            .reshape(2, outer.dimension, -1)[:, inner_physical_to_outer_logical, :]
+            .reshape(2 * outer.dimension, -1)
+        ).view(outer.field)
+
+        return outer, inner
 
     def _sample_failure_and_discard_counts(
         self,
@@ -3642,37 +3649,6 @@ class CSSCode(QuditCode):
         self._distance_bound_x = self._distance_bound_z = self._distance_bound = None
         return self
 
-    def _get_distance_exact(self, pauli: PauliXZ | None) -> int | float:
-        """Method for subclasses to compute specialized exact distance calculations."""
-        return NotImplemented
-
-    def _get_distance_bound_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
-        """Retrieve the best known upper bound on (X-, Z-, or ordinary) distance, or ``None``."""
-        if pauli is Pauli.X:
-            candidates = [self._distance_x, self._distance_bound_x]
-        elif pauli is Pauli.Z:
-            candidates = [self._distance_z, self._distance_bound_z]
-        else:
-            candidates = [
-                self._distance,
-                self._distance_bound,
-                self._distance_x,
-                self._distance_z,
-                self._distance_bound_x,
-                self._distance_bound_z,
-            ]
-        return min((bound for bound in candidates if bound is not None), default=None)
-
-    def _update_distance_bound(self, bound: float, pauli: PauliXZ) -> float:
-        """Remember an upper bound on the X-distance or Z-distance, and return the best bound."""
-        known_bound = self._get_distance_bound_if_known(None if self._equal_distance_xz else pauli)
-        bound = bound if known_bound is None else min(bound, known_bound)
-        if pauli is Pauli.X or self._equal_distance_xz:
-            self._distance_bound_x = bound
-        if pauli is Pauli.Z or self._equal_distance_xz:
-            self._distance_bound_z = bound
-        return bound
-
     def reduce_logical_op(
         self,
         pauli: PauliXZLike,
@@ -4021,6 +3997,37 @@ class CSSCode(QuditCode):
             min_error_weight,
         )
 
+    def _get_distance_exact(self, pauli: PauliXZ | None) -> int | float:
+        """Method for subclasses to compute specialized exact distance calculations."""
+        return NotImplemented
+
+    def _get_distance_bound_if_known(self, pauli: PauliXZ | None = None) -> int | float | None:
+        """Retrieve the best known upper bound on (X-, Z-, or ordinary) distance, or ``None``."""
+        if pauli is Pauli.X:
+            candidates = [self._distance_x, self._distance_bound_x]
+        elif pauli is Pauli.Z:
+            candidates = [self._distance_z, self._distance_bound_z]
+        else:
+            candidates = [
+                self._distance,
+                self._distance_bound,
+                self._distance_x,
+                self._distance_z,
+                self._distance_bound_x,
+                self._distance_bound_z,
+            ]
+        return min((bound for bound in candidates if bound is not None), default=None)
+
+    def _update_distance_bound(self, bound: float, pauli: PauliXZ) -> float:
+        """Remember an upper bound on the X-distance or Z-distance, and return the best bound."""
+        known_bound = self._get_distance_bound_if_known(None if self._equal_distance_xz else pauli)
+        bound = bound if known_bound is None else min(bound, known_bound)
+        if pauli is Pauli.X or self._equal_distance_xz:
+            self._distance_bound_x = bound
+        if pauli is Pauli.Z or self._equal_distance_xz:
+            self._distance_bound_z = bound
+        return bound
+
     def _sample_css_failure_and_discard_counts(
         self,
         error_weight: int,
@@ -4077,54 +4084,6 @@ class CSSCode(QuditCode):
                 num_failures += 1
 
         return num_failures, num_discards
-
-
-####################################################################################################
-# helper methods
-
-
-def _get_random_array(
-    field: type[galois.FieldArray],
-    shape: int | tuple[int, ...],
-    *,
-    satisfy: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
-    seed: int | None = None,
-) -> galois.FieldArray:
-    """Get a random array over a given finite field with a given shape.
-
-    If passed a condition that the array must satisfy, re-sample until the condition is met.
-    """
-    seed = _get_scrambled_seed(seed) if seed is not None else None
-    while not satisfy(array := field.Random(shape, seed=seed)):
-        seed = seed + 1 if seed is not None else None  # pragma: no cover
-    return array
-
-
-def _decode_consistently(
-    decoder: decoders.ErrorDecoder,
-    check_matrix: npt.NDArray[np.int_],
-    get_syndrome: Callable[[], npt.NDArray[np.int_]],
-    field: type[galois.FieldArray],
-) -> galois.FieldArray:
-    """Decode syndromes until the decoder infers an error that reproduces its syndrome.
-
-    Each attempt decodes a new syndrome from get_syndrome, which may be randomized.  An attempt
-    fails if the decoder signals erasure, or infers an error that does not reproduce its syndrome.
-
-    Raises:
-        ValueError: If the decoder fails _MAX_DECODING_ATTEMPTS times in a row.
-    """
-    check_matrix = np.asanyarray(check_matrix).view(field)
-    for _ in range(_MAX_DECODING_ATTEMPTS):
-        syndrome = np.asanyarray(get_syndrome()).view(field)
-        error, erased = decoders.get_error_and_erasure(decoder, syndrome)
-        if not erased and np.array_equal(check_matrix @ error.view(field), syndrome):
-            return error.view(field)
-    raise ValueError(
-        "The decoder failed to infer an error that reproduces its syndrome in"
-        f" {_MAX_DECODING_ATTEMPTS} attempts.  Try a more thorough decoder, such as"
-        " decoder=decoders.bp_osd(osd_method='OSD_CS', osd_order=5)"
-    )
 
 
 def _join_slices(*sectors: Slice) -> npt.NDArray[np.int_]:
@@ -4187,6 +4146,60 @@ def _resolve_distance_backend(
     return "decoder"
 
 
+def _require_symplectic(symplectic: bool) -> None:
+    """Reject non-symplectic operator layouts, which only CSS codes support."""
+    if not symplectic:
+        raise ValueError("Non-CSS codes only support symplectic=True; use a CSSCode instead")
+
+
+####################################################################################################
+# helper methods
+
+
+def _get_random_array(
+    field: type[galois.FieldArray],
+    shape: int | tuple[int, ...],
+    *,
+    satisfy: Callable[[galois.FieldArray], bool | np.bool_] = lambda _: True,
+    seed: int | None = None,
+) -> galois.FieldArray:
+    """Get a random array over a given finite field with a given shape.
+
+    If passed a condition that the array must satisfy, re-sample until the condition is met.
+    """
+    seed = _get_scrambled_seed(seed) if seed is not None else None
+    while not satisfy(array := field.Random(shape, seed=seed)):
+        seed = seed + 1 if seed is not None else None  # pragma: no cover
+    return array
+
+
+def _decode_consistently(
+    decoder: decoders.ErrorDecoder,
+    check_matrix: npt.NDArray[np.int_],
+    get_syndrome: Callable[[], npt.NDArray[np.int_]],
+    field: type[galois.FieldArray],
+) -> galois.FieldArray:
+    """Decode syndromes until the decoder infers an error that reproduces its syndrome.
+
+    Each attempt decodes a new syndrome from get_syndrome, which may be randomized.  An attempt
+    fails if the decoder signals erasure, or infers an error that does not reproduce its syndrome.
+
+    Raises:
+        ValueError: If the decoder fails _MAX_DECODING_ATTEMPTS times in a row.
+    """
+    check_matrix = np.asanyarray(check_matrix).view(field)
+    for _ in range(_MAX_DECODING_ATTEMPTS):
+        syndrome = np.asanyarray(get_syndrome()).view(field)
+        error, erased = decoders.get_error_and_erasure(decoder, syndrome)
+        if not erased and np.array_equal(check_matrix @ error.view(field), syndrome):
+            return error.view(field)
+    raise ValueError(
+        "The decoder failed to infer an error that reproduces its syndrome in"
+        f" {_MAX_DECODING_ATTEMPTS} attempts.  Try a more thorough decoder, such as"
+        " decoder=decoders.bp_osd(osd_method='OSD_CS', osd_order=5)"
+    )
+
+
 def _validate_num_trials(num_trials: object) -> None:
     """Reject a non-integer number of trials, such as a Pauli sector passed positionally."""
     if num_trials is not None and not isinstance(num_trials, numbers.Integral):
@@ -4194,19 +4207,6 @@ def _validate_num_trials(num_trials: object) -> None:
             f"num_trials must be an integer or None, not {num_trials!r}; to bound the distance of"
             " a single Pauli sector, pass it by keyword as pauli=..."
         )
-
-
-def _get_sorted_unique_bits(bits: Collection[int], num_bits: int) -> list[int]:
-    """Sort and deduplicate bit indices, rejecting any outside of range(num_bits)."""
-    if invalid := sorted({bit for bit in bits if not 0 <= bit < num_bits}):
-        raise ValueError(f"Bit indices must lie in range({num_bits}); invalid indices: {invalid}")
-    return sorted(set(bits))
-
-
-def _require_symplectic(symplectic: bool) -> None:
-    """Reject non-symplectic operator layouts, which only CSS codes support."""
-    if not symplectic:
-        raise ValueError("Non-CSS codes only support symplectic=True; use a CSSCode instead")
 
 
 def _get_scrambled_seed(seed: int) -> int:

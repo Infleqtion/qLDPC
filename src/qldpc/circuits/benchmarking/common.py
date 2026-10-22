@@ -220,10 +220,6 @@ def get_logical_error_and_discard_rate(
     return logical_error_rate, discard_rate
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_postselection_masks(
     post_select: bool | Collection[int],
     post_select_observables: Collection[int],

@@ -145,8 +145,8 @@ def _count_light_dual_words(
 ) -> list[int]:
     """The numbers of words of weights ``0, 1, ...`` orthogonal to a span, in 64-bit arithmetic.
 
-    Since ``|K_w(j)| <= C(n, w)`` and the weight distribution ``A`` of the span sums to
-    ``2**rank``, no product ``K_w(j) A(j)`` and no partial sum of ``sum_j K_w(j) A(j)`` exceeds
+    Since ``|K_w(j)| <= C(n, w)`` and the weight distribution ``A`` of the span sums to ``2**rank``,
+    no product ``K_w(j) A(j)`` and no partial sum of ``sum_j K_w(j) A(j)`` exceeds
     ``2**rank * C(n, w)`` in magnitude.  Signed 64-bit arithmetic is therefore exact at the weights
     ``w`` below the first one at which this bound reaches ``2**63``, and the counts stop there.  At
     those weights, every Krawtchouk value is at most ``C(n, w) < 2**63`` in magnitude, and the rank

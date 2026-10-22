@@ -214,7 +214,10 @@ def test_deprecated_builders() -> None:
         (deprecated_decoders.get_decoder_mwpm, "decoders.mwpm(...).build(pcm_or_dem)", {}),
         (
             deprecated_decoders.get_decoder_rbp,
-            "decoders.relay_bp(...).build(pcm_or_dem) or decoders.min_sum_bp(...).build(pcm_or_dem)",
+            (
+                "decoders.relay_bp(...).build(pcm_or_dem)"
+                " or decoders.min_sum_bp(...).build(pcm_or_dem)"
+            ),
             {},
         ),
     ]

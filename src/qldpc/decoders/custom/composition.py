@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Decoder composition helpers."""
+"""Decoders built from other decoders: block-wise composite decoders and direct decoders."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ class CompositeDecoder(ErrorDecoder):
 
     A CompositeDecoder is instantiated from a sequence of tuples, where each tuple contains
 
-    (a) the decoder for a one code block
+    (a) the decoder for one code block
     (b) the length of a syndrome vector for that code block.
 
     When asked to decode a syndrome, a CompositeDecoder splits the syndrome into segments of

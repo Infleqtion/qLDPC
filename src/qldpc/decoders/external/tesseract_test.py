@@ -26,57 +26,6 @@ from qldpc.decoders.external.tesseract import _get_decoder_tesseract
 from qldpc.decoders.protocols import _batch_decode_errors, _supports_batch_decoding
 
 
-class _FakeTesseractConfig:
-    """API-faithful stand-in for upstream TesseractConfig."""
-
-    dem: stim.DetectorErrorModel
-    merge_errors: bool
-    pqlimit: int
-
-    def __init__(self, **kwargs: object) -> None:
-        self.__dict__.update(kwargs)
-
-    def compile_decoder(self) -> _FakeTesseractDecoder:
-        return _FakeTesseractDecoder(self)
-
-
-class _FakeTesseractDecoder:
-    """Small exact decoder with Tesseract's Python method names and result state."""
-
-    def __init__(self, config: _FakeTesseractConfig) -> None:
-        self.config = config
-        self.dem_arrays = decoders.DetectorErrorModelArrays(config.dem, simplify=False)
-        self.lookup = decoders.custom.LookupDecoder(config.dem, max_weight=config.dem.num_errors)
-        self.low_confidence_flag = False
-        self.predicted_errors_buffer: list[int] = []
-
-    def decode_to_errors(self, syndrome: npt.NDArray[np.bool_]) -> list[int]:
-        syndrome = np.asarray(syndrome, dtype=np.uint8)
-        self.predicted_errors_buffer = []
-        self.low_confidence_flag = False
-        if not np.any(syndrome):
-            return self.predicted_errors_buffer
-        if self.config.pqlimit == 0:
-            self.low_confidence_flag = True
-            return self.predicted_errors_buffer
-
-        error = np.asarray(self.lookup.decode(syndrome.astype(int)), dtype=np.uint8)
-        self.predicted_errors_buffer = np.flatnonzero(error).tolist()
-        reproduced = np.asarray(self.dem_arrays.detector_flip_matrix @ error).ravel() % 2
-        self.low_confidence_flag = not np.array_equal(reproduced, syndrome)
-        return self.predicted_errors_buffer
-
-    def decode(self, syndrome: npt.NDArray[np.bool_]) -> npt.NDArray[np.bool_]:
-        indices = self.decode_to_errors(syndrome)
-        error = np.zeros(self.dem_arrays.num_errors, dtype=np.uint8)
-        np.bitwise_xor.at(error, indices, 1)
-        flips = np.asarray(self.dem_arrays.observable_flip_matrix @ error).ravel() % 2
-        return flips.astype(bool)
-
-    def decode_batch(self, syndromes: npt.NDArray[np.bool_]) -> npt.NDArray[np.bool_]:
-        return np.asarray([self.decode(syndrome) for syndrome in syndromes], dtype=bool)
-
-
 @pytest.fixture
 def fake_tesseract(monkeypatch: pytest.MonkeyPatch) -> None:
     """Install a controlled stand-in for the optional upstream package."""
@@ -401,3 +350,54 @@ def test_tesseract_missing_dependency_error(monkeypatch: pytest.MonkeyPatch) -> 
     monkeypatch.setattr(builtins, "__import__", import_tesseract)
     with pytest.raises(ModuleNotFoundError, match="nested_dependency"):
         importlib.import_module("qldpc.decoders.external.tesseract")._get_tesseract()
+
+
+class _FakeTesseractConfig:
+    """API-faithful stand-in for upstream TesseractConfig."""
+
+    dem: stim.DetectorErrorModel
+    merge_errors: bool
+    pqlimit: int
+
+    def __init__(self, **kwargs: object) -> None:
+        self.__dict__.update(kwargs)
+
+    def compile_decoder(self) -> _FakeTesseractDecoder:
+        return _FakeTesseractDecoder(self)
+
+
+class _FakeTesseractDecoder:
+    """Small exact decoder with Tesseract's Python method names and result state."""
+
+    def __init__(self, config: _FakeTesseractConfig) -> None:
+        self.config = config
+        self.dem_arrays = decoders.DetectorErrorModelArrays(config.dem, simplify=False)
+        self.lookup = decoders.custom.LookupDecoder(config.dem, max_weight=config.dem.num_errors)
+        self.low_confidence_flag = False
+        self.predicted_errors_buffer: list[int] = []
+
+    def decode_to_errors(self, syndrome: npt.NDArray[np.bool_]) -> list[int]:
+        syndrome = np.asarray(syndrome, dtype=np.uint8)
+        self.predicted_errors_buffer = []
+        self.low_confidence_flag = False
+        if not np.any(syndrome):
+            return self.predicted_errors_buffer
+        if self.config.pqlimit == 0:
+            self.low_confidence_flag = True
+            return self.predicted_errors_buffer
+
+        error = np.asarray(self.lookup.decode(syndrome.astype(int)), dtype=np.uint8)
+        self.predicted_errors_buffer = np.flatnonzero(error).tolist()
+        reproduced = np.asarray(self.dem_arrays.detector_flip_matrix @ error).ravel() % 2
+        self.low_confidence_flag = not np.array_equal(reproduced, syndrome)
+        return self.predicted_errors_buffer
+
+    def decode(self, syndrome: npt.NDArray[np.bool_]) -> npt.NDArray[np.bool_]:
+        indices = self.decode_to_errors(syndrome)
+        error = np.zeros(self.dem_arrays.num_errors, dtype=np.uint8)
+        np.bitwise_xor.at(error, indices, 1)
+        flips = np.asarray(self.dem_arrays.observable_flip_matrix @ error).ravel() % 2
+        return flips.astype(bool)
+
+    def decode_batch(self, syndromes: npt.NDArray[np.bool_]) -> npt.NDArray[np.bool_]:
+        return np.asarray([self.decode(syndrome) for syndrome in syndromes], dtype=bool)

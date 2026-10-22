@@ -36,9 +36,9 @@ def idle_barrier_qubits(
 ) -> set[int]:
     """Qubits that pending idle errors may not be deferred past, at any depth of repeat blocks.
 
-    These are the qubits targeted by any instruction other than an explicit idle (``I``/``II``) or
-    a ``QUBIT_COORDS`` annotation.  Annotations such as ``OBSERVABLE_INCLUDE`` with Pauli targets
-    are included, since they depend on the state of their target qubits.
+    These are the qubits targeted by any instruction other than an explicit idle (``I``/``II``) or a
+    ``QUBIT_COORDS`` annotation.  Annotations such as ``OBSERVABLE_INCLUDE`` with Pauli targets are
+    included, since they depend on the state of their target qubits.
     """
     qubits: set[int] = set()
     for instruction in instructions:

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Lookup-table decoder classes."""
+"""Lookup-table decoders and their decoder specification."""
 
 from __future__ import annotations
 
@@ -645,6 +645,56 @@ class ObservableLookupDecoder(_LookupDecoderBase):
         return np.column_stack([packed_predictions[:, :num_observable_bytes], erased])
 
 
+class _FieldVectorPacker:
+    """Pack fixed-length vectors over a finite field into compact, hashable bytes.
+
+    Over GF(2), vectors are bit-packed with np.packbits.  Over any other field, each entry is stored
+    as the smallest unsigned integer that holds the integer representation of a field element that
+    galois uses, which is lossless for both prime and extension fields.  Fields with more than 2**64
+    elements are out of scope, since iter_errors_and_syndromes builds a tuple of every element.
+    """
+
+    def __init__(self, field_order: int, vector_length: int, unpacked_dtype: npt.DTypeLike) -> None:
+        self.field_order = field_order
+        self.vector_length = vector_length
+        self.unpacked_dtype = np.dtype(unpacked_dtype)
+        self.element_dtype = np.dtype(np.min_scalar_type(field_order - 1)).newbyteorder("<")
+        self.num_packed_bytes = (
+            -(-vector_length // 8)
+            if field_order == 2
+            else vector_length * self.element_dtype.itemsize
+        )
+
+    def pack(self, vector: npt.NDArray[np.integer]) -> bytes:
+        """Pack a vector of field elements."""
+        if self.field_order == 2:
+            return np.packbits(vector, bitorder="little").tobytes()
+        return np.asarray(vector, dtype=self.element_dtype).tobytes()
+
+    def unpack(self, packed: bytes) -> npt.NDArray[np.int_]:
+        """Unpack a vector into a new array."""
+        if self.field_order == 2:
+            buffer = np.frombuffer(packed, dtype=np.uint8)
+            bits = np.unpackbits(buffer, count=self.vector_length, bitorder="little")
+            return bits.astype(self.unpacked_dtype)
+        return np.frombuffer(packed, dtype=self.element_dtype).astype(self.unpacked_dtype)
+
+    def pack_rows(self, vectors: npt.NDArray[np.integer]) -> npt.NDArray[np.uint8]:
+        """Pack a two-dimensional array of vectors, one vector per row."""
+        if self.field_order == 2:
+            return np.packbits(vectors, bitorder="little", axis=1)
+        elements = np.ascontiguousarray(vectors, dtype=self.element_dtype)
+        return elements.view(np.uint8).reshape(len(vectors), self.num_packed_bytes)
+
+    def unpack_rows(self, packed: npt.NDArray[np.uint8]) -> npt.NDArray[np.int_]:
+        """Unpack fixed-width byte rows into vectors, one vector per row."""
+        if self.field_order == 2:
+            bits = np.unpackbits(packed, count=self.vector_length, bitorder="little", axis=1)
+            return bits.astype(self.unpacked_dtype)
+        elements = np.ascontiguousarray(packed).view(self.element_dtype)
+        return elements.reshape(len(packed), self.vector_length).astype(self.unpacked_dtype)
+
+
 ####################################################################################################
 # weighted lookup decoders
 
@@ -889,6 +939,19 @@ class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
         )
 
 
+def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
+    """The weight of an error: the number of qudits, or of bits, that it addresses nontrivially.
+
+    This is the weight that ``iter_errors_and_syndromes`` enumerates by, so ranking errors by it
+    keeps the lighter of two that a penalty scores equally.  A symplectic error assigns both an X
+    and a Z component to each qudit, and a qudit carrying both counts once, so the number of nonzero
+    entries would count it twice.
+    """
+    if symplectic:
+        return int(math.symplectic_weight(np.asarray(error)))
+    return int(np.count_nonzero(error))
+
+
 ####################################################################################################
 # decoder specifications
 
@@ -960,7 +1023,7 @@ observable output contract.
 
 
 ####################################################################################################
-# lookup-table construction
+# helper methods for lookup-table construction
 
 
 def _organize_lookup_table_initialization_data(
@@ -1117,8 +1180,8 @@ def _build_observable_flip_func(
     With ``symplectic=True``, an error assigns both an X and a Z component to each qudit, and the
     flip that it induces in an observable is their symplectic product,
     ``observable @ symplectic_conjugate(error)``.  That product is obtained by multiplying the error
-    by -symplectic_conjugate(observable_flip_matrix), in the same way that
-    iter_errors_and_syndromes obtains a syndrome from a parity check matrix.
+    by -symplectic_conjugate(observable_flip_matrix), in the same way that iter_errors_and_syndromes
+    obtains a syndrome from a parity check matrix.
     """
     field = type(pcm) if isinstance(pcm, galois.FieldArray) else galois.GF2
     if isinstance(observable_flip_matrix, galois.FieldArray) and (
@@ -1182,70 +1245,3 @@ def _build_error_log_probability(
         return float(np.sum(log_probs[events]) + np.sum(log_non_probs[~events]))
 
     return error_log_probability
-
-
-####################################################################################################
-# supporting objects
-
-
-class _FieldVectorPacker:
-    """Pack fixed-length vectors over a finite field into compact, hashable bytes.
-
-    Over GF(2), vectors are bit-packed with np.packbits.  Over any other field, each entry is stored
-    as the smallest unsigned integer that holds the integer representation of a field element that
-    galois uses, which is lossless for both prime and extension fields.  Fields with more than 2**64
-    elements are out of scope, since iter_errors_and_syndromes builds a tuple of every element.
-    """
-
-    def __init__(self, field_order: int, vector_length: int, unpacked_dtype: npt.DTypeLike) -> None:
-        self.field_order = field_order
-        self.vector_length = vector_length
-        self.unpacked_dtype = np.dtype(unpacked_dtype)
-        self.element_dtype = np.dtype(np.min_scalar_type(field_order - 1)).newbyteorder("<")
-        self.num_packed_bytes = (
-            -(-vector_length // 8)
-            if field_order == 2
-            else vector_length * self.element_dtype.itemsize
-        )
-
-    def pack(self, vector: npt.NDArray[np.integer]) -> bytes:
-        """Pack a vector of field elements."""
-        if self.field_order == 2:
-            return np.packbits(vector, bitorder="little").tobytes()
-        return np.asarray(vector, dtype=self.element_dtype).tobytes()
-
-    def unpack(self, packed: bytes) -> npt.NDArray[np.int_]:
-        """Unpack a vector into a new array."""
-        if self.field_order == 2:
-            buffer = np.frombuffer(packed, dtype=np.uint8)
-            bits = np.unpackbits(buffer, count=self.vector_length, bitorder="little")
-            return bits.astype(self.unpacked_dtype)
-        return np.frombuffer(packed, dtype=self.element_dtype).astype(self.unpacked_dtype)
-
-    def pack_rows(self, vectors: npt.NDArray[np.integer]) -> npt.NDArray[np.uint8]:
-        """Pack a two-dimensional array of vectors, one vector per row."""
-        if self.field_order == 2:
-            return np.packbits(vectors, bitorder="little", axis=1)
-        elements = np.ascontiguousarray(vectors, dtype=self.element_dtype)
-        return elements.view(np.uint8).reshape(len(vectors), self.num_packed_bytes)
-
-    def unpack_rows(self, packed: npt.NDArray[np.uint8]) -> npt.NDArray[np.int_]:
-        """Unpack fixed-width byte rows into vectors, one vector per row."""
-        if self.field_order == 2:
-            bits = np.unpackbits(packed, count=self.vector_length, bitorder="little", axis=1)
-            return bits.astype(self.unpacked_dtype)
-        elements = np.ascontiguousarray(packed).view(self.element_dtype)
-        return elements.reshape(len(packed), self.vector_length).astype(self.unpacked_dtype)
-
-
-def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
-    """The weight of an error: the number of qudits, or of bits, that it addresses nontrivially.
-
-    This is the weight that ``iter_errors_and_syndromes`` enumerates by, so ranking errors by it
-    keeps the lighter of two that a penalty scores equally.  A symplectic error assigns both an X
-    and a Z component to each qudit, and a qudit carrying both counts once, so the number of nonzero
-    entries would count it twice.
-    """
-    if symplectic:
-        return int(math.symplectic_weight(np.asarray(error)))
-    return int(np.count_nonzero(error))

@@ -459,10 +459,6 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
         return self._compile_windows(dem, windows)
 
 
-####################################################################################################
-# helper methods
-
-
 def _time_coordinate(dem_coords: dict[int, list[float]]) -> int:
     """Which detector coordinate of a detector error model indexes time.
 

@@ -5,7 +5,6 @@
 .. warning::
     This module does not promise to be performant.  If you need to do heavy numerical abstract
     algebra, you're probably better served by GAP or MAGMA (or maybe SageMath).
-
 """
 
 from __future__ import annotations
@@ -31,6 +30,7 @@ from .rings import GroupRing, RingMember
 
 if TYPE_CHECKING:
     from .wedderburn_artin import WedderburnArtinTransformer
+
 
 ####################################################################################################
 # RingArray: RingMember-valued array
@@ -288,7 +288,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         coefficients = ring.field(np.asarray(array).astype(int))
         if coefficients.ndim == 0 or coefficients.shape[-1] != ring.group.order:
             raise ValueError(
-                f"The last axis of a RingArray coefficient array must have length {ring.group.order}"
+                "The last axis of a RingArray coefficient array must have length"
+                f" {ring.group.order}"
             )
         return ring_array_from_field_array(coefficients, ring)
 
@@ -644,10 +645,6 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         self._hnf_transformer = transformer
         self._hnf_right = right
         return self
-
-
-####################################################################################################
-# helper methods
 
 
 def _iter_ring_arrays(obj: Any) -> Iterator[RingArray]:

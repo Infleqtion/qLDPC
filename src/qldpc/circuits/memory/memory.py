@@ -131,7 +131,7 @@ def get_memory_experiment(
     - The K-th detector in measurement round M gets coordinate (M, 0, K).
 
     Args:
-        code: An error-correcting code.  Must be a qubit stabilizer (non-subsystem) codes.  If
+        code: An error-correcting code.  Must be a qubit stabilizer (non-subsystem) code.  If
             passed a classical code, treat it as a quantum CSS code that protects only basis-type
             logical operators (or X-type logicals, if basis is None).
         basis: Pauli.X, Pauli.Z, or None to indicate which type of logical operators to track (where
@@ -387,10 +387,6 @@ def get_logical_bell_prep(
     return as_noiseless_circuit(circuit)
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_basis_memory_experiment_parts(
     code: codes.QuditCode,
     basis: PauliXZ,
@@ -561,7 +557,7 @@ def _get_qec_cycle(
             of QEC measures the parity checks of the code.
 
     Returns:
-        stim.Circuit: The noiseless circuit of num_rounds syndorme measurements.
+        stim.Circuit: The noiseless circuit of num_rounds syndrome measurements.
         MeasurementRecord: The record of all measurements in the constructed circuit.
         DetectorRecord: The record of all detectors in the constructed circuit.
     """

@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Decoder specifications and observable adapter for the pymatching package.
+"""PyMatching decoder adapters and the MWPM decoder specification.
 
 qLDPC imports this integration module while initializing its public decoder API.  Importing
 PyMatching and ldpc eagerly adds roughly 0.18 seconds (about 25 percent) to ``import qldpc`` in
 fresh-process development benchmarks.  The error-decoder subclass is therefore created on first use
-in the private lazy-backend section at the bottom of this module.
+by the file-internal helpers at the end of the decoder section.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 
 ####################################################################################################
-# public decoder and specifications
+# PyMatching decoders
 
 
 class MatchingObservableDecoder(ObservableDecoder):
@@ -102,6 +102,82 @@ class MatchingObservableDecoder(ObservableDecoder):
             )
             for prediction, weight in zip(predictions, weights, strict=True)
         )
+
+
+# Matching is an error decoder only when it has no faults matrix.  Create that protocol-compatible
+# subclass on first use instead of importing PyMatching during every qldpc import.
+
+_MATCHING_TYPE: type[Any] | None = None
+
+
+def _get_pymatching() -> Any:
+    """Import PyMatching or report a broken qLDPC installation."""
+    try:
+        import pymatching
+    except ModuleNotFoundError as error:
+        if error.name != "pymatching":
+            raise
+        raise ModuleNotFoundError(
+            "PyMatching is a required qLDPC dependency but is not installed. Reinstall qLDPC"
+        ) from None
+    return pymatching
+
+
+def _get_matching_type() -> type[Any]:
+    """Return the protocol-compatible PyMatching subclass, creating it on first use."""
+    global _MATCHING_TYPE
+    if _MATCHING_TYPE is None:
+        pymatching_module = _get_pymatching()
+
+        def decode_errors_detailed(
+            matching: Any, syndrome: npt.NDArray[np.int_]
+        ) -> ErrorDecodeResult:
+            return decode_errors_detailed_batch(matching, np.asarray(syndrome)[None, :])[0]
+
+        def decode_errors_detailed_batch(
+            matching: Any, syndromes: npt.NDArray[np.int_]
+        ) -> tuple[ErrorDecodeResult, ...]:
+            syndromes = np.asarray(syndromes)
+            if len(syndromes) == 0:
+                return ()
+            predictions, weights = matching.decode_batch(syndromes, return_weights=True)
+            return tuple(
+                ErrorDecodeResult(
+                    np.asarray(prediction),
+                    diagnostics={"pymatching.objective_weight": float(weight)},
+                )
+                for prediction, weight in zip(predictions, weights, strict=True)
+            )
+
+        matching_type = type(
+            "Matching",
+            (pymatching_module.Matching, BatchErrorDecoder),
+            {
+                "__module__": __name__,
+                "__doc__": "A pymatching.Matching that is also a BatchErrorDecoder.",
+                "decode_errors_detailed": decode_errors_detailed,
+                "decode_errors_detailed_batch": decode_errors_detailed_batch,
+            },
+        )
+        matching_type.__qualname__ = matching_type.__name__
+        Matching = matching_type
+        globals()["Matching"] = Matching
+        _MATCHING_TYPE = Matching
+    return _MATCHING_TYPE
+
+
+if not TYPE_CHECKING:
+    # Static type checkers see the backend classes declared above, rather than an Any fallback.
+
+    def __getattr__(name: str) -> Any:
+        """Load the protocol-compatible PyMatching subclass only when requested."""
+        if name != "Matching":
+            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+        return _get_matching_type()
+
+
+####################################################################################################
+# decoder specifications
 
 
 @_erasure_bit_support("MWPM", supported=False)
@@ -267,10 +343,6 @@ Use native observable decoding for those models.
 )
 
 
-####################################################################################################
-# private matching helpers
-
-
 def _build_matching(
     pcm_or_dem: _PcmOrDem,
     *,
@@ -361,78 +433,3 @@ def _splits_errors(
         or (merged_arrays.observable_flip_matrix != decomposed_arrays.observable_flip_matrix).nnz
         > 0
     )
-
-
-####################################################################################################
-# lazy backend class
-#
-# Matching is an error decoder only when it has no faults matrix.  Create that protocol-compatible
-# subclass on first use instead of importing PyMatching during every qldpc import.
-
-_MATCHING_TYPE: type[Any] | None = None
-
-
-def _get_pymatching() -> Any:
-    """Import PyMatching or report a broken qLDPC installation."""
-    try:
-        import pymatching
-    except ModuleNotFoundError as error:
-        if error.name != "pymatching":
-            raise
-        raise ModuleNotFoundError(
-            "PyMatching is a required qLDPC dependency but is not installed. Reinstall qLDPC"
-        ) from None
-    return pymatching
-
-
-def _get_matching_type() -> type[Any]:
-    """Return the protocol-compatible PyMatching subclass, creating it on first use."""
-    global _MATCHING_TYPE
-    if _MATCHING_TYPE is None:
-        pymatching_module = _get_pymatching()
-
-        def decode_errors_detailed(
-            matching: Any, syndrome: npt.NDArray[np.int_]
-        ) -> ErrorDecodeResult:
-            return decode_errors_detailed_batch(matching, np.asarray(syndrome)[None, :])[0]
-
-        def decode_errors_detailed_batch(
-            matching: Any, syndromes: npt.NDArray[np.int_]
-        ) -> tuple[ErrorDecodeResult, ...]:
-            syndromes = np.asarray(syndromes)
-            if len(syndromes) == 0:
-                return ()
-            predictions, weights = matching.decode_batch(syndromes, return_weights=True)
-            return tuple(
-                ErrorDecodeResult(
-                    np.asarray(prediction),
-                    diagnostics={"pymatching.objective_weight": float(weight)},
-                )
-                for prediction, weight in zip(predictions, weights, strict=True)
-            )
-
-        matching_type = type(
-            "Matching",
-            (pymatching_module.Matching, BatchErrorDecoder),
-            {
-                "__module__": __name__,
-                "__doc__": "A pymatching.Matching that is also a BatchErrorDecoder.",
-                "decode_errors_detailed": decode_errors_detailed,
-                "decode_errors_detailed_batch": decode_errors_detailed_batch,
-            },
-        )
-        matching_type.__qualname__ = matching_type.__name__
-        Matching = matching_type
-        globals()["Matching"] = Matching
-        _MATCHING_TYPE = Matching
-    return _MATCHING_TYPE
-
-
-if not TYPE_CHECKING:
-    # Static type checkers see the backend classes declared above, rather than an Any fallback.
-
-    def __getattr__(name: str) -> Any:
-        """Load the protocol-compatible PyMatching subclass only when requested."""
-        if name != "Matching":
-            raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
-        return _get_matching_type()

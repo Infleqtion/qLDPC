@@ -22,15 +22,6 @@ from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.external.pymatching import MatchingObservableDecoder
 
 
-def _get_circuit_data() -> tuple[stim.DetectorErrorModel, npt.NDArray[np.int_]]:
-    """A repetition-code memory experiment's detector error model and sampled syndromes."""
-    circuit = stim.Circuit.generated(
-        "repetition_code:memory", distance=3, rounds=3, after_clifford_depolarization=0.02
-    )
-    syndromes = circuit.compile_detector_sampler(seed=0).sample(200).astype(int)
-    return circuit.detector_error_model(), syndromes
-
-
 def test_deprecated_decoder_args() -> None:
     """Deprecated keyword arguments are translated, but cannot be combined with a decoder."""
     matrix = np.eye(1, dtype=int)
@@ -364,13 +355,6 @@ def test_observable_decoder_inputs() -> None:
         spec.build_observable_decoder(dem)
 
 
-class _BitPackedOnly:
-    """A compiled decoder that only exposes decode_shots_bit_packed."""
-
-    def __init__(self, compiled_decoder: decoders.sinter.CompiledSinterDecoder) -> None:
-        self.decode_shots_bit_packed = compiled_decoder.decode_shots_bit_packed
-
-
 def test_observable_decoder_compilers() -> None:
     """An observable-decoder compiler, such as a SinterDecoder, is compiled for the given model."""
     dem, syndromes = _get_circuit_data()
@@ -417,3 +401,19 @@ def test_observable_decoder_compilers() -> None:
 
     with pytest.raises(TypeError, match="compiled by compile_decoder_for_dem must provide"):
         build_observable_decoder(dem, decoder=InvalidCompiler())  # type: ignore[arg-type]
+
+
+def _get_circuit_data() -> tuple[stim.DetectorErrorModel, npt.NDArray[np.int_]]:
+    """A repetition-code memory experiment's detector error model and sampled syndromes."""
+    circuit = stim.Circuit.generated(
+        "repetition_code:memory", distance=3, rounds=3, after_clifford_depolarization=0.02
+    )
+    syndromes = circuit.compile_detector_sampler(seed=0).sample(200).astype(int)
+    return circuit.detector_error_model(), syndromes
+
+
+class _BitPackedOnly:
+    """A compiled decoder that only exposes decode_shots_bit_packed."""
+
+    def __init__(self, compiled_decoder: decoders.sinter.CompiledSinterDecoder) -> None:
+        self.decode_shots_bit_packed = compiled_decoder.decode_shots_bit_packed

@@ -2,13 +2,12 @@
 
 """Exact binary BZ searches using disjoint or overlapping information sets.
 
-The disjoint/rank-deficient certificates follow `Algorithm 994
-<https://arxiv.org/abs/1603.06757>`_; the symplectic reduction follows the
-`quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_. The overlapping-set
-certificate and implementation invariants are derived in ``brouwer_zimmermann.md``
-beside this module. Information-set families and their certificates are built in
-``_information_sets.py``, which fixed-weight logical counting shares; this module owns witness
-discovery, early exits, exhaustive dispatch, and the resumable native scan.
+The disjoint/rank-deficient certificates follow `Algorithm 994 <https://arxiv.org/abs/1603.06757>`_;
+the symplectic reduction follows the `quantum-code adaptation <https://arxiv.org/abs/2408.10743>`_.
+The overlapping-set certificate and implementation invariants are derived in
+``brouwer_zimmermann.md`` beside this module.  Information-set families and their certificates are
+built in ``_information_sets.py``, which fixed-weight logical counting shares; this module owns
+witness discovery, early exits, exhaustive dispatch, and the resumable native scan.
 """
 
 from __future__ import annotations

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Module for loading groups from GroupNames or the GAP computer algebra system.
+"""Loading groups and their properties from GroupNames, GAP, or MAGMA.
 
 See https://groupnames.org and https://www.gap-system.org.
 """
@@ -261,17 +261,6 @@ def _get_group_url(order: int, index: int) -> str | None:
     return _GROUPNAMES_URL + match.group(1)
 
 
-def _maybe_get_webpage(order: int) -> str | None:
-    """Try to retrieve the webpage listing all groups up to a given order."""
-    try:
-        url = _GROUPNAMES_URL + ("index500.html" if order > 60 else "")
-        page = urllib.request.urlopen(url, timeout=10)
-        return page.read().decode("utf-8")
-    except (urllib.error.URLError, TimeoutError):
-        # we cannot access the webpage
-        return None
-
-
 ####################################################################################################
 # small groups
 
@@ -429,6 +418,21 @@ def get_primitive_central_idempotents(group: str, field: int) -> _IdempotentsLis
         idempotents.append(tuple(idempotent))
 
     return idempotents
+
+
+####################################################################################################
+# helper methods shared by several sections
+
+
+def _maybe_get_webpage(order: int) -> str | None:
+    """Try to retrieve the webpage listing all groups up to a given order."""
+    try:
+        url = _GROUPNAMES_URL + ("index500.html" if order > 60 else "")
+        page = urllib.request.urlopen(url, timeout=10)
+        return page.read().decode("utf-8")
+    except (urllib.error.URLError, TimeoutError):
+        # we cannot access the webpage
+        return None
 
 
 ####################################################################################################

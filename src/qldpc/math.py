@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Miscellaneous mathematical and linear algebra methods."""
+"""Mathematical helpers: finite fields, Pauli strings, symplectic vectors, matrices, and bases."""
 
 from __future__ import annotations
 
@@ -313,10 +313,6 @@ def symplectic_gram_schmidt(
 
     hyperbolic = field(firsts + partners) if firsts else field.Zeros((0, dimension))
     return hyperbolic, field(radical) if radical else field.Zeros((0, dimension))
-
-
-####################################################################################################
-# helper methods
 
 
 def _orthonormalize_char_2(words: list[galois.FieldArray]) -> list[galois.FieldArray] | None:

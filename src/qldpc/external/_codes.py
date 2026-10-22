@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Module for loading error-correcting codes from the GAP computer algebra system."""
+"""Loading codes from GAP, QECDB, and the qLDPC Challenge, and QDistRnd distance bounds in GAP."""
 
 from __future__ import annotations
 
@@ -46,7 +46,10 @@ def get_classical_code(code: str) -> tuple[list[list[int]], int]:
         "z := PrimitiveRoot(LeftActingDomain(code));;",
         r'Print(LeftActingDomain(code), "\n");;',
         "for vec in mat do",
-        r'  Print(List(vec, function(x) if IsZero(x) then return -1; else return LogFFE(x, z); fi; end), "\n");;',
+        (
+            "  Print(List(vec, function(x) if IsZero(x) then return -1;"
+            r' else return LogFFE(x, z); fi; end), "\n");;'
+        ),
         "od;;",
     ]
     code_str = qldpc.external.gap.get_output(*commands)

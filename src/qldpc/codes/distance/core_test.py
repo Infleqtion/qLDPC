@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Unit tests for exact-distance helpers in qldpc.codes.distance."""
+"""Unit tests for exact binary distance calculations and distance method validation."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ from .conftest import get_random_full_rank_matrix
 @pytest.mark.usefixtures("force_information_sets")
 def test_brouwer_zimmermann_information_set_search() -> None:
     """Information-set search excludes stabilizers, finds logical products, and honors cutoffs."""
-    # The Hamming-weight-one stabilizer is lighter than every logical operator.
-    # With block_size=0, some Brouwer-Zimmermann batches contain only that stabilizer.
+    # The Hamming-weight-one stabilizer is lighter than every logical operator.  With block_size=0,
+    # some Brouwer-Zimmermann batches contain only that stabilizer.
     distance = qldpc.codes.get_distance_quantum(
         [[1, 1, 1, 1]], [[1, 0, 0, 0]], homogeneous=True, cutoff=0, block_size=0
     )
@@ -29,8 +29,8 @@ def test_brouwer_zimmermann_information_set_search() -> None:
     )
     assert distance == 2
 
-    # Every generator in every information set has Hamming weight at least three.
-    # Certifying the weight-two codeword requires searching two-generator combinations.
+    # Every generator in every information set has Hamming weight at least three.  Certifying the
+    # weight-two codeword requires searching two-generator combinations.
     generators = [
         [0, 0, 1, 0, 0, 0, 0, 0, 1, 1],
         [1, 0, 1, 1, 0, 0, 1, 1, 1, 0],
@@ -40,8 +40,8 @@ def test_brouwer_zimmermann_information_set_search() -> None:
     ]
     assert qldpc.codes.get_distance_classical(generators, cutoff=0) == 2
 
-    # Both reduced generators have Hamming weight three.
-    # Their weight-two sum reaches the distance cutoff.
+    # Both reduced generators have Hamming weight three.  Their weight-two sum reaches the distance
+    # cutoff.
     assert qldpc.codes.get_distance_classical([[1, 0, 1, 1], [0, 1, 1, 1]], cutoff=2) == 2
 
     # Row reduction exposes a Hamming-weight-one generator before any search runs.

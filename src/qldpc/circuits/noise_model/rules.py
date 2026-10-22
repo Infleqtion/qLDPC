@@ -51,8 +51,8 @@ class NoiseRule:
                 - ``stim.Circuit``: a fragment of noise instructions emitted verbatim after each
                     ``k``-qubit block, with qubit indices remapped from ``[0, k)`` in the fragment
                     to the corresponding block's targets.  The fragment's arity is inferred from
-                    ``circuit.num_qubits``.  Every instruction must be a Stim noise channel, such
-                    as ``X_ERROR``, ``DEPOLARIZE1``, or ``PAULI_CHANNEL_1``.  Gates, measurements,
+                    ``circuit.num_qubits``.  Every instruction must be a Stim noise channel, such as
+                    ``X_ERROR``, ``DEPOLARIZE1``, or ``PAULI_CHANNEL_1``.  Gates, measurements,
                     resets, annotations such as ``TICK``, heralded noise channels (which produce
                     measurement results), repeat blocks, and fragments that address no qubits are
                     rejected.  ``PauliChannel`` and ``Mapping`` arguments are preferred when they
@@ -206,6 +206,34 @@ class NoiseRule:
 # uniform depolarizing channel, a Mapping is auto-wrapped as a `PauliChannel`, and an
 # `AbstractPauliChannel` / `NoiseRule` is used directly.
 ErrorSpec: TypeAlias = float | Mapping[str, float] | AbstractPauliChannel | NoiseRule
+
+
+def _validate_after_circuit(after_circuit: stim.Circuit) -> None:
+    """Validate that ``after_circuit`` contains only noise instructions.
+
+    Args:
+        after_circuit: The fragment to validate.
+
+    Raises:
+        ValueError: If ``after_circuit`` contains a non-noise or measurement-producing instruction.
+        TypeError: If ``after_circuit`` contains a repeat block.
+    """
+    for op in after_circuit:
+        if not isinstance(op, stim.CircuitInstruction):
+            raise TypeError(
+                f"after (stim.Circuit form) may contain only noise instructions, not "
+                f"{type(op).__name__}"
+            )
+        if op_type(op.name) != NOISE:
+            raise ValueError(
+                f"after (stim.Circuit form) contains non-noise instruction {op.name!r}; only "
+                "NOISE instructions are permitted"
+            )
+        if stim.gate_data(op.name).produces_measurements:
+            raise ValueError(
+                f"after (stim.Circuit form) cannot contain measurement-producing noise "
+                f"instruction {op.name!r}"
+            )
 
 
 ####################################################################################################
@@ -383,35 +411,3 @@ def _rule_with_immunity(
         "on gates that touch immune qubits.  If this edge case matters for your use case, please "
         "open an issue at https://github.com/qLDPCOrg/qLDPC/issues."
     )
-
-
-####################################################################################################
-# helper methods
-
-
-def _validate_after_circuit(after_circuit: stim.Circuit) -> None:
-    """Validate that ``after_circuit`` contains only noise instructions.
-
-    Args:
-        after_circuit: The fragment to validate.
-
-    Raises:
-        ValueError: If ``after_circuit`` contains a non-noise instruction or no qubit targets.
-        TypeError: If ``after_circuit`` contains a repeat block.
-    """
-    for op in after_circuit:
-        if not isinstance(op, stim.CircuitInstruction):
-            raise TypeError(
-                f"after (stim.Circuit form) may contain only noise instructions, not "
-                f"{type(op).__name__}"
-            )
-        if op_type(op.name) != NOISE:
-            raise ValueError(
-                f"after (stim.Circuit form) contains non-noise instruction {op.name!r}; only "
-                "NOISE instructions are permitted"
-            )
-        if stim.gate_data(op.name).produces_measurements:
-            raise ValueError(
-                f"after (stim.Circuit form) cannot contain measurement-producing noise "
-                f"instruction {op.name!r}"
-            )

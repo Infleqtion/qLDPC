@@ -260,10 +260,6 @@ def get_state_prep_diagnostic_tasks(
     ]
 
 
-####################################################################################################
-# helper methods
-
-
 def _assert_pure_logical_state(
     state_prep_circuit: stim.Circuit, code: codes.QuditCode, qubit_ids: QubitIDs
 ) -> None:

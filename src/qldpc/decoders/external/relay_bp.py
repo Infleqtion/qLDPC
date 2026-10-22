@@ -24,7 +24,7 @@ from ..dems import DetectorErrorModelArrays
 from ..protocols import BatchErrorDecoder, ErrorDecodeResult, ObservableDecodeResult
 
 ####################################################################################################
-# public decoder and specifications
+# Relay-BP decoder
 
 
 class RelayBPDecoder(BatchErrorDecoder):
@@ -100,9 +100,9 @@ class RelayBPDecoder(BatchErrorDecoder):
                 under ``help(relay_bp.bp)``.
             observable_error_matrix: A binary matrix whose rows specify which error mechanisms flip
                 which observables, or None.  If ``pcm_or_dem`` is a DEM, this matrix is extracted
-                from the DEM.  If ``pcm_or_dem`` is a matrix and
-                ``observable_error_matrix is None``, the constructed ``RelayBPDecoder`` will not be
-                able to predict observable flips (or logical error rates).
+                from the DEM.  If ``pcm_or_dem`` is a matrix and ``observable_error_matrix`` is
+                None, the constructed ``RelayBPDecoder`` will not be able to predict observable
+                flips (or logical error rates).
             include_decode_result: Argument passed to ``relay_bp.ObservableDecoderRunner``.
             add_erasure_bit: Whether to append a bit to all decoded errors, set to 1 when the error
                 Relay-BP settles on does not reproduce the syndrome and to 0 otherwise.  Without
@@ -391,6 +391,60 @@ class RelayBPDecoder(BatchErrorDecoder):
         return np.all(residuals == detectors, axis=1)
 
 
+def _get_relay_bp() -> Any:
+    """Import the optional relay-bp package or raise an actionable error."""
+    try:
+        import relay_bp
+    except ModuleNotFoundError as error:
+        if error.name != "relay_bp":
+            raise
+        raise ModuleNotFoundError(
+            "The Relay-BP decoders require the optional 'relay-bp' package.  Install it with"
+            " `pip install 'qldpc[relay-bp]'`"
+        ) from error
+    return relay_bp
+
+
+def _as_relay_bp_matrix(matrix: IntegerArray) -> IntegerArray:
+    """Return a binary matrix in a form that relay_bp accepts, leaving the given matrix unmodified.
+
+    relay_bp panics on sparse matrices with unsorted or duplicate indices, so this function copies
+    sparse inputs into a canonical CSC matrix.  This function also reduces entries mod 2 (after
+    summing sparse duplicates) and warns if that changes them, so that relay_bp decodes the same
+    GF(2) matrix that the RelayBPDecoder uses to check syndromes.  Finally, this function rejects
+    matrices with non-integer entries, and field arrays over fields other than GF(2).
+    """
+    if isinstance(matrix, galois.FieldArray):
+        if type(matrix).order != 2:
+            raise ValueError(
+                f"Relay-BP requires a binary matrix, but received a matrix over {type(matrix).name}"
+            )
+        return matrix.view(np.ndarray)
+    output: IntegerArray
+    if scipy.sparse.issparse(matrix):
+        output = scipy.sparse.csc_matrix(matrix, copy=True)
+        output.sum_duplicates()
+        entries = output.data
+    else:
+        output = entries = np.array(matrix)  # copy, so that reducing entries leaves matrix intact
+    if np.any(entries % 1):
+        raise ValueError("Relay-BP requires a matrix with integer entries")
+    if np.any((entries != 0) & (entries != 1)):
+        warnings.warn(
+            "RelayBPDecoder received a matrix with entries other than 0 and 1 (after summing"
+            " duplicate sparse entries, if applicable).  Reducing these entries mod 2.",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        entries %= 2
+    if scipy.sparse.issparse(output):
+        output.eliminate_zeros()
+    return output.astype(np.uint8, copy=False)
+
+
+####################################################################################################
+# decoder specifications
+
+
 @_erasure_bit_support("RBP", supported=True)
 def _get_decoder_rbp(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
@@ -615,6 +669,7 @@ Returns:
 """,
 )
 
+
 min_sum_bp = decoder_spec(
     "min_sum_bp",
     _get_decoder_min_sum_bp,
@@ -650,24 +705,6 @@ Returns:
 )
 
 
-####################################################################################################
-# private builder helpers
-
-
-def _get_relay_bp() -> Any:
-    """Import the optional relay-bp package or raise an actionable error."""
-    try:
-        import relay_bp
-    except ModuleNotFoundError as error:
-        if error.name != "relay_bp":
-            raise
-        raise ModuleNotFoundError(
-            "The Relay-BP decoders require the optional 'relay-bp' package.  Install it with"
-            " `pip install 'qldpc[relay-bp]'`"
-        ) from error
-    return relay_bp
-
-
 def _get_relay_decoder(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     *,
@@ -677,39 +714,3 @@ def _get_relay_decoder(
 ) -> RelayBPDecoder:
     """Build a RelayBPDecoder from a class-name prefix and precision."""
     return RelayBPDecoder(pcm_or_dem, name=f"{decoder_class_prefix}{precision}", **decoder_args)
-
-
-def _as_relay_bp_matrix(matrix: IntegerArray) -> IntegerArray:
-    """Return a binary matrix in a form that relay_bp accepts, leaving the given matrix unmodified.
-
-    relay_bp panics on sparse matrices with unsorted or duplicate indices, so this function copies
-    sparse inputs into a canonical CSC matrix.  This function also reduces entries mod 2 (after
-    summing sparse duplicates) and warns if that changes them, so that relay_bp decodes the same
-    GF(2) matrix that the RelayBPDecoder uses to check syndromes.  Finally, this function rejects
-    matrices with non-integer entries, and field arrays over fields other than GF(2).
-    """
-    if isinstance(matrix, galois.FieldArray):
-        if type(matrix).order != 2:
-            raise ValueError(
-                f"Relay-BP requires a binary matrix, but received a matrix over {type(matrix).name}"
-            )
-        return matrix.view(np.ndarray)
-    output: IntegerArray
-    if scipy.sparse.issparse(matrix):
-        output = scipy.sparse.csc_matrix(matrix, copy=True)
-        output.sum_duplicates()
-        entries = output.data
-    else:
-        output = entries = np.array(matrix)  # copy, so that reducing entries leaves matrix intact
-    if np.any(entries % 1):
-        raise ValueError("Relay-BP requires a matrix with integer entries")
-    if np.any((entries != 0) & (entries != 1)):
-        warnings.warn(
-            "RelayBPDecoder received a matrix with entries other than 0 and 1 (after summing"
-            " duplicate sparse entries, if applicable).  Reducing these entries mod 2.",
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        entries %= 2
-    if scipy.sparse.issparse(output):
-        output.eliminate_zeros()
-    return output.astype(np.uint8, copy=False)

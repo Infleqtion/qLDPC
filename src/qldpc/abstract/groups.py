@@ -16,7 +16,6 @@ p satisfies L(p.T) = L(p).T, and p.T equals the inverse ~p = p**-1.  Some custom
 (SpecialLinearGroup, ProjectiveSpecialLinearGroup, GeneralLinearGroup, ProjectiveGeneralLinearGroup,
 QuaternionGroup) are generally not orthogonal, so that transpose/inverse identity does not hold for
 them.
-
 """
 
 from __future__ import annotations
@@ -143,26 +142,6 @@ class Group:
         lift: Lift | None = None,
     ) -> None:
         self._init_from_group(comb.PermutationGroup(*generators), name, generate_func, lift)
-
-    def _init_from_group(
-        self,
-        group: comb.PermutationGroup | Group,
-        name: str | None = None,
-        generate_func: GenerateFunc | None = None,
-        lift: Lift | None = None,
-    ) -> None:
-        """Initialize from an existing group."""
-        if isinstance(group, comb.PermutationGroup):
-            self._group = group
-            self._name = name
-            self._generate_func = generate_func
-            self._lift = lift
-        else:
-            assert isinstance(group, Group)
-            self._group = group._group
-            self._name = name or group._name
-            self._generate_func = generate_func or group._generate_func
-            self._lift = lift or group._lift
 
     def __eq__(self, other: object) -> bool:
         # Two groups are equal only if they share a representation as well as an underlying group:
@@ -611,6 +590,26 @@ class Group:
             output *= symbols[base] ** exponent
         return output
 
+    def _init_from_group(
+        self,
+        group: comb.PermutationGroup | Group,
+        name: str | None = None,
+        generate_func: GenerateFunc | None = None,
+        lift: Lift | None = None,
+    ) -> None:
+        """Initialize from an existing group."""
+        if isinstance(group, comb.PermutationGroup):
+            self._group = group
+            self._name = name
+            self._generate_func = generate_func
+            self._lift = lift
+        else:
+            assert isinstance(group, Group)
+            self._group = group._group
+            self._name = name or group._name
+            self._generate_func = generate_func or group._generate_func
+            self._lift = lift or group._lift
+
     def _random_member(self, rng: Random) -> GroupMember:
         """A random element of this group, drawn with the given random number generator."""
         # HACK to circumvent an error thrown by sympy when "unranking" an empty Permutation
@@ -703,6 +702,11 @@ class WreathProductGroup(Group):
                 for col in range(self.bottom_degree)
             ]
         )
+
+
+def _get_rng(seed: int | None) -> Random:
+    """A new random number generator with the given seed, or SymPy's global one if seed is None."""
+    return Random(seed) if seed is not None else sympy.core.random.rng
 
 
 ####################################################################################################
@@ -966,7 +970,10 @@ class SpecialLinearGroup(Group):
     def get_generating_mats(
         dimension: int, field: int | type[galois.FieldArray] | None = None
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
-        """Generating matrices for the Special Linear group, based on https://arxiv.org/abs/2201.09155."""
+        """Generating matrices for the Special Linear group.
+
+        Based on https://arxiv.org/abs/2201.09155.
+        """
         field = resolve_field(field)
         minus_one = -field(1)
         gen_w = minus_one * np.diag(np.ones(dimension - 1, dtype=int), k=-1).view(field)
@@ -1025,8 +1032,8 @@ class ProjectiveSpecialLinearGroup(Group):
         self._field = resolve_field(field)
 
         # The linear representation of PSL exists only when SL has a trivial center.  The center is
-        # the scalar matrices in SL, of size gcd(d, q - 1), so this happens exactly when that
-        # gcd is 1.  See the class docstring for how linear_rep selects the representation.
+        # the scalar matrices in SL, of size gcd(d, q - 1), so this happens exactly when the size is
+        # one.  See the class docstring for how linear_rep selects the representation.
         num_roots = math.gcd(self.dimension, self.field.order - 1)
         has_linear_rep = num_roots == 1
         if linear_rep and not has_linear_rep:
@@ -1331,8 +1338,3 @@ def _get_linear_rep(
         return field(np.vstack(rows, dtype=int))
 
     return generators, lift
-
-
-def _get_rng(seed: int | None) -> Random:
-    """A new random number generator with the given seed, or SymPy's global one if seed is None."""
-    return Random(seed) if seed is not None else sympy.core.random.rng

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Instrumental objects used to construct error-correcting codes."""
+"""Objects for building codes: Pauli operators, Tanner graph nodes, Cayley and chain complexes."""
 
 from __future__ import annotations
 

@@ -6,14 +6,13 @@ See :class:`CSSLogicalCounter` for the conventions.
 
 Each X/Z sector uses a normalizer basis whose quotient labels mark nontrivial words (Section 3.4 of
 ``brouwer_zimmermann.md``).  Words are enumerated in layers over Brouwer--Zimmermann (BZ)
-information sets, whose family and certificate come from the stages in ``_information_sets.py``
-that the distance search shares.  Unlike a distance search, the scan stops only when the BZ lower
-bound exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several
-information sets is counted by only one of them.  Full Pauli counts are derived from the
-homogeneous words of weight ``d``, with one masked rank per word.  Self-dual codes scan only one
-sector, and have ``count_pauli = 3 * count_x``.  Counters for codes deformed by local
-CSS-preserving Cliffords transform the stored sector bases and information-set families rather than
-recomputing them.
+information sets, whose family and certificate come from the stages in ``_information_sets.py`` that
+the distance search shares.  Unlike a distance search, the scan stops only when the BZ lower bound
+exceeds ``w`` (Section 5 of ``brouwer_zimmermann.md``), and a word visited by several information
+sets is counted by only one of them.  Full Pauli counts are derived from the homogeneous words of
+weight ``d``, with one masked rank per word.  Self-dual codes scan only one sector, and have
+``count_pauli = 3 * count_x``.  Counters for codes deformed by local CSS-preserving Cliffords
+transform the stored sector bases and information-set families rather than recomputing them.
 
 The default method is ``"brouwer_zimmermann"``.  The alternative ``"macwilliams"`` counts from
 check-space weight distributions; see ``_macwilliams.py`` for the algorithm.
@@ -349,8 +348,8 @@ class CSSLogicalCounter:
 
         The Clifford maps an X support ``x`` on the targets, as a column vector, to ``matrix_x @ x``
         and a Z support ``z`` to ``matrix_z @ z``, where ``matrix_z = (matrix_x^-1)^T`` over GF(2)
-        preserves commutation.  The packed matrices are cached by ``matrix_x``, so reusing a gate
-        is cheaper than its first use.
+        preserves commutation.  The packed matrices are cached by ``matrix_x``, so reusing a gate is
+        cheaper than its first use.
 
         Args:
             targets: Between one and 64 distinct qubit indices on which the Clifford acts, in order.
@@ -511,8 +510,8 @@ class CSSLogicalCounter:
         """Count logical operators by the weight enumerators of the checks of a stabilizer code.
 
         Each support of a nontrivial logical Pauli operator of weight ``d`` in a self-dual code
-        carries exactly three such operators: one X-only, one Z-only, and one Y-only.  The checks
-        of a self-dual code may share one weight distribution, even if a deformation gave them
+        carries exactly three such operators: one X-only, one Z-only, and one Y-only.  The checks of
+        a self-dual code may share one weight distribution, even if a deformation gave them
         different bases.  Equal check spaces have equal distributions, so whether they share one
         changes only the number of walks, never the counts.  The enumerators are kept, so that later
         counts at any weight, with any options, do not walk again.

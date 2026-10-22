@@ -27,7 +27,25 @@ def get_distance_quantum_brute_force(
     block_size: int,
     homogeneous: bool,
 ) -> int:
-    """Enumerate independent logical and excluded bases prepared or verified in this module."""
+    """Find the minimum weight of a nontrivial logical operator by exhaustive enumeration.
+
+    Every combination of the rows of logical_ops that uses at least one row, multiplied by every
+    combination of the rows of stabilizers, is a candidate.  The rows of logical_ops and stabilizers
+    must together be linearly independent; callers in this package construct or verify such bases.
+
+    Args:
+        logical_ops: Binary rows that, together with the stabilizers, generate the logical space.
+        stabilizers: Binary rows that generate the excluded (stabilizer) space.
+        cutoff: Return early once the lightest operator seen has weight at most this cutoff.
+        block_size: Batch size exponent: calculations are vectorized over ``2**block_size`` values.
+        homogeneous: If True, rows are weighed by Hamming weight.  If False, rows are symplectic
+            vectors, with X support in their first half and Z support in their second half, and
+            are weighed by symplectic weight.
+
+    Returns:
+        The minimum weight of a nontrivial logical operator or, after an early exit, the weight (at
+        most cutoff) of the lightest operator seen.
+    """
     num_bits = np.shape(logical_ops)[-1]
 
     weight_func = np.bitwise_count if homogeneous else symplectic_weight

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Shared fixtures and matrix helper for exact-distance dispatch and BZ tests."""
+"""Shared fixtures and helpers for exact-distance, binary-algebra, and BZ tests."""
 
 from collections.abc import Iterator
 from unittest import mock

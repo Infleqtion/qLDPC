@@ -25,6 +25,13 @@ def test_op_type() -> None:
     assert {"M", "MZ", "MPP", "MXX"} <= _operations.JUST_MEASURE_OPS
 
 
+def test_involves_classical_bits() -> None:
+    """Classically controlled instructions are identified by their targets."""
+    assert _operations.involves_classical_bits(stim.Circuit("M 0\nCX rec[-1] 1")[1])
+    assert _operations.involves_classical_bits(stim.Circuit("CX sweep[0] 1")[0])
+    assert not _operations.involves_classical_bits(stim.Circuit("CX 0 1")[0])
+
+
 def test_gate_aliases() -> None:
     """Instructions can be matched by any of their names, and Pauli products by their bases."""
     assert {"CX", "CNOT", "ZCX"} <= set(
@@ -72,10 +79,3 @@ def test_known_gate_shape() -> None:
     assert _operations.known_gate_shape("MXYZ") == (3, True, False)
     assert _operations.known_gate_shape("SXY_DAG") == (2, False, False)
     assert _operations.known_gate_shape("MPP") is None
-
-
-def test_involves_classical_bits() -> None:
-    """Classically controlled instructions are identified by their targets."""
-    assert _operations.involves_classical_bits(stim.Circuit("M 0\nCX rec[-1] 1")[1])
-    assert _operations.involves_classical_bits(stim.Circuit("CX sweep[0] 1")[0])
-    assert not _operations.involves_classical_bits(stim.Circuit("CX 0 1")[0])

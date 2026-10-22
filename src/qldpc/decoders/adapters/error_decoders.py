@@ -75,6 +75,35 @@ class _DetailedErrorsToObservablesDecoder(ErrorsToObservablesDecoder):
 # error-mechanism alignment
 
 
+def _match_error_decoder_to_dem(
+    decoder: ErrorDecoder, dem: stim.DetectorErrorModel
+) -> ErrorDecoder:
+    """Validate an error decoder's output width and align merged errors with a DEM."""
+    if getattr(decoder, "_infers_decomposed_errors", False):
+        raise ValueError(
+            "The error decoder infers errors in the components of decomposed error mechanisms,"
+            " which cannot be read as errors of the detector error model.  To predict observable"
+            " flips with decomposed errors, pass a decoder specification such as"
+            " decoders.mwpm(decompose_errors=True), which build a matching decoder that predicts"
+            " observable flips natively"
+        )
+    num_erasure_bits = int(getattr(decoder, "has_erasure_bit", False))
+    test_error = decoder.decode_errors(np.zeros(dem.num_detectors, dtype=int))
+    num_inferred_errors = len(test_error) - num_erasure_bits
+    circuit_errors = DetectorErrorModelArrays.get_circuit_errors(dem)
+    num_merged_errors = len(DetectorErrorModelArrays.get_merged_circuit_errors(circuit_errors))
+    if num_inferred_errors == len(circuit_errors):
+        return decoder
+    if num_inferred_errors == num_merged_errors:
+        return _ExpandedErrorDecoder(decoder, dem)
+    raise ValueError(
+        f"An error decoder inferred an error of length {num_inferred_errors} for a detector error"
+        f" model with {len(circuit_errors)} error mechanisms ({num_merged_errors} after merging"
+        " equivalent mechanisms).  If the decoder predicts observable flips rather than errors,"
+        " give it a decode_observables method, and pass it where an observable decoder is accepted"
+    )
+
+
 class _ExpandedErrorDecoder(BatchErrorDecoder):
     """Map errors inferred for a simplified DEM back to the full DEM.
 
@@ -126,35 +155,6 @@ class _ExpandedErrorDecoder(BatchErrorDecoder):
             simplified_errors = simplified_errors[:, :-1]
         original_errors[:, self._simplified_to_original_index] = simplified_errors
         return original_errors
-
-
-def _match_error_decoder_to_dem(
-    decoder: ErrorDecoder, dem: stim.DetectorErrorModel
-) -> ErrorDecoder:
-    """Validate an error decoder's output width and align merged errors with a DEM."""
-    if getattr(decoder, "_infers_decomposed_errors", False):
-        raise ValueError(
-            "The error decoder infers errors in the components of decomposed error mechanisms,"
-            " which cannot be read as errors of the detector error model.  To predict observable"
-            " flips with decomposed errors, pass a decoder specification such as"
-            " decoders.mwpm(decompose_errors=True), which build a matching decoder that predicts"
-            " observable flips natively"
-        )
-    num_erasure_bits = int(getattr(decoder, "has_erasure_bit", False))
-    test_error = decoder.decode_errors(np.zeros(dem.num_detectors, dtype=int))
-    num_inferred_errors = len(test_error) - num_erasure_bits
-    circuit_errors = DetectorErrorModelArrays.get_circuit_errors(dem)
-    num_merged_errors = len(DetectorErrorModelArrays.get_merged_circuit_errors(circuit_errors))
-    if num_inferred_errors == len(circuit_errors):
-        return decoder
-    if num_inferred_errors == num_merged_errors:
-        return _ExpandedErrorDecoder(decoder, dem)
-    raise ValueError(
-        f"An error decoder inferred an error of length {num_inferred_errors} for a detector error"
-        f" model with {len(circuit_errors)} error mechanisms ({num_merged_errors} after merging"
-        " equivalent mechanisms).  If the decoder predicts observable flips rather than errors,"
-        " give it a decode_observables method, and pass it where an observable decoder is accepted"
-    )
 
 
 class _DetailedExpandedErrorDecoder(_ExpandedErrorDecoder):

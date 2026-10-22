@@ -181,44 +181,6 @@ def test_emit_after() -> None:
         circuits.NoiseRule(after={"XX": 0.1}).emit_after(circuit, [0, 1, 2])
 
 
-def test_rule_with_immunity() -> None:
-    """Noise rules are dropped or conditioned for operations that touch immune qubits."""
-    rule = circuits.NoiseRule(after={"XX": 0.1, "ZZ": 0.2, "XZ": 0.3})
-    op = stim.CircuitInstruction("CX", [0, 1])
-    assert rules._rule_with_immunity(rule, op, frozenset(), immunize_gates=True) is rule
-    assert rules._rule_with_immunity(rule, op, frozenset({2}), immunize_gates=True) is rule
-    assert rules._rule_with_immunity(rule, op, frozenset({0, 1}), immunize_gates=False) is None
-    assert rules._rule_with_immunity(rule, op, frozenset({1}), immunize_gates=True) is None
-    rule = circuits.NoiseRule(after={"XI": 0.1, "XX": 0.2})
-    conditioned = rules._rule_with_immunity(rule, op, frozenset({1}), immunize_gates=False)
-    assert conditioned is not None and conditioned.after == circuits.PauliChannel({"XI": 0.1})
-    with pytest.raises(ValueError, match="partial immunity"):
-        rules._rule_with_immunity(
-            circuits.NoiseRule(readout_error=0.1),
-            stim.CircuitInstruction("MXX", [0, 1]),
-            frozenset({1}),
-            immunize_gates=False,
-        )
-
-
-def test_rule_validation() -> None:
-    """Rules are validated against the shape of the operations they apply to."""
-    rule = circuits.NoiseRule(after={"X": 0.1})
-    rules._validate_rule_for_arity(rule, 1, "context")
-    with pytest.raises(ValueError, match="arity 1; expected 2"):
-        rules._validate_rule_for_arity(rule, 2, "context")
-    with pytest.raises(ValueError, match="readout_error"):
-        rules._validate_rule_for_arity(circuits.NoiseRule(readout_error=0.1), 1, "context")
-    with pytest.raises(ValueError, match="reset_error"):
-        rules._validate_rule_for_arity(circuits.NoiseRule(reset_error=0.1), 1, "context")
-
-    rules._validate_custom_rule(
-        circuits.NoiseRule(readout_error=0.1), stim.CircuitInstruction("MR", [0])
-    )
-    with pytest.raises(ValueError, match="rule_func returned a rule for 'CX'"):
-        rules._validate_custom_rule(rule, stim.CircuitInstruction("CX", [0, 1]))
-
-
 def test_as_noise_rule() -> None:
     """Error specifications are normalized to noise rules."""
     rule = circuits.NoiseRule(after={"X": 0.1})
@@ -253,3 +215,41 @@ def test_normalize_clifford_nq_error() -> None:
         rules._normalize_clifford_nq_error({1: "X"})  # type: ignore[dict-item]
     with pytest.raises(ValueError, match=r"is not in \[0, 1\]"):
         rules._normalize_clifford_nq_error({1: 1.5})
+
+
+def test_rule_validation() -> None:
+    """Rules are validated against the shape of the operations they apply to."""
+    rule = circuits.NoiseRule(after={"X": 0.1})
+    rules._validate_rule_for_arity(rule, 1, "context")
+    with pytest.raises(ValueError, match="arity 1; expected 2"):
+        rules._validate_rule_for_arity(rule, 2, "context")
+    with pytest.raises(ValueError, match="readout_error"):
+        rules._validate_rule_for_arity(circuits.NoiseRule(readout_error=0.1), 1, "context")
+    with pytest.raises(ValueError, match="reset_error"):
+        rules._validate_rule_for_arity(circuits.NoiseRule(reset_error=0.1), 1, "context")
+
+    rules._validate_custom_rule(
+        circuits.NoiseRule(readout_error=0.1), stim.CircuitInstruction("MR", [0])
+    )
+    with pytest.raises(ValueError, match="rule_func returned a rule for 'CX'"):
+        rules._validate_custom_rule(rule, stim.CircuitInstruction("CX", [0, 1]))
+
+
+def test_rule_with_immunity() -> None:
+    """Noise rules are dropped or conditioned for operations that touch immune qubits."""
+    rule = circuits.NoiseRule(after={"XX": 0.1, "ZZ": 0.2, "XZ": 0.3})
+    op = stim.CircuitInstruction("CX", [0, 1])
+    assert rules._rule_with_immunity(rule, op, frozenset(), immunize_gates=True) is rule
+    assert rules._rule_with_immunity(rule, op, frozenset({2}), immunize_gates=True) is rule
+    assert rules._rule_with_immunity(rule, op, frozenset({0, 1}), immunize_gates=False) is None
+    assert rules._rule_with_immunity(rule, op, frozenset({1}), immunize_gates=True) is None
+    rule = circuits.NoiseRule(after={"XI": 0.1, "XX": 0.2})
+    conditioned = rules._rule_with_immunity(rule, op, frozenset({1}), immunize_gates=False)
+    assert conditioned is not None and conditioned.after == circuits.PauliChannel({"XI": 0.1})
+    with pytest.raises(ValueError, match="partial immunity"):
+        rules._rule_with_immunity(
+            circuits.NoiseRule(readout_error=0.1),
+            stim.CircuitInstruction("MXX", [0, 1]),
+            frozenset({1}),
+            immunize_gates=False,
+        )

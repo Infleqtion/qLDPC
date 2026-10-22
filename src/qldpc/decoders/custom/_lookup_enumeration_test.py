@@ -15,64 +15,6 @@ from qldpc import math
 from qldpc.decoders.custom._lookup_enumeration import iter_errors_and_syndromes
 
 
-def _brute_force(
-    matrix: galois.FieldArray,
-    max_weight: int,
-    syndrome_mask: npt.NDArray[np.bool_] | None,
-    symplectic: bool,
-    error_channel: npt.NDArray[np.floating] | None = None,
-    probability_cutoff: float = 0,
-) -> dict[tuple[int, ...], tuple[int, ...]]:
-    """Map every admissible error to its syndrome by checking every vector over the field."""
-    field = type(matrix)
-    repeat = 2 if symplectic else 1
-    num_sites = matrix.shape[1] // repeat
-    expected = {}
-    for vector in itertools.product(range(field.order), repeat=matrix.shape[1]):
-        error = field(vector)
-        sites = error.reshape(repeat, num_sites).view(np.ndarray).any(axis=0)
-        if np.count_nonzero(sites) > max_weight:
-            continue
-        if probability_cutoff:
-            assert error_channel is not None
-            active = error.view(np.ndarray).astype(bool)
-            probabilities = np.where(active, error_channel / (field.order - 1), 1 - error_channel)
-            if np.prod(probabilities) < probability_cutoff:
-                continue
-        product = math.symplectic_conjugate(matrix) @ error if symplectic else matrix @ error
-        syndrome = product.view(np.ndarray)
-        if syndrome_mask is not None:
-            if np.any(syndrome[~syndrome_mask]):
-                continue
-            syndrome = syndrome[syndrome_mask]
-        expected[tuple(vector)] = tuple(syndrome.tolist())
-    return expected
-
-
-def _enumerate(
-    matrix: galois.FieldArray,
-    max_weight: int,
-    syndrome_mask: npt.NDArray[np.bool_] | None,
-    symplectic: bool,
-    **kwargs: object,
-) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
-    return [
-        (tuple(error.tolist()), tuple(syndrome.tolist()))
-        for error, syndrome in iter_errors_and_syndromes(
-            matrix,
-            max_weight,
-            syndrome_mask,
-            symplectic,
-            **kwargs,  # type: ignore[arg-type]
-        )
-    ]
-
-
-def _weights(errors: list[tuple[int, ...]], symplectic: bool) -> list[int]:
-    repeat = 2 if symplectic else 1
-    return [int(np.count_nonzero(np.reshape(error, (repeat, -1)).any(axis=0))) for error in errors]
-
-
 @pytest.mark.parametrize(
     "matrix, symplectic",
     [
@@ -157,3 +99,61 @@ def test_probability_cutoff_prunes_without_enumerating() -> None:
     )
     assert len(errors) == 2**6
     assert not np.any(errors[:, 6:])
+
+
+def _brute_force(
+    matrix: galois.FieldArray,
+    max_weight: int,
+    syndrome_mask: npt.NDArray[np.bool_] | None,
+    symplectic: bool,
+    error_channel: npt.NDArray[np.floating] | None = None,
+    probability_cutoff: float = 0,
+) -> dict[tuple[int, ...], tuple[int, ...]]:
+    """Map every admissible error to its syndrome by checking every vector over the field."""
+    field = type(matrix)
+    repeat = 2 if symplectic else 1
+    num_sites = matrix.shape[1] // repeat
+    expected = {}
+    for vector in itertools.product(range(field.order), repeat=matrix.shape[1]):
+        error = field(vector)
+        sites = error.reshape(repeat, num_sites).view(np.ndarray).any(axis=0)
+        if np.count_nonzero(sites) > max_weight:
+            continue
+        if probability_cutoff:
+            assert error_channel is not None
+            active = error.view(np.ndarray).astype(bool)
+            probabilities = np.where(active, error_channel / (field.order - 1), 1 - error_channel)
+            if np.prod(probabilities) < probability_cutoff:
+                continue
+        product = math.symplectic_conjugate(matrix) @ error if symplectic else matrix @ error
+        syndrome = product.view(np.ndarray)
+        if syndrome_mask is not None:
+            if np.any(syndrome[~syndrome_mask]):
+                continue
+            syndrome = syndrome[syndrome_mask]
+        expected[tuple(vector)] = tuple(syndrome.tolist())
+    return expected
+
+
+def _enumerate(
+    matrix: galois.FieldArray,
+    max_weight: int,
+    syndrome_mask: npt.NDArray[np.bool_] | None,
+    symplectic: bool,
+    **kwargs: object,
+) -> list[tuple[tuple[int, ...], tuple[int, ...]]]:
+    return [
+        (tuple(error.tolist()), tuple(syndrome.tolist()))
+        for error, syndrome in iter_errors_and_syndromes(
+            matrix,
+            max_weight,
+            syndrome_mask,
+            symplectic,
+            **kwargs,  # type: ignore[arg-type]
+        )
+    ]
+
+
+def _weights(errors: list[tuple[int, ...]], symplectic: bool) -> list[int]:
+    repeat = 2 if symplectic else 1
+    return [int(np.count_nonzero(np.reshape(error, (repeat, -1)).any(axis=0))) for error in errors]

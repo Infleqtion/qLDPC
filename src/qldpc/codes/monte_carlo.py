@@ -269,10 +269,6 @@ class ErrorRateFunc:
         return divisor
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_sample_allocation(
     num_samples: int, block_length: int, max_error_rate: float, min_error_weight: int = 1
 ) -> npt.NDArray[np.int_]:

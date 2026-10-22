@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Functional counts and coverage of the MacWilliams method."""
+"""Unit tests for logical-operator counts by the MacWilliams method."""
 
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from . import _macwilliams as mw
 def test_logical_counts(monkeypatch: pytest.MonkeyPatch, num_bits: int, compiled: bool) -> None:
     """Count two disjoint four-qubit blocks, with any remaining qubits free, at every weight.
 
-    A logical has even weight on each block, and the checks are the words of weights 0, 4 and 8
-    that are constant on each block.  At length 70, middle weights exceed 64-bit integers.
+    A logical has even weight on each block, and the checks are the words of weights 0, 4 and 8 that
+    are constant on each block.  At length 70, middle weights exceed 64-bit integers.
     """
     if not compiled:
         monkeypatch.setattr(mw, "_add_span_weights", mw._add_span_weights.py_func)
@@ -39,6 +39,7 @@ def test_logical_counts(monkeypatch: pytest.MonkeyPatch, num_bits: int, compiled
 
 
 def test_check_rank_limit() -> None:
+    """CheckEnumerators rejects a check space with more than 2**63 words."""
     checks = np.eye(mw._MAX_RANK + 1, mw._MAX_RANK + 2, dtype=np.uint8)
     with pytest.raises(ValueError, match="check ranks up to 63"):
         mw.CheckEnumerators(checks, checks[:0])

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Miscellaneous circuit utilities."""
+"""Circuit types, qubit remapping, measurement utilities, and the guard for qubit-only methods."""
 
 from __future__ import annotations
 

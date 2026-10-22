@@ -5,7 +5,6 @@
 .. warning::
     This module does not promise to be performant.  If you need to do heavy numerical abstract
     algebra, you're probably better served by GAP or MAGMA (or maybe SageMath).
-
 """
 
 from __future__ import annotations
@@ -222,10 +221,6 @@ def get_howell_dual(
     if not skip_validation:
         _validate_howell_dual(matrix_hnf, dual, transformer, right)
     return dual
-
-
-####################################################################################################
-# helper methods
 
 
 @functools.cache

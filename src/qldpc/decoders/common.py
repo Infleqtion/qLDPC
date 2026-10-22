@@ -26,6 +26,10 @@ _Decoder = TypeVar("_Decoder", bound=ErrorDecoder)
 _ErrorChannel: TypeAlias = float | npt.NDArray[np.floating] | Sequence[float] | None
 
 
+####################################################################################################
+# warnings
+
+
 class ObservableDecodingFallbackWarning(UserWarning):
     """A decoder specification could not decode observables natively, so errors are decoded instead.
 

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
+"""Run the modular 100% statement-coverage check, starting with the slowest test files."""
+
 import sys
 from typing import Any
 from unittest import mock

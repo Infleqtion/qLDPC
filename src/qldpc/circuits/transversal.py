@@ -272,7 +272,6 @@ def get_transversal_circuits(
     .. warning::
         This method performs a brute-force search over the Clifford automorphisms of a code, and
         thereby generally has exponential runtime.
-
     """
     physical_circuits = [None] * len(logical_circuits_or_tableaus)
 
@@ -369,10 +368,6 @@ def get_transversal_circuit(
         deform_code=deform_code,
         with_magma=with_magma,
     )[0]
-
-
-####################################################################################################
-# helper methods
 
 
 def _is_pauli_tableau(tableau: stim.Tableau) -> bool:

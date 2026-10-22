@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Helper function(s) for caching results."""
+"""Persistent disk caching for the results of expensive computations."""
 
 from __future__ import annotations
 
@@ -16,6 +16,34 @@ import platformdirs
 
 _Params = ParamSpec("_Params")
 _Result = TypeVar("_Result")
+
+
+def use_disk_cache(
+    cache_name: str,
+    *,
+    cache_dir: pathlib.Path | str | None = None,
+    key_func: Callable[..., Hashable] | None = None,
+) -> Callable[[Callable[_Params, _Result]], CachedFunction[_Params, _Result]]:
+    """Decorator to cache results to disk.
+
+    By default, the cache key is the tuple of positional arguments followed by (keyword, value)
+    pairs, unpacked if this tuple has length 1.  A custom key_func, called with the same arguments
+    as the decorated function, overrides this default.
+
+    The decorated function has a .refresh method with the same signature, which ignores any existing
+    cache entry, recomputes the result, and saves the new result to the cache.  Refreshing only
+    affects this cache, and does not clear other caches used internally by the function.
+
+    The decorator is intended for module-level functions: a decorated function is pickled by
+    reference to its qualified name, and it does not bind as a method.
+
+    Disk caching is bypassed when running with pytest.
+    """
+
+    def decorator(function: Callable[_Params, _Result]) -> CachedFunction[_Params, _Result]:
+        return CachedFunction(function, cache_name, cache_dir=cache_dir, key_func=key_func)
+
+    return decorator
 
 
 class CachedFunction(Generic[_Params, _Result]):
@@ -60,24 +88,16 @@ class CachedFunction(Generic[_Params, _Result]):
         cache[key] = result
         return result
 
+    def __reduce__(self) -> str:
+        """Pickle by reference to the module-level name of the decorated function."""
+        return self._function.__qualname__
+
     def _get_key(self, *args: _Params.args, **kwargs: _Params.kwargs) -> Hashable:
         """Get the cache key for the given arguments."""
         if self._key_func is not None:
             return self._key_func(*args, **kwargs)
         key = args + tuple(kwargs.items())
         return key if len(key) != 1 else key[0]  # unpack length-1 tuples
-
-    def __reduce__(self) -> str:
-        """Pickle by reference to the module-level name of the decorated function."""
-        return self._function.__qualname__
-
-
-def get_disk_cache_path(
-    cache_name: str, *, cache_dir: pathlib.Path | str | None = None
-) -> pathlib.Path:
-    """Retrieve the path of a cache."""
-    cache_dir = cache_dir or pathlib.Path(platformdirs.user_cache_dir()) / "qldpc"
-    return pathlib.Path(cache_dir) / cache_name
 
 
 def get_disk_cache(
@@ -92,32 +112,12 @@ def get_disk_cache(
     return diskcache.Cache(get_disk_cache_path(cache_name, cache_dir=cache_dir))
 
 
-def use_disk_cache(
-    cache_name: str,
-    *,
-    cache_dir: pathlib.Path | str | None = None,
-    key_func: Callable[..., Hashable] | None = None,
-) -> Callable[[Callable[_Params, _Result]], CachedFunction[_Params, _Result]]:
-    """Decorator to cache results to disk.
-
-    By default, the cache key is the tuple of positional arguments followed by (keyword, value)
-    pairs, unpacked if this tuple has length 1.  A custom key_func, called with the same arguments
-    as the decorated function, overrides this default.
-
-    The decorated function has a .refresh method with the same signature, which ignores any existing
-    cache entry, recomputes the result, and saves the new result to the cache.  Refreshing only
-    affects this cache, and does not clear other caches used internally by the function.
-
-    The decorator is intended for module-level functions: a decorated function is pickled by
-    reference to its qualified name, and it does not bind as a method.
-
-    Disk caching is bypassed when running with pytest.
-    """
-
-    def decorator(function: Callable[_Params, _Result]) -> CachedFunction[_Params, _Result]:
-        return CachedFunction(function, cache_name, cache_dir=cache_dir, key_func=key_func)
-
-    return decorator
+def get_disk_cache_path(
+    cache_name: str, *, cache_dir: pathlib.Path | str | None = None
+) -> pathlib.Path:
+    """Retrieve the path of a cache."""
+    cache_dir = cache_dir or pathlib.Path(platformdirs.user_cache_dir()) / "qldpc"
+    return pathlib.Path(cache_dir) / cache_name
 
 
 def clear_entry(
@@ -135,10 +135,6 @@ def clear_entry(
             + ", but this entry does not exist.",
             stacklevel=2,
         )
-
-
-####################################################################################################
-# helper methods
 
 
 def _running_with_pytest() -> bool:

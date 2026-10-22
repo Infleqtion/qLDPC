@@ -693,7 +693,12 @@ def test_data_init_validation(bad_init: object, error_substr: str) -> None:
     x = np.asarray(code.get_logical_ops(Pauli.X)[0]).astype(np.uint8)
     g = build_gadget(code, x, basis=Pauli.X)
     with pytest.raises(ValueError, match=error_substr):
-        build_single_ppm_circuit(g, rounds=3, noise_model=None, data_init=bad_init)  # type: ignore[arg-type]
+        build_single_ppm_circuit(
+            g,
+            rounds=3,
+            noise_model=None,
+            data_init=bad_init,  # type: ignore[arg-type]
+        )
 
 
 def test_qubit_coords_layout_steane() -> None:
@@ -1344,7 +1349,12 @@ def test_expand_joint_data_init_rejects_non_str_non_seq_type() -> None:
     from qldpc.experimental.surgery.circuit import _expand_joint_data_init
 
     with pytest.raises(TypeError, match="data_init must be"):
-        _expand_joint_data_init({"bad": "input"}, n_l=4, n_r=4, intercode=True)  # type: ignore[arg-type]
+        _expand_joint_data_init(
+            {"bad": "input"},  # type: ignore[arg-type]
+            n_l=4,
+            n_r=4,
+            intercode=True,
+        )
 
 
 def test_single_ppm_dem_ok_bb_36_8_with_boost() -> None:

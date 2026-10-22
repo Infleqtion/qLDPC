@@ -18,6 +18,16 @@ import stim
 
 from ..common import StimCircuitLike
 
+# Floating-point tolerance used for probability comparisons throughout this module.  Small enough to
+# catch real bugs, large enough to absorb the ~O(n * eps) drift that accumulates when summing or
+# renormalizing many probabilities.
+_ABSOLUTE_ERROR_TOLERANCE = 1e-9
+
+# the order of the probability arguments of Stim's PAULI_CHANNEL_1 and PAULI_CHANNEL_2 instructions
+_PAULI_CHANNEL_1_ORDER = ("X", "Y", "Z")
+_PAULI_CHANNEL_2_ORDER = tuple(a + b for a in "IXYZ" for b in "IXYZ" if (a, b) != ("I", "I"))
+
+
 ####################################################################################################
 # Pauli channels
 
@@ -194,7 +204,7 @@ class PauliChannel(AbstractPauliChannel):
         super().__init__(probabilities, num_qubits=num_qubits)
 
         # Ensure the sum of all probabilities does not exceed 1.  Use math.fsum for a precise sum,
-        # and allow a small tolerance so a mathematically- normalized input isn't rejected due to
+        # and allow a small tolerance so a mathematically normalized input isn't rejected due to
         # per-value rounding (e.g., ``[p_i / sum(p_i) for p_i in ...]`` can accumulate to
         # ~1 + O(n * eps)).
         total = math.fsum(self._probabilities.values())
@@ -416,21 +426,6 @@ class PauliChannelSequence(AbstractPauliChannel):
             pauli_targets = _pauli_string_to_targets(string, qubits)
             circuit.append("CORRELATED_ERROR", pauli_targets, [prob], tag=tag)
         return circuit
-
-
-####################################################################################################
-# helper methods
-
-# Floating-point tolerance used for probability comparisons throughout this module.  Small enough to
-# catch real bugs, large enough to absorb the ~O(n * eps) drift that accumulates when summing or
-# renormalizing many probabilities.
-_ABSOLUTE_ERROR_TOLERANCE = 1e-9
-
-
-_PAULI_CHANNEL_1_ORDER = ("X", "Y", "Z")
-
-
-_PAULI_CHANNEL_2_ORDER = tuple(a + b for a in "IXYZ" for b in "IXYZ" if (a, b) != ("I", "I"))
 
 
 def _pauli_channel_1_shortcut(args: list[float]) -> tuple[str, list[float]]:

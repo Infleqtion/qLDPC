@@ -23,73 +23,6 @@ from qldpc.decoders.external import frontier
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
 
 
-@dataclasses.dataclass(frozen=True)
-class _Column:
-    family: str
-    index: int
-    label: str
-    instruction_offset: int
-    prior_probs: tuple[float, float]
-    detector_response_masks: tuple[int, int]
-    logical_response_masks: tuple[int, int]
-    detector_support_mask: int
-    original_column_index: int = -1
-
-
-@dataclasses.dataclass(frozen=True)
-class _Model:
-    columns: tuple[_Column, ...]
-    layout: tuple[_Column, ...]
-    num_detectors: int
-    num_observables: int = 1
-    backward_columns: tuple[_Column, ...] | None = None
-    backward_layout: tuple[_Column, ...] | None = None
-
-
-@dataclasses.dataclass(frozen=True)
-class _Result:
-    status: str
-    logical_hat: int | None
-    log_evidence: float = 1.0
-    terminal_log_masses: dict[int, float] = dataclasses.field(default_factory=lambda: {0: 1.0})
-    terminal_top_log_mass_gap: float = 0.25
-    direction: str = "forward"
-    engine: str = "python"
-    committee_members: tuple[object, ...] = ()
-    stats: dict[str, int] = dataclasses.field(default_factory=lambda: {"processed_columns": 2})
-
-
-_Call = tuple[str, _Model, list[int], dict[str, object]]
-
-
-def _decode_exactly(model: _Model, syndrome: np.ndarray, **options: object) -> _Result:
-    """Return the most likely observable flips, as unpruned Frontier would."""
-    target = sum(int(bit) << index for index, bit in enumerate(syndrome))
-    class_probs: dict[int, float] = {}
-    for outcomes in itertools.product((0, 1), repeat=len(model.columns)):
-        detectors = logicals = 0
-        prob = 1.0
-        for column, outcome in zip(model.columns, outcomes):
-            detectors ^= column.detector_response_masks[outcome]
-            logicals ^= column.logical_response_masks[outcome]
-            prob *= column.prior_probs[outcome]
-        if detectors == target:
-            class_probs[logicals] = class_probs.get(logicals, 0) + prob
-    if not class_probs:
-        return _Result("no_path", None)
-    return _Result("ok", max(class_probs, key=lambda logicals: class_probs[logicals]))
-
-
-def _optimize_column_order(
-    columns: list[_Column], *, num_detectors: int
-) -> tuple[list[_Column], tuple[int, ...]]:
-    """Reorder columns, reindexing them as Frontier does."""
-    ordering = tuple(reversed(range(len(columns))))
-    return [
-        dataclasses.replace(columns[old], index=new) for new, old in enumerate(ordering)
-    ], ordering
-
-
 @pytest.fixture
 def calls(monkeypatch: pytest.MonkeyPatch) -> list[_Call]:
     """Install a substitute for Frontier that decodes exactly, and record its decoding calls."""
@@ -296,3 +229,70 @@ decoders.frontier(committee=True)
 assert "frontier" not in sys.modules
 """
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+@dataclasses.dataclass(frozen=True)
+class _Column:
+    family: str
+    index: int
+    label: str
+    instruction_offset: int
+    prior_probs: tuple[float, float]
+    detector_response_masks: tuple[int, int]
+    logical_response_masks: tuple[int, int]
+    detector_support_mask: int
+    original_column_index: int = -1
+
+
+@dataclasses.dataclass(frozen=True)
+class _Model:
+    columns: tuple[_Column, ...]
+    layout: tuple[_Column, ...]
+    num_detectors: int
+    num_observables: int = 1
+    backward_columns: tuple[_Column, ...] | None = None
+    backward_layout: tuple[_Column, ...] | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class _Result:
+    status: str
+    logical_hat: int | None
+    log_evidence: float = 1.0
+    terminal_log_masses: dict[int, float] = dataclasses.field(default_factory=lambda: {0: 1.0})
+    terminal_top_log_mass_gap: float = 0.25
+    direction: str = "forward"
+    engine: str = "python"
+    committee_members: tuple[object, ...] = ()
+    stats: dict[str, int] = dataclasses.field(default_factory=lambda: {"processed_columns": 2})
+
+
+_Call = tuple[str, _Model, list[int], dict[str, object]]
+
+
+def _decode_exactly(model: _Model, syndrome: np.ndarray, **options: object) -> _Result:
+    """Return the most likely observable flips, as unpruned Frontier would."""
+    target = sum(int(bit) << index for index, bit in enumerate(syndrome))
+    class_probs: dict[int, float] = {}
+    for outcomes in itertools.product((0, 1), repeat=len(model.columns)):
+        detectors = logicals = 0
+        prob = 1.0
+        for column, outcome in zip(model.columns, outcomes):
+            detectors ^= column.detector_response_masks[outcome]
+            logicals ^= column.logical_response_masks[outcome]
+            prob *= column.prior_probs[outcome]
+        if detectors == target:
+            class_probs[logicals] = class_probs.get(logicals, 0) + prob
+    if not class_probs:
+        return _Result("no_path", None)
+    return _Result("ok", max(class_probs, key=lambda logicals: class_probs[logicals]))
+
+
+def _optimize_column_order(
+    columns: list[_Column], *, num_detectors: int
+) -> tuple[list[_Column], tuple[int, ...]]:
+    """Reorder columns, reindexing them as Frontier does."""
+    ordering = tuple(reversed(range(len(columns))))
+    return [
+        dataclasses.replace(columns[old], index=new) for new, old in enumerate(ordering)
+    ], ordering

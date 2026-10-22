@@ -24,27 +24,6 @@ from qldpc.decoders.construction import specs
 from qldpc.decoders.construction._resolution import build_error_decoder
 
 
-def _get_graphlike_inputs() -> tuple[npt.NDArray[np.int_], stim.DetectorErrorModel]:
-    """A parity check matrix and a detector error model whose errors flip at most two checks."""
-    matrix = np.array([[1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 1]], dtype=int)
-    circuit = stim.Circuit.generated(
-        "repetition_code:memory", distance=3, rounds=2, after_clifford_depolarization=0.01
-    )
-    return matrix, circuit.detector_error_model()
-
-
-def _build_observable_lookup_decoder(
-    dem: stim.DetectorErrorModel, *, max_weight: int
-) -> decoders.ObservableDecoder:
-    """Build an observable lookup decoder, as a builder that a specification can defer."""
-    return decoders.lookup(max_weight=max_weight).build_observable_decoder(dem)
-
-
-def _uniform_binary_error_channel(error: npt.NDArray[np.int_] | Sequence[int]) -> float:
-    """Return the log probability of a uniformly random binary error."""
-    return -float(np.size(error) * np.log(2))
-
-
 def test_decoder_specs() -> None:
     """Typed decoder specs defer construction and survive process serialization."""
     matrix = np.eye(2, dtype=int)
@@ -478,3 +457,24 @@ def test_is_default_value() -> None:
     assert specs._is_default_value(float("1"), 1.0)
     assert not specs._is_default_value(1, 1.0)
     assert not specs._is_default_value(object(), default)
+
+
+def _get_graphlike_inputs() -> tuple[npt.NDArray[np.int_], stim.DetectorErrorModel]:
+    """A parity check matrix and a detector error model whose errors flip at most two checks."""
+    matrix = np.array([[1, 1, 0, 0], [0, 1, 1, 0], [0, 0, 1, 1]], dtype=int)
+    circuit = stim.Circuit.generated(
+        "repetition_code:memory", distance=3, rounds=2, after_clifford_depolarization=0.01
+    )
+    return matrix, circuit.detector_error_model()
+
+
+def _build_observable_lookup_decoder(
+    dem: stim.DetectorErrorModel, *, max_weight: int
+) -> decoders.ObservableDecoder:
+    """Build an observable lookup decoder, as a builder that a specification can defer."""
+    return decoders.lookup(max_weight=max_weight).build_observable_decoder(dem)
+
+
+def _uniform_binary_error_channel(error: npt.NDArray[np.int_] | Sequence[int]) -> float:
+    """Return the log probability of a uniformly random binary error."""
+    return -float(np.size(error) * np.log(2))

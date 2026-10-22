@@ -2862,10 +2862,6 @@ class T4Code(CSSCode):
         )
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_check_pauli(row: int, col: int) -> PauliXZ:
     """What type of stabilizer does the check at the given coordinates measure?
 

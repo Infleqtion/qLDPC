@@ -202,7 +202,10 @@ def test_observable_decoders_reject_prebuilt_decoders() -> None:
             "each subgraph",
         ),
         (
-            lambda: decoders.SequentialWindowDecoder([[0]], decoder=prebuilt),  # type: ignore[arg-type]
+            lambda: decoders.SequentialWindowDecoder(
+                [[0]],
+                decoder=prebuilt,  # type: ignore[arg-type]
+            ),
             "each window",
         ),
         (

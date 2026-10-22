@@ -19,6 +19,9 @@ from .bridge import build_bridge
 from .circuit import _build_joint_ppm_circuit, keep_only_observable, logical_state_init
 from .gadget import build_gadget
 
+####################################################################################################
+# compiler records
+
 
 class _SurgeryBackendUnsupportedError(RuntimeError):
     """A valid logical request that the selected surgery construction cannot realize."""
@@ -90,6 +93,120 @@ class _CompiledPairMeasurement:
     resolved_operators: tuple[tuple[int, ...], tuple[int, ...]]
     backend: _WebsterBackendDetails
     resources: _SurgeryResourceCounts
+
+
+####################################################################################################
+# pair-measurement lowering
+
+
+def _compile_interblock_pair_measurement(
+    blocks: Collection[_LogicalBlock],
+    request: _PauliPairMeasurement,
+    *,
+    rounds: int,
+    noise_model: NoiseModel | None = None,
+    initial_states: Mapping[str, str] | None = None,
+) -> _CompiledPairMeasurement:
+    """Lower one explicit inter-block Pauli-pair request through the fallback backend."""
+    if not isinstance(rounds, int) or isinstance(rounds, bool):
+        raise TypeError("rounds must be an integer")
+    if rounds < 1:
+        raise ValueError(f"rounds must be >= 1, got {rounds}")
+
+    block_by_id = _validate_blocks(blocks)
+    resolved_l, resolved_r = _validate_request(request, block_by_id)
+    resolved = (resolved_l, resolved_r)
+    factor_l, block_l = resolved_l
+    factor_r, block_r = resolved_r
+    basis = _as_pauli_xz(factor_l.basis)
+    assert _as_pauli_xz(factor_r.basis) is basis
+    data_init = _resolve_initial_states(initial_states, resolved)
+
+    operators = (
+        np.asarray(block_l.code.get_logical_ops(basis)[factor_l.logical_index], dtype=np.uint8),
+        np.asarray(block_r.code.get_logical_ops(basis)[factor_r.logical_index], dtype=np.uint8),
+    )
+    supports = tuple(
+        tuple(int(index) for index in np.flatnonzero(operator)) for operator in operators
+    )
+    for factor, support in zip(request.factors, supports):
+        if len(support) < 2:
+            raise _SurgeryBackendUnsupportedError(
+                f"the Webster universal adapter requires support weight >= 2, but "
+                f"{factor.block_id!r} logical {factor.logical_index} has weight {len(support)}"
+            )
+
+    gadget_l = build_gadget(block_l.code, operators[0], basis=basis)
+    gadget_r = build_gadget(block_r.code, operators[1], basis=basis)
+    try:
+        bridge = build_bridge(gadget_l, gadget_r)
+    except (RuntimeError, ValueError) as error:
+        raise _SurgeryBackendUnsupportedError(
+            f"the Webster universal adapter cannot realize result {request.result_key!r}"
+        ) from error
+
+    diagnostic_circuit, merged_code = _build_joint_ppm_circuit(
+        gadget_l,
+        gadget_r,
+        bridge,
+        intercode=True,
+        rounds=rounds,
+        noise_model=noise_model,
+        data_init=data_init,
+    )
+    circuit = keep_only_observable(diagnostic_circuit, 0)
+
+    qubit_ids = QubitIDs.from_code(merged_code)
+    num_data_l = block_l.code.num_qudits
+    num_data_r = block_r.code.num_qudits
+    block_data_qubits = (
+        (factor_l.block_id, tuple(qubit_ids.data[:num_data_l])),
+        (
+            factor_r.block_id,
+            tuple(qubit_ids.data[num_data_l : num_data_l + num_data_r]),
+        ),
+    )
+    gadget_ancilla_qubits = bridge.g_l_aug.incidence.shape[0] + bridge.g_r_aug.incidence.shape[0]
+    resources = _SurgeryResourceCounts(
+        source_data_qubits=num_data_l + num_data_r,
+        gadget_ancilla_qubits=gadget_ancilla_qubits,
+        adapter_data_qubits=bridge.width,
+        syndrome_ancilla_qubits=merged_code.num_checks,
+        allocated_physical_qubits=diagnostic_circuit.num_qubits,
+        syndrome_rounds=rounds,
+        logical_outcomes=1,
+    )
+    assert (
+        resources.source_data_qubits
+        + resources.gadget_ancilla_qubits
+        + resources.adapter_data_qubits
+        == merged_code.num_qudits
+    )
+    assert (
+        merged_code.num_qudits + resources.syndrome_ancilla_qubits
+        == resources.allocated_physical_qubits
+    )
+
+    resolved_operators = tuple(
+        tuple(int(value) for value in operator.tolist()) for operator in operators
+    )
+    return _CompiledPairMeasurement(
+        request=request,
+        circuit=circuit,
+        diagnostic_circuit=diagnostic_circuit,
+        merged_code=merged_code,
+        result_observables=((request.result_key, 0),),
+        diagnostic_observable_indices=(1,),
+        block_data_qubits=block_data_qubits,
+        resolved_operators=(resolved_operators[0], resolved_operators[1]),
+        backend=_WebsterBackendDetails(
+            name="webster-universal-adapter",
+            bridge_width=bridge.width,
+            cellulate_max_len=None,
+            boosted=False,
+        ),
+        resources=resources,
+    )
 
 
 def _as_pauli_xz(basis: Pauli) -> PauliXZ:
@@ -203,7 +320,8 @@ def _resolve_initial_states(
         missing = sorted(expected_ids - provided_ids)
         extra = sorted(provided_ids - expected_ids, key=repr)
         raise ValueError(
-            f"initial_states must name exactly the measured blocks; missing={missing}, extra={extra}"
+            "initial_states must name exactly the measured blocks; "
+            f"missing={missing}, extra={extra}"
         )
 
     data_init: list[str] = []
@@ -217,113 +335,3 @@ def _resolve_initial_states(
             )
         data_init.append(logical_state_init(block.code, state, log_idx=factor.logical_index))
     return data_init[0], data_init[1]
-
-
-def _compile_interblock_pair_measurement(
-    blocks: Collection[_LogicalBlock],
-    request: _PauliPairMeasurement,
-    *,
-    rounds: int,
-    noise_model: NoiseModel | None = None,
-    initial_states: Mapping[str, str] | None = None,
-) -> _CompiledPairMeasurement:
-    """Lower one explicit inter-block Pauli-pair request through the fallback backend."""
-    if not isinstance(rounds, int) or isinstance(rounds, bool):
-        raise TypeError("rounds must be an integer")
-    if rounds < 1:
-        raise ValueError(f"rounds must be >= 1, got {rounds}")
-
-    block_by_id = _validate_blocks(blocks)
-    resolved_l, resolved_r = _validate_request(request, block_by_id)
-    resolved = (resolved_l, resolved_r)
-    factor_l, block_l = resolved_l
-    factor_r, block_r = resolved_r
-    basis = _as_pauli_xz(factor_l.basis)
-    assert _as_pauli_xz(factor_r.basis) is basis
-    data_init = _resolve_initial_states(initial_states, resolved)
-
-    operators = (
-        np.asarray(block_l.code.get_logical_ops(basis)[factor_l.logical_index], dtype=np.uint8),
-        np.asarray(block_r.code.get_logical_ops(basis)[factor_r.logical_index], dtype=np.uint8),
-    )
-    supports = tuple(
-        tuple(int(index) for index in np.flatnonzero(operator)) for operator in operators
-    )
-    for factor, support in zip(request.factors, supports):
-        if len(support) < 2:
-            raise _SurgeryBackendUnsupportedError(
-                f"the Webster universal adapter requires support weight >= 2, but "
-                f"{factor.block_id!r} logical {factor.logical_index} has weight {len(support)}"
-            )
-
-    gadget_l = build_gadget(block_l.code, operators[0], basis=basis)
-    gadget_r = build_gadget(block_r.code, operators[1], basis=basis)
-    try:
-        bridge = build_bridge(gadget_l, gadget_r)
-    except (RuntimeError, ValueError) as error:
-        raise _SurgeryBackendUnsupportedError(
-            f"the Webster universal adapter cannot realize result {request.result_key!r}"
-        ) from error
-
-    diagnostic_circuit, merged_code = _build_joint_ppm_circuit(
-        gadget_l,
-        gadget_r,
-        bridge,
-        intercode=True,
-        rounds=rounds,
-        noise_model=noise_model,
-        data_init=data_init,
-    )
-    circuit = keep_only_observable(diagnostic_circuit, 0)
-
-    qubit_ids = QubitIDs.from_code(merged_code)
-    num_data_l = block_l.code.num_qudits
-    num_data_r = block_r.code.num_qudits
-    block_data_qubits = (
-        (factor_l.block_id, tuple(qubit_ids.data[:num_data_l])),
-        (
-            factor_r.block_id,
-            tuple(qubit_ids.data[num_data_l : num_data_l + num_data_r]),
-        ),
-    )
-    gadget_ancilla_qubits = bridge.g_l_aug.incidence.shape[0] + bridge.g_r_aug.incidence.shape[0]
-    resources = _SurgeryResourceCounts(
-        source_data_qubits=num_data_l + num_data_r,
-        gadget_ancilla_qubits=gadget_ancilla_qubits,
-        adapter_data_qubits=bridge.width,
-        syndrome_ancilla_qubits=merged_code.num_checks,
-        allocated_physical_qubits=diagnostic_circuit.num_qubits,
-        syndrome_rounds=rounds,
-        logical_outcomes=1,
-    )
-    assert (
-        resources.source_data_qubits
-        + resources.gadget_ancilla_qubits
-        + resources.adapter_data_qubits
-        == merged_code.num_qudits
-    )
-    assert (
-        merged_code.num_qudits + resources.syndrome_ancilla_qubits
-        == resources.allocated_physical_qubits
-    )
-
-    resolved_operators = tuple(
-        tuple(int(value) for value in operator.tolist()) for operator in operators
-    )
-    return _CompiledPairMeasurement(
-        request=request,
-        circuit=circuit,
-        diagnostic_circuit=diagnostic_circuit,
-        merged_code=merged_code,
-        result_observables=((request.result_key, 0),),
-        diagnostic_observable_indices=(1,),
-        block_data_qubits=block_data_qubits,
-        resolved_operators=(resolved_operators[0], resolved_operators[1]),
-        backend=_WebsterBackendDetails(
-            name="webster-universal-adapter",
-            bridge_width=bridge.width,
-            cellulate_max_len=None,
-            boosted=False,
-        ),
-        resources=resources,
-    )

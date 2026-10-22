@@ -419,8 +419,8 @@ def _get_code_capacity_dem(
     field = type(syndrome_matrix)
     if getattr(field, "order", 2) != 2:
         raise ValueError(
-            "An observable decoder built from a Stim detector error model requires a binary code, so"
-            f" it cannot decode a code over {field.name}.  Pass a decoder specification such as"
+            "An observable decoder built from a Stim detector error model requires a binary code,"
+            f" so it cannot decode a code over {field.name}.  Pass a decoder specification such as"
             " decoders.guf(), or a prebuilt observable decoder (such as an ObservableLookupDecoder)"
             " built for this code, instead"
         )

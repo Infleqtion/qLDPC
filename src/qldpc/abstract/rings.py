@@ -32,6 +32,7 @@ from .monomials import iter_monomial_terms
 if TYPE_CHECKING:
     from .wedderburn_artin import WedderburnArtinTransformer
 
+
 ####################################################################################################
 # group algebra and elements thereof
 

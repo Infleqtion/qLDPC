@@ -243,10 +243,6 @@ def clear_cache() -> None:
     _subprocess_packages.clear()
 
 
-####################################################################################################
-# helper methods
-
-
 def _get_libgap() -> _LibGap | None:
     """Return the optional direct GAP binding, if it is importable.
 

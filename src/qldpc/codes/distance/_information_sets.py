@@ -53,9 +53,9 @@ class InformationSet(NamedTuple):
 class Certificate:
     """Lower bound on the Hamming weight of eligible words that a family has not yet visited.
 
-    The bound holds only after every search basis of the family has completed each coefficient
-    layer through ``completed_weight``; an interrupted layer does not advance it.  It does not bound
-    the weights of witnesses already found, and it does not transfer to another basis or CSS sector.
+    The bound holds only after every search basis of the family has completed each coefficient layer
+    through ``completed_weight``; an interrupted layer does not advance it.  It does not bound the
+    weights of witnesses already found, and it does not transfer to another basis or CSS sector.
 
     Attributes:
         dimension: Number of rows of the searched basis.
@@ -215,11 +215,11 @@ def get_overlapping_family(
 ) -> BasisFamily | None:
     """Stage three: look for a lower-work replacement for a disjoint family.
 
-    ``family`` contains full or partial sets for one independent binary basis.
-    A replacement contains only full sets, with quotient labels transformed alongside rows.
-    ``max_sets`` bounds the size of a replacement family and the effort spent building it.
-    More sets can avoid costly coefficient layers in hard searches, while fewer reduce setup work.
-    Return a lower-work family certified with its maximum Hamming-coordinate coverage, or ``None``.
+    ``family`` contains full or partial sets for one independent binary basis.  A replacement
+    contains only full sets, with quotient labels transformed alongside rows.  ``max_sets`` bounds
+    the size of a replacement family and the effort spent building it.  More sets can avoid costly
+    coefficient layers in hard searches, while fewer reduce setup work.  Return a lower-work family
+    certified with its maximum Hamming-coordinate coverage, or ``None``.
     """
     # Start from full blocks; skip complete packings and families already at the size limit.
     certificate = family.certificate

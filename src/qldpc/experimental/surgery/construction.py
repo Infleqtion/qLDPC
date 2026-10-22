@@ -13,21 +13,6 @@ from qldpc.codes.common import CSSCode
 from qldpc.objects import Pauli, PauliXZ
 
 
-def _binary_matrix(name: str, matrix: np.ndarray) -> np.ndarray:
-    """Return a copied binary matrix."""
-    array = np.asarray(matrix)
-    if array.ndim != 2:
-        raise ValueError(f"{name} must be two-dimensional")
-    if np.any((array != 0) & (array != 1)):
-        raise ValueError(f"{name} must be binary")
-    return array.astype(np.uint8, copy=True)
-
-
-def _rank(matrix: np.ndarray) -> int:
-    """Compute matrix rank over GF(2)."""
-    return int(np.linalg.matrix_rank(galois.GF2(np.asarray(matrix, dtype=np.uint8))))
-
-
 @dataclasses.dataclass(frozen=True)
 class _CSSConeRegions:
     """Qubit and check-row regions of an assembled CSS cone."""
@@ -246,3 +231,18 @@ def _validate_logical_loss(
         f"{operation} must fix exactly {expected}, but the input encodes {input_dimension} and the "
         f"merged code encodes {merged_code.dimension} (logical loss {logical_loss}). {guidance}"
     )
+
+
+def _binary_matrix(name: str, matrix: np.ndarray) -> np.ndarray:
+    """Return a copied binary matrix."""
+    array = np.asarray(matrix)
+    if array.ndim != 2:
+        raise ValueError(f"{name} must be two-dimensional")
+    if np.any((array != 0) & (array != 1)):
+        raise ValueError(f"{name} must be binary")
+    return array.astype(np.uint8, copy=True)
+
+
+def _rank(matrix: np.ndarray) -> int:
+    """Compute matrix rank over GF(2)."""
+    return int(np.linalg.matrix_rank(galois.GF2(np.asarray(matrix, dtype=np.uint8))))

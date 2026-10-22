@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Classes to define the AlphaSyndrome syndrome measurement strategies."""
+"""The AlphaSyndrome syndrome measurement strategy, based on Monte Carlo tree search."""
 
 from __future__ import annotations
 
@@ -403,10 +403,6 @@ class _TreeState:
 
         # return a schedule of gates: a list whose t-th index is a list of gates to apply at time t
         return [time_to_gates[time] for time in sorted(time_to_gates.keys())]
-
-
-####################################################################################################
-# helper methods
 
 
 def _schedule_to_circuit(schedule: _GateSchedule, target_pauli: Pauli) -> stim.Circuit:

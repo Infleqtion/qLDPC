@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Decoder protocols, detailed decoding results, and coercion into and batches of error decoders."""
+"""Decoder protocols and detailed results, with helpers that coerce and batch error decoders."""
 
 from __future__ import annotations
 
@@ -233,8 +233,8 @@ class _WrappedErrorDecoder(ErrorDecoder):
 
 
 _OBSERVABLE_DECODER_ADVICE = (
-    "Pass an error-decoder specification such as decoders.bp_osd(...), or pass the observable decoder where"
-    " one is accepted, such as to decoders.SinterDecoder"
+    "Pass an error-decoder specification such as decoders.bp_osd(...), or pass the observable"
+    " decoder where one is accepted, such as to decoders.SinterDecoder"
 )
 
 
