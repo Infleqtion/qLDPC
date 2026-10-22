@@ -753,6 +753,10 @@ def test_non_css_operator_layout_and_argument_validation() -> None:
         codes.FiveQubitCode().get_logical_ops(symplectic=False)
     with pytest.raises(ValueError, match="is_subsystem_code=False contradicts"):
         codes.QuditCode(codes.BaconShorCode(3), is_subsystem_code=False)
+    with pytest.raises(ValueError, match="logical_index must lie in"):
+        codes.SurfaceCode(3).reduce_logical_op(Pauli.X, 1)
+    with pytest.raises(ValueError, match="pauli_bias must have three entries"):
+        codes.SurfaceCode(3).get_logical_error_rate_func(10, pauli_bias=(1, 1))
 
 
 def test_subsystem_code_hint_is_trusted() -> None:
@@ -762,11 +766,6 @@ def test_subsystem_code_hint_is_trusted() -> None:
     assert codes.QuditCode(matrix).is_subsystem_code
     assert not codes.QuditCode(matrix, is_subsystem_code=False).is_subsystem_code
     assert not codes.CSSCode([[1]], [[1]], is_subsystem_code=False).is_subsystem_code
-
-    with pytest.raises(ValueError, match="logical_index must lie in"):
-        codes.SurfaceCode(3).reduce_logical_op(Pauli.X, 1)
-    with pytest.raises(ValueError, match="pauli_bias must have three entries"):
-        codes.SurfaceCode(3).get_logical_error_rate_func(10, pauli_bias=(1, 1))
 
 
 def test_from_qldpc_challenge_id() -> None:

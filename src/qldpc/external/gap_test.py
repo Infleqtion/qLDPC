@@ -295,7 +295,7 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
 
         # GAP is not callable, so the user must pass around commands and outputs
         cache: dict[str, str] = {}
-        inputs = iter(["_OUTPUT_", "", "_NEW_OUTPUT_", ""])
+        inputs = iter(["_OUTPUT_", ""])
         monkeypatch.setattr("builtins.input", lambda: next(inputs))
         with (
             unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
@@ -306,9 +306,11 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
             assert not error_message
             assert terminal_output.startswith("Run the following command in GAP:")
 
-            # pasted output is not cached (even with a persistent cache), so a mistaken paste does
-            # not persist: the same command prompts again
-            assert external.gap.get_output("_INPUT_") == "_NEW_OUTPUT_"
+            # retrieve results from cache
+            assert external.gap.get_output("_INPUT_") == "_OUTPUT_"
+            terminal_output, error_message = capsys.readouterr()
+            assert not error_message
+            assert "found in the local cache" in terminal_output
 
 
 def test_get_output_libgap() -> None:

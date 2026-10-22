@@ -83,9 +83,7 @@ def get_output(*commands: str, use_pipe: bool = False) -> str:
     libgap binding.  Otherwise, when GAP is callable, it runs the commands in a subprocess.
     Finally, it falls back to a manual workflow that prints the commands, copies them to the system
     clipboard, and reads the pasted output from standard input (blocking, and raising ``EOFError``
-    if standard input is closed).  This function does not cache the output, so that a mistaken
-    paste does not persist; qLDPC functions that call it cache results that they parse
-    successfully.  Once :func:`require_package` has
+    if standard input is closed), caching the result to disk.  Once :func:`require_package` has
     fallen back from libgap to the GAP executable, every later call in the process uses the
     executable.
 
@@ -109,6 +107,22 @@ def get_output(*commands: str, use_pipe: bool = False) -> str:
     print(command)
     print()
 
+    cache_name = "gap_output"
+    cache = qldpc.cache.get_disk_cache(cache_name)
+
+    if output := cache.get(command, None):
+        print("NOTICE: GAP command and output found in the local cache.  Retrieved output:")
+        print("=" * 80)
+        print(output)
+        print("=" * 80)
+        print()
+        print(
+            "If you think that the cached result is incorrect, you can remove it from the cache"
+            " by running the following commands:\n"
+            f'\nimport qldpc\nqldpc.cache.clear_entry("{cache_name}", """{command}""")\n'
+        )
+        return output
+
     print("===============================================================================")
     print("NOTE:")
     try:
@@ -128,7 +142,11 @@ def get_output(*commands: str, use_pipe: bool = False) -> str:
     lines = []
     while line := input():
         lines.append(line)
-    return "\n".join(lines)
+    output = "\n".join(lines)
+
+    # save output to cache and return
+    cache[command] = output
+    return output
 
 
 @functools.cache
