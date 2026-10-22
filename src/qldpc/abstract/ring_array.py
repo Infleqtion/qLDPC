@@ -39,7 +39,8 @@ if TYPE_CHECKING:
 class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     """Array whose entries are members of a GroupRing."""
 
-    _ring: GroupRing
+    # None only for a view of a plain array that has not yet been assigned a ring
+    _ring: GroupRing | None
 
     # Howell-form provenance, attached by howell_normal_form_* to their direct output only (via
     # _mark_as_hnf).  These deliberately do NOT propagate through numpy operations:
@@ -81,7 +82,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         # A view of a plain array (obj without _ring) has no ring until its creator assigns one,
         # which every .view(RingArray) in this module does immediately.  Howell-form provenance is
         # intentionally NOT propagated here (see the class attributes).
-        self._ring = getattr(obj, "_ring", None)  # type:ignore[assignment]
+        self._ring = getattr(obj, "_ring", None)
 
     def __array_function__(
         self,
@@ -102,10 +103,10 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         if any(ring != rings[0] for ring in rings[1:]):
             raise ValueError("Cannot perform operations on RingArrays with different base rings")
         args = tuple(_unwrap_ring_arrays(x) for x in args)
-        result = super().__array_function__(func, types, args, kwargs)
+        result: object = super().__array_function__(func, types, args, kwargs)
         if isinstance(result, np.ndarray):
             result = result.view(RingArray)
-            result._ring = rings[0]  # type:ignore[attr-defined]
+            result._ring = rings[0]
         return result
 
     def __array_ufunc__(
@@ -128,10 +129,12 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         ):
             return product
         inputs = tuple(x.view(np.ndarray) if isinstance(x, RingArray) else x for x in inputs)
-        result = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+        result: RingArray | RingMember | None = super().__array_ufunc__(
+            ufunc, method, *inputs, **kwargs
+        )
         if isinstance(result, np.ndarray):
             result = result.view(RingArray)
-            result._ring = next(iter(rings), None)  # type:ignore[attr-defined]
+            result._ring = next(iter(rings), None)
         return result
 
     def __str__(self) -> str:
@@ -140,6 +143,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     @property
     def ring(self) -> GroupRing:
         """Base ring of this RingArray."""
+        if self._ring is None:
+            raise ValueError("This RingArray has no base ring (it may be a view of a plain array)")
         return self._ring
 
     @property
@@ -350,6 +355,9 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         The RREF of a RingArray over a commutative ring is unique.  For non-commutative rings, the
         RREF is only unique up to a choice of matrix basis for simple components of the ring.
+
+        Without a transformer, this method may run GAP, prompt on standard input, and use the system
+        clipboard; see GroupRing.get_transformer.
         """
         self._require_ndim(2)
         if not self.ring.is_semisimple:
@@ -369,7 +377,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         - ``RingArray.howell_normal_form_semisimple`` (if ``poly is False``, the default), or
         - ``RingArray.howell_normal_form_poly`` (if ``poly is True``).
 
-        See the documentation of those methods for additional information.
+        See the documentation of those methods for additional information, including the GAP
+        computations, prompts, and clipboard use that ``howell_normal_form_semisimple`` may need.
         """
         if poly:
             return self.howell_normal_form_poly()
@@ -417,6 +426,9 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         - https://en.wikipedia.org/wiki/Howell_normal_form
         - https://github.com/m-webster/XPFpackage/blob/570ea89/Examples/A.1_howell_matrix.ipynb
+
+        Without a transformer, this method may run GAP, prompt on standard input, and use the system
+        clipboard; see GroupRing.get_transformer.
         """
         self._require_ndim(2)
         if not self.ring.is_semisimple:

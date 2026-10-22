@@ -429,6 +429,7 @@ def assert_lift_is_homomorphism(group: abstract.Group) -> None:
 def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group; its lift is a homomorphism (though not orthogonal)."""
     group = abstract.SL(dimension, field=field, linear_rep=linear_rep)
+    assert group.dimension == dimension and group.field.order == field
     order = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
     mats = tuple(abstract.SL.iter_mats(dimension, field))
     assert group.order == len(mats) == order
@@ -454,6 +455,15 @@ def test_PSL(dimension: int, field: int, linear_rep: bool | None) -> None:
     assert group.order == len(mats) == order
     assert all(mat.shape == (dimension, dimension) for mat in mats)
     assert_lift_is_homomorphism(group)
+
+
+def test_matrix_group_names() -> None:
+    """Matrix groups are named after their classes."""
+    assert abstract.SL(2, 3).name == "SpecialLinearGroup"
+    assert abstract.SL(2, 2, linear_rep=False).name == "SpecialLinearGroup"
+    assert abstract.PSL(2, 2).name == "ProjectiveSpecialLinearGroup"
+    assert abstract.GL(2, 2).name == "GeneralLinearGroup"
+    assert abstract.PGL(2, 2).name == "ProjectiveGeneralLinearGroup"
 
 
 def test_psl_requires_trivial_center() -> None:
@@ -575,7 +585,7 @@ def test_small_group() -> None:
     ):
         group = abstract.SmallGroup(order, index)
         assert group.generators == desired_group.generators
-        generated = list(abstract.SmallGroup.generator(order))
+        generated = list(abstract.SmallGroup.iter_groups(order))
         assert len(generated) == 1 and generated[0].equiv(desired_group)
 
         # retrieve group structure

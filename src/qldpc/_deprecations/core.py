@@ -36,7 +36,7 @@ from typing import TYPE_CHECKING, TypeVar
 from qldpc._utils import get_external_caller_stacklevel
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Iterator
     from types import FrameType
 
     import numpy as np
@@ -144,16 +144,16 @@ ALIASES: dict[str, dict[str, str]] = {
             "qldpc.decoders.construction._resolution:reject_prebuilt_decoder"
         ),
         "reject_removed_decoder_args": "qldpc._deprecations.decoders:reject_removed_decoder_args",
-        "resolve_decoder": "qldpc.decoders.construction._resolution:resolve_decoder",
-        "resolve_observable_decoder": (
-            "qldpc.decoders.construction._resolution:resolve_observable_decoder"
-        ),
+        "resolve_decoder": "qldpc._deprecations.decoders:resolve_decoder",
+        "resolve_observable_decoder": "qldpc._deprecations.decoders:resolve_observable_decoder",
         "supports_batch_decoding": "qldpc.decoders.protocols:_supports_batch_decoding",
     },
     "qldpc.decoders.adapters": {
+        "BatchErrorDecoder": "qldpc.decoders:BatchErrorDecoder",
         "BitPackedObservableDecoder": (
             "qldpc.decoders.adapters._observable_decoders:BitPackedObservableDecoder"
         ),
+        "ErrorDecoder": "qldpc.decoders:ErrorDecoder",
         "ErrorsToFieldObservablesDecoder": (
             "qldpc.decoders.adapters._observable_decoders:ErrorsToFieldObservablesDecoder"
         ),
@@ -283,7 +283,7 @@ def defunct(message: str) -> ValueError:
 
 def install_deprecated_methods() -> None:
     """Attach deprecated methods to their classes."""
-    from qldpc.abstract import TrivialGroup
+    from qldpc.abstract import SmallGroup, TrivialGroup
     from qldpc.codes import ClassicalCode, CSSCode, QuditCode
     from qldpc.decoders.custom import DirectDecoder
 
@@ -340,6 +340,24 @@ def install_deprecated_methods() -> None:
             "DirectDecoder.decode_batch is DEFUNCT; use DirectDecoder.correct_batch instead.  A"
             " DirectDecoder corrects code words, and is not a syndrome decoder"
         )
+
+    @_deprecated_method(SmallGroup, static=True)
+    def number(order: int) -> int:
+        """Deprecated alias for SmallGroup.count_groups."""
+        warn_deprecated(
+            "SmallGroup.number is DEPRECATED; use SmallGroup.count_groups instead",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return SmallGroup.count_groups(order)
+
+    @_deprecated_method(SmallGroup, static=True)
+    def generator(order: int) -> Iterator[SmallGroup]:
+        """Deprecated alias for SmallGroup.iter_groups."""
+        warn_deprecated(
+            "SmallGroup.generator is DEPRECATED; use SmallGroup.iter_groups instead",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return SmallGroup.iter_groups(order)
 
     @_deprecated_method(TrivialGroup, static=True)
     def to_ring_array(data: npt.NDArray[np.int_] | NestedSequence) -> None:

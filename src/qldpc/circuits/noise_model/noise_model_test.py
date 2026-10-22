@@ -1031,12 +1031,3 @@ class _CallableRule:
 
     def __call__(self, op: stim.CircuitInstruction) -> circuits.NoiseRule | None:
         return None
-
-
-def test_legacy_imports() -> None:
-    """Names that were importable from the former noise_model.py module remain importable."""
-    from qldpc.circuits import common
-    from qldpc.circuits.noise_model import StimCircuitLike, with_remapped_qubits
-
-    assert StimCircuitLike is common.StimCircuitLike
-    assert with_remapped_qubits is common.with_remapped_qubits

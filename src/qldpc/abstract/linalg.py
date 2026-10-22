@@ -143,7 +143,9 @@ def get_howell_dual(
 
     The ``transformer`` must be the one used to build ``matrix_hnf``, since the dual is built in
     that transformer's basis.  By default it is read from ``matrix_hnf`` (the transformer recorded
-    when the Howell form was built).
+    when the Howell form was built).  If neither provides one, this function uses the ring's
+    transformer, which may run GAP, prompt on standard input, and use the system clipboard; see
+    GroupRing.get_transformer.
 
     Likewise, the ``right`` flag must match the orientation used to build ``matrix_hnf`` (the
     ``right`` passed to ``null_space``/``howell_normal_form_semisimple``).  For a non-commutative
@@ -310,8 +312,8 @@ def _get_ring(
     matrix_a: RingArray | npt.NDArray[np.int_], matrix_b: RingArray | npt.NDArray[np.int_]
 ) -> GroupRing:
     """Identify the ring that at least one of the matrices is over."""
-    ring_a = matrix_a.ring if isinstance(matrix_a, RingArray) else None
-    ring_b = matrix_b.ring if isinstance(matrix_b, RingArray) else None
+    ring_a = matrix_a._ring if isinstance(matrix_a, RingArray) else None
+    ring_b = matrix_b._ring if isinstance(matrix_b, RingArray) else None
     if ring_a is None and ring_b is None:
         raise ValueError("At least one of the provided matrices must be a RingArray")
     if ring_a is not None and ring_b is not None and ring_a != ring_b:

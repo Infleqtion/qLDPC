@@ -99,7 +99,7 @@ class Pauli(enum.Enum):
             return 0
         if self == Pauli.Z:
             return 1
-        raise AttributeError(f"No index for {self}.")
+        raise TypeError(f"Only Pauli.X and Pauli.Z have an index (got {self})")
 
 
 PauliXZ = Literal[Pauli.X, Pauli.Z]

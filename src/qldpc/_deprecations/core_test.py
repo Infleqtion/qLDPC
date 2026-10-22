@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import unittest.mock
 import warnings
 
 import numpy as np
@@ -117,6 +118,23 @@ def test_deprecated_methods() -> None:
     assert puncture.__module__ == codes.ClassicalCode.__module__
     assert puncture.__qualname__ == "ClassicalCode.puncture"
     assert str(inspect.signature(puncture)).startswith("(self, bits")
+
+
+def test_deprecated_small_group_methods() -> None:
+    """Deprecated SmallGroup methods warn and delegate to their replacements."""
+    group = abstract.CyclicGroup(2)
+    generators = [tuple(gen.array_form) for gen in group.generators]
+    with (
+        unittest.mock.patch("qldpc.external._groups.get_small_group_number", return_value=1),
+        unittest.mock.patch("qldpc.external._groups.get_generators", return_value=generators),
+    ):
+        with pytest.warns(DeprecationWarning, match="use SmallGroup.count_groups") as caught:
+            assert abstract.SmallGroup.number(2) == 1  # type: ignore[attr-defined]
+        assert caught[0].filename == __file__
+        with pytest.warns(DeprecationWarning, match="use SmallGroup.iter_groups") as caught:
+            groups = list(abstract.SmallGroup.generator(2))  # type: ignore[attr-defined]
+        assert caught[0].filename == __file__
+    assert len(groups) == 1 and groups[0].equiv(group)
 
 
 def test_defunct_methods() -> None:

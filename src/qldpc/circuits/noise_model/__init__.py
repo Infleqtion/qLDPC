@@ -139,9 +139,6 @@ The original code was written for the paper at "Inplace Access to the Surface Co
 Portions copyright the original authors, licensed under CC BY 4.0 — see above.
 """
 
-# re-exported for backwards compatibility with imports from the former noise_model.py module
-from ..common import StimCircuitLike as StimCircuitLike
-from ..common import with_remapped_qubits as with_remapped_qubits
 from .channels import (
     AbstractPauliChannel,
     PauliChannel,

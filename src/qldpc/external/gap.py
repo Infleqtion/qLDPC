@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import functools
 import importlib
-import os
 import re
 import subprocess
 from collections.abc import Callable, Sequence
@@ -17,11 +16,7 @@ from typing import Protocol
 
 import pyperclip
 
-import qldpc
 import qldpc.cache
-
-# GAP root directory for packages that qLDPC installs for the GAP executable, in qLDPC's user cache
-_GAP_ROOT = str(qldpc.cache.get_disk_cache_path("gap"))
 
 
 class GAPError(ValueError):
@@ -88,7 +83,9 @@ def get_output(*commands: str, use_pipe: bool = False) -> str:
     libgap binding.  Otherwise, when GAP is callable, it runs the commands in a subprocess.
     Finally, it falls back to a manual workflow that prints the commands, copies them to the system
     clipboard, and reads the pasted output from standard input (blocking, and raising ``EOFError``
-    if standard input is closed), caching the result to disk.  Once :func:`require_package` has
+    if standard input is closed).  This function does not cache the output, so that a mistaken
+    paste does not persist; qLDPC functions that call it cache results that they parse
+    successfully.  Once :func:`require_package` has
     fallen back from libgap to the GAP executable, every later call in the process uses the
     executable.
 
@@ -112,22 +109,6 @@ def get_output(*commands: str, use_pipe: bool = False) -> str:
     print(command)
     print()
 
-    cache_name = "gap_output"
-    cache = qldpc.cache.get_disk_cache(cache_name)
-
-    if output := cache.get(command, None):
-        print("NOTICE: GAP command and output found in the local cache.  Retrieved output:")
-        print("=" * 80)
-        print(output)
-        print("=" * 80)
-        print()
-        print(
-            "If you think that the cached result is incorrect, you can remove it from the cache"
-            " by running the following commands:\n"
-            f'\nimport qldpc\nqldpc.cache.clear_entry("{cache_name}", """{command}""")\n'
-        )
-        return output
-
     print("===============================================================================")
     print("NOTE:")
     try:
@@ -147,11 +128,7 @@ def get_output(*commands: str, use_pipe: bool = False) -> str:
     lines = []
     while line := input():
         lines.append(line)
-    output = "\n".join(lines)
-
-    # save output to cache and return
-    cache[command] = output
-    return output
+    return "\n".join(lines)
 
 
 @functools.cache
@@ -190,7 +167,8 @@ def require_package(name: str, repo: str | None = None) -> bool:
             _libgap_packages[name.lower()] = (name, repo)
             return True
 
-        _confirm_package_install(name)
+        source = _get_package_manager_source(name, repo) if repo else "GAP's package distribution"
+        _confirm_package_install(name, source)
         try:
             installed = _install_package_libgap(name, repo, libgap)
         except (ModuleNotFoundError, ValueError) as error:
@@ -327,10 +305,11 @@ def _sanitize_commands(commands: Sequence[str]) -> tuple[str, ...]:
 def _get_output_subprocess(commands: Sequence[str], use_pipe: bool = False) -> str:
     """Evaluate commands through the GAP executable."""
     commands = _sanitize_commands(commands)
+    gap_root = qldpc.cache.get_disk_cache_path("gap")  # for packages that qLDPC installs
     shell_commands = [
         "gap",
         "-l",
-        f";{_GAP_ROOT}",
+        f";{gap_root}",
         "-q",
         "--quitonbreak",
     ]
@@ -356,10 +335,13 @@ def _get_output_subprocess(commands: Sequence[str], use_pipe: bool = False) -> s
     return result.stdout
 
 
-def _confirm_package_install(name: str) -> None:
-    """Ask the user for permission to install a missing GAP package."""
+def _confirm_package_install(name: str, source: str) -> None:
+    """Ask the user for permission to install a missing GAP package from the given source."""
     response = (
-        input(f"GAP package '{name}' is required but not installed.  Try to install it? (Y/n)")
+        input(
+            f"GAP package '{name}' is required but not installed.  Try to install it from {source}?"
+            " (Y/n)"
+        )
         .strip()
         .lower()
     )
@@ -369,7 +351,8 @@ def _confirm_package_install(name: str) -> None:
 
 def _install_package_subprocess(name: str, repo: str) -> None:
     """Install a GAP package for the executable backend."""
-    commands = ["git", "clone", repo, os.path.join(_GAP_ROOT, "pkg", name.lower())]
+    package_dir = qldpc.cache.get_disk_cache_path("gap") / "pkg" / name.lower()
+    commands = ["git", "clone", repo, str(package_dir)]
     print(" ".join(commands))
     install_result = subprocess.run(commands, capture_output=True, text=True, check=False)
     if install_result.returncode:
@@ -389,7 +372,7 @@ def _require_package_subprocess(
     if availability.strip() == "fail":
         repo = repo or f"https://github.com/gap-packages/{name}"
         if confirm_install:
-            _confirm_package_install(name)
+            _confirm_package_install(name, repo)
         _install_package_subprocess(name, repo)
     return True
 

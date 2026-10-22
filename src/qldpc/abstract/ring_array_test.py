@@ -163,6 +163,10 @@ def test_matmul_fallbacks() -> None:
     unknown_ring = np.asarray(matrix).view(abstract.RingArray)
     assert np.array_equal(unknown_ring @ unknown_ring, expected)
 
+    # a RingArray without a base ring says so, rather than returning None
+    with pytest.raises(ValueError, match="no base ring"):
+        unknown_ring.ring  # noqa: B018
+
 
 def test_ring_row_reduction(
     ring_dihedral3_gf5: abstract.GroupRing, pytestconfig: pytest.Config

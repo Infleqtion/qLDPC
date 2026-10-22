@@ -7,6 +7,7 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import os
+import pathlib
 import subprocess
 import types
 import unittest.mock
@@ -276,12 +277,14 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
         ):
             external.gap.get_output()
 
-        # GAP is callable, and succeeds
+        # GAP is callable, and succeeds, with qLDPC's current cache directory as a GAP root
         with (
             unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
-            unittest.mock.patch("subprocess.run", return_value=get_mock_process("_TEST_")),
+            unittest.mock.patch("subprocess.run", return_value=get_mock_process("_TEST_")) as run,
+            unittest.mock.patch("qldpc.cache.get_disk_cache_path", return_value="_CACHE_"),
         ):
             assert external.gap.get_output() == "_TEST_"
+        assert ";_CACHE_" in run.call_args.args[0]
 
         # GAP is callable, and succeeds with piped input
         with (
@@ -292,7 +295,7 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
 
         # GAP is not callable, so the user must pass around commands and outputs
         cache: dict[str, str] = {}
-        inputs = iter(["_OUTPUT_", ""])
+        inputs = iter(["_OUTPUT_", "", "_NEW_OUTPUT_", ""])
         monkeypatch.setattr("builtins.input", lambda: next(inputs))
         with (
             unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
@@ -303,11 +306,9 @@ def test_get_output(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixtu
             assert not error_message
             assert terminal_output.startswith("Run the following command in GAP:")
 
-            # retrieve results from cache
-            assert external.gap.get_output("_INPUT_") == "_OUTPUT_"
-            terminal_output, error_message = capsys.readouterr()
-            assert not error_message
-            assert "found in the local cache" in terminal_output
+            # pasted output is not cached (even with a persistent cache), so a mistaken paste does
+            # not persist: the same command prompts again
+            assert external.gap.get_output("_INPUT_") == "_NEW_OUTPUT_"
 
 
 def test_get_output_libgap() -> None:
@@ -412,20 +413,25 @@ def test_require_package(capsys: pytest.CaptureFixture[str]) -> None:
             ):
                 external.gap.require_package("")
 
-            # successfully install a missing package into the GAP package directory
+            # successfully install a missing package, from a source named in the prompt, into the
+            # GAP package directory of qLDPC's current cache directory
             install = unittest.mock.Mock(return_value=get_mock_process())
             with (
                 unittest.mock.patch("qldpc.external.gap.get_output", return_value="fail"),
-                unittest.mock.patch("builtins.input", return_value="y"),
+                unittest.mock.patch("builtins.input", return_value="y") as confirm,
                 unittest.mock.patch("subprocess.run", install),
+                unittest.mock.patch(
+                    "qldpc.cache.get_disk_cache_path", return_value=pathlib.Path("_CACHE_")
+                ),
             ):
                 assert external.gap.require_package("Example", "https://example.com/gap-package")
+            assert "https://example.com/gap-package" in confirm.call_args.args[0]
             install.assert_called_once_with(
                 [
                     "git",
                     "clone",
                     "https://example.com/gap-package",
-                    os.path.join(external.gap._GAP_ROOT, "pkg", "example"),
+                    os.path.join("_CACHE_", "pkg", "example"),
                 ],
                 capture_output=True,
                 text=True,
@@ -555,6 +561,7 @@ def test_require_package_libgap(capsys: pytest.CaptureFixture[str]) -> None:
         assert external.gap.require_package("QDistRnd", "https://example.com/qdist")
     get_executable_output.assert_called_once_with(('Print(TestPackageAvailability("qdistrnd"));;',))
     confirm.assert_called_once()
+    assert "https://example.com/qdist" in confirm.call_args.args[0]
     install.assert_called_once_with("QDistRnd", "https://example.com/qdist")
     terminal_output, error_message = capsys.readouterr()
     assert not error_message

@@ -70,6 +70,9 @@ class GroupRing:
 
         By default each component's primitive central idempotent is validated; pass
         ``skip_validation=True`` to skip the check (see WedderburnArtinComponentTransformer).
+
+        Unless the ring's primitive central idempotents are already known, this may run GAP, prompt
+        on standard input, and use the system clipboard; see get_primitive_central_idempotents.
         """
         from .wedderburn_artin import WedderburnArtinTransformer  # avoid circular import
 
