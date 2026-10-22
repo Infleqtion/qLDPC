@@ -127,10 +127,11 @@ def test_alpha_reward_matches_paper() -> None:
     See Section 4.4 of https://arxiv.org/abs/2601.12509.
     """
     code = codes.CSSCode([[1, 1, 0]], [[1, 1, 0]])
+    shots = 20
     strategy = circuits.AlphaSyndrome(
-        circuits.DepolarizingNoiseModel(0.2),
+        circuits.NoiseModel(),
         iters_per_step=3,
-        shots_per_iter=20,
+        shots_per_iter=shots,
         verbose=False,
         seed=11,
     )
@@ -145,9 +146,17 @@ def test_alpha_reward_matches_paper() -> None:
         rewards.append(reward)
         original_backpropagate(node, reward)
 
+    # without noise, no observable flips, so every flipped prediction is a logical error
+    num_observables = evaluation_data[2]
+    predictions = []
+    for num_errors in [0, 10, 0]:
+        prediction = np.zeros((shots, num_observables), dtype=bool)
+        prediction[:num_errors, 0] = True
+        predictions.append(prediction)
+
     with (
         mock.patch.object(_TreeNode, "backpropagate", autospec=True, side_effect=record_reward),
-        mock.patch.object(alpha_syndrome.np, "sum", side_effect=[0, 10, 0]),
+        mock.patch.object(alpha_syndrome.sinter, "predict_observables", side_effect=predictions),
     ):
         strategy._schedule_one_gate(
             code,

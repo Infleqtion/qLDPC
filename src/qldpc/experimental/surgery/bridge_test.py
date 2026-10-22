@@ -217,7 +217,7 @@ def test_build_bridge_bb18_hyperedge_and_long_cycle() -> None:
     import sympy
 
     from qldpc.experimental.surgery import build_bridge, build_gadget
-    from qldpc.experimental.surgery.circuit import _stitch_to_joint_csscode
+    from qldpc.experimental.surgery.circuit import _stitch_intracode
 
     x, y = sympy.symbols("x y")
     code = codes.BBCode(
@@ -235,7 +235,7 @@ def test_build_bridge_bb18_hyperedge_and_long_cycle() -> None:
     assert max(row_weights) >= 4, "fixture must carry a hyperedge (F row of weight >= 4)"
     bridge = build_bridge(g_l, g_r)
     # Merged code construction must succeed
-    merged = _stitch_to_joint_csscode(g_l, g_r, bridge)
+    merged = _stitch_intracode(g_l, g_r, bridge)
     # Intra-code joint Z̄_1 ⊗ Z̄_2: k_merged == k_orig − 1
     assert merged.dimension == code.dimension - 1
     # CSS commutation on merged code
@@ -251,7 +251,7 @@ def test_adapter_cycle_check_weight_bounded() -> None:
     T_r | H_R]: at most 3 entries from each SkipTree block and exactly 2 from H_R.
     """
     from qldpc.experimental.surgery.bridge import build_bridge
-    from qldpc.experimental.surgery.circuit import _stitch_to_joint_csscode
+    from qldpc.experimental.surgery.circuit import _stitch_intracode
     from qldpc.experimental.surgery.gadget import (
         build_gadget,
     )
@@ -264,7 +264,7 @@ def test_adapter_cycle_check_weight_bounded() -> None:
     g_l = build_gadget(code, x, basis=Pauli.Z)
     g_r = build_gadget(code, x, basis=Pauli.Z)
     bridge = build_bridge(g_l, g_r)
-    merged = _stitch_to_joint_csscode(g_l, g_r, bridge)
+    merged = _stitch_intracode(g_l, g_r, bridge)
     HX = np.asarray(merged.matrix_x).astype(np.int_)
     # basis=Z: new cycle-X-checks are the last (w-1) rows of HX
     new_x_rows = HX[-(bridge.width - 1) :, :]

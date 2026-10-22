@@ -9,7 +9,7 @@ import pytest
 import stim
 
 from qldpc import circuits, decoders
-from qldpc.circuits.benchmarking import common
+from qldpc.circuits.benchmarking import logical_errors
 from qldpc.codes.distance import DistanceMethod
 
 
@@ -129,20 +129,11 @@ def test_erasure_counts_as_a_discard() -> None:
         )
 
 
-def test_postselection_masks() -> None:
-    """Automatic selection chooses flags, while explicit out-of-range indices are rejected."""
-    record = circuits.DetectorRecord({"prep": [0], "flags": [1]})
-    detector_mask, observable_mask = common._get_postselection_masks(True, (), record, 0)
-    assert detector_mask is not None
-    assert np.array_equal(detector_mask, [2])
-    assert observable_mask is None
-
-    detector_mask, observable_mask = common._get_postselection_masks(False, [-1], record, 3)
-    assert detector_mask is None
-    assert observable_mask is not None
-    assert np.array_equal(observable_mask, [4])
-
-    with pytest.raises(ValueError, match="2 selectable prep/flag detectors"):
-        common._get_postselection_masks([2], (), record, 0)
+def test_postselection_mask() -> None:
+    """Post-selection masks are bit-packed, accept negative indices, and reject other indices."""
+    assert logical_errors._get_postselection_mask((), 3, "Detector") is None
+    mask = logical_errors._get_postselection_mask([0, -1], 10, "Detector")
+    assert mask is not None
+    assert np.array_equal(mask, [1, 2])
     with pytest.raises(ValueError, match="Observable post-selection"):
-        common._get_postselection_masks((), [1], record, 1)
+        logical_errors._get_postselection_mask([1], 1, "Observable")

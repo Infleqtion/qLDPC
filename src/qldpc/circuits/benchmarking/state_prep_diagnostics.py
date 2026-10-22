@@ -21,7 +21,7 @@ from ..common import (
 )
 from ..encoding import get_logical_state_stabilizers, get_state_stabilizers
 from ..noise_model import DepolarizingNoiseModel, NoiseModel, as_noiseless_circuit
-from .common import _get_postselection_masks
+from .logical_errors import _get_postselection_mask
 
 ####################################################################################################
 # state preparation diagnostics
@@ -246,8 +246,13 @@ def get_state_prep_diagnostic_tasks(
         observables=observables,
         skip_validation=skip_validation,
     )
-    postselection_mask, postselected_observables_mask = _get_postselection_masks(
-        post_select, post_select_observables, detector_record, diagnostic_circuit.num_observables
+    postselection_mask = _get_postselection_mask(
+        _get_selected_detectors(post_select, detector_record),
+        detector_record.num_events,
+        "Detector",
+    )
+    postselected_observables_mask = _get_postselection_mask(
+        post_select_observables, diagnostic_circuit.num_observables, "Observable"
     )
     return [
         sinter.Task(
@@ -258,6 +263,28 @@ def get_state_prep_diagnostic_tasks(
         )
         for error_rate in error_rates
     ]
+
+
+def _get_selected_detectors(
+    post_select: bool | Collection[int], detector_record: DetectorRecord
+) -> list[int]:
+    """Identify the detectors of a state-prep diagnostic circuit to post-select on.
+
+    ``post_select=True`` selects the flag detectors.  Explicit indices refer to the selectable prep
+    and flag detectors, which come first in the detector record, and may be negative to count back
+    from the last of them.
+    """
+    if isinstance(post_select, bool):
+        return detector_record.get_events("flags") if post_select else []
+    num_selectable = len(detector_record.get_events("prep", "flags"))
+    post_select = list(post_select)
+    if not all(-num_selectable <= dd < num_selectable for dd in post_select):
+        raise ValueError(
+            f"The detector record exposes {num_selectable} selectable prep/flag detectors "
+            f"(out of {detector_record.num_events} total), so post-selection accepts indices "
+            f"in the range [-{num_selectable}, {num_selectable}); requested: {post_select}"
+        )
+    return [dd % num_selectable for dd in post_select]
 
 
 def _assert_pure_logical_state(
