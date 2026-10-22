@@ -9,7 +9,6 @@ from qldpc import _deprecations
 from . import gap, sqetch
 
 __all__ = ["gap", "sqetch"]
-__all__.extend(_deprecations.deprecated_names(__name__))
 
 if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
 

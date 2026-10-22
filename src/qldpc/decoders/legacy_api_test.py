@@ -142,21 +142,20 @@ V041_ROOT_NAMES = {
 
 
 def test_tagged_root_names_are_importable() -> None:
-    """Every root name of a tagged release is exported and importable from the package root."""
-    assert not (V033_ROOT_NAMES | V041_ROOT_NAMES) - set(qldpc.decoders.__all__)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", DeprecationWarning)
-        for name in V033_ROOT_NAMES | V041_ROOT_NAMES:
-            assert hasattr(qldpc.decoders, name)
-
-
-def test_tagged_root_star_import() -> None:
-    """A star import of the package root resolves every name in its __all__."""
+    """Every root name of a tagged release can be imported from the package root."""
+    names = sorted(V033_ROOT_NAMES | V041_ROOT_NAMES)
     namespace: dict[str, object] = {}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        # a star import is only valid at module level, so execute it in a fresh namespace
-        exec("from qldpc.decoders import *", namespace)  # noqa: S102
+        exec(f"from qldpc.decoders import {', '.join(names)}", namespace)  # noqa: S102
+    assert set(names) <= namespace.keys()
+
+
+def test_root_star_import() -> None:
+    """A star import of the package root resolves every name in its __all__, without warning."""
+    namespace: dict[str, object] = {}
+    # a star import is only valid at module level, so execute it in a fresh namespace
+    exec("from qldpc.decoders import *", namespace)  # noqa: S102
     assert set(qldpc.decoders.__all__) <= namespace.keys()
 
 
@@ -172,7 +171,7 @@ def test_tagged_root_star_import() -> None:
 )
 def test_historical_root_class_has_qualified_import(name: str, qualified_name: str) -> None:
     """Historical root classes retain identity while naming their canonical package path."""
-    assert name in qldpc.decoders.__all__
+    assert name not in qldpc.decoders.__all__
     assert name not in vars(qldpc.decoders)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

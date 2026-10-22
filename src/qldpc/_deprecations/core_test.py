@@ -6,10 +6,8 @@ from __future__ import annotations
 
 import importlib
 import inspect
-import pickle
 import sys
 import warnings
-from collections.abc import Callable
 
 import numpy as np
 import pytest
@@ -48,7 +46,7 @@ def test_aliases() -> None:
 
 
 def test_silent_aliases() -> None:
-    """Deprecated functions that warn when called, and moved objects, do not warn when accessed."""
+    """Deprecated functions that warn when called do not warn when accessed."""
     for module_name, aliases in _deprecations.SILENT_ALIASES.items():
         module = importlib.import_module(module_name)
         for name, target in aliases.items():
@@ -60,14 +58,17 @@ def test_silent_aliases() -> None:
 
 
 def test_deprecated_names() -> None:
-    """Packages keep released deprecated names in __all__, and unknown names are not deprecated."""
+    """Deprecated names are importable but unlisted, and unknown names are not deprecated."""
     for module_name in _deprecations.ALIASES.keys() | _deprecations.SILENT_ALIASES.keys():
-        module = importlib.import_module(module_name)
-        if hasattr(module, "__all__"):
-            assert set(_deprecations.deprecated_names(module_name)) <= set(module.__all__)
-    for module_name, names in _deprecations.UNLISTED_NAMES.items():
-        assert names <= set(_deprecations.ALIASES.get(module_name, {}))
-        assert not names & set(importlib.import_module(module_name).__all__)
+        names = set(_deprecations.ALIASES.get(module_name, {}))
+        names |= set(_deprecations.SILENT_ALIASES.get(module_name, {}))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            module = importlib.import_module(module_name)
+            namespace: dict[str, object] = {}
+            exec(f"from {module_name} import {', '.join(sorted(names))}", namespace)  # noqa: S102
+        assert names <= namespace.keys()
+        assert not names & set(getattr(module, "__all__", ()))
     with pytest.raises(AttributeError, match=r"module 'qldpc\.decoders' has no attribute 'Other'"):
         _deprecations.get_deprecated_attribute("qldpc.decoders", "Other")
 
@@ -84,33 +85,29 @@ def test_deprecated_import_warns_once() -> None:
     assert caught[0].filename == __file__
 
 
-def test_deprecated_pickle_paths() -> None:
-    """Pickles that reference a class by a deprecated or moved path still load."""
-    with pytest.warns(DeprecationWarning, match="LookupDecoder is deprecated"):
-        cls = pickle.loads(b"cqldpc.decoders\nLookupDecoder\n.")  # noqa: S301
-    assert cls is decoders.custom.LookupDecoder
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        cls = pickle.loads(b"cqldpc.abstract.rings\nRingArray\n.")  # noqa: S301
-    assert cls is abstract.RingArray
+def test_star_imports_do_not_warn() -> None:
+    """Star imports of modules that serve deprecated names do not warn."""
+    for module_name in _deprecations.ALIASES.keys() | _deprecations.SILENT_ALIASES.keys():
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            # a star import is only valid at module level, so execute it in a fresh namespace
+            exec(f"from {module_name} import *", {})  # noqa: S102
 
 
 def test_deprecated_modules() -> None:
-    """Deprecated submodules can be imported, and old pickles that reference them still load."""
+    """Deprecated submodules can be imported, warning once."""
     for package, aliases in _deprecations.ALIASES.items():
         for name, target in aliases.items():
             if ":" in target:
                 continue
             path = f"{package}.{name}"
             replacement = importlib.import_module(target)
-            loaders: list[Callable[[str], object]] = [__import__, _unpickle_module_name]
-            for load in loaders:
-                with pytest.warns(DeprecationWarning, match=f"{name} is deprecated") as caught:
-                    load(path)
-                assert len(caught) == 1 and caught[0].filename == __file__
-                assert sys.modules[path] is replacement
-                assert replacement.__spec__ is not None and replacement.__spec__.name == target
-                del sys.modules[path], vars(sys.modules[package])[name]
+            with pytest.warns(DeprecationWarning, match=f"{name} is deprecated") as caught:
+                __import__(path)
+            assert len(caught) == 1 and caught[0].filename == __file__
+            assert sys.modules[path] is replacement
+            assert replacement.__spec__ is not None and replacement.__spec__.name == target
+            del sys.modules[path], vars(sys.modules[package])[name]
 
 
 def test_deprecated_methods() -> None:
@@ -161,8 +158,3 @@ def _get_from_package(module_name: str, name: str) -> object:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
         return next(getattr(module, name) for module in modules if hasattr(module, name))
-
-
-def _unpickle_module_name(module_name: str) -> object:
-    """Unpickle the name of a module from a pickle that references it by its module path."""
-    return pickle.loads(f"c{module_name}\n__name__\n.".encode())  # noqa: S301

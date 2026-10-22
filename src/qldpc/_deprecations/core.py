@@ -12,13 +12,12 @@ SILENT_ALIASES list for that module:
 
 Python calls a module-level __getattr__ (PEP 562) only for names that the module does not define.
 A deprecated name thereby refers to the same object as its replacement, which preserves isinstance
-checks, subclassing, and unpickling.  Type checkers do not see the stub, so they reject deprecated
-names.  A package that must keep deprecated names in its __all__ extends it with deprecated_names,
-which leaves out the names that UNLISTED_NAMES lists because no released __all__ listed them.
+checks and subclassing.  Type checkers do not see the stub, so they reject deprecated names, and no
+__all__ lists them, so that star imports do not warn.
 
 A registry target without an attribute names a module that replaces a deprecated submodule.  Such a
 submodule is served both as an attribute of its package and, by a finder that this module appends
-to sys.meta_path, to import statements and to old pickles that reference objects by its path.
+to sys.meta_path, to import statements.
 
 Registry targets are lazy "module:attribute" strings, and this module imports no qLDPC subpackage
 at import time, so that every module can import it without an import cycle.  Deprecated methods are
@@ -186,12 +185,9 @@ ALIASES: dict[str, dict[str, str]] = {
     },
 }
 
-# Names served without warning when accessed: deprecated functions, which warn when called instead,
-# and objects that moved to another module, which old pickles may still reference by their old path.
+# Deprecated functions, which are served without warning when accessed, because they warn when
+# called instead.
 SILENT_ALIASES: dict[str, dict[str, str]] = {
-    "qldpc.abstract.rings": {
-        "RingArray": "qldpc.abstract.ring_array:RingArray",
-    },
     "qldpc.decoders": {
         "decode": "qldpc._deprecations.decoders:decode",
         "decode_observables": "qldpc._deprecations.decoders:decode_observables",
@@ -207,18 +203,6 @@ SILENT_ALIASES: dict[str, dict[str, str]] = {
         "get_error_decoder": "qldpc._deprecations.decoders:get_error_decoder",
         "get_observable_decoder": "qldpc._deprecations.decoders:get_observable_decoder",
     },
-    "qldpc.decoders.adapters.error_decoders": {
-        "ExpandedErrorDecoder": "qldpc.decoders.adapters._dem_matching:ExpandedErrorDecoder",
-    },
-    "qldpc.decoders.protocols": {
-        "WrappedErrorDecoder": "qldpc.decoders._common:WrappedErrorDecoder",
-    },
-}
-
-# Deprecated names that the released __all__ of their module did not list, so that deprecated_names
-# leaves them out.
-UNLISTED_NAMES: dict[str, set[str]] = {
-    "qldpc.codes": {"code_capacity"},
 }
 
 
@@ -247,12 +231,6 @@ def get_deprecated_attribute(module_name: str, name: str) -> object:
             _get_alias_warning(name, target), stacklevel=get_external_caller_stacklevel()
         )
     return _import_target(target)
-
-
-def deprecated_names(module_name: str) -> list[str]:
-    """List the deprecated names that a module serves and that its released __all__ listed."""
-    names = ALIASES.get(module_name, {}).keys() | SILENT_ALIASES.get(module_name, {}).keys()
-    return sorted(names - UNLISTED_NAMES.get(module_name, set()))
 
 
 def _import_target(target: str) -> object:

@@ -30,7 +30,6 @@ __all__ = [
     "SubgraphDecoder",
     "TrivialDecoder",
 ]
-__all__.extend(_deprecations.deprecated_names(__name__))
 
 if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
 

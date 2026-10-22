@@ -698,7 +698,7 @@ class ClassicalCode(AbstractCode):
         return ~ClassicalCode(generator, field)
 
     @staticmethod
-    def from_name(name: str) -> ClassicalCode:
+    def from_name(name: str, *, refresh: bool = False) -> ClassicalCode:
         """Named code in the GAP computer algebra system.
 
         The name is a GAP expression that constructs a code with GAP's GUAVA package, such as
@@ -709,11 +709,18 @@ class ClassicalCode(AbstractCode):
         method asks on standard input whether to proceed manually, and if so prints the GAP
         commands, copies them to the system clipboard, and reads GAP's output from standard input.
         Retrieved codes are cached on disk, in qLDPC's user cache directory, so they persist between
-        sessions.  See help(qldpc.external.gap.get_output) and
+        sessions: later calls with the same name return the cached code without running GAP, unless
+        they pass ``refresh=True``.  See help(qldpc.external.gap.get_output) and
         help(qldpc.external.gap.require_package) for details and the errors that GAP can raise.
+
+        Args:
+            name: A GAP expression that constructs a code with GUAVA.
+            refresh: If True, run GAP even if the code is cached, and replace the cached code.
         """
         standardized_name = name.strip().replace(" ", "")  # strip whitespace
-        matrix, field = _codes.get_classical_code(standardized_name)
+        get_classical_code = _codes.get_classical_code
+        retrieve = get_classical_code.refresh if refresh else get_classical_code
+        matrix, field = retrieve(standardized_name)
         code = ClassicalCode(matrix, field)
         code._name = name
         return code
@@ -1240,20 +1247,27 @@ class QuditCode(AbstractCode):
         return QuditCode(matrix.reshape(num_checks, 2 * num_qudits), field)
 
     @staticmethod
-    def from_qecdb_id(code_id: str) -> QuditCode:
+    def from_qecdb_id(code_id: str, *, refresh: bool = False) -> QuditCode:
         """Retrieve a code by ID from qecdb.org.
 
         This method queries QECDB's API at https://qecdb.org, so it requires network access.  The
         code is a CSSCode if QECDB marks it as CSS, and it remembers the distance that QECDB
         reports, if any.  Retrieved data is cached on disk, in qLDPC's user cache directory, so it
         persists between sessions: later calls with the same ID return the cached data without
-        accessing the network, even if QECDB has changed since.
+        accessing the network, even if QECDB has changed since, unless they pass ``refresh=True``.
+
+        Args:
+            code_id: The ID of the code on qecdb.org.
+            refresh: If True, retrieve the latest data from QECDB even if data for this ID is
+                cached, and replace the cached data.
 
         Raises:
             RuntimeError: If qecdb.org cannot be accessed.
             ValueError: If QECDB has no stabilizer data for the code.
         """
-        strings, distance, is_css = _codes.get_quantum_code(code_id)
+        get_quantum_code = _codes.get_quantum_code
+        retrieve = get_quantum_code.refresh if refresh else get_quantum_code
+        strings, distance, is_css = retrieve(code_id)
         code = QuditCode.from_strings(strings, field=2)
         if is_css:
             code = code.to_css()
@@ -1261,7 +1275,7 @@ class QuditCode(AbstractCode):
         return code
 
     @staticmethod
-    def from_qldpc_challenge_id(code_id: str) -> QuditCode:
+    def from_qldpc_challenge_id(code_id: str, *, refresh: bool = False) -> QuditCode:
         """Retrieve a code by ID from the Unitary Foundation qLDPC Challenge.
 
         This method fetches the data that the challenge publishes at
@@ -1272,13 +1286,20 @@ class QuditCode(AbstractCode):
         is unknown (``None``), and :meth:`get_distance` computes it when asked.  Retrieved data is
         cached on disk, in qLDPC's user cache directory, so it persists between sessions: later
         calls with the same ID return the cached data without accessing the network, and so miss a
-        distance that the challenge has certified since.
+        distance that the challenge has certified since, unless they pass ``refresh=True``.
+
+        Args:
+            code_id: The ID of the code in the qLDPC Challenge.
+            refresh: If True, retrieve the latest data from the challenge even if data for this ID
+                is cached, and replace the cached data.
 
         Raises:
             RuntimeError: If the challenge data cannot be accessed.
             ValueError: If the challenge data for the code cannot be parsed.
         """
-        matrix, distance, is_css, distance_bounds = _codes.get_qldpc_challenge_code(code_id)
+        get_challenge_code = _codes.get_qldpc_challenge_code
+        retrieve = get_challenge_code.refresh if refresh else get_challenge_code
+        matrix, distance, is_css, distance_bounds = retrieve(code_id)
         code = QuditCode(matrix)
         if is_css:
             css_code = code.to_css()
@@ -2634,23 +2655,34 @@ class CSSCode(QuditCode):
         return QuditCode.from_strings(checks, field).to_css()
 
     @staticmethod
-    def from_qecdb_id(code_id: str) -> CSSCode:
+    def from_qecdb_id(code_id: str, *, refresh: bool = False) -> CSSCode:
         """Retrieve a CSS code by ID from qecdb.org.
 
         This method requires network access, and caches retrieved data on disk, where it persists
-        between sessions.  See help(QuditCode.from_qecdb_id).
+        between sessions until a call passes ``refresh=True``.  See help(QuditCode.from_qecdb_id).
+
+        Args:
+            code_id: The ID of the code on qecdb.org.
+            refresh: If True, retrieve the latest data from QECDB even if data for this ID is
+                cached, and replace the cached data.
         """
-        return QuditCode.from_qecdb_id(code_id).to_css()
+        return QuditCode.from_qecdb_id(code_id, refresh=refresh).to_css()
 
     @staticmethod
-    def from_qldpc_challenge_id(code_id: str) -> CSSCode:
+    def from_qldpc_challenge_id(code_id: str, *, refresh: bool = False) -> CSSCode:
         """Retrieve a CSS code by ID from the Unitary Foundation qLDPC Challenge.
 
         This method requires network access, and caches retrieved data on disk, where it persists
-        between sessions.  The distance of the code is unknown (``None``) until the challenge has
-        certified it.  See help(QuditCode.from_qldpc_challenge_id).
+        between sessions until a call passes ``refresh=True``.  The distance of the code is unknown
+        (``None``) until the challenge has certified it.  See
+        help(QuditCode.from_qldpc_challenge_id).
+
+        Args:
+            code_id: The ID of the code in the qLDPC Challenge.
+            refresh: If True, retrieve the latest data from the challenge even if data for this ID
+                is cached, and replace the cached data.
         """
-        return QuditCode.from_qldpc_challenge_id(code_id).to_css()
+        return QuditCode.from_qldpc_challenge_id(code_id, refresh=refresh).to_css()
 
     @property
     def is_subsystem_code(self) -> bool:

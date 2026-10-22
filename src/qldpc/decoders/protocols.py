@@ -5,12 +5,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 import numpy.typing as npt
-
-from qldpc import _deprecations
 
 ####################################################################################################
 # detailed decode results
@@ -167,9 +165,3 @@ class SupportsDecode(Protocol):
 
     def decode(self, syndrome: Any, /) -> Any:
         """Decode an error syndrome and return an inferred error."""
-
-
-if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
-
-    def __getattr__(name: str) -> object:
-        return _deprecations.get_deprecated_attribute(__name__, name)

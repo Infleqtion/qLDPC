@@ -11,9 +11,7 @@ registry; it is not imported here, because decoder modules import it.
 from .core import (
     ALIASES,
     SILENT_ALIASES,
-    UNLISTED_NAMES,
     defunct,
-    deprecated_names,
     get_deprecated_attribute,
     install_deprecated_methods,
     warn_deprecated,
@@ -22,9 +20,7 @@ from .core import (
 __all__ = [
     "ALIASES",
     "SILENT_ALIASES",
-    "UNLISTED_NAMES",
     "defunct",
-    "deprecated_names",
     "get_deprecated_attribute",
     "install_deprecated_methods",
     "warn_deprecated",

@@ -111,7 +111,6 @@ __all__ = [
     "tesseract_preset",
     "with_erasure_bits",
 ]
-__all__.extend(_deprecations.deprecated_names(__name__))
 
 if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
 

@@ -4,13 +4,11 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Self, cast
+from typing import Self, cast
 
 import numpy as np
 import numpy.typing as npt
 import stim
-
-from qldpc import _deprecations
 
 from .._common import batch_decode_errors
 from ..dems import DetectorErrorModelArrays
@@ -70,9 +68,3 @@ class _DetailedErrorsToObservablesDecoder(ErrorsToObservablesDecoder):
         flips = np.asarray(result.error[:num_errors] @ self.observable_flip_matrix.T) % 2
         prediction = np.hstack([flips, result.error[num_errors:]])
         return ObservableDecodeResult(prediction, result.erasure, result.diagnostics)
-
-
-if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
-
-    def __getattr__(name: str) -> object:
-        return _deprecations.get_deprecated_attribute(__name__, name)

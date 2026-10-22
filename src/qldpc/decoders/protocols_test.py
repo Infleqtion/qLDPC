@@ -4,14 +4,11 @@
 
 from __future__ import annotations
 
-import pickle
-
 import numpy as np
 import numpy.typing as npt
 import pytest
 
 from qldpc import decoders
-from qldpc.decoders import _common
 
 
 def test_error_decoder_protocols() -> None:
@@ -46,9 +43,3 @@ def test_error_decoder_protocols() -> None:
         IncompleteDecoder().decode(syndromes[0])
     with pytest.raises(NotImplementedError, match="must implement decode_errors_batch"):
         IncompleteDecoder().decode_batch(syndromes)
-
-
-def test_deprecated_pickle_path() -> None:
-    """Pickles that reference WrappedErrorDecoder at its former module still load."""
-    cls = pickle.loads(b"cqldpc.decoders.protocols\nWrappedErrorDecoder\n.")  # noqa: S301
-    assert cls is _common.WrappedErrorDecoder

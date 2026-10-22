@@ -136,6 +136,12 @@ def test_named_codes(order: int = 2) -> None:
     ):
         assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
 
+    # refresh=True replaces cached data with the latest data
+    with unittest.mock.patch("qldpc.external._codes.get_classical_code") as get_code:
+        get_code.return_value = ([[1]], None)
+        get_code.refresh.return_value = (checks, None)
+        assert codes.ClassicalCode.from_name("", refresh=True) == code
+
 
 def test_dual_code(bits: int = 5, checks: int = 3, field: int = 3) -> None:
     """Dual code construction."""
@@ -771,6 +777,13 @@ def test_from_qldpc_challenge_id() -> None:
         assert code.get_distance_if_known() is None
         assert code.get_distance_bound() == 1
 
+    # refresh=True replaces cached data with the latest data
+    with unittest.mock.patch("qldpc.external._codes.get_qldpc_challenge_code") as get_code:
+        get_code.return_value = (code_data[0], None, True, (2, 4))
+        get_code.refresh.return_value = code_data
+        css_code = codes.CSSCode.from_qldpc_challenge_id("", refresh=True)
+        assert css_code.get_distance_if_known() == 2
+
 
 def test_qudit_deformations() -> None:
     """Local Fourier transforms of a QuditCode."""
@@ -1263,6 +1276,12 @@ def test_css_from_qecdb_id() -> None:
         assert isinstance(code, codes.CSSCode)
         assert code.is_equiv_to(codes.C4Code())
         assert code.get_distance_if_known() == 2
+
+    # refresh=True replaces cached data with the latest data
+    with unittest.mock.patch("qldpc.external._codes.get_quantum_code") as get_code:
+        get_code.return_value = (strings, None, is_css)
+        get_code.refresh.return_value = code_data
+        assert codes.CSSCode.from_qecdb_id("", refresh=True).get_distance_if_known() == 2
 
 
 def test_swel_codes() -> None:

@@ -11,7 +11,7 @@ import numpy.typing as npt
 import stim
 
 from qldpc import decoders
-from qldpc.decoders.adapters import _dem_matching, error_decoders
+from qldpc.decoders.adapters import error_decoders
 
 
 class _FixedDecoder(decoders.ErrorDecoder):
@@ -57,9 +57,3 @@ def test_errors_to_observables_decoder() -> None:
     assert result.erasure
     assert result.diagnostics == {"fixed": 1}
     assert type(pickle.loads(pickle.dumps(detailed))) is type(detailed)  # noqa: S301
-
-
-def test_deprecated_pickle_path() -> None:
-    """Pickles that reference ExpandedErrorDecoder at its former module still load."""
-    cls = pickle.loads(b"cqldpc.decoders.adapters.error_decoders\nExpandedErrorDecoder\n.")  # noqa: S301
-    assert cls is _dem_matching.ExpandedErrorDecoder
