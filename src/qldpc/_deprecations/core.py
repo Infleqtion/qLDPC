@@ -30,7 +30,7 @@ from __future__ import annotations
 import importlib
 import sys
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, TypeVar
 
 from qldpc._utils import get_external_caller_stacklevel
@@ -43,6 +43,9 @@ if TYPE_CHECKING:
     import numpy.typing as npt
 
     from qldpc.abstract.groups import NestedSequence
+
+# the type of physical error rates that qldpc.codes.monte_carlo.ErrorRateFunc formerly accepted
+OneOrManyFloats = TypeVar("OneOrManyFloats", float, Iterable[float])
 
 _FunctionT = TypeVar("_FunctionT", bound=Callable[..., object])
 
@@ -91,6 +94,9 @@ ALIASES: dict[str, dict[str, str]] = {
         ),
         "validate_distance_backend": "qldpc.codes.distance.core:_validate_distance_backend",
         "validate_distance_method": "qldpc.codes.distance.core:_validate_distance_method",
+    },
+    "qldpc.codes.monte_carlo": {
+        "OneOrManyFloats": "qldpc._deprecations.core:OneOrManyFloats",
     },
     "qldpc.decoders": {
         "BatchDecoder": "qldpc.decoders.protocols:BatchErrorDecoder",
@@ -182,6 +188,12 @@ ALIASES: dict[str, dict[str, str]] = {
     "qldpc.external": {
         "codes": "qldpc.external._codes",
         "groups": "qldpc.external._groups",
+    },
+    # renamed functions of the deprecated qldpc.external.codes, which now refers to this module
+    "qldpc.external._codes": {
+        "get_classical_code": "qldpc.external._codes:get_guava_code",
+        "get_distance_bound": "qldpc.external._codes:get_qdistrnd_distance_bound",
+        "get_quantum_code": "qldpc.external._codes:get_qecdb_code",
     },
 }
 
@@ -284,7 +296,7 @@ def defunct(message: str) -> ValueError:
 def install_deprecated_methods() -> None:
     """Attach deprecated methods to their classes."""
     from qldpc.abstract import SmallGroup, TrivialGroup
-    from qldpc.codes import ClassicalCode, CSSCode, QuditCode
+    from qldpc.codes import BBCode, ClassicalCode, CSSCode, QuditCode
     from qldpc.decoders.custom import DirectDecoder
 
     @_deprecated_method(ClassicalCode)
@@ -324,6 +336,17 @@ def install_deprecated_methods() -> None:
         )
         code = self.conjugated()
         return code.to_css() if isinstance(self, CSSCode) else code
+
+    @_deprecated_method(BBCode)
+    def modular_inverse(
+        self: BBCode, basis: tuple[tuple[int, int], tuple[int, int]], aa: int, bb: int
+    ) -> tuple[int, int]:
+        """Deprecated method that solves for the coefficients of a vector in a basis."""
+        warn_deprecated(
+            "BBCode.modular_inverse is DEPRECATED and will be removed from the public API",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return self._get_basis_coefficients(basis, aa, bb)
 
     @_deprecated_method(DirectDecoder)
     def decode(self: DirectDecoder, word: npt.NDArray[np.int_]) -> None:

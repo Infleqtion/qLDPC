@@ -14,7 +14,7 @@ from qldpc import codes
 from qldpc.external import _codes
 
 
-def test_get_classical_code() -> None:
+def test_get_guava_code() -> None:
     """Retrieve parity check matrix from GAP 4."""
     # GAP reports each entry as its discrete log base the primitive root (-1 for a zero entry); over
     # GF(4) the logs 0, 1, 2 rebuild the galois integers 1, 2, 3 and -1 rebuilds a zero.
@@ -24,14 +24,14 @@ def test_get_classical_code() -> None:
             "qldpc.external.gap.get_output", return_value="\nGF(2^2)\n[-1, 0, 1, 2]"
         ),
     ):
-        assert _codes.get_classical_code("") == ([[0, 1, 2, 3]], 4)
+        assert _codes.get_guava_code("") == ([[0, 1, 2, 3]], 4)
 
     # over a prime field the log 0 rebuilds the identity
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.get_output", return_value="GF(3)\n[0, 0]"),
     ):
-        assert _codes.get_classical_code("") == ([[1, 1]], 3)
+        assert _codes.get_guava_code("") == ([[1, 1]], 3)
 
     # fail to determine the base field
     with (
@@ -39,7 +39,7 @@ def test_get_classical_code() -> None:
         unittest.mock.patch("qldpc.external.gap.get_output", return_value="[0, 0]"),
         pytest.raises(ValueError, match="Could not determine the base field"),
     ):
-        _codes.get_classical_code("")
+        _codes.get_guava_code("")
 
     # fail to find parity checks
     with (
@@ -47,7 +47,7 @@ def test_get_classical_code() -> None:
         unittest.mock.patch("qldpc.external.gap.get_output", return_value="GF(3^3)"),
         pytest.raises(ValueError, match="Code has no parity checks"),
     ):
-        _codes.get_classical_code("")
+        _codes.get_guava_code("")
 
 
 def get_mock_page(text: str) -> unittest.mock.MagicMock:
@@ -57,14 +57,14 @@ def get_mock_page(text: str) -> unittest.mock.MagicMock:
     return mock_page
 
 
-def test_get_quantum_code() -> None:
+def test_get_qecdb_code() -> None:
     """Retrieve quantum code data from qecdb.org."""
     # cannot connect to qecdb.org
     with (
         unittest.mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("message")),
         pytest.raises(RuntimeError, match="Cannot access"),
     ):
-        _codes.get_quantum_code("")
+        _codes.get_qecdb_code("")
 
     # API response missing stabilizer data
     mock_page = get_mock_page('{"d": 5}')
@@ -72,12 +72,12 @@ def test_get_quantum_code() -> None:
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
         pytest.raises(ValueError, match="stabilizer data"),
     ):
-        _codes.get_quantum_code("")
+        _codes.get_qecdb_code("")
 
     # retrieve code data!
     mock_page = get_mock_page('{"H": "XXXX ZZZZ", "d": 5, "css": false}')
     with unittest.mock.patch("urllib.request.urlopen", return_value=mock_page):
-        assert _codes.get_quantum_code("") == (["XXXX", "ZZZZ"], 5, False)
+        assert _codes.get_qecdb_code("") == (["XXXX", "ZZZZ"], 5, False)
 
 
 def test_get_qldpc_challenge_code() -> None:
@@ -110,29 +110,29 @@ def test_get_qldpc_challenge_code() -> None:
         _codes.get_qldpc_challenge_code("")
 
 
-def test_distance_bound() -> None:
+def test_get_qdistrnd_distance_bound() -> None:
     """Compute a bound on code distance using QDistRnd."""
     with unittest.mock.patch("qldpc.external.gap.require_package", return_value=None):
         with pytest.raises(ValueError, match="non-CSS subsystem codes"):
-            _codes.get_distance_bound(codes.QuditCode(codes.SHYPSCode(2).matrix))
+            _codes.get_qdistrnd_distance_bound(codes.QuditCode(codes.SHYPSCode(2).matrix))
 
         with unittest.mock.patch("qldpc.external.gap.get_output", return_value="3"):
-            assert _codes.get_distance_bound(codes.FiveQubitCode()) == 3
-            assert _codes.get_distance_bound(codes.SteaneCode()) == 3
+            assert _codes.get_qdistrnd_distance_bound(codes.FiveQubitCode()) == 3
+            assert _codes.get_qdistrnd_distance_bound(codes.SteaneCode()) == 3
 
         # QDistRnd produced no output at all
         with (
             unittest.mock.patch("qldpc.external.gap.get_output", return_value=""),
             pytest.raises(ValueError, match="no output"),
         ):
-            _codes.get_distance_bound(codes.FiveQubitCode())
+            _codes.get_qdistrnd_distance_bound(codes.FiveQubitCode())
 
         # QDistRnd output has no bound, only a comment line
         with (
             unittest.mock.patch("qldpc.external.gap.get_output", return_value="# comment only"),
             pytest.raises(ValueError, match="Could not parse a distance bound"),
         ):
-            _codes.get_distance_bound(codes.FiveQubitCode())
+            _codes.get_qdistrnd_distance_bound(codes.FiveQubitCode())
 
 
 def test_get_gap_sparse_matrix_commands() -> None:

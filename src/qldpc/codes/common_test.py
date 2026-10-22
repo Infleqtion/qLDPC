@@ -131,13 +131,11 @@ def test_named_codes(order: int = 2) -> None:
     code = codes.RepetitionCode(order)
     checks = [list(row) for row in code.matrix.view(np.ndarray)]
 
-    with unittest.mock.patch(
-        "qldpc.external._codes.get_classical_code", return_value=(checks, None)
-    ):
+    with unittest.mock.patch("qldpc.external._codes.get_guava_code", return_value=(checks, None)):
         assert codes.ClassicalCode.from_name(f"RepetitionCode({order})") == code
 
     # refresh=True replaces cached data with the latest data
-    with unittest.mock.patch("qldpc.external._codes.get_classical_code") as get_code:
+    with unittest.mock.patch("qldpc.external._codes.get_guava_code") as get_code:
         get_code.return_value = ([[1]], None)
         get_code.refresh.return_value = (checks, None)
         assert codes.ClassicalCode.from_name("", refresh=True) == code
@@ -191,7 +189,7 @@ def test_distance_classical(bits: int = 3) -> None:
     # computing an exact distance but providing bounding arguments raises a warning
     with pytest.warns(UserWarning, match="ignored"):
         assert rep_code.get_distance(test_arg=True)
-    with pytest.raises(ValueError, match="only available for CSSCode"):
+    with pytest.raises(ValueError, match="only supports the 'decoder' distance backend"):
         rep_code.get_distance_bound(backend="sqetch")
 
     # trivial (null) codes have an undefined distance
@@ -510,22 +508,29 @@ def test_distance_qudit() -> None:
     with pytest.warns(UserWarning, match="ignored"):
         assert code.get_distance(test_arg=True)
 
+    # automatic backend selection uses GAP only if it can be called, so it never prompts on stdin
     code.forget_distance()
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_installed", side_effect=AssertionError),
+        pytest.raises(NotImplementedError, match="GAP cannot be called"),
+    ):
+        code.get_distance(bound=True)
+
+    # explicitly requesting GAP offers the manual workflow, which the user can decline
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=False),
         pytest.raises(NotImplementedError, match="not supported"),
     ):
-        code.get_distance(bound=True)
-    with (
-        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        pytest.raises(ValueError, match="not recognized by GAP/QDistRnd"),
-    ):
+        code.get_distance_bound(backend="gap")
+    with pytest.raises(ValueError, match="not recognized by GAP/QDistRnd"):
         code.get_distance(bound=True, test=True)
 
     # mock computing distance with GAP
     with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
-        unittest.mock.patch("qldpc.external._codes.get_distance_bound", return_value=-1),
+        unittest.mock.patch("qldpc.external._codes.get_qdistrnd_distance_bound", return_value=-1),
     ):
         assert code.get_distance(bound=True) == -1
 
@@ -558,9 +563,10 @@ def test_distance_bound_memory() -> None:
     qudit_code = codes.FiveQubitCode()
     qudit_code.forget_distance()
     with (
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external._codes.get_distance_bound", side_effect=[4, 5]
+            "qldpc.external._codes.get_qdistrnd_distance_bound", side_effect=[4, 5]
         ) as gap_bound,
     ):
         assert qudit_code.get_distance_bound() == qudit_code.get_distance_bound() == 4
@@ -747,6 +753,15 @@ def test_non_css_operator_layout_and_argument_validation() -> None:
         codes.FiveQubitCode().get_logical_ops(symplectic=False)
     with pytest.raises(ValueError, match="is_subsystem_code=False contradicts"):
         codes.QuditCode(codes.BaconShorCode(3), is_subsystem_code=False)
+
+
+def test_subsystem_code_hint_is_trusted() -> None:
+    """An explicit is_subsystem_code hint is recorded, rather than recomputed."""
+    # the checks X and Z on one qubit anticommute, so they generate a gauge group
+    matrix = [[1, 0], [0, 1]]
+    assert codes.QuditCode(matrix).is_subsystem_code
+    assert not codes.QuditCode(matrix, is_subsystem_code=False).is_subsystem_code
+    assert not codes.CSSCode([[1]], [[1]], is_subsystem_code=False).is_subsystem_code
 
     with pytest.raises(ValueError, match="logical_index must lie in"):
         codes.SurfaceCode(3).reduce_logical_op(Pauli.X, 1)
@@ -1271,14 +1286,14 @@ def test_css_from_qecdb_id() -> None:
     distance = 2
     is_css = True
     code_data = (strings, distance, is_css)
-    with unittest.mock.patch("qldpc.external._codes.get_quantum_code", return_value=code_data):
+    with unittest.mock.patch("qldpc.external._codes.get_qecdb_code", return_value=code_data):
         code = codes.CSSCode.from_qecdb_id("")
         assert isinstance(code, codes.CSSCode)
         assert code.is_equiv_to(codes.C4Code())
         assert code.get_distance_if_known() == 2
 
     # refresh=True replaces cached data with the latest data
-    with unittest.mock.patch("qldpc.external._codes.get_quantum_code") as get_code:
+    with unittest.mock.patch("qldpc.external._codes.get_qecdb_code") as get_code:
         get_code.return_value = (strings, None, is_css)
         get_code.refresh.return_value = code_data
         assert codes.CSSCode.from_qecdb_id("", refresh=True).get_distance_if_known() == 2
@@ -1381,7 +1396,7 @@ def test_distance_css() -> None:
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
-        unittest.mock.patch("qldpc.external._codes.get_distance_bound", return_value=-1),
+        unittest.mock.patch("qldpc.external._codes.get_qdistrnd_distance_bound", return_value=-1),
     ):
         assert code.get_distance(bound=True) == -1
     with pytest.warns(UserWarning, match=r"may take a \(very\) long time"):
@@ -1598,7 +1613,7 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external._codes.get_distance_bound", return_value=4
+            "qldpc.external._codes.get_qdistrnd_distance_bound", return_value=4
         ) as gap_bound,
     ):
         assert code.get_distance_bound(pauli=Pauli.Z) == 4
@@ -1629,11 +1644,32 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=True),
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external._codes.get_distance_bound", return_value=2
+            "qldpc.external._codes.get_qdistrnd_distance_bound", return_value=2
         ) as qudit_gap_bound,
     ):
         assert qudit_code.get_distance_bound(pauli=Pauli.Z) == 2
     qudit_gap_bound.assert_called_once_with(qudit_code, 1, cutoff=None, maxav="fail")
+
+
+def test_css_auto_distance_bound_options_of_unavailable_backends() -> None:
+    """Automatic selection rejects options for an unavailable backend, rather than ignoring it."""
+    steane_code = codes.SteaneCode()
+    code = codes.CSSCode(steane_code.matrix_x, steane_code.matrix_z)
+    with (
+        unittest.mock.patch("qldpc.external.sqetch.is_installed", return_value=False),
+        unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
+        unittest.mock.patch.object(
+            code, "get_distance_bound_with_decoder", side_effect=AssertionError
+        ),
+    ):
+        with pytest.raises(ValueError, match="sqetch is not installed"):
+            code.get_distance_bound(5, seed=1)
+        with pytest.raises(ValueError, match="GAP cannot be called"):
+            code.get_distance_bound(5, maxav="fail")
+    qutrit_code = codes.SurfaceCode(2, field=3)
+    qutrit_code.forget_distance()
+    with pytest.raises(ValueError, match="sqetch only supports binary codes"):
+        qutrit_code.get_distance_bound(seed=1)
 
 
 def test_css_distance_bound_backend_selection() -> None:
@@ -1673,7 +1709,7 @@ def test_css_distance_bound_backend_selection() -> None:
     with (
         unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
         unittest.mock.patch(
-            "qldpc.external._codes.get_distance_bound", return_value=4
+            "qldpc.external._codes.get_qdistrnd_distance_bound", return_value=4
         ) as gap_bound,
     ):
         assert (

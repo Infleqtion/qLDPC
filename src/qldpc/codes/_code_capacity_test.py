@@ -633,6 +633,7 @@ def test_code_capacity_decoder_from_bit_packed_sinter_decoder() -> None:
     assert sinter_decoder.dems[0].num_detectors == sinter_decoder.dems[0].num_observables == 9
     assert decoder.num_erasure_flags == 1
     assert decoder.get_failure_and_erasure(error) == (False, False)
+    # ObservableDecoder does not declare the compiled_decoder of this bit-packed adapter
     compiled_decoder = decoder.decoder.compiled_decoder  # type:ignore[attr-defined]
     assert np.array_equal(compiled_decoder.packed_syndromes[-1], [[1, 1]])
     assert decoder.get_failure_and_erasure(galois.GF2.Zeros(9)) == (True, False)
@@ -649,7 +650,7 @@ def test_code_capacity_decoder_from_bit_packed_sinter_decoder() -> None:
     decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, sinter_decoder
     )
-    with pytest.raises(ValueError, match=r"shape \(1, 1\) for one shot"):
+    with pytest.raises(ValueError, match=r"flips of shape \(1, 1\)"):
         decoder.get_failure_and_erasure(error)
 
     # a compiled decoder that can do neither is rejected

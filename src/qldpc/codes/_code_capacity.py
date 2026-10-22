@@ -200,7 +200,8 @@ def get_code_capacity_decoder(
         dem_error_weights: Relative probabilities for the detector error model's error mechanisms
             when building a native observable decoder or compiling a Sinter-style decoder.  These
             are scaled by a fixed placeholder error rate, so decoder decisions do not change when
-            the returned estimator is evaluated at different physical error rates.
+            an estimator built from the returned decoder is evaluated at different physical error
+            rates.
         prebuilt_rejection_reason: If not None, reject a prebuilt (error or observable) decoder,
             with this reason in the error message.  A Sinter-style decoder is compiled here, so it
             is not rejected.
@@ -286,6 +287,7 @@ def get_code_capacity_decoder(
     try:
         error_decoder = build_error_decoder(
             syndrome_matrix,
+            # a remaining constructor may build either kind of decoder, which this call checks
             decoder=decoder,  # type:ignore[arg-type]
         )
     except ValueError as error:

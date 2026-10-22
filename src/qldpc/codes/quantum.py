@@ -1186,8 +1186,8 @@ class BBCode(QCCode):
 
         # invert the system of equations for each of old_x and old_y
         new_basis = vec_new_x, vec_new_y
-        xx, xy = self.modular_inverse(new_basis, 1, 0)
-        yx, yy = self.modular_inverse(new_basis, 0, 1)
+        xx, xy = self._get_basis_coefficients(new_basis, 1, 0)
+        yx, yy = self._get_basis_coefficients(new_basis, 0, 1)
 
         # express generators old_x, old_y in terms of new_x and new_y
         symbol_new_x = sympy.Symbol("".join(map(str, self.symbols)))
@@ -1206,26 +1206,6 @@ class BBCode(QCCode):
             new_polys.append(self.get_canonical_form(poly, orders))
 
         return new_polys
-
-    def modular_inverse(
-        self, basis: tuple[tuple[int, int], tuple[int, int]], aa: int, bb: int
-    ) -> tuple[int, int]:
-        """Brute-force solve for the basis coefficients ``xx, yy`` of a target vector.
-
-        Solves ``xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders`` for ``xx, yy``.
-        """
-        aa = aa % self.orders[0]
-        bb = bb % self.orders[1]
-        order_0 = self.get_order(basis[0])
-        order_1 = self.get_order(basis[1])
-        for xx in range(order_0):
-            for yy in range(order_1):
-                if (
-                    aa == (xx * basis[0][0] + yy * basis[1][0]) % self.orders[0]
-                    and bb == (xx * basis[0][1] + yy * basis[1][1]) % self.orders[1]
-                ):
-                    return xx, yy
-        raise ValueError(f"Uninvertible system of equations: {basis}, {aa}, {bb}")
 
     def get_order(self, vec: tuple[int, int]) -> int:
         """What multiple of the vector hits the "origin" on the torus of plaquettes for this code?
@@ -1254,6 +1234,26 @@ class BBCode(QCCode):
                 yy = (aa * vec_a[1] + bb * vec_b[1]) % self.orders[1]
                 reached[xx, yy] = True
         return bool(np.all(reached))
+
+    def _get_basis_coefficients(
+        self, basis: tuple[tuple[int, int], tuple[int, int]], aa: int, bb: int
+    ) -> tuple[int, int]:
+        """Brute-force solve for the basis coefficients ``xx, yy`` of a target vector.
+
+        Solves ``xx * basis[0] + yy * basis[1] == (aa, bb) % self.orders`` for ``xx, yy``.
+        """
+        aa = aa % self.orders[0]
+        bb = bb % self.orders[1]
+        order_0 = self.get_order(basis[0])
+        order_1 = self.get_order(basis[1])
+        for xx in range(order_0):
+            for yy in range(order_1):
+                if (
+                    aa == (xx * basis[0][0] + yy * basis[1][0]) % self.orders[0]
+                    and bb == (xx * basis[0][1] + yy * basis[1][1]) % self.orders[1]
+                ):
+                    return xx, yy
+        raise ValueError(f"Uninvertible system of equations: {basis}, {aa}, {bb}")
 
 
 class GrossCode(BBCode):
@@ -1504,6 +1504,7 @@ class HGPCode(CSSCode):
 
         # construct the X-sector and Z-sector parity check matrices
         matrix_x = np.hstack([mat_H1_In2, mat_Im1_H2_T])
+        # numpy's stubs type this np.kron result as a boolean array, which they cannot negate
         matrix_z = np.hstack([-mat_In1_H2, mat_H1_T_Im2])  # type: ignore[misc]
         return matrix_x.view(type(matrix_a)), matrix_z.view(type(matrix_a))
 
@@ -1971,7 +1972,7 @@ class LPCode(CSSCode):
     def get_canonical_logical_line_ops(
         matrix_a: abstract.RingArray, matrix_b: abstract.RingArray
     ) -> tuple[galois.FieldArray, galois.FieldArray]:
-        """Canonical logical line operators for a subsystem lifted product code."""
+        """Canonical logical line operators for a lifted product code."""
         logical_ops_xz = LPCode.get_canonical_ring_logical_line_ops(matrix_a, matrix_b)
         return LPCode.to_lifted_logical_ops(*logical_ops_xz)
 

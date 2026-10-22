@@ -74,8 +74,10 @@ LogicalCountMethod = Literal[
     "brouwer_zimmermann", "macwilliams", "brute_force", "information_sets", "weight_enumerator"
 ]
 
+_CanonicalLogicalCountMethod = Literal["brouwer_zimmermann", "macwilliams", "brute_force"]
+
 # The canonical name of every accepted logical-count method name, including aliases.
-_LOGICAL_COUNT_METHODS: dict[str, Literal["brouwer_zimmermann", "macwilliams", "brute_force"]] = {
+_LOGICAL_COUNT_METHODS: dict[str, _CanonicalLogicalCountMethod] = {
     **_DISTANCE_METHODS,
     "macwilliams": "macwilliams",
     "weight_enumerator": "macwilliams",
@@ -615,7 +617,7 @@ def count_logical_ops_css(
 
 def _validate_logical_count_method(
     method: LogicalCountMethod,
-) -> Literal["brouwer_zimmermann", "macwilliams", "brute_force"]:
+) -> _CanonicalLogicalCountMethod:
     """Validate a logical-count method selector, and return its canonical name.
 
     The aliases ``"information_sets"`` and ``"weight_enumerator"`` resolve to
@@ -690,9 +692,9 @@ def _count_words(
     # Pack the sets for the native scan.
     rows = [pack_bits(generators) for generators, _ in sets]
     tags = [pack_bits(set_labels) for _, set_labels in sets]
-    # Ownership compares sets, so a single set needs no decoder.
-    decoders = (
-        np.stack([_get_decoder(generators) for generators, _ in sets])
+    # Ownership compares sets, so a single set needs no coefficient extractor.
+    extractors = (
+        np.stack([_get_coefficient_extractor(generators) for generators, _ in sets])
         if len(sets) > 1
         else np.zeros((1, 0, rows[0].shape[1]), dtype=np.uint64)
     )
@@ -707,7 +709,7 @@ def _count_words(
                 depth, lighter = _count_chunk(
                     rows[index],
                     tags[index],
-                    decoders,
+                    extractors,
                     index,
                     support,
                     depth,
@@ -778,7 +780,7 @@ def _transport_family(
     )
 
 
-def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:
+def _get_coefficient_extractor(generators: _BinaryMatrix) -> _PackedMatrix:
     """Packed rows ``E.T`` such that ``generators @ E`` is the identity over GF(2).
 
     Bit ``b`` of the coefficient vector of a word ``w`` is then the parity of ``w & E.T[b]``.
@@ -788,9 +790,9 @@ def _get_decoder(generators: _BinaryMatrix) -> _PackedMatrix:
     size = len(generators)
     _, transform, pivots = row_reduce_binary(generators, np.eye(size, dtype=np.uint8))
     assert transform is not None
-    decoder = np.zeros((generators.shape[1], size), dtype=np.uint8)
-    decoder[pivots] = transform
-    return pack_bits(decoder.T)
+    extractor = np.zeros((generators.shape[1], size), dtype=np.uint8)
+    extractor[pivots] = transform
+    return pack_bits(extractor.T)
 
 
 ####################################################################################################
@@ -914,7 +916,7 @@ def _apply_local(
 def _count_chunk(
     rows: _PackedMatrix,
     tags: _PackedMatrix,
-    decoders: npt.NDArray[np.uint64],
+    extractors: npt.NDArray[np.uint64],
     set_index: int,
     support: npt.NDArray[np.int64],
     depth: int,
@@ -990,7 +992,7 @@ def _count_chunk(
                     break
             if nontrivial and weight < target:
                 return depth, True
-            if nontrivial and _is_owned(word, decoders, set_index, layer):
+            if nontrivial and _is_owned(word, extractors, set_index, layer):
                 rank = _get_masked_rank(rank_rows, word, complement, pivots)
                 histogram[max_exponent - rank] += 1
 
@@ -1002,24 +1004,24 @@ def _count_chunk(
 
 @njit(cache=True)
 def _is_owned(
-    word: npt.NDArray[np.uint64], decoders: npt.NDArray[np.uint64], set_index: int, layer: int
+    word: npt.NDArray[np.uint64], extractors: npt.NDArray[np.uint64], set_index: int, layer: int
 ) -> bool:
     """Whether set ``set_index`` minimizes (layer, set index) among the sets that visit ``word``.
 
     Each set visits a word in the layer given by the weight of its coefficient vector in that set,
     so exactly one set owns each word, and it visits the word before any other set does.
     """
-    for other in range(len(decoders)):
+    for other in range(len(extractors)):
         if other == set_index:
             continue
         # A set that visits the word in an earlier layer, or in the same layer with a smaller index,
         # owns it.
         limit = layer if other < set_index else layer - 1
         size = 0
-        for decoder in decoders[other]:
+        for extractor_row in extractors[other]:
             parity = np.int64(0)
             for index in range(len(word)):
-                parity += popcount_word(word[index] & decoder[index])
+                parity += popcount_word(word[index] & extractor_row[index])
             size += int(parity & 1)
             if size > limit:
                 break

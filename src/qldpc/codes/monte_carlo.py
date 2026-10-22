@@ -11,16 +11,13 @@ from __future__ import annotations
 
 import dataclasses
 from collections.abc import Callable, Iterable
-from typing import TypeVar
+from typing import TYPE_CHECKING, overload
 
 import numpy as np
 import numpy.typing as npt
 import scipy.special
 
-from qldpc import math
-
-OneOrManyFloats = TypeVar("OneOrManyFloats", float, Iterable[float])
-
+from qldpc import _deprecations, math
 
 ####################################################################################################
 # logical error rate estimation
@@ -192,13 +189,21 @@ class ErrorRateFunc:
         variances[: self.min_error_weight] = 0.0  # a perfectly decoded weight is never discarded
         return variances
 
+    @overload
+    def __call__(self, error_rate: float, *, discard_rate: bool = False) -> tuple[float, float]: ...
+
+    @overload
     def __call__(
-        self, error_rate: OneOrManyFloats, *, discard_rate: bool = False
-    ) -> tuple[OneOrManyFloats, OneOrManyFloats]:
+        self, error_rate: Iterable[float], *, discard_rate: bool = False
+    ) -> tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]: ...
+
+    def __call__(
+        self, error_rate: float | Iterable[float], *, discard_rate: bool = False
+    ) -> tuple[float, float] | tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]:
         """Compute the logical error rate (or discard rate) at a given physical error rate."""
         if isinstance(error_rate, Iterable):
             results = [self(rate, discard_rate=discard_rate) for rate in error_rate]
-            return (  # type:ignore[return-value]
+            return (
                 np.array([result[0] for result in results]),
                 np.array([result[1] for result in results]),
             )
@@ -211,7 +216,6 @@ class ErrorRateFunc:
         weight_probs = _get_error_probs_by_weight(
             self.num_error_locations, error_rate, self.max_error_weight
         )
-        value: OneOrManyFloats
         if discard_rate:
             # an error treated as a failure is not a discard, so no such term applies here
             value = float(weight_probs @ self.discard_rates)
@@ -225,7 +229,15 @@ class ErrorRateFunc:
         error = float(np.sqrt(weight_probs**2 @ variances))
         return value, error
 
-    def truncation_error_bound(self, error_rate: OneOrManyFloats) -> OneOrManyFloats:
+    @overload
+    def truncation_error_bound(self, error_rate: float) -> float: ...
+
+    @overload
+    def truncation_error_bound(self, error_rate: Iterable[float]) -> npt.NDArray[np.floating]: ...
+
+    def truncation_error_bound(
+        self, error_rate: float | Iterable[float]
+    ) -> float | npt.NDArray[np.floating]:
         """Contribution to the reported infidelity from errors too heavy to have been sampled.
 
         Errors heavier than max_error_weight are all treated as failures, so this is the probability
@@ -241,7 +253,7 @@ class ErrorRateFunc:
         """
         if isinstance(error_rate, Iterable):
             values = [self.truncation_error_bound(rate) for rate in error_rate]
-            return np.array(values)  # type:ignore[return-value]
+            return np.array(values)
         if self.max_error_weight >= self.num_error_locations:
             # no error is heavier than the number of error locations, so nothing is truncated.  The
             # closed form cannot be relied on to say so, because its second parameter is zero here:
@@ -461,3 +473,9 @@ def _get_error_probs_by_weight(
         for kk in range(max_weight + 1)
     ]
     return np.exp(log_probs)
+
+
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
+
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

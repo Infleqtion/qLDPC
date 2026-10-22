@@ -206,7 +206,7 @@ What qLDPC computes exactly, bounds, and trusts
 * Upper bounds: ``get_distance_bound`` with every backend.
 * Estimates: code-capacity and circuit-level logical error rates are sampled.
   A code-capacity estimate treats unsampled heavy errors as failures, so it can be high by up to the amount that its ``truncation_error_bound`` method reports.
-* Trusted, not verified: recorded parameters of built-in families and online lookups, promises such as ``promise_equal_distance_xz``, an explicit ``CSSCode(..., is_subsystem_code=...)``, a code-capacity ``min_error_weight`` below which errors are assumed to be corrected, and an explicit ``detector_to_time`` mapping.
+* Trusted, not verified: recorded parameters of built-in families and online lookups, promises such as ``promise_equal_distance_xz``, an explicit ``is_subsystem_code=`` hint to ``QuditCode`` or ``CSSCode``, a code-capacity ``min_error_weight`` below which errors are assumed to be corrected, and an explicit ``detector_to_time`` mapping.
 
 External tools, side effects, and caching
 -----------------------------------------

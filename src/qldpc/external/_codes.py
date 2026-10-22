@@ -9,7 +9,7 @@ import json
 import re
 import urllib.error
 import urllib.request
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import galois
 import numpy as np
@@ -18,6 +18,7 @@ import numpy.typing as npt
 import qldpc
 import qldpc.cache
 import qldpc.external.gap
+from qldpc import _deprecations
 
 ####################################################################################################
 # codes from databases
@@ -27,7 +28,7 @@ import qldpc.external.gap
     "codes",
     key_func=lambda code: "".join(code.split()),  # strip whitespace
 )
-def get_classical_code(code: str) -> tuple[list[list[int]], int]:
+def get_guava_code(code: str) -> tuple[list[list[int]], int]:
     """Retrieve a classical code from GAP.
 
     Requires the GAP GUAVA package (https://www.gap-system.org/Packages/guava.html).
@@ -81,14 +82,14 @@ def get_classical_code(code: str) -> tuple[list[list[int]], int]:
 
 
 @qldpc.cache.use_disk_cache("qecdb")
-def get_quantum_code(code_id: str) -> tuple[list[str], int | None, bool]:
+def get_qecdb_code(code_id: str) -> tuple[list[str], int | None, bool]:
     """Retrieve a quantum code from qecdb.org.
 
     This function queries QECDB's JSON API at https://qecdb.org, so it requires network access.
 
     Return the stabilizers of the code, its distance, and whether it's CSS.
 
-    Results are cached to disk.  Use get_quantum_code.refresh(code_id) to retrieve and cache the
+    Results are cached to disk.  Use get_qecdb_code.refresh(code_id) to retrieve and cache the
     latest data from QECDB.
     """
     code_data = _get_json(f"https://qecdb.org/api/codes/{code_id}")
@@ -158,7 +159,7 @@ def _get_json(url: str) -> Any:
 # QDistRnd distance bounds
 
 
-def get_distance_bound(
+def get_qdistrnd_distance_bound(
     code: qldpc.codes.QuditCode,
     num_trials: int = 1,
     *,
@@ -285,3 +286,9 @@ def _get_gap_sparse_matrix_commands(
     ]
     commands = [cmd.strip() for cmd in commands]
     return commands
+
+
+if not TYPE_CHECKING:  # DEPRECATED: see qldpc._deprecations
+
+    def __getattr__(name: str) -> object:
+        return _deprecations.get_deprecated_attribute(__name__, name)

@@ -4,11 +4,8 @@
 
 from __future__ import annotations
 
-import os
 import pathlib
 import random
-import subprocess
-import sys
 import unittest.mock
 
 import networkx as nx
@@ -19,6 +16,7 @@ from sympy.abc import x, y
 
 import qldpc
 from qldpc import abstract, codes, decoders
+from qldpc.conftest import run_python
 from qldpc.objects import ChainComplex, Node, Pauli
 
 from .common_test import assert_valid_subgraphs
@@ -376,7 +374,7 @@ def test_bivariate_bicycle_codes() -> None:
     code = codes.BBCode(orders, poly_a, poly_b)
     with pytest.raises(ValueError, match="Uninvertible system of equations"):
         basis = (1, 0), (0, 0)
-        code.modular_inverse(basis, 0, 1)
+        code._get_basis_coefficients(basis, 0, 1)
 
 
 def test_gross_codes() -> None:
@@ -1060,22 +1058,7 @@ def test_random_quantum_tanner_code_is_reproducible() -> None:
         "code = codes.QTCode.random(abstract.CyclicGroup(8), codes.RepetitionCode(2), seed=7);"
         "print(np.asarray(code.matrix).tobytes().hex())"
     )
-    matrices = {
-        subprocess.run(
-            [sys.executable, "-c", script],
-            # hand the child this interpreter's import path, so that it builds the code from the
-            # same sources rather than from whatever qldpc its environment happens to resolve
-            env={
-                **os.environ,
-                "PYTHONHASHSEED": hash_seed,
-                "PYTHONPATH": os.pathsep.join(path for path in sys.path if path),
-            },
-            capture_output=True,
-            check=True,
-            text=True,
-        ).stdout
-        for hash_seed in ["0", "1"]
-    }
+    matrices = {run_python(script, env={"PYTHONHASHSEED": hash_seed}) for hash_seed in ["0", "1"]}
     assert matrices == {matrix_for(seed=7).hex() + "\n"}
 
 

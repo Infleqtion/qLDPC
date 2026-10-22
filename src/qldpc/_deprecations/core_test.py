@@ -11,6 +11,7 @@ import warnings
 
 import numpy as np
 import pytest
+from sympy.abc import x, y
 
 from qldpc import _deprecations, abstract, codes, decoders
 
@@ -97,9 +98,12 @@ def test_deprecated_methods() -> None:
     classical_code = codes.RepetitionCode(3)
     qudit_code = codes.QuditCode(codes.FiveQubitCode())
     css_code = codes.SteaneCode()
+    bb_code = codes.BBCode((3, 3), 1 + x + x * y, 1 + y + x * y)
     cases: list[tuple[object, str, tuple[object, ...], object, str]] = [
         (classical_code, "puncture", ([0],), classical_code.punctured([0]), "ClassicalCode"),
         (classical_code, "shorten", ([0],), classical_code.shortened([0]), "ClassicalCode"),
+        # 1 * (1, 1) + 2 * (0, 1) == (1, 0) modulo 3
+        (bb_code, "modular_inverse", (((1, 1), (0, 1)), 1, 0), (1, 2), "BBCode"),
         (qudit_code, "get_dual_subsystem_code", (), qudit_code.dual(), "QuditCode"),
         (qudit_code, "conjugate", (), qudit_code.conjugated(), "QuditCode"),
         (css_code, "conjugate", (), css_code.conjugated().to_css(), "SteaneCode"),
