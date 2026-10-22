@@ -5,10 +5,6 @@
 .. warning::
     This module does not promise to be performant.  If you need to do heavy numerical abstract
     algebra, you're probably better served by GAP or MAGMA (or maybe SageMath).
-
-``RingArray`` now lives in ``.ring_array``, but this module still provides it lazily, without a
-warning, for existing imports and pickled objects that reference ``qldpc.abstract.rings.RingArray``.
-
 """
 
 from __future__ import annotations

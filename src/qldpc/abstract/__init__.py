@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Abstract algebra: groups, group rings, ring-valued arrays, and linear algebra over rings."""
+
 from typing import TYPE_CHECKING
 
 from qldpc import _deprecations

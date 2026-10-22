@@ -699,7 +699,19 @@ class ClassicalCode(AbstractCode):
 
     @staticmethod
     def from_name(name: str) -> ClassicalCode:
-        """Named code in the GAP computer algebra system."""
+        """Named code in the GAP computer algebra system.
+
+        The name is a GAP expression that constructs a code with GAP's GUAVA package, such as
+        ``"HammingCode(3, GF(2))"``.  Retrieving the code runs GAP: in process if
+        ``passagemath-gap`` is installed, or else in a subprocess that calls the ``gap`` executable.
+        If GUAVA is missing, this method asks for confirmation on standard input and then downloads
+        and installs GUAVA, which requires network access.  If GAP cannot be called at all, this
+        method asks on standard input whether to proceed manually, and if so prints the GAP
+        commands, copies them to the system clipboard, and reads GAP's output from standard input.
+        Retrieved codes are cached on disk, in qLDPC's user cache directory, so they persist between
+        sessions.  See help(qldpc.external.gap.get_output) and
+        help(qldpc.external.gap.require_package) for details and the errors that GAP can raise.
+        """
         standardized_name = name.strip().replace(" ", "")  # strip whitespace
         matrix, field = _codes.get_classical_code(standardized_name)
         code = ClassicalCode(matrix, field)
@@ -1229,7 +1241,18 @@ class QuditCode(AbstractCode):
 
     @staticmethod
     def from_qecdb_id(code_id: str) -> QuditCode:
-        """Retrieve a code by ID from qecdb.org."""
+        """Retrieve a code by ID from qecdb.org.
+
+        This method queries QECDB's API at https://qecdb.org, so it requires network access.  The
+        code is a CSSCode if QECDB marks it as CSS, and it remembers the distance that QECDB
+        reports, if any.  Retrieved data is cached on disk, in qLDPC's user cache directory, so it
+        persists between sessions: later calls with the same ID return the cached data without
+        accessing the network, even if QECDB has changed since.
+
+        Raises:
+            RuntimeError: If qecdb.org cannot be accessed.
+            ValueError: If QECDB has no stabilizer data for the code.
+        """
         strings, distance, is_css = _codes.get_quantum_code(code_id)
         code = QuditCode.from_strings(strings, field=2)
         if is_css:
@@ -1241,8 +1264,19 @@ class QuditCode(AbstractCode):
     def from_qldpc_challenge_id(code_id: str) -> QuditCode:
         """Retrieve a code by ID from the Unitary Foundation qLDPC Challenge.
 
-        The code remembers the upper bounds on distance from its submission, but its exact distance
-        is recorded only if the challenge has certified it.
+        This method fetches the data that the challenge publishes at
+        https://unitaryfoundation.github.io/qldpc-challenge/codes/, so it requires network access.
+        The code is a CSSCode if the challenge lists it as CSS.  The code remembers the upper bounds
+        on distance from its submission, but a submitted distance is only an upper bound, so the
+        exact distance is recorded only if the challenge has certified it.  Until then the distance
+        is unknown (``None``), and :meth:`get_distance` computes it when asked.  Retrieved data is
+        cached on disk, in qLDPC's user cache directory, so it persists between sessions: later
+        calls with the same ID return the cached data without accessing the network, and so miss a
+        distance that the challenge has certified since.
+
+        Raises:
+            RuntimeError: If the challenge data cannot be accessed.
+            ValueError: If the challenge data for the code cannot be parsed.
         """
         matrix, distance, is_css, distance_bounds = _codes.get_qldpc_challenge_code(code_id)
         code = QuditCode(matrix)
@@ -2601,12 +2635,21 @@ class CSSCode(QuditCode):
 
     @staticmethod
     def from_qecdb_id(code_id: str) -> CSSCode:
-        """Retrieve a CSS code by ID from qecdb.org."""
+        """Retrieve a CSS code by ID from qecdb.org.
+
+        This method requires network access, and caches retrieved data on disk, where it persists
+        between sessions.  See help(QuditCode.from_qecdb_id).
+        """
         return QuditCode.from_qecdb_id(code_id).to_css()
 
     @staticmethod
     def from_qldpc_challenge_id(code_id: str) -> CSSCode:
-        """Retrieve a CSS code by ID from the Unitary Foundation qLDPC Challenge."""
+        """Retrieve a CSS code by ID from the Unitary Foundation qLDPC Challenge.
+
+        This method requires network access, and caches retrieved data on disk, where it persists
+        between sessions.  The distance of the code is unknown (``None``) until the challenge has
+        certified it.  See help(QuditCode.from_qldpc_challenge_id).
+        """
         return QuditCode.from_qldpc_challenge_id(code_id).to_css()
 
     @property

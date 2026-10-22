@@ -312,7 +312,7 @@ class CSSLogicalCounter:
             complement=False,
             max_exponent=target if weigh else 0,
             reject_lighter=reject_above,
-            get_disjoint=functools.partial(self.get_disjoint_family, 0),
+            get_disjoint=functools.partial(self._get_disjoint_family, 0),
             max_sets=max_information_sets,
         )
         if self._self_dual or counts_x is None:
@@ -326,7 +326,7 @@ class CSSLogicalCounter:
                 complement=True,
                 max_exponent=len(self._gauge_x) if weigh else 0,
                 reject_lighter=reject_above,
-                get_disjoint=functools.partial(self.get_disjoint_family, 1),
+                get_disjoint=functools.partial(self._get_disjoint_family, 1),
                 max_sets=max_information_sets,
             )
         if counts_x is None or counts_z is None:
@@ -561,7 +561,7 @@ class CSSLogicalCounter:
             self._sectors = (sector_x, sector_z)
         return self._sectors
 
-    def get_disjoint_family(self, index: int) -> _information_sets.BasisFamily:
+    def _get_disjoint_family(self, index: int) -> _information_sets.BasisFamily:
         """The first stage of the information-set family of a sector, which is kept.
 
         This stage does not depend on the counted weight, so counting at another weight, as when a

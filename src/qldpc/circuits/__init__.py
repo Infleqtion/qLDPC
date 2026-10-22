@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Stim circuits: encoders, memory experiments, noise models, benchmarks, and transversal gates."""
+
 from typing import TYPE_CHECKING
 
 from qldpc import _deprecations

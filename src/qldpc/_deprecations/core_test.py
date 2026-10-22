@@ -60,11 +60,14 @@ def test_silent_aliases() -> None:
 
 
 def test_deprecated_names() -> None:
-    """Packages keep their deprecated names in __all__, and unknown names are not deprecated."""
+    """Packages keep released deprecated names in __all__, and unknown names are not deprecated."""
     for module_name in _deprecations.ALIASES.keys() | _deprecations.SILENT_ALIASES.keys():
         module = importlib.import_module(module_name)
         if hasattr(module, "__all__"):
             assert set(_deprecations.deprecated_names(module_name)) <= set(module.__all__)
+    for module_name, names in _deprecations.UNLISTED_NAMES.items():
+        assert names <= set(_deprecations.ALIASES.get(module_name, {}))
+        assert not names & set(importlib.import_module(module_name).__all__)
     with pytest.raises(AttributeError, match=r"module 'qldpc\.decoders' has no attribute 'Other'"):
         _deprecations.get_deprecated_attribute("qldpc.decoders", "Other")
 

@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Tools for constructing and analyzing quantum low density parity check (qLDPC) codes."""
+
 import importlib.metadata
 
 from . import (

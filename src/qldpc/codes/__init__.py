@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Classical and quantum error-correcting codes, built-in code families, and code distances."""
+
 from typing import TYPE_CHECKING
 
 from qldpc import _deprecations

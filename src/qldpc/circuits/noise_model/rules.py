@@ -51,10 +51,12 @@ class NoiseRule:
                 - ``stim.Circuit``: a fragment of noise instructions emitted verbatim after each
                     ``k``-qubit block, with qubit indices remapped from ``[0, k)`` in the fragment
                     to the corresponding block's targets.  The fragment's arity is inferred from
-                    ``circuit.num_qubits``.  Every instruction must be a noise instruction
-                    (``op_type(name) == NOISE``); repeat blocks are rejected.  ``PauliChannel`` and
-                    ``Mapping`` arguments are preferred when they suffice, as the ``stim.Circuit``
-                    form skips native broadcasting.
+                    ``circuit.num_qubits``.  Every instruction must be a Stim noise channel, such
+                    as ``X_ERROR``, ``DEPOLARIZE1``, or ``PAULI_CHANNEL_1``.  Gates, measurements,
+                    resets, annotations such as ``TICK``, heralded noise channels (which produce
+                    measurement results), repeat blocks, and fragments that address no qubits are
+                    rejected.  ``PauliChannel`` and ``Mapping`` arguments are preferred when they
+                    suffice, as the ``stim.Circuit`` form skips native broadcasting.
 
             readout_error: The probability that a measurement result is reported incorrectly.  Only
                 allowed for operations that produce measurement results.  ``None`` (the default)
@@ -66,7 +68,9 @@ class NoiseRule:
 
         Raises:
             ValueError: If any Pauli string is invalid, any probability is not in [0, 1], or the
-                ``stim.Circuit`` form contains a non-noise instruction.
+                ``stim.Circuit`` form contains an instruction other than a noise channel without
+                measurement results or addresses no qubits.
+            TypeError: If the ``stim.Circuit`` form contains a repeat block.
         """
         self.readout_error = readout_error
         if readout_error is not None and not (0 <= readout_error <= 1):

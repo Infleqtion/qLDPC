@@ -16,31 +16,10 @@ When sources disagree, use this order:
 Re-derive behavior from the current branch before documenting or changing it.
 Do not copy transient project history, machine-specific paths, or local-session instructions into production files.
 
-## Repository map
+## Orientation
 
-| Area | What it does | Tests and examples |
-| --- | --- | --- |
-| [`src/qldpc/codes/common.py`](src/qldpc/codes/common.py) | `AbstractCode`, `ClassicalCode`, `QuditCode`, and `CSSCode`; logicals, stabilizers, distance, concatenation, and error-rate interfaces | [`common_test.py`](src/qldpc/codes/common_test.py) |
-| [`src/qldpc/codes/monte_carlo.py`](src/qldpc/codes/monte_carlo.py) | Fixed-weight sample allocation, rate estimation, and statistical uncertainty | [`monte_carlo_test.py`](src/qldpc/codes/monte_carlo_test.py) |
-| [`src/qldpc/codes/_code_capacity.py`](src/qldpc/codes/_code_capacity.py) | Code-capacity detector error models, observable-decoder orchestration, and sector reuse | [`_code_capacity_test.py`](src/qldpc/codes/_code_capacity_test.py), [`common_test.py`](src/qldpc/codes/common_test.py) |
-| [`src/qldpc/codes/classical.py`](src/qldpc/codes/classical.py) | Classical code families | [`classical_test.py`](src/qldpc/codes/classical_test.py), [`basics.ipynb`](examples/basics.ipynb) |
-| [`src/qldpc/codes/quantum.py`](src/qldpc/codes/quantum.py) | Quantum, CSS, subsystem, product, and geometric code families | [`quantum_test.py`](src/qldpc/codes/quantum_test.py), [`bivariate_bicycle_codes.ipynb`](examples/bivariate_bicycle_codes.ipynb) |
-| [`src/qldpc/codes/distance/`](src/qldpc/codes/distance/) | Exact binary classical and quantum distance enumeration, and exact counts of CSS logical operators of a given weight ([`logical_counts.py`](src/qldpc/codes/distance/logical_counts.py)) | Co-located `*_test.py` files |
-| [`src/qldpc/abstract/`](src/qldpc/abstract/) | Groups, group rings, `RingArray`, semisimple linear algebra, and Wedderburn--Artin transforms | Co-located `*_test.py` files in the same directory |
-| [`src/qldpc/math.py`](src/qldpc/math.py) | Symplectic and finite-field array helpers | [`math_test.py`](src/qldpc/math_test.py) |
-| [`src/qldpc/objects.py`](src/qldpc/objects.py) | Pauli labels, graph nodes, Cayley complexes, and chain complexes | [`objects_test.py`](src/qldpc/objects_test.py) |
-| [`src/qldpc/decoders/external/`](src/qldpc/decoders/external/) | Integrations and immediate builders for ldpc, PyMatching, Relay-BP, Tesseract, and Frontier | Co-located `*_test.py` files |
-| [`src/qldpc/decoders/custom/`](src/qldpc/decoders/custom/) | qLDPC-owned decoder implementations and their immediate builders | Co-located `*_test.py` files |
-| [`src/qldpc/decoders/construction/`](src/qldpc/decoders/construction/) | Typed decoder specs and generic resolution | Co-located `*_test.py` files |
-| [`src/qldpc/decoders/`](src/qldpc/decoders/) | Decoder protocols, capability checks, adapters, DEM arrays, Sinter, and windowed decoding | Co-located tests, [`legacy_api_test.py`](src/qldpc/decoders/legacy_api_test.py) for the package-root names of tagged releases, plus [`logical_error_rates/`](examples/logical_error_rates/) |
-| [`src/qldpc/circuits/`](src/qldpc/circuits/) | Stim circuits, bookkeeping, encoders, memory experiments, noise, benchmarking, and transversal operations | Co-located tests plus [`noise_models.ipynb`](examples/noise_models.ipynb) and [`transversal_gates.ipynb`](examples/transversal_gates.ipynb) |
-| [`src/qldpc/external/`](src/qldpc/external/) | GAP, GUAVA, QDistRnd, GroupNames, and code-database integrations | Co-located tests use controlled substitutes for processes, input, and network access |
-| [`src/qldpc/_deprecations/`](src/qldpc/_deprecations/) | Registry of deprecated names, deprecated methods, warning helpers, and deprecated decoder construction | Co-located `*_test.py` files |
-| [`src/qldpc/cache.py`](src/qldpc/cache.py) | Persistent disk-cache helpers for expensive computations | [`cache_test.py`](src/qldpc/cache_test.py) |
-| [`src/qldpc/experimental/`](src/qldpc/experimental/) | Unstable research implementations | Co-located tests and [`examples/experimental/`](examples/experimental/) |
-| [`examples/`](examples/) | Canonical executable notebooks and small helper scripts | Sphinx links to these files; do not edit generated or duplicate notebook copies |
-| [`docs/source/`](docs/source/) | Sphinx pages and the library map | Strict build through [`checks/build_docs.py`](checks/build_docs.py) |
-| [`checks/`](checks/) | Local wrappers for the repository's quality gates | Mirrors the commands used by CI |
+The source tree under `src/qldpc/` mirrors the library: each package and module starts with a docstring whose first line summarizes it, and the [library map](docs/source/library_map.rst) explains how the packages relate.
+Canonical executable notebooks live in [`examples/`](examples/), Sphinx pages and the library map in [`docs/source/`](docs/source/), and local wrappers for CI's quality gates in [`checks/`](checks/).
 
 The main code hierarchy is:
 
@@ -260,6 +239,7 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
   Names added since the last release may change without a shim.
 - Register a renamed or moved name or submodule in `ALIASES`, which warns on access and names the replacement.
   Use `SILENT_ALIASES` instead for deprecated functions that warn when called, and for moved objects that old pickles reference.
+  If the released `__all__` of a registered name's module did not list the name, also list it in `UNLISTED_NAMES`, so that `deprecated_names` leaves it out of `__all__`.
 - Type checkers must reject deprecated names.
   Do not add `TYPE_CHECKING` aliases; the stub defines `__getattr__` only under `if not TYPE_CHECKING`.
 - Docstrings carry no deprecation notes.

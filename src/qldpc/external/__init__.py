@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Integrations with external tools: the GAP computer algebra system and the sqetch estimator."""
+
 from typing import TYPE_CHECKING
 
 from qldpc import _deprecations

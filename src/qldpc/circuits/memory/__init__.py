@@ -1,5 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
+"""Memory experiments and the syndrome measurement strategies that they use."""
+
 from typing import TYPE_CHECKING
 
 from qldpc import _deprecations

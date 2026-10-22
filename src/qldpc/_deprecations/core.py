@@ -13,7 +13,8 @@ SILENT_ALIASES list for that module:
 Python calls a module-level __getattr__ (PEP 562) only for names that the module does not define.
 A deprecated name thereby refers to the same object as its replacement, which preserves isinstance
 checks, subclassing, and unpickling.  Type checkers do not see the stub, so they reject deprecated
-names.  A package that must keep deprecated names in its __all__ extends it with deprecated_names.
+names.  A package that must keep deprecated names in its __all__ extends it with deprecated_names,
+which leaves out the names that UNLISTED_NAMES lists because no released __all__ listed them.
 
 A registry target without an attribute names a module that replaces a deprecated submodule.  Such a
 submodule is served both as an attribute of its package and, by a finder that this module appends
@@ -78,6 +79,7 @@ ALIASES: dict[str, dict[str, str]] = {
         "validate_syndrome_qubit_ids": "qldpc.circuits.memory._common:validate_syndrome_qubit_ids",
     },
     "qldpc.codes": {
+        "code_capacity": "qldpc.codes._code_capacity",
         "get_distance_css_brouwer_zimmermann": (
             "qldpc.codes.distance._brouwer_zimmermann:get_distance_css_brouwer_zimmermann"
         ),
@@ -213,6 +215,12 @@ SILENT_ALIASES: dict[str, dict[str, str]] = {
     },
 }
 
+# Deprecated names that the released __all__ of their module did not list, so that deprecated_names
+# leaves them out.
+UNLISTED_NAMES: dict[str, set[str]] = {
+    "qldpc.codes": {"code_capacity"},
+}
+
 
 def get_deprecated_attribute(module_name: str, name: str) -> object:
     """Retrieve a deprecated attribute of a module, warning if ALIASES lists it.
@@ -242,8 +250,9 @@ def get_deprecated_attribute(module_name: str, name: str) -> object:
 
 
 def deprecated_names(module_name: str) -> list[str]:
-    """List the deprecated names that the registry serves for a module, sorted."""
-    return sorted(ALIASES.get(module_name, {}).keys() | SILENT_ALIASES.get(module_name, {}).keys())
+    """List the deprecated names that a module serves and that its released __all__ listed."""
+    names = ALIASES.get(module_name, {}).keys() | SILENT_ALIASES.get(module_name, {}).keys()
+    return sorted(names - UNLISTED_NAMES.get(module_name, set()))
 
 
 def _import_target(target: str) -> object:
