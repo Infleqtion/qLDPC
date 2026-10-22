@@ -256,7 +256,6 @@ For each such set, the error left on the output must be equivalent to an error w
 Errors that differ by a stabilizer of the prepared state count as equivalent.
 Weight is physical Pauli weight or CSS weight (the larger of the X weight and the Z weight), chosen automatically for the prepared state unless you set ``css_weight=``.
 The check is exact, and a failure comes with a concrete set of faults.
-Only the prepared state is certified, not the circuits that use it next.
 See the :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` for examples and the :func:`API documentation <qldpc.circuits.benchmarking.state_prep_certification.certify_state_prep_spread>` for details.
 
 Optional integrations and side effects
