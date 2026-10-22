@@ -356,6 +356,25 @@ def test_cellulate_max_len_default_is_floored_at_3() -> None:
     bridge = bridge_module.build_bridge(gadget, gadget)
     assert bridge.width == 3
 
+    # The floor is exactly 3.  The H_X rows of this [[8,2]] code also have weight 2, and its port
+    # subgraph carries a cycle that a cap of 3 splits with a chord but a cap of 4 does not.
+    matrix_x = np.array(
+        [[1, 0, 0, 0, 0, 0, 1, 0], [0, 0, 0, 0, 1, 0, 0, 1], [0, 0, 0, 0, 0, 0, 1, 1]]
+    )
+    matrix_z = np.array(
+        [
+            [1, 0, 1, 0, 1, 0, 1, 1],
+            [0, 1, 1, 0, 0, 1, 0, 0],
+            [0, 1, 0, 1, 0, 1, 0, 0],
+            [1, 0, 0, 1, 1, 0, 1, 1],
+        ]
+    )
+    x = np.array([0, 1, 1, 1, 0, 0, 0, 1], dtype=np.uint8)
+    gadget = build_gadget(codes.CSSCode(matrix_x, matrix_z), x, basis=Pauli.X)
+    default_rows = bridge_module.build_bridge(gadget, gadget).g_l_aug.incidence.shape[0]
+    capped = bridge_module.build_bridge(gadget, gadget, cellulate_max_len=4)
+    assert default_rows > capped.g_l_aug.incidence.shape[0]
+
 
 def test_cellulate_max_len_default_reads_an_empty_measured_basis_as_zero() -> None:
     """A code with no measured-basis checks contributes 0 to the derived cap, not an error.
@@ -459,6 +478,7 @@ def test_build_bridge_skiptree_invariant_holds_after_boost() -> None:
     """
     from qldpc.experimental.surgery.bridge import build_bridge
     from qldpc.experimental.surgery.cheeger import boost_gadget
+    from qldpc.experimental.surgery.circuit import build_joint_ppm_circuit
     from qldpc.experimental.surgery.gadget import build_gadget
 
     z = np.asarray(_bb_72_12().get_logical_ops(Pauli.Z)[0]).astype(np.uint8)
@@ -469,6 +489,9 @@ def test_build_bridge_skiptree_invariant_holds_after_boost() -> None:
     assert g_l.incidence.shape[0] > g_l_raw.incidence.shape[0], "boost should add κ' rows"
     bridge = build_bridge(g_l, g_r)
     _assert_skiptree_identity(bridge)
+
+    # a joint PPM built from the boosted gadgets has deterministic detectors
+    build_joint_ppm_circuit(g_l, g_r, bridge, rounds=1)[0].detector_error_model()
 
 
 def _bb_36_8() -> codes.BBCode:
