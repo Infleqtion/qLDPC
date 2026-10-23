@@ -7,6 +7,11 @@ predict_observable_flips=True) build the observable lookup decoders of this modu
 interface of qLDPC 0.4.1 to the observable lookup decoders that replace them: their decode methods
 are aliases of the decode_observables methods.  This module imports qldpc.decoders when it is
 imported, so qLDPC modules import it only within the functions that use it.
+
+The decoders that these constructors build are observable lookup decoders, and are intentionally no
+longer instances of LookupDecoder or WeightedLookupDecoder, as they were in qLDPC 0.4.1; this change
+of type is a maintainer decision.  An instance of a user-defined subclass of LookupDecoder or
+WeightedLookupDecoder keeps its class.
 """
 
 from __future__ import annotations

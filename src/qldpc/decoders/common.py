@@ -119,10 +119,11 @@ def _to_pcm(pcm_or_dem: _PcmOrDem) -> IntegerArray:
 def _get_matrix_error_channel(
     pcm_or_dem: _PcmOrDem,
     error_channel: _ErrorChannel,
-    error_rate: float | None,
+    error_rate: float | None,  # DEPRECATED: see qldpc._deprecations
 ) -> npt.NDArray[np.floating] | None:
     """Normalize matrix error probabilities and reject explicit probabilities for a DEM."""
     if isinstance(pcm_or_dem, stim.DetectorErrorModel):
+        # DEPRECATED: see qldpc._deprecations
         _reject_dem_error_probabilities(error_channel, error_rate)
         return None
 
@@ -146,8 +147,12 @@ def _get_matrix_error_channel(
     return probabilities
 
 
-def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -> None:
+def _reject_dem_error_probabilities(
+    error_channel: object,
+    error_rate: object,  # DEPRECATED: see qldpc._deprecations
+) -> None:
     """Reject explicit error probabilities for a detector error model, which supplies its own."""
+    # DEPRECATED: see qldpc._deprecations
     options = {"error_channel": error_channel, "error_rate": error_rate}
     if specified := [f"{name}={value!r}" for name, value in options.items() if value is not None]:
         raise ValueError(

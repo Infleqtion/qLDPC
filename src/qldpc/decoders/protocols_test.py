@@ -116,7 +116,14 @@ def test_error_decoder_coercion() -> None:
         protocols._as_error_decoder(
             types.SimpleNamespace(decode_observables=lambda syndrome: syndrome)
         )
-    # a decode method that declares the deprecated decode_returns_observables=True predicts flips
+    with pytest.raises(TypeError, match="cannot decode until it is compiled"):
+        protocols._as_error_decoder(decoders.SinterDecoder())
+    with pytest.raises(TypeError, match="must be an ErrorDecoder, or have a decode method"):
+        protocols._as_error_decoder(object())
+
+
+def test_deprecated_decode_returns_observables() -> None:
+    """A decode method that declares deprecated decode_returns_observables=True predicts flips."""
     legacy_decoder = types.SimpleNamespace(
         decode=lambda syndrome: syndrome, decode_returns_observables=True
     )
@@ -125,7 +132,3 @@ def test_error_decoder_coercion() -> None:
         pytest.raises(TypeError, match="observable flips rather than errors"),
     ):
         protocols._as_error_decoder(legacy_decoder)
-    with pytest.raises(TypeError, match="cannot decode until it is compiled"):
-        protocols._as_error_decoder(decoders.SinterDecoder())
-    with pytest.raises(TypeError, match="must be an ErrorDecoder, or have a decode method"):
-        protocols._as_error_decoder(object())

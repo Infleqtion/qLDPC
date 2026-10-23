@@ -61,8 +61,10 @@ class _LookupDecoderBase:
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
+        # DEPRECATED: see qldpc._deprecations
         error_channel = _prepare_error_channel(error_channel, penalty_func)
         if confidence_ratio is not None and not confidence_ratio >= 0:  # also rejects NaN
             raise ValueError("A LookupDecoder confidence_ratio must be a non-negative number")
@@ -458,12 +460,13 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
             | None
         ) = None,
         observable_flip_matrix: IntegerArray | None = None,
-        predict_observable_flips: bool = False,
+        predict_observable_flips: bool = False,  # DEPRECATED: see qldpc._deprecations
         post_select: Collection[int] = (),
         add_erasure_bit: bool | None = None,
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         """Initialize an error lookup table."""
@@ -495,7 +498,7 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
             confidence_ratio=confidence_ratio,
             probability_cutoff=probability_cutoff,
             symplectic=symplectic,
-            penalty_func=penalty_func,
+            penalty_func=penalty_func,  # DEPRECATED: see qldpc._deprecations
         )
 
     def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
@@ -563,6 +566,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None: ...
 
@@ -583,6 +587,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         super().__init__(
@@ -595,7 +600,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
             confidence_ratio=confidence_ratio,
             probability_cutoff=probability_cutoff,
             symplectic=symplectic,
-            penalty_func=penalty_func,
+            penalty_func=penalty_func,  # DEPRECATED: see qldpc._deprecations
         )
 
     def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
@@ -814,7 +819,7 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         max_weight: int,
         *,
         observable_flip_matrix: IntegerArray | None = None,
-        predict_observable_flips: bool = False,
+        predict_observable_flips: bool = False,  # DEPRECATED: see qldpc._deprecations
         post_select: Collection[int] = (),
         add_erasure_bit: bool = False,
         symplectic: bool = False,
@@ -995,7 +1000,7 @@ lookup = decoder_spec(
     _get_decoder_lookup,
     _get_observable_decoder_lookup,
     signature_source=LookupDecoder,
-    exclude=frozenset({"predict_observable_flips"}),
+    exclude=frozenset({"predict_observable_flips"}),  # DEPRECATED: see qldpc._deprecations
     doc="""Configure a bounded-weight lookup-table decoder.
 
 Args:
@@ -1137,10 +1142,10 @@ def _organize_lookup_table_initialization_data(
 
 def _prepare_error_channel(
     error_channel: _ErrorChannel,
-    penalty_func: _ErrorLogProbability | None,
+    penalty_func: _ErrorLogProbability | None,  # DEPRECATED: see qldpc._deprecations
 ) -> _ErrorChannel:
     """Validate a callable error channel, or replace a deprecated penalty function with one."""
-    if penalty_func is not None:
+    if penalty_func is not None:  # DEPRECATED: see qldpc._deprecations
         if error_channel is not None:
             raise ValueError(
                 "Cannot specify both an error_channel and a penalty_func in a LookupDecoder"

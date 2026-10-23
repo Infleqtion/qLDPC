@@ -279,7 +279,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         This method is the inverse of ``RingArray.to_field_array``.
         """
-        if isinstance(array, (GroupRing, Group)):
+        if isinstance(array, (GroupRing, Group)):  # DEPRECATED: see qldpc._deprecations
             _deprecations.warn_deprecated(
                 "Check argument order: it should be RingArray.from_field_array(array, ring)."
                 "  The order (ring, array) is DEPRECATED and will throw an error in the future!",
@@ -308,7 +308,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         This method is the inverse of ``RingArray.to_field_vector``.
         """
-        if isinstance(vector, (GroupRing, Group)):
+        if isinstance(vector, (GroupRing, Group)):  # DEPRECATED: see qldpc._deprecations
             _deprecations.warn_deprecated(
                 "Check argument order: it should be RingArray.from_field_vector(vector, ring)."
                 "  The order (ring, vector) is DEPRECATED and will throw an error in the future!",

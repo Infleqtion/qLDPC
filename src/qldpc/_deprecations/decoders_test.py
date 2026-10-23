@@ -531,3 +531,4 @@ def test_decode_returns_observables() -> None:
     with pytest.warns(DeprecationWarning, match="implement decode_observables") as caught:
         assert deprecated_decoders.decode_returns_observables(declaring_decoder)
     assert caught[0].filename == __file__
+    assert deprecated_decoders.decode_returns_observables(declaring_decoder, warn=False)

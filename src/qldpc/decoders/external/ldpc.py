@@ -61,7 +61,7 @@ def _get_decoder_bp_osd(
     osd_method: Literal["OSD_0", "OSD_E", "OSD_CS"] = "OSD_0",
     osd_order: int = 0,
     backend_options: Mapping[str, object] | None = None,
-    error_rate: float | None = None,
+    error_rate: float | None = None,  # DEPRECATED: see qldpc._deprecations
 ) -> ErrorDecoder:
     """Build a belief-propagation with ordered-statistics (BP+OSD) decoder.
 
@@ -91,6 +91,7 @@ def _get_decoder_bp_osd(
         An ``ldpc.BpOsdDecoder`` subclass that is also an
         :class:`~qldpc.decoders.protocols.ErrorDecoder`.
     """
+    # DEPRECATED: see qldpc._deprecations
     pcm, error_channel = _to_ldpc_inputs(pcm_or_dem, error_channel, error_rate)
     return _build_ldpc_decoder(
         "BpOsdDecoder",
@@ -130,7 +131,7 @@ def _get_decoder_bp_lsd(
     lsd_order: int = 0,
     always_run_lsd: bool = False,
     backend_options: Mapping[str, object] | None = None,
-    error_rate: float | None = None,
+    error_rate: float | None = None,  # DEPRECATED: see qldpc._deprecations
 ) -> ErrorDecoder:
     """Build a belief-propagation with localized-statistics (BP+LSD) decoder.
 
@@ -165,6 +166,7 @@ def _get_decoder_bp_lsd(
         An ``ldpc.bplsd_decoder.BpLsdDecoder`` subclass that is also an
         :class:`~qldpc.decoders.protocols.ErrorDecoder`.
     """
+    # DEPRECATED: see qldpc._deprecations
     pcm, error_channel = _to_ldpc_inputs(pcm_or_dem, error_channel, error_rate)
     _warn_unknown_bp_lsd_options(backend_options or {})
     return _build_ldpc_decoder(
@@ -205,7 +207,7 @@ def _get_decoder_bf(
     uf_method: Literal["inversion", "peeling"] = "peeling",
     bits_per_step: int = 0,
     backend_options: Mapping[str, object] | None = None,
-    error_rate: float | None = None,
+    error_rate: float | None = None,  # DEPRECATED: see qldpc._deprecations
 ) -> ErrorDecoder:
     """Build a belief-find (BF) decoder.
 
@@ -237,6 +239,7 @@ def _get_decoder_bf(
         An ``ldpc.BeliefFindDecoder`` subclass that is also an
         :class:`~qldpc.decoders.protocols.ErrorDecoder`.
     """
+    # DEPRECATED: see qldpc._deprecations
     pcm, error_channel = _to_ldpc_inputs(pcm_or_dem, error_channel, error_rate)
     return _build_ldpc_decoder(
         "BeliefFindDecoder",
@@ -380,9 +383,10 @@ def _warn_unknown_bp_lsd_options(backend_options: Mapping[str, object]) -> None:
 def _to_ldpc_inputs(
     pcm_or_dem: _PcmOrDem,
     error_channel: float | npt.NDArray[np.floating] | Sequence[float] | None,
-    error_rate: float | None,
+    error_rate: float | None,  # DEPRECATED: see qldpc._deprecations
 ) -> tuple[IntegerArray, list[float]]:
     """Convert backend input to the matrix and probabilities expected by ldpc."""
+    # DEPRECATED: see qldpc._deprecations
     matrix_error_channel = _get_matrix_error_channel(pcm_or_dem, error_channel, error_rate)
     if isinstance(pcm_or_dem, stim.DetectorErrorModel):
         dem_arrays = DetectorErrorModelArrays(pcm_or_dem)

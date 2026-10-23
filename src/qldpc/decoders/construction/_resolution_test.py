@@ -168,7 +168,10 @@ def test_error_decoder_output_is_validated() -> None:
             dem, decoder=lambda dem: pymatching.Matching.from_detector_error_model(dem)
         )
 
-    # the deprecated LookupDecoder(..., predict_observable_flips=True) is not an error decoder
+
+def test_deprecated_observable_lookup_decoder_is_not_an_error_decoder() -> None:
+    """The deprecated LookupDecoder(..., predict_observable_flips=True) is not an error decoder."""
+    dem, _ = _get_circuit_data()
     with (
         pytest.warns(DeprecationWarning),
         pytest.raises(TypeError, match="observable flips rather than errors"),

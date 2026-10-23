@@ -586,7 +586,7 @@ class ClassicalCode(AbstractCode):
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         decoder: decoders.ErrorDecoderInput = None,
         backend: DistanceBackend = "auto",
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> int | float:
         """Use a randomized algorithm to compute an upper bound on code distance.
 
@@ -641,7 +641,7 @@ class ClassicalCode(AbstractCode):
         else:
             check_matrix = np.vstack([self.matrix, self.generator]).view(self.field)
             syndrome = np.zeros(len(check_matrix), dtype=int).view(self.field)
-        if decoder_kwargs:
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
             decoder = merge_legacy_decoder_args(check_matrix, decoder, decoder_kwargs)
         error_decoder = build_error_decoder(check_matrix, decoder=decoder)
 
@@ -831,7 +831,7 @@ class ClassicalCode(AbstractCode):
         *,
         min_error_weight: int = 1,
         decoder: decoders.DecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> ErrorRateFunc:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
@@ -896,7 +896,7 @@ class ClassicalCode(AbstractCode):
         declared to be decoded perfectly.  The sum runs only as far as the heaviest weight the
         budget reached, and ``F_k = 0`` is assumed above that.
         """
-        if decoder_kwargs:
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
             decoder = merge_legacy_decoder_args(self.matrix, decoder, decoder_kwargs)
         code_capacity_decoder = get_code_capacity_decoder(self.matrix, None, decoder)
 
@@ -2296,7 +2296,7 @@ class QuditCode(AbstractCode):
         *,
         min_error_weight: int = 1,
         decoder: decoders.DeferredDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> ErrorRateFunc:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
@@ -2363,7 +2363,7 @@ class QuditCode(AbstractCode):
         if pauli_bias_zxy is not None:
             weights_xzy = 3 * pauli_bias_zxy[[1, 0, 2]]
             dem_error_weights = np.repeat(weights_xzy, len(self))
-        if decoder_kwargs:
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
             decoder = merge_legacy_decoder_args(syndrome_matrix, decoder, decoder_kwargs)
         code_capacity_decoder = get_code_capacity_decoder(
             syndrome_matrix,
@@ -3579,7 +3579,7 @@ class CSSCode(QuditCode):
         *,
         cutoff: int | None = None,
         decoder: decoders.DeferredErrorDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> int | float:
         r"""Use a randomized algorithm to compute an upper bound on code distance.
 
@@ -3644,7 +3644,7 @@ class CSSCode(QuditCode):
 
         # initialize a decoder and a trivial effective syndrome
         effective_check_matrix = np.vstack([matrix_z, logical_ops_z])
-        if decoder_kwargs:
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
             decoder = merge_legacy_decoder_args(effective_check_matrix, decoder, decoder_kwargs)
         error_decoder = build_error_decoder(effective_check_matrix, decoder=decoder)
         effective_syndrome = np.zeros(len(effective_check_matrix), dtype=int)
@@ -3680,7 +3680,7 @@ class CSSCode(QuditCode):
         logical_index: int,
         *,
         decoder: decoders.DeferredErrorDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> Self:
         """Reduce the weight of a logical operator.
 
@@ -3718,7 +3718,7 @@ class CSSCode(QuditCode):
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[dual_op_index] = 1
 
-        if decoder_kwargs:
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
             decoder = merge_legacy_decoder_args(effective_check_matrix, decoder, decoder_kwargs)
         error_decoder = build_error_decoder(effective_check_matrix, decoder=decoder)
         candidate_logical_op = _decode_consistently(
@@ -3735,7 +3735,7 @@ class CSSCode(QuditCode):
         pauli: PauliXZLike | None = None,
         *,
         decoder: decoders.DeferredErrorDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> Self:
         """Reduce the weight of all logical operators.
 
@@ -3753,10 +3753,13 @@ class CSSCode(QuditCode):
         """
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
         if pauli is None:
+            # DEPRECATED: see qldpc._deprecations
             self.reduce_logical_ops(Pauli.X, decoder=decoder, **decoder_kwargs)
+            # DEPRECATED: see qldpc._deprecations
             self.reduce_logical_ops(Pauli.Z, decoder=decoder, **decoder_kwargs)
         else:
             for logical_index in range(self.dimension):
+                # DEPRECATED: see qldpc._deprecations
                 self.reduce_logical_op(pauli, logical_index, decoder=decoder, **decoder_kwargs)
         return self
 
@@ -3882,9 +3885,9 @@ class CSSCode(QuditCode):
         decoder: decoders.DecoderInput = None,
         decoder_x: decoders.DecoderInput = None,
         decoder_z: decoders.DecoderInput = None,
-        decoder_x_kwargs: dict[str, Any] | None = None,
-        decoder_z_kwargs: dict[str, Any] | None = None,
-        **decoder_kwargs: Any,
+        decoder_x_kwargs: dict[str, Any] | None = None,  # DEPRECATED: see qldpc._deprecations
+        decoder_z_kwargs: dict[str, Any] | None = None,  # DEPRECATED: see qldpc._deprecations
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> ErrorRateFunc:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
@@ -3956,6 +3959,7 @@ class CSSCode(QuditCode):
         # decoders can be shared when their matrices and decoder inputs coincide.
         decoder_x_input = decoder if decoder_x is None else decoder_x
         decoder_z_input = decoder if decoder_z is None else decoder_z
+        # DEPRECATED: see qldpc._deprecations
         if decoder_kwargs or decoder_x_kwargs or decoder_z_kwargs:
             decoder_x_input, decoder_z_input = merge_legacy_css_decoder_args(
                 stabilizer_ops_z,

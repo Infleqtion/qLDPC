@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import stim
 
-from qldpc import decoders
+from qldpc import codes, decoders
 from qldpc.decoders import _capabilities
 
 _OBSERVABLE_DECODER = types.SimpleNamespace(decode_observables=lambda syndrome: np.zeros(1))
@@ -74,3 +74,31 @@ def test_deprecated_observable_lookup_decoder() -> None:
         decoder = decoders.custom.LookupDecoder(dem, max_weight=1, predict_observable_flips=True)
     assert isinstance(decoder, decoders.ErrorDecoder)  # its decode methods match the protocol
     assert _capabilities.is_prebuilt_observable_decoder(decoder)
+
+
+def test_deprecated_decode_returns_observables() -> None:
+    """A code-capacity estimate warns once about a decoder that declares decode_returns_observables.
+
+    The declaration makes a decoder that can also predict observables an observable decoder, and
+    makes a decoder that cannot an invalid error decoder.
+    """
+    code = codes.RepetitionCode(3)
+    observable_decoder = types.SimpleNamespace(
+        decode=lambda syndrome: np.zeros(code.num_bits, dtype=int),
+        decode_observables=lambda syndrome: np.zeros(code.num_bits, dtype=int),
+        decode_returns_observables=True,
+    )
+    with pytest.warns(DeprecationWarning, match="decode_returns_observables=True") as caught:
+        code.get_logical_error_rate_func(10, decoder=observable_decoder)
+    assert len(caught) == 1
+
+    error_decoder = types.SimpleNamespace(
+        decode=lambda syndrome: np.zeros(code.num_bits, dtype=int),
+        decode_returns_observables=True,
+    )
+    with (
+        pytest.warns(DeprecationWarning, match="decode_returns_observables=True") as caught,
+        pytest.raises(TypeError, match="observable flips rather than errors"),
+    ):
+        code.get_logical_error_rate_func(10, decoder=error_decoder)
+    assert len(caught) == 1

@@ -510,7 +510,7 @@ class RingMember:
     @classmethod
     def from_vector(cls, vector: npt.NDArray[np.int_], ring: GroupRing | Group) -> RingMember:
         """Construct a group algebra element from vector of coefficients, ``(x_g : g in G)``."""
-        if isinstance(vector, (GroupRing, Group)):
+        if isinstance(vector, (GroupRing, Group)):  # DEPRECATED: see qldpc._deprecations
             _deprecations.warn_deprecated(
                 "Check argument order: it should be RingMember.from_vector(vector, ring)."
                 "  The order (ring, vector) is DEPRECATED and will throw an error in the future!",

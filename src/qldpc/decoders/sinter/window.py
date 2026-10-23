@@ -64,7 +64,7 @@ class SequentialWindowDecoder(SinterDecoder):
         simplify: bool = True,
         decompose_errors: bool = False,
         decoder: DeferredErrorDecoderInput = None,
-        **decoder_kwargs: object,
+        **decoder_kwargs: object,  # DEPRECATED: see qldpc._deprecations
     ) -> None:
         """Initialize an observable decoder that splits a detector error model into windows.
 
@@ -94,7 +94,7 @@ class SequentialWindowDecoder(SinterDecoder):
             simplify=simplify,
             decompose_errors=decompose_errors,
             decoder=decoder,
-            **decoder_kwargs,
+            **decoder_kwargs,  # DEPRECATED: see qldpc._deprecations
         )
 
         if commit_regions is not None and len(detection_regions) != len(commit_regions):
@@ -321,7 +321,7 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
         simplify: bool = True,
         decompose_errors: bool = False,
         decoder: DeferredErrorDecoderInput = None,
-        **decoder_kwargs: object,
+        **decoder_kwargs: object,  # DEPRECATED: see qldpc._deprecations
     ) -> None:
         """Initialize an observable decoder that splits a model into temporal windows.
 
@@ -365,7 +365,7 @@ class SlidingWindowDecoder(SequentialWindowDecoder):
             simplify=simplify,
             decompose_errors=decompose_errors,
             decoder=decoder,
-            **decoder_kwargs,
+            **decoder_kwargs,  # DEPRECATED: see qldpc._deprecations
         )
 
         if not window_size >= stride > 0:

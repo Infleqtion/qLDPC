@@ -120,13 +120,6 @@ def test_unsimplified_dense_decoder() -> None:
 
 def test_rejected_decoder_arguments() -> None:
     """Decoder arguments that an ObservableDecoder cannot honor are rejected."""
-    with pytest.raises(ValueError, match="DEFUNCT"):
-        decoders.SinterDecoder(priors_arg="error_channel")
-    with pytest.raises(ValueError, match="Cannot combine decoder="):
-        decoders.SinterDecoder(decoder=decoders.lookup(1), with_lookup=True)
-    with pytest.raises(ValueError, match="Cannot combine decoder="):
-        decoders.SlidingWindowDecoder(2, 1, decoder=decoders.lookup(1), with_lookup=True)
-
     dem = stim.DetectorErrorModel("""
         error(0.3) D0 L0 L1
         error(0.1) D1 L1
@@ -171,6 +164,21 @@ def test_rejected_decoder_arguments() -> None:
         decoders.SinterDecoder(
             decoder=decoders.custom.ObservableLookupDecoder(dem, 2)  # type: ignore[arg-type]
         )
+
+
+def test_deprecated_decoder_arguments() -> None:
+    """Deprecated decoder arguments are translated, or rejected if defunct or conflicting."""
+    with pytest.raises(ValueError, match="DEFUNCT"):
+        decoders.SinterDecoder(priors_arg="error_channel")
+    with pytest.raises(ValueError, match="Cannot combine decoder="):
+        decoders.SinterDecoder(decoder=decoders.lookup(1), with_lookup=True)
+    with pytest.raises(ValueError, match="Cannot combine decoder="):
+        decoders.SlidingWindowDecoder(2, 1, decoder=decoders.lookup(1), with_lookup=True)
+
+    dem = stim.DetectorErrorModel("""
+        error(0.3) D0 L0 L1
+        error(0.1) D1 L1
+    """)
 
     # the deprecated lookup decoder that predicts observable flips is an observable decoder
     with pytest.warns(DeprecationWarning):
