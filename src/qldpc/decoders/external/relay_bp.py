@@ -146,15 +146,15 @@ class RelayBPDecoder(BatchErrorDecoder):
                 error_priors = [_PLACEHOLDER_ERROR_RATE] * pcm.shape[1]
 
         pcm = _as_relay_bp_matrix(pcm)
-        self.has_observable_error_matrix = observable_error_matrix is not None
+        self._has_observable_error_matrix = observable_error_matrix is not None
         if observable_error_matrix is None:
             observable_error_matrix = np.empty((0, 0), dtype=np.uint8)
         else:
             observable_error_matrix = _as_relay_bp_matrix(observable_error_matrix)
 
         self.has_erasure_bit = add_erasure_bit
-        self.pcm_transposed = scipy.sparse.csr_matrix(pcm, dtype=np.uint8).T.tocsr()
-        self.observable_error_matrix_transposed = scipy.sparse.csr_matrix(
+        self._pcm_transposed = scipy.sparse.csr_matrix(pcm, dtype=np.uint8).T.tocsr()
+        self._observable_error_matrix_transposed = scipy.sparse.csr_matrix(
             observable_error_matrix, dtype=np.uint8
         ).T.tocsr()
         self.decoder = relay_bp.ObservableDecoderRunner(
@@ -215,7 +215,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         """
         detectors = np.asarray(detectors, dtype=np.uint8)
         if len(detectors) == 0:
-            num_errors = self.pcm_transposed.shape[0]
+            num_errors = self._pcm_transposed.shape[0]
             return np.zeros((0, num_errors + self.has_erasure_bit), dtype=np.uint8)
         errors = self.decoder.decode_batch(
             detectors, parallel, progress_bar, leave_progress_bar_on_finish
@@ -310,7 +310,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         """
         self._require_observables()
         if len(detectors) == 0:
-            num_observables = self.observable_error_matrix_transposed.shape[1]
+            num_observables = self._observable_error_matrix_transposed.shape[1]
             return np.zeros((0, num_observables + self.has_erasure_bit), dtype=np.uint8)
         if not self.has_erasure_bit:
             return np.asarray(
@@ -354,7 +354,7 @@ class RelayBPDecoder(BatchErrorDecoder):
 
     def _require_observables(self) -> None:
         """Raise an error if this decoder was not given observables to predict."""
-        if not self.has_observable_error_matrix:
+        if not self._has_observable_error_matrix:
             raise ValueError(
                 "Predicting observable flips with a RelayBPDecoder requires an"
                 " observable_error_matrix, or a detector error model with observables"
@@ -374,7 +374,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         read.
         """
         errors = np.asarray(errors, dtype=np.uint8)
-        return (errors @ self.observable_error_matrix_transposed) & 1
+        return (errors @ self._observable_error_matrix_transposed) & 1
 
     def _reproduces_syndrome(
         self, errors: npt.NDArray[np.int_], detectors: npt.NDArray[np.int_]
@@ -387,7 +387,7 @@ class RelayBPDecoder(BatchErrorDecoder):
         The parity accumulates in uint8 and overflows for a check that many error mechanisms
         address.  That is harmless: overflow reduces modulo 256, and only the low bit is read.
         """
-        residuals = np.asarray(errors.astype(np.uint8, copy=False) @ self.pcm_transposed) & 1
+        residuals = np.asarray(errors.astype(np.uint8, copy=False) @ self._pcm_transposed) & 1
         return np.all(residuals == detectors, axis=1)
 
 

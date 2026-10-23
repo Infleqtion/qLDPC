@@ -105,7 +105,7 @@ class GUFDecoder(ErrorDecoder):
                 return exhausted
             last_error_set_size = len(error_set)
 
-            checks, bits = self.get_sub_problem_indices(syndrome, error_set)
+            checks, bits = self._get_sub_problem_indices(syndrome, error_set)
             sub_matrix = self.code.matrix[np.ix_(checks, bits)]
             sub_syndrome = syndrome[checks]
 
@@ -152,7 +152,7 @@ class GUFDecoder(ErrorDecoder):
         """Decode an error syndrome and return an inferred error (alias for decode_errors)."""
         return self.decode_errors(syndrome, max_weight=max_weight)
 
-    def get_sub_problem_indices(
+    def _get_sub_problem_indices(
         self, syndrome: npt.NDArray[np.int_], error_set: set[Node]
     ) -> tuple[list[int], list[int]]:
         """Syndrome and data bit indices for decoding on the interior of the given error set."""

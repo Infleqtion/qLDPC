@@ -110,7 +110,7 @@ def test_ilp_decoder_near_integral_values() -> None:
     def solve_then_perturb(problem: cvxpy.Problem, **kwargs: object) -> float:
         """Solve, then report the solution the way a solver at its tolerance would."""
         result = solve(problem, **kwargs)
-        decoder.variables.value = np.asarray(decoder.variables.value) - 4e-16
+        decoder._variables.value = np.asarray(decoder._variables.value) - 4e-16
         return float(result)
 
     with unittest.mock.patch.object(cvxpy.Problem, "solve", solve_then_perturb):

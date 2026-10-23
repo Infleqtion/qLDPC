@@ -334,7 +334,7 @@ class CompiledTrivialDecoder(CompiledSinterDecoder):
     def __init__(self, num_detectors: int, num_observables: int) -> None:
         self.num_detectors = num_detectors  # for compatibility with the parent class
         self.num_observables = num_observables
-        self.packed_observable_size = (num_observables + 7) // 8
+        self._packed_observable_size = (num_observables + 7) // 8
 
     def decode_shots_bit_packed(
         self, bit_packed_detection_event_data: npt.NDArray[np.uint8]
@@ -345,7 +345,7 @@ class CompiledTrivialDecoder(CompiledSinterDecoder):
 
         See help(sinter.CompiledDecoder) for additional information.
         """
-        shape = (len(bit_packed_detection_event_data), self.packed_observable_size)
+        shape = (len(bit_packed_detection_event_data), self._packed_observable_size)
         return np.zeros(shape, dtype=np.uint8)
 
     def decode_shots(self, detection_event_data: npt.NDArray[np.uint8]) -> npt.NDArray[np.uint8]:
