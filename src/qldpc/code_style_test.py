@@ -18,7 +18,7 @@ _MODULES = [
 @pytest.mark.parametrize("path", _MODULES, ids=lambda path: str(path.relative_to(_SOURCE)))
 def test_module_layout(path: pathlib.Path) -> None:
     """Modules have license and section headers, and plain names precede underscore names."""
-    lines = path.read_text().splitlines()
+    lines = path.read_text(encoding="utf-8").splitlines()
     assert lines[0] == "# SPDX-License-Identifier: Apache-2.0", "missing license header"
     sections = [0]
     for index, line in enumerate(lines):
