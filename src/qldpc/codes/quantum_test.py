@@ -4,11 +4,8 @@
 
 from __future__ import annotations
 
-import os
 import pathlib
 import random
-import subprocess
-import sys
 import unittest.mock
 
 import networkx as nx
@@ -19,6 +16,7 @@ from sympy.abc import x, y
 
 import qldpc
 from qldpc import abstract, codes, decoders
+from qldpc.conftest import run_python
 from qldpc.objects import ChainComplex, Node, Pauli
 
 from .common_test import assert_valid_subgraphs
@@ -135,11 +133,15 @@ def test_hamming_and_tetrahedral_codes() -> None:
 
 
 def test_two_block_code_error() -> None:
-    """Raise error when trying to construct incompatible two-block codes."""
+    """Two-block codes need commuting matrices, unless validation is skipped."""
     matrix_a = [[1, 0], [0, 2]]
     matrix_b = [[0, 1], [1, 0]]
+    assert not codes.TBCode(matrix_a, matrix_a, field=3).is_subsystem_code
     with pytest.raises(ValueError, match="do not commute"):
         codes.TBCode(matrix_a, matrix_b, field=3)
+
+    # skipping validation builds the code, whose checks do not commute
+    assert codes.TBCode(matrix_a, matrix_b, field=3, skip_validation=True).is_subsystem_code
 
 
 def test_gala_code_construction() -> None:
@@ -376,7 +378,7 @@ def test_bivariate_bicycle_codes() -> None:
     code = codes.BBCode(orders, poly_a, poly_b)
     with pytest.raises(ValueError, match="Uninvertible system of equations"):
         basis = (1, 0), (0, 0)
-        code.modular_inverse(basis, 0, 1)
+        code._get_basis_coefficients(basis, 0, 1)
 
 
 def test_gross_codes() -> None:
@@ -1060,22 +1062,7 @@ def test_random_quantum_tanner_code_is_reproducible() -> None:
         "code = codes.QTCode.random(abstract.CyclicGroup(8), codes.RepetitionCode(2), seed=7);"
         "print(np.asarray(code.matrix).tobytes().hex())"
     )
-    matrices = {
-        subprocess.run(
-            [sys.executable, "-c", script],
-            # hand the child this interpreter's import path, so that it builds the code from the
-            # same sources rather than from whatever qldpc its environment happens to resolve
-            env={
-                **os.environ,
-                "PYTHONHASHSEED": hash_seed,
-                "PYTHONPATH": os.pathsep.join(path for path in sys.path if path),
-            },
-            capture_output=True,
-            check=True,
-            text=True,
-        ).stdout
-        for hash_seed in ["0", "1"]
-    }
+    matrices = {run_python(script, env={"PYTHONHASHSEED": hash_seed}) for hash_seed in ["0", "1"]}
     assert matrices == {matrix_for(seed=7).hex() + "\n"}
 
 

@@ -101,11 +101,11 @@ Plumbing that one subpackage uses is an underscore name in that subpackage, and 
 
 - Build decoders from typed specifications, as in `decoders.bp_osd(...).build(pcm_or_dem)` or `decoders.mwpm(...).build_observable_decoder(dem)`.
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
-  Code that consumes a user-supplied error decoder coerces it with `_as_error_decoder` from [`decoders/protocols.py`](src/qldpc/decoders/protocols.py), or outside `qldpc.decoders` with `resolve_decoder` (below), and calls `decode_errors`.
+  Code that consumes a user-supplied error decoder coerces it with `_as_error_decoder` from [`decoders/protocols.py`](src/qldpc/decoders/protocols.py), or outside `qldpc.decoders` with `build_error_decoder` (below), and calls `decode_errors`.
 - A method that decodes a matrix it constructs itself must reject prebuilt decoders with `reject_prebuilt_decoder` from `decoders/construction/_resolution.py`.
 - Code-capacity estimators resolve their `decoder=`, `decoder_x=`, and `decoder_z=` inputs with `get_code_capacity_decoder` from [`codes/_code_capacity.py`](src/qldpc/codes/_code_capacity.py).
   It always yields an observable decoder: on binary codes, specifications that predict observables natively build it from a DEM; otherwise inferred errors are projected onto logical predictions.
-- Keep `resolve_decoder` in `decoders/construction/_resolution.py` specific to error decoders.
+- Keep `build_error_decoder` in `decoders/construction/_resolution.py` specific to error decoders.
   Dispatch on explicit capabilities (`compile_decoder_for_dem`, `decode_observables`, the `ErrorDecoder` protocol), never on output length.
 - Only decoders that declare erasure support may append an erasure flag.
   They append that flag as the last entry of each inferred error; unsupported decoders must reject `add_erasure_bit=True`.
@@ -200,9 +200,11 @@ Deprecated APIs remain supported, but the library and its documentation are writ
 Keep deprecated code in one place, so that it is easy to find and to remove.
 
 - All deprecated code and APIs live under the private package [`qldpc/_deprecations/`](src/qldpc/_deprecations/).
-  [`core.py`](src/qldpc/_deprecations/core.py) holds the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes; its module docstring explains the mechanics.
+  [`core.py`](src/qldpc/_deprecations/core.py) holds the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods, attributes, and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes; its module docstring explains the mechanics.
   [`decoders.py`](src/qldpc/_deprecations/decoders.py) holds the deprecated decoder API and its translation into decoder specifications.
-  It is the one module allowed to import other subpackages' underscore names: it calls private decoder builders, so that deprecated APIs pass options to them unchecked.
+  It and `lookup.py` are the only modules allowed to use other subpackages' underscore names: `decoders.py` calls private decoder builders, so that deprecated APIs pass options to them unchecked, and `lookup.py` builds deprecated lookup decoders from their private bases.
+  [`lookup.py`](src/qldpc/_deprecations/lookup.py) holds the lookup decoders that the deprecated `predict_observable_flips=True` option builds.
+  It imports `qldpc.decoders`, so other modules import it only within the functions that use it.
 - Only the following deprecation code lives outside `qldpc/_deprecations/`:
   1. Each module that still serves a deprecated name ends with this identical marked stub, which looks the name up in the registry:
 
@@ -226,6 +228,7 @@ Keep deprecated code in one place, so that it is easy to find and to remove.
 - `.rst` pages and the README do not mention deprecated APIs.
   Docstrings carry no deprecation notes, except one line in `Args` that calls out a deprecated option and what to use instead.
 - The data-driven tests in [`core_test.py`](src/qldpc/_deprecations/core_test.py) cover every registry entry and the attached methods, and [`decoders_test.py`](src/qldpc/_deprecations/decoders_test.py) covers the deprecated decoder API.
+  [`lookup_test.py`](src/qldpc/_deprecations/lookup_test.py) covers the lookup decoders that the deprecated `predict_observable_flips=True` option builds.
   [`decoders/legacy_api_test.py`](src/qldpc/decoders/legacy_api_test.py) checks that the `qldpc.decoders` root names of v0.3.3 and v0.4.1 remain importable.
   Tests of inline deprecations stay beside their modules; name new ones `test_deprecated_*`.
 - To remove deprecations, grep for `_deprecations` and, case-insensitively, for `deprecat`.

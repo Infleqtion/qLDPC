@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import TypeGuard
 
+from qldpc._deprecations.decoders import decode_returns_observables
+
 from .construction.specs import DecoderSpec, ObservableDecoderCompiler
 from .protocols import ErrorDecoder, ObservableDecoder, SupportsDecode
 
@@ -55,16 +57,19 @@ def is_prebuilt_observable_decoder(decoder: object) -> bool:
     that can do both, such as a RelayBPDecoder, is used as an error decoder if passed prebuilt to a
     code-capacity estimator, since it cannot be rebuilt for that sector's observables.
     """
-    returns_observables = bool(getattr(decoder, "decode_returns_observables", False))
-    is_error_decoder = isinstance(decoder, ErrorDecoder) or (
-        isinstance(decoder, SupportsDecode) and not returns_observables
+    predicts_observables = isinstance(decoder, ObservableDecoder) or callable(
+        getattr(decoder, "decode_shots_bit_packed", None)
+    )
+    is_error_decoder = (
+        # DEPRECATED: see qldpc._deprecations
+        # warn only if the declaration can make this an observable decoder; a decoder that cannot
+        # predict observables is coerced by _as_error_decoder, which warns
+        not decode_returns_observables(decoder, warn=predicts_observables)
+        and isinstance(decoder, (ErrorDecoder, SupportsDecode))
     )
     return (
         not isinstance(decoder, (type, DecoderSpec))
         and not is_error_decoder
         and not compiles_for_dem(decoder)
-        and (
-            isinstance(decoder, ObservableDecoder)
-            or callable(getattr(decoder, "decode_shots_bit_packed", None))
-        )
+        and predicts_observables
     )

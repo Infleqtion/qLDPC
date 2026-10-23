@@ -13,6 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import stim
 
+from qldpc._deprecations.decoders import translate_error_rate
 from qldpc.math import IntegerArray
 
 from .dems import DetectorErrorModelArrays
@@ -118,24 +119,16 @@ def _to_pcm(pcm_or_dem: _PcmOrDem) -> IntegerArray:
 def _get_matrix_error_channel(
     pcm_or_dem: _PcmOrDem,
     error_channel: _ErrorChannel,
-    error_rate: float | None,
+    error_rate: float | None,  # DEPRECATED: see qldpc._deprecations
 ) -> npt.NDArray[np.floating] | None:
     """Normalize matrix error probabilities and reject explicit probabilities for a DEM."""
     if isinstance(pcm_or_dem, stim.DetectorErrorModel):
+        # DEPRECATED: see qldpc._deprecations
         _reject_dem_error_probabilities(error_channel, error_rate)
         return None
 
-    if error_rate is not None:
-        # imported here because qldpc._deprecations.decoders imports modules that import this one
-        from qldpc._deprecations.decoders import deprecate_error_rate_option
-
-        deprecate_error_rate_option(
-            {"error_channel": error_channel, "error_rate": error_rate},
-            frozenset(
-                {"error_rate", "error_channel"} if error_channel is not None else {"error_rate"}
-            ),
-        )
-        error_channel = error_rate
+    if error_rate is not None:  # DEPRECATED: see qldpc._deprecations
+        error_channel = translate_error_rate(error_rate, error_channel is not None)
     if error_channel is None:
         error_channel = _PLACEHOLDER_ERROR_RATE
 
@@ -154,8 +147,12 @@ def _get_matrix_error_channel(
     return probabilities
 
 
-def _reject_dem_error_probabilities(error_channel: object, error_rate: object) -> None:
+def _reject_dem_error_probabilities(
+    error_channel: object,
+    error_rate: object,  # DEPRECATED: see qldpc._deprecations
+) -> None:
     """Reject explicit error probabilities for a detector error model, which supplies its own."""
+    # DEPRECATED: see qldpc._deprecations
     options = {"error_channel": error_channel, "error_rate": error_rate}
     if specified := [f"{name}={value!r}" for name, value in options.items() if value is not None]:
         raise ValueError(

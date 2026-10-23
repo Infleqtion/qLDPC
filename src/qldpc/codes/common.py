@@ -23,15 +23,16 @@ import scipy.linalg
 import scipy.sparse
 import stim
 
-from qldpc import _deprecations, abstract, decoders, external, math
+from qldpc import abstract, decoders, external, math
 from qldpc._deprecations.decoders import (
-    get_legacy_decoder_migration_message,
-    reject_removed_decoder_args,
+    merge_legacy_css_decoder_args,
+    merge_legacy_decoder_args,
+    selects_legacy_decoder,
 )
 from qldpc._utils import format_docstring, get_external_caller_stacklevel
 from qldpc._utils import networkx as nx
 from qldpc.decoders._capabilities import is_prebuilt_decoder, is_prebuilt_observable_decoder
-from qldpc.decoders.construction._resolution import reject_prebuilt_decoder, resolve_decoder
+from qldpc.decoders.construction._resolution import build_error_decoder, reject_prebuilt_decoder
 from qldpc.external import _codes
 from qldpc.math import IntegerArray, resolve_field
 from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, PauliXZLike, QuditPauli
@@ -136,7 +137,7 @@ class AbstractCode(abc.ABC):
         else:
             self._field = resolve_field(field)
             if scipy.sparse.issparse(matrix):
-                matrix = matrix.todense()  # type:ignore[union-attr]
+                matrix = matrix.todense()  # type:ignore[union-attr]  # issparse does not narrow
             array = np.asanyarray(matrix)
             if array.dtype == bool:
                 # galois rejects bool dtypes, so treat booleans as 0/1 integers
@@ -589,7 +590,7 @@ class ClassicalCode(AbstractCode):
         vector: Sequence[int] | npt.NDArray[np.int_] | None = None,
         decoder: decoders.ErrorDecoderInput = None,
         backend: DistanceBackend = "auto",
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> int | float:
         """Use a randomized algorithm to compute an upper bound on code distance.
 
@@ -626,7 +627,7 @@ class ClassicalCode(AbstractCode):
         _validate_num_trials(num_trials)
         if backend not in ("auto", "decoder"):
             raise ValueError(
-                f"The {backend!r} distance backend is only available for CSSCode instances."
+                f"ClassicalCode only supports the 'decoder' distance backend (provided: {backend!r})"
             )
         if vector is None:
             reject_prebuilt_decoder(decoder, _CLASSICAL_DISTANCE_BOUND_REASON)
@@ -644,7 +645,9 @@ class ClassicalCode(AbstractCode):
         else:
             check_matrix = np.vstack([self.matrix, self.generator]).view(self.field)
             syndrome = np.zeros(len(check_matrix), dtype=int).view(self.field)
-        error_decoder = resolve_decoder(check_matrix, decoder, decoder_kwargs)
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
+            decoder = merge_legacy_decoder_args(check_matrix, decoder, decoder_kwargs)
+        error_decoder = build_error_decoder(check_matrix, decoder=decoder)
 
         def get_syndrome() -> npt.NDArray[np.int_]:
             """Get a syndrome to decode, randomizing its overlap with code words if necessary."""
@@ -717,8 +720,8 @@ class ClassicalCode(AbstractCode):
             refresh: If True, run GAP even if the code is cached, and replace the cached code.
         """
         standardized_name = name.strip().replace(" ", "")  # strip whitespace
-        get_classical_code = _codes.get_classical_code
-        retrieve = get_classical_code.refresh if refresh else get_classical_code
+        get_guava_code = _codes.get_guava_code
+        retrieve = get_guava_code.refresh if refresh else get_guava_code
         matrix, field = retrieve(standardized_name)
         code = ClassicalCode(matrix, field)
         code._name = name
@@ -832,7 +835,7 @@ class ClassicalCode(AbstractCode):
         *,
         min_error_weight: int = 1,
         decoder: decoders.DecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> ErrorRateFunc:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
@@ -897,9 +900,9 @@ class ClassicalCode(AbstractCode):
         declared to be decoded perfectly.  The sum runs only as far as the heaviest weight the
         budget reached, and ``F_k = 0`` is assumed above that.
         """
-        code_capacity_decoder = get_code_capacity_decoder(
-            self.matrix, None, decoder, decoder_kwargs
-        )
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
+            decoder = merge_legacy_decoder_args(self.matrix, decoder, decoder_kwargs)
+        code_capacity_decoder = get_code_capacity_decoder(self.matrix, None, decoder)
 
         # sample errors of fixed weight and record failure/discard counts
         return ErrorRateFunc.from_sampler(
@@ -993,7 +996,14 @@ class QuditCode(AbstractCode):
         *,
         is_subsystem_code: bool | None = None,
     ) -> None:
-        """Construct a qudit code from a parity check matrix over a finite field."""
+        """Construct a qudit code from a parity check matrix over a finite field.
+
+        ``is_subsystem_code`` records whether the parity checks fail to commute, making this a
+        subsystem code.  If omitted, it is computed when first needed.  An explicit ``True`` is a
+        trusted hint, which is safe even if wrong: a stabilizer code treated as a subsystem code
+        just has no gauge qudits.  An explicit ``False`` is verified, and raises a ValueError if
+        some parity checks do not commute.
+        """
         super().__init__(matrix, field)
 
         if isinstance(matrix, QuditCode):
@@ -1005,7 +1015,9 @@ class QuditCode(AbstractCode):
                 raise ValueError("is_subsystem_code=False contradicts the subsystem code provided")
 
         if is_subsystem_code:
-            self._is_subsystem_code = is_subsystem_code
+            self._is_subsystem_code = True
+        elif is_subsystem_code is not None and self.is_subsystem_code:
+            raise ValueError("is_subsystem_code=False, but some parity checks do not commute")
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -1044,7 +1056,8 @@ class QuditCode(AbstractCode):
             return self
         is_subsystem_code = self.is_subsystem_code
         matrix = self.matrix.row_space()
-        code = QuditCode(matrix, self.field, is_subsystem_code=is_subsystem_code)
+        code = QuditCode(matrix, self.field)
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if not is_subsystem_code:
             code._dimension = len(code) - len(matrix)
         code._distance = self._distance
@@ -1111,7 +1124,8 @@ class QuditCode(AbstractCode):
         zs = np.any(matrix_z, axis=1)
         if np.any(xs & zs):
             return self
-        code = CSSCode(matrix_x[xs], matrix_z[zs], is_subsystem_code=self._is_subsystem_code)
+        code = CSSCode(matrix_x[xs], matrix_z[zs])
+        code._is_subsystem_code = self._is_subsystem_code  # known, so not re-verified
         code._dimension = self._dimension
         code._distance = self._distance
         code._distance_bound = self._distance_bound
@@ -1271,8 +1285,8 @@ class QuditCode(AbstractCode):
             RuntimeError: If qecdb.org cannot be accessed.
             ValueError: If QECDB has no stabilizer data for the code.
         """
-        get_quantum_code = _codes.get_quantum_code
-        retrieve = get_quantum_code.refresh if refresh else get_quantum_code
+        get_qecdb_code = _codes.get_qecdb_code
+        retrieve = get_qecdb_code.refresh if refresh else get_qecdb_code
         strings, distance, is_css = retrieve(code_id)
         code = QuditCode.from_strings(strings, field=2)
         if is_css:
@@ -1555,7 +1569,8 @@ class QuditCode(AbstractCode):
         else:
             # X-type and Z-type stabilizers in standard form
             stabilizer_ops = self.get_stabilizer_ops()
-            code = QuditCode(stabilizer_ops, is_subsystem_code=False)
+            code = QuditCode(stabilizer_ops)
+            code._is_subsystem_code = False  # stabilizers commute
             (
                 standard_stabilizer_ops,
                 qudit_locs,
@@ -1901,7 +1916,8 @@ class QuditCode(AbstractCode):
         gauge operators of the original code.
         """
         matrix = np.vstack([self.get_stabilizer_ops(), self.get_logical_ops()])
-        code = QuditCode(matrix, is_subsystem_code=self.dimension != 0)
+        code = QuditCode(matrix)
+        code._is_subsystem_code = self.dimension != 0  # logical operators do not all commute
         code._stabilizer_ops = self._stabilizer_ops
         code._logical_ops = self._gauge_ops
         code._gauge_ops = self._logical_ops
@@ -2061,16 +2077,23 @@ class QuditCode(AbstractCode):
     ) -> int | float:
         """Use a randomized algorithm to compute an upper bound on code distance.
 
-        Specifically, use GAP's QDistRnd package to compute a distance bound.  Raise an error
-        otherwise.  The ``sqetch`` backend is available only on :class:`CSSCode`.
+        Specifically, use GAP's QDistRnd package to compute a distance bound.  By default,
+        ``backend="auto"`` uses GAP only if a GAP binding or executable can be called (see
+        :func:`qldpc.external.gap.is_callable`), and raises an error otherwise.  An explicit
+        ``backend="gap"`` instead falls back to a manual workflow when GAP cannot be called: after
+        asking on standard input whether to proceed, it prints GAP commands, copies them to the
+        system clipboard, and reads GAP's output from standard input (see
+        :func:`qldpc.external.gap.get_output`).  With either backend, GAP may ask on standard input
+        before installing a missing GUAVA or QDistRnd package.
 
         Args:
             num_trials: Minimize over this many independent upper bounds.  If ``None`` (the
                 default), return the best known upper bound on distance, or compute a single upper
                 bound if no bound is known.
             cutoff: Exit early once the upper bound falls to or below this cutoff.
-            backend: Distance-bound backend.  ``"auto"`` and ``"gap"`` use GAP/QDistRnd;
-                ``"decoder"`` and ``"sqetch"`` require a CSSCode and are rejected here.
+            backend: Distance-bound backend.  ``"auto"`` (the default) and ``"gap"`` use
+                GAP/QDistRnd as described above; ``"decoder"`` and ``"sqetch"`` require a CSSCode
+                and are rejected here.
             **bound_kwargs: Keyword arguments to pass to GAP/QDistRnd.  Recognized options are
                 {gap_options}; see https://qec-pages.github.io/QDistRnd/doc/chap4.html.
 
@@ -2078,6 +2101,12 @@ class QuditCode(AbstractCode):
             An upper bound on distance if it is defined, or np.nan otherwise.  The returned bound is
             never worse than the best bound already known for this code, and the best bound is
             remembered for later calls.
+
+        Raises:
+            NotImplementedError: If GAP cannot be called with ``backend="auto"``, or if the manual
+                workflow is declined with ``backend="gap"``.
+            ValueError: If given options that GAP/QDistRnd does not recognize, or options for GAP
+                with ``backend="auto"`` when GAP cannot be called.
         """
         _validate_distance_backend(backend)
         _validate_num_trials(num_trials)
@@ -2097,13 +2126,18 @@ class QuditCode(AbstractCode):
 
         if unknown_gap := sorted(set(bound_kwargs) - _GAP_DISTANCE_BOUND_KWARGS):
             raise ValueError(f"Arguments not recognized by GAP/QDistRnd: {unknown_gap}")
+        if _resolve_distance_backend(backend, bound_kwargs, is_binary=False) != "gap":
+            raise NotImplementedError(
+                "Bounding the code distance of non-CSS codes requires GAP/QDistRnd, but GAP cannot"
+                ' be called; pass backend="gap" to use GAP manually'
+            )
         if not external.gap.is_installed():
             raise NotImplementedError(
                 "Bounding the code distance of non-CSS codes without GAP is not supported"
             )
 
         maxav = bound_kwargs.get("maxav", "fail")
-        bound = _codes.get_distance_bound(self, num_trials, cutoff=cutoff, maxav=maxav)
+        bound = _codes.get_qdistrnd_distance_bound(self, num_trials, cutoff=cutoff, maxav=maxav)
         self._distance_bound = min(best_bound, bound)
         return self._distance_bound
 
@@ -2124,7 +2158,8 @@ class QuditCode(AbstractCode):
             return result.reshape(-1, 2 * len(self)).view(self.field)
 
         # transform the parity check matrix, and any other operators that are already known
-        code = QuditCode(transform_ops(self.matrix), is_subsystem_code=self._is_subsystem_code)
+        code = QuditCode(transform_ops(self.matrix))
+        code._is_subsystem_code = self._is_subsystem_code  # preserved by the transformation
         if self._logical_ops is not None:
             code._logical_ops = transform_ops(self.get_logical_ops())
         if self._stabilizer_ops is not None:
@@ -2164,7 +2199,8 @@ class QuditCode(AbstractCode):
                 new_ops.append(np.concatenate(xs_zs))
             return self.field(new_ops)
 
-        code = QuditCode(transform_ops(self.matrix), is_subsystem_code=self._is_subsystem_code)
+        code = QuditCode(transform_ops(self.matrix))
+        code._is_subsystem_code = self._is_subsystem_code  # preserved by the transformation
 
         # preserve or update logical operators, as applicable
         if preserve_logicals:
@@ -2195,7 +2231,8 @@ class QuditCode(AbstractCode):
         code_z = ClassicalCode.stack(codes_z)
         matrix = np.hstack([code_x.matrix, code_z.matrix])
         is_subsystem_code = any(code.is_subsystem_code for code in codes)
-        code = QuditCode(matrix, is_subsystem_code=is_subsystem_code)
+        code = QuditCode(matrix)
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if inherit_logicals:
             logicals_xx = [
                 code.get_logical_ops(Pauli.X, symplectic=True)[:, : len(code)] for code in codes
@@ -2258,9 +2295,8 @@ class QuditCode(AbstractCode):
         inner_checks = inner.matrix @ outer.get_logical_ops()
 
         # combine parity checks of the outer and inner codes
-        code = QuditCode(
-            np.vstack([outer.matrix, inner_checks]), is_subsystem_code=is_subsystem_code
-        )
+        code = QuditCode(np.vstack([outer.matrix, inner_checks]))
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
 
         if inherit_logicals:
             code._logical_ops = inner.get_logical_ops() @ outer.get_logical_ops()
@@ -2274,7 +2310,7 @@ class QuditCode(AbstractCode):
         *,
         min_error_weight: int = 1,
         decoder: decoders.DeferredDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> ErrorRateFunc:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
@@ -2341,11 +2377,12 @@ class QuditCode(AbstractCode):
         if pauli_bias_zxy is not None:
             weights_xzy = 3 * pauli_bias_zxy[[1, 0, 2]]
             dem_error_weights = np.repeat(weights_xzy, len(self))
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
+            decoder = merge_legacy_decoder_args(syndrome_matrix, decoder, decoder_kwargs)
         code_capacity_decoder = get_code_capacity_decoder(
             syndrome_matrix,
             observable_matrix,
             decoder,
-            decoder_kwargs,
             symplectic_dem_errors=True,
             dem_error_weights=dem_error_weights,
             prebuilt_rejection_reason=_QUDIT_SYNDROME_MATRIX_REASON,
@@ -2530,6 +2567,12 @@ class CSSCode(QuditCode):
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
 
+        ``is_subsystem_code`` records whether some X-type and Z-type parity checks fail to commute,
+        making this a subsystem code.  If omitted, it is computed when first needed.  An explicit
+        ``True`` is a trusted hint, which is safe even if wrong: a stabilizer code treated as a
+        subsystem code just has no gauge qudits.  An explicit ``False`` is verified, and raises a
+        ValueError if some parity checks do not commute.
+
         If ``promise_equal_distance_xz is True``, the X-type and Z-type logical operators are
         assumed to have equal minimum weight, which lets the code distance be computed from one type
         alone.  This promise is trusted rather than verified: passing ``True`` when it does not hold
@@ -2541,7 +2584,11 @@ class CSSCode(QuditCode):
         if len(self.code_x) != len(self.code_z) or self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
-        self._is_subsystem_code = is_subsystem_code
+        self._is_subsystem_code = None
+        if is_subsystem_code:
+            self._is_subsystem_code = True
+        elif is_subsystem_code is not None and self.is_subsystem_code:
+            raise ValueError("is_subsystem_code=False, but some parity checks do not commute")
         self._equal_distance_xz = promise_equal_distance_xz or self.code_x == self.code_z
 
     def __eq__(self, other: object) -> bool:
@@ -2653,7 +2700,7 @@ class CSSCode(QuditCode):
     @staticmethod
     def from_strings(
         checks: Sequence[str], field: int | type[galois.FieldArray] | None = None
-    ) -> QuditCode:
+    ) -> CSSCode:
         """Construct a CSSCode from the provided parity checks.
 
         Alias for QuditCode.from_strings(checks, field).to_css().  See help(QuditCode.from_strings).
@@ -2734,7 +2781,7 @@ class CSSCode(QuditCode):
     def get_swel_logical_ops(self) -> galois.FieldArray:
         """Find a self-dual basis of logical operators for this code: (Lx, Lz) = (L, L).  Return L.
 
-        Raise a ValueError if no such basis exists (see QuditCode.is_swel).
+        Raise a ValueError if no such basis exists (see CSSCode.is_swel).
         """
         supports = (
             math.get_orthonormal_basis(self.get_logical_ops(Pauli.X), promise_full_rank=True)
@@ -2751,7 +2798,7 @@ class CSSCode(QuditCode):
     def set_swel_logical_ops(self) -> Self:
         """Set the logical operators of this code to those of a self-dual logical operator basis.
 
-        Raise a ValueError if this code is not SWEL (see QuditCode.is_swel).
+        Raise a ValueError if this code is not SWEL (see CSSCode.is_swel).
         """
         supports = self.get_swel_logical_ops()
         return self.set_logical_ops_xz(supports, supports)
@@ -2762,11 +2809,8 @@ class CSSCode(QuditCode):
         if self._is_canonicalized:
             return self
         is_subsystem_code = self.is_subsystem_code
-        code = CSSCode(
-            self.code_x.canonicalized,
-            self.code_z.canonicalized,
-            is_subsystem_code=is_subsystem_code,
-        )
+        code = CSSCode(self.code_x.canonicalized, self.code_z.canonicalized)
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if not is_subsystem_code:
             code._dimension = len(self) - code.num_checks
         code._distance = self._distance
@@ -2989,7 +3033,8 @@ class CSSCode(QuditCode):
             # X-type and Z-type stabilizers in standard form
             stabilizers_x: npt.NDArray[np.int_] = self.get_stabilizer_ops(Pauli.X)
             stabilizers_z: npt.NDArray[np.int_] = self.get_stabilizer_ops(Pauli.Z)
-            code = CSSCode(stabilizers_x, stabilizers_z, is_subsystem_code=False)
+            code = CSSCode(stabilizers_x, stabilizers_z)
+            code._is_subsystem_code = False  # stabilizers commute
             (
                 stabilizers_x,
                 stabilizers_z,
@@ -3210,7 +3255,8 @@ class CSSCode(QuditCode):
         """
         matrix_x = np.vstack([self.get_stabilizer_ops(Pauli.X), self.get_logical_ops(Pauli.X)])
         matrix_z = np.vstack([self.get_stabilizer_ops(Pauli.Z), self.get_logical_ops(Pauli.Z)])
-        code = CSSCode(matrix_x, matrix_z, is_subsystem_code=self.dimension != 0)
+        code = CSSCode(matrix_x, matrix_z)
+        code._is_subsystem_code = self.dimension != 0  # logical operators do not all commute
         code._stabilizer_ops = self._stabilizer_ops
         code._logical_ops = self._gauge_ops
         code._gauge_ops = self._logical_ops
@@ -3468,8 +3514,8 @@ class CSSCode(QuditCode):
                 ``"sqetch"`` backends cannot be combined with ``decoder``.
             **bound_kwargs: Keyword arguments to pass to the downstream distance bounding method.
                 For ``"gap"``, recognized options are {gap_options}.  For ``"sqetch"``, recognized
-                options are {sqetch_options}.  With ``"auto"``, supplied keywords limit selection to
-                backends that accept them.
+                options are {sqetch_options}.  With ``"auto"``, options for sqetch or GAP select
+                that backend, and raise a ValueError if it is unavailable.
 
         Returns:
             An upper bound on distance if it is defined, or np.nan otherwise.  The returned bound is
@@ -3540,13 +3586,12 @@ class CSSCode(QuditCode):
             )
 
         # GAP estimates the Z-distance of CSS codes, so flip X/Z if necessary
-        code = (
-            self
-            if pauli is Pauli.Z
-            else CSSCode(self.matrix_z, self.matrix_x, is_subsystem_code=self._is_subsystem_code)
-        )
+        code = self
+        if pauli is not Pauli.Z:
+            code = CSSCode(self.matrix_z, self.matrix_x)
+            code._is_subsystem_code = self._is_subsystem_code  # known, so not re-verified
         maxav = bound_kwargs.get("maxav", "fail")
-        bound = _codes.get_distance_bound(code, num_trials, cutoff=cutoff, maxav=maxav)
+        bound = _codes.get_qdistrnd_distance_bound(code, num_trials, cutoff=cutoff, maxav=maxav)
         return self._update_distance_bound(bound, pauli)
 
     def get_distance_bound_with_decoder(
@@ -3556,7 +3601,7 @@ class CSSCode(QuditCode):
         *,
         cutoff: int | None = None,
         decoder: decoders.DeferredErrorDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> int | float:
         r"""Use a randomized algorithm to compute an upper bound on code distance.
 
@@ -3621,7 +3666,9 @@ class CSSCode(QuditCode):
 
         # initialize a decoder and a trivial effective syndrome
         effective_check_matrix = np.vstack([matrix_z, logical_ops_z])
-        error_decoder = resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
+            decoder = merge_legacy_decoder_args(effective_check_matrix, decoder, decoder_kwargs)
+        error_decoder = build_error_decoder(effective_check_matrix, decoder=decoder)
         effective_syndrome = np.zeros(len(effective_check_matrix), dtype=int)
 
         def get_effective_syndrome() -> npt.NDArray[np.int_]:
@@ -3655,7 +3702,7 @@ class CSSCode(QuditCode):
         logical_index: int,
         *,
         decoder: decoders.DeferredErrorDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> Self:
         """Reduce the weight of a logical operator.
 
@@ -3693,7 +3740,9 @@ class CSSCode(QuditCode):
         effective_syndrome = np.zeros((code.num_checks + self.dimension), dtype=int)
         effective_syndrome[dual_op_index] = 1
 
-        error_decoder = resolve_decoder(effective_check_matrix, decoder, decoder_kwargs)
+        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
+            decoder = merge_legacy_decoder_args(effective_check_matrix, decoder, decoder_kwargs)
+        error_decoder = build_error_decoder(effective_check_matrix, decoder=decoder)
         candidate_logical_op = _decode_consistently(
             error_decoder, effective_check_matrix, lambda: effective_syndrome, self.field
         )
@@ -3708,7 +3757,7 @@ class CSSCode(QuditCode):
         pauli: PauliXZLike | None = None,
         *,
         decoder: decoders.DeferredErrorDecoderInput = None,
-        **decoder_kwargs: Any,
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> Self:
         """Reduce the weight of all logical operators.
 
@@ -3726,10 +3775,13 @@ class CSSCode(QuditCode):
         """
         pauli = None if pauli is None else Pauli.coerce_xz(pauli)
         if pauli is None:
+            # DEPRECATED: see qldpc._deprecations
             self.reduce_logical_ops(Pauli.X, decoder=decoder, **decoder_kwargs)
+            # DEPRECATED: see qldpc._deprecations
             self.reduce_logical_ops(Pauli.Z, decoder=decoder, **decoder_kwargs)
         else:
             for logical_index in range(self.dimension):
+                # DEPRECATED: see qldpc._deprecations
                 self.reduce_logical_op(pauli, logical_index, decoder=decoder, **decoder_kwargs)
         return self
 
@@ -3777,12 +3829,13 @@ class CSSCode(QuditCode):
             raise TypeError("CSSCode.stack requires CSSCode inputs")
         code_x = ClassicalCode.stack([code.code_x for code in css_codes])
         code_z = ClassicalCode.stack([code.code_z for code in css_codes])
+        is_subsystem_code = any(code.is_subsystem_code for code in codes)
         code = CSSCode(
             code_x,
             code_z,
-            is_subsystem_code=any(code.is_subsystem_code for code in codes),
             promise_equal_distance_xz=all(code._equal_distance_xz for code in css_codes),
         )
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if inherit_logicals:
             logicals_x = [code.get_logical_ops(Pauli.X) for code in css_codes]
             logicals_z = [code.get_logical_ops(Pauli.Z) for code in css_codes]
@@ -3855,9 +3908,9 @@ class CSSCode(QuditCode):
         decoder: decoders.DecoderInput = None,
         decoder_x: decoders.DecoderInput = None,
         decoder_z: decoders.DecoderInput = None,
-        decoder_x_kwargs: dict[str, Any] | None = None,
-        decoder_z_kwargs: dict[str, Any] | None = None,
-        **decoder_kwargs: Any,
+        decoder_x_kwargs: dict[str, Any] | None = None,  # DEPRECATED: see qldpc._deprecations
+        decoder_z_kwargs: dict[str, Any] | None = None,  # DEPRECATED: see qldpc._deprecations
+        **decoder_kwargs: Any,  # DEPRECATED: see qldpc._deprecations
     ) -> ErrorRateFunc:
         """Construct a function from physical --> logical error rate in a code capacity model.
 
@@ -3925,30 +3978,21 @@ class CSSCode(QuditCode):
                 " decoder=decoders.bp_osd(...)"
             )
 
-        # Construct decoders.  Sector-specific decoder inputs override the shared input: decoder_x
-        # and decoder_z override decoder, and the legacy decoder_x_kwargs and decoder_z_kwargs
-        # override shared legacy keyword arguments.  The two decoders can be shared when their
-        # matrices, decoder inputs, and legacy arguments coincide.
+        # Construct decoders.  Sector-specific decoder inputs override the shared input, and the two
+        # decoders can be shared when their matrices and decoder inputs coincide.
         decoder_x_input = decoder if decoder_x is None else decoder_x
         decoder_z_input = decoder if decoder_z is None else decoder_z
-
-        # reject removed arguments, and warn about deprecated arguments, naming their replacements
-        for removed_args in [decoder_kwargs, decoder_x_kwargs or {}, decoder_z_kwargs or {}]:
-            reject_removed_decoder_args(removed_args)
-        for argument_name, matrix, legacy_args in [
-            ("decoder", stabilizer_ops_z, decoder_kwargs),
-            ("decoder_x", stabilizer_ops_z, decoder_x_kwargs),
-            ("decoder_z", stabilizer_ops_x, decoder_z_kwargs),
-        ]:
-            if legacy_args:
-                _deprecations.warn_deprecated(
-                    get_legacy_decoder_migration_message(
-                        matrix, legacy_args, argument_name=argument_name
-                    ),
-                    stacklevel=get_external_caller_stacklevel(),
-                )
-        decoder_x_kwargs = decoder_kwargs | (decoder_x_kwargs or {})
-        decoder_z_kwargs = decoder_kwargs | (decoder_z_kwargs or {})
+        # DEPRECATED: see qldpc._deprecations
+        if decoder_kwargs or decoder_x_kwargs or decoder_z_kwargs:
+            decoder_x_input, decoder_z_input = merge_legacy_css_decoder_args(
+                stabilizer_ops_z,
+                stabilizer_ops_x,
+                decoder_x_input,
+                decoder_z_input,
+                decoder_kwargs,
+                decoder_x_kwargs,
+                decoder_z_kwargs,
+            )
 
         # identify logical operators
         logicals_x = self.get_logical_ops(Pauli.X)
@@ -3957,10 +4001,9 @@ class CSSCode(QuditCode):
         same_x_and_z = (
             np.array_equal(stabilizer_ops_x, stabilizer_ops_z)
             and decoder_x_input is decoder_z_input
-            and decoder_x_kwargs == decoder_z_kwargs
         )
         code_capacity_decoder_x = get_code_capacity_decoder(
-            stabilizer_ops_z, logicals_z, decoder_x_input, decoder_x_kwargs, warn_deprecated=False
+            stabilizer_ops_z, logicals_z, decoder_x_input
         )
         code_capacity_decoder_z = (
             code_capacity_decoder_x.reuse_for(stabilizer_ops_x, logicals_x)
@@ -3976,11 +4019,7 @@ class CSSCode(QuditCode):
                     " such as decoder=decoders.bp_osd(...)"
                 )
             code_capacity_decoder_z = get_code_capacity_decoder(
-                stabilizer_ops_x,
-                logicals_x,
-                decoder_z_input,
-                decoder_z_kwargs,
-                warn_deprecated=False,
+                stabilizer_ops_x, logicals_x, decoder_z_input
             )
 
         # sample errors of fixed weight and record failure/discard counts
@@ -4133,16 +4172,35 @@ def _resolve_distance_backend(
 
     Automatic selection only uses GAP when a GAP binding or executable can be called, so that the
     default backend never falls back to the manual copy/paste GAP workflow, which is available by
-    requesting ``backend="gap"`` explicitly.
+    requesting ``backend="gap"`` explicitly.  Options that only sqetch or only GAP accepts select
+    that backend, and raise a ValueError if it is unavailable.
     """
     if backend != "auto":
         return backend
 
+    if selects_legacy_decoder(bound_kwargs):  # DEPRECATED: see qldpc._deprecations
+        return "decoder"
     options = set(bound_kwargs)
+    backend_specific = options & (_SQETCH_DISTANCE_BOUND_KWARGS | _GAP_DISTANCE_BOUND_KWARGS)
+    if backend_specific and not (
+        options <= _SQETCH_DISTANCE_BOUND_KWARGS or options <= _GAP_DISTANCE_BOUND_KWARGS
+    ):
+        raise ValueError(
+            f"Distance-bound options {sorted(options)} mix options of different backends; pass"
+            " options of one backend (sqetch, GAP/QDistRnd, or the decoder) at a time"
+        )
     if is_binary and options <= _SQETCH_DISTANCE_BOUND_KWARGS and external.sqetch.is_installed():
         return "sqetch"
     if options <= _GAP_DISTANCE_BOUND_KWARGS and external.gap.is_callable():
         return "gap"
+    if options and options <= _SQETCH_DISTANCE_BOUND_KWARGS:
+        reason = "sqetch is not installed" if is_binary else "sqetch only supports binary codes"
+        raise ValueError(f"sqetch options {sorted(options)} were given, but {reason}")
+    if options and options <= _GAP_DISTANCE_BOUND_KWARGS:
+        raise ValueError(
+            f"GAP/QDistRnd options {sorted(options)} were given, but GAP cannot be called; pass"
+            ' backend="gap" to use GAP manually'
+        )
     return "decoder"
 
 

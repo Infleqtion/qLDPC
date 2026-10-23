@@ -36,43 +36,10 @@ def test_single_ppm_uses_stored_merged_checks_as_source_of_truth() -> None:
         build_single_ppm_circuit(modified, rounds=1)
 
 
-def test_merged_csscode_accessor_handles_single_and_joint_layouts() -> None:
-    """One private accessor covers both existing merged-code shapes."""
-    from qldpc.experimental.surgery import build_bridge, build_gadget
-    from qldpc.experimental.surgery.circuit import _merged_csscode
-
-    code_l = codes.SteaneCode()
-    code_r = codes.SteaneCode()
-    logical_l = np.asarray(code_l.get_logical_ops(Pauli.X)[0], dtype=np.uint8)
-    logical_r = np.asarray(code_r.get_logical_ops(Pauli.X)[0], dtype=np.uint8)
-    gadget_l = build_gadget(code_l, logical_l, basis=Pauli.X)
-    gadget_r = build_gadget(code_r, logical_r, basis=Pauli.X)
-    bridge = build_bridge(gadget_l, gadget_r)
-
-    assert _merged_csscode(gadget_l).dimension == code_l.dimension - 1
-    assert _merged_csscode(gadget_l, gadget_r, bridge).dimension == (
-        code_l.dimension + code_r.dimension - 1
-    )
-    with pytest.raises(ValueError, match="both be provided"):
-        _merged_csscode(gadget_l, gadget_r)
-
-
-def test_merged_csscode_rejects_structure_for_single_layout() -> None:
-    """Explicit inter-block structure is only meaningful for joint layouts."""
-    from qldpc.experimental.surgery.circuit import _merged_csscode
-    from qldpc.experimental.surgery.gadget import build_gadget
-
-    code = codes.SteaneCode()
-    logical = np.asarray(code.get_logical_ops(Pauli.X)[0], dtype=np.uint8)
-    gadget = build_gadget(code, logical, basis=Pauli.X)
-    with pytest.raises(ValueError, match="only valid for a joint"):
-        _merged_csscode(gadget, intercode=True)
-
-
 def test_explicit_intracode_structure_uses_code_equality_not_identity() -> None:
     """One shared data register may be described by equivalent code objects."""
     from qldpc.experimental.surgery import build_bridge, build_gadget
-    from qldpc.experimental.surgery.circuit import _merged_csscode
+    from qldpc.experimental.surgery.circuit import _stitch_intracode
 
     code_l = codes.SteaneCode()
     code_r = codes.SteaneCode()
@@ -81,17 +48,10 @@ def test_explicit_intracode_structure_uses_code_equality_not_identity() -> None:
     gadget_l = build_gadget(code_l, logical_l, basis=Pauli.X)
     gadget_r = build_gadget(code_r, logical_r, basis=Pauli.X)
 
-    merged = _merged_csscode(
-        gadget_l,
-        gadget_r,
-        build_bridge(gadget_l, gadget_r),
-        intercode=False,
-    )
+    merged = _stitch_intracode(gadget_l, gadget_r, build_bridge(gadget_l, gadget_r))
     shared_gadget_r = build_gadget(code_l, logical_l, basis=Pauli.X)
-    shared_merged = _merged_csscode(
-        gadget_l,
-        shared_gadget_r,
-        build_bridge(gadget_l, shared_gadget_r),
+    shared_merged = _stitch_intracode(
+        gadget_l, shared_gadget_r, build_bridge(gadget_l, shared_gadget_r)
     )
     assert np.array_equal(merged.matrix_x, shared_merged.matrix_x)
     assert np.array_equal(merged.matrix_z, shared_merged.matrix_z)
@@ -108,12 +68,7 @@ def test_explicit_intracode_structure_uses_code_equality_not_identity() -> None:
     assert permuted_code.num_qudits == code_l.num_qudits
     assert permuted_code != code_l
     with pytest.raises(ValueError, match="structurally identical"):
-        _merged_csscode(
-            gadget_l,
-            permuted_gadget,
-            build_bridge(gadget_l, permuted_gadget),
-            intercode=False,
-        )
+        _stitch_intracode(gadget_l, permuted_gadget, build_bridge(gadget_l, permuted_gadget))
 
 
 def test_single_ppm_rejects_a_reducible_logical_until_boosted() -> None:
@@ -247,7 +202,7 @@ def test_stitch_intercode_both_bases_commute_and_singletons_excluded(basis: Paul
     import galois
 
     from qldpc.experimental.surgery.bridge import build_bridge
-    from qldpc.experimental.surgery.circuit import _stitch_to_joint_csscode
+    from qldpc.experimental.surgery.circuit import _stitch_intercode
     from qldpc.experimental.surgery.gadget import build_gadget
 
     GF2 = galois.GF2
@@ -259,7 +214,7 @@ def test_stitch_intercode_both_bases_commute_and_singletons_excluded(basis: Paul
     g_l = build_gadget(code, x, basis=basis)
     g_r = build_gadget(codes.SteaneCode(), x, basis=basis)
     bridge = build_bridge(g_l, g_r)
-    merged = _stitch_to_joint_csscode(g_l, g_r, bridge)
+    merged = _stitch_intercode(g_l, g_r, bridge)
     HX = np.asarray(merged.matrix_x).astype(np.int_)
     HZ = np.asarray(merged.matrix_z).astype(np.int_)
     product = (HX @ HZ.T) % 2
@@ -314,7 +269,7 @@ def test_stitch_intracode_both_bases_commute(basis: PauliXZ) -> None:
     Steane intra-code (k=1) yields the degenerate joint X̄·X̄ = I case.
     """
     from qldpc.experimental.surgery.bridge import build_bridge
-    from qldpc.experimental.surgery.circuit import _stitch_to_joint_csscode
+    from qldpc.experimental.surgery.circuit import _stitch_intracode
     from qldpc.experimental.surgery.gadget import (
         build_gadget,
     )
@@ -332,7 +287,7 @@ def test_stitch_intracode_both_bases_commute(basis: PauliXZ) -> None:
     g_l = build_gadget(code, x1, basis=basis)
     g_r = build_gadget(code, x2, basis=basis)
     bridge = build_bridge(g_l, g_r)
-    merged = _stitch_to_joint_csscode(g_l, g_r, bridge)
+    merged = _stitch_intracode(g_l, g_r, bridge)
     HX = np.asarray(merged.matrix_x).astype(np.int_)
     HZ = np.asarray(merged.matrix_z).astype(np.int_)
     product = (HX @ HZ.T) % 2
@@ -416,7 +371,7 @@ def test_joint_xx_in_stabilizer_on_webster_intracode(code_index: int) -> None:
     import galois
 
     from qldpc.experimental.surgery.bridge import build_bridge
-    from qldpc.experimental.surgery.circuit import _stitch_to_joint_csscode
+    from qldpc.experimental.surgery.circuit import _stitch_intracode
     from qldpc.experimental.surgery.gadget import (
         build_gadget,
     )
@@ -429,7 +384,7 @@ def test_joint_xx_in_stabilizer_on_webster_intracode(code_index: int) -> None:
     g_l = build_gadget(code, x1, basis=Pauli.X)
     g_r = build_gadget(code, x2, basis=Pauli.X)
     bridge = build_bridge(g_l, g_r)
-    merged = _stitch_to_joint_csscode(g_l, g_r, bridge)
+    merged = _stitch_intracode(g_l, g_r, bridge)
     HX = np.asarray(merged.matrix_x).astype(np.int_)
     joint = np.zeros(HX.shape[1], dtype=np.int_)
     n = code.num_qudits

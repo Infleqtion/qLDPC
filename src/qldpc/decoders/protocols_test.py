@@ -51,7 +51,7 @@ def test_error_decoder_protocols() -> None:
 
 
 def test_error_decoder_coercion() -> None:
-    """Objects with a decode method are wrapped to provide decode_errors."""
+    """Objects with only one of the decode and decode_errors methods are wrapped to provide both."""
     syndromes = np.eye(2, dtype=int)
 
     class BareDecoder:
@@ -83,6 +83,16 @@ def test_error_decoder_coercion() -> None:
     assert protocols._supports_batch_decoding(decoder)
     assert np.array_equal(protocols._batch_decode_errors(decoder, syndromes), 3 * syndromes)
 
+    # an object that implements only decode_errors is wrapped to provide decode
+    decoder = protocols._as_error_decoder(
+        types.SimpleNamespace(
+            decode_errors=lambda syndrome: 2 * syndrome,
+            decode_errors_batch=lambda syndromes: 3 * syndromes,
+        )
+    )
+    assert np.array_equal(decoder.decode(syndromes[0]), [2, 0])
+    assert np.array_equal(decoder.decode_batch(syndromes), 3 * syndromes)
+
     # an error decoder is returned as is, and its native batch method is used
     lookup_decoder = decoders.custom.LookupDecoder(np.eye(2, dtype=int), max_weight=1)
     assert protocols._as_error_decoder(lookup_decoder) is lookup_decoder
@@ -101,14 +111,23 @@ def test_error_decoder_coercion() -> None:
     assert protocols._batch_decode_errors(error_decoder, syndromes[:0]).shape == (0, 4)
 
     # objects that predict observable flips, or that do not decode, are rejected
-    observable_decoders = [
-        types.SimpleNamespace(decode_observables=lambda syndrome: syndrome),
-        types.SimpleNamespace(decode=lambda syndrome: syndrome, decode_returns_observables=True),
-    ]
-    for observable_decoder in observable_decoders:
-        with pytest.raises(TypeError, match="observable flips rather than errors"):
-            protocols._as_error_decoder(observable_decoder)
+    with pytest.raises(TypeError, match="observable flips rather than errors"):
+        protocols._as_error_decoder(
+            types.SimpleNamespace(decode_observables=lambda syndrome: syndrome)
+        )
     with pytest.raises(TypeError, match="cannot decode until it is compiled"):
         protocols._as_error_decoder(decoders.SinterDecoder())
     with pytest.raises(TypeError, match="must be an ErrorDecoder, or have a decode method"):
         protocols._as_error_decoder(object())
+
+
+def test_deprecated_decode_returns_observables() -> None:
+    """A decode method that declares deprecated decode_returns_observables=True predicts flips."""
+    legacy_decoder = types.SimpleNamespace(
+        decode=lambda syndrome: syndrome, decode_returns_observables=True
+    )
+    with (
+        pytest.warns(DeprecationWarning, match="decode_returns_observables=True is deprecated"),
+        pytest.raises(TypeError, match="observable flips rather than errors"),
+    ):
+        protocols._as_error_decoder(legacy_decoder)

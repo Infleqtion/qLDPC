@@ -42,19 +42,19 @@ class CompositeDecoder(ErrorDecoder):
     ) -> None:
         self.decoders, syndrome_lengths = zip(*decoders_and_syndrome_lengths)
         self._error_decoders = tuple(_as_error_decoder(decoder) for decoder in self.decoders)
-        self.erasing_decoders = tuple(
+        self._erasing_decoders = tuple(
             bool(getattr(decoder, "has_erasure_bit", False)) for decoder in self.decoders
         )
-        self.has_erasure_bit = any(self.erasing_decoders)
-        self.slices = tuple(
+        self.has_erasure_bit = any(self._erasing_decoders)
+        self._slices = tuple(
             slice(sum(syndrome_lengths[:ss]), sum(syndrome_lengths[: ss + 1]))
             for ss in range(len(syndrome_lengths))
         )
 
-        self.decode_batch_implemented = all(
+        self._decode_batch_implemented = all(
             _supports_batch_decoding(decoder) for decoder in self._error_decoders
         )
-        if self.decode_batch_implemented:
+        if self._decode_batch_implemented:
             self.decode_errors_batch = self.decode_batch = self._decode_batch
 
     @staticmethod
@@ -69,7 +69,7 @@ class CompositeDecoder(ErrorDecoder):
         return self._join_segments(
             [
                 decoder.decode_errors(syndrome[slice])
-                for decoder, slice in zip(self._error_decoders, self.slices)
+                for decoder, slice in zip(self._error_decoders, self._slices)
             ]
         )
 
@@ -78,7 +78,7 @@ class CompositeDecoder(ErrorDecoder):
         return self._join_segments(
             [
                 _batch_decode_errors(decoder, syndromes[:, slice])
-                for decoder, slice in zip(self._error_decoders, self.slices)
+                for decoder, slice in zip(self._error_decoders, self._slices)
             ]
         )
 
@@ -89,7 +89,7 @@ class CompositeDecoder(ErrorDecoder):
 
         errors = []
         erased = np.zeros(segments[0].shape[:-1], dtype=bool)
-        for segment, erasing in zip(segments, self.erasing_decoders):
+        for segment, erasing in zip(segments, self._erasing_decoders):
             if erasing:
                 erased = erased | (segment[..., -1] != 0)
                 segment = segment[..., :-1]
@@ -119,8 +119,8 @@ class DirectDecoder:
         correct_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]],
         correct_batch_func: Callable[[npt.NDArray[np.int_]], npt.NDArray[np.int_]] | None = None,
     ) -> None:
-        self.correct_func = correct_func
-        self.correct_batch_func = correct_batch_func
+        self._correct_func = correct_func
+        self._correct_batch_func = correct_batch_func
 
     @staticmethod
     def from_indirect(
@@ -163,10 +163,10 @@ class DirectDecoder:
 
     def correct(self, word: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Correct a corrupted code word."""
-        return self.correct_func(word)
+        return self._correct_func(word)
 
     def correct_batch(self, words: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Correct a batch of corrupted code words, one per row."""
-        if self.correct_batch_func is not None:
-            return self.correct_batch_func(words)
+        if self._correct_batch_func is not None:
+            return self._correct_batch_func(words)
         return np.array([self.correct(word) for word in words])

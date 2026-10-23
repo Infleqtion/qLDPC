@@ -14,9 +14,8 @@ import stim
 
 from qldpc import codes, decoders
 from qldpc.codes.distance import DistanceMethod
+from qldpc.decoders.adapters._observable_decoders import split_discard_byte
 from qldpc.objects import Pauli
-
-from ..bookkeeping import DetectorRecord
 
 ####################################################################################################
 # exact circuit fault distance
@@ -172,13 +171,15 @@ def get_logical_error_and_discard_rate(
     det_data, obs_data, _ = sampler.sample(shots=num_samples, bit_packed=True)
 
     # identify post-selection masks
-    detector_record = DetectorRecord({"prep": range(circuit_or_dem.num_detectors)})
-    postselection_mask, postselected_observables_mask = _get_postselection_masks(
-        post_select, post_select_observables, detector_record, dem.num_observables
+    postselection_mask = _get_postselection_mask(
+        post_select, circuit_or_dem.num_detectors, "Detector"
+    )
+    postselected_observables_mask = _get_postselection_mask(
+        post_select_observables, dem.num_observables, "Observable"
     )
     num_discards = 0
 
-    # if applicable, post-select on flag detectors
+    # if applicable, post-select on detectors
     if postselection_mask is not None:
         shot_mask = ~np.any(det_data & postselection_mask, axis=1)
         det_data = det_data[shot_mask]
@@ -191,19 +192,13 @@ def get_logical_error_and_discard_rate(
     )
     predicted_flips = compiled_sinter_decoder.decode_shots_bit_packed(det_data)
 
-    # a prediction one byte wider than the sampled observables need signals discards in that byte
-    if predicted_flips.shape[1] == obs_data.shape[1] + 1:
-        discarded = predicted_flips[:, -1] != 0
-        obs_data = obs_data[~discarded]
-        predicted_flips = predicted_flips[~discarded, :-1]
-        num_discards += int(np.sum(discarded))
-    elif predicted_flips.shape[1] != obs_data.shape[1]:
-        raise ValueError(
-            f"The decoder predicted {predicted_flips.shape[1]} bytes of observable flips per shot,"
-            f" but the {dem.num_observables} observables of the sampled detector error model take"
-            f" {obs_data.shape[1]} bytes, or {obs_data.shape[1] + 1} bytes with a byte added to"
-            " signal discards"
-        )
+    # the decoder may ask for shots to be discarded in a byte added to its predictions
+    predicted_flips, discarded = split_discard_byte(
+        predicted_flips, len(det_data), dem.num_observables
+    )
+    obs_data = obs_data[~discarded]
+    predicted_flips = predicted_flips[~discarded]
+    num_discards += int(np.sum(discarded))
 
     incorrectly_predicted_flips = obs_data ^ predicted_flips
 
@@ -220,46 +215,27 @@ def get_logical_error_and_discard_rate(
     return logical_error_rate, discard_rate
 
 
-def _get_postselection_masks(
-    post_select: bool | Collection[int],
-    post_select_observables: Collection[int],
-    detector_record: DetectorRecord,
-    num_observables: int,
-) -> tuple[npt.NDArray[np.uint8] | None, npt.NDArray[np.uint8] | None]:
-    """Build the bit-packed detector and observable post-selection masks for sinter."""
-    if isinstance(post_select, bool):
-        post_select = detector_record.get_events("flags") if post_select else ()
-    post_select = list(post_select)
-    post_select_observables = list(post_select_observables)
+def _get_postselection_mask(
+    indices: Collection[int], size: int, name: str
+) -> npt.NDArray[np.uint8] | None:
+    """Build a bit-packed sinter post-selection mask, or None if there is nothing to select.
 
-    if not post_select:
-        postselection_mask = None
-    else:
-        num_prep = len(detector_record.get_events("prep"))
-        num_flags = len(detector_record.get_events("flags"))
-        num_detectors = num_prep + num_flags
-        if not all(-num_detectors <= dd < num_detectors for dd in post_select):
-            raise ValueError(
-                f"The detector record exposes {num_detectors} selectable prep/flag detectors "
-                f"(out of {detector_record.num_events} total), so post-selection accepts indices "
-                f"in the range [-{num_detectors}, {num_detectors});"
-                f" requested: {post_select}"
-            )
-        post_select = [dd % num_detectors for dd in post_select]
-        postselection_array = np.zeros(detector_record.num_events, dtype=int)
-        postselection_array[post_select] = 1
-        postselection_mask = np.packbits(postselection_array, bitorder="little")
+    Args:
+        indices: The indices to select, which may be negative to count back from the end.
+        size: The number of detectors or observables that the mask covers.
+        name: The kind of index ("Detector" or "Observable"), for error messages.
 
-    if not post_select_observables:
-        postselected_observables_mask = None
-    else:
-        if not all(-num_observables <= oo < num_observables for oo in post_select_observables):
-            raise ValueError(
-                f"Observable post-selection accepts indices in the range [-{num_observables},"
-                f" {num_observables}); requested: {post_select_observables}"
-            )
-        postselection_array = np.zeros(num_observables, dtype=int)
-        postselection_array[[oo % num_observables for oo in post_select_observables]] = 1
-        postselected_observables_mask = np.packbits(postselection_array, bitorder="little")
-
-    return postselection_mask, postselected_observables_mask
+    Returns:
+        A little-endian bit-packed mask with ``size`` bits, or None if ``indices`` is empty.
+    """
+    indices = list(indices)
+    if not indices:
+        return None
+    if not all(-size <= index < size for index in indices):
+        raise ValueError(
+            f"{name} post-selection accepts indices in the range [-{size}, {size});"
+            f" requested: {indices}"
+        )
+    mask = np.zeros(size, dtype=np.uint8)
+    mask[indices] = 1
+    return np.packbits(mask, bitorder="little")

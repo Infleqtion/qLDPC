@@ -99,7 +99,7 @@ class Pauli(enum.Enum):
             return 0
         if self == Pauli.Z:
             return 1
-        raise AttributeError(f"No index for {self}.")
+        raise TypeError(f"Only Pauli.X and Pauli.Z have an index (got {self})")
 
 
 PauliXZ = Literal[Pauli.X, Pauli.Z]
@@ -558,6 +558,7 @@ class ChainComplex:
                 if deg_a:
                     row = get_block_index(deg_a - 1, deg_b)
                     iden_b = np.identity(op_b.shape[1], dtype=np.uint8)
+                    # NumPy types np.kron as possibly returning an object array
                     blocks[row][col] = np.kron(op_a, iden_b)  # type:ignore[assignment]
                 if deg_b:
                     row = get_block_index(deg_a, deg_b - 1)

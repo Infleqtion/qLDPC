@@ -19,10 +19,11 @@ A registry target without an attribute names a module that replaces a deprecated
 is served as an attribute of its package, as in ``from package import submodule``.
 
 Registry targets are lazy "module:attribute" strings, and this module imports no qLDPC subpackage
-at import time, so that every module can import it without an import cycle.  Deprecated methods are
-defined at the bottom of this module, and attached to their classes by install_deprecated_methods,
-which qldpc/__init__.py calls once all subpackages are imported.  Deprecated arguments and modes
-are handled where they are accepted, by calling warn_deprecated or raising defunct(...).
+at import time, so that every module can import it without an import cycle.  Deprecated methods and
+attributes are defined at the bottom of this module, and attached to their classes by
+install_deprecated_methods, which qldpc/__init__.py calls once all subpackages are imported.
+Deprecated arguments and modes are handled where they are accepted, by calling warn_deprecated or
+raising defunct(...).
 """
 
 from __future__ import annotations
@@ -30,19 +31,22 @@ from __future__ import annotations
 import importlib
 import sys
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, TypeVar
 
 from qldpc._utils import get_external_caller_stacklevel
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Iterator
     from types import FrameType
 
     import numpy as np
     import numpy.typing as npt
 
     from qldpc.abstract.groups import NestedSequence
+
+# the type of physical error rates that qldpc.codes.monte_carlo.ErrorRateFunc formerly accepted
+OneOrManyFloats = TypeVar("OneOrManyFloats", float, Iterable[float])
 
 _FunctionT = TypeVar("_FunctionT", bound=Callable[..., object])
 
@@ -91,6 +95,9 @@ ALIASES: dict[str, dict[str, str]] = {
         ),
         "validate_distance_backend": "qldpc.codes.distance.core:_validate_distance_backend",
         "validate_distance_method": "qldpc.codes.distance.core:_validate_distance_method",
+    },
+    "qldpc.codes.monte_carlo": {
+        "OneOrManyFloats": "qldpc._deprecations.core:OneOrManyFloats",
     },
     "qldpc.decoders": {
         "BatchDecoder": "qldpc.decoders.protocols:BatchErrorDecoder",
@@ -144,16 +151,16 @@ ALIASES: dict[str, dict[str, str]] = {
             "qldpc.decoders.construction._resolution:reject_prebuilt_decoder"
         ),
         "reject_removed_decoder_args": "qldpc._deprecations.decoders:reject_removed_decoder_args",
-        "resolve_decoder": "qldpc.decoders.construction._resolution:resolve_decoder",
-        "resolve_observable_decoder": (
-            "qldpc.decoders.construction._resolution:resolve_observable_decoder"
-        ),
+        "resolve_decoder": "qldpc._deprecations.decoders:resolve_decoder",
+        "resolve_observable_decoder": "qldpc._deprecations.decoders:resolve_observable_decoder",
         "supports_batch_decoding": "qldpc.decoders.protocols:_supports_batch_decoding",
     },
     "qldpc.decoders.adapters": {
+        "BatchErrorDecoder": "qldpc.decoders:BatchErrorDecoder",
         "BitPackedObservableDecoder": (
             "qldpc.decoders.adapters._observable_decoders:BitPackedObservableDecoder"
         ),
+        "ErrorDecoder": "qldpc.decoders:ErrorDecoder",
         "ErrorsToFieldObservablesDecoder": (
             "qldpc.decoders.adapters._observable_decoders:ErrorsToFieldObservablesDecoder"
         ),
@@ -182,6 +189,12 @@ ALIASES: dict[str, dict[str, str]] = {
     "qldpc.external": {
         "codes": "qldpc.external._codes",
         "groups": "qldpc.external._groups",
+    },
+    # renamed functions of the deprecated qldpc.external.codes, which now refers to this module
+    "qldpc.external._codes": {
+        "get_classical_code": "qldpc.external._codes:get_guava_code",
+        "get_distance_bound": "qldpc.external._codes:get_qdistrnd_distance_bound",
+        "get_quantum_code": "qldpc.external._codes:get_qecdb_code",
     },
 }
 
@@ -283,9 +296,11 @@ def defunct(message: str) -> ValueError:
 
 def install_deprecated_methods() -> None:
     """Attach deprecated methods to their classes."""
-    from qldpc.abstract import TrivialGroup
-    from qldpc.codes import ClassicalCode, CSSCode, QuditCode
-    from qldpc.decoders.custom import DirectDecoder
+    from qldpc.abstract import SmallGroup, TrivialGroup
+    from qldpc.codes import BBCode, ClassicalCode, CSSCode, QuditCode
+    from qldpc.decoders.custom import DirectDecoder, LookupDecoder
+
+    from .decoders import decode_returns_observables as returns_observables
 
     @_deprecated_method(ClassicalCode)
     def puncture(self: ClassicalCode, bits: Collection[int]) -> ClassicalCode:
@@ -325,6 +340,17 @@ def install_deprecated_methods() -> None:
         code = self.conjugated()
         return code.to_css() if isinstance(self, CSSCode) else code
 
+    @_deprecated_method(BBCode)
+    def modular_inverse(
+        self: BBCode, basis: tuple[tuple[int, int], tuple[int, int]], aa: int, bb: int
+    ) -> tuple[int, int]:
+        """Deprecated method that solves for the coefficients of a vector in a basis."""
+        warn_deprecated(
+            "BBCode.modular_inverse is DEPRECATED and will be removed from the public API",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return self._get_basis_coefficients(basis, aa, bb)
+
     @_deprecated_method(DirectDecoder)
     def decode(self: DirectDecoder, word: npt.NDArray[np.int_]) -> None:
         """DEFUNCT alias for DirectDecoder.correct."""
@@ -341,6 +367,44 @@ def install_deprecated_methods() -> None:
             " DirectDecoder corrects code words, and is not a syndrome decoder"
         )
 
+    @_deprecated_method(LookupDecoder, attribute=True)
+    def predict_observable_flips(self: LookupDecoder) -> bool:
+        """Deprecated attribute that reports the deprecated predict_observable_flips option."""
+        warn_deprecated(
+            f"{type(self).__name__}.predict_observable_flips is DEPRECATED and will be removed from"
+            " the public API",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return returns_observables(self)
+
+    @_deprecated_method(LookupDecoder, attribute=True)
+    def decode_returns_observables(self: LookupDecoder) -> bool:
+        """Deprecated attribute that reports the deprecated predict_observable_flips option."""
+        warn_deprecated(
+            f"{type(self).__name__}.decode_returns_observables is DEPRECATED and will be removed"
+            " from the public API",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return returns_observables(self)
+
+    @_deprecated_method(SmallGroup, static=True)
+    def number(order: int) -> int:
+        """Deprecated alias for SmallGroup.count_groups."""
+        warn_deprecated(
+            "SmallGroup.number is DEPRECATED; use SmallGroup.count_groups instead",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return SmallGroup.count_groups(order)
+
+    @_deprecated_method(SmallGroup, static=True)
+    def generator(order: int) -> Iterator[SmallGroup]:
+        """Deprecated alias for SmallGroup.iter_groups."""
+        warn_deprecated(
+            "SmallGroup.generator is DEPRECATED; use SmallGroup.iter_groups instead",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return SmallGroup.iter_groups(order)
+
     @_deprecated_method(TrivialGroup, static=True)
     def to_ring_array(data: npt.NDArray[np.int_] | NestedSequence) -> None:
         """DEFUNCT alias for qldpc.abstract.RingArray.build(data)."""
@@ -350,14 +414,20 @@ def install_deprecated_methods() -> None:
         )
 
 
-def _deprecated_method(cls: type, *, static: bool = False) -> Callable[[_FunctionT], _FunctionT]:
-    """Attach a function to a class as a method, with the module and qualified name of a member."""
+def _deprecated_method(
+    cls: type, *, static: bool = False, attribute: bool = False
+) -> Callable[[_FunctionT], _FunctionT]:
+    """Attach a function to a class as a method, with the module and qualified name of a member.
+
+    A static function is attached as a static method, and an attribute as a read-only property.
+    """
 
     def attach(function: _FunctionT) -> _FunctionT:
         function.__module__ = cls.__module__
         function.__qualname__ = f"{cls.__qualname__}.{function.__name__}"
         function.__annotations__.pop("self", None)  # methods in class bodies leave self implicit
-        setattr(cls, function.__name__, staticmethod(function) if static else function)
+        member = staticmethod(function) if static else property(function) if attribute else function
+        setattr(cls, function.__name__, member)
         return function
 
     return attach

@@ -10,7 +10,8 @@ import galois
 import numpy as np
 import stim
 
-from qldpc import codes, math
+from qldpc import _deprecations, codes, math
+from qldpc._utils import get_external_caller_stacklevel
 from qldpc.objects import Pauli
 
 from .bookkeeping import QubitIDs
@@ -284,21 +285,35 @@ def get_state_stabilizers(
 
 @_restrict_to_qubits
 def get_logical_state_stabilizers(
-    state_prep_circuit: stim.Circuit, code: codes.QuditCode, qubit_ids: QubitIDs | None = None
+    code: codes.QuditCode, state_prep_circuit: stim.Circuit, qubit_ids: QubitIDs | None = None
 ) -> list[stim.PauliString]:
     """Identify pure logical operators that stabilize the state prepared by the provided circuit.
 
-    The first len(code) qubits addressed by the circuit must be the data qubits of the code.
+    The data qubits of the code are those specified by qubit_ids, and the circuit may address other
+    qubits as well.
 
     Args:
-        state_prep_circuit: A circuit that prepares a logical state of the provided code.
         code: The code whose logical state is prepared by the provided state_prep_circuit.
+        state_prep_circuit: A circuit that prepares a logical state of the provided code.  The
+            argument order (state_prep_circuit, code) is deprecated; pass the code first.
         qubit_ids: A QubitIDs object specifying the indices of the data qubits of the code.  If
             None, the data qubits of the code are assumed to be range(len(code)).
 
     Returns:
-        A list of Pauli strings supported on the data qubits of the provided code.
+        A list of Pauli strings on len(code) qubits, whose j-th qubit is the data qubit
+        qubit_ids.data[j] of the provided code.
     """
+    # DEPRECATED: see qldpc._deprecations
+    if isinstance(code, stim.Circuit) and isinstance(state_prep_circuit, codes.QuditCode):
+        _deprecations.warn_deprecated(
+            "Check argument order: it should be"
+            " get_logical_state_stabilizers(code, state_prep_circuit, qubit_ids).  The order"
+            " (state_prep_circuit, code, qubit_ids) is DEPRECATED and will throw an error in the"
+            " future!",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        code, state_prep_circuit = state_prep_circuit, code
+
     qubit_ids = QubitIDs.validated(qubit_ids or QubitIDs.from_code(code), code)
     encoder = get_encoding_circuit(code)
     circuit = state_prep_circuit + with_remapped_qubits(encoder.inverse(), qubit_ids.data)

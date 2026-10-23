@@ -39,7 +39,8 @@ if TYPE_CHECKING:
 class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     """Array whose entries are members of a GroupRing."""
 
-    _ring: GroupRing
+    # None only for a view of a plain array that has not yet been assigned a ring
+    _ring: GroupRing | None
 
     # Howell-form provenance, attached by howell_normal_form_* to their direct output only (via
     # _mark_as_hnf).  These deliberately do NOT propagate through numpy operations:
@@ -81,7 +82,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         # A view of a plain array (obj without _ring) has no ring until its creator assigns one,
         # which every .view(RingArray) in this module does immediately.  Howell-form provenance is
         # intentionally NOT propagated here (see the class attributes).
-        self._ring = getattr(obj, "_ring", None)  # type:ignore[assignment]
+        self._ring = getattr(obj, "_ring", None)
 
     def __array_function__(
         self,
@@ -102,10 +103,10 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         if any(ring != rings[0] for ring in rings[1:]):
             raise ValueError("Cannot perform operations on RingArrays with different base rings")
         args = tuple(_unwrap_ring_arrays(x) for x in args)
-        result = super().__array_function__(func, types, args, kwargs)
+        result: object = super().__array_function__(func, types, args, kwargs)
         if isinstance(result, np.ndarray):
             result = result.view(RingArray)
-            result._ring = rings[0]  # type:ignore[attr-defined]
+            result._ring = rings[0]
         return result
 
     def __array_ufunc__(
@@ -128,10 +129,12 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         ):
             return product
         inputs = tuple(x.view(np.ndarray) if isinstance(x, RingArray) else x for x in inputs)
-        result = super().__array_ufunc__(ufunc, method, *inputs, **kwargs)
+        result: RingArray | RingMember | None = super().__array_ufunc__(
+            ufunc, method, *inputs, **kwargs
+        )
         if isinstance(result, np.ndarray):
             result = result.view(RingArray)
-            result._ring = next(iter(rings), None)  # type:ignore[attr-defined]
+            result._ring = next(iter(rings), None)
         return result
 
     def __str__(self) -> str:
@@ -140,6 +143,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
     @property
     def ring(self) -> GroupRing:
         """Base ring of this RingArray."""
+        if self._ring is None:
+            raise ValueError("This RingArray has no base ring (it may be a view of a plain array)")
         return self._ring
 
     @property
@@ -274,7 +279,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         This method is the inverse of ``RingArray.to_field_array``.
         """
-        if isinstance(array, (GroupRing, Group)):
+        if isinstance(array, (GroupRing, Group)):  # DEPRECATED: see qldpc._deprecations
             _deprecations.warn_deprecated(
                 "Check argument order: it should be RingArray.from_field_array(array, ring)."
                 "  The order (ring, array) is DEPRECATED and will throw an error in the future!",
@@ -303,7 +308,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         This method is the inverse of ``RingArray.to_field_vector``.
         """
-        if isinstance(vector, (GroupRing, Group)):
+        if isinstance(vector, (GroupRing, Group)):  # DEPRECATED: see qldpc._deprecations
             _deprecations.warn_deprecated(
                 "Check argument order: it should be RingArray.from_field_vector(vector, ring)."
                 "  The order (ring, vector) is DEPRECATED and will throw an error in the future!",
@@ -350,6 +355,9 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         The RREF of a RingArray over a commutative ring is unique.  For non-commutative rings, the
         RREF is only unique up to a choice of matrix basis for simple components of the ring.
+
+        Without a transformer, this method may run GAP, prompt on standard input, and use the system
+        clipboard; see GroupRing.get_transformer.
         """
         self._require_ndim(2)
         if not self.ring.is_semisimple:
@@ -369,7 +377,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
         - ``RingArray.howell_normal_form_semisimple`` (if ``poly is False``, the default), or
         - ``RingArray.howell_normal_form_poly`` (if ``poly is True``).
 
-        See the documentation of those methods for additional information.
+        See the documentation of those methods for additional information, including the GAP
+        computations, prompts, and clipboard use that ``howell_normal_form_semisimple`` may need.
         """
         if poly:
             return self.howell_normal_form_poly()
@@ -417,6 +426,9 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
 
         - https://en.wikipedia.org/wiki/Howell_normal_form
         - https://github.com/m-webster/XPFpackage/blob/570ea89/Examples/A.1_howell_matrix.ipynb
+
+        Without a transformer, this method may run GAP, prompt on standard input, and use the system
+        clipboard; see GroupRing.get_transformer.
         """
         self._require_ndim(2)
         if not self.ring.is_semisimple:
@@ -563,7 +575,8 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
                 aa_poly = galois.Poly(aa_vec[pivot_col, ::-1], field=self.field)
                 bb_poly = galois.Poly(bb_vec[pivot_col, ::-1], field=self.field)
 
-                # find gg, ss, tt, uu, vv, and work around some typing bugs/errors in galois/mypy
+                # find gg, ss, tt, uu, vv; mypy sees only the integer signature of galois.egcd,
+                # which also handles polynomials
                 gg_poly: galois.Poly
                 ss_poly: galois.Poly
                 tt_poly: galois.Poly
@@ -588,6 +601,7 @@ class RingArray(np.ndarray[Any, np.dtype[np.object_]]):
             pivot_poly = galois.Poly(field_array[pivot_row, pivot_col, ::-1], field=self.field)
             gcd_poly: galois.Poly
             ff_poly: galois.Poly
+            # mypy sees only the integer signature of galois.egcd, which also handles polynomials
             gcd_poly, ff_poly, _ = galois.egcd(pivot_poly, modulus_poly)  # type:ignore[assignment,arg-type]
             if pivot_poly != gcd_poly:
                 quotient_poly = pivot_poly // gcd_poly

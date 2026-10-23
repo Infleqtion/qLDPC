@@ -6,10 +6,12 @@ from __future__ import annotations
 
 import importlib
 import inspect
+import unittest.mock
 import warnings
 
 import numpy as np
 import pytest
+from sympy.abc import x, y
 
 from qldpc import _deprecations, abstract, codes, decoders
 
@@ -96,9 +98,12 @@ def test_deprecated_methods() -> None:
     classical_code = codes.RepetitionCode(3)
     qudit_code = codes.QuditCode(codes.FiveQubitCode())
     css_code = codes.SteaneCode()
+    bb_code = codes.BBCode((3, 3), 1 + x + x * y, 1 + y + x * y)
     cases: list[tuple[object, str, tuple[object, ...], object, str]] = [
         (classical_code, "puncture", ([0],), classical_code.punctured([0]), "ClassicalCode"),
         (classical_code, "shorten", ([0],), classical_code.shortened([0]), "ClassicalCode"),
+        # 1 * (1, 1) + 2 * (0, 1) == (1, 0) modulo 3
+        (bb_code, "modular_inverse", (((1, 1), (0, 1)), 1, 0), (1, 2), "BBCode"),
         (qudit_code, "get_dual_subsystem_code", (), qudit_code.dual(), "QuditCode"),
         (qudit_code, "conjugate", (), qudit_code.conjugated(), "QuditCode"),
         (css_code, "conjugate", (), css_code.conjugated().to_css(), "SteaneCode"),
@@ -117,6 +122,39 @@ def test_deprecated_methods() -> None:
     assert puncture.__module__ == codes.ClassicalCode.__module__
     assert puncture.__qualname__ == "ClassicalCode.puncture"
     assert str(inspect.signature(puncture)).startswith("(self, bits")
+
+
+def test_deprecated_attributes() -> None:
+    """Deprecated attributes warn when read, and cannot be set."""
+    matrix = np.eye(1, dtype=int)
+    lookup_decoder = decoders.custom.LookupDecoder(matrix, max_weight=1)
+    # a LookupDecoder infers errors, rather than observable flips
+    for attribute_name in ["predict_observable_flips", "decode_returns_observables"]:
+        with pytest.warns(DeprecationWarning, match="DEPRECATED") as caught:
+            value = getattr(lookup_decoder, attribute_name)
+        assert len(caught) == 1
+        assert caught[0].filename == __file__
+        assert str(caught[0].message).startswith(f"LookupDecoder.{attribute_name} is DEPRECATED")
+        assert value is False
+        with pytest.raises(AttributeError):
+            setattr(lookup_decoder, attribute_name, False)
+
+
+def test_deprecated_small_group_methods() -> None:
+    """Deprecated SmallGroup methods warn and delegate to their replacements."""
+    group = abstract.CyclicGroup(2)
+    generators = [tuple(gen.array_form) for gen in group.generators]
+    with (
+        unittest.mock.patch("qldpc.external._groups.get_small_group_number", return_value=1),
+        unittest.mock.patch("qldpc.external._groups.get_generators", return_value=generators),
+    ):
+        with pytest.warns(DeprecationWarning, match="use SmallGroup.count_groups") as caught:
+            assert abstract.SmallGroup.number(2) == 1  # type: ignore[attr-defined]
+        assert caught[0].filename == __file__
+        with pytest.warns(DeprecationWarning, match="use SmallGroup.iter_groups") as caught:
+            groups = list(abstract.SmallGroup.generator(2))  # type: ignore[attr-defined]
+        assert caught[0].filename == __file__
+    assert len(groups) == 1 and groups[0].equiv(group)
 
 
 def test_defunct_methods() -> None:

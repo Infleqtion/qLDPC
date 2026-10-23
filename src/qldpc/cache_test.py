@@ -115,7 +115,7 @@ def test_refresh() -> None:
 
 def test_pickle() -> None:
     """Cached module-level functions are pickled by reference."""
-    function = qldpc.external._codes.get_classical_code
+    function = qldpc.external._codes.get_guava_code
     assert pickle.dumps(function)
     assert copy.deepcopy(function) is function
-    assert function.__wrapped__.__name__ == "get_classical_code"
+    assert function.__wrapped__.__name__ == "get_guava_code"

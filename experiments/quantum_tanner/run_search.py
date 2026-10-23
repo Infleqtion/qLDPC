@@ -236,7 +236,7 @@ def run_and_save(
 def get_small_groups(max_order: int = MAX_ORDER) -> Iterator[tuple[int, int]]:
     """Iterate over (order, index) for all groups in the SmallGroups library up to a given order."""
     for order in range(1, max_order + 1):
-        for index in range(1, abstract.SmallGroup.number(order) + 1):
+        for index in range(1, abstract.SmallGroup.count_groups(order) + 1):
             yield order, index
 
 

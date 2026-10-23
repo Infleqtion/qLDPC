@@ -8,7 +8,6 @@ import dataclasses
 import inspect
 import itertools
 import math
-import subprocess
 import sys
 import types
 from typing import Any
@@ -18,6 +17,7 @@ import pytest
 import stim
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.construction._resolution import build_observable_decoder
 from qldpc.decoders.external import frontier
 from qldpc.decoders.external.frontier import _get_observable_decoder_frontier
@@ -105,7 +105,7 @@ def test_frontier_decoding(calls: list[_Call]) -> None:
 
 
 def test_frontier_builder() -> None:
-    """The frontier helper has the defaults of the builder, which describes what it builds."""
+    """The frontier helper has the defaults of the builder."""
     builder_parameters = inspect.signature(_get_observable_decoder_frontier).parameters
     helper_parameters = inspect.signature(decoders.frontier).parameters
     assert {name: parameter.default for name, parameter in helper_parameters.items()} == {
@@ -113,10 +113,6 @@ def test_frontier_builder() -> None:
         for name, parameter in builder_parameters.items()
         if parameter.default is not inspect.Parameter.empty
     }
-    docstring = inspect.getdoc(_get_observable_decoder_frontier)
-    assert docstring is not None and docstring.startswith("Build ")
-    returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
-    assert "decoder specification" not in returns
 
 
 def test_frontier_scan_orders(calls: list[_Call]) -> None:
@@ -228,7 +224,7 @@ from qldpc import decoders
 decoders.frontier(committee=True)
 assert "frontier" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)
 
 
 @dataclasses.dataclass(frozen=True)

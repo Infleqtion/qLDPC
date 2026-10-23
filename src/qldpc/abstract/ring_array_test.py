@@ -163,6 +163,10 @@ def test_matmul_fallbacks() -> None:
     unknown_ring = np.asarray(matrix).view(abstract.RingArray)
     assert np.array_equal(unknown_ring @ unknown_ring, expected)
 
+    # a RingArray without a base ring says so, rather than returning None
+    with pytest.raises(ValueError, match="no base ring"):
+        unknown_ring.ring  # noqa: B018
+
 
 def test_ring_row_reduction(
     ring_dihedral3_gf5: abstract.GroupRing, pytestconfig: pytest.Config
@@ -302,11 +306,13 @@ def test_deprecated_argument_order() -> None:
 
     vector = ring.field.Random(2 * ring.group.order)
     with pytest.warns(DeprecationWarning, match="DEPRECATED"):
+        # the deprecated argument order does not match the typed signature
         ring_array = abstract.RingArray.from_field_vector(ring, vector)  # type:ignore[arg-type]
     assert np.array_equal(ring_array.to_field_vector(), vector)
 
     matrix = ring.field.Random((1, 2, ring.group.order))
     with pytest.warns(DeprecationWarning, match="DEPRECATED"):
+        # the deprecated argument order does not match the typed signature
         ring_array = abstract.RingArray.from_field_array(ring, matrix)  # type:ignore[arg-type]
     assert np.array_equal(ring_array.to_field_array(), matrix)
 

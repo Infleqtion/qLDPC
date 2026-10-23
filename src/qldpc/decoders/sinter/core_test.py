@@ -120,9 +120,6 @@ def test_unsimplified_dense_decoder() -> None:
 
 def test_rejected_decoder_arguments() -> None:
     """Decoder arguments that an ObservableDecoder cannot honor are rejected."""
-    with pytest.raises(ValueError, match="DEFUNCT"):
-        decoders.SinterDecoder(priors_arg="error_channel")
-
     dem = stim.DetectorErrorModel("""
         error(0.3) D0 L0 L1
         error(0.1) D1 L1
@@ -145,6 +142,7 @@ def test_rejected_decoder_arguments() -> None:
             decoder=decoders.from_matrix(lambda matrix: decoders.custom.LookupDecoder(matrix, 1))
         ).compile_decoder_for_dem(dem)
 
+    # a window decoder needs error decoders, so an observable-decoder factory is invalid on purpose
     window_decoder = decoders.SequentialWindowDecoder(
         [[0], [1]],
         decoder=build_observable_decoder,  # type: ignore[arg-type]
@@ -167,15 +165,27 @@ def test_rejected_decoder_arguments() -> None:
             decoder=decoders.custom.ObservableLookupDecoder(dem, 2)  # type: ignore[arg-type]
         )
 
+
+def test_deprecated_decoder_arguments() -> None:
+    """Deprecated decoder arguments are translated, or rejected if defunct or conflicting."""
+    with pytest.raises(ValueError, match="DEFUNCT"):
+        decoders.SinterDecoder(priors_arg="error_channel")
+    with pytest.raises(ValueError, match="Cannot combine decoder="):
+        decoders.SinterDecoder(decoder=decoders.lookup(1), with_lookup=True)
+
+    dem = stim.DetectorErrorModel("""
+        error(0.3) D0 L0 L1
+        error(0.1) D1 L1
+    """)
+
+    # the deprecated lookup decoder that predicts observable flips is an observable decoder
     with pytest.warns(DeprecationWarning):
         decoder = decoders.SinterDecoder(
             with_lookup=True, max_weight=2, predict_observable_flips=True
         )
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(TypeError, match="observable flips rather than errors"),
-    ):
-        decoder.compile_decoder_for_dem(dem)
+    with pytest.warns(DeprecationWarning):
+        compiled = decoder.compile_decoder_for_dem(dem)
+    assert np.array_equal(compiled.decode_observables(np.array([1, 0])), [1, 1])
 
     with pytest.warns(DeprecationWarning):
         window_decoder = decoders.SequentialWindowDecoder(
@@ -316,7 +326,7 @@ def test_predict_observables_with_erasure(num_observables: int) -> None:
             compiled = super().compile_decoder_for_dem(dem)
             return WideCompiledDecoder(compiled.dem_arrays, compiled.decoder)
 
-    with pytest.raises(ValueError, match="bytes of observable flips per shot"):
+    with pytest.raises(ValueError, match="with a byte added to signal discards"):
         sinter.predict_observables(
             dem=dem,
             dets=detection_events,

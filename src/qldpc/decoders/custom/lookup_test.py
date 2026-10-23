@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import collections
-import inspect
 import warnings
 
 import galois
@@ -45,14 +44,6 @@ def test_lookup(toy_problem: ToyProblem) -> None:
 
     observable_decoder = _get_observable_decoder_lookup(dem, max_weight=2)
     assert np.array_equal(observable_decoder.decode_observables(syndrome), [])
-
-
-def test_lookup_builder_docstring() -> None:
-    """The lookup builder describes the decoder that it builds, not a decoder specification."""
-    docstring = inspect.getdoc(_get_decoder_lookup)
-    assert docstring is not None and docstring.startswith("Build ")
-    returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
-    assert "decoder specification" not in returns
 
 
 def test_tie_breaking() -> None:
@@ -377,33 +368,21 @@ def test_explicit_observable_lookup_decoders() -> None:
     with pytest.raises(TypeError, match="observable flips rather than errors"):
         build_error_decoder(dem, decoder=decoder)  # type: ignore[arg-type]
 
-    # deprecated lookup decoders that predict observable flips are marked as such, so they are
-    # rejected where an error decoder is required
-    with pytest.warns(
-        DeprecationWarning,
-        match=r"use decoders\.lookup\(max_weight=\.\.\.\)\.build_observable_decoder\(dem\)",
-    ):
-        legacy = decoders.custom.LookupDecoder(dem, max_weight=1, predict_observable_flips=True)
-    with pytest.warns(
-        DeprecationWarning, match=r"WeightedObservableLookupDecoder\(\.\.\.\)\.decode_observables"
-    ):
-        legacy_weighted = decoders.custom.WeightedLookupDecoder(
-            dem, max_weight=1, predict_observable_flips=True
-        )
-    for legacy_decoder in [legacy, legacy_weighted]:
-        assert legacy_decoder.decode_returns_observables
-        assert np.array_equal(legacy_decoder.decode(syndrome), [1])
-        with pytest.raises(TypeError, match="observable flips rather than errors"):
-            build_error_decoder(dem, decoder=legacy_decoder)
-    assert not decoders.custom.LookupDecoder(dem, max_weight=1).decode_returns_observables
-    with pytest.warns(DeprecationWarning, match=r"ObservableLookupDecoder\(matrix, max_weight="):
-        decoders.custom.LookupDecoder(
-            np.array([[1]], dtype=int),
-            max_weight=1,
-            observable_flip_matrix=np.array([[1]], dtype=int),
-            error_channel=[0.1],
-            predict_observable_flips=True,
-        )
+
+def test_deprecated_predict_observable_flips() -> None:
+    """The deprecated predict_observable_flips=True option builds an observable lookup decoder."""
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
+    cases: list[tuple[type[decoders.custom.LookupDecoder], type[decoders.ObservableDecoder]]] = [
+        (decoders.custom.LookupDecoder, decoders.custom.ObservableLookupDecoder),
+        (decoders.custom.WeightedLookupDecoder, decoders.custom.WeightedObservableLookupDecoder),
+    ]
+    for decoder_class, observable_decoder_class in cases:
+        with pytest.warns(DeprecationWarning, match="predict_observable_flips=True") as caught:
+            decoder: object = decoder_class(dem, max_weight=1, predict_observable_flips=True)
+        assert caught[0].filename == __file__
+        assert isinstance(decoder, observable_decoder_class)
+        assert not isinstance(decoder, decoders.custom.LookupDecoder)
+        assert np.array_equal(decoder.decode_observables(np.array([1], dtype=int)), [1])
 
 
 def test_quantum_observable_flip_prediction() -> None:

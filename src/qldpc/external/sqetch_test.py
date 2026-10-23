@@ -175,7 +175,7 @@ def test_get_distance_bound_reports_missing_torch(monkeypatch: pytest.MonkeyPatc
         "sqetch",
         types.SimpleNamespace(estimate_distance=estimate_distance),
     )
-    with pytest.raises(RuntimeError, match="PyTorch with CUDA"):
+    with pytest.raises(ModuleNotFoundError, match="PyTorch with CUDA"):
         external.sqetch.get_distance_bound(codes.SteaneCode())
 
 

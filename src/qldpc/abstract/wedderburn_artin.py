@@ -48,6 +48,10 @@ class WedderburnArtinTransformer:
     For background, see the `Wedderburn-Artin theorem
     <https://en.wikipedia.org/wiki/Wedderburn%E2%80%93Artin_theorem>`_ and `Wedderburn's little
     theorem <https://en.wikipedia.org/wiki/Wedderburn%27s_little_theorem>`_.
+
+    Unless the ring's primitive central idempotents are already known, construction may run GAP,
+    prompt on standard input, and use the system clipboard; see
+    GroupRing.get_primitive_central_idempotents.
     """
 
     ring: GroupRing
@@ -214,7 +218,7 @@ class WedderburnArtinComponentTransformer:
         self,
         pci: RingMember,
         *,
-        seed: np.random.Generator | None = None,
+        seed: np.random.Generator | int | None = None,
         galois_compile: Literal["auto", "jit-lookup", "jit-calculate", "python-calculate"]
         | None = "python-calculate",
         skip_validation: bool = False,
@@ -743,6 +747,7 @@ class WedderburnArtinComponentTransformer:
         quotient_coeff: galois.Poly
         gcd: galois.Poly
         for factor, quotient in zip(factors, quotients):
+            # mypy sees only the integer signature of galois.egcd, which also handles polynomials
             gcd, _factor_coeff, quotient_coeff = galois.egcd(factor, quotient)  # type:ignore[assignment,arg-type]
             idempotent_poly = quotient_coeff * quotient // gcd  # <- G_j(x)
             new_idempotent = idempotent_poly.coeffs[::-1] @ powers[: len(idempotent_poly)]  # <- e_j

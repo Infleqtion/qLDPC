@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, get_args
 
 import numpy as np
 import numpy.typing as npt
@@ -27,9 +27,11 @@ from ._brute_force import (
 DistanceBackend = Literal["auto", "decoder", "gap", "sqetch"]
 DistanceMethod = Literal["brouwer_zimmermann", "brute_force", "information_sets"]
 
+_CanonicalDistanceMethod = Literal["brouwer_zimmermann", "brute_force"]
+
 # The canonical name of every accepted exact-distance method name, including aliases.  Logical
 # counts accept the same names.
-_DISTANCE_METHODS: dict[str, Literal["brouwer_zimmermann", "brute_force"]] = {
+_DISTANCE_METHODS: dict[str, _CanonicalDistanceMethod] = {
     "brouwer_zimmermann": "brouwer_zimmermann",
     "brute_force": "brute_force",
     "information_sets": "brouwer_zimmermann",
@@ -197,7 +199,7 @@ def get_distance_quantum(
 
 def _validate_distance_backend(backend: DistanceBackend) -> None:
     """Validate a distance-bound backend selector."""
-    if backend not in ("auto", "decoder", "gap", "sqetch"):
+    if backend not in get_args(DistanceBackend):
         raise ValueError(
             f"Unknown distance backend {backend!r}; choose from 'auto', 'decoder', 'gap', or "
             "'sqetch'."
@@ -206,7 +208,7 @@ def _validate_distance_backend(backend: DistanceBackend) -> None:
 
 def _validate_distance_method(
     method: DistanceMethod,
-) -> Literal["brouwer_zimmermann", "brute_force"]:
+) -> _CanonicalDistanceMethod:
     """Validate an exact-distance method selector, and return its canonical name.
 
     The alias ``"information_sets"`` resolves to ``"brouwer_zimmermann"``.

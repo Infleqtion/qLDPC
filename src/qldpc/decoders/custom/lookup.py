@@ -61,8 +61,10 @@ class _LookupDecoderBase:
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
+        # DEPRECATED: see qldpc._deprecations
         error_channel = _prepare_error_channel(error_channel, penalty_func)
         if confidence_ratio is not None and not confidence_ratio >= 0:  # also rejects NaN
             raise ValueError("A LookupDecoder confidence_ratio must be a non-negative number")
@@ -458,32 +460,33 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
             | None
         ) = None,
         observable_flip_matrix: IntegerArray | None = None,
-        predict_observable_flips: bool = False,
+        predict_observable_flips: bool = False,  # DEPRECATED: see qldpc._deprecations
         post_select: Collection[int] = (),
         add_erasure_bit: bool | None = None,
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         """Initialize an error lookup table."""
-        if predict_observable_flips:
-            advice = (
-                "use decoders.lookup(max_weight=...).build_observable_decoder(dem) instead"
-                if isinstance(pcm_or_dem, stim.DetectorErrorModel)
-                else (
-                    "use qldpc.decoders.custom.lookup.ObservableLookupDecoder(matrix,"
-                    " max_weight=..., observable_flip_matrix=..., error_channel=...)"
-                    ".decode_observables(syndrome) instead"
-                )
+        if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
+            from qldpc._deprecations.lookup import become_legacy_observable_decoder
+
+            become_legacy_observable_decoder(
+                self,
+                pcm_or_dem,
+                max_weight,
+                error_channel=error_channel,
+                observable_flip_matrix=observable_flip_matrix,
+                post_select=post_select,
+                add_erasure_bit=add_erasure_bit,
+                confidence_ratio=confidence_ratio,
+                probability_cutoff=probability_cutoff,
+                symplectic=symplectic,
+                penalty_func=penalty_func,
             )
-            _deprecations.warn_deprecated(
-                f"predict_observable_flips=True is deprecated; {advice}",
-                stacklevel=get_external_caller_stacklevel(),
-            )
-        self._outputs_observables = predict_observable_flips
-        self.predict_observable_flips = predict_observable_flips
-        self.decode_returns_observables = predict_observable_flips
+            return
         super().__init__(
             pcm_or_dem,
             max_weight,
@@ -494,7 +497,7 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
             confidence_ratio=confidence_ratio,
             probability_cutoff=probability_cutoff,
             symplectic=symplectic,
-            penalty_func=penalty_func,
+            penalty_func=penalty_func,  # DEPRECATED: see qldpc._deprecations
         )
 
     def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
@@ -562,6 +565,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None: ...
 
@@ -582,6 +586,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
         confidence_ratio: float | None = None,
         probability_cutoff: float = 0,
         symplectic: bool = False,
+        # DEPRECATED: see qldpc._deprecations
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         super().__init__(
@@ -594,7 +599,7 @@ class ObservableLookupDecoder(_LookupDecoderBase):
             confidence_ratio=confidence_ratio,
             probability_cutoff=probability_cutoff,
             symplectic=symplectic,
-            penalty_func=penalty_func,
+            penalty_func=penalty_func,  # DEPRECATED: see qldpc._deprecations
         )
 
     def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
@@ -813,21 +818,24 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         max_weight: int,
         *,
         observable_flip_matrix: IntegerArray | None = None,
-        predict_observable_flips: bool = False,
+        predict_observable_flips: bool = False,  # DEPRECATED: see qldpc._deprecations
         post_select: Collection[int] = (),
         add_erasure_bit: bool = False,
         symplectic: bool = False,
     ) -> None:
-        if predict_observable_flips:
-            _deprecations.warn_deprecated(
-                "predict_observable_flips=True is deprecated; use"
-                " qldpc.decoders.custom.lookup.WeightedObservableLookupDecoder(...)"
-                ".decode_observables(syndrome, penalty_func) instead",
-                stacklevel=get_external_caller_stacklevel(),
+        if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
+            from qldpc._deprecations.lookup import become_legacy_observable_decoder
+
+            become_legacy_observable_decoder(
+                self,
+                pcm_or_dem,
+                max_weight,
+                observable_flip_matrix=observable_flip_matrix,
+                post_select=post_select,
+                add_erasure_bit=add_erasure_bit,
+                symplectic=symplectic,
             )
-        self._outputs_observables = predict_observable_flips
-        self.predict_observable_flips = predict_observable_flips
-        self.decode_returns_observables = predict_observable_flips
+            return
         super().__init__(
             pcm_or_dem,
             max_weight,
@@ -960,26 +968,16 @@ def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
 def _get_decoder_lookup(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: object
 ) -> LookupDecoder:
-    """Build a lookup-table decoder.
-
-    The options, including the required ``max_weight``, an independent or callable correlated
-    ``error_channel``, and optional erasure, confidence, probability-cutoff, post-selection, and
-    symplectic options, are those of :class:`~qldpc.decoders.custom.lookup.LookupDecoder`.
-
-    Returns:
-        A :class:`~qldpc.decoders.custom.lookup.LookupDecoder` that maps syndromes to representative
-        errors.
-
-    ``add_erasure_bit=True`` appends a flag for syndromes absent from the table.  A positive
-    ``confidence_ratio`` also enables the flag and erases ambiguous syndromes.
-    """
+    """Build a lookup-table decoder; see ``decoders.lookup`` for its options."""
+    # the typed signature of the specification helper, not this builder, checks the options
     return LookupDecoder(pcm_or_dem, **decoder_args)  # type: ignore[arg-type]
 
 
 def _get_observable_decoder_lookup(
     dem: stim.DetectorErrorModel, **decoder_args: object
 ) -> ObservableDecoder:
-    """Build a lookup table that maps DEM syndromes directly to observable flips."""
+    """Build a lookup-table observable decoder; see ``decoders.lookup`` for its options."""
+    # the typed signature of the specification helper, not this builder, checks the options
     return ObservableLookupDecoder(dem, **decoder_args)  # type: ignore[call-overload]
 
 
@@ -988,7 +986,7 @@ lookup = decoder_spec(
     _get_decoder_lookup,
     _get_observable_decoder_lookup,
     signature_source=LookupDecoder,
-    exclude=frozenset({"predict_observable_flips"}),
+    exclude=frozenset({"predict_observable_flips"}),  # DEPRECATED: see qldpc._deprecations
     doc="""Configure a bounded-weight lookup-table decoder.
 
 Args:
@@ -1130,10 +1128,10 @@ def _organize_lookup_table_initialization_data(
 
 def _prepare_error_channel(
     error_channel: _ErrorChannel,
-    penalty_func: _ErrorLogProbability | None,
+    penalty_func: _ErrorLogProbability | None,  # DEPRECATED: see qldpc._deprecations
 ) -> _ErrorChannel:
     """Validate a callable error channel, or replace a deprecated penalty function with one."""
-    if penalty_func is not None:
+    if penalty_func is not None:  # DEPRECATED: see qldpc._deprecations
         if error_channel is not None:
             raise ValueError(
                 "Cannot specify both an error_channel and a penalty_func in a LookupDecoder"

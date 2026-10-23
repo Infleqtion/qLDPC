@@ -7,6 +7,7 @@ from __future__ import annotations
 import functools
 import pickle
 import re
+import types
 import warnings
 from collections.abc import Callable
 from typing import Any, cast
@@ -19,7 +20,7 @@ import stim
 
 from qldpc import decoders
 from qldpc._deprecations import decoders as deprecated_decoders
-from qldpc.decoders.construction._resolution import resolve_decoder, resolve_observable_decoder
+from qldpc.conftest import run_python
 from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.custom.ilp import ILPDecoder
 from qldpc.decoders.custom.lookup import LookupDecoder, ObservableLookupDecoder
@@ -152,11 +153,13 @@ def test_deprecated_decoder_functions() -> None:
     # the static_decoder argument has been removed from other methods, in favor of decoder=
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     with pytest.raises(TypeError, match="static_decoder argument has been removed"):
-        resolve_decoder(matrix, None, {"static_decoder": static_decoder})
+        deprecated_decoders.resolve_decoder(matrix, None, {"static_decoder": static_decoder})
     with pytest.raises(TypeError, match="static_decoder argument has been removed"):
-        resolve_observable_decoder(dem, None, {"static_decoder": static_decoder})
+        deprecated_decoders.resolve_observable_decoder(
+            dem, None, {"static_decoder": static_decoder}
+        )
     with pytest.raises(ValueError, match="Cannot combine decoder"):
-        resolve_decoder(matrix, static_decoder, {"with_BF": True})
+        deprecated_decoders.resolve_decoder(matrix, static_decoder, {"with_BF": True})
 
 
 def test_legacy_flat_backend_options() -> None:
@@ -392,16 +395,16 @@ def test_legacy_decoder_migration_messages() -> None:
 
     # deprecated arguments build a decoder, warning unless an outer API has already warned
     with pytest.warns(DeprecationWarning, match="with_BF keyword"):
-        decoder = resolve_decoder(matrix, None, {"with_BF": True})
+        decoder = deprecated_decoders.resolve_decoder(matrix, None, {"with_BF": True})
     assert np.array_equal(decoder.decode_errors(np.array([1, 0])), [1, 0])
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        resolve_decoder(matrix, None, {"with_BF": True}, warn_deprecated=False)
-        resolve_decoder(matrix, decoders.bf(), {})
+        deprecated_decoders.resolve_decoder(matrix, None, {"with_BF": True}, warn_deprecated=False)
+        deprecated_decoders.resolve_decoder(matrix, decoders.bf(), {})
 
     # deprecated arguments build an observable decoder with error-decoder semantics
     dem = stim.DetectorErrorModel("error(0.1) D0 L0\nerror(0.2) D0 D1\nerror(0.1) D1")
-    observable_decoder = resolve_observable_decoder(
+    observable_decoder = deprecated_decoders.resolve_observable_decoder(
         dem, None, {"with_lookup": True, "max_weight": 1}, warn_deprecated=False
     )
     assert isinstance(observable_decoder, decoders.ErrorsToObservablesDecoder)
@@ -409,8 +412,70 @@ def test_legacy_decoder_migration_messages() -> None:
     assert np.array_equal(observable_decoder.decode_observables(np.array([1, 1])), [0])
 
     # without deprecated arguments, decoder specifications may build a native observable decoder
-    observable_decoder = resolve_observable_decoder(dem, decoders.lookup(1), {})
+    observable_decoder = deprecated_decoders.resolve_observable_decoder(dem, decoders.lookup(1), {})
     assert isinstance(observable_decoder, ObservableLookupDecoder)
+
+
+def test_merge_legacy_css_decoder_args() -> None:
+    """Deprecated arguments of the two CSS sectors warn per argument, and translate per sector."""
+    matrix = galois.GF2([[1, 1, 0], [0, 1, 1]])
+    merge = deprecated_decoders.merge_legacy_css_decoder_args
+
+    def decode(decoder_input: decoders.DecoderInput) -> npt.NDArray[np.int_]:
+        assert callable(decoder_input)
+        decoder: Any = decoder_input(matrix)
+        return decoder.decode_errors(np.array([1, 0]))
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        decoder_x, decoder_z = merge(
+            matrix, matrix, None, None, {"with_lookup": True, "max_weight": 1}, None, None
+        )
+    assert ["decoder=decoders.lookup(...)" in str(warning.message) for warning in caught] == [True]
+    assert decoder_x is decoder_z  # so that the sectors can share one decoder
+    assert np.array_equal(decode(decoder_x), [1, 0, 0])
+
+    # sector-specific arguments override shared ones
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        decoder_x, decoder_z = merge(
+            matrix,
+            matrix,
+            None,
+            None,
+            {"with_lookup": True, "max_weight": 1},
+            None,
+            {"max_weight": 0},
+        )
+    assert len(caught) == 2
+    assert sum("decoder_z=" in str(warning.message) for warning in caught) == 1
+    assert np.array_equal(decode(decoder_x), [1, 0, 0])
+    assert np.array_equal(decode(decoder_z), [0, 0, 0])
+
+    # a sector without deprecated arguments keeps its decoder input
+    spec = decoders.lookup(1)
+    with pytest.warns(DeprecationWarning, match="decoder_x="):
+        decoder_x, decoder_z = merge(matrix, matrix, None, spec, {}, {"with_BF": True}, None)
+    assert np.array_equal(decode(decoder_x), [1, 0, 0]) and decoder_z is spec
+
+    # deprecated arguments cannot be combined with a decoder input or the removed static_decoder
+    with pytest.warns(DeprecationWarning), pytest.raises(ValueError, match="Cannot combine"):
+        merge(matrix, matrix, None, spec, {}, None, {"with_BF": True})
+    with pytest.raises(TypeError, match="static_decoder argument has been removed"):
+        merge(matrix, matrix, None, None, {}, {"static_decoder": spec}, None)
+
+
+def test_import_order() -> None:
+    """Importing this module before the rest of qLDPC does not break the import of qLDPC."""
+    code = (
+        "import importlib.util, sys\n"
+        "spec = importlib.util.find_spec('qldpc')\n"
+        "package = importlib.util.module_from_spec(spec)\n"
+        "sys.modules['qldpc'] = package\n"
+        "import qldpc._deprecations.decoders\n"
+        "spec.loader.exec_module(package)\n"
+    )
+    run_python(code)
 
 
 def test_deprecate_error_rate_option() -> None:
@@ -449,3 +514,29 @@ def test_deprecate_error_rate_option() -> None:
             decoders.tesseract_preset(error_rate=None, error_channel=0.1).options["error_channel"]
             == 0.1
         )
+
+
+def test_decode_returns_observables() -> None:
+    """Decoders whose decode methods return observable flips are identified, warning for others."""
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
+    with pytest.warns(DeprecationWarning, match="predict_observable_flips=True"):
+        legacy_decoder = LookupDecoder(dem, max_weight=1, predict_observable_flips=True)
+    assert deprecated_decoders.decode_returns_observables(legacy_decoder)
+
+    # neither classes, nor error decoders, nor objects without the declaration return observables
+    for decoder in [type(legacy_decoder), LookupDecoder(dem, max_weight=1), object()]:
+        assert not deprecated_decoders.decode_returns_observables(decoder)
+
+    # other objects that declare decode_returns_observables=True use a deprecated convention
+    declaring_decoder = types.SimpleNamespace(decode_returns_observables=True)
+    with pytest.warns(DeprecationWarning, match="implement decode_observables") as caught:
+        assert deprecated_decoders.decode_returns_observables(declaring_decoder)
+    assert caught[0].filename == __file__
+    assert deprecated_decoders.decode_returns_observables(declaring_decoder, warn=False)
+
+
+def test_selects_legacy_decoder() -> None:
+    """Deprecated keyword arguments select a decoder by decoder_constructor or with_<NAME>."""
+    assert deprecated_decoders.selects_legacy_decoder({"with_RBP": True, "seed": 1})
+    assert deprecated_decoders.selects_legacy_decoder({"decoder_constructor": print})
+    assert not deprecated_decoders.selects_legacy_decoder({"with_RBP": False, "seed": 1})

@@ -72,7 +72,7 @@ def get_distance_bound(
         device: CUDA device ordinal.
 
     Raises:
-        ModuleNotFoundError: If the optional dependency is not installed.
+        ModuleNotFoundError: If sqetch, or PyTorch with CUDA extension support, is not installed.
         RuntimeError: If no nontrivial logical operator is found.
         ValueError: If the code or backend arguments are unsupported.
 
@@ -108,7 +108,7 @@ def get_distance_bound(
     except ModuleNotFoundError as error:
         if error.name != "torch":
             raise
-        raise RuntimeError(
+        raise ModuleNotFoundError(
             "The sqetch backend requires PyTorch with CUDA extension support. "
             f"Install it with `{_INSTALL_COMMAND}`."
         ) from error
