@@ -392,11 +392,10 @@ def merge_legacy_css_decoder_args(
             )
     sector_args_x = {**decoder_args, **(decoder_x_args or {})}
     sector_args_z = {**decoder_args, **(decoder_z_args or {})}
-    # compare matrices first: sector arguments may hold arrays, which compare only when shared
     same_x_and_z = (
         decoder_x is decoder_z
         and np.array_equal(matrix_x, matrix_z)
-        and sector_args_x == sector_args_z
+        and _have_equal_options(sector_args_x, sector_args_z)
     )
     if sector_args_x:
         _reject_decoder_with_legacy_args(decoder_x)
@@ -578,6 +577,16 @@ def _get_legacy_decoder_replacement(
     if (decoder_constructor := decoder_args.get("decoder_constructor")) is not None:
         return f"{argument_name}={_get_constructor_name(decoder_constructor)}"
     return f"{argument_name}=decoders.{_get_legacy_helper_name(pcm_or_dem, decoder_args)}(...)"
+
+
+def _have_equal_options(options_a: Mapping[str, object], options_b: Mapping[str, object]) -> bool:
+    """Whether two option mappings are equal, comparing array values elementwise."""
+    return options_a.keys() == options_b.keys() and all(
+        np.array_equal(np.asarray(value), np.asarray(options_b[key]))
+        if isinstance(value, np.ndarray) or isinstance(options_b[key], np.ndarray)
+        else value == options_b[key]
+        for key, value in options_a.items()
+    )
 
 
 def _get_constructor_name(decoder_constructor: object) -> str:

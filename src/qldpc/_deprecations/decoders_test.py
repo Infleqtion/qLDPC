@@ -452,6 +452,13 @@ def test_merge_legacy_css_decoder_args() -> None:
     assert np.array_equal(decode(decoder_x), [1, 0, 0])
     assert np.array_equal(decode(decoder_z), [0, 0, 0])
 
+    # sector-specific arguments that hold equal arrays also share a translated decoder input
+    sector_args = [{"with_lookup": True, "max_weight": 1, "error_channel": np.full(3, 0.1)}]
+    sector_args.append({**sector_args[0], "error_channel": np.full(3, 0.1)})
+    with pytest.warns(DeprecationWarning):
+        decoder_x, decoder_z = merge(matrix, matrix, None, None, {}, *sector_args)
+    assert decoder_x is decoder_z
+
     # a sector without deprecated arguments keeps its decoder input
     spec = decoders.lookup(1)
     with pytest.warns(DeprecationWarning, match="decoder_x="):

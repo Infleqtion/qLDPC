@@ -1491,20 +1491,21 @@ def test_deprecated_decoder_kwargs_warning_location() -> None:
         )
     assert received_tags == ["sector-x", "sector-z"]
 
-    # sector-specific arguments may hold arrays, such as per-qubit priors
-    surface_code = codes.SurfaceCode(3)
+    # sector-specific arguments may hold arrays, such as per-qubit priors, even for a code whose
+    # X-type and Z-type checks coincide
+    steane_code = codes.SteaneCode()
     with pytest.warns(DeprecationWarning):
-        surface_code.get_logical_error_rate_func(
+        steane_code.get_logical_error_rate_func(
             1,
             decoder_x_kwargs={
                 "with_lookup": True,
                 "max_weight": 1,
-                "error_channel": np.full(len(surface_code), 0.1),
+                "error_channel": np.full(len(steane_code), 0.1),
             },
             decoder_z_kwargs={
                 "with_lookup": True,
                 "max_weight": 1,
-                "error_channel": np.full(len(surface_code), 0.2),
+                "error_channel": np.full(len(steane_code), 0.2),
             },
         )
 
