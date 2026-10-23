@@ -308,8 +308,9 @@ Args:
 
 Returns:
     A decoder specification.  ``build(pcm_or_dem)`` infers physical errors with a
-    ``pymatching.Matching`` subclass.  ``build_observable_decoder(dem)`` predicts observable
-    flips natively with a :class:`~qldpc.decoders.external.pymatching.MatchingObservableDecoder`.
+    ``pymatching.Matching`` subclass that is a :class:`~qldpc.decoders.protocols.BatchErrorDecoder`.
+    ``build_observable_decoder(dem)`` predicts observable flips natively with a
+    :class:`~qldpc.decoders.external.pymatching.MatchingObservableDecoder`.
 
 An error decoder cannot infer decomposed error mechanisms as errors of the original DEM.
 Use native observable decoding for those models.

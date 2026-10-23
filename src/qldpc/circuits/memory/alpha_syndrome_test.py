@@ -9,6 +9,7 @@ from unittest import mock
 
 import numpy as np
 import pytest
+import sinter
 import stim
 
 from qldpc import circuits, codes, decoders, math
@@ -62,7 +63,18 @@ def test_alpha_syndrome_qldpc_decoder() -> None:
         dems.append(dem)
         return spec.build(dem)
 
-    decoder_inputs: list[decoders.DeferredDecoderInput] = [spec, build_decoder]
+    class ObservableDecoderCompiler:
+        def compile_decoder_for_dem(
+            self, dem: stim.DetectorErrorModel
+        ) -> decoders.ObservableDecoder:
+            dems.append(dem)
+            return spec.build_observable_decoder(dem)
+
+    decoder_inputs: list[decoders.DeferredDecoderInput] = [
+        spec,
+        build_decoder,
+        ObservableDecoderCompiler(),
+    ]
     for decoder in decoder_inputs:
         strategy = circuits.AlphaSyndrome(
             circuits.DepolarizingNoiseModel(0.01),
@@ -74,6 +86,23 @@ def test_alpha_syndrome_qldpc_decoder() -> None:
         )
         assert alpha_syndrome_is_valid(code, strategy)
     assert dems
+
+    # a decoder with the decode_via_files method that Sinter calls is passed to Sinter as is
+    class FileDecoder:
+        def decode_via_files(self, **kwargs: object) -> None:
+            sinter.BUILT_IN_DECODERS["pymatching"].decode_via_files(**kwargs)
+
+    file_decoder = FileDecoder()
+    strategy = circuits.AlphaSyndrome(
+        circuits.DepolarizingNoiseModel(0.01),
+        file_decoder,
+        iters_per_step=2,
+        shots_per_iter=1,
+        verbose=False,
+        seed=0,
+    )
+    assert strategy.sinter_decoding_kwargs["custom_decoders"] == {"custom": file_decoder}
+    assert alpha_syndrome_is_valid(code, strategy)
 
 
 def test_alpha_reproducibility_and_tree_edges() -> None:

@@ -105,11 +105,11 @@ class AlphaSyndrome(SyndromeMeasurementStrategy):
         if isinstance(decoder, str):
             self.sinter_decoding_kwargs = {"decoder": decoder}
         else:
-            if not hasattr(decoder, "compile_decoder_for_dem"):
+            # sinter.predict_observables decodes by calling decode_via_files
+            if not hasattr(decoder, "decode_via_files"):
                 decoder = decoders.SinterDecoder(decoder=decoder)
             self.sinter_decoding_kwargs = {
                 "decoder": "custom",
-                # objects with compile_decoder_for_dem are passed to Sinter as Sinter decoders
                 "custom_decoders": {"custom": cast(sinter.Decoder, decoder)},
             }
 
