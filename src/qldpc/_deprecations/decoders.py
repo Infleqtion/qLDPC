@@ -418,6 +418,13 @@ def reject_removed_decoder_args(decoder_args: Mapping[str, object]) -> None:
         )
 
 
+def selects_legacy_decoder(decoder_args: Mapping[str, object]) -> bool:
+    """Whether deprecated keyword arguments select a decoder with decoder_constructor or with_*."""
+    return decoder_args.get("decoder_constructor") is not None or any(
+        decoder_args.get(f"with_{name}", False) for name in _LEGACY_HELPER_NAMES
+    )
+
+
 def get_legacy_decoder_migration_message(
     pcm_or_dem: PcmOrDem | None,
     decoder_args: Mapping[str, object],

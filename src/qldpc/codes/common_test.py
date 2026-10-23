@@ -1692,6 +1692,21 @@ def test_css_auto_distance_bound_options_of_unavailable_backends() -> None:
         qutrit_code.get_distance_bound(seed=1)
 
 
+def test_deprecated_distance_bound_decoder_options() -> None:
+    """Options of a decoder selected by deprecated keywords may share names with sqetch options."""
+    received_seeds: list[int] = []
+
+    def build_decoder(matrix: galois.FieldArray, seed: int) -> decoders.ErrorDecoder:
+        received_seeds.append(seed)
+        return decoders.bp_osd().build(matrix)
+
+    code = codes.SteaneCode()
+    code.forget_distance()
+    with pytest.warns(DeprecationWarning):
+        code.get_distance_bound(1, decoder_constructor=build_decoder, seed=7)
+    assert received_seeds and set(received_seeds) == {7}
+
+
 def test_css_distance_bound_backend_selection() -> None:
     """Honor explicit sqetch, decoder, and GAP backend selection."""
     code = codes.SteaneCode()

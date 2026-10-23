@@ -24,7 +24,11 @@ import scipy.sparse
 import stim
 
 from qldpc import abstract, decoders, external, math
-from qldpc._deprecations.decoders import merge_legacy_css_decoder_args, merge_legacy_decoder_args
+from qldpc._deprecations.decoders import (
+    merge_legacy_css_decoder_args,
+    merge_legacy_decoder_args,
+    selects_legacy_decoder,
+)
 from qldpc._utils import format_docstring, get_external_caller_stacklevel
 from qldpc._utils import networkx as nx
 from qldpc.decoders._capabilities import is_prebuilt_decoder, is_prebuilt_observable_decoder
@@ -4155,6 +4159,8 @@ def _resolve_distance_backend(
     if backend != "auto":
         return backend
 
+    if selects_legacy_decoder(bound_kwargs):  # DEPRECATED: see qldpc._deprecations
+        return "decoder"
     options = set(bound_kwargs)
     backend_specific = options & (_SQETCH_DISTANCE_BOUND_KWARGS | _GAP_DISTANCE_BOUND_KWARGS)
     if backend_specific and not (

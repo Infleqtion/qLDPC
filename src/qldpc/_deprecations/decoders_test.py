@@ -532,3 +532,10 @@ def test_decode_returns_observables() -> None:
         assert deprecated_decoders.decode_returns_observables(declaring_decoder)
     assert caught[0].filename == __file__
     assert deprecated_decoders.decode_returns_observables(declaring_decoder, warn=False)
+
+
+def test_selects_legacy_decoder() -> None:
+    """Deprecated keyword arguments select a decoder by decoder_constructor or with_<NAME>."""
+    assert deprecated_decoders.selects_legacy_decoder({"with_RBP": True, "seed": 1})
+    assert deprecated_decoders.selects_legacy_decoder({"decoder_constructor": print})
+    assert not deprecated_decoders.selects_legacy_decoder({"with_RBP": False, "seed": 1})
