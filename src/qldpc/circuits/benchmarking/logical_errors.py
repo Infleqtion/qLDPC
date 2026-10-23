@@ -202,9 +202,11 @@ def get_logical_error_and_discard_rate(
     if not hasattr(decoder, "decode_via_files"):
         decoder = decoders.SinterDecoder(decoder=decoder)
     compiled_sinter_decoder = cast(sinter.Decoder, decoder).compile_decoder_for_dem(
-        dem if dem_to_decode is None else dem_to_decode
+        dem=dem if dem_to_decode is None else dem_to_decode
     )
-    predicted_flips = compiled_sinter_decoder.decode_shots_bit_packed(det_data)
+    predicted_flips = compiled_sinter_decoder.decode_shots_bit_packed(
+        bit_packed_detection_event_data=det_data
+    )
 
     # the decoder may ask for shots to be discarded in a byte added to its predictions
     predicted_flips, discarded = split_discard_byte(

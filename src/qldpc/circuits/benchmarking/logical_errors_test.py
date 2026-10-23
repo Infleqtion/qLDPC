@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import sinter
 import stim
 
 from qldpc import circuits, decoders
@@ -72,6 +73,15 @@ def test_logical_error_and_discard_rate() -> None:
     )
     assert np.isnan(logical_error_rate)
     assert discard_rate == 1
+
+    # a decoder built into Sinter, whose compile_decoder_for_dem takes the model by keyword only
+    logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
+        stim.DetectorErrorModel("error(0.1) D0 L0"),
+        decoder=sinter.BUILT_IN_DECODERS["pymatching"],
+        num_samples=10,
+    )
+    assert logical_error_rate == 0
+    assert discard_rate == 0
 
     # sampling nothing reports no rates rather than dividing by zero
     logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
