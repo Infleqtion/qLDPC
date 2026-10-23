@@ -968,19 +968,7 @@ def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
 def _get_decoder_lookup(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: object
 ) -> LookupDecoder:
-    """Build a lookup-table decoder.
-
-    The options, including the required ``max_weight``, an independent or callable correlated
-    ``error_channel``, and optional erasure, confidence, probability-cutoff, post-selection, and
-    symplectic options, are those of :class:`~qldpc.decoders.custom.lookup.LookupDecoder`.
-
-    Returns:
-        A :class:`~qldpc.decoders.custom.lookup.LookupDecoder` that maps syndromes to representative
-        errors.
-
-    ``add_erasure_bit=True`` appends a flag for syndromes absent from the table.  A positive
-    ``confidence_ratio`` also enables the flag and erases ambiguous syndromes.
-    """
+    """Build a lookup-table decoder; see ``decoders.lookup`` for its options."""
     # the typed signature of the specification helper, not this builder, checks the options
     return LookupDecoder(pcm_or_dem, **decoder_args)  # type: ignore[arg-type]
 
@@ -988,7 +976,7 @@ def _get_decoder_lookup(
 def _get_observable_decoder_lookup(
     dem: stim.DetectorErrorModel, **decoder_args: object
 ) -> ObservableDecoder:
-    """Build a lookup table that maps DEM syndromes directly to observable flips."""
+    """Build a lookup-table observable decoder; see ``decoders.lookup`` for its options."""
     # the typed signature of the specification helper, not this builder, checks the options
     return ObservableLookupDecoder(dem, **decoder_args)  # type: ignore[call-overload]
 

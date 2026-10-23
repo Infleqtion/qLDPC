@@ -998,9 +998,11 @@ class QuditCode(AbstractCode):
     ) -> None:
         """Construct a qudit code from a parity check matrix over a finite field.
 
-        If ``is_subsystem_code`` is not None, it records whether the parity checks fail to commute,
-        making this a subsystem code.  This hint is trusted rather than verified: passing a value
-        that does not hold makes this code report, and compute with, the wrong kind of code.
+        ``is_subsystem_code`` records whether the parity checks fail to commute, making this a
+        subsystem code.  If omitted, it is computed when first needed.  An explicit ``True`` is a
+        trusted hint, which is safe even if wrong: a stabilizer code treated as a subsystem code
+        just has no gauge qudits.  An explicit ``False`` is verified, and raises a ValueError if
+        some parity checks do not commute.
         """
         super().__init__(matrix, field)
 
@@ -1012,8 +1014,10 @@ class QuditCode(AbstractCode):
             if matrix._is_subsystem_code and is_subsystem_code is False:
                 raise ValueError("is_subsystem_code=False contradicts the subsystem code provided")
 
-        if is_subsystem_code is not None:
-            self._is_subsystem_code = is_subsystem_code
+        if is_subsystem_code:
+            self._is_subsystem_code = True
+        elif is_subsystem_code is not None and self.is_subsystem_code:
+            raise ValueError("is_subsystem_code=False, but some parity checks do not commute")
 
     def __eq__(self, other: object) -> bool:
         """Equality test between two code instances."""
@@ -1052,7 +1056,8 @@ class QuditCode(AbstractCode):
             return self
         is_subsystem_code = self.is_subsystem_code
         matrix = self.matrix.row_space()
-        code = QuditCode(matrix, self.field, is_subsystem_code=is_subsystem_code)
+        code = QuditCode(matrix, self.field)
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if not is_subsystem_code:
             code._dimension = len(code) - len(matrix)
         code._distance = self._distance
@@ -1119,7 +1124,8 @@ class QuditCode(AbstractCode):
         zs = np.any(matrix_z, axis=1)
         if np.any(xs & zs):
             return self
-        code = CSSCode(matrix_x[xs], matrix_z[zs], is_subsystem_code=self._is_subsystem_code)
+        code = CSSCode(matrix_x[xs], matrix_z[zs])
+        code._is_subsystem_code = self._is_subsystem_code  # known, so not re-verified
         code._dimension = self._dimension
         code._distance = self._distance
         code._distance_bound = self._distance_bound
@@ -1563,7 +1569,8 @@ class QuditCode(AbstractCode):
         else:
             # X-type and Z-type stabilizers in standard form
             stabilizer_ops = self.get_stabilizer_ops()
-            code = QuditCode(stabilizer_ops, is_subsystem_code=False)
+            code = QuditCode(stabilizer_ops)
+            code._is_subsystem_code = False  # stabilizers commute
             (
                 standard_stabilizer_ops,
                 qudit_locs,
@@ -1909,7 +1916,8 @@ class QuditCode(AbstractCode):
         gauge operators of the original code.
         """
         matrix = np.vstack([self.get_stabilizer_ops(), self.get_logical_ops()])
-        code = QuditCode(matrix, is_subsystem_code=self.dimension != 0)
+        code = QuditCode(matrix)
+        code._is_subsystem_code = self.dimension != 0  # logical operators do not all commute
         code._stabilizer_ops = self._stabilizer_ops
         code._logical_ops = self._gauge_ops
         code._gauge_ops = self._logical_ops
@@ -2150,7 +2158,8 @@ class QuditCode(AbstractCode):
             return result.reshape(-1, 2 * len(self)).view(self.field)
 
         # transform the parity check matrix, and any other operators that are already known
-        code = QuditCode(transform_ops(self.matrix), is_subsystem_code=self._is_subsystem_code)
+        code = QuditCode(transform_ops(self.matrix))
+        code._is_subsystem_code = self._is_subsystem_code  # preserved by the transformation
         if self._logical_ops is not None:
             code._logical_ops = transform_ops(self.get_logical_ops())
         if self._stabilizer_ops is not None:
@@ -2190,7 +2199,8 @@ class QuditCode(AbstractCode):
                 new_ops.append(np.concatenate(xs_zs))
             return self.field(new_ops)
 
-        code = QuditCode(transform_ops(self.matrix), is_subsystem_code=self._is_subsystem_code)
+        code = QuditCode(transform_ops(self.matrix))
+        code._is_subsystem_code = self._is_subsystem_code  # preserved by the transformation
 
         # preserve or update logical operators, as applicable
         if preserve_logicals:
@@ -2221,7 +2231,8 @@ class QuditCode(AbstractCode):
         code_z = ClassicalCode.stack(codes_z)
         matrix = np.hstack([code_x.matrix, code_z.matrix])
         is_subsystem_code = any(code.is_subsystem_code for code in codes)
-        code = QuditCode(matrix, is_subsystem_code=is_subsystem_code)
+        code = QuditCode(matrix)
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if inherit_logicals:
             logicals_xx = [
                 code.get_logical_ops(Pauli.X, symplectic=True)[:, : len(code)] for code in codes
@@ -2284,9 +2295,8 @@ class QuditCode(AbstractCode):
         inner_checks = inner.matrix @ outer.get_logical_ops()
 
         # combine parity checks of the outer and inner codes
-        code = QuditCode(
-            np.vstack([outer.matrix, inner_checks]), is_subsystem_code=is_subsystem_code
-        )
+        code = QuditCode(np.vstack([outer.matrix, inner_checks]))
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
 
         if inherit_logicals:
             code._logical_ops = inner.get_logical_ops() @ outer.get_logical_ops()
@@ -2557,6 +2567,12 @@ class CSSCode(QuditCode):
     ) -> None:
         """Build a CSSCode from classical subcodes that specify X-type and Z-type parity checks.
 
+        ``is_subsystem_code`` records whether some X-type and Z-type parity checks fail to commute,
+        making this a subsystem code.  If omitted, it is computed when first needed.  An explicit
+        ``True`` is a trusted hint, which is safe even if wrong: a stabilizer code treated as a
+        subsystem code just has no gauge qudits.  An explicit ``False`` is verified, and raises a
+        ValueError if some parity checks do not commute.
+
         If ``promise_equal_distance_xz is True``, the X-type and Z-type logical operators are
         assumed to have equal minimum weight, which lets the code distance be computed from one type
         alone.  This promise is trusted rather than verified: passing ``True`` when it does not hold
@@ -2568,7 +2584,11 @@ class CSSCode(QuditCode):
         if len(self.code_x) != len(self.code_z) or self.code_x.field is not self.code_z.field:
             raise ValueError("The sub-codes provided for this CSSCode are incompatible")
 
-        self._is_subsystem_code = is_subsystem_code
+        self._is_subsystem_code = None
+        if is_subsystem_code:
+            self._is_subsystem_code = True
+        elif is_subsystem_code is not None and self.is_subsystem_code:
+            raise ValueError("is_subsystem_code=False, but some parity checks do not commute")
         self._equal_distance_xz = promise_equal_distance_xz or self.code_x == self.code_z
 
     def __eq__(self, other: object) -> bool:
@@ -2789,11 +2809,8 @@ class CSSCode(QuditCode):
         if self._is_canonicalized:
             return self
         is_subsystem_code = self.is_subsystem_code
-        code = CSSCode(
-            self.code_x.canonicalized,
-            self.code_z.canonicalized,
-            is_subsystem_code=is_subsystem_code,
-        )
+        code = CSSCode(self.code_x.canonicalized, self.code_z.canonicalized)
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if not is_subsystem_code:
             code._dimension = len(self) - code.num_checks
         code._distance = self._distance
@@ -3016,7 +3033,8 @@ class CSSCode(QuditCode):
             # X-type and Z-type stabilizers in standard form
             stabilizers_x: npt.NDArray[np.int_] = self.get_stabilizer_ops(Pauli.X)
             stabilizers_z: npt.NDArray[np.int_] = self.get_stabilizer_ops(Pauli.Z)
-            code = CSSCode(stabilizers_x, stabilizers_z, is_subsystem_code=False)
+            code = CSSCode(stabilizers_x, stabilizers_z)
+            code._is_subsystem_code = False  # stabilizers commute
             (
                 stabilizers_x,
                 stabilizers_z,
@@ -3237,7 +3255,8 @@ class CSSCode(QuditCode):
         """
         matrix_x = np.vstack([self.get_stabilizer_ops(Pauli.X), self.get_logical_ops(Pauli.X)])
         matrix_z = np.vstack([self.get_stabilizer_ops(Pauli.Z), self.get_logical_ops(Pauli.Z)])
-        code = CSSCode(matrix_x, matrix_z, is_subsystem_code=self.dimension != 0)
+        code = CSSCode(matrix_x, matrix_z)
+        code._is_subsystem_code = self.dimension != 0  # logical operators do not all commute
         code._stabilizer_ops = self._stabilizer_ops
         code._logical_ops = self._gauge_ops
         code._gauge_ops = self._logical_ops
@@ -3567,11 +3586,10 @@ class CSSCode(QuditCode):
             )
 
         # GAP estimates the Z-distance of CSS codes, so flip X/Z if necessary
-        code = (
-            self
-            if pauli is Pauli.Z
-            else CSSCode(self.matrix_z, self.matrix_x, is_subsystem_code=self._is_subsystem_code)
-        )
+        code = self
+        if pauli is not Pauli.Z:
+            code = CSSCode(self.matrix_z, self.matrix_x)
+            code._is_subsystem_code = self._is_subsystem_code  # known, so not re-verified
         maxav = bound_kwargs.get("maxav", "fail")
         bound = _codes.get_qdistrnd_distance_bound(code, num_trials, cutoff=cutoff, maxav=maxav)
         return self._update_distance_bound(bound, pauli)
@@ -3811,12 +3829,13 @@ class CSSCode(QuditCode):
             raise TypeError("CSSCode.stack requires CSSCode inputs")
         code_x = ClassicalCode.stack([code.code_x for code in css_codes])
         code_z = ClassicalCode.stack([code.code_z for code in css_codes])
+        is_subsystem_code = any(code.is_subsystem_code for code in codes)
         code = CSSCode(
             code_x,
             code_z,
-            is_subsystem_code=any(code.is_subsystem_code for code in codes),
             promise_equal_distance_xz=all(code._equal_distance_xz for code in css_codes),
         )
+        code._is_subsystem_code = is_subsystem_code  # known, so not re-verified
         if inherit_logicals:
             logicals_x = [code.get_logical_ops(Pauli.X) for code in css_codes]
             logicals_z = [code.get_logical_ops(Pauli.Z) for code in css_codes]

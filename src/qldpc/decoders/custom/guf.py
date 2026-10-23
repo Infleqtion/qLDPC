@@ -176,25 +176,7 @@ class GUFDecoder(ErrorDecoder):
 def _get_decoder_guf(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: object
 ) -> GUFDecoder:
-    """Build a generalized union-find (GUF) decoder.
-
-    Args:
-        pcm_or_dem: A parity-check matrix or detector error model to decode.  A DEM is converted to
-            its dense detector-flip matrix.
-        max_weight: Maximum weight of a candidate error, or None for no limit.
-        symplectic: Whether to treat the parity-check matrix as that of a QuditCode, whose first and
-            last halves of columns denote the X and Z support of a stabilizer.
-        add_erasure_bit: Whether to append a flag when the search is exhausted without finding an
-            error that reproduces the syndrome.
-        **decoder_args: The options above, passed to :class:`~qldpc.decoders.custom.guf.GUFDecoder`.
-
-    Returns:
-        A :class:`~qldpc.decoders.custom.guf.GUFDecoder`.
-
-    Supplying ``max_weight`` can make the search exponential.  See
-    :class:`~qldpc.decoders.custom.guf.GUFDecoder` and
-    `arXiv:2103.08049 <https://arxiv.org/abs/2103.08049>`_.
-    """
+    """Build a GUF decoder; see ``decoders.guf`` for its options."""
     # the typed signature of the specification helper, not this builder, checks the options
     return GUFDecoder(_to_pcm(pcm_or_dem), **decoder_args)  # type: ignore[arg-type]
 

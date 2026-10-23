@@ -109,12 +109,8 @@ class TrivialCode(CSSCode):
             matrix_x[range(gauge_dimension, num_checks_x), stab_z_qubits] = 1
             matrix_z[range(gauge_dimension, num_checks_z), stab_x_qubits] = 1
 
-        super().__init__(
-            matrix_x,
-            matrix_z,
-            is_subsystem_code=bool(gauge_dimension),
-            promise_equal_distance_xz=True,
-        )
+        super().__init__(matrix_x, matrix_z, promise_equal_distance_xz=True)
+        self._is_subsystem_code = bool(gauge_dimension)  # known by construction
 
 
 class FiveQuditCode(QuditCode):
@@ -135,10 +131,8 @@ class FiveQuditCode(QuditCode):
             [-1, 0, 1, 0, 0, 0, 0, 0, 1, -1],
             [0, -1, 0, 1, 0, -1, 0, 0, 0, 1],
         ]
-        super().__init__(
-            field(1) * np.array(matrix, dtype=int),
-            is_subsystem_code=False,
-        )
+        super().__init__(field(1) * np.array(matrix, dtype=int))
+        self._is_subsystem_code = False  # known by construction
         self._dimension = 1
         self._distance = 3
 
@@ -171,7 +165,8 @@ class QuantumHammingCode(CSSCode):
         set_logicals: bool = True,
     ) -> None:
         code = HammingCode(size, field)
-        super().__init__(code, code, is_subsystem_code=False)
+        super().__init__(code, code)
+        self._is_subsystem_code = False  # known by construction
         self._distance_x = self._distance_z = 3
 
         if size == 4 and set_logicals and self.field is galois.GF2:
@@ -251,9 +246,8 @@ class QuantumReedMullerCode(CSSCode):
         self._order = order
         self._size = size
         generator = np.atleast_2d(ReedMullerCode.get_generator(order, size))
-        super().__init__(
-            generator, generator, is_subsystem_code=False, promise_equal_distance_xz=True
-        )
+        super().__init__(generator, generator, promise_equal_distance_xz=True)
+        self._is_subsystem_code = False  # known by construction
 
     @property
     def order(self) -> int:
@@ -371,7 +365,8 @@ class TetrahedralCode(CSSCode):
                 matrix_z[row, support] = 1
             code_z = ClassicalCode(matrix_z)
 
-        super().__init__(code_x, code_z, is_subsystem_code=False)
+        super().__init__(code_x, code_z)
+        self._is_subsystem_code = False  # known by construction
         self.set_logical_ops_xz(
             [[1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0]],
             [[1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]],
@@ -389,7 +384,8 @@ class QuantumGolayCode(CSSCode):
     def __init__(self) -> None:
         # by convention, keep only the first 11 of the classical code's (redundant) 23 parity checks
         checks = GolayCode().matrix[:11]
-        super().__init__(checks, checks, is_subsystem_code=False)
+        super().__init__(checks, checks)
+        self._is_subsystem_code = False  # known by construction
         self._distance_x = self._distance_z = 7
 
 
@@ -407,7 +403,8 @@ class IcebergCode(CSSCode):
                 f"The Iceberg code is only defined for even block lengths (provided: {size})"
             )
         checks = [[1] * size]
-        super().__init__(checks, checks, is_subsystem_code=False)
+        super().__init__(checks, checks)
+        self._is_subsystem_code = False  # known by construction
         self._dimension = size - 2
         self._distance_x = self._distance_z = 2
 
@@ -434,7 +431,8 @@ class C6Code(CSSCode):
 
     def __init__(self) -> None:
         checks = [[1, 1, 0, 0, 1, 1], [0, 1, 1, 1, 1, 0]]
-        super().__init__(checks, checks, is_subsystem_code=False)
+        super().__init__(checks, checks)
+        self._is_subsystem_code = False  # known by construction
         logical_ops_xz = scipy.linalg.block_diag([1, 1, 1], [1, 1, 1])
         self.set_logical_ops_xz(logical_ops_xz, logical_ops_xz)
 
@@ -458,7 +456,8 @@ class ManyHypercubeCode(CSSCode):
         if level == 1:
             # construct a [6, 4, 2] Iceberg code
             code = IcebergCode(6)
-            super().__init__(code.code_x, code.code_z, is_subsystem_code=False)
+            super().__init__(code.code_x, code.code_z)
+            self._is_subsystem_code = False  # known by construction
 
             # split the four logical qubits into pairs with disjoint support on the physical qubits
             sector_ops_x = [[1, 1, 0], [0, 1, 1]]
@@ -472,7 +471,8 @@ class ManyHypercubeCode(CSSCode):
             base_code = ManyHypercubeCode(1)
             for _ in range(level - 1):
                 code = CSSCode.concatenate(code, base_code)
-            super().__init__(code.code_x, code.code_z, is_subsystem_code=False)
+            super().__init__(code.code_x, code.code_z)
+            self._is_subsystem_code = False  # known by construction
             self._dimension = 4**level
             self._distance_x = self._distance_z = 2**level
 
@@ -518,12 +518,10 @@ class TBCode(CSSCode):
         matrix_x = np.block([matrix_a, matrix_b])
         matrix_z = np.block([matrix_b.T, -matrix_a.T])
         super().__init__(
-            matrix_x,
-            matrix_z,
-            field,
-            promise_equal_distance_xz=promise_equal_distance_xz,
-            is_subsystem_code=False,
+            matrix_x, matrix_z, field, promise_equal_distance_xz=promise_equal_distance_xz
         )
+        if not skip_validation:
+            self._is_subsystem_code = False  # verified above
 
 
 class GALACode(CSSCode):
@@ -627,7 +625,9 @@ class GALACode(CSSCode):
         matrix_z = active_matrix_z.lift()
         if not skip_validation and np.any(matrix_x @ matrix_z.T):
             raise ValueError("The active parity checks of this GALACode do not commute")
-        super().__init__(matrix_x, matrix_z, is_subsystem_code=False)
+        super().__init__(matrix_x, matrix_z)
+        if not skip_validation:
+            self._is_subsystem_code = False  # verified above
 
     def __str__(self) -> str:
         """Human-readable representation of this code."""
@@ -787,6 +787,7 @@ class QCCode(TBCode):
         super().__init__(
             matrix_a, matrix_b, field, promise_equal_distance_xz=True, skip_validation=True
         )
+        self._is_subsystem_code = False  # matrices over an abelian group ring commute
 
     def get_simplified_form(
         self, poly: sympy.Basic, orders: tuple[int, ...] | None = None
@@ -1411,8 +1412,8 @@ class HGPCode(CSSCode):
             matrix_x.view(np.ndarray).astype(int),
             matrix_z.view(np.ndarray).astype(int),
             field,
-            is_subsystem_code=False,
         )
+        self._is_subsystem_code = False  # known by construction
         if set_logicals:
             logical_ops_xz = HGPCode.get_canonical_logical_line_ops(
                 self.code_a.matrix, self.code_b.matrix
@@ -1954,7 +1955,8 @@ class LPCode(CSSCode):
         # if Hadamard-transforming qudits, conjugate those in the (1, 1) sector by default
         self.bias_tailoring_qubits = slice(self.sector_size[0, 0], None)
 
-        super().__init__(matrix_x.lift(), matrix_z.lift(), field, is_subsystem_code=False)
+        super().__init__(matrix_x.lift(), matrix_z.lift(), field)
+        self._is_subsystem_code = False  # known by construction
 
         if set_logicals:
             try:
@@ -2218,7 +2220,8 @@ class QTCode(CSSCode):
         self.code_b = code_b
         self.complex = CayleyComplex(subset_a, subset_b, bipartite=bipartite)
         code_x, code_z = self.get_subcodes(self.complex, code_a, code_b)
-        super().__init__(code_x, code_z, field, is_subsystem_code=False)
+        super().__init__(code_x, code_z, field)
+        self._is_subsystem_code = False  # known by construction
 
     def __eq__(self, other: object) -> bool:
         return (

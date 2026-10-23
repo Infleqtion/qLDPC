@@ -48,25 +48,17 @@ def test_ldpc_builders(
 
 
 def test_ldpc_builder_docstrings() -> None:
-    """Builders describe the decoders that they build, and keep error_rate as their last option."""
-    builders: list[Callable[..., decoders.ErrorDecoder]] = [
-        _get_decoder_bp_osd,
-        _get_decoder_bp_lsd,
-        _get_decoder_bf,
+    """Builders point to the helpers that document their options, and keep error_rate last."""
+    builders: list[tuple[Callable[..., decoders.ErrorDecoder], Callable[..., object]]] = [
+        (_get_decoder_bp_osd, decoders.bp_osd),
+        (_get_decoder_bp_lsd, decoders.bp_lsd),
+        (_get_decoder_bf, decoders.bf),
     ]
-    for builder in builders:
+    for builder, helper in builders:
         assert list(inspect.signature(builder).parameters)[-1] == "error_rate"
         docstring = inspect.getdoc(builder)
         assert docstring is not None and docstring.startswith("Build ")
-        arguments = docstring.split("Args:\n", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
-        documented_names = [
-            line.strip().split(":", maxsplit=1)[0]
-            for line in arguments.splitlines()
-            if line.startswith("    ") and not line.startswith("        ")
-        ]
-        assert documented_names[-1] == "error_rate"
-        returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
-        assert "decoder specification" not in returns
+        assert f"see ``decoders.{helper.__name__}`` for its options" in docstring
 
 
 @pytest.mark.parametrize(

@@ -131,14 +131,14 @@ def validate_observable_decoder(decoder: object, source: str) -> ObservableDecod
 def validate_decoder_output(
     output: npt.NDArray[Any],
     num_values: int,
-    num_erasure_flags: int,
+    num_erasure_bits: int,
     field: type[galois.FieldArray],
     source: str,
 ) -> None:
     """Check that a decoder output holds num_values field elements followed by erasure flags."""
-    expected_shape = (num_values + num_erasure_flags,)
+    expected_shape = (num_values + num_erasure_bits,)
     if output.shape != expected_shape:
-        flags = f" and {num_erasure_flags} erasure flag(s)" if num_erasure_flags else ""
+        flags = f" and {num_erasure_bits} erasure flag(s)" if num_erasure_bits else ""
         raise ValueError(
             f"{source} of shape {output.shape}, but expected shape {expected_shape}:"
             f" {num_values} value(s){flags}"

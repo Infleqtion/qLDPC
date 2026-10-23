@@ -55,7 +55,7 @@ class CodeCapacityDecoder:
     A code-capacity experiment samples errors, and decodes the syndrome ``syndrome_matrix @ error``
     of each error to predict the values ``observable_matrix @ error`` of its observables.  Decoding
     fails if the prediction differs from these values, and is discarded if the decoder signals
-    erasure by setting any of the num_erasure_flags flags that it appends to each prediction.
+    erasure by setting any of the num_erasure_bits flags that it appends to each prediction.
     Matrices are arrays over the field of the code; None denotes an identity observable map.
 
     Build a CodeCapacityDecoder with get_code_capacity_decoder.
@@ -68,7 +68,7 @@ class CodeCapacityDecoder:
     # maps an error to the values of its observables
     observable_matrix: galois.FieldArray | None
     # number of erasure flags that the decoder appends to each prediction
-    num_erasure_flags: int = 0
+    num_erasure_bits: int = 0
 
     @property
     def field(self) -> type[galois.FieldArray]:
@@ -87,7 +87,7 @@ class CodeCapacityDecoder:
     @property
     def can_discard(self) -> bool:
         """Whether this decoder can signal erasure, and thereby discard a sample."""
-        return self.num_erasure_flags > 0
+        return self.num_erasure_bits > 0
 
     @staticmethod
     def from_error_decoder(
@@ -120,7 +120,7 @@ class CodeCapacityDecoder:
         validate_decoder_output(
             prediction,
             self.num_observables,
-            self.num_erasure_flags,
+            self.num_erasure_bits,
             self.field,
             "An observable decoder predicted observable values",
         )
@@ -315,15 +315,15 @@ def _get_observable_code_capacity_decoder(
     if isinstance(decoder, CompiledSinterDecoder):
         if field.order != 2:
             raise ValueError(f"{source} is binary, so it cannot decode a code over {field.name}")
-        observable_decoder, num_erasure_flags = decoder, decoder.num_erasure_bits
+        observable_decoder, num_erasure_bits = decoder, decoder.num_erasure_bits
     elif isinstance(decoder, ObservableDecoder):
-        num_erasure_flags = int(bool(getattr(decoder, "has_erasure_bit", False)))
+        num_erasure_bits = int(bool(getattr(decoder, "has_erasure_bit", False)))
         observable_decoder = decoder
     elif callable(getattr(decoder, "decode_shots_bit_packed", None)):
         if field.order != 2:
             raise ValueError(f"{source} is binary, so it cannot decode a code over {field.name}")
         observable_decoder = BitPackedObservableDecoder(decoder, num_observables)
-        num_erasure_flags = 1
+        num_erasure_bits = 1
     else:
         raise TypeError(
             f"{source} must provide a decode_observables or decode_shots_bit_packed method"
@@ -358,7 +358,7 @@ def _get_observable_code_capacity_decoder(
             f" {field.name}"
         )
     return CodeCapacityDecoder(
-        observable_decoder, syndrome_matrix, observable_matrix, num_erasure_flags
+        observable_decoder, syndrome_matrix, observable_matrix, num_erasure_bits
     )
 
 

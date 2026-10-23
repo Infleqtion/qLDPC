@@ -100,7 +100,7 @@ class TesseractDecoder(ErrorDecoder, BatchObservableDecoder):
             pcm_or_dem: A binary parity-check matrix or detector error model to decode.
             error_channel: One probability for every matrix-column error, or one probability per
                 column.  Defaults to {PLACEHOLDER_ERROR_RATE}.  A DEM supplies its own
-                probabilities, so neither probability argument can be specified with one.
+                probabilities, so ``error_channel`` cannot be specified with one.
             add_erasure_bit: Whether to append Tesseract's low-confidence flag to each result.
             det_beam: Beam-search cutoff.
             beam_climbing: Whether to retry with increasing beam sizes.
@@ -323,17 +323,7 @@ def _get_detector_order_name(method: TesseractDetectorOrderMethod) -> str:
 def _get_decoder_tesseract(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: Any
 ) -> TesseractDecoder:
-    """Build a Tesseract search-based decoder.
-
-    The options are those of :class:`~qldpc.decoders.external.tesseract.TesseractDecoder`.
-
-    Returns:
-        A :class:`~qldpc.decoders.external.tesseract.TesseractDecoder`, which infers errors and
-        predicts observable flips natively.
-
-    Tesseract requires the optional ``tesseract-decoder`` package, which can be installed with
-    ``pip install 'qldpc[tesseract]'``.
-    """
+    """Build a Tesseract decoder; see ``decoders.tesseract`` for its options."""
     return TesseractDecoder(pcm_or_dem, **decoder_args)
 
 

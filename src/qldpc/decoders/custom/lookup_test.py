@@ -7,6 +7,7 @@ from __future__ import annotations
 import collections
 import inspect
 import warnings
+from collections.abc import Callable
 
 import galois
 import numpy as np
@@ -48,11 +49,12 @@ def test_lookup(toy_problem: ToyProblem) -> None:
 
 
 def test_lookup_builder_docstring() -> None:
-    """The lookup builder describes the decoder that it builds, not a decoder specification."""
-    docstring = inspect.getdoc(_get_decoder_lookup)
-    assert docstring is not None and docstring.startswith("Build ")
-    returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
-    assert "decoder specification" not in returns
+    """The lookup builders point to the helper that documents their options."""
+    builders: list[Callable[..., object]] = [_get_decoder_lookup, _get_observable_decoder_lookup]
+    for builder in builders:
+        docstring = inspect.getdoc(builder)
+        assert docstring is not None and docstring.startswith("Build ")
+        assert "see ``decoders.lookup`` for its options" in docstring
 
 
 def test_tie_breaking() -> None:

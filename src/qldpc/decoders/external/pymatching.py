@@ -206,40 +206,7 @@ def _get_decoder_mwpm(
     use_virtual_boundary_node: bool = False,
     backend_options: Mapping[str, object] | None = None,
 ) -> BatchErrorDecoder:
-    """Build a minimum-weight perfect matching (MWPM) decoder.
-
-    See the `PyMatching documentation <https://pymatching.readthedocs.io/>`_ and
-    `arXiv:2105.13082 <https://arxiv.org/abs/2105.13082>`_.
-
-    Args:
-        pcm_or_dem: A parity-check matrix or detector error model (DEM) to decode.
-        enable_correlations: Whether to use PyMatching's correlated-matching mode.  Correlated
-            matching predicts observable flips, so it requires ``build_observable_decoder`` and
-            rejects every other non-default option.
-        decompose_errors: Whether to apply decompositions suggested by a detector error model.
-        ignore_non_graphlike_errors: Whether to ignore errors that trigger more than two detectors
-            after any requested decomposition.
-        weights: Weight of each error mechanism for a matrix input.
-        error_probabilities: Error probabilities for a matrix input.
-        repetitions: Number of repeated matching rounds.
-        timelike_weights: Weight assigned to timelike edges.
-        measurement_error_probabilities: Measurement-error probabilities for repeated rounds.
-        merge_strategy: Strategy used when merging duplicate matching edges.
-        use_virtual_boundary_node: Whether to use a virtual boundary node.
-        backend_options: Additional options for ``pymatching.Matching.load_from_check_matrix`` that
-            are not listed above.  PyMatching ignores names that it does not recognize, so names
-            absent from its signature are rejected when the decoder is built.  ``faults_matrix`` is
-            reserved for observable decoding and cannot be specified here.
-
-    Returns:
-        A ``pymatching.Matching`` subclass that is also a
-        :class:`~qldpc.decoders.protocols.BatchErrorDecoder`, which maps a syndrome to an inferred
-        physical error.
-
-    If ``decompose_errors=True`` splits a DEM error mechanism, an inferred error addresses the
-    resulting components rather than the original error mechanisms, so it cannot be converted back
-    into observable flips of that DEM.
-    """
+    """Build an MWPM error decoder; see ``decoders.mwpm`` for its options."""
     if enable_correlations:
         raise ValueError(
             "Correlated matching (enable_correlations=True) cannot infer errors; it can only"
@@ -270,7 +237,7 @@ def _get_observable_decoder_mwpm(
     backend_options: Mapping[str, object] | None = None,
     **decoder_args: object,
 ) -> MatchingObservableDecoder:
-    """Build an MWPM decoder that predicts DEM observable flips natively.
+    """Build an MWPM observable decoder; see ``decoders.mwpm`` for its options.
 
     In correlated-matching mode, PyMatching constructs the matching directly from the DEM, so the
     other matching-construction arguments are unused.
@@ -319,12 +286,13 @@ mwpm = decoder_spec(
 
 See the `PyMatching documentation of Matching.load_from_check_matrix
 <https://pymatching.readthedocs.io/en/stable/api.html#pymatching.matching.Matching.load_from_check_matrix>`_
-for a discussion of the matching options, and the `PyMatching README
-<https://github.com/oscarhiggott/PyMatching#correlated-matching>`_ for correlated matching.
+for a discussion of the matching options, the `PyMatching README
+<https://github.com/oscarhiggott/PyMatching#correlated-matching>`_ for correlated matching, and
+`arXiv:2105.13082 <https://arxiv.org/abs/2105.13082>`_.
 
 Args:
-    enable_correlations: Use correlated matching for native observable prediction.  Other
-        non-default options are not supported in this mode.
+    enable_correlations: Use correlated matching for native observable prediction.  This mode
+        cannot ``build`` an error decoder, and does not support other non-default options.
     decompose_errors: Apply the decompositions suggested by a detector error model.
     ignore_non_graphlike_errors: Ignore mechanisms that trigger more than two detectors.
     weights: Matching-edge weights for a matrix input.

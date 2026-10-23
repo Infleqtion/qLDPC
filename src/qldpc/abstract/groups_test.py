@@ -519,6 +519,22 @@ def test_pgl_requires_trivial_center() -> None:
         abstract.PGL(2, 3, linear_rep=True)
 
 
+def test_matrix_groups_keep_their_field() -> None:
+    """Matrix groups lift into the field class that they are given, not the default of its order."""
+    # a non-default primitive element (and irreducible polynomial x + 2) makes a field class that
+    # differs from galois.GF(5)
+    field = galois.GF(5, primitive_element=3)
+    groups = [
+        abstract.SL(2, field),
+        abstract.PSL(2, field),  # a permutation representation, since gcd(2, 5 - 1) > 1
+        abstract.GL(2, field),
+        abstract.PGL(2, field),  # a permutation representation, since 5 > 2
+    ]
+    for group in groups:
+        assert group.field is field
+        assert all(type(group.lift(member)) is field for member in group.generators)
+
+
 @pytest.mark.parametrize(
     "base_cls,quotient_cls,dimension,field",
     [

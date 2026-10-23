@@ -469,42 +469,7 @@ def _get_decoder_relay_bp(
     seed: int = 0,
     backend_options: Mapping[str, object] | None = None,
 ) -> RelayBPDecoder:
-    """Build a Relay-BP decoder from the relay-bp package.
-
-    See the `relay-bp package documentation <https://pypi.org/project/relay-bp>`_ and
-    `arXiv:2506.01779 <https://arxiv.org/abs/2506.01779>`_.
-
-    Args:
-        pcm_or_dem: A parity-check matrix or detector error model (DEM) to decode.
-        precision: Numeric precision of the ``relay_bp.RelayDecoder<precision>`` backend class.
-        error_priors: Prior probability of each error mechanism.  Defaults to the probabilities of a
-            detector error model, or to a placeholder probability for a matrix.
-        observable_error_matrix: Binary matrix whose rows specify which error mechanisms flip which
-            observables, for a matrix input.  A detector error model supplies its own.
-        include_decode_result: Argument passed to ``relay_bp.ObservableDecoderRunner``.
-        add_erasure_bit: Whether to append a flag set when the error that Relay-BP settles on does
-            not reproduce the syndrome.
-        alpha: Backend option; see ``help(relay_bp.RelayDecoderF32)``.
-        alpha_iteration_scaling_factor: Backend option.
-        gamma0: Backend option.
-        data_scale_value: Backend option.
-        max_data_value: Backend option.
-        pre_iter: Backend option.
-        num_sets: Backend option.
-        set_max_iter: Backend option.
-        gamma_dist_interval: Backend option, or None for the backend default.
-        explicit_gammas: Backend option.
-        stop_nconv: Backend option.
-        stopping_criterion: Backend option, or None for the backend default.
-        logging: Backend option.
-        seed: Backend option.
-        backend_options: Additional options for the selected Relay-BP backend that are not listed
-            above.  The backend rejects unsupported names when the decoder is built.
-
-    Returns:
-        A :class:`~qldpc.decoders.external.relay_bp.RelayBPDecoder`, which infers errors and, when
-        observable metadata is available, predicts observable flips.
-    """
+    """Build a Relay-BP decoder; see ``decoders.relay_bp`` for its options."""
     optional_args = {
         "gamma_dist_interval": gamma_dist_interval,
         "stopping_criterion": stopping_criterion,
@@ -551,36 +516,7 @@ def _get_decoder_min_sum_bp(
     frac_bits: int | None = None,
     backend_options: Mapping[str, object] | None = None,
 ) -> RelayBPDecoder:
-    """Build a min-sum belief-propagation decoder from the relay-bp package.
-
-    See the `relay-bp package documentation <https://pypi.org/project/relay-bp>`_ and
-    `arXiv:2506.01779 <https://arxiv.org/abs/2506.01779>`_.
-
-    Args:
-        pcm_or_dem: A parity-check matrix or detector error model (DEM) to decode.
-        precision: Numeric precision of the ``relay_bp.MinSumBPDecoder<precision>`` backend class.
-        error_priors: Prior probability of each error mechanism.  Defaults to the probabilities of a
-            detector error model, or to a placeholder probability for a matrix.
-        observable_error_matrix: Binary matrix whose rows specify which error mechanisms flip which
-            observables, for a matrix input.  A detector error model supplies its own.
-        include_decode_result: Argument passed to ``relay_bp.ObservableDecoderRunner``.
-        add_erasure_bit: Whether to append a flag set when the error that belief propagation settles
-            on does not reproduce the syndrome.
-        max_iter: Backend option; see ``help(relay_bp.MinSumBPDecoderF32)``.
-        alpha: Backend option.
-        alpha_iteration_scaling_factor: Backend option.
-        gamma0: Backend option.
-        data_scale_value: Backend option.
-        max_data_value: Backend option.
-        int_bits: Backend option for fixed-point precision.
-        frac_bits: Backend option for fixed-point precision.
-        backend_options: Additional options for the selected Relay-BP backend that are not listed
-            above.  The backend rejects unsupported names when the decoder is built.
-
-    Returns:
-        A :class:`~qldpc.decoders.external.relay_bp.RelayBPDecoder`, which infers errors and, when
-        observable metadata is available, predicts observable flips.
-    """
+    """Build a min-sum BP decoder; see ``decoders.min_sum_bp`` for its options."""
     return RelayBPDecoder(
         pcm_or_dem,
         name=f"MinSumBPDecoder{precision}",
@@ -611,7 +547,8 @@ the backend options.
 
 Args:
     precision: Numeric precision of the ``relay_bp.RelayDecoder<precision>`` backend.
-    error_priors: Prior error probabilities.  A DEM supplies its own unless overridden.
+    error_priors: Prior error probabilities.  A DEM supplies its own unless overridden, and a
+        matrix defaults to a placeholder probability.
     observable_error_matrix: Observable flips for each matrix-column error.  A DEM supplies
         its own matrix; do not pass this option with a DEM.
     include_decode_result: Whether the upstream observable runner retains decode results.
@@ -652,7 +589,8 @@ the backend options.
 
 Args:
     precision: Numeric precision of the ``relay_bp.MinSumBPDecoder<precision>`` backend.
-    error_priors: Prior error probabilities.  A DEM supplies its own unless overridden.
+    error_priors: Prior error probabilities.  A DEM supplies its own unless overridden, and a
+        matrix defaults to a placeholder probability.
     observable_error_matrix: Observable flips for each matrix-column error.  A DEM supplies
         its own matrix; do not pass this option with a DEM.
     include_decode_result: Whether the upstream observable runner retains decode results.

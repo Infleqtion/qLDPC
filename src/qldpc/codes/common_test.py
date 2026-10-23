@@ -759,13 +759,23 @@ def test_non_css_operator_layout_and_argument_validation() -> None:
         codes.SurfaceCode(3).get_logical_error_rate_func(10, pauli_bias=(1, 1))
 
 
-def test_subsystem_code_hint_is_trusted() -> None:
-    """An explicit is_subsystem_code hint is recorded, rather than recomputed."""
+def test_subsystem_code_hint() -> None:
+    """An explicit is_subsystem_code=True is trusted, while an explicit False is verified."""
     # the checks X and Z on one qubit anticommute, so they generate a gauge group
     matrix = [[1, 0], [0, 1]]
     assert codes.QuditCode(matrix).is_subsystem_code
-    assert not codes.QuditCode(matrix, is_subsystem_code=False).is_subsystem_code
-    assert not codes.CSSCode([[1]], [[1]], is_subsystem_code=False).is_subsystem_code
+    with pytest.raises(ValueError, match="do not commute"):
+        codes.QuditCode(matrix, is_subsystem_code=False)
+    with pytest.raises(ValueError, match="do not commute"):
+        codes.CSSCode([[1]], [[1]], is_subsystem_code=False)
+
+    # the check X on one qubit commutes with itself
+    assert codes.QuditCode([[1, 0]], is_subsystem_code=True).is_subsystem_code
+    assert codes.CSSCode([[1]], [[0]], is_subsystem_code=True).is_subsystem_code
+    assert not codes.CSSCode([[1]], [[0]], is_subsystem_code=False).is_subsystem_code
+
+    # a qutrit check commutes with itself, although its non-symplectic square is nonzero
+    assert not codes.QuditCode([[1, 1]], field=3, is_subsystem_code=False).is_subsystem_code
 
 
 def test_from_qldpc_challenge_id() -> None:
@@ -1754,6 +1764,21 @@ def test_css_distance_bound_backend_selection() -> None:
             == 4
         )
     gap_bound.assert_called_once_with(code, 3, cutoff=2, maxav="average")
+
+    # GAP bounds Z-type logical operators, so it bounds X-type ones of the code with X and Z swapped
+    surface_code = codes.SurfaceCode(2)
+    surface_code.forget_distance()
+    with (
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch(
+            "qldpc.external._codes.get_qdistrnd_distance_bound", return_value=2
+        ) as gap_bound,
+    ):
+        assert surface_code.get_distance_bound(pauli=Pauli.X, backend="gap") == 2
+    swapped_code = gap_bound.call_args.args[0]
+    assert np.array_equal(swapped_code.matrix_x, surface_code.matrix_z)
+    assert np.array_equal(swapped_code.matrix_z, surface_code.matrix_x)
+    assert not swapped_code.is_subsystem_code
 
     code.forget_distance()
     with pytest.raises(ValueError, match="not recognized by sqetch"):

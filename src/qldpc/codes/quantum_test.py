@@ -133,11 +133,15 @@ def test_hamming_and_tetrahedral_codes() -> None:
 
 
 def test_two_block_code_error() -> None:
-    """Raise error when trying to construct incompatible two-block codes."""
+    """Two-block codes need commuting matrices, unless validation is skipped."""
     matrix_a = [[1, 0], [0, 2]]
     matrix_b = [[0, 1], [1, 0]]
+    assert not codes.TBCode(matrix_a, matrix_a, field=3).is_subsystem_code
     with pytest.raises(ValueError, match="do not commute"):
         codes.TBCode(matrix_a, matrix_b, field=3)
+
+    # skipping validation builds the code, whose checks do not commute
+    assert codes.TBCode(matrix_a, matrix_b, field=3, skip_validation=True).is_subsystem_code
 
 
 def test_gala_code_construction() -> None:

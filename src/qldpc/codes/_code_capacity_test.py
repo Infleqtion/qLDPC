@@ -229,7 +229,7 @@ def test_code_capacity_decoder_from_observable_decoder() -> None:
     decoder = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix, observable_matrix, _FixedObservableDecoder([0, 0, 1], True)
     )
-    assert decoder.num_erasure_flags == 1
+    assert decoder.num_erasure_bits == 1
     assert decoder.get_failure_and_erasure(error) == (False, True)
 
     # a prediction of the wrong shape or field is rejected
@@ -509,7 +509,7 @@ def test_code_capacity_decoder_from_sinter_decoder() -> None:
     decoder = _code_capacity.get_code_capacity_decoder(
         code.matrix, observable_matrix, sinter_decoder
     )
-    assert decoder.num_erasure_flags == 1
+    assert decoder.num_erasure_bits == 1
     assert decoder.get_failure_and_erasure(code.field([1, 0, 0])) == (False, True)
     assert decoder.get_failure_and_erasure(code.field([0, 0, 0])) == (False, False)
 
@@ -631,7 +631,7 @@ def test_code_capacity_decoder_from_bit_packed_sinter_decoder() -> None:
         syndrome_matrix, observable_matrix, sinter_decoder
     )
     assert sinter_decoder.dems[0].num_detectors == sinter_decoder.dems[0].num_observables == 9
-    assert decoder.num_erasure_flags == 1
+    assert decoder.num_erasure_bits == 1
     assert decoder.get_failure_and_erasure(error) == (False, False)
     # ObservableDecoder does not declare the compiled_decoder of this bit-packed adapter
     compiled_decoder = decoder.decoder.compiled_decoder  # type:ignore[attr-defined]

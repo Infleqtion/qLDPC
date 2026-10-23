@@ -89,6 +89,7 @@ Add a public decoder to qLDPC
    An observable-only backend uses :func:`~qldpc.decoders.construction.specs.observable_decoder_spec`.
    These helpers take their option signature from the typed builder (or from ``signature_source=DecoderClass`` if that builder forwards ``**kwargs``).
    Provide a written ``doc=`` string with the helper's options and return contract.
+   Give the builder a one-line docstring that names this helper, rather than repeating its options.
    A :class:`~qldpc.decoders.construction.specs.DecoderSpec` holds the builder and options; call ``build`` or ``build_observable_decoder`` to construct a decoder.
 4. **Export, document, and test.**
    Export the backend class at its qualified ``custom`` or ``external`` package path.
