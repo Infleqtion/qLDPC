@@ -200,9 +200,11 @@ Deprecated APIs remain supported, but the library and its documentation are writ
 Keep deprecated code in one place, so that it is easy to find and to remove.
 
 - All deprecated code and APIs live under the private package [`qldpc/_deprecations/`](src/qldpc/_deprecations/).
-  [`core.py`](src/qldpc/_deprecations/core.py) holds the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes; its module docstring explains the mechanics.
+  [`core.py`](src/qldpc/_deprecations/core.py) holds the registry of renamed and moved names, `warn_deprecated`, `defunct`, and the deprecated methods, attributes, and DEFUNCT stubs that `install_deprecated_methods` attaches to their classes; its module docstring explains the mechanics.
   [`decoders.py`](src/qldpc/_deprecations/decoders.py) holds the deprecated decoder API and its translation into decoder specifications.
   It is the one module allowed to import other subpackages' underscore names: it calls private decoder builders, so that deprecated APIs pass options to them unchecked.
+  [`lookup.py`](src/qldpc/_deprecations/lookup.py) holds the lookup decoders that the deprecated `predict_observable_flips=True` option builds.
+  It imports `qldpc.decoders`, so other modules import it only within the functions that use it.
 - Only the following deprecation code lives outside `qldpc/_deprecations/`:
   1. Each module that still serves a deprecated name ends with this identical marked stub, which looks the name up in the registry:
 

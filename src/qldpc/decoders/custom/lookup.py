@@ -467,23 +467,23 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         """Initialize an error lookup table."""
-        if predict_observable_flips:
-            advice = (
-                "use decoders.lookup(max_weight=...).build_observable_decoder(dem) instead"
-                if isinstance(pcm_or_dem, stim.DetectorErrorModel)
-                else (
-                    "use qldpc.decoders.custom.lookup.ObservableLookupDecoder(matrix,"
-                    " max_weight=..., observable_flip_matrix=..., error_channel=...)"
-                    ".decode_observables(syndrome) instead"
-                )
+        if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
+            from qldpc._deprecations.lookup import become_legacy_observable_decoder
+
+            become_legacy_observable_decoder(
+                self,
+                pcm_or_dem,
+                max_weight,
+                error_channel=error_channel,
+                observable_flip_matrix=observable_flip_matrix,
+                post_select=post_select,
+                add_erasure_bit=add_erasure_bit,
+                confidence_ratio=confidence_ratio,
+                probability_cutoff=probability_cutoff,
+                symplectic=symplectic,
+                penalty_func=penalty_func,
             )
-            _deprecations.warn_deprecated(
-                f"predict_observable_flips=True is deprecated; {advice}",
-                stacklevel=get_external_caller_stacklevel(),
-            )
-        self._outputs_observables = predict_observable_flips
-        # DEPRECATED: these attributes report the deprecated predict_observable_flips option
-        self.predict_observable_flips = self.decode_returns_observables = predict_observable_flips
+            return
         super().__init__(
             pcm_or_dem,
             max_weight,
@@ -818,16 +818,19 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         add_erasure_bit: bool = False,
         symplectic: bool = False,
     ) -> None:
-        if predict_observable_flips:
-            _deprecations.warn_deprecated(
-                "predict_observable_flips=True is deprecated; use"
-                " qldpc.decoders.custom.lookup.WeightedObservableLookupDecoder(...)"
-                ".decode_observables(syndrome, penalty_func) instead",
-                stacklevel=get_external_caller_stacklevel(),
+        if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
+            from qldpc._deprecations.lookup import become_legacy_observable_decoder
+
+            become_legacy_observable_decoder(
+                self,
+                pcm_or_dem,
+                max_weight,
+                observable_flip_matrix=observable_flip_matrix,
+                post_select=post_select,
+                add_erasure_bit=add_erasure_bit,
+                symplectic=symplectic,
             )
-        self._outputs_observables = predict_observable_flips
-        # DEPRECATED: these attributes report the deprecated predict_observable_flips option
-        self.predict_observable_flips = self.decode_returns_observables = predict_observable_flips
+            return
         super().__init__(
             pcm_or_dem,
             max_weight,

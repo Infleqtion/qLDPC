@@ -621,3 +621,34 @@ def translate_error_rate(error_rate: _ErrorRateT, error_channel_given: bool) -> 
         stacklevel=get_external_caller_stacklevel(),
     )
     return error_rate
+
+
+####################################################################################################
+# deprecated observable flips from decode methods
+
+
+def decode_returns_observables(decoder: object) -> bool:
+    """Whether the decode methods of a decoder return observable flips, by a deprecated convention.
+
+    A lookup decoder built with the deprecated predict_observable_flips=True option returns
+    observable flips, as does another decoder object that declares decode_returns_observables=True,
+    which is deprecated.  A decoder that predicts observable flips should implement
+    decode_observables.
+    """
+    from qldpc.decoders.custom.lookup import LookupDecoder
+
+    from .lookup import LegacyObservableLookupDecoder, LegacyWeightedObservableLookupDecoder
+
+    if isinstance(decoder, (LegacyObservableLookupDecoder, LegacyWeightedObservableLookupDecoder)):
+        return True
+    # a LookupDecoder decodes to errors, and reading its deprecated attributes would warn
+    if isinstance(decoder, (type, LookupDecoder)) or not getattr(
+        decoder, "decode_returns_observables", False
+    ):
+        return False
+    _deprecations.warn_deprecated(
+        "Declaring decode_returns_observables=True is deprecated; a decoder that predicts"
+        " observable flips should implement decode_observables instead",
+        stacklevel=get_external_caller_stacklevel(),
+    )
+    return True

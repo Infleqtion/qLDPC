@@ -168,12 +168,12 @@ def test_error_decoder_output_is_validated() -> None:
             dem, decoder=lambda dem: pymatching.Matching.from_detector_error_model(dem)
         )
 
-    # the deprecated LookupDecoder(..., predict_observable_flips=True) is rejected explicitly
+    # the deprecated LookupDecoder(..., predict_observable_flips=True) is not an error decoder
     with (
         pytest.warns(DeprecationWarning),
         pytest.raises(TypeError, match="observable flips rather than errors"),
     ):
-        build_observable_decoder(
+        build_error_decoder(
             dem,
             decoder=lambda dem: decoders.custom.LookupDecoder(
                 dem, max_weight=1, predict_observable_flips=True

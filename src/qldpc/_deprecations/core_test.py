@@ -124,6 +124,28 @@ def test_deprecated_methods() -> None:
     assert str(inspect.signature(puncture)).startswith("(self, bits")
 
 
+def test_deprecated_attributes() -> None:
+    """Deprecated attributes warn when read, and cannot be set."""
+    matrix = np.eye(1, dtype=int)
+    lookup_decoder = decoders.custom.LookupDecoder(matrix, max_weight=1)
+    weighted_decoder = decoders.custom.WeightedLookupDecoder(matrix, max_weight=1)
+    cases: list[tuple[object, str, object, str]] = [
+        # a LookupDecoder infers errors, rather than observable flips
+        (lookup_decoder, "predict_observable_flips", False, "LookupDecoder"),
+        (lookup_decoder, "decode_returns_observables", False, "LookupDecoder"),
+        (weighted_decoder, "decode_returns_observables", False, "WeightedLookupDecoder"),
+    ]
+    for obj, attribute_name, expected, class_name in cases:
+        with pytest.warns(DeprecationWarning, match="DEPRECATED") as caught:
+            value = getattr(obj, attribute_name)
+        assert len(caught) == 1
+        assert caught[0].filename == __file__
+        assert str(caught[0].message).startswith(f"{class_name}.{attribute_name} is DEPRECATED")
+        assert value is expected
+        with pytest.raises(AttributeError):
+            setattr(obj, attribute_name, expected)
+
+
 def test_deprecated_small_group_methods() -> None:
     """Deprecated SmallGroup methods warn and delegate to their replacements."""
     group = abstract.CyclicGroup(2)

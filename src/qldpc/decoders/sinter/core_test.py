@@ -168,15 +168,14 @@ def test_rejected_decoder_arguments() -> None:
             decoder=decoders.custom.ObservableLookupDecoder(dem, 2)  # type: ignore[arg-type]
         )
 
+    # the deprecated lookup decoder that predicts observable flips is an observable decoder
     with pytest.warns(DeprecationWarning):
         decoder = decoders.SinterDecoder(
             with_lookup=True, max_weight=2, predict_observable_flips=True
         )
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(TypeError, match="observable flips rather than errors"),
-    ):
-        decoder.compile_decoder_for_dem(dem)
+    with pytest.warns(DeprecationWarning):
+        compiled = decoder.compile_decoder_for_dem(dem)
+    assert np.array_equal(compiled.decode_observables(np.array([1, 0])), [1, 1])
 
     with pytest.warns(DeprecationWarning):
         window_decoder = decoders.SequentialWindowDecoder(

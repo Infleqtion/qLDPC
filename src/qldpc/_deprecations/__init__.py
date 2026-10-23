@@ -6,6 +6,8 @@ All deprecation code lives in this private package.  The core module registers d
 defines deprecated methods, and provides the helpers that inline deprecated-argument blocks call.
 The decoders module holds deprecated decoder construction, which qldpc.decoders serves through the
 registry.  Decoder modules import it directly, and nothing here uses it, so it is not imported here.
+The lookup module holds the lookup decoders that the deprecated predict_observable_flips=True
+option builds.  It imports qldpc.decoders, so it is imported only within the functions that use it.
 """
 
 from .core import (

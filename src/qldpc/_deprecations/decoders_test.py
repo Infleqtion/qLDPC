@@ -7,6 +7,7 @@ from __future__ import annotations
 import functools
 import pickle
 import re
+import types
 import warnings
 from collections.abc import Callable
 from typing import Any, cast
@@ -512,3 +513,21 @@ def test_deprecate_error_rate_option() -> None:
             decoders.tesseract_preset(error_rate=None, error_channel=0.1).options["error_channel"]
             == 0.1
         )
+
+
+def test_decode_returns_observables() -> None:
+    """Decoders whose decode methods return observable flips are identified, warning for others."""
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
+    with pytest.warns(DeprecationWarning, match="predict_observable_flips=True"):
+        legacy_decoder = LookupDecoder(dem, max_weight=1, predict_observable_flips=True)
+    assert deprecated_decoders.decode_returns_observables(legacy_decoder)
+
+    # neither classes, nor error decoders, nor objects without the declaration return observables
+    for decoder in [type(legacy_decoder), LookupDecoder(dem, max_weight=1), object()]:
+        assert not deprecated_decoders.decode_returns_observables(decoder)
+
+    # other objects that declare decode_returns_observables=True use a deprecated convention
+    declaring_decoder = types.SimpleNamespace(decode_returns_observables=True)
+    with pytest.warns(DeprecationWarning, match="implement decode_observables") as caught:
+        assert deprecated_decoders.decode_returns_observables(declaring_decoder)
+    assert caught[0].filename == __file__

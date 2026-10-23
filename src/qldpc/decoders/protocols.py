@@ -10,6 +10,8 @@ from typing import Any, Protocol, runtime_checkable
 import numpy as np
 import numpy.typing as npt
 
+from qldpc._deprecations.decoders import decode_returns_observables
+
 ####################################################################################################
 # detailed decode results
 
@@ -184,8 +186,7 @@ def _as_error_decoder(decoder: object, source: str = "A decoder") -> ErrorDecode
     predicts_observables = TypeError(
         f"{source} predicts observable flips rather than errors.  " + _OBSERVABLE_DECODER_ADVICE
     )
-    # DEPRECATED: only LookupDecoder(predict_observable_flips=True) sets decode_returns_observables
-    if getattr(decoder, "decode_returns_observables", False):
+    if decode_returns_observables(decoder):  # DEPRECATED: see qldpc._deprecations
         raise predicts_observables
     if isinstance(decoder, ErrorDecoder):
         return decoder

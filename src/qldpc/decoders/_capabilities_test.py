@@ -8,6 +8,7 @@ import types
 
 import galois
 import numpy as np
+import pytest
 import stim
 
 from qldpc import decoders
@@ -64,3 +65,12 @@ def test_is_prebuilt_observable_decoder() -> None:
     assert not _capabilities.is_prebuilt_observable_decoder(decoders.relay_bp().build(matrix))
     assert _capabilities.compiles_for_dem(sinter_decoder)
     assert not _capabilities.compiles_for_dem(decoders.TrivialDecoder)
+
+
+def test_deprecated_observable_lookup_decoder() -> None:
+    """A lookup decoder built with predict_observable_flips=True is an observable decoder."""
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
+    with pytest.warns(DeprecationWarning, match="predict_observable_flips=True"):
+        decoder = decoders.custom.LookupDecoder(dem, max_weight=1, predict_observable_flips=True)
+    assert isinstance(decoder, decoders.ErrorDecoder)  # its decode methods match the protocol
+    assert _capabilities.is_prebuilt_observable_decoder(decoder)
