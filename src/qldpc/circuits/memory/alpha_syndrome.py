@@ -10,6 +10,7 @@ import random
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import cast
 
 import numpy as np
 import sinter
@@ -52,7 +53,7 @@ class AlphaSyndrome(SyndromeMeasurementStrategy):
     def __init__(
         self,
         noise_model: NoiseModel,
-        decoder: sinter.Decoder | str = _DEFAULT_SINTER_DECODER,
+        decoder: sinter.Decoder | str | decoders.DeferredDecoderInput = _DEFAULT_SINTER_DECODER,
         iters_per_step: int = 1000,
         shots_per_iter: int = 10000,
         exploration_weight: float = math.sqrt(2),
@@ -74,7 +75,8 @@ class AlphaSyndrome(SyndromeMeasurementStrategy):
             noise_model: The noise model to append to the syndrome measurement circuit.
             decoder: The decoder that Sinter will use to compute logical error rates.  If this
                 argument is a string, it must be a decoder name recognized by Sinter, such as
-                "pymatching" or "fusion_blossom".
+                "pymatching" or "fusion_blossom".  A qLDPC decoder input, such as the specification
+                ``decoders.bp_osd()``, is wrapped in ``decoders.SinterDecoder(decoder=decoder)``.
             iters_per_step: Cumulative visit budget for each MCTS root as scheduling advances
                 (default: 1000).  Existing subtree visits count toward this budget.
             shots_per_iter: Number of times to sample evaluation circuits (default: 10000).
@@ -103,9 +105,12 @@ class AlphaSyndrome(SyndromeMeasurementStrategy):
         if isinstance(decoder, str):
             self.sinter_decoding_kwargs = {"decoder": decoder}
         else:
+            if not hasattr(decoder, "compile_decoder_for_dem"):
+                decoder = decoders.SinterDecoder(decoder=decoder)
             self.sinter_decoding_kwargs = {
                 "decoder": "custom",
-                "custom_decoders": {"custom": decoder},
+                # objects with compile_decoder_for_dem are passed to Sinter as Sinter decoders
+                "custom_decoders": {"custom": cast(sinter.Decoder, decoder)},
             }
 
     @_restrict_to_qubits

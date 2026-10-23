@@ -94,7 +94,7 @@ def get_state_prep_diagnostic_circuit(
 
     # if necessary, identify the pure logical operators that stabilize the prepared state
     if observables is None:
-        observables = get_logical_state_stabilizers(state_prep_circuit, code, qubit_ids)
+        observables = get_logical_state_stabilizers(code, state_prep_circuit, qubit_ids)
 
     # if applicable, convert Pauli strings into symplectic vectors
     if len(observables) > 0 and any(isinstance(obs, stim.PauliString) for obs in observables):

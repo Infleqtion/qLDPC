@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 import stim
 
-from qldpc import circuits, codes, math
+from qldpc import circuits, codes, decoders, math
 from qldpc.circuits.memory import alpha_syndrome
 from qldpc.circuits.memory.alpha_syndrome import _TreeNode, _TreeState
 from qldpc.objects import Pauli
@@ -50,6 +50,30 @@ def test_alpha_syndrome(pytestconfig: pytest.Config) -> None:
                 range(20, 20 + codes.SteaneCode().num_checks - 1),
             ),
         )
+
+
+def test_alpha_syndrome_qldpc_decoder() -> None:
+    """AlphaSyndrome accepts qLDPC decoder inputs, such as decoder specifications."""
+    code = codes.CSSCode([[1, 1, 0]], [[1, 1, 0]])
+    spec = decoders.bp_osd()
+    dems: list[stim.DetectorErrorModel] = []
+
+    def build_decoder(dem: stim.DetectorErrorModel) -> decoders.ErrorDecoder:
+        dems.append(dem)
+        return spec.build(dem)
+
+    decoder_inputs: list[decoders.DeferredDecoderInput] = [spec, build_decoder]
+    for decoder in decoder_inputs:
+        strategy = circuits.AlphaSyndrome(
+            circuits.DepolarizingNoiseModel(0.01),
+            decoder,
+            iters_per_step=2,
+            shots_per_iter=1,
+            verbose=False,
+            seed=0,
+        )
+        assert alpha_syndrome_is_valid(code, strategy)
+    assert dems
 
 
 def test_alpha_reproducibility_and_tree_edges() -> None:
