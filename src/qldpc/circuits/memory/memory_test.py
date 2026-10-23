@@ -107,6 +107,22 @@ def test_memory_experiment() -> None:
         circuits.get_memory_experiment(codes.FiveQubitCode())
 
 
+def test_memory_experiment_circuit_distance() -> None:
+    """Default memory experiments preserve the distance of a distance-3 surface code.
+
+    Building a detector error model requires deterministic detectors and observables, and an
+    observable that is a stabilizer would have no undetectable error at all.
+    """
+    code = codes.SurfaceCode(3, rotated=True)
+    noise_model = circuits.DepolarizingNoiseModel(1e-3)
+    for basis in PAULIS_XZ + [None]:
+        circuit = circuits.get_memory_experiment(
+            code, basis=basis, num_rounds=2, noise_model=noise_model
+        )
+        assert circuit.num_observables == (2 if basis is None else 1)
+        assert len(circuit.shortest_graphlike_error()) == 3
+
+
 def test_qubit_ids(pytestconfig: pytest.Config) -> None:
     """We can construct memory experiments with different qubit IDs."""
     random.seed(pytestconfig.getoption("randomly_seed"))

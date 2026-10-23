@@ -41,19 +41,13 @@ def test_get_group_url() -> None:
 
     # cannot find group in the index
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace(f"{ORDER},{INDEX}", ""))
-    with (
-        unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
-        pytest.raises(ValueError, match=r"Group .* not found"),
-    ):
-        _groups._get_group_url(ORDER, INDEX)
+    with unittest.mock.patch("urllib.request.urlopen", return_value=mock_page):
+        assert _groups._get_group_url(ORDER, INDEX) is None
 
     # cannot find link to group webpage
     mock_page = get_mock_page(MOCK_INDEX_HTML.replace("href", ""))
-    with (
-        unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
-        pytest.raises(ValueError, match=r"Webpage .* not found"),
-    ):
-        _groups._get_group_url(ORDER, INDEX)
+    with unittest.mock.patch("urllib.request.urlopen", return_value=mock_page):
+        assert _groups._get_group_url(ORDER, INDEX) is None
 
     # everything works as expected
     mock_page = get_mock_page(MOCK_INDEX_HTML)
@@ -75,14 +69,20 @@ def test_maybe_get_generators_from_groupnames() -> None:
     with (
         unittest.mock.patch("qldpc.external._groups._get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
-        pytest.raises(ValueError, match=r"Generators .* not found"),
     ):
-        _groups._maybe_get_generators_from_groupnames(GROUP)
+        assert _groups._maybe_get_generators_from_groupnames(GROUP) is None
 
-    # group webpage is unreachable
+    # group webpage is unreachable, or times out while loading
     with (
         unittest.mock.patch("qldpc.external._groups._get_group_url", return_value=GROUP_URL),
         unittest.mock.patch("urllib.request.urlopen", side_effect=urllib.error.URLError("message")),
+    ):
+        assert _groups._maybe_get_generators_from_groupnames(GROUP) is None
+    mock_page = unittest.mock.MagicMock()
+    mock_page.read.side_effect = TimeoutError
+    with (
+        unittest.mock.patch("qldpc.external._groups._get_group_url", return_value=GROUP_URL),
+        unittest.mock.patch("urllib.request.urlopen", return_value=mock_page),
     ):
         assert _groups._maybe_get_generators_from_groupnames(GROUP) is None
 

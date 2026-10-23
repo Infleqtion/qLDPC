@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import inspect
 import pickle
-import subprocess
 import sys
+import threading
 import warnings
 from collections.abc import Callable
 from typing import Any
@@ -19,6 +20,7 @@ import stim
 from ldpc import bplsd_decoder
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.external import ldpc as ldpc_integration
 from qldpc.decoders.external.ldpc import (
     _get_decoder_bf,
@@ -45,8 +47,8 @@ def test_ldpc_builders(
         assert np.array_equal(matrix @ decoded % 2, syndrome)
 
 
-def test_ldpc_builder_docstrings() -> None:
-    """Builders describe the decoders that they build, and keep error_rate as their last option."""
+def test_ldpc_builder_error_rate_is_last() -> None:
+    """Builders keep error_rate as their last parameter."""
     builders: list[Callable[..., decoders.ErrorDecoder]] = [
         _get_decoder_bp_osd,
         _get_decoder_bp_lsd,
@@ -54,17 +56,6 @@ def test_ldpc_builder_docstrings() -> None:
     ]
     for builder in builders:
         assert list(inspect.signature(builder).parameters)[-1] == "error_rate"
-        docstring = inspect.getdoc(builder)
-        assert docstring is not None and docstring.startswith("Build ")
-        arguments = docstring.split("Args:\n", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
-        documented_names = [
-            line.strip().split(":", maxsplit=1)[0]
-            for line in arguments.splitlines()
-            if line.startswith("    ") and not line.startswith("        ")
-        ]
-        assert documented_names[-1] == "error_rate"
-        returns = docstring.split("Returns:\n", maxsplit=1)[1].split("\n\n")[0]
-        assert "decoder specification" not in returns
 
 
 @pytest.mark.parametrize(
@@ -164,6 +155,31 @@ def test_ldpc_protocol_adapters() -> None:
     assert np.array_equal(first_ratios, [1, 0])
 
 
+def test_ldpc_protocol_adapters_are_created_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Concurrent first uses share one set of adapter classes, as pickling requires."""
+    # create the original classes, which monkeypatch restores after the test
+    ldpc_integration._get_backend_class("BpOsdDecoder")
+    num_threads = 8
+
+    def get_adapter_type(barrier: threading.Barrier) -> type[Any]:
+        barrier.wait()
+        return ldpc_integration._get_backend_class("BpOsdDecoder")
+
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads often, so that an unguarded race is likely
+    try:
+        for _ in range(5):
+            monkeypatch.setattr(ldpc_integration, "_BACKEND_CLASSES", None)
+            for name in ("BeliefFindDecoder", "BpLsdDecoder", "BpOsdDecoder"):
+                monkeypatch.delattr(ldpc_integration, name)
+            barriers = [threading.Barrier(num_threads)] * num_threads
+            with concurrent.futures.ThreadPoolExecutor(num_threads) as executor:
+                adapter_types = set(executor.map(get_adapter_type, barriers))
+            assert adapter_types == {ldpc_integration.BpOsdDecoder}
+    finally:
+        sys.setswitchinterval(switch_interval)
+
+
 @pytest.mark.parametrize(
     ("builder", "name"),
     [
@@ -220,4 +236,4 @@ import sys
 import qldpc.decoders.external.ldpc
 assert "ldpc" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)

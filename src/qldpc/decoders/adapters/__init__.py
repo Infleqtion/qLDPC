@@ -6,12 +6,9 @@ from typing import TYPE_CHECKING
 
 from qldpc import _deprecations
 
-from ..protocols import BatchErrorDecoder, ErrorDecoder
 from .error_decoders import ErrorsToObservablesDecoder
 
 __all__ = [
-    "BatchErrorDecoder",
-    "ErrorDecoder",
     "ErrorsToObservablesDecoder",
 ]
 

@@ -69,7 +69,7 @@ def get_generators(
         "- GAP 4 is not installed",
     ]
     if group.startswith("SmallGroup"):
-        message.append("- GroupNames.org is unreachable")
+        message.append("- GroupNames.org is unreachable or does not provide the group")
     else:
         message.append("- group not indexed by GroupNames.org")
     raise ValueError("\n".join(message))
@@ -175,7 +175,7 @@ def _maybe_get_generators_from_gap(
 
 
 def _maybe_get_generators_from_groupnames(group: str) -> _GeneratorsList | None:
-    """Retrieve GAP group generators from GroupNames.org."""
+    """Retrieve GAP group generators from GroupNames.org, or None if it cannot provide them."""
     # extract order and index of a SmallGroup
     match = re.match(r"SmallGroup\(([0-9]+),([0-9]+)\)", group)
     if match:
@@ -191,10 +191,10 @@ def _maybe_get_generators_from_groupnames(group: str) -> _GeneratorsList | None:
         return None
     try:
         group_page = urllib.request.urlopen(group_url, timeout=10)
+        group_page_html = group_page.read().decode("utf-8")
     except (urllib.error.URLError, TimeoutError):
         # we cannot access the webpage
         return None
-    group_page_html = group_page.read().decode("utf-8")
 
     # extract section with the generators we are after
     loc = group_page_html.lower().find("permutation representation")
@@ -205,7 +205,8 @@ def _maybe_get_generators_from_groupnames(group: str) -> _GeneratorsList | None:
     section = section[section.find("<pre") :]
     match = re.search(r">((?:.|\n)*?)<\/pre>", section)
     if match is None:
-        raise ValueError(f"Generators for group {order},{index} not found")
+        # the webpage does not list generators
+        return None
     permutations = match.group(1).replace("<br>", "")
     return _parse_gap_permutations(permutations, cycle_sep=" ")
 
@@ -236,7 +237,7 @@ def _parse_gap_permutations(permutations: str, cycle_sep: str = ",") -> _Generat
 
 
 def _get_group_url(order: int, index: int) -> str | None:
-    """Retrieve the webpage of an indexed GAP group on GroupNames.org."""
+    """Retrieve the webpage of an indexed GAP group on GroupNames.org, or None if it is unknown."""
     # get the HTML for the page with all groups
     page_html = _maybe_get_webpage(order)
     if page_html is None:
@@ -246,7 +247,8 @@ def _get_group_url(order: int, index: int) -> str | None:
     # extract section with the specified group
     loc = page_html.find(f"<td>{order},{index}</td>")
     if loc == -1:
-        raise ValueError(f"Group {order},{index} not found on GroupNames.org")
+        # GroupNames.org does not list the group
+        return None
 
     end = loc + page_html[loc:].find("\n")
     start = loc - page_html[:loc][::-1].find("\n")
@@ -255,7 +257,8 @@ def _get_group_url(order: int, index: int) -> str | None:
     # extract first link from this section
     match = re.search(r'href="([^"]*)"', section)
     if match is None:
-        raise ValueError(f"Webpage for group {order},{index} not found")
+        # GroupNames.org has no webpage for the group
+        return None
 
     # return url for the desired group
     return _GROUPNAMES_URL + match.group(1)

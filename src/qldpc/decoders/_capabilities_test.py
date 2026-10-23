@@ -8,9 +8,10 @@ import types
 
 import galois
 import numpy as np
+import pytest
 import stim
 
-from qldpc import decoders
+from qldpc import codes, decoders
 from qldpc.decoders import _capabilities
 
 _OBSERVABLE_DECODER = types.SimpleNamespace(decode_observables=lambda syndrome: np.zeros(1))
@@ -37,7 +38,7 @@ def test_is_prebuilt_decoder() -> None:
     deferred_decoders: list[object] = [
         None,
         decoders.bp_osd(),
-        decoders.custom.LookupDecoder,
+        decoders.custom.ErrorLookupDecoder,
         lambda matrix: _ERROR_DECODER,
         decoders.from_matrix(lambda matrix: _ERROR_DECODER),
         decoders.from_dem(lambda dem: _OBSERVABLE_DECODER),
@@ -64,3 +65,31 @@ def test_is_prebuilt_observable_decoder() -> None:
     assert not _capabilities.is_prebuilt_observable_decoder(decoders.relay_bp().build(matrix))
     assert _capabilities.compiles_for_dem(sinter_decoder)
     assert not _capabilities.compiles_for_dem(decoders.TrivialDecoder)
+
+
+def test_deprecated_decode_returns_observables() -> None:
+    """A code-capacity estimate warns once about a decoder that declares decode_returns_observables.
+
+    The declaration makes a decoder that can also predict observables an observable decoder, and
+    makes a decoder that cannot an invalid error decoder.
+    """
+    code = codes.RepetitionCode(3)
+    observable_decoder = types.SimpleNamespace(
+        decode=lambda syndrome: np.zeros(code.num_bits, dtype=int),
+        decode_observables=lambda syndrome: np.zeros(code.num_bits, dtype=int),
+        decode_returns_observables=True,
+    )
+    with pytest.warns(DeprecationWarning, match="decode_returns_observables=True") as caught:
+        code.get_logical_error_rate_func(10, decoder=observable_decoder)
+    assert len(caught) == 1
+
+    error_decoder = types.SimpleNamespace(
+        decode=lambda syndrome: np.zeros(code.num_bits, dtype=int),
+        decode_returns_observables=True,
+    )
+    with (
+        pytest.warns(DeprecationWarning, match="decode_returns_observables=True") as caught,
+        pytest.raises(TypeError, match="observable flips rather than errors"),
+    ):
+        code.get_logical_error_rate_func(10, decoder=error_decoder)
+    assert len(caught) == 1

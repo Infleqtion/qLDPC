@@ -76,25 +76,45 @@ class BitPackedObservableDecoder(ObservableDecoder):
         packed_syndrome = np.packbits(
             np.asarray(syndrome, dtype=np.uint8).reshape(1, -1), bitorder="little", axis=1
         )
-        packed_prediction = np.asarray(
-            self.compiled_decoder.decode_shots_bit_packed(
-                bit_packed_detection_event_data=packed_syndrome
-            ),
-            dtype=np.uint8,
+        packed_prediction = self.compiled_decoder.decode_shots_bit_packed(
+            bit_packed_detection_event_data=packed_syndrome
         )
-        num_bytes = -(-self.num_observables // 8)
-        if packed_prediction.shape not in [(1, num_bytes), (1, num_bytes + 1)]:
-            raise ValueError(
-                f"A compiled Sinter decoder predicted bit-packed observable flips of shape"
-                f" {packed_prediction.shape} for one shot, but {self.num_observables} observables"
-                f" take shape (1, {num_bytes}), or (1, {num_bytes + 1}) with a byte added to signal"
-                " discards"
-            )
-        flips = np.unpackbits(
-            packed_prediction[0, :num_bytes], count=self.num_observables, bitorder="little"
+        packed_flips, discarded = split_discard_byte(packed_prediction, 1, self.num_observables)
+        flips = np.unpackbits(packed_flips[0], count=self.num_observables, bitorder="little")
+        return np.append(flips, np.uint8(discarded[0]))
+
+
+def split_discard_byte(
+    packed_predictions: npt.ArrayLike, num_shots: int, num_observables: int
+) -> tuple[npt.NDArray[np.uint8], npt.NDArray[np.bool_]]:
+    """Split bit-packed predictions into packed observable flips and a mask of discarded shots.
+
+    A compiled Sinter decoder predicts one bit-packed byte per eight observables for each shot, and
+    may add one byte that asks for the shot to be discarded if it is nonzero, as in
+    qldpc.decoders.sinter.CompiledSinterDecoder.pack_observable_flips.
+
+    Args:
+        packed_predictions: Bit-packed predictions of a compiled Sinter decoder, one row per shot.
+        num_shots: The number of shots that were decoded.
+        num_observables: The number of observables of the decoded detector error model.
+
+    Returns:
+        The bit-packed observable flips without the added byte, and a boolean array that marks the
+        shots to discard.
+
+    Raises:
+        ValueError: If the predictions do not have one row per shot of the expected width.
+    """
+    packed_predictions = np.asarray(packed_predictions, dtype=np.uint8)
+    num_bytes = -(-num_observables // 8)
+    if packed_predictions.shape not in [(num_shots, num_bytes), (num_shots, num_bytes + 1)]:
+        raise ValueError(
+            f"A decoder predicted bit-packed observable flips of shape {packed_predictions.shape},"
+            f" but {num_shots} shot(s) of {num_observables} observable(s) take shape"
+            f" {(num_shots, num_bytes)}, or {(num_shots, num_bytes + 1)} with a byte added to"
+            " signal discards"
         )
-        erased = bool(np.any(packed_prediction[0, num_bytes:]))
-        return np.append(flips, np.uint8(erased))
+    return packed_predictions[:, :num_bytes], np.any(packed_predictions[:, num_bytes:], axis=1)
 
 
 ####################################################################################################
@@ -111,14 +131,14 @@ def validate_observable_decoder(decoder: object, source: str) -> ObservableDecod
 def validate_decoder_output(
     output: npt.NDArray[Any],
     num_values: int,
-    num_erasure_flags: int,
+    num_erasure_bits: int,
     field: type[galois.FieldArray],
     source: str,
 ) -> None:
     """Check that a decoder output holds num_values field elements followed by erasure flags."""
-    expected_shape = (num_values + num_erasure_flags,)
+    expected_shape = (num_values + num_erasure_bits,)
     if output.shape != expected_shape:
-        flags = f" and {num_erasure_flags} erasure flag(s)" if num_erasure_flags else ""
+        flags = f" and {num_erasure_bits} erasure flag(s)" if num_erasure_bits else ""
         raise ValueError(
             f"{source} of shape {output.shape}, but expected shape {expected_shape}:"
             f" {num_values} value(s){flags}"

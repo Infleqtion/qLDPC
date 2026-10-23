@@ -429,6 +429,7 @@ def assert_lift_is_homomorphism(group: abstract.Group) -> None:
 def test_SL(dimension: int, field: int, linear_rep: bool) -> None:
     """Special linear group; its lift is a homomorphism (though not orthogonal)."""
     group = abstract.SL(dimension, field=field, linear_rep=linear_rep)
+    assert group.dimension == dimension and group.field.order == field
     order = np.prod([field**dimension - field**jj for jj in range(dimension)]) // (field - 1)
     mats = tuple(abstract.SL.iter_mats(dimension, field))
     assert group.order == len(mats) == order
@@ -454,6 +455,12 @@ def test_PSL(dimension: int, field: int, linear_rep: bool | None) -> None:
     assert group.order == len(mats) == order
     assert all(mat.shape == (dimension, dimension) for mat in mats)
     assert_lift_is_homomorphism(group)
+
+
+def test_matrix_group_names() -> None:
+    """Matrix groups are named after their classes."""
+    assert abstract.SL(2, 3).name == "SpecialLinearGroup"
+    assert abstract.SL(2, 2, linear_rep=False).name == "SpecialLinearGroup"
 
 
 def test_psl_requires_trivial_center() -> None:
@@ -507,6 +514,22 @@ def test_pgl_requires_trivial_center() -> None:
     """
     with pytest.raises(ValueError, match="does not descend to PGL"):
         abstract.PGL(2, 3, linear_rep=True)
+
+
+def test_matrix_groups_keep_their_field() -> None:
+    """Matrix groups lift into the field class that they are given, not the default of its order."""
+    # a non-default primitive element (and irreducible polynomial x + 2) makes a field class that
+    # differs from galois.GF(5)
+    field = galois.GF(5, primitive_element=3)
+    groups = [
+        abstract.SL(2, field),
+        abstract.PSL(2, field),  # a permutation representation, since gcd(2, 5 - 1) > 1
+        abstract.GL(2, field),
+        abstract.PGL(2, field),  # a permutation representation, since 5 > 2
+    ]
+    for group in groups:
+        assert group.field is field
+        assert all(type(group.lift(member)) is field for member in group.generators)
 
 
 @pytest.mark.parametrize(
@@ -575,7 +598,7 @@ def test_small_group() -> None:
     ):
         group = abstract.SmallGroup(order, index)
         assert group.generators == desired_group.generators
-        generated = list(abstract.SmallGroup.generator(order))
+        generated = list(abstract.SmallGroup.iter_groups(order))
         assert len(generated) == 1 and generated[0].equiv(desired_group)
 
         # retrieve group structure

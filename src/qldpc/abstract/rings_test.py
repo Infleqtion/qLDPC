@@ -147,6 +147,7 @@ def test_deprecated_argument_order() -> None:
 
     vector = ring.field.Random(ring.group.order)
     with pytest.warns(DeprecationWarning, match="DEPRECATED"):
+        # the deprecated argument order does not match the typed signature
         ring_member = abstract.RingMember.from_vector(ring, vector)  # type:ignore[arg-type]
     assert np.array_equal(ring_member.to_vector(), vector)
 

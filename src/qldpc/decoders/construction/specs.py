@@ -276,6 +276,8 @@ def _get_spec_options(
         bound = signature.bind(*args, **kwargs)
     except TypeError as error:
         raise TypeError(f"{helper_name}() {error}") from None
+    # DEPRECATED: see qldpc._deprecations
+    # only the deprecated error_rate option needs to know which options were passed explicitly
     explicitly_provided: set[str] = set()
     for name, value in bound.arguments.items():
         if signature.parameters[name].kind is inspect.Parameter.VAR_KEYWORD:

@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import functools
 from collections.abc import Sequence
 from typing import Any, Literal, cast
 
@@ -91,7 +92,7 @@ class TesseractDecoder(ErrorDecoder, BatchObservableDecoder):
         num_det_orders: int | None = None,
         det_order_method: TesseractDetectorOrderMethod | None = None,
         seed: int | None = None,
-        error_rate: float | None = None,
+        error_rate: float | None = None,  # DEPRECATED: see qldpc._deprecations
     ) -> None:
         """Initialize a Tesseract decoder.
 
@@ -99,7 +100,7 @@ class TesseractDecoder(ErrorDecoder, BatchObservableDecoder):
             pcm_or_dem: A binary parity-check matrix or detector error model to decode.
             error_channel: One probability for every matrix-column error, or one probability per
                 column.  Defaults to {PLACEHOLDER_ERROR_RATE}.  A DEM supplies its own
-                probabilities, so neither probability argument can be specified with one.
+                probabilities, so ``error_channel`` cannot be specified with one.
             add_erasure_bit: Whether to append Tesseract's low-confidence flag to each result.
             det_beam: Beam-search cutoff.
             beam_climbing: Whether to retry with increasing beam sizes.
@@ -123,6 +124,7 @@ class TesseractDecoder(ErrorDecoder, BatchObservableDecoder):
         """
         backend = _get_tesseract()
         is_dem = isinstance(pcm_or_dem, stim.DetectorErrorModel)
+        # DEPRECATED: see qldpc._deprecations
         dem, num_errors = _get_dem_and_num_errors(pcm_or_dem, error_channel, error_rate)
         backend_order_method = (
             None
@@ -258,16 +260,18 @@ def _get_tesseract() -> Any:
 def _get_dem_and_num_errors(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     error_channel: float | npt.NDArray[np.floating] | Sequence[float] | None,
-    error_rate: float | None,
+    error_rate: float | None,  # DEPRECATED: see qldpc._deprecations
 ) -> tuple[stim.DetectorErrorModel, int]:
     """Convert an input to Tesseract's DEM while preserving its error indexing."""
     if isinstance(pcm_or_dem, stim.DetectorErrorModel):
+        # DEPRECATED: see qldpc._deprecations
         _reject_dem_error_probabilities(error_channel, error_rate)
         return pcm_or_dem, pcm_or_dem.num_errors
 
     _validate_binary_matrix(pcm_or_dem)
     probabilities = cast(
         npt.NDArray[np.floating],
+        # DEPRECATED: see qldpc._deprecations
         _get_matrix_error_channel(pcm_or_dem, error_channel, error_rate),
     )
     dem_arrays = DetectorErrorModelArrays.from_arrays(pcm_or_dem, None, probabilities)
@@ -319,17 +323,7 @@ def _get_detector_order_name(method: TesseractDetectorOrderMethod) -> str:
 def _get_decoder_tesseract(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: Any
 ) -> TesseractDecoder:
-    """Build a Tesseract search-based decoder.
-
-    The options are those of :class:`~qldpc.decoders.external.tesseract.TesseractDecoder`.
-
-    Returns:
-        A :class:`~qldpc.decoders.external.tesseract.TesseractDecoder`, which infers errors and
-        predicts observable flips natively.
-
-    Tesseract requires the optional ``tesseract-decoder`` package, which can be installed with
-    ``pip install 'qldpc[tesseract]'``.
-    """
+    """Build a Tesseract decoder; see ``decoders.tesseract`` for its options."""
     return TesseractDecoder(pcm_or_dem, **decoder_args)
 
 
@@ -388,7 +382,7 @@ def tesseract_preset(
     sparsify: Literal["surface-code-like", "color-code-like"] | None = None,
     error_channel: float | npt.NDArray[np.floating] | Sequence[float] | None = None,
     add_erasure_bit: bool = False,
-    error_rate: float | None = None,
+    error_rate: float | None = None,  # DEPRECATED: see qldpc._deprecations
 ) -> DecoderSpec[TesseractDecoder]:
     """Configure one of Tesseract's named Sinter presets.
 
@@ -433,20 +427,8 @@ def tesseract_preset(
             " 'surface-code-like', or 'color-code-like'"
         ) from None
 
-    explicitly_provided: set[str] = set()
-    if error_channel is not None:
-        explicitly_provided.add("error_channel")
-    if error_rate is not None:
-        explicitly_provided.add("error_rate")
-    probability_options = deprecate_error_rate_option(
-        {"error_channel": error_channel, "error_rate": error_rate},
-        frozenset(explicitly_provided),
-    )
-    return tesseract(
-        error_channel=cast(
-            float | npt.NDArray[np.floating] | Sequence[float] | None,
-            probability_options["error_channel"],
-        ),
+    make_spec = functools.partial(
+        tesseract,
         add_erasure_bit=add_erasure_bit,
         det_beam=det_beam,
         beam_climbing=True,
@@ -457,3 +439,8 @@ def tesseract_preset(
         det_order_method="index",
         seed=2_384_753,
     )
+    # DEPRECATED: see qldpc._deprecations
+    if error_channel is None:  # the default, which error_rate may replace
+        return make_spec(error_rate=error_rate)
+    # DEPRECATED: see qldpc._deprecations
+    return make_spec(error_channel=error_channel, error_rate=error_rate)

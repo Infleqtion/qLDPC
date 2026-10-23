@@ -48,7 +48,7 @@ def test_pauli() -> None:
 
     assert objects.Pauli.X.index != objects.Pauli.Z.index
     for pauli in [objects.Pauli.I, objects.Pauli.Y]:
-        with pytest.raises(AttributeError, match="No index"):
+        with pytest.raises(TypeError, match="have an index"):
             assert pauli.index
 
 

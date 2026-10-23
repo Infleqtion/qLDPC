@@ -22,17 +22,6 @@ from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.external.pymatching import MatchingObservableDecoder
 
 
-def test_deprecated_decoder_args() -> None:
-    """Deprecated keyword arguments are translated, but cannot be combined with a decoder."""
-    matrix = np.eye(1, dtype=int)
-    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
-    with pytest.warns(DeprecationWarning, match="with_lookup"):
-        decoder = _resolution.resolve_decoder(matrix, None, {"with_lookup": True, "max_weight": 1})
-    assert decoder.decode_errors(np.array([1])).tolist() == [1]
-    with pytest.raises(ValueError, match="Cannot combine decoder"):
-        _resolution.resolve_observable_decoder(dem, decoders.lookup(1), {"with_lookup": True})
-
-
 def test_decoding() -> None:
     """Decode a simple problem."""
     matrix = np.eye(3, 2, dtype=int)
@@ -104,7 +93,7 @@ def test_explicit_factory_inputs() -> None:
 
     def build_errors(matrix: galois.FieldArray) -> decoders.ErrorDecoder:
         seen_matrices.append(matrix)
-        return decoders.custom.LookupDecoder(matrix, max_weight=1)
+        return decoders.custom.ErrorLookupDecoder(matrix, max_weight=1)
 
     def build_observables(dem: stim.DetectorErrorModel) -> decoders.ObservableDecoder:
         seen_dems.append(dem)
@@ -159,9 +148,9 @@ def test_invalid_explicit_decoder_inputs() -> None:
 def test_reject_prebuilt_decoder() -> None:
     """Prebuilt decoders are rejected where a decoder must be built for a new matrix."""
     matrix = np.eye(2, dtype=int)
-    prebuilt = decoders.custom.LookupDecoder(matrix, max_weight=1)
+    prebuilt = decoders.custom.ErrorLookupDecoder(matrix, max_weight=1)
     reason = "the matrix is new"
-    for decoder in [None, decoders.lookup(max_weight=1), decoders.custom.LookupDecoder]:
+    for decoder in [None, decoders.lookup(max_weight=1), decoders.custom.ErrorLookupDecoder]:
         _resolution.reject_prebuilt_decoder(decoder, reason)
     with pytest.raises(ValueError, match="cannot be passed as decoder= here because the matrix"):
         _resolution.reject_prebuilt_decoder(prebuilt, reason)
@@ -177,18 +166,6 @@ def test_error_decoder_output_is_validated() -> None:
     with pytest.raises(ValueError, match="inferred an error of length 1"):
         build_observable_decoder(
             dem, decoder=lambda dem: pymatching.Matching.from_detector_error_model(dem)
-        )
-
-    # the deprecated LookupDecoder(..., predict_observable_flips=True) is rejected explicitly
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(TypeError, match="observable flips rather than errors"),
-    ):
-        build_observable_decoder(
-            dem,
-            decoder=lambda dem: decoders.custom.LookupDecoder(
-                dem, max_weight=1, predict_observable_flips=True
-            ),
         )
 
 
@@ -326,7 +303,7 @@ def test_observable_decoder_inputs() -> None:
     """Observable decoders are built from specifications, constructors, and prebuilt decoders."""
     dem, syndromes = _get_circuit_data()
     observable_lookup = decoders.custom.ObservableLookupDecoder(dem, max_weight=2)
-    error_lookup = decoders.custom.LookupDecoder(dem, max_weight=2)
+    error_lookup = decoders.custom.ErrorLookupDecoder(dem, max_weight=2)
     expected_flips = observable_lookup.decode_observables_batch(syndromes)
 
     # prebuilt decoders, and constructors of either kind of decoder
@@ -334,7 +311,7 @@ def test_observable_decoder_inputs() -> None:
         observable_lookup,
         error_lookup,
         lambda dem: decoders.custom.ObservableLookupDecoder(dem, max_weight=2),
-        lambda dem: decoders.custom.LookupDecoder(dem, max_weight=2),
+        lambda dem: decoders.custom.ErrorLookupDecoder(dem, max_weight=2),
     ]
     for decoder_input in decoder_inputs:
         observable_decoder: Any = build_observable_decoder(dem, decoder=decoder_input)
@@ -350,7 +327,9 @@ def test_observable_decoder_inputs() -> None:
     def build_invalid_decoder(dem: stim.DetectorErrorModel) -> Any:
         return object()
 
-    spec = decoders.DecoderSpec("custom", decoders.custom.LookupDecoder, (), build_invalid_decoder)
+    spec = decoders.DecoderSpec(
+        "custom", decoders.custom.ErrorLookupDecoder, (), build_invalid_decoder
+    )
     with pytest.raises(TypeError, match="must provide a decode_observables method"):
         spec.build_observable_decoder(dem)
 
@@ -387,6 +366,7 @@ def test_observable_decoder_compilers() -> None:
         def compile_decoder_for_dem(self, dem: stim.DetectorErrorModel) -> object:
             return _BitPackedOnly(lookup_compiler.compile_decoder_for_dem(dem))
 
+    # this compiler builds an untyped object, and the protocols do not declare has_erasure_bit
     bit_packed_decoder = build_observable_decoder(
         dem,
         decoder=BitPackedCompiler(),  # type: ignore[arg-type]

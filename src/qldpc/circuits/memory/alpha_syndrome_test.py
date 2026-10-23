@@ -9,9 +9,10 @@ from unittest import mock
 
 import numpy as np
 import pytest
+import sinter
 import stim
 
-from qldpc import circuits, codes, math
+from qldpc import circuits, codes, decoders, math
 from qldpc.circuits.memory import alpha_syndrome
 from qldpc.circuits.memory.alpha_syndrome import _TreeNode, _TreeState
 from qldpc.objects import Pauli
@@ -50,6 +51,47 @@ def test_alpha_syndrome(pytestconfig: pytest.Config) -> None:
                 range(20, 20 + codes.SteaneCode().num_checks - 1),
             ),
         )
+
+
+def test_alpha_syndrome_qldpc_decoder() -> None:
+    """AlphaSyndrome accepts qLDPC decoder inputs, such as decoder builders."""
+    code = codes.CSSCode([[1, 1, 0]], [[1, 1, 0]])
+    dems: list[stim.DetectorErrorModel] = []
+
+    def build_decoder(dem: stim.DetectorErrorModel) -> decoders.ErrorDecoder:
+        dems.append(dem)
+        return decoders.bp_osd().build(dem)
+
+    strategy = circuits.AlphaSyndrome(
+        circuits.DepolarizingNoiseModel(0.01),
+        build_decoder,
+        iters_per_step=2,
+        shots_per_iter=1,
+        verbose=False,
+        seed=0,
+    )
+    assert alpha_syndrome_is_valid(code, strategy)
+    assert dems
+
+    # a decoder with the decode_via_files method that Sinter calls is passed to Sinter as is
+    class FileDecoder:
+        called = False
+
+        def decode_via_files(self, **kwargs: object) -> None:
+            self.called = True
+            sinter.BUILT_IN_DECODERS["pymatching"].decode_via_files(**kwargs)
+
+    file_decoder = FileDecoder()
+    strategy = circuits.AlphaSyndrome(
+        circuits.DepolarizingNoiseModel(0.01),
+        file_decoder,
+        iters_per_step=2,
+        shots_per_iter=1,
+        verbose=False,
+        seed=0,
+    )
+    assert alpha_syndrome_is_valid(code, strategy)
+    assert file_decoder.called
 
 
 def test_alpha_reproducibility_and_tree_edges() -> None:
@@ -127,10 +169,11 @@ def test_alpha_reward_matches_paper() -> None:
     See Section 4.4 of https://arxiv.org/abs/2601.12509.
     """
     code = codes.CSSCode([[1, 1, 0]], [[1, 1, 0]])
+    shots = 20
     strategy = circuits.AlphaSyndrome(
-        circuits.DepolarizingNoiseModel(0.2),
+        circuits.NoiseModel(),
         iters_per_step=3,
-        shots_per_iter=20,
+        shots_per_iter=shots,
         verbose=False,
         seed=11,
     )
@@ -145,9 +188,17 @@ def test_alpha_reward_matches_paper() -> None:
         rewards.append(reward)
         original_backpropagate(node, reward)
 
+    # without noise, no observable flips, so every flipped prediction is a logical error
+    num_observables = evaluation_data[2]
+    predictions = []
+    for num_errors in [0, 10, 0]:
+        prediction = np.zeros((shots, num_observables), dtype=bool)
+        prediction[:num_errors, 0] = True
+        predictions.append(prediction)
+
     with (
         mock.patch.object(_TreeNode, "backpropagate", autospec=True, side_effect=record_reward),
-        mock.patch.object(alpha_syndrome.np, "sum", side_effect=[0, 10, 0]),
+        mock.patch.object(alpha_syndrome.sinter, "predict_observables", side_effect=predictions),
     ):
         strategy._schedule_one_gate(
             code,

@@ -2,7 +2,7 @@
 
 """Fault distances, logical error rates, and state-preparation checks."""
 
-from .common import get_fault_distance, get_logical_error_and_discard_rate
+from .logical_errors import get_fault_distance, get_logical_error_and_discard_rate
 from .state_prep_certification import (
     StatePrepSpreadCertificate,
     StatePrepSpreadCounterexample,

@@ -70,6 +70,9 @@ class GroupRing:
 
         By default each component's primitive central idempotent is validated; pass
         ``skip_validation=True`` to skip the check (see WedderburnArtinComponentTransformer).
+
+        Unless the ring's primitive central idempotents are already known, this may run GAP, prompt
+        on standard input, and use the system clipboard; see get_primitive_central_idempotents.
         """
         from .wedderburn_artin import WedderburnArtinTransformer  # avoid circular import
 
@@ -507,7 +510,7 @@ class RingMember:
     @classmethod
     def from_vector(cls, vector: npt.NDArray[np.int_], ring: GroupRing | Group) -> RingMember:
         """Construct a group algebra element from vector of coefficients, ``(x_g : g in G)``."""
-        if isinstance(vector, (GroupRing, Group)):
+        if isinstance(vector, (GroupRing, Group)):  # DEPRECATED: see qldpc._deprecations
             _deprecations.warn_deprecated(
                 "Check argument order: it should be RingMember.from_vector(vector, ring)."
                 "  The order (ring, vector) is DEPRECATED and will throw an error in the future!",

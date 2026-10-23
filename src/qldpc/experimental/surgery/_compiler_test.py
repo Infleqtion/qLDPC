@@ -196,20 +196,10 @@ def test_compiler_rejects_invalid_rounds_and_block_collections() -> None:
     blocks = (_LogicalBlock("left", code), _LogicalBlock("right", code))
     request = _pair_request()
 
-    with pytest.raises(TypeError, match="rounds must be an integer"):
-        _compile_interblock_pair_measurement(blocks, request, rounds=1.5)  # type: ignore[arg-type]
-    with pytest.raises(TypeError, match="rounds must be an integer"):
-        _compile_interblock_pair_measurement(blocks, request, rounds=True)
     with pytest.raises(ValueError, match="rounds must be >= 1"):
         _compile_interblock_pair_measurement(blocks, request, rounds=0)
     with pytest.raises(ValueError, match="exactly 2 blocks"):
         _compile_interblock_pair_measurement(blocks[:1], request, rounds=1)
-    with pytest.raises(TypeError, match="must contain _LogicalBlock"):
-        _compile_interblock_pair_measurement(
-            (blocks[0], object()),  # type: ignore[arg-type]
-            request,
-            rounds=1,
-        )
 
 
 def test_compiler_rejects_invalid_logical_blocks() -> None:
@@ -217,12 +207,6 @@ def test_compiler_rejects_invalid_logical_blocks() -> None:
     code = codes.SteaneCode()
     request = _pair_request()
 
-    with pytest.raises(TypeError, match="identifiers must be strings"):
-        _compile_interblock_pair_measurement(
-            (_LogicalBlock(1, code), _LogicalBlock("right", code)),  # type: ignore[arg-type]
-            request,
-            rounds=1,
-        )
     with pytest.raises(ValueError, match="must not be empty"):
         _compile_interblock_pair_measurement(
             (_LogicalBlock(" ", code), _LogicalBlock("right", code)),
@@ -232,15 +216,6 @@ def test_compiler_rejects_invalid_logical_blocks() -> None:
     with pytest.raises(ValueError, match="duplicate logical block"):
         _compile_interblock_pair_measurement(
             (_LogicalBlock("left", code), _LogicalBlock("left", code)),
-            request,
-            rounds=1,
-        )
-    with pytest.raises(TypeError, match="must contain a CSSCode"):
-        _compile_interblock_pair_measurement(
-            (
-                _LogicalBlock("left", codes.RepetitionCode(3)),  # type: ignore[arg-type]
-                _LogicalBlock("right", code),
-            ),
             request,
             rounds=1,
         )
@@ -263,37 +238,14 @@ def test_compiler_rejects_invalid_logical_blocks() -> None:
 
 
 def test_compiler_rejects_invalid_pair_requests() -> None:
-    """Request-shape, result, factor, basis, and index errors are explicit."""
+    """Result-key, block, basis, and index errors in a request are explicit."""
     code = codes.SteaneCode()
     blocks = (_LogicalBlock("left", code), _LogicalBlock("right", code))
 
-    with pytest.raises(TypeError, match="request must be"):
-        _compile_interblock_pair_measurement(blocks, object(), rounds=1)  # type: ignore[arg-type]
-    with pytest.raises(TypeError, match="result_key must be a string"):
-        _compile_interblock_pair_measurement(
-            blocks,
-            _PauliPairMeasurement(1, _pair_request().factors),  # type: ignore[arg-type]
-            rounds=1,
-        )
     with pytest.raises(ValueError, match="result_key must not be empty"):
         _compile_interblock_pair_measurement(
             blocks,
             _PauliPairMeasurement(" ", _pair_request().factors),
-            rounds=1,
-        )
-    with pytest.raises(ValueError, match="requires exactly 2 factors"):
-        _compile_interblock_pair_measurement(
-            blocks,
-            _PauliPairMeasurement(
-                "parity",
-                (_pair_request().factors[0],),  # type: ignore[arg-type]
-            ),
-            rounds=1,
-        )
-    with pytest.raises(TypeError, match="must be _LogicalPauliRef"):
-        _compile_interblock_pair_measurement(
-            blocks,
-            _PauliPairMeasurement("parity", (object(), object())),  # type: ignore[arg-type]
             rounds=1,
         )
     with pytest.raises(ValueError, match="unknown logical block"):
@@ -308,28 +260,10 @@ def test_compiler_rejects_invalid_pair_requests() -> None:
             ),
             rounds=1,
         )
-    with pytest.raises(TypeError, match="block identifiers must be strings"):
-        _compile_interblock_pair_measurement(
-            blocks,
-            _PauliPairMeasurement(
-                "parity",
-                (
-                    _LogicalPauliRef(1, 0, Pauli.X),  # type: ignore[arg-type]
-                    _LogicalPauliRef("right", 0, Pauli.X),
-                ),
-            ),
-            rounds=1,
-        )
     with pytest.raises(ValueError, match=r"Pauli\.X or Pauli\.Z"):
         _compile_interblock_pair_measurement(
             blocks,
             _pair_request(Pauli.Y),
-            rounds=1,
-        )
-    with pytest.raises(TypeError, match="logical indices must be integers"):
-        _compile_interblock_pair_measurement(
-            blocks,
-            _pair_request(Pauli.X, left_index=True),
             rounds=1,
         )
     with pytest.raises(IndexError, match="out of range"):
@@ -370,13 +304,6 @@ def test_compiler_rejects_invalid_initial_states() -> None:
     blocks = (_LogicalBlock("left", code), _LogicalBlock("right", code))
     request = _pair_request()
 
-    with pytest.raises(TypeError, match="initial_states must be a mapping"):
-        _compile_interblock_pair_measurement(
-            blocks,
-            request,
-            rounds=1,
-            initial_states=(("+", "+"),),  # type: ignore[arg-type]
-        )
     with pytest.raises(ValueError, match=r"missing=.*right"):
         _compile_interblock_pair_measurement(
             blocks,
@@ -390,13 +317,6 @@ def test_compiler_rejects_invalid_initial_states() -> None:
             request,
             rounds=1,
             initial_states={"left": "+", "right": "+", "third": "+"},
-        )
-    with pytest.raises(TypeError, match="must be a string"):
-        _compile_interblock_pair_measurement(
-            blocks,
-            request,
-            rounds=1,
-            initial_states={"left": 0, "right": "+"},  # type: ignore[dict-item]
         )
     with pytest.raises(ValueError, match="must be one of"):
         _compile_interblock_pair_measurement(

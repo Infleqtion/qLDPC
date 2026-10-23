@@ -5,13 +5,14 @@
 from __future__ import annotations
 
 import builtins
+import concurrent.futures
 import pickle
-import subprocess
 import sys
+import threading
 import types
 import unittest.mock
 from collections.abc import Callable
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 import galois
 import numpy as np
@@ -20,6 +21,7 @@ import pytest
 import stim
 
 from qldpc import decoders
+from qldpc.conftest import run_python
 from qldpc.decoders.external import pymatching
 from qldpc.decoders.external.pymatching import (
     _get_decoder_mwpm,
@@ -191,7 +193,31 @@ import types
 import qldpc.decoders.external.pymatching
 assert "pymatching" not in sys.modules
 """
-    subprocess.run([sys.executable, "-c", code], check=True)
+    run_python(code)
+
+
+def test_pymatching_protocol_adapter_is_created_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Concurrent first uses share one adapter class, as pickling requires."""
+    # create the original classes, which monkeypatch restores after the test
+    pymatching._get_matching_type()
+    num_threads = 8
+
+    def get_adapter_type(barrier: threading.Barrier) -> type[Any]:
+        barrier.wait()
+        return pymatching._get_matching_type()
+
+    switch_interval = sys.getswitchinterval()
+    sys.setswitchinterval(1e-6)  # switch threads often, so that an unguarded race is likely
+    try:
+        for _ in range(5):
+            monkeypatch.setattr(pymatching, "_MATCHING_TYPE", None)
+            monkeypatch.delattr(pymatching, "Matching")
+            barriers = [threading.Barrier(num_threads)] * num_threads
+            with concurrent.futures.ThreadPoolExecutor(num_threads) as executor:
+                adapter_types = set(executor.map(get_adapter_type, barriers))
+            assert adapter_types == {pymatching.Matching}
+    finally:
+        sys.setswitchinterval(switch_interval)
 
 
 def test_pymatching_missing_dependency_message(monkeypatch: pytest.MonkeyPatch) -> None:
