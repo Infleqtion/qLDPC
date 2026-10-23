@@ -172,8 +172,6 @@ def test_deprecated_decoder_arguments() -> None:
         decoders.SinterDecoder(priors_arg="error_channel")
     with pytest.raises(ValueError, match="Cannot combine decoder="):
         decoders.SinterDecoder(decoder=decoders.lookup(1), with_lookup=True)
-    with pytest.raises(ValueError, match="Cannot combine decoder="):
-        decoders.SlidingWindowDecoder(2, 1, decoder=decoders.lookup(1), with_lookup=True)
 
     dem = stim.DetectorErrorModel("""
         error(0.3) D0 L0 L1

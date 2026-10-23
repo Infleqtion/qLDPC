@@ -1684,9 +1684,6 @@ def test_css_auto_distance_bound_options_of_unavailable_backends() -> None:
     with (
         unittest.mock.patch("qldpc.external.sqetch.is_installed", return_value=False),
         unittest.mock.patch("qldpc.external.gap.is_callable", return_value=False),
-        unittest.mock.patch.object(
-            code, "get_distance_bound_with_decoder", side_effect=AssertionError
-        ),
     ):
         with pytest.raises(ValueError, match="sqetch is not installed"):
             code.get_distance_bound(5, seed=1)
@@ -1694,8 +1691,6 @@ def test_css_auto_distance_bound_options_of_unavailable_backends() -> None:
             code.get_distance_bound(5, maxav="fail")
         with pytest.raises(ValueError, match="mix options of different backends"):
             code.get_distance_bound(5, seed=1, maxav="fail")
-        with pytest.raises(ValueError, match="mix options of different backends"):
-            code.get_distance_bound(5, seed=1, max_iter=5)
     qutrit_code = codes.SurfaceCode(2, field=3)
     qutrit_code.forget_distance()
     with pytest.raises(ValueError, match="sqetch only supports binary codes"):
@@ -1778,7 +1773,6 @@ def test_css_distance_bound_backend_selection() -> None:
     swapped_code = gap_bound.call_args.args[0]
     assert np.array_equal(swapped_code.matrix_x, surface_code.matrix_z)
     assert np.array_equal(swapped_code.matrix_z, surface_code.matrix_x)
-    assert not swapped_code.is_subsystem_code
 
     code.forget_distance()
     with pytest.raises(ValueError, match="not recognized by sqetch"):

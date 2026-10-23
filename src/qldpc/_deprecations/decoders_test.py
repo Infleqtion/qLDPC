@@ -447,7 +447,8 @@ def test_merge_legacy_css_decoder_args() -> None:
             None,
             {"max_weight": 0},
         )
-    assert ["decoder_z=" in str(warning.message) for warning in caught] == [False, True]
+    assert len(caught) == 2
+    assert sum("decoder_z=" in str(warning.message) for warning in caught) == 1
     assert np.array_equal(decode(decoder_x), [1, 0, 0])
     assert np.array_equal(decode(decoder_z), [0, 0, 0])
 

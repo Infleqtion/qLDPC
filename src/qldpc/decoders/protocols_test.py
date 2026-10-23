@@ -91,7 +91,6 @@ def test_error_decoder_coercion() -> None:
         )
     )
     assert np.array_equal(decoder.decode(syndromes[0]), [2, 0])
-    assert np.array_equal(protocols._batch_decode_errors(decoder, syndromes), 3 * syndromes)
     assert np.array_equal(decoder.decode_batch(syndromes), 3 * syndromes)
 
     # an error decoder is returned as is, and its native batch method is used

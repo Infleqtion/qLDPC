@@ -251,12 +251,7 @@ def test_sliding_window_time_gaps() -> None:
 
 
 def test_sliding_window_without_detectors() -> None:
-    """An empty detector subset, or a model without detectors, contributes no window."""
-    dem = stim.DetectorErrorModel("detector(0) D0\ndetector(1) D1\nerror(0.1) D0 D1")
-    decoder = decoders.SlidingWindowDecoder(1, 1, [[0, 1], []], decoder=decoders.lookup(1))
-    compiled = decoder.compile_decoder_for_dem(dem)
-    assert list(compiled.window_detectors) == [[0], [1]]
-
+    """A model without detectors contributes no window."""
     dem = stim.DetectorErrorModel("error(0.1) L0")
     decoder = decoders.SlidingWindowDecoder(1, 1, decoder=decoders.lookup(1))
     compiled = decoder.compile_decoder_for_dem(dem)

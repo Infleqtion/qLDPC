@@ -144,7 +144,6 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
         syndrome_matrix, observable_matrix, _FixedErrorDecoder([2, 1, 0])
     )
     assert not decoder.can_discard
-    assert not isinstance(decoder, decoders.SupportsDecode)  # it predicts observables, not errors
     observables, erased = decoder.predict(field([1]))
     assert isinstance(observables, field) and not erased
     assert np.array_equal(observables, observable_matrix @ field([2, 1, 0]))

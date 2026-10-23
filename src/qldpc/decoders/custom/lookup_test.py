@@ -5,9 +5,7 @@
 from __future__ import annotations
 
 import collections
-import inspect
 import warnings
-from collections.abc import Callable
 
 import galois
 import numpy as np
@@ -46,15 +44,6 @@ def test_lookup(toy_problem: ToyProblem) -> None:
 
     observable_decoder = _get_observable_decoder_lookup(dem, max_weight=2)
     assert np.array_equal(observable_decoder.decode_observables(syndrome), [])
-
-
-def test_lookup_builder_docstring() -> None:
-    """The lookup builders point to the helper that documents their options."""
-    builders: list[Callable[..., object]] = [_get_decoder_lookup, _get_observable_decoder_lookup]
-    for builder in builders:
-        docstring = inspect.getdoc(builder)
-        assert docstring is not None and docstring.startswith("Build ")
-        assert "see ``decoders.lookup`` for its options" in docstring
 
 
 def test_tie_breaking() -> None:

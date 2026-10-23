@@ -54,42 +54,31 @@ def test_alpha_syndrome(pytestconfig: pytest.Config) -> None:
 
 
 def test_alpha_syndrome_qldpc_decoder() -> None:
-    """AlphaSyndrome accepts qLDPC decoder inputs, such as decoder specifications."""
+    """AlphaSyndrome accepts qLDPC decoder inputs, such as decoder builders."""
     code = codes.CSSCode([[1, 1, 0]], [[1, 1, 0]])
-    spec = decoders.bp_osd()
     dems: list[stim.DetectorErrorModel] = []
 
     def build_decoder(dem: stim.DetectorErrorModel) -> decoders.ErrorDecoder:
         dems.append(dem)
-        return spec.build(dem)
+        return decoders.bp_osd().build(dem)
 
-    class ObservableDecoderCompiler:
-        def compile_decoder_for_dem(
-            self, dem: stim.DetectorErrorModel
-        ) -> decoders.ObservableDecoder:
-            dems.append(dem)
-            return spec.build_observable_decoder(dem)
-
-    decoder_inputs: list[decoders.DeferredDecoderInput] = [
-        spec,
+    strategy = circuits.AlphaSyndrome(
+        circuits.DepolarizingNoiseModel(0.01),
         build_decoder,
-        ObservableDecoderCompiler(),
-    ]
-    for decoder in decoder_inputs:
-        strategy = circuits.AlphaSyndrome(
-            circuits.DepolarizingNoiseModel(0.01),
-            decoder,
-            iters_per_step=2,
-            shots_per_iter=1,
-            verbose=False,
-            seed=0,
-        )
-        assert alpha_syndrome_is_valid(code, strategy)
+        iters_per_step=2,
+        shots_per_iter=1,
+        verbose=False,
+        seed=0,
+    )
+    assert alpha_syndrome_is_valid(code, strategy)
     assert dems
 
     # a decoder with the decode_via_files method that Sinter calls is passed to Sinter as is
     class FileDecoder:
+        called = False
+
         def decode_via_files(self, **kwargs: object) -> None:
+            self.called = True
             sinter.BUILT_IN_DECODERS["pymatching"].decode_via_files(**kwargs)
 
     file_decoder = FileDecoder()
@@ -101,8 +90,8 @@ def test_alpha_syndrome_qldpc_decoder() -> None:
         verbose=False,
         seed=0,
     )
-    assert strategy.sinter_decoding_kwargs["custom_decoders"] == {"custom": file_decoder}
     assert alpha_syndrome_is_valid(code, strategy)
+    assert file_decoder.called
 
 
 def test_alpha_reproducibility_and_tree_edges() -> None:

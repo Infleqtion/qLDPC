@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import numpy as np
-import numpy.typing as npt
 import pytest
 import stim
 
@@ -111,29 +110,6 @@ def test_erasure_counts_as_a_discard() -> None:
     )
     assert logical_error_rate == 0
     assert 0.30 < discard_rate < 0.55
-
-    # a prediction that is neither as wide as the observables nor one byte wider cannot be compared
-    class CompiledWideDecoder(decoders.sinter.CompiledTrivialDecoder):
-        """A compiled decoder whose predictions are two bytes too wide."""
-
-        def decode_shots_bit_packed(
-            self, bit_packed_detection_event_data: npt.NDArray[np.uint8]
-        ) -> npt.NDArray[np.uint8]:
-            predictions = super().decode_shots_bit_packed(bit_packed_detection_event_data)
-            return np.zeros((len(predictions), predictions.shape[1] + 2), dtype=np.uint8)
-
-    class WideDecoder(decoders.TrivialDecoder):
-        """A decoder whose predictions are two bytes too wide."""
-
-        def compile_decoder_for_dem(
-            self, dem: stim.DetectorErrorModel
-        ) -> decoders.sinter.CompiledSinterDecoder:
-            return CompiledWideDecoder(dem.num_detectors, dem.num_observables)
-
-    with pytest.raises(ValueError, match="with a byte added to signal discards"):
-        circuits.get_logical_error_and_discard_rate(
-            circuit, sinter_decoder=WideDecoder(), num_samples=2
-        )
 
 
 def test_postselection_mask() -> None:

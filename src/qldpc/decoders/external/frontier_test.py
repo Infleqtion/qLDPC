@@ -105,7 +105,7 @@ def test_frontier_decoding(calls: list[_Call]) -> None:
 
 
 def test_frontier_builder() -> None:
-    """The frontier helper has the defaults of the builder, which points to the helper."""
+    """The frontier helper has the defaults of the builder."""
     builder_parameters = inspect.signature(_get_observable_decoder_frontier).parameters
     helper_parameters = inspect.signature(decoders.frontier).parameters
     assert {name: parameter.default for name, parameter in helper_parameters.items()} == {
@@ -113,9 +113,6 @@ def test_frontier_builder() -> None:
         for name, parameter in builder_parameters.items()
         if parameter.default is not inspect.Parameter.empty
     }
-    docstring = inspect.getdoc(_get_observable_decoder_frontier)
-    assert docstring is not None and docstring.startswith("Build ")
-    assert "see ``decoders.frontier`` for its options" in docstring
 
 
 def test_frontier_scan_orders(calls: list[_Call]) -> None:

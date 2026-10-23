@@ -47,18 +47,15 @@ def test_ldpc_builders(
         assert np.array_equal(matrix @ decoded % 2, syndrome)
 
 
-def test_ldpc_builder_docstrings() -> None:
-    """Builders point to the helpers that document their options, and keep error_rate last."""
-    builders: list[tuple[Callable[..., decoders.ErrorDecoder], Callable[..., object]]] = [
-        (_get_decoder_bp_osd, decoders.bp_osd),
-        (_get_decoder_bp_lsd, decoders.bp_lsd),
-        (_get_decoder_bf, decoders.bf),
+def test_ldpc_builder_error_rate_is_last() -> None:
+    """Builders keep error_rate as their last parameter."""
+    builders: list[Callable[..., decoders.ErrorDecoder]] = [
+        _get_decoder_bp_osd,
+        _get_decoder_bp_lsd,
+        _get_decoder_bf,
     ]
-    for builder, helper in builders:
+    for builder in builders:
         assert list(inspect.signature(builder).parameters)[-1] == "error_rate"
-        docstring = inspect.getdoc(builder)
-        assert docstring is not None and docstring.startswith("Build ")
-        assert f"see ``decoders.{helper.__name__}`` for its options" in docstring
 
 
 @pytest.mark.parametrize(

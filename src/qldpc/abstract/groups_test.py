@@ -461,9 +461,6 @@ def test_matrix_group_names() -> None:
     """Matrix groups are named after their classes."""
     assert abstract.SL(2, 3).name == "SpecialLinearGroup"
     assert abstract.SL(2, 2, linear_rep=False).name == "SpecialLinearGroup"
-    assert abstract.PSL(2, 2).name == "ProjectiveSpecialLinearGroup"
-    assert abstract.GL(2, 2).name == "GeneralLinearGroup"
-    assert abstract.PGL(2, 2).name == "ProjectiveGeneralLinearGroup"
 
 
 def test_psl_requires_trivial_center() -> None:

@@ -189,7 +189,6 @@ def test_pymatching_import_is_lazy() -> None:
     """Importing the integration does not import pymatching until a matching is requested."""
     code = """
 import sys
-import threading
 import types
 import qldpc.decoders.external.pymatching
 assert "pymatching" not in sys.modules

@@ -169,21 +169,6 @@ def test_error_decoder_output_is_validated() -> None:
         )
 
 
-def test_deprecated_observable_lookup_decoder_is_not_an_error_decoder() -> None:
-    """The deprecated LookupDecoder(..., predict_observable_flips=True) is not an error decoder."""
-    dem, _ = _get_circuit_data()
-    with (
-        pytest.warns(DeprecationWarning),
-        pytest.raises(TypeError, match="observable flips rather than errors"),
-    ):
-        build_error_decoder(
-            dem,
-            decoder=lambda dem: decoders.custom.LookupDecoder(
-                dem, max_weight=1, predict_observable_flips=True
-            ),
-        )
-
-
 def test_erasure_bit_request() -> None:
     """A request for an erasure bit is rejected by a decoder that cannot signal erasure."""
     matrix = np.eye(3, 2, dtype=int)

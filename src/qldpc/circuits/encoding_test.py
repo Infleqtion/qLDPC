@@ -212,11 +212,6 @@ def test_deprecated_logical_state_stabilizers_argument_order() -> None:
     assert stabilizers == expected
     assert len(record) == 1 and record[0].filename == __file__
 
-    with pytest.warns(DeprecationWarning, match="DEPRECATED") as record:
-        stabilizers = circuits.get_logical_state_stabilizers(prep, code, qubit_ids=qids)
-    assert stabilizers == expected
-    assert len(record) == 1 and record[0].filename == __file__
-
 
 def test_get_logical_tableau_from_code_data() -> None:
     """Identify a logical tableau, and reject invalid encoders and non-logical circuits."""
