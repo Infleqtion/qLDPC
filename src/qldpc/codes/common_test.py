@@ -1474,16 +1474,8 @@ def test_deprecated_abstract_code_graph() -> None:
     """A direct subclass of AbstractCode may still define its Tanner graph with matrix_to_graph."""
 
     class MinimalCode(codes.AbstractCode):
-        def __eq__(self, other: object) -> bool:
-            return self is other
-
-        def __len__(self) -> int:
-            return self.matrix.shape[1]
-
-        def __str__(self) -> str:
-            return "MinimalCode"
-
-        canonicalized = dimension = None  # type: ignore[assignment]  # unused by this test
+        # abstract members that this test does not use
+        __eq__ = __len__ = __str__ = canonicalized = dimension = None  # type: ignore[assignment]
 
     class LegacyCode(MinimalCode):
         @staticmethod
