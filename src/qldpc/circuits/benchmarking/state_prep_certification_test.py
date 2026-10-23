@@ -431,15 +431,25 @@ def test_post_selection_can_accept_a_damaging_pair() -> None:
         DETECTOR rec[-1]
     """)
 
-    def certify(max_faults: int) -> circuits.StatePrepSpreadCertificate:
+    def certify(
+        max_faults: int, post_select: bool | Sequence[int] = (0,)
+    ) -> circuits.StatePrepSpreadCertificate:
         return circuits.certify_state_prep_spread(
-            circuit, output_qubits=[0, 1, 2, 3], post_select=[0], max_faults=max_faults
+            circuit, output_qubits=[0, 1, 2, 3], post_select=post_select, max_faults=max_faults
         )
 
     assert certify(1).certified
     result = certify(3)
     _assert_valid_counterexample(result, circuit, [0])
     assert result.counterexample is not None and result.counterexample.fault_count == 2
+
+    # True selects every detector of the circuit, here detector 0, and False selects none.
+    assert certify(3, True) == result
+    unselected = certify(1, False)
+    assert not unselected.certified
+    assert unselected == circuits.certify_state_prep_spread(
+        circuit, output_qubits=[0, 1, 2, 3], max_faults=1
+    )
 
 
 def test_circuit_without_faults_certifies() -> None:

@@ -70,7 +70,7 @@ def certify_state_prep_spread(
     *,
     output_qubits: Sequence[int],
     max_faults: int,
-    post_select: Collection[int] = (),
+    post_select: bool | Collection[int] = False,
     css_weight: bool | None = None,
 ) -> StatePrepSpreadCertificate:
     r"""Certify bounded error spread of a noisy Clifford state preparation.
@@ -115,9 +115,10 @@ def certify_state_prep_spread(
         output_qubits: Distinct indices of the output qubits, at least one, in the desired Pauli
             frame.
         max_faults: Largest number of faults to consider, a positive integer.
-        post_select: Indices of circuit detectors that must not fire, relative to their ideal
-            values, for a pattern to be accepted.  The diagnostics appended to read out the output
-            state never reject.
+        post_select: The circuit detectors to post-select on: True for all of them, False (the
+            default) for none, or a collection of detector indices.  A pattern is accepted only if
+            none of these detectors fire, relative to their ideal values.  The diagnostics appended
+            to read out the output state never reject.
         css_weight: True for CSS weight, False for physical weight, or None to choose CSS weight
             when the prepared state is a CSS state.
 
@@ -141,7 +142,10 @@ def certify_state_prep_spread(
     ):
         raise ValueError("max_faults must be a positive integer")
     qubits = tuple(output_qubits)
-    selected = tuple(post_select)
+    if isinstance(post_select, bool):
+        selected = tuple(range(circuit.num_detectors)) if post_select else ()
+    else:
+        selected = tuple(post_select)
     _validate_indices(qubits, circuit.num_qubits, "output_qubits", nonempty=True)
     _validate_indices(selected, circuit.num_detectors, "post_select")
 
