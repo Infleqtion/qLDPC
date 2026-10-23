@@ -15,7 +15,6 @@ import galois
 import numpy as np
 import numpy.typing as npt
 
-import qldpc
 import qldpc.cache
 import qldpc.external.gap
 from qldpc import _deprecations
@@ -160,62 +159,79 @@ def _get_json(url: str) -> Any:
 
 
 def get_qdistrnd_distance_bound(
-    code: qldpc.codes.QuditCode,
+    matrix: galois.FieldArray,
     num_trials: int = 1,
     *,
+    matrix_z: galois.FieldArray | None = None,
+    is_subsystem_code: bool = False,
     cutoff: int | None = None,
     maxav: str = "fail",
 ) -> int:
     """Estimate the distance of a quantum code using GAP's QDistRnd package.
 
     The estimate is a randomized upper bound (QDistRnd samples random codewords).  Requires the GAP
-    GUAVA and QDistRnd packages.
-
-    If given a CSSCode, estimate the Z-distance (minimum weight of a Z-type logical operator).  See
-    https://qec-pages.github.io/QDistRnd/doc/chap4.html.
+    GUAVA and QDistRnd packages.  See https://qec-pages.github.io/QDistRnd/doc/chap4.html.
 
     Note that QDistRnd does not support subsystem codes.  In the case of a CSS code, however, we can
     still compute the Z-distance by promoting all Z-type gauge group generators to stabilizers.
     ``maxav`` is passed through to QDistRnd as a raw GAP value (default "fail"); see the QDistRnd
     documentation linked above.
+
+    Args:
+        matrix: The symplectic parity check matrix of a stabilizer code, with rows of the form
+            ``[X|Z]``, or the X-type stabilizers of a CSS code if matrix_z is given.  The field of
+            this finite-field array is the field of the code.
+        num_trials: The number of independent upper bounds to minimize over.
+        matrix_z: The Z-type parity checks of a CSS code, which may generate a gauge group.  If
+            given, estimate the Z-distance of the CSS code (the minimum weight of a Z-type logical
+            operator).
+        is_subsystem_code: Whether the code defined by a symplectic matrix is a subsystem code,
+            which QDistRnd does not support.  Ignored if matrix_z is given.
+        cutoff: Exit early once the upper bound falls to or below this cutoff.
+        maxav: The maxav option of QDistRnd.
+
+    Returns:
+        An upper bound on the distance of the code.
+
+    Raises:
+        ValueError: If given a non-CSS subsystem code, or if QDistRnd output is missing or invalid.
     """
     qldpc.external.gap.require_package("GUAVA")
     qldpc.external.gap.require_package("QDistRnd", "https://github.com/QEC-pages/QDistRnd")
 
-    field = f"GF({code.field.order})"
+    field_order = type(matrix).order
+    field = f"GF({field_order})"
     one = f"One({field})"
     cutoff = cutoff or 0
     kwargs = ",".join([f"field:={field}", f"maxav:={maxav}"])
 
-    if isinstance(code, qldpc.codes.CSSCode):
-        code_x = qldpc.codes.ClassicalCode(code.get_stabilizer_ops(qldpc.objects.Pauli.X))
-        code_z = code.code_z
+    if matrix_z is not None:
         args = ",".join([f"{one}*matrix_x", f"{one}*matrix_z", f"{num_trials}", f"{cutoff}"])
         commands = [
             'LoadPackage("QDistRnd", false);;',
-            *_get_gap_sparse_matrix_commands("matrix_x", code.field.order, code_x.matrix),
-            *_get_gap_sparse_matrix_commands("matrix_z", code.field.order, code_z.matrix),
+            *_get_gap_sparse_matrix_commands("matrix_x", field_order, matrix),
+            *_get_gap_sparse_matrix_commands("matrix_z", field_order, matrix_z),
             f"Print(DistRandCSS({args}:{kwargs}));;",
         ]
 
-    elif code.is_subsystem_code:
+    elif is_subsystem_code:
         raise ValueError("QDistRnd cannot estimate the distance of non-CSS subsystem codes.")
 
     else:
         # "riffle" the parity check matrix to put X and Z support bits each qudit next to each other
-        matrix = code.matrix.reshape(-1, 2, len(code)).transpose(0, 2, 1).reshape(code.matrix.shape)
-        riffled_code = qldpc.codes.ClassicalCode(matrix)
+        num_qudits = matrix.shape[1] // 2
+        riffled_matrix = matrix.reshape(-1, 2, num_qudits).transpose(0, 2, 1).reshape(matrix.shape)
         args = ",".join([f"{one}*matrix", f"{num_trials}", f"{cutoff}"])
         commands = [
             'LoadPackage("QDistRnd", false);',
-            *_get_gap_sparse_matrix_commands("matrix", code.field.order, riffled_code.matrix),
+            *_get_gap_sparse_matrix_commands("matrix", field_order, riffled_matrix),
             f"Print(DistRandStab({args}:{kwargs}));",
         ]
 
     # Issue: Piped input somehow causes extra terminal output.  Fix: Ignore all but last line.
     result_lines = qldpc.external.gap.get_output(*commands, use_pipe=True).strip().splitlines()
     if not result_lines:
-        raise ValueError(f"QDistRnd returned no output for code:\n{code}")
+        raise ValueError("QDistRnd returned no output")
     output = result_lines[-1]
 
     # strip whitespace and comments, and interpret the remaining text as the bound

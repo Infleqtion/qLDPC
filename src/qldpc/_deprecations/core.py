@@ -37,13 +37,17 @@ from typing import TYPE_CHECKING, TypeVar
 from qldpc._utils import get_external_caller_stacklevel
 
 if TYPE_CHECKING:
-    from collections.abc import Collection, Iterator
+    from collections.abc import Collection, Iterator, Sequence
     from types import FrameType
 
+    import galois
+    import networkx as nx
     import numpy as np
     import numpy.typing as npt
 
     from qldpc.abstract.groups import NestedSequence
+    from qldpc.codes import QuditCode
+    from qldpc.objects import TannerGraph
 
 # the type of physical error rates that qldpc.codes.monte_carlo.ErrorRateFunc formerly accepted
 OneOrManyFloats = TypeVar("OneOrManyFloats", float, Iterable[float])
@@ -162,7 +166,7 @@ ALIASES: dict[str, dict[str, str]] = {
         ),
         "ErrorDecoder": "qldpc.decoders:ErrorDecoder",
         "ErrorsToFieldObservablesDecoder": (
-            "qldpc.decoders.adapters._observable_decoders:ErrorsToFieldObservablesDecoder"
+            "qldpc.codes._code_capacity:ErrorsToFieldObservablesDecoder"
         ),
         "ExpandedErrorDecoder": ("qldpc.decoders.adapters.error_decoders:_ExpandedErrorDecoder"),
         "match_error_decoder_to_dem": (
@@ -193,7 +197,7 @@ ALIASES: dict[str, dict[str, str]] = {
     # renamed functions of the deprecated qldpc.external.codes, which now refers to this module
     "qldpc.external._codes": {
         "get_classical_code": "qldpc.external._codes:get_guava_code",
-        "get_distance_bound": "qldpc.external._codes:get_qdistrnd_distance_bound",
+        "get_distance_bound": "qldpc._deprecations.core:get_distance_bound",
         "get_quantum_code": "qldpc.external._codes:get_qecdb_code",
     },
 }
@@ -291,14 +295,54 @@ def defunct(message: str) -> ValueError:
 
 
 ####################################################################################################
+# deprecated functions
+
+
+def get_distance_bound(
+    code: QuditCode,
+    num_trials: int = 1,
+    *,
+    cutoff: int | None = None,
+    maxav: str = "fail",
+) -> int:
+    """Deprecated: estimate the distance of a quantum code using GAP's QDistRnd package.
+
+    If given a CSSCode, estimate its Z-distance.  This function was formerly
+    qldpc.external.codes.get_distance_bound.
+    """
+    from qldpc.codes import CSSCode
+    from qldpc.external._codes import get_qdistrnd_distance_bound
+    from qldpc.objects import Pauli
+
+    if isinstance(code, CSSCode):
+        return get_qdistrnd_distance_bound(
+            code.get_stabilizer_ops(Pauli.X),
+            num_trials,
+            matrix_z=code.matrix_z,
+            cutoff=cutoff,
+            maxav=maxav,
+        )
+    return get_qdistrnd_distance_bound(
+        code.matrix,
+        num_trials,
+        is_subsystem_code=code.is_subsystem_code,
+        cutoff=cutoff,
+        maxav=maxav,
+    )
+
+
+####################################################################################################
 # deprecated methods
 
 
 def install_deprecated_methods() -> None:
     """Attach deprecated methods to their classes."""
     from qldpc.abstract import SmallGroup, TrivialGroup
-    from qldpc.codes import BBCode, ClassicalCode, CSSCode, QuditCode
-    from qldpc.decoders.custom import DirectDecoder
+    from qldpc.codes import AbstractCode, BBCode, ClassicalCode, CSSCode, QuditCode
+    from qldpc.decoders.custom import DirectDecoder, GUFDecoder
+
+    _attach_tanner_graph_methods(ClassicalCode, symplectic=False)
+    _attach_tanner_graph_methods(QuditCode, symplectic=True)
 
     @_deprecated_method(ClassicalCode)
     def puncture(self: ClassicalCode, bits: Collection[int]) -> ClassicalCode:
@@ -391,18 +435,64 @@ def install_deprecated_methods() -> None:
             " qldpc.abstract.RingArray.build(data) instead"
         )
 
+    @_deprecated_method(GUFDecoder, attribute=True)
+    def code(self: GUFDecoder) -> AbstractCode:
+        """Deprecated code whose parity check matrix this decoder decodes."""
+        warn_deprecated(
+            "GUFDecoder.code is DEPRECATED and will be removed from the public API",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return QuditCode(self._matrix) if self.symplectic else ClassicalCode(self._matrix)
 
-def _deprecated_method(cls: type, *, static: bool = False) -> Callable[[_FunctionT], _FunctionT]:
+
+def _attach_tanner_graph_methods(cls: type, *, symplectic: bool) -> None:
+    """Attach deprecated static methods that convert between matrices and Tanner graphs."""
+    import galois
+
+    from qldpc.objects import TannerGraph
+
+    name = cls.__name__
+
+    @_deprecated_method(cls, static=True)
+    def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> TannerGraph:
+        """Deprecated alias for qldpc.objects.TannerGraph.from_matrix."""
+        warn_deprecated(
+            f"{name}.matrix_to_graph is DEPRECATED; use qldpc.objects.TannerGraph.from_matrix"
+            " instead",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        return TannerGraph.from_matrix(matrix, symplectic=symplectic)
+
+    @_deprecated_method(cls, static=True)
+    def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
+        """Deprecated alias for qldpc.objects.TannerGraph.to_matrix."""
+        warn_deprecated(
+            f"{name}.graph_to_matrix is DEPRECATED; use qldpc.objects.TannerGraph.to_matrix"
+            " instead",
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        field = getattr(graph, "field", galois.GF2)
+        return TannerGraph(graph, field=field, symplectic=symplectic).to_matrix()
+
+
+def _deprecated_method(
+    cls: type, *, static: bool = False, attribute: bool = False
+) -> Callable[[_FunctionT], _FunctionT]:
     """Attach a function to a class as a method, with the module and qualified name of a member.
 
-    A static function is attached as a static method.
+    A static function is attached as a static method, and an attribute function as a read-only
+    property.
     """
 
     def attach(function: _FunctionT) -> _FunctionT:
         function.__module__ = cls.__module__
         function.__qualname__ = f"{cls.__qualname__}.{function.__name__}"
         function.__annotations__.pop("self", None)  # methods in class bodies leave self implicit
-        member = staticmethod(function) if static else function
+        member: object = function
+        if static:
+            member = staticmethod(function)
+        elif attribute:
+            member = property(function)
         setattr(cls, function.__name__, member)
         return function
 

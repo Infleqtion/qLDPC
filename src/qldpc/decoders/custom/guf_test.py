@@ -79,7 +79,8 @@ def test_guf_builder() -> None:
     error = np.array([1, 0, 0])
     syndrome = matrix @ error % 2
 
-    for pcm_or_dem in [matrix, dem]:
+    # a boolean matrix is interpreted over GF(2)
+    for pcm_or_dem in [matrix, matrix.astype(bool), dem]:
         decoder = _get_decoder_guf(pcm_or_dem, add_erasure_bit=True)
         decoded = decoder.decode(syndrome)
         assert decoded.shape == (error.size + 1,)

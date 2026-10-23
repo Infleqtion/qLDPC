@@ -544,7 +544,7 @@ def test_hypergraph_product(
     matrix_x, matrix_z = chain.op(1), chain.op(2).T
 
     assert nx.utils.graphs_equal(code.graph, graph)
-    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+    assert np.array_equal(code.matrix, graph.to_matrix())
     assert np.array_equal(code.matrix_x, matrix_x)
     assert np.array_equal(code.matrix_z, matrix_z)
     assert_valid_subgraphs(code)
@@ -562,9 +562,8 @@ def test_hypergraph_product(
     # a random seed code addresses every bit.  Check a seed code that leaves one unaddressed, whose
     # product therefore has a data qudit that no check addresses.
     seed = codes.ClassicalCode([[1, 1, 0], [0, 0, 0]], field=field)
-    assert nx.utils.graphs_equal(
-        codes.HGPCode(seed, seed).graph, codes.HGPCode.get_graph_product(seed.graph, seed.graph)
-    )
+    graph = codes.HGPCode.get_graph_product(seed.graph, seed.graph)
+    assert nx.utils.graphs_equal(codes.HGPCode(seed, seed).graph, graph)
 
 
 @pytest.mark.parametrize(
