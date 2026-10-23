@@ -112,27 +112,40 @@ def test_get_qldpc_challenge_code() -> None:
 
 def test_get_qdistrnd_distance_bound() -> None:
     """Compute a bound on code distance using QDistRnd."""
+    matrix = codes.FiveQubitCode().matrix
+    steane_code = codes.SteaneCode()
     with unittest.mock.patch("qldpc.external.gap.require_package", return_value=None):
         with pytest.raises(ValueError, match="non-CSS subsystem codes"):
-            _codes.get_qdistrnd_distance_bound(codes.QuditCode(codes.SHYPSCode(2).matrix))
+            _codes.get_qdistrnd_distance_bound(matrix, is_subsystem_code=True)
 
-        with unittest.mock.patch("qldpc.external.gap.get_output", return_value="3"):
-            assert _codes.get_qdistrnd_distance_bound(codes.FiveQubitCode()) == 3
-            assert _codes.get_qdistrnd_distance_bound(codes.SteaneCode()) == 3
+        with unittest.mock.patch("qldpc.external.gap.get_output", return_value="3") as get_output:
+            assert _codes.get_qdistrnd_distance_bound(matrix) == 3
+
+            # QDistRnd receives the checks with the X and Z support of each qudit side by side
+            riffled_matrix = matrix[:, [col for qudit in range(5) for col in (qudit, qudit + 5)]]
+            commands = _codes._get_gap_sparse_matrix_commands("matrix", 2, riffled_matrix)
+            assert set(commands) <= set(get_output.call_args.args)
+
+            assert (
+                _codes.get_qdistrnd_distance_bound(
+                    steane_code.matrix_x, matrix_z=steane_code.matrix_z
+                )
+                == 3
+            )
 
         # QDistRnd produced no output at all
         with (
             unittest.mock.patch("qldpc.external.gap.get_output", return_value=""),
             pytest.raises(ValueError, match="no output"),
         ):
-            _codes.get_qdistrnd_distance_bound(codes.FiveQubitCode())
+            _codes.get_qdistrnd_distance_bound(matrix)
 
         # QDistRnd output has no bound, only a comment line
         with (
             unittest.mock.patch("qldpc.external.gap.get_output", return_value="# comment only"),
             pytest.raises(ValueError, match="Could not parse a distance bound"),
         ):
-            _codes.get_qdistrnd_distance_bound(codes.FiveQubitCode())
+            _codes.get_qdistrnd_distance_bound(matrix)
 
 
 def test_get_gap_sparse_matrix_commands() -> None:

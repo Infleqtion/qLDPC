@@ -53,9 +53,9 @@ class SinterDecoder(_SinterDecoder):
     def __init__(
         self,
         *,
+        decoder: DeferredDecoderInput = None,
         simplify: bool = True,
         decompose_errors: bool = False,
-        decoder: DeferredDecoderInput = None,
         **decoder_kwargs: object,  # DEPRECATED: see qldpc._deprecations
     ) -> None:
         """Initialize a SinterDecoder.
@@ -63,23 +63,15 @@ class SinterDecoder(_SinterDecoder):
         See help(sinter.Decoder) for additional information.
 
         Args:
+            decoder: A decoder specification such as ``decoders.mwpm(...)``, or None for the default
+                decoder.  It is built for each (simplified) detector error model.
             simplify: Whether to merge equivalent errors in a DEM when compiling a decoder for that
                 DEM.
             decompose_errors: Whether to decompose errors according to their suggested decomposition
                 when compiling a decoder for a DEM.
-            decoder: A decoder specification such as ``decoders.mwpm(...)``, or None for the default
-                decoder.  It is built for each (simplified) detector error model.
             **decoder_kwargs: Deprecated keyword-based decoder options; pass a specification as
                 ``decoder=`` instead.
         """
-        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
-            reject_removed_decoder_args(decoder_kwargs)
-            if "priors_arg" in decoder_kwargs or "log_likelihood_priors" in decoder_kwargs:
-                raise _deprecations.defunct(
-                    "The 'priors_arg' and 'log_likelihood_priors' arguments to a SinterDecoder are"
-                    " DEFUNCT and should no longer be necessary.\nIf you need these arguments"
-                    " restored, please open an issue at https://github.com/qLDPCOrg/qLDPC/issues"
-                )
         reject_prebuilt_decoder(decoder, self._prebuilt_decoder_rejection_reason)
         if (
             decompose_errors
@@ -94,8 +86,17 @@ class SinterDecoder(_SinterDecoder):
         self.simplify = simplify
         self.decompose_errors = decompose_errors
         self.decoder_input = decoder
-        self.decoder_kwargs = decoder_kwargs  # DEPRECATED: see qldpc._deprecations
-        if decoder_kwargs:  # DEPRECATED: see qldpc._deprecations
+
+        # DEPRECATED: see qldpc._deprecations
+        self.decoder_kwargs = decoder_kwargs
+        if decoder_kwargs:
+            reject_removed_decoder_args(decoder_kwargs)
+            if "priors_arg" in decoder_kwargs or "log_likelihood_priors" in decoder_kwargs:
+                raise _deprecations.defunct(
+                    "The 'priors_arg' and 'log_likelihood_priors' arguments to a SinterDecoder are"
+                    " DEFUNCT and should no longer be necessary.\nIf you need these arguments"
+                    " restored, please open an issue at https://github.com/qLDPCOrg/qLDPC/issues"
+                )
             self.decoder_input = merge_legacy_decoder_args(None, decoder, decoder_kwargs)
 
     def compile_decoder_for_dem(self, dem: stim.DetectorErrorModel) -> CompiledSinterDecoder:
