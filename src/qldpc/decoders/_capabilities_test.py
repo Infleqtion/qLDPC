@@ -38,7 +38,7 @@ def test_is_prebuilt_decoder() -> None:
     deferred_decoders: list[object] = [
         None,
         decoders.bp_osd(),
-        decoders.custom.LookupDecoder,
+        decoders.custom.ErrorLookupDecoder,
         lambda matrix: _ERROR_DECODER,
         decoders.from_matrix(lambda matrix: _ERROR_DECODER),
         decoders.from_dem(lambda dem: _OBSERVABLE_DECODER),

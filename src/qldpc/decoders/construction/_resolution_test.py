@@ -93,7 +93,7 @@ def test_explicit_factory_inputs() -> None:
 
     def build_errors(matrix: galois.FieldArray) -> decoders.ErrorDecoder:
         seen_matrices.append(matrix)
-        return decoders.custom.LookupDecoder(matrix, max_weight=1)
+        return decoders.custom.ErrorLookupDecoder(matrix, max_weight=1)
 
     def build_observables(dem: stim.DetectorErrorModel) -> decoders.ObservableDecoder:
         seen_dems.append(dem)
@@ -148,9 +148,9 @@ def test_invalid_explicit_decoder_inputs() -> None:
 def test_reject_prebuilt_decoder() -> None:
     """Prebuilt decoders are rejected where a decoder must be built for a new matrix."""
     matrix = np.eye(2, dtype=int)
-    prebuilt = decoders.custom.LookupDecoder(matrix, max_weight=1)
+    prebuilt = decoders.custom.ErrorLookupDecoder(matrix, max_weight=1)
     reason = "the matrix is new"
-    for decoder in [None, decoders.lookup(max_weight=1), decoders.custom.LookupDecoder]:
+    for decoder in [None, decoders.lookup(max_weight=1), decoders.custom.ErrorLookupDecoder]:
         _resolution.reject_prebuilt_decoder(decoder, reason)
     with pytest.raises(ValueError, match="cannot be passed as decoder= here because the matrix"):
         _resolution.reject_prebuilt_decoder(prebuilt, reason)
@@ -303,7 +303,7 @@ def test_observable_decoder_inputs() -> None:
     """Observable decoders are built from specifications, constructors, and prebuilt decoders."""
     dem, syndromes = _get_circuit_data()
     observable_lookup = decoders.custom.ObservableLookupDecoder(dem, max_weight=2)
-    error_lookup = decoders.custom.LookupDecoder(dem, max_weight=2)
+    error_lookup = decoders.custom.ErrorLookupDecoder(dem, max_weight=2)
     expected_flips = observable_lookup.decode_observables_batch(syndromes)
 
     # prebuilt decoders, and constructors of either kind of decoder
@@ -311,7 +311,7 @@ def test_observable_decoder_inputs() -> None:
         observable_lookup,
         error_lookup,
         lambda dem: decoders.custom.ObservableLookupDecoder(dem, max_weight=2),
-        lambda dem: decoders.custom.LookupDecoder(dem, max_weight=2),
+        lambda dem: decoders.custom.ErrorLookupDecoder(dem, max_weight=2),
     ]
     for decoder_input in decoder_inputs:
         observable_decoder: Any = build_observable_decoder(dem, decoder=decoder_input)
@@ -327,7 +327,9 @@ def test_observable_decoder_inputs() -> None:
     def build_invalid_decoder(dem: stim.DetectorErrorModel) -> Any:
         return object()
 
-    spec = decoders.DecoderSpec("custom", decoders.custom.LookupDecoder, (), build_invalid_decoder)
+    spec = decoders.DecoderSpec(
+        "custom", decoders.custom.ErrorLookupDecoder, (), build_invalid_decoder
+    )
     with pytest.raises(TypeError, match="must provide a decode_observables method"):
         spec.build_observable_decoder(dem)
 

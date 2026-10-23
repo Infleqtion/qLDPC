@@ -139,7 +139,9 @@ def test_rejected_decoder_arguments() -> None:
     assert np.array_equal(compiled.decode_observables(np.array([1, 0])), [1, 1])
     with pytest.raises(ValueError, match="needs a parity-check matrix"):
         decoders.SinterDecoder(
-            decoder=decoders.from_matrix(lambda matrix: decoders.custom.LookupDecoder(matrix, 1))
+            decoder=decoders.from_matrix(
+                lambda matrix: decoders.custom.ErrorLookupDecoder(matrix, 1)
+            )
         ).compile_decoder_for_dem(dem)
 
     # a window decoder needs error decoders, so an observable-decoder factory is invalid on purpose
@@ -201,7 +203,7 @@ def test_deprecated_decoder_arguments() -> None:
 def test_observable_decoders_reject_prebuilt_decoders() -> None:
     """Observable decoders reject an error decoder that cannot be rebuilt for each model."""
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
-    prebuilt = decoders.custom.LookupDecoder(dem, max_weight=1)
+    prebuilt = decoders.custom.ErrorLookupDecoder(dem, max_weight=1)
     for build_decoder, reason in [
         (
             lambda: decoders.SinterDecoder(decoder=prebuilt),  # type: ignore[arg-type]
@@ -231,7 +233,7 @@ def test_observable_decoders_reject_prebuilt_decoders() -> None:
         decoders.SinterDecoder(static_decoder=prebuilt)
 
     decoder = decoders.SequentialWindowDecoder(
-        [[0]], decoder=lambda dem: decoders.custom.LookupDecoder(dem, max_weight=1)
+        [[0]], decoder=lambda dem: decoders.custom.ErrorLookupDecoder(dem, max_weight=1)
     )
     assert np.array_equal(
         decoder.compile_decoder_for_dem(dem).decode_observables(np.array([1])), [1]

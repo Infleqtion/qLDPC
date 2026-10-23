@@ -19,9 +19,9 @@ A registry target without an attribute names a module that replaces a deprecated
 is served as an attribute of its package, as in ``from package import submodule``.
 
 Registry targets are lazy "module:attribute" strings, and this module imports no qLDPC subpackage
-at import time, so that every module can import it without an import cycle.  Deprecated methods and
-attributes are defined at the bottom of this module, and attached to their classes by
-install_deprecated_methods, which qldpc/__init__.py calls once all subpackages are imported.
+at import time, so that every module can import it without an import cycle.  Deprecated methods are
+defined at the bottom of this module, and attached to their classes by install_deprecated_methods,
+which qldpc/__init__.py calls once all subpackages are imported.
 Deprecated arguments and modes are handled where they are accepted, by calling warn_deprecated or
 raising defunct(...).
 """
@@ -298,9 +298,7 @@ def install_deprecated_methods() -> None:
     """Attach deprecated methods to their classes."""
     from qldpc.abstract import SmallGroup, TrivialGroup
     from qldpc.codes import BBCode, ClassicalCode, CSSCode, QuditCode
-    from qldpc.decoders.custom import DirectDecoder, LookupDecoder
-
-    from .decoders import decode_returns_observables as returns_observables
+    from qldpc.decoders.custom import DirectDecoder
 
     @_deprecated_method(ClassicalCode)
     def puncture(self: ClassicalCode, bits: Collection[int]) -> ClassicalCode:
@@ -367,26 +365,6 @@ def install_deprecated_methods() -> None:
             " DirectDecoder corrects code words, and is not a syndrome decoder"
         )
 
-    @_deprecated_method(LookupDecoder, attribute=True)
-    def predict_observable_flips(self: LookupDecoder) -> bool:
-        """Deprecated attribute that reports the deprecated predict_observable_flips option."""
-        warn_deprecated(
-            f"{type(self).__name__}.predict_observable_flips is DEPRECATED and will be removed from"
-            " the public API",
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        return returns_observables(self)
-
-    @_deprecated_method(LookupDecoder, attribute=True)
-    def decode_returns_observables(self: LookupDecoder) -> bool:
-        """Deprecated attribute that reports the deprecated predict_observable_flips option."""
-        warn_deprecated(
-            f"{type(self).__name__}.decode_returns_observables is DEPRECATED and will be removed"
-            " from the public API",
-            stacklevel=get_external_caller_stacklevel(),
-        )
-        return returns_observables(self)
-
     @_deprecated_method(SmallGroup, static=True)
     def number(order: int) -> int:
         """Deprecated alias for SmallGroup.count_groups."""
@@ -414,19 +392,17 @@ def install_deprecated_methods() -> None:
         )
 
 
-def _deprecated_method(
-    cls: type, *, static: bool = False, attribute: bool = False
-) -> Callable[[_FunctionT], _FunctionT]:
+def _deprecated_method(cls: type, *, static: bool = False) -> Callable[[_FunctionT], _FunctionT]:
     """Attach a function to a class as a method, with the module and qualified name of a member.
 
-    A static function is attached as a static method, and an attribute as a read-only property.
+    A static function is attached as a static method.
     """
 
     def attach(function: _FunctionT) -> _FunctionT:
         function.__module__ = cls.__module__
         function.__qualname__ = f"{cls.__qualname__}.{function.__name__}"
         function.__annotations__.pop("self", None)  # methods in class bodies leave self implicit
-        member = staticmethod(function) if static else property(function) if attribute else function
+        member = staticmethod(function) if static else function
         setattr(cls, function.__name__, member)
         return function
 

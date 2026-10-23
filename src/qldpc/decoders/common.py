@@ -48,10 +48,10 @@ def get_error_and_erasure(
 ) -> tuple[galois.FieldArray, bool]:
     """Decode a syndrome and return the inferred error together with an erasure flag.
 
-    If the decoder has a has_erasure_bit attribute set to True (e.g., a LookupDecoder constructed
-    with ``add_erasure_bit=True``), the last element of the decoded vector is treated as the erasure
-    bit: 1 means the syndrome was not recognized and the sample should be discarded, 0 means a
-    correction was found normally.  The erasure bit is stripped before returning the error.
+    If the decoder has a has_erasure_bit attribute set to True (e.g., an ErrorLookupDecoder
+    constructed with ``add_erasure_bit=True``), the last element of the decoded vector is treated as
+    the erasure bit: 1 means the syndrome was not recognized and the sample should be discarded, 0
+    means a correction was found normally.  The erasure bit is stripped before returning the error.
     """
     error = _as_error_decoder(decoder).decode_errors(syndrome.view(np.ndarray))
     if getattr(decoder, "has_erasure_bit", False):

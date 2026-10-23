@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import pickle
+from typing import Any
 
 import numpy as np
 import numpy.typing as npt
@@ -32,7 +33,7 @@ def test_legacy_observable_lookup_decoder() -> None:
     _assert_decodes(decoder, syndromes, flips)
     for method in [decoder.decode_batch, decoder.decode_errors_batch]:
         assert np.array_equal(method(syndromes), flips)
-    assert decoder.predict_observable_flips and decoder.decode_returns_observables
+    assert isinstance(decoder, decoders.custom.LookupDecoder)
 
     # a legacy decoder is an observable decoder, rather than an error decoder
     assert build_observable_decoder(dem, decoder=decoder) is decoder
@@ -48,6 +49,7 @@ def test_legacy_observable_lookup_decoder() -> None:
             error_channel=[0.1],
             predict_observable_flips=True,
         )
+    assert isinstance(decoder, lookup.LegacyObservableLookupDecoder)
     assert np.array_equal(decoder.decode(np.array([1], dtype=int)), [1])
 
 
@@ -63,7 +65,7 @@ def test_legacy_weighted_observable_lookup_decoder() -> None:
             dem, max_weight=1, predict_observable_flips=True
         )
     assert isinstance(decoder, lookup.LegacyWeightedObservableLookupDecoder)
-    assert decoder.predict_observable_flips and decoder.decode_returns_observables
+    assert isinstance(decoder, decoders.custom.WeightedLookupDecoder)
 
     # the penalty function selects the error, whose observable flip is the prediction
     syndromes = np.array([[1], [0]], dtype=int)
@@ -93,8 +95,31 @@ def _assert_decodes(
                 assert np.array_equal(method(syndrome, *args), flip)
 
 
-def test_subclass_with_predict_observable_flips() -> None:
-    """A subclass of a lookup decoder keeps its class with predict_observable_flips=True."""
+def test_deprecated_direct_construction() -> None:
+    """Calling LookupDecoder or WeightedLookupDecoder directly warns and builds an error decoder."""
+    matrix = np.eye(2, dtype=int)
+    syndrome = np.array([1, 0], dtype=int)
+    cases: list[tuple[type[decoders.custom.LookupDecoder], type[decoders.ErrorDecoder]]] = [
+        (decoders.custom.LookupDecoder, decoders.custom.ErrorLookupDecoder),
+        (decoders.custom.WeightedLookupDecoder, decoders.custom.WeightedErrorLookupDecoder),
+    ]
+    for base_class, error_class in cases:
+        # an explicit predict_observable_flips=False is accepted, and other options are forwarded
+        options_and_decoded: list[tuple[dict[str, bool], list[int]]] = [
+            ({}, [1, 0]),
+            ({"predict_observable_flips": False, "add_erasure_bit": True}, [1, 0, 0]),
+        ]
+        for options, decoded in options_and_decoded:
+            with pytest.warns(DeprecationWarning, match=rf"\b{error_class.__name__}\b") as caught:
+                decoder: Any = base_class(matrix, 1, **options)
+            assert len(caught) == 1
+            assert caught[0].filename == __file__
+            assert type(decoder) is error_class
+            assert np.array_equal(decoder.decode(syndrome), decoded)
+
+
+def test_deprecated_user_subclass() -> None:
+    """A user-defined subclass of a base lookup decoder names the classes to subclass instead."""
 
     class CustomLookupDecoder(decoders.custom.LookupDecoder):
         pass
@@ -102,16 +127,29 @@ def test_subclass_with_predict_observable_flips() -> None:
     class CustomWeightedLookupDecoder(decoders.custom.WeightedLookupDecoder):
         pass
 
-    dem = stim.DetectorErrorModel("""
-        error(0.3) D0 L0 L1
-        error(0.1) D1 L1
-    """)
-    for decoder_class in [CustomLookupDecoder, CustomWeightedLookupDecoder]:
-        with pytest.warns(DeprecationWarning, match="predict_observable_flips=True is deprecated"):
-            decoder = decoder_class(dem, max_weight=2, predict_observable_flips=True)
-        assert type(decoder) is decoder_class
-        assert np.array_equal(decoder.decode(np.array([1, 0])), [1, 1])
-        with pytest.warns(DeprecationWarning, match="predict_observable_flips is DEPRECATED"):
-            assert decoder.predict_observable_flips
-        with pytest.raises(TypeError, match="observable flips rather than errors"):
-            build_error_decoder(dem, decoder=decoder)
+    with pytest.raises(TypeError, match=r"\bErrorLookupDecoder\b.*\bObservableLookupDecoder\b"):
+        CustomLookupDecoder(np.eye(1, dtype=int), 1)
+    with pytest.raises(
+        TypeError, match=r"WeightedErrorLookupDecoder.*WeightedObservableLookupDecoder"
+    ):
+        CustomWeightedLookupDecoder(np.eye(1, dtype=int), 1, predict_observable_flips=True)
+
+
+def test_deprecated_legacy_attributes() -> None:
+    """Legacy observable lookup decoders have deprecated attributes, which warn and are True."""
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
+    with pytest.warns(DeprecationWarning, match="predict_observable_flips=True"):
+        legacy_decoders = [
+            decoders.custom.LookupDecoder(dem, 1, predict_observable_flips=True),
+            decoders.custom.WeightedLookupDecoder(dem, 1, predict_observable_flips=True),
+        ]
+    for legacy_decoder, class_name in zip(
+        legacy_decoders, ["LookupDecoder", "WeightedLookupDecoder"], strict=True
+    ):
+        for attribute_name in ["predict_observable_flips", "decode_returns_observables"]:
+            match = rf"\b{class_name}\.{attribute_name} is DEPRECATED"
+            with pytest.warns(DeprecationWarning, match=match) as caught:
+                value = getattr(legacy_decoder, attribute_name)
+            assert len(caught) == 1
+            assert caught[0].filename == __file__
+            assert value is True

@@ -57,7 +57,7 @@ def test_decoder_specs() -> None:
     assert np.array_equal(legacy_decoder.decode(np.array([1])), [0, 1])
 
     # a spec that was not built by a helper still has a (less concise) representation
-    spec = decoders.DecoderSpec("custom", decoders.custom.LookupDecoder, (("max_weight", 1),))
+    spec = decoders.DecoderSpec("custom", decoders.custom.ErrorLookupDecoder, (("max_weight", 1),))
     assert repr(spec).startswith("DecoderSpec('custom', ")
 
     # misspelled options are rejected when specifications are created, including by helpers that
@@ -264,22 +264,22 @@ def test_decoder_spec_helper_defaults() -> None:
             if parameter.default is not inspect.Parameter.empty
         }
 
-    # helpers for decoders defined in qLDPC mirror all non-deprecated constructor options
-    qldpc_decoders: list[tuple[Callable[..., object], Callable[..., object], set[str]]] = [
-        (decoders.lookup, decoders.custom.LookupDecoder, {"predict_observable_flips"}),
-        (decoders.guf, decoders.custom.GUFDecoder, set()),
-        (decoders.ilp, decoders.custom.ILPDecoder, set()),
-        (decoders.tesseract, decoders.external.TesseractDecoder, set()),
+    # helpers for decoders defined in qLDPC mirror all constructor options
+    qldpc_decoders: list[tuple[Callable[..., object], Callable[..., object]]] = [
+        (decoders.lookup, decoders.custom.ErrorLookupDecoder),
+        (decoders.guf, decoders.custom.GUFDecoder),
+        (decoders.ilp, decoders.custom.ILPDecoder),
+        (decoders.tesseract, decoders.external.TesseractDecoder),
     ]
-    for helper, constructor, excluded in qldpc_decoders:
+    for helper, constructor in qldpc_decoders:
         helper_defaults = get_defaults(helper)
         constructor_defaults = get_defaults(constructor)
-        assert helper_defaults.keys() == constructor_defaults.keys() - excluded, helper
+        assert helper_defaults.keys() == constructor_defaults.keys(), helper
         for name, default in helper_defaults.items():
             assert default == constructor_defaults[name], (helper, name)
 
     entry_points: list[Callable[..., object]] = [
-        decoders.custom.LookupDecoder,
+        decoders.custom.ErrorLookupDecoder,
         decoders.custom.ObservableLookupDecoder,
         decoders.lookup,
     ]
@@ -361,7 +361,7 @@ def test_decoder_spec_helper_annotations() -> None:
         (decoders.mwpm, decoders.BatchErrorDecoder),
         (decoders.relay_bp, decoders.external.RelayBPDecoder),
         (decoders.tesseract, decoders.external.TesseractDecoder),
-        (decoders.lookup, decoders.custom.LookupDecoder),
+        (decoders.lookup, decoders.custom.ErrorLookupDecoder),
         (decoders.guf, decoders.custom.GUFDecoder),
         (decoders.ilp, decoders.custom.ILPDecoder),
         (decoders.frontier, Never),

@@ -94,7 +94,7 @@ def test_error_decoder_coercion() -> None:
     assert np.array_equal(decoder.decode_batch(syndromes), 3 * syndromes)
 
     # an error decoder is returned as is, and its native batch method is used
-    lookup_decoder = decoders.custom.LookupDecoder(np.eye(2, dtype=int), max_weight=1)
+    lookup_decoder = decoders.custom.ErrorLookupDecoder(np.eye(2, dtype=int), max_weight=1)
     assert protocols._as_error_decoder(lookup_decoder) is lookup_decoder
     assert protocols._supports_batch_decoding(lookup_decoder)
     assert np.array_equal(protocols._batch_decode_errors(lookup_decoder, syndromes), syndromes)

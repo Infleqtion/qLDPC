@@ -10,8 +10,10 @@ from .composition import CompositeDecoder, DirectDecoder
 from .guf import GUFDecoder
 from .ilp import ILPDecoder
 from .lookup import (
+    ErrorLookupDecoder,
     LookupDecoder,
     ObservableLookupDecoder,
+    WeightedErrorLookupDecoder,
     WeightedLookupDecoder,
     WeightedObservableLookupDecoder,
 )
@@ -19,10 +21,12 @@ from .lookup import (
 __all__ = [
     "CompositeDecoder",
     "DirectDecoder",
+    "ErrorLookupDecoder",
     "GUFDecoder",
     "ILPDecoder",
     "LookupDecoder",
     "ObservableLookupDecoder",
+    "WeightedErrorLookupDecoder",
     "WeightedLookupDecoder",
     "WeightedObservableLookupDecoder",
 ]
