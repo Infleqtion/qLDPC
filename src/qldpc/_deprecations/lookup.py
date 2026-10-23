@@ -28,6 +28,8 @@ from qldpc.decoders.custom.lookup import (
     ObservableLookupDecoder,
     WeightedLookupDecoder,
     WeightedObservableLookupDecoder,
+    _LookupDecoderBase,
+    _WeightedLookupDecoderBase,
 )
 
 from .decoders import _MATRIX_OBSERVABLE_LOOKUP_ADVICE
@@ -73,16 +75,14 @@ def become_legacy_observable_decoder(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     max_weight: int,
     **options: object,
-) -> bool:
+) -> None:
     """Warn about predict_observable_flips=True, and initialize a decoder as one that uses it.
 
     The decoder, a LookupDecoder that is being initialized, becomes a
     LegacyWeightedObservableLookupDecoder if it is a WeightedLookupDecoder, and a
     LegacyObservableLookupDecoder otherwise, which is initialized with the given arguments.  An
-    instance of a user-defined subclass keeps its class, and is left for its caller to initialize.
-
-    Returns:
-        Whether the decoder was initialized.
+    instance of a user-defined subclass keeps its class, and is initialized as in qLDPC 0.4.1: as a
+    lookup decoder whose decode methods return observable flips.
     """
     legacy_class: type[ObservableLookupDecoder | WeightedObservableLookupDecoder]
     if isinstance(decoder, WeightedLookupDecoder):
@@ -102,10 +102,20 @@ def become_legacy_observable_decoder(
         f"predict_observable_flips=True is deprecated; {advice}",
         stacklevel=get_external_caller_stacklevel(),
     )
-    if type(decoder) not in (LookupDecoder, WeightedLookupDecoder):
-        return False
-    decoder.__class__ = legacy_class
-    # the arguments are those of a LookupDecoder, which an observable lookup decoder also accepts
-    initialize = cast("Callable[..., None]", legacy_class.__init__)
+    initialize: Callable[..., None]
+    if type(decoder) in (LookupDecoder, WeightedLookupDecoder):
+        decoder.__class__ = legacy_class
+        # an observable lookup decoder accepts the arguments of a LookupDecoder
+        initialize = cast("Callable[..., None]", legacy_class.__init__)
+    else:
+        # a subclass keeps its class, and builds a table of observable flips by the private switch
+        # that observable lookup decoders also use
+        assert isinstance(decoder, LookupDecoder)
+        decoder._outputs_observables = True
+        base = (
+            _WeightedLookupDecoderBase
+            if isinstance(decoder, WeightedLookupDecoder)
+            else _LookupDecoderBase
+        )
+        initialize = cast("Callable[..., None]", base.__init__)
     initialize(decoder, pcm_or_dem, max_weight, **options)
-    return True

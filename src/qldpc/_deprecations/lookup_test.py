@@ -95,14 +95,25 @@ def _assert_decodes(
                 assert np.array_equal(method(syndrome, *args), flip)
 
 
-def test_subclass_keeps_its_class() -> None:
-    """The helper leaves an instance of a user-defined subclass for its caller to initialize."""
+def test_subclass_with_predict_observable_flips() -> None:
+    """A subclass of a lookup decoder keeps its class with predict_observable_flips=True."""
 
     class CustomLookupDecoder(decoders.custom.LookupDecoder):
         pass
 
-    decoder = object.__new__(CustomLookupDecoder)
-    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
-    with pytest.warns(DeprecationWarning, match="predict_observable_flips=True is deprecated"):
-        assert not lookup.become_legacy_observable_decoder(decoder, dem, 1)
-    assert type(decoder) is CustomLookupDecoder
+    class CustomWeightedLookupDecoder(decoders.custom.WeightedLookupDecoder):
+        pass
+
+    dem = stim.DetectorErrorModel("""
+        error(0.3) D0 L0 L1
+        error(0.1) D1 L1
+    """)
+    for decoder_class in [CustomLookupDecoder, CustomWeightedLookupDecoder]:
+        with pytest.warns(DeprecationWarning, match="predict_observable_flips=True is deprecated"):
+            decoder = decoder_class(dem, max_weight=2, predict_observable_flips=True)
+        assert type(decoder) is decoder_class
+        assert np.array_equal(decoder.decode(np.array([1, 0])), [1, 1])
+        with pytest.warns(DeprecationWarning, match="predict_observable_flips is DEPRECATED"):
+            assert decoder.predict_observable_flips
+        with pytest.raises(TypeError, match="observable flips rather than errors"):
+            build_error_decoder(dem, decoder=decoder)

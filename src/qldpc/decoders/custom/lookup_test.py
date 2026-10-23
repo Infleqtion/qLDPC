@@ -702,27 +702,3 @@ def test_deprecated_observable_lookup_warning_location() -> None:
         "decoders.lookup(max_weight=...).build_observable_decoder(dem)" in message
         for message in messages
     )
-
-
-def test_deprecated_predict_observable_flips_in_subclass() -> None:
-    """A subclass of a lookup decoder keeps its class with predict_observable_flips=True."""
-
-    class CustomLookupDecoder(decoders.custom.LookupDecoder):
-        pass
-
-    class CustomWeightedLookupDecoder(decoders.custom.WeightedLookupDecoder):
-        pass
-
-    dem = stim.DetectorErrorModel("""
-        error(0.3) D0 L0 L1
-        error(0.1) D1 L1
-    """)
-    for decoder_class in [CustomLookupDecoder, CustomWeightedLookupDecoder]:
-        with pytest.warns(DeprecationWarning, match="predict_observable_flips=True is deprecated"):
-            decoder = decoder_class(dem, max_weight=2, predict_observable_flips=True)
-        assert type(decoder) is decoder_class
-        assert np.array_equal(decoder.decode(np.array([1, 0])), [1, 1])
-        with pytest.warns(DeprecationWarning, match="predict_observable_flips is DEPRECATED"):
-            assert decoder.predict_observable_flips
-        with pytest.raises(TypeError, match="observable flips rather than errors"):
-            build_error_decoder(dem, decoder=decoder)

@@ -473,7 +473,7 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
         if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
             from qldpc._deprecations.lookup import become_legacy_observable_decoder
 
-            if become_legacy_observable_decoder(
+            become_legacy_observable_decoder(
                 self,
                 pcm_or_dem,
                 max_weight,
@@ -485,9 +485,8 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
                 probability_cutoff=probability_cutoff,
                 symplectic=symplectic,
                 penalty_func=penalty_func,
-            ):
-                return
-            self._outputs_observables = True  # a subclass keeps its class and this deprecated mode
+            )
+            return
         super().__init__(
             pcm_or_dem,
             max_weight,
@@ -827,7 +826,7 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
             from qldpc._deprecations.lookup import become_legacy_observable_decoder
 
-            if become_legacy_observable_decoder(
+            become_legacy_observable_decoder(
                 self,
                 pcm_or_dem,
                 max_weight,
@@ -835,9 +834,8 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
                 post_select=post_select,
                 add_erasure_bit=add_erasure_bit,
                 symplectic=symplectic,
-            ):
-                return
-            self._outputs_observables = True  # a subclass keeps its class and this deprecated mode
+            )
+            return
         super().__init__(
             pcm_or_dem,
             max_weight,
