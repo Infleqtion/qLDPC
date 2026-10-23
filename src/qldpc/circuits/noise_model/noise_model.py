@@ -31,6 +31,7 @@ from ._operations import (
     GATE_OP_TYPES,
     IDLE_OPS,
     JUST_MEASURE_OPS,
+    JUST_MEASURE_PP,
     JUST_RESET_OPS,
     MEASURE_AND_RESET_OPS,
     NOISE,
@@ -306,10 +307,17 @@ class NoiseModel:
         Returns:
             The NoiseRule to apply for the given operation, or None for no noise.
         """
-        if op_type(op.name) in (ANNOTATION, NOISE) or involves_classical_bits(op):
+        this_op_type = op_type(op.name)
+        if this_op_type in (ANNOTATION, NOISE) or involves_classical_bits(op):
             return None
+        # the number of qubits in the Pauli product of an MPP, SPP, or SPP_DAG instruction
+        product_arity = (
+            sum(1 for target in op.targets_copy() if not target.is_combiner)
+            if this_op_type in (CLIFFORD_PP, JUST_MEASURE_PP)
+            else 0
+        )
 
-        if self.rule_func is not None and op_type(op.name) in GATE_OP_TYPES:
+        if self.rule_func is not None and this_op_type in GATE_OP_TYPES:
             rule = self.rule_func(op)
             if rule is not None:
                 _validate_custom_rule(rule, op)
@@ -320,11 +328,10 @@ class NoiseModel:
                 rule = self.rules.get(name)
                 if rule is not None:
                     if name in {"MPP", "SPP", "SPP_DAG"}:
-                        arity = sum(1 for target in op.targets_copy() if not target.is_combiner)
-                        if rule.after is not None and rule.after.num_qubits != arity:
+                        if rule.after is not None and rule.after.num_qubits != product_arity:
                             raise ValueError(
                                 f"This NoiseRule has arity {rule.after.num_qubits}, but"
-                                f" {op.name!r} has {arity} qubit targets"
+                                f" {op.name!r} has {product_arity} qubit targets"
                             )
                         if rule.readout_error is not None and op.name not in JUST_MEASURE_OPS:
                             raise ValueError(f"`readout_error` is not valid on {op.name!r}")
@@ -335,14 +342,13 @@ class NoiseModel:
         if op.name in IDLE_OPS:
             return None
 
-        this_op_type = op_type(op.name)
         if this_op_type in (CLIFFORD_1Q, CLIFFORD_2Q, CLIFFORD_PP):
             if this_op_type == CLIFFORD_1Q:
                 num_qubits = 1
             elif this_op_type == CLIFFORD_2Q:
                 num_qubits = 2
             else:
-                num_qubits = sum(1 for target in op.targets_copy() if not target.is_combiner)
+                num_qubits = product_arity
             if num_qubits in self.clifford_nq_error:
                 return self.clifford_nq_error[num_qubits]
 
