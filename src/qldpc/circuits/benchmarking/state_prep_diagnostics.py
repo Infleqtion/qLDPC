@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Collection, Mapping, Sequence
+from typing import Literal
 
 import numpy as np
 import numpy.typing as npt
@@ -152,8 +153,9 @@ def get_state_prep_diagnostic_tasks(
     error_rates: Sequence[float] | npt.NDArray[np.floating],
     noise_model_family: Callable[[float], NoiseModel] = DepolarizingNoiseModel,
     *,
-    post_select: bool | Collection[int] = False,
-    post_select_observables: Collection[int] = (),
+    add_flags: bool = False,
+    post_select: bool | Collection[int] | Literal["flags"] = False,
+    post_select_observables: bool | Collection[int] = False,
     qubit_ids: QubitIDs | None = None,
     observables: npt.NDArray[np.int_]
     | Sequence[Sequence[int]]
@@ -214,12 +216,20 @@ def get_state_prep_diagnostic_tasks(
         noise_model_family: A single-parameter family of noise models for adding noise to circuits.
 
     Keyword args:
-        post_select: If True, add a flag detector for each unused measurement in the provided
-            circuit and post-select on those detectors.  If provided a collection of integers,
-            post-select on corresponding detectors that are already present in the provided circuit.
-        post_select_observables: The observables to post-select on.  Any time the decoder's
-            prediction for these observable flips do not agree with the actual observable flips, the
-            shot is discarded rather than counting as an error.
+        add_flags: Whether to add a flag detector for each unaddressed measurement in the circuit,
+            as in get_state_prep_diagnostic_circuit.
+        post_select: The detectors to post-select on, out of the selectable detectors: those
+            already present in the provided circuit followed by any added flag detectors.  True
+            selects all selectable detectors, False (the default) selects none, a collection of
+            integers selects the selectable detectors with those indices (counted in the order
+            above, and possibly negative to count back from the last of them), and "flags" selects
+            exactly the added flag detectors, which requires ``add_flags=True``.  The final
+            (noiseless) stabilizer detectors are never selectable.  Shots in which any selected
+            detector fires are discarded.
+        post_select_observables: The observables to post-select on: True for all observables,
+            False (the default) for none, or a collection of observable indices.  Any time the
+            decoder's prediction for these observable flips do not agree with the actual observable
+            flips, the shot is discarded rather than counting as an error.
         qubit_ids: A QubitIDs object specifying the indices of the data qubits of the code.  If
             None, the data qubits of the code are assumed to be range(len(code)).
         observables: The observables that should stabilize the prepared state, or (by default) None.
@@ -237,7 +247,11 @@ def get_state_prep_diagnostic_tasks(
         A list of sinter Tasks, one-to-one with the provided error_rates.  The error rate of an
             individual task is task.json_metadata["p"].
     """
-    add_flags = post_select is True
+    if isinstance(post_select, str) and not (post_select == "flags" and add_flags):
+        raise ValueError(
+            f"Unsupported post-selection with post_select={post_select!r} and add_flags={add_flags}:"
+            ' post_select="flags" selects the added flag detectors, so it requires add_flags=True'
+        )
     diagnostic_circuit, detector_record = get_state_prep_diagnostic_circuit(
         code,
         state_prep_circuit,
@@ -266,17 +280,19 @@ def get_state_prep_diagnostic_tasks(
 
 
 def _get_selected_detectors(
-    post_select: bool | Collection[int], detector_record: DetectorRecord
+    post_select: bool | Collection[int] | Literal["flags"], detector_record: DetectorRecord
 ) -> list[int]:
     """Identify the detectors of a state-prep diagnostic circuit to post-select on.
 
-    ``post_select=True`` selects the flag detectors.  Explicit indices refer to the selectable prep
-    and flag detectors, which come first in the detector record, and may be negative to count back
-    from the last of them.
+    ``post_select="flags"`` selects the flag detectors.  Otherwise, ``post_select`` selects among
+    the prep and flag detectors, which come first in the detector record: True selects all of them,
+    False none, and explicit indices may be negative to count back from the last of them.
     """
-    if isinstance(post_select, bool):
-        return detector_record.get_events("flags") if post_select else []
+    if isinstance(post_select, str):
+        return detector_record.get_events("flags")
     num_selectable = len(detector_record.get_events("prep", "flags"))
+    if isinstance(post_select, bool):
+        return list(range(num_selectable)) if post_select else []
     post_select = list(post_select)
     if not all(-num_selectable <= dd < num_selectable for dd in post_select):
         raise ValueError(

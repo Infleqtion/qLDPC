@@ -24,7 +24,15 @@ import qldpc
 from qldpc import abstract
 from qldpc._utils import networkx as nx
 from qldpc.math import resolve_field
-from qldpc.objects import CayleyComplex, ChainComplex, Node, Pauli, PauliXZ, QuditPauli
+from qldpc.objects import (
+    CayleyComplex,
+    ChainComplex,
+    Node,
+    Pauli,
+    PauliXZ,
+    QuditPauli,
+    TannerGraph,
+)
 
 from .classical import (
     CyclicCode,
@@ -1510,8 +1518,8 @@ class HGPCode(CSSCode):
         return matrix_x.view(type(matrix_a)), matrix_z.view(type(matrix_a))
 
     @staticmethod
-    def get_graph_product(graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> nx.DiGraph:
-        """Hypergraph product of two Tanner graphs."""
+    def get_graph_product(graph_a: nx.DiGraph, graph_b: nx.DiGraph) -> TannerGraph:
+        """Hypergraph product of two Tanner graphs, as the Tanner graph of a qudit code."""
         graph = nx.DiGraph()
         field = getattr(graph_a, "field", galois.GF2)
         _Pauli = Pauli if field is galois.GF2 else QuditPauli
@@ -1552,9 +1560,7 @@ class HGPCode(CSSCode):
             graph[node_check][node_qudit][Pauli] = op
 
         # relabel nodes, from (node_a, node_b) --> node_combined
-        graph = nx.relabel_nodes(graph, node_map)
-        graph.field = field
-        return graph
+        return TannerGraph(nx.relabel_nodes(graph, node_map), field=field, symplectic=True)
 
     @staticmethod
     def get_sector(node_a: Node, node_b: Node) -> tuple[int, int]:

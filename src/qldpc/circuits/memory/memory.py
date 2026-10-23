@@ -12,7 +12,7 @@ import stim
 
 from qldpc import codes
 from qldpc._utils import format_docstring
-from qldpc.objects import Node, Pauli, PauliXZ, PauliXZLike
+from qldpc.objects import Node, Pauli, PauliXZ, PauliXZLike, TannerGraph
 
 from ..bookkeeping import DetectorRecord, MeasurementRecord, QubitIDs
 from ..common import _restrict_to_qubits, get_pauli_product_measurements, with_remapped_qubits
@@ -326,7 +326,7 @@ def get_observables(
 
     # build a graph of edges directed from observables to the data qubits they address
     logical_ops = code.get_logical_ops(basis, symplectic=True)
-    logical_op_graph = codes.QuditCode.matrix_to_graph(logical_ops)
+    logical_op_graph = TannerGraph.from_matrix(logical_ops, symplectic=True)
 
     if on_measurements and (not isinstance(code, codes.CSSCode) or basis is None):
         raise ValueError(

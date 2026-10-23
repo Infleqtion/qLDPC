@@ -23,7 +23,7 @@ import scipy.linalg
 import scipy.sparse
 import stim
 
-from qldpc import abstract, decoders, external, math
+from qldpc import _deprecations, abstract, decoders, external, math
 from qldpc._deprecations.decoders import (
     merge_legacy_css_decoder_args,
     merge_legacy_decoder_args,
@@ -35,7 +35,15 @@ from qldpc.decoders._capabilities import is_prebuilt_decoder, is_prebuilt_observ
 from qldpc.decoders.construction._resolution import build_error_decoder, reject_prebuilt_decoder
 from qldpc.external import _codes
 from qldpc.math import IntegerArray, resolve_field
-from qldpc.objects import PAULIS_XZ, Node, Pauli, PauliXZ, PauliXZLike, QuditPauli
+from qldpc.objects import (
+    PAULIS_XZ,
+    Node,
+    Pauli,
+    PauliXZ,
+    PauliXZLike,
+    QuditPauli,
+    TannerGraph,
+)
 
 from ._code_capacity import CodeCapacityDecoder, get_code_capacity_decoder
 from .distance import (
@@ -216,20 +224,18 @@ class AbstractCode(abc.ABC):
         """Rank of this code's parity check matrix."""
         return len(self.canonicalized.matrix)
 
-    @functools.cached_property
-    def graph(self) -> nx.DiGraph:
-        """Tanner graph of this code."""
-        return self.matrix_to_graph(self.matrix)
-
-    @staticmethod
-    @abc.abstractmethod
-    def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
-        """Convert a parity check matrix into a Tanner graph."""
-
-    @staticmethod
-    @abc.abstractmethod
-    def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
-        """Convert a Tanner graph into a parity check matrix."""
+    @property
+    def graph(self) -> TannerGraph:
+        """Tanner graph of this code, which subclasses define."""
+        matrix_to_graph = getattr(type(self), "matrix_to_graph", None)
+        if matrix_to_graph is not None:  # DEPRECATED: see qldpc._deprecations
+            _deprecations.warn_deprecated(
+                f"{type(self).__name__}.matrix_to_graph is deprecated; define the graph property"
+                " instead, for example with qldpc.objects.TannerGraph.from_matrix",
+                stacklevel=get_external_caller_stacklevel(),
+            )
+            return matrix_to_graph(self.matrix)
+        raise NotImplementedError(f"{type(self).__name__} does not define its Tanner graph")
 
     @functools.cached_property
     @abc.abstractmethod
@@ -324,46 +330,10 @@ class ClassicalCode(AbstractCode):
             return len(self) - self._dimension
         return super().rank
 
-    @staticmethod
-    def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
-        """Convert a parity check matrix into a Tanner graph.
-
-        The Tanner graph is a bipartite graph with (num_checks, num_bits) vertices, respectively
-        identified with the checks and bits of the code.  The check vertex c and the bit vertex b
-        share an edge iff c addresses b; that is, edge (c, b) is in the graph iff ``H[c, b] != 0``.
-
-        A check that addresses no bits, as an all-zero row of H defines, is an isolated vertex of
-        the graph.  Seeding a vertex for every row puts the check vertices in one-to-one
-        correspondence with the rows of H, so the graph records how many checks there are even when
-        some of them address no bits.
-        """
-        matrix = np.asanyarray(matrix)
-
-        # initialize graph with nodes, data before checks
-        graph = nx.DiGraph()
-        for bit in range(matrix.shape[-1]):
-            graph.add_node(Node(index=bit, is_data=True))
-        for check in range(len(matrix)):
-            graph.add_node(Node(index=check, is_data=False))
-
-        # add edges
-        for row, col in zip(*np.nonzero(matrix)):
-            node_c = Node(index=int(row), is_data=False)
-            node_d = Node(index=int(col), is_data=True)
-            graph.add_edge(node_c, node_d, val=matrix[row][col])
-        graph.field = type(matrix) if isinstance(matrix, galois.FieldArray) else galois.GF2
-        return graph
-
-    @staticmethod
-    def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
-        """Convert a Tanner graph into a parity check matrix."""
-        num_bits = sum(node.is_data for node in graph.nodes())
-        num_checks = len(graph.nodes()) - num_bits
-        field = getattr(graph, "field", galois.GF2)
-        matrix = field.Zeros((num_checks, num_bits))
-        for node_c, node_b, data in graph.edges(data=True):
-            matrix[node_c.index, node_b.index] = data.get("val", 1)
-        return matrix
+    @functools.cached_property
+    def graph(self) -> TannerGraph:
+        """Tanner graph of this code."""
+        return TannerGraph.from_matrix(self.matrix)
 
     def get_weight(self) -> int:
         """Compute the weight of the largest parity check."""
@@ -1068,50 +1038,10 @@ class QuditCode(AbstractCode):
         code._is_canonicalized = True
         return code
 
-    @staticmethod
-    def matrix_to_graph(matrix: npt.NDArray[np.int_] | Sequence[Sequence[int]]) -> nx.DiGraph:
-        """Convert a parity check matrix into a Tanner graph.
-
-        A check that addresses no qudits, as an all-zero row defines, is an isolated vertex of the
-        graph.  Seeding a vertex for every row puts the check vertices in one-to-one correspondence
-        with the rows, so the graph records how many checks there are even when some of them address
-        no qudits.
-        """
-        matrix = np.asanyarray(matrix)
-        matrix = np.reshape(matrix, (len(matrix), 2, matrix.shape[-1] // 2))
-
-        # initialize graph with nodes
-        graph = nx.DiGraph()
-        graph.field = type(matrix) if isinstance(matrix, galois.FieldArray) else galois.GF2
-        for qudit in range(matrix.shape[-1]):
-            graph.add_node(Node(index=qudit, is_data=True))
-        for check in range(len(matrix)):
-            graph.add_node(Node(index=check, is_data=False))
-
-        # add edges
-        _Pauli = Pauli if graph.field is galois.GF2 else QuditPauli
-        for row, xz, col in zip(*np.nonzero(matrix)):
-            node_check = Node(index=int(row), is_data=False)
-            node_qudit = Node(index=int(col), is_data=True)
-            graph.add_edge(node_check, node_qudit)
-
-            qudit_op = graph[node_check][node_qudit].get(Pauli, _Pauli((0, 0)))
-            vals_xz = list(qudit_op.value)
-            vals_xz[xz] += int(matrix[row, xz, col])
-            graph[node_check][node_qudit][Pauli] = _Pauli(tuple(vals_xz))
-
-        return graph
-
-    @staticmethod
-    def graph_to_matrix(graph: nx.DiGraph) -> galois.FieldArray:
-        """Convert a Tanner graph into a parity check matrix."""
-        num_qudits = sum(1 for node in graph.nodes() if node.is_data)
-        num_checks = len(graph.nodes()) - num_qudits
-        matrix = np.zeros((num_checks, 2, num_qudits), dtype=int)
-        for node_check, node_qudit, data in graph.edges(data=True):
-            matrix[node_check.index, :, node_qudit.index] = data.get(Pauli).value
-        field = getattr(graph, "field", galois.GF2)
-        return field(matrix.reshape(num_checks, 2 * num_qudits))
+    @functools.cached_property
+    def graph(self) -> TannerGraph:
+        """Tanner graph of this code."""
+        return TannerGraph.from_matrix(self.matrix, symplectic=True)
 
     def maybe_to_css(self) -> QuditCode:
         """Try to convert this QuditCode into a CSSCode.
@@ -2137,7 +2067,13 @@ class QuditCode(AbstractCode):
             )
 
         maxav = bound_kwargs.get("maxav", "fail")
-        bound = _codes.get_qdistrnd_distance_bound(self, num_trials, cutoff=cutoff, maxav=maxav)
+        bound = _codes.get_qdistrnd_distance_bound(
+            self.matrix,
+            num_trials,
+            is_subsystem_code=self.is_subsystem_code,
+            cutoff=cutoff,
+            maxav=maxav,
+        )
         self._distance_bound = min(best_bound, bound)
         return self._distance_bound
 
@@ -3591,7 +3527,13 @@ class CSSCode(QuditCode):
             code = CSSCode(self.matrix_z, self.matrix_x)
             code._is_subsystem_code = self._is_subsystem_code  # known, so not re-verified
         maxav = bound_kwargs.get("maxav", "fail")
-        bound = _codes.get_qdistrnd_distance_bound(code, num_trials, cutoff=cutoff, maxav=maxav)
+        bound = _codes.get_qdistrnd_distance_bound(
+            code.get_stabilizer_ops(Pauli.X),
+            num_trials,
+            matrix_z=code.matrix_z,
+            cutoff=cutoff,
+            maxav=maxav,
+        )
         return self._update_distance_bound(bound, pauli)
 
     def get_distance_bound_with_decoder(

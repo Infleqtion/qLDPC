@@ -100,6 +100,8 @@ Plumbing that one subpackage uses is an underscore name in that subpackage, and 
 ### Decoders
 
 - Build decoders from typed specifications, as in `decoders.bp_osd(...).build(pcm_or_dem)` or `decoders.mwpm(...).build_observable_decoder(dem)`.
+- Specifications of external decoders use their backends' own option names, such as `error_priors`, `observable_error_matrix`, or `error_probabilities`.
+  These differences between backends are intended, not inconsistencies to fix.
 - Keep error decoders (`decode_errors`, with `decode` as an alias) distinct from observable decoders (`decode_observables`).
   Code that consumes a user-supplied error decoder coerces it with `_as_error_decoder` from [`decoders/protocols.py`](src/qldpc/decoders/protocols.py), or outside `qldpc.decoders` with `build_error_decoder` (below), and calls `decode_errors`.
 - A method that decodes a matrix it constructs itself must reject prebuilt decoders with `reject_prebuilt_decoder` from `decoders/construction/_resolution.py`.

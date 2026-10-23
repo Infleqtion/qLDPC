@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Collection
+from typing import cast
 
 import galois
 import numpy as np
@@ -89,11 +90,11 @@ def get_fault_distance(
 
 def get_logical_error_and_discard_rate(
     circuit_or_dem: stim.Circuit | stim.DetectorErrorModel,
-    sinter_decoder: sinter.Decoder,
+    decoder: sinter.Decoder | decoders.DeferredDecoderInput,
     num_samples: int,
     *,
-    post_select: Collection[int] = (),
-    post_select_observables: Collection[int] = (),
+    post_select: bool | Collection[int] = False,
+    post_select_observables: bool | Collection[int] = False,
     dem_to_decode: stim.DetectorErrorModel | None = None,
 ) -> tuple[float, float]:
     """Compute a logical error rate and discard rate from samples of the provided circuit.
@@ -103,12 +104,14 @@ def get_logical_error_and_discard_rate(
 
     This method is provided for convenience, but if you are doing heavy numerics you should probably
     build a sinter.Task and call sinter.collect.  In this case, circuit_or_dem should just be a
-    circuit, and the sinter.Task would be built as follows::
+    circuit, and the sinter.Task would be built as follows, after replacing ``post_select=True`` by
+    ``range(circuit.num_detectors)``, ``post_select_observables=True`` by
+    ``range(circuit.num_observables)``, and False by ``()``::
 
         postselection_mask = np.zeros(circuit.num_detectors, dtype=int)
-        postselection_mask[post_select] = 1
+        postselection_mask[list(post_select)] = 1
         postselected_observables_mask = np.zeros(circuit.num_observables, dtype=int)
-        postselected_observables_mask[post_select_observables] = 1
+        postselected_observables_mask[list(post_select_observables)] = 1
         task = sinter.Task(
             circuit=circuit,
             detector_error_model=dem_to_decode,
@@ -123,21 +126,30 @@ def get_logical_error_and_discard_rate(
         stats = sinter.collect(
             tasks=[task],  # or more tasks
             decoders=["custom"],
-            custom_decoders={"custom": sinter_decoder},
+            custom_decoders={"custom": decoder},
             num_shots=num_samples,
             # other options such as num_workers=os.cpu_count() or max_errors=100
         )
 
+    where a decoder that is not a Sinter decoder, such as ``decoders.bp_osd()``, must first be
+    wrapped in ``decoders.SinterDecoder(decoder=decoder)``.
+
     Args:
         circuit_or_dem: The circuit or detector error model we wish to sample.
-        sinter_decoder: The circuit-level decoder used to predict observable flips.
+        decoder: The circuit-level decoder used to predict observable flips: a Sinter decoder, or a
+            qLDPC decoder input such as the specification ``decoders.bp_osd()``, which is wrapped in
+            ``decoders.SinterDecoder(decoder=decoder)``.  None selects the default decoder of a
+            ``decoders.SinterDecoder``.
         num_samples: The number of times to sample the circuit_or_dem.
 
     Keyword args:
-        post_select: The detectors in circuit_or_dem to post-select on.
-        post_select_observables: The observables to post-select on.  Any time the decoder's
-            prediction for these observable flips do not agree with the actual observable flips, the
-            shot is discarded rather than counting as an error.
+        post_select: The detectors to post-select on: True for all detectors of circuit_or_dem,
+            False (the default) for none, or a collection of detector indices.  Shots in which any
+            of these detectors fires are discarded.
+        post_select_observables: The observables to post-select on: True for all observables,
+            False (the default) for none, or a collection of observable indices.  Any time the
+            decoder's prediction for these observable flips do not agree with the actual observable
+            flips, the shot is discarded rather than counting as an error.
         dem_to_decode: The detector error model to decode.  This DEM should include _all_ detectors,
             including any that are post-selected on: the decoder receives every detector bit, for
             consistency with how Sinter works.  If ``dem_to_decode is None``, this method decodes
@@ -187,10 +199,14 @@ def get_logical_error_and_discard_rate(
         num_discards += int(np.sum(~shot_mask))
 
     # decode and identify incorrectly predicted observable flips
-    compiled_sinter_decoder = sinter_decoder.compile_decoder_for_dem(
-        dem if dem_to_decode is None else dem_to_decode
+    if not hasattr(decoder, "decode_via_files"):
+        decoder = decoders.SinterDecoder(decoder=decoder)
+    compiled_sinter_decoder = cast(sinter.Decoder, decoder).compile_decoder_for_dem(
+        dem=dem if dem_to_decode is None else dem_to_decode
     )
-    predicted_flips = compiled_sinter_decoder.decode_shots_bit_packed(det_data)
+    predicted_flips = compiled_sinter_decoder.decode_shots_bit_packed(
+        bit_packed_detection_event_data=det_data
+    )
 
     # the decoder may ask for shots to be discarded in a byte added to its predictions
     predicted_flips, discarded = split_discard_byte(
@@ -216,18 +232,21 @@ def get_logical_error_and_discard_rate(
 
 
 def _get_postselection_mask(
-    indices: Collection[int], size: int, name: str
+    indices: bool | Collection[int], size: int, name: str
 ) -> npt.NDArray[np.uint8] | None:
     """Build a bit-packed sinter post-selection mask, or None if there is nothing to select.
 
     Args:
-        indices: The indices to select, which may be negative to count back from the end.
+        indices: The indices to select, which may be negative to count back from the end, or True
+            to select all ``size`` indices, or False to select none.
         size: The number of detectors or observables that the mask covers.
         name: The kind of index ("Detector" or "Observable"), for error messages.
 
     Returns:
-        A little-endian bit-packed mask with ``size`` bits, or None if ``indices`` is empty.
+        A little-endian bit-packed mask with ``size`` bits, or None if no index is selected.
     """
+    if isinstance(indices, bool):
+        indices = range(size) if indices else ()
     indices = list(indices)
     if not indices:
         return None

@@ -9,11 +9,14 @@ import inspect
 import unittest.mock
 import warnings
 
+import galois
+import networkx as nx
 import numpy as np
 import pytest
 from sympy.abc import x, y
 
-from qldpc import _deprecations, abstract, codes, decoders
+from qldpc import _deprecations, abstract, codes, decoders, math
+from qldpc.objects import TannerGraph
 
 
 def test_aliases() -> None:
@@ -122,6 +125,69 @@ def test_deprecated_methods() -> None:
     assert puncture.__module__ == codes.ClassicalCode.__module__
     assert puncture.__qualname__ == "ClassicalCode.puncture"
     assert str(inspect.signature(puncture)).startswith("(self, bits")
+
+
+def test_deprecated_tanner_graph_methods() -> None:
+    """Deprecated conversions between matrices and Tanner graphs delegate to TannerGraph."""
+    matrix = galois.GF(3)([[1, 2, 0, 0], [0, 1, 1, 2]])
+    for cls, symplectic in [(codes.ClassicalCode, False), (codes.QuditCode, True)]:
+        name = cls.__name__
+        with pytest.warns(
+            DeprecationWarning, match=f"{name}.matrix_to_graph is DEPRECATED"
+        ) as caught:
+            graph = cls.matrix_to_graph(matrix)  # type: ignore[attr-defined]
+        assert caught[0].filename == __file__
+        expected = TannerGraph.from_matrix(matrix, symplectic=symplectic)
+        assert nx.utils.graphs_equal(graph, expected)
+
+        # a plain graph with a field attribute, as these methods formerly built, converts back
+        graph = nx.DiGraph(expected)
+        graph.field = expected.field
+        with pytest.warns(
+            DeprecationWarning, match=f"{name}.graph_to_matrix is DEPRECATED"
+        ) as caught:
+            assert np.array_equal(cls.graph_to_matrix(graph), matrix)  # type: ignore[attr-defined]
+        assert caught[0].filename == __file__
+
+    # subclasses inherit the deprecated methods
+    with pytest.warns(DeprecationWarning, match="QuditCode.matrix_to_graph is DEPRECATED"):
+        graph = codes.CSSCode.matrix_to_graph(matrix)  # type: ignore[attr-defined]
+    assert graph.symplectic
+
+
+def test_deprecated_guf_decoder_code() -> None:
+    """The deprecated code of a GUF decoder warns and rebuilds the code that it decodes."""
+    code = codes.FiveQubitCode()
+    for decoder, expected in [
+        (decoders.custom.GUFDecoder(code.matrix), codes.ClassicalCode(code.matrix)),
+        (
+            decoders.custom.GUFDecoder(code.matrix, symplectic=True),
+            codes.QuditCode(-math.symplectic_conjugate(code.matrix)),
+        ),
+    ]:
+        with pytest.warns(DeprecationWarning, match="GUFDecoder.code is DEPRECATED") as caught:
+            assert decoder.code == expected  # type: ignore[attr-defined]
+        assert caught[0].filename == __file__
+
+
+def test_deprecated_get_distance_bound() -> None:
+    """The deprecated QDistRnd distance bound sends GAP the same commands as the code methods."""
+    stabilizer_code, css_code = codes.FiveQubitCode(), codes.SurfaceCode(2)
+    subsystem_code = codes.QuditCode(codes.SHYPSCode(2).matrix)
+    with (
+        unittest.mock.patch("qldpc.external.gap.require_package"),
+        unittest.mock.patch("qldpc.external.gap.is_installed", return_value=True),
+        unittest.mock.patch("qldpc.external.gap.get_output", return_value="3") as get_output,
+    ):
+        for code, get_bound in [
+            (stabilizer_code, lambda: stabilizer_code.get_distance_bound(1, backend="gap")),
+            (css_code, lambda: css_code.get_distance_bound(1, pauli="Z", backend="gap")),
+        ]:
+            code.forget_distance()
+            assert get_bound() == _deprecations.core.get_distance_bound(code) == 3
+            assert get_output.call_args_list[-2] == get_output.call_args_list[-1]
+        with pytest.raises(ValueError, match="non-CSS subsystem codes"):
+            _deprecations.core.get_distance_bound(subsystem_code)
 
 
 def test_deprecated_small_group_methods() -> None:

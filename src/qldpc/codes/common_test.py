@@ -16,6 +16,7 @@ import networkx as nx
 import numpy as np
 import numpy.typing as npt
 import pytest
+import scipy.sparse
 import stim
 
 from qldpc import abstract, codes, decoders, external, math
@@ -63,6 +64,10 @@ def test_constructions_classical(pytestconfig: pytest.Config) -> None:
     code = codes.ClassicalCode(bool_matrix)
     assert np.array_equal(code.matrix, np.array(bool_matrix, dtype=int))
     assert np.array_equal(codes.ClassicalCode(np.array(bool_matrix)).matrix, code.matrix)
+
+    # sparse matrices are densified
+    sparse_matrix = scipy.sparse.csr_array(np.array(bool_matrix, dtype=int))
+    assert np.array_equal(codes.ClassicalCode(sparse_matrix).matrix, code.matrix)
 
     # construct a code from its generator matrix
     code = codes.ClassicalCode.random(6, 4, field=3)
@@ -213,12 +218,12 @@ def test_distance_classical(bits: int = 3) -> None:
 def test_conversions_classical(bits: int = 5, checks: int = 3) -> None:
     """Conversions between matrix and graph representations of a classical code."""
     code = codes.ClassicalCode.random(bits, checks)
-    assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(code.graph))
+    assert np.array_equal(code.matrix, code.graph.to_matrix())
 
     # a check that addresses no bits is an isolated vertex of the graph, so the round trip recovers
     # every row, including an all-zero one at either end of the matrix
     code = codes.ClassicalCode([[0, 0, 0], [1, 1, 0], [0, 1, 1], [0, 0, 0]])
-    assert np.array_equal(code.matrix, codes.ClassicalCode.graph_to_matrix(code.graph))
+    assert np.array_equal(code.matrix, code.graph.to_matrix())
 
 
 def test_automorphism(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
@@ -428,7 +433,7 @@ def test_qudit_codes() -> None:
 
     # a check that addresses no qudits is still a row of the parity check matrix, at either end
     trivial_code = codes.QuditCode.from_strings(["I I I", "X X X", "I I I"])
-    assert np.array_equal(trivial_code.matrix, codes.QuditCode.graph_to_matrix(trivial_code.graph))
+    assert np.array_equal(trivial_code.matrix, trivial_code.graph.to_matrix())
 
     # equivalence to code with redundant stabilizers
     redundant_code = codes.QuditCode(np.vstack([code.matrix, code.matrix]))
@@ -697,8 +702,7 @@ def test_css_joint_distance_cache() -> None:
 def test_conversions_quantum(field: int, bits: int = 5, checks: int = 3) -> None:
     """Conversions between matrix and graph representations of a code."""
     code = get_random_qudit_code(bits, checks, field)
-    graph = codes.QuditCode.matrix_to_graph(code.matrix)
-    assert np.array_equal(code.matrix, codes.QuditCode.graph_to_matrix(graph))
+    assert np.array_equal(code.matrix, code.graph.to_matrix())
 
 
 @pytest.mark.parametrize("field", [2, 3])
@@ -1466,6 +1470,25 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
         non_css.get_code_params(bound=True, decoder=decoder)
 
 
+def test_deprecated_abstract_code_graph() -> None:
+    """A direct subclass of AbstractCode may still define its Tanner graph with matrix_to_graph."""
+
+    class MinimalCode(codes.AbstractCode):
+        # abstract members that this test does not use
+        __eq__ = __len__ = __str__ = canonicalized = dimension = None  # type: ignore[assignment]
+
+    class LegacyCode(MinimalCode):
+        @staticmethod
+        def matrix_to_graph(matrix: npt.NDArray[np.int_]) -> nx.DiGraph:
+            return nx.DiGraph([(0, 1)])
+
+    with pytest.raises(NotImplementedError, match="does not define its Tanner graph"):
+        assert MinimalCode([[1, 1]]).graph
+    with pytest.warns(DeprecationWarning, match="matrix_to_graph is deprecated") as caught:
+        assert list(LegacyCode([[1, 1]]).graph.edges) == [(0, 1)]
+    assert caught[0].filename == __file__
+
+
 def test_deprecated_decoder_kwargs_warning_location() -> None:
     """A high-level legacy decoder warning points to the user's call site."""
     code = codes.RepetitionCode(3)
@@ -1644,7 +1667,10 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         ) as gap_bound,
     ):
         assert code.get_distance_bound(pauli=Pauli.Z) == 4
-    gap_bound.assert_called_once_with(code, 1, cutoff=None, maxav="fail")
+    (matrix_x, num_trials), kwargs = gap_bound.call_args
+    assert np.array_equal(matrix_x, code.matrix_x) and num_trials == 1
+    assert np.array_equal(kwargs.pop("matrix_z"), code.matrix_z)
+    assert kwargs == {"cutoff": None, "maxav": "fail"}
 
     code.forget_distance()
     with (
@@ -1675,7 +1701,10 @@ def test_css_auto_distance_bound_backend_selection() -> None:
         ) as qudit_gap_bound,
     ):
         assert qudit_code.get_distance_bound(pauli=Pauli.Z) == 2
-    qudit_gap_bound.assert_called_once_with(qudit_code, 1, cutoff=None, maxav="fail")
+    (matrix_x, num_trials), kwargs = qudit_gap_bound.call_args
+    assert np.array_equal(matrix_x, qudit_code.matrix_x) and num_trials == 1
+    assert np.array_equal(kwargs.pop("matrix_z"), qudit_code.matrix_z)
+    assert kwargs == {"cutoff": None, "maxav": "fail"}
 
 
 def test_css_auto_distance_bound_options_of_unavailable_backends() -> None:
@@ -1759,7 +1788,10 @@ def test_css_distance_bound_backend_selection() -> None:
             )
             == 4
         )
-    gap_bound.assert_called_once_with(code, 3, cutoff=2, maxav="average")
+    (matrix_x, num_trials), kwargs = gap_bound.call_args
+    assert np.array_equal(matrix_x, code.matrix_x) and num_trials == 3
+    assert np.array_equal(kwargs.pop("matrix_z"), code.matrix_z)
+    assert kwargs == {"cutoff": 2, "maxav": "average"}
 
     # GAP bounds Z-type logical operators, so it bounds X-type ones of the code with X and Z swapped
     surface_code = codes.SurfaceCode(2)
@@ -1771,9 +1803,8 @@ def test_css_distance_bound_backend_selection() -> None:
         ) as gap_bound,
     ):
         assert surface_code.get_distance_bound(pauli=Pauli.X, backend="gap") == 2
-    swapped_code = gap_bound.call_args.args[0]
-    assert np.array_equal(swapped_code.matrix_x, surface_code.matrix_z)
-    assert np.array_equal(swapped_code.matrix_z, surface_code.matrix_x)
+    assert np.array_equal(gap_bound.call_args.args[0], surface_code.matrix_z)
+    assert np.array_equal(gap_bound.call_args.kwargs["matrix_z"], surface_code.matrix_x)
 
     code.forget_distance()
     with pytest.raises(ValueError, match="not recognized by sqetch"):

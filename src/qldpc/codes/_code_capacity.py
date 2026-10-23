@@ -23,7 +23,6 @@ from qldpc._utils import get_external_caller_stacklevel
 from qldpc.decoders._capabilities import compiles_for_dem, is_prebuilt_observable_decoder
 from qldpc.decoders.adapters._observable_decoders import (
     BitPackedObservableDecoder,
-    ErrorsToFieldObservablesDecoder,
     validate_decoder_output,
 )
 from qldpc.decoders.common import ObservableDecodingFallbackWarning
@@ -251,50 +250,100 @@ def get_code_capacity_decoder(
             require_dimensions=False,
         )
 
-    native_error: Exception | None = None
-    if isinstance(decoder, DecoderSpec):
-        is_binary = getattr(type(syndrome_matrix), "order", 2) == 2
-        if not decoder.infers_errors or (is_binary and decoder.predicts_observables_natively):
-            dem = build_dem()
-            if not decoder.infers_errors:
-                # an observable-only specification has nothing to fall back to
-                observable_decoder = decoder.build_observable_decoder(dem)
-            else:
-                try:
-                    observable_decoder = decoder.build_observable_decoder(dem)
-                except ValueError as error:
-                    native_error = error
-            if native_error is None:
-                return _get_observable_code_capacity_decoder(
-                    observable_decoder,
-                    syndrome_matrix,
-                    observable_matrix,
-                    "A decoder specification",
-                    require_dimensions=False,
-                )
-            spec_repr = repr(decoder)
-            if len(spec_repr) > _MAX_SPEC_REPR_LENGTH:
-                spec_repr = spec_repr[: _MAX_SPEC_REPR_LENGTH - 4] + "...)"
-            warnings.warn(
-                f"{spec_repr} could not build an observable decoder for this code-capacity"
-                f" detector error model ({type(native_error).__name__}: {native_error}), so qLDPC"
-                " is decoding errors with the syndrome matrix instead.  Pass"
-                " decoder=decoders.from_matrix(spec.build) to select error decoding explicitly",
-                ObservableDecodingFallbackWarning,
-                stacklevel=get_external_caller_stacklevel(),
-            )
-
-    try:
-        error_decoder = build_error_decoder(
+    if isinstance(decoder, DecoderSpec) and not decoder.infers_errors:
+        # an observable-only specification has nothing to fall back to
+        return _get_observable_code_capacity_decoder(
+            decoder.build_observable_decoder(build_dem()),
             syndrome_matrix,
-            # a remaining constructor may build either kind of decoder, which this call checks
-            decoder=decoder,  # type:ignore[arg-type]
+            observable_matrix,
+            "A decoder specification",
+            require_dimensions=False,
         )
-    except ValueError as error:
-        if native_error is not None:
+
+    if (
+        isinstance(decoder, DecoderSpec)
+        and decoder.predicts_observables_natively
+        and getattr(type(syndrome_matrix), "order", 2) == 2
+    ):
+        dem = build_dem()
+        try:
+            observable_decoder = decoder.build_observable_decoder(dem)
+        except ValueError as error:
+            native_error = error
+        else:
+            return _get_observable_code_capacity_decoder(
+                observable_decoder,
+                syndrome_matrix,
+                observable_matrix,
+                "A decoder specification",
+                require_dimensions=False,
+            )
+        spec_repr = repr(decoder)
+        if len(spec_repr) > _MAX_SPEC_REPR_LENGTH:
+            spec_repr = spec_repr[: _MAX_SPEC_REPR_LENGTH - 4] + "...)"
+        warnings.warn(
+            f"{spec_repr} could not build an observable decoder for this code-capacity"
+            f" detector error model ({type(native_error).__name__}: {native_error}), so qLDPC"
+            " is decoding errors with the syndrome matrix instead.  Pass"
+            " decoder=decoders.from_matrix(spec.build) to select error decoding explicitly",
+            ObservableDecodingFallbackWarning,
+            stacklevel=get_external_caller_stacklevel(),
+        )
+        try:
+            error_decoder = build_error_decoder(syndrome_matrix, decoder=decoder)
+        except ValueError as error:
             raise error from native_error
-        raise
+        return CodeCapacityDecoder.from_error_decoder(
+            error_decoder, syndrome_matrix, observable_matrix
+        )
+
+    error_decoder = build_error_decoder(
+        syndrome_matrix,
+        # a remaining constructor may build either kind of decoder, which this call checks
+        decoder=decoder,  # type:ignore[arg-type]
+    )
     return CodeCapacityDecoder.from_error_decoder(error_decoder, syndrome_matrix, observable_matrix)
+
+
+class ErrorsToFieldObservablesDecoder(ObservableDecoder):
+    """Observable decoder that converts the errors that an error decoder infers into observables.
+
+    The observable values of an inferred error are ``observable_matrix @ error``, over the field of
+    observable_matrix.  If the error decoder signals erasure, its erasure bit is appended to each
+    prediction.
+    """
+
+    def __init__(
+        self,
+        error_decoder: ErrorDecoder,
+        observable_matrix: galois.FieldArray | None,
+        field: type[galois.FieldArray],
+        num_error_locations: int,
+    ) -> None:
+        self.error_decoder = error_decoder
+        self.observable_matrix = observable_matrix
+        self.field = field
+        self.num_error_locations = num_error_locations
+        self.has_erasure_bit = bool(getattr(error_decoder, "has_erasure_bit", False))
+
+    def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Decode an error syndrome and return predicted observable values."""
+        num_error_locations = self.num_error_locations
+        error = np.asarray(self.error_decoder.decode_errors(syndrome))
+        validate_decoder_output(
+            error,
+            num_error_locations,
+            int(self.has_erasure_bit),
+            self.field,
+            "An error decoder inferred an error",
+        )
+        inferred_error = self.field(error[:num_error_locations].astype(int))
+        observables = (
+            inferred_error
+            if self.observable_matrix is None
+            else self.observable_matrix @ inferred_error
+        )
+        return np.concatenate([observables.view(np.ndarray), error[num_error_locations:]])
 
 
 def _get_observable_code_capacity_decoder(

@@ -4,8 +4,12 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
+import numpy.typing as npt
 import pytest
+import sinter
 import stim
 
 from qldpc import circuits, codes, math
@@ -55,63 +59,50 @@ def test_state_prep_benchmarks() -> None:
         == 0.123
     )
 
-    # find observables automatically and post-select on all measurements
+    # find observables automatically, and add flags
     task = circuits.get_state_prep_diagnostic_tasks(
-        code,
-        circuit,
-        error_rates[:1],
-        noise_model_family,
-        post_select=True,
+        code, circuit, error_rates[:1], noise_model_family, add_flags=True
     )[0]
     diagnostic_circuit, _ = circuits.get_state_prep_diagnostic_circuit(
         code, circuit, add_flags=True
     )
-    postselection_array = np.zeros(task.circuit.num_detectors, dtype=int)
-    postselection_array[: circuit.num_measurements] = 1
-    postselection_mask = np.packbits(postselection_array, bitorder="little")
     assert task.circuit == noise_model_family(float(error_rates[0])).noisy_circuit(
         diagnostic_circuit
     )
-    assert np.array_equal(task.postselection_mask, postselection_mask)
 
-    # we can also post-select manually
-    circuit.append("DETECTOR", stim.target_rec(-1))
-    diagnostic_circuit, _ = circuits.get_state_prep_diagnostic_circuit(code, circuit)
-    task = circuits.get_state_prep_diagnostic_tasks(
-        code,
-        circuit,
-        error_rates[:1],
-        noise_model_family,
-        observables=string_observables,
-        post_select=range(circuit.num_detectors),
-    )[0]
-    assert task.circuit == noise_model_family(float(error_rates[0])).noisy_circuit(
-        diagnostic_circuit
+
+def test_state_prep_post_selection() -> None:
+    """Post-select on prep and flag detectors and observables, but never on final stabilizers."""
+    # a prep detector (index 0), and one unaddressed measurement for a flag (index 1)
+    code = codes.SteaneCode()
+    circuit = circuits.get_encoding_circuit(code, only_zero=True)
+    circuit += stim.Circuit("R 7 8\nM 7 8\nDETECTOR rec[-1]")
+    num_detectors = 2 + len(code.get_stabilizer_ops())
+
+    def get_task(**kwargs: Any) -> sinter.Task:
+        return circuits.get_state_prep_diagnostic_tasks(code, circuit, [0.01], **kwargs)[0]
+
+    task = get_task(add_flags=True)
+    assert task.postselection_mask is None and task.postselected_observables_mask is None
+    assert np.array_equal(_selected(get_task(post_select=True), num_detectors - 1), [1] + [0] * 6)
+    assert np.array_equal(
+        _selected(get_task(add_flags=True, post_select=True), num_detectors), [1, 1] + [0] * 6
     )
-    assert np.array_equal(task.postselection_mask, postselection_mask)
-
-    # we can only manually post-select on detectors that are present in the circuit
+    assert np.array_equal(
+        _selected(get_task(add_flags=True, post_select="flags"), num_detectors), [0, 1] + [0] * 6
+    )
+    assert np.array_equal(
+        _selected(get_task(add_flags=True, post_select=[-2]), num_detectors), [1, 0] + [0] * 6
+    )
     with pytest.raises(ValueError, match="selectable prep/flag detectors"):
-        circuits.get_state_prep_diagnostic_tasks(
-            code,
-            circuit,
-            error_rates[:1],
-            noise_model_family,
-            observables=string_observables,
-            post_select=[circuit.num_measurements],
-        )
-    negative_task = circuits.get_state_prep_diagnostic_tasks(
-        code,
-        circuit,
-        error_rates[:1],
-        noise_model_family,
-        observables=string_observables,
-        post_select=[-1],
-    )[0]
-    assert negative_task.postselection_mask is not None
-    selected_bits = np.unpackbits(negative_task.postselection_mask, bitorder="little")
-    assert selected_bits[circuit.num_detectors - 1] == 1
-    assert np.sum(selected_bits[: circuit.num_detectors]) == 1
+        get_task(add_flags=True, post_select=[2])
+    with pytest.raises(ValueError, match="add_flags=True"):
+        get_task(post_select="flags")
+
+    task = get_task(post_select_observables=True)
+    assert task.postselected_observables_mask is not None
+    selected = np.unpackbits(task.postselected_observables_mask, bitorder="little")
+    assert np.array_equal(selected[: task.circuit.num_observables], [1] * code.dimension)
 
 
 def test_state_prep_benchmark_remaps_data_qubits() -> None:
@@ -150,3 +141,9 @@ def test_pure_logical_state(pytestconfig: pytest.Config) -> None:
     # data qubits that the circuit never touches are in |0>
     zero_code = codes.QuditCode([[0, 0, 1, 0], [0, 0, 0, 1]])
     assert circuits.get_state_prep_diagnostic_circuit(zero_code, stim.Circuit("X 0\nX 0"))
+
+
+def _selected(task: sinter.Task, num_detectors: int) -> npt.NDArray[np.uint8]:
+    """The post-selection bits of the first detectors of a Sinter task."""
+    assert task.postselection_mask is not None
+    return np.unpackbits(task.postselection_mask, bitorder="little")[:num_detectors]

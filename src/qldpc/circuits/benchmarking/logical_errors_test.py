@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+import sinter
 import stim
 
 from qldpc import circuits, decoders
@@ -45,18 +46,18 @@ def test_logical_error_and_discard_rate() -> None:
     # bypass sinter to compute logical error rates
     logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
         circuit,
-        sinter_decoder=decoders.TrivialDecoder(),
+        decoder=decoders.TrivialDecoder(),
         num_samples=1,
         post_select=range(circuit.num_detectors),
     )
     assert logical_error_rate == 0
     assert discard_rate == 0
 
-    # post-selecting on a detector that always fires discards every shot, also for arrays
+    # post-selecting on a detector that always fires discards every shot, also for arrays and True
     dem = stim.DetectorErrorModel("error(1) D0 L0")
-    for post_select in ([0], np.array([0])):
+    for post_select in ([0], np.array([0]), True):
         logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
-            dem, sinter_decoder=decoders.TrivialDecoder(), num_samples=2, post_select=post_select
+            dem, decoder=decoders.TrivialDecoder(), num_samples=2, post_select=post_select
         )
         assert np.isnan(logical_error_rate)
         assert discard_rate == 1
@@ -66,16 +67,25 @@ def test_logical_error_and_discard_rate() -> None:
     dem.append("error", [1], [stim.DemTarget.logical_observable_id(circuit.num_observables)])
     logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
         dem,
-        sinter_decoder=decoders.TrivialDecoder(),
+        decoder=decoders.TrivialDecoder(),
         num_samples=1,
         post_select_observables=[circuit.num_observables],
     )
     assert np.isnan(logical_error_rate)
     assert discard_rate == 1
 
+    # a decoder built into Sinter, whose compile_decoder_for_dem takes the model by keyword only
+    logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
+        stim.DetectorErrorModel("error(0.1) D0 L0"),
+        decoder=sinter.BUILT_IN_DECODERS["pymatching"],
+        num_samples=10,
+    )
+    assert logical_error_rate == 0
+    assert discard_rate == 0
+
     # sampling nothing reports no rates rather than dividing by zero
     logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
-        circuit, sinter_decoder=decoders.TrivialDecoder(), num_samples=0
+        circuit, decoder=decoders.TrivialDecoder(), num_samples=0
     )
     assert np.isnan(logical_error_rate)
     assert discard_rate == 0
@@ -84,7 +94,7 @@ def test_logical_error_and_discard_rate() -> None:
     with pytest.raises(ValueError, match="Incompatible detector error models"):
         circuits.get_logical_error_and_discard_rate(
             circuit,
-            sinter_decoder=decoders.TrivialDecoder(),
+            decoder=decoders.TrivialDecoder(),
             num_samples=1,
             dem_to_decode=stim.DetectorErrorModel(),
         )
@@ -104,9 +114,10 @@ def test_erasure_counts_as_a_discard() -> None:
 
     # every error of weight one is decoded exactly, and every heavier error is erased, so the
     # logical error rate is exactly zero and the discard rate is 1 - 0.8**7 - 7 * 0.2 * 0.8**6
-    decoder = decoders.SinterDecoder(decoder=decoders.lookup(max_weight=1, add_erasure_bit=True))
+    # a decoder specification is built for the sampled detector error model
+    decoder = decoders.lookup(max_weight=1, add_erasure_bit=True)
     logical_error_rate, discard_rate = circuits.get_logical_error_and_discard_rate(
-        circuit, sinter_decoder=decoder, num_samples=1000
+        circuit, decoder, num_samples=1000
     )
     assert logical_error_rate == 0
     assert 0.30 < discard_rate < 0.55

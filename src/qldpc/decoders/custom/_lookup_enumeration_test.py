@@ -10,9 +10,11 @@ import galois
 import numpy as np
 import numpy.typing as npt
 import pytest
+import scipy.sparse
 
 from qldpc import math
 from qldpc.decoders.custom._lookup_enumeration import iter_errors_and_syndromes
+from qldpc.math import IntegerArray
 
 
 @pytest.mark.parametrize(
@@ -101,6 +103,14 @@ def test_probability_cutoff_prunes_without_enumerating() -> None:
     assert not np.any(errors[:, 6:])
 
 
+def test_plain_and_sparse_matrices() -> None:
+    """Dense and sparse matrices that are not finite-field arrays are interpreted over GF(2)."""
+    matrix = galois.GF2([[1, 1, 0], [0, 1, 1]])
+    expected = _brute_force(matrix, 2, None, False)
+    for plain_matrix in [matrix.view(np.ndarray), scipy.sparse.csr_array(matrix.view(np.ndarray))]:
+        assert dict(_enumerate(plain_matrix, 2, None, False)) == expected
+
+
 def _brute_force(
     matrix: galois.FieldArray,
     max_weight: int,
@@ -136,7 +146,7 @@ def _brute_force(
 
 
 def _enumerate(
-    matrix: galois.FieldArray,
+    matrix: IntegerArray,
     max_weight: int,
     syndrome_mask: npt.NDArray[np.bool_] | None,
     symplectic: bool,

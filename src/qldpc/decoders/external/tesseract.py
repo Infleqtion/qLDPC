@@ -14,7 +14,7 @@ import numpy.typing as npt
 import scipy.sparse
 import stim
 
-from qldpc._deprecations.decoders import deprecate_error_rate_option
+from qldpc._deprecations.decoders import deprecate_error_rate_option, translate_error_rate
 from qldpc._utils import format_docstring
 from qldpc.math import IntegerArray
 
@@ -440,7 +440,6 @@ def tesseract_preset(
         seed=2_384_753,
     )
     # DEPRECATED: see qldpc._deprecations
-    if error_channel is None:  # the default, which error_rate may replace
-        return make_spec(error_rate=error_rate)
-    # DEPRECATED: see qldpc._deprecations
-    return make_spec(error_channel=error_channel, error_rate=error_rate)
+    if error_rate is not None:
+        error_channel = translate_error_rate(error_rate, error_channel is not None)
+    return make_spec(error_channel=error_channel)

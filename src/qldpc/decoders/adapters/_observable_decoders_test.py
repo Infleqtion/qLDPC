@@ -9,23 +9,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 
-from qldpc import decoders
 from qldpc.decoders.adapters import _observable_decoders
-
-
-def test_errors_to_field_observables_decoder() -> None:
-    """An inferred field-valued error is projected onto the requested observables."""
-    field = galois.GF(3)
-    observable_matrix = field([[1, 2, 0]])
-    decoder = _observable_decoders.ErrorsToFieldObservablesDecoder(
-        _FixedErrorDecoder([2, 1, 0]), observable_matrix, field, 3
-    )
-    assert np.array_equal(decoder.decode_observables(np.array([0])), [1])
-
-    identity_decoder = _observable_decoders.ErrorsToFieldObservablesDecoder(
-        _FixedErrorDecoder([2, 1, 0, 1], has_erasure_bit=True), None, field, 3
-    )
-    assert np.array_equal(identity_decoder.decode_observables(np.array([0])), [2, 1, 0, 1])
 
 
 def test_bit_packed_observable_decoder() -> None:
@@ -48,8 +32,8 @@ def test_bit_packed_observable_decoder() -> None:
 
 def test_validate_observable_decoder() -> None:
     """Observable-decoder validation narrows valid objects and rejects invalid ones."""
-    decoder = _observable_decoders.ErrorsToFieldObservablesDecoder(
-        _FixedErrorDecoder([0]), None, galois.GF(2), 1
+    decoder = _observable_decoders.BitPackedObservableDecoder(
+        _BitPackedCompiledDecoder(np.zeros((1, 1), dtype=np.uint8)), num_observables=1
     )
     assert _observable_decoders.validate_observable_decoder(decoder, "The decoder") is decoder
     with pytest.raises(TypeError, match="must provide a decode_observables method"):
@@ -79,15 +63,6 @@ def test_validate_decoder_output() -> None:
         _observable_decoders.validate_decoder_output(
             np.array([0, 2]), 1, 1, field, "A decoder returned"
         )
-
-
-class _FixedErrorDecoder(decoders.ErrorDecoder):
-    def __init__(self, output: npt.ArrayLike, has_erasure_bit: bool = False) -> None:
-        self.output = np.asarray(output)
-        self.has_erasure_bit = has_erasure_bit
-
-    def decode_errors(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        return self.output
 
 
 class _BitPackedCompiledDecoder:

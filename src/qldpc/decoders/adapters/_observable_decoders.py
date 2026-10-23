@@ -10,51 +10,10 @@ import galois
 import numpy as np
 import numpy.typing as npt
 
-from ..protocols import ErrorDecoder, ObservableDecoder
+from ..protocols import ObservableDecoder
 
 ####################################################################################################
 # observable decoder adapters
-
-
-class ErrorsToFieldObservablesDecoder(ObservableDecoder):
-    """Observable decoder that converts the errors that an error decoder infers into observables.
-
-    The observable values of an inferred error are ``observable_matrix @ error``, over the field of
-    observable_matrix.  If the error decoder signals erasure, its erasure bit is appended to each
-    prediction.
-    """
-
-    def __init__(
-        self,
-        error_decoder: ErrorDecoder,
-        observable_matrix: galois.FieldArray | None,
-        field: type[galois.FieldArray],
-        num_error_locations: int,
-    ) -> None:
-        self.error_decoder = error_decoder
-        self.observable_matrix = observable_matrix
-        self.field = field
-        self.num_error_locations = num_error_locations
-        self.has_erasure_bit = bool(getattr(error_decoder, "has_erasure_bit", False))
-
-    def decode_observables(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Decode an error syndrome and return predicted observable values."""
-        num_error_locations = self.num_error_locations
-        error = np.asarray(self.error_decoder.decode_errors(syndrome))
-        validate_decoder_output(
-            error,
-            num_error_locations,
-            int(self.has_erasure_bit),
-            self.field,
-            "An error decoder inferred an error",
-        )
-        inferred_error = self.field(error[:num_error_locations].astype(int))
-        observables = (
-            inferred_error
-            if self.observable_matrix is None
-            else self.observable_matrix @ inferred_error
-        )
-        return np.concatenate([observables.view(np.ndarray), error[num_error_locations:]])
 
 
 class BitPackedObservableDecoder(ObservableDecoder):
