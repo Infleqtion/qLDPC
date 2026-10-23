@@ -23,7 +23,7 @@ import scipy.linalg
 import scipy.sparse
 import stim
 
-from qldpc import abstract, decoders, external, math
+from qldpc import _deprecations, abstract, decoders, external, math
 from qldpc._deprecations.decoders import (
     merge_legacy_css_decoder_args,
     merge_legacy_decoder_args,
@@ -224,10 +224,18 @@ class AbstractCode(abc.ABC):
         """Rank of this code's parity check matrix."""
         return len(self.canonicalized.matrix)
 
-    @functools.cached_property
-    @abc.abstractmethod
+    @property
     def graph(self) -> TannerGraph:
-        """Tanner graph of this code."""
+        """Tanner graph of this code, which subclasses define."""
+        matrix_to_graph = getattr(type(self), "matrix_to_graph", None)
+        if matrix_to_graph is not None:  # DEPRECATED: see qldpc._deprecations
+            _deprecations.warn_deprecated(
+                f"{type(self).__name__}.matrix_to_graph is deprecated; define the graph property"
+                " instead, for example with qldpc.objects.TannerGraph.from_matrix",
+                stacklevel=get_external_caller_stacklevel(),
+            )
+            return matrix_to_graph(self.matrix)
+        raise NotImplementedError(f"{type(self).__name__} does not define its Tanner graph")
 
     @functools.cached_property
     @abc.abstractmethod

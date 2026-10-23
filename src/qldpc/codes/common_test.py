@@ -1470,6 +1470,33 @@ def test_css_decoder_distance_bound_skips_gap_probe() -> None:
         non_css.get_code_params(bound=True, decoder=decoder)
 
 
+def test_deprecated_abstract_code_graph() -> None:
+    """A direct subclass of AbstractCode may still define its Tanner graph with matrix_to_graph."""
+
+    class MinimalCode(codes.AbstractCode):
+        def __eq__(self, other: object) -> bool:
+            return self is other
+
+        def __len__(self) -> int:
+            return self.matrix.shape[1]
+
+        def __str__(self) -> str:
+            return "MinimalCode"
+
+        canonicalized = dimension = None  # type: ignore[assignment]  # unused by this test
+
+    class LegacyCode(MinimalCode):
+        @staticmethod
+        def matrix_to_graph(matrix: npt.NDArray[np.int_]) -> nx.DiGraph:
+            return nx.DiGraph([(0, 1)])
+
+    with pytest.raises(NotImplementedError, match="does not define its Tanner graph"):
+        assert MinimalCode([[1, 1]]).graph
+    with pytest.warns(DeprecationWarning, match="matrix_to_graph is deprecated") as caught:
+        assert list(LegacyCode([[1, 1]]).graph.edges) == [(0, 1)]
+    assert caught[0].filename == __file__
+
+
 def test_deprecated_decoder_kwargs_warning_location() -> None:
     """A high-level legacy decoder warning points to the user's call site."""
     code = codes.RepetitionCode(3)
