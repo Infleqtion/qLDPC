@@ -113,6 +113,19 @@ _MATCHING_TYPE: type[Any] | None = None
 _MATCHING_TYPE_LOCK = threading.Lock()
 
 
+def _get_pymatching() -> Any:
+    """Import PyMatching or report a broken qLDPC installation."""
+    try:
+        import pymatching
+    except ModuleNotFoundError as error:
+        if error.name != "pymatching":
+            raise
+        raise ModuleNotFoundError(
+            "PyMatching is a required qLDPC dependency but is not installed. Reinstall qLDPC"
+        ) from None
+    return pymatching
+
+
 def _get_matching_type() -> type[Any]:
     """Return the protocol-compatible PyMatching subclass, creating it on first use."""
     global _MATCHING_TYPE
@@ -120,7 +133,7 @@ def _get_matching_type() -> type[Any]:
         return _MATCHING_TYPE
     with _MATCHING_TYPE_LOCK:
         if _MATCHING_TYPE is None:
-            import pymatching
+            pymatching = _get_pymatching()
 
             def decode_errors_detailed(
                 matching: Any, syndrome: npt.NDArray[np.int_]
@@ -263,7 +276,7 @@ def _get_observable_decoder_mwpm(
     other matching-construction arguments are unused.
     """
     if enable_correlations:
-        import pymatching
+        pymatching = _get_pymatching()
 
         matching = pymatching.Matching.from_detector_error_model(dem, enable_correlations=True)
         return MatchingObservableDecoder(matching, enable_correlations=True)
@@ -346,7 +359,7 @@ def _build_matching(
     **decoder_args: object,
 ) -> Any:
     """Build a Matching that predicts errors or, from a DEM, observable flips."""
-    import pymatching
+    pymatching = _get_pymatching()
 
     backend_options = dict(backend_options or {})
     _validate_backend_options(pymatching, backend_options)

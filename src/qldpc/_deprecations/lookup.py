@@ -19,6 +19,7 @@ import stim
 from qldpc import _deprecations
 from qldpc._utils import get_external_caller_stacklevel
 from qldpc.decoders.custom.lookup import (
+    LookupDecoder,
     ObservableLookupDecoder,
     WeightedLookupDecoder,
     WeightedObservableLookupDecoder,
@@ -67,12 +68,16 @@ def become_legacy_observable_decoder(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel,
     max_weight: int,
     **options: object,
-) -> None:
+) -> bool:
     """Warn about predict_observable_flips=True, and initialize a decoder as one that uses it.
 
     The decoder, a LookupDecoder that is being initialized, becomes a
     LegacyWeightedObservableLookupDecoder if it is a WeightedLookupDecoder, and a
-    LegacyObservableLookupDecoder otherwise, which is initialized with the given arguments.
+    LegacyObservableLookupDecoder otherwise, which is initialized with the given arguments.  An
+    instance of a user-defined subclass keeps its class, and is left for its caller to initialize.
+
+    Returns:
+        Whether the decoder was initialized.
     """
     legacy_class: type[ObservableLookupDecoder | WeightedObservableLookupDecoder]
     if isinstance(decoder, WeightedLookupDecoder):
@@ -92,7 +97,10 @@ def become_legacy_observable_decoder(
         f"predict_observable_flips=True is deprecated; {advice}",
         stacklevel=get_external_caller_stacklevel(),
     )
+    if type(decoder) not in (LookupDecoder, WeightedLookupDecoder):
+        return False
     decoder.__class__ = legacy_class
     # the arguments are those of a LookupDecoder, which an observable lookup decoder also accepts
     initialize = cast("Callable[..., None]", legacy_class.__init__)
     initialize(decoder, pcm_or_dem, max_weight, **options)
+    return True

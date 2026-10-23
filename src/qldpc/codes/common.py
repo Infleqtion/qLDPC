@@ -4152,6 +4152,14 @@ def _resolve_distance_backend(
         return backend
 
     options = set(bound_kwargs)
+    backend_specific = options & (_SQETCH_DISTANCE_BOUND_KWARGS | _GAP_DISTANCE_BOUND_KWARGS)
+    if backend_specific and not (
+        options <= _SQETCH_DISTANCE_BOUND_KWARGS or options <= _GAP_DISTANCE_BOUND_KWARGS
+    ):
+        raise ValueError(
+            f"Distance-bound options {sorted(options)} mix options of different backends; pass"
+            " options of one backend (sqetch, GAP/QDistRnd, or the decoder) at a time"
+        )
     if is_binary and options <= _SQETCH_DISTANCE_BOUND_KWARGS and external.sqetch.is_installed():
         return "sqetch"
     if options <= _GAP_DISTANCE_BOUND_KWARGS and external.gap.is_callable():

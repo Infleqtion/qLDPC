@@ -208,7 +208,9 @@ def require_package(name: str, repo: str | None = None) -> bool:
                 package,
                 package_repo,
                 availability,
-                confirm_install=package.lower() != name.lower(),
+                # the user agreed to install this package from a repo, or else from GAP's package
+                # distribution, so ask again before cloning a default repo instead
+                confirm_install=package.lower() != name.lower() or package_repo is None,
             )
         _subprocess_packages.update(requirements)
         _libgap_packages.clear()

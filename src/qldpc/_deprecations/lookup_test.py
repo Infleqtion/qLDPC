@@ -93,3 +93,16 @@ def _assert_decodes(
         for syndrome, flip in zip(syndromes, flips):
             for method in [copied_decoder.decode, copied_decoder.decode_errors]:
                 assert np.array_equal(method(syndrome, *args), flip)
+
+
+def test_subclass_keeps_its_class() -> None:
+    """The helper leaves an instance of a user-defined subclass for its caller to initialize."""
+
+    class CustomLookupDecoder(decoders.custom.LookupDecoder):
+        pass
+
+    decoder = object.__new__(CustomLookupDecoder)
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0")
+    with pytest.warns(DeprecationWarning, match="predict_observable_flips=True is deprecated"):
+        assert not lookup.become_legacy_observable_decoder(decoder, dem, 1)
+    assert type(decoder) is CustomLookupDecoder

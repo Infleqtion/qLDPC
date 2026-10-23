@@ -361,8 +361,8 @@ def merge_legacy_css_decoder_args(
     """Translate deprecated keyword arguments for the two sectors of a CSS code into decoder inputs.
 
     Sector-specific arguments override the shared arguments.  Each nonempty argument mapping warns
-    separately, naming the decoder= argument that replaces it.  If the two sectors get the same
-    decoder input and the same arguments, they also get the same translated decoder input.
+    separately, naming the decoder= argument that replaces it.  If the two sectors have the same
+    matrix, decoder input, and arguments, they also get the same translated decoder input.
 
     Args:
         matrix_x: The syndrome matrix of the sector that decodes X-type errors.
@@ -392,7 +392,12 @@ def merge_legacy_css_decoder_args(
             )
     sector_args_x = {**decoder_args, **(decoder_x_args or {})}
     sector_args_z = {**decoder_args, **(decoder_z_args or {})}
-    same_x_and_z = decoder_x is decoder_z and sector_args_x == sector_args_z
+    # compare matrices first: sector arguments may hold arrays, which compare only when shared
+    same_x_and_z = (
+        decoder_x is decoder_z
+        and np.array_equal(matrix_x, matrix_z)
+        and sector_args_x == sector_args_z
+    )
     if sector_args_x:
         _reject_decoder_with_legacy_args(decoder_x)
         decoder_x = _get_legacy_decoder_input(sector_args_x)
@@ -641,10 +646,11 @@ def decode_returns_observables(decoder: object) -> bool:
 
     if isinstance(decoder, (LegacyObservableLookupDecoder, LegacyWeightedObservableLookupDecoder)):
         return True
-    # a LookupDecoder decodes to errors, and reading its deprecated attributes would warn
-    if isinstance(decoder, (type, LookupDecoder)) or not getattr(
-        decoder, "decode_returns_observables", False
-    ):
+    # only a subclass of LookupDecoder that is built with predict_observable_flips=True keeps its
+    # class and returns observable flips, and reading its deprecated attributes would warn
+    if isinstance(decoder, LookupDecoder):
+        return decoder._outputs_observables
+    if isinstance(decoder, type) or not getattr(decoder, "decode_returns_observables", False):
         return False
     _deprecations.warn_deprecated(
         "Declaring decode_returns_observables=True is deprecated; a decoder that predicts"

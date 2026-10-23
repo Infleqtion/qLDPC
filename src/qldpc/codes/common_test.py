@@ -1481,6 +1481,23 @@ def test_deprecated_decoder_kwargs_warning_location() -> None:
         )
     assert received_tags == ["sector-x", "sector-z"]
 
+    # sector-specific arguments may hold arrays, such as per-qubit priors
+    surface_code = codes.SurfaceCode(3)
+    with pytest.warns(DeprecationWarning):
+        surface_code.get_logical_error_rate_func(
+            1,
+            decoder_x_kwargs={
+                "with_lookup": True,
+                "max_weight": 1,
+                "error_channel": np.full(len(surface_code), 0.1),
+            },
+            decoder_z_kwargs={
+                "with_lookup": True,
+                "max_weight": 1,
+                "error_channel": np.full(len(surface_code), 0.2),
+            },
+        )
+
     # legacy sector-specific arguments of a CSS code name their sector-specific replacements
     css_code = codes.SurfaceCode(2)
     with warnings.catch_warnings(record=True) as caught:
@@ -1665,6 +1682,10 @@ def test_css_auto_distance_bound_options_of_unavailable_backends() -> None:
             code.get_distance_bound(5, seed=1)
         with pytest.raises(ValueError, match="GAP cannot be called"):
             code.get_distance_bound(5, maxav="fail")
+        with pytest.raises(ValueError, match="mix options of different backends"):
+            code.get_distance_bound(5, seed=1, maxav="fail")
+        with pytest.raises(ValueError, match="mix options of different backends"):
+            code.get_distance_bound(5, seed=1, max_iter=5)
     qutrit_code = codes.SurfaceCode(2, field=3)
     qutrit_code.forget_distance()
     with pytest.raises(ValueError, match="sqetch only supports binary codes"):

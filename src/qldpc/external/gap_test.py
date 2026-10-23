@@ -571,6 +571,22 @@ def test_require_package_libgap(capsys: pytest.CaptureFixture[str]) -> None:
     assert "Falling back to the GAP executable" in terminal_output
     assert external.gap._subprocess_packages == {"qdistrnd"}
 
+    # without a repo, the fallback asks again before cloning the default repo
+    external.gap.require_package.cache_clear()
+    external.gap._subprocess_packages.clear()
+    with (
+        unittest.mock.patch("qldpc.external.gap._get_libgap", return_value=libgap),
+        unittest.mock.patch("qldpc.external.gap._is_gap_executable", return_value=True),
+        unittest.mock.patch("builtins.input", return_value="y") as confirm,
+        unittest.mock.patch("qldpc.external.gap._get_output_subprocess", return_value="fail"),
+        unittest.mock.patch("qldpc.external.gap._install_package_subprocess", install),
+    ):
+        assert external.gap.require_package("Example")
+    prompts = [call.args[0] for call in confirm.call_args_list]
+    assert len(prompts) == 2 and "GAP's package distribution" in prompts[0]
+    assert "https://github.com/gap-packages/Example" in prompts[1]
+    capsys.readouterr()
+
     external.gap.require_package.cache_clear()
     external.gap._subprocess_packages.clear()
     libgap.package_available = True

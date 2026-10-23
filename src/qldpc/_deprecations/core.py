@@ -300,6 +300,8 @@ def install_deprecated_methods() -> None:
     from qldpc.codes import BBCode, ClassicalCode, CSSCode, QuditCode
     from qldpc.decoders.custom import DirectDecoder, LookupDecoder
 
+    from .decoders import decode_returns_observables as returns_observables
+
     @_deprecated_method(ClassicalCode)
     def puncture(self: ClassicalCode, bits: Collection[int]) -> ClassicalCode:
         """Deprecated alias for ClassicalCode.punctured."""
@@ -367,23 +369,23 @@ def install_deprecated_methods() -> None:
 
     @_deprecated_method(LookupDecoder, attribute=True)
     def predict_observable_flips(self: LookupDecoder) -> bool:
-        """Deprecated attribute that is False, since a LookupDecoder infers errors."""
+        """Deprecated attribute that reports the deprecated predict_observable_flips option."""
         warn_deprecated(
             f"{type(self).__name__}.predict_observable_flips is DEPRECATED and will be removed from"
             " the public API",
             stacklevel=get_external_caller_stacklevel(),
         )
-        return False
+        return returns_observables(self)
 
     @_deprecated_method(LookupDecoder, attribute=True)
     def decode_returns_observables(self: LookupDecoder) -> bool:
-        """Deprecated attribute that is False, since a LookupDecoder infers errors."""
+        """Deprecated attribute that reports the deprecated predict_observable_flips option."""
         warn_deprecated(
             f"{type(self).__name__}.decode_returns_observables is DEPRECATED and will be removed"
             " from the public API",
             stacklevel=get_external_caller_stacklevel(),
         )
-        return False
+        return returns_observables(self)
 
     @_deprecated_method(SmallGroup, static=True)
     def number(order: int) -> int:

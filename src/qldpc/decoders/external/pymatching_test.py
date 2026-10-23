@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import builtins
 import concurrent.futures
 import pickle
 import sys
@@ -218,3 +219,33 @@ def test_pymatching_protocol_adapter_is_created_once(monkeypatch: pytest.MonkeyP
             assert adapter_types == {pymatching.Matching}
     finally:
         sys.setswitchinterval(switch_interval)
+
+
+def test_pymatching_missing_dependency_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A missing required dependency identifies a broken qLDPC installation."""
+    monkeypatch.setitem(sys.modules, "pymatching", None)
+    with pytest.raises(ModuleNotFoundError, match="required qLDPC dependency"):
+        pymatching._get_observable_decoder_mwpm(
+            stim.DetectorErrorModel("error(0.1) D0 L0"),
+            enable_correlations=True,
+        )
+
+
+def test_pymatching_transitive_import_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An import failure inside PyMatching is preserved instead of mislabeled as a missing extra."""
+
+    def import_with_missing_dependency(
+        name: str,
+        globals: dict[str, object] | None = None,
+        locals: dict[str, object] | None = None,
+        fromlist: tuple[str, ...] = (),
+        level: int = 0,
+    ) -> object:
+        del globals, locals, fromlist, level
+        assert name == "pymatching"
+        raise ModuleNotFoundError("No module named 'backend_dependency'", name="backend_dependency")
+
+    monkeypatch.delitem(sys.modules, "pymatching")
+    monkeypatch.setattr(builtins, "__import__", import_with_missing_dependency)
+    with pytest.raises(ModuleNotFoundError, match="backend_dependency"):
+        pymatching._get_pymatching()
