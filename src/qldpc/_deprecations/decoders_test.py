@@ -23,7 +23,7 @@ from qldpc._deprecations import decoders as deprecated_decoders
 from qldpc.conftest import run_python
 from qldpc.decoders.custom.guf import GUFDecoder
 from qldpc.decoders.custom.ilp import ILPDecoder
-from qldpc.decoders.custom.lookup import LookupDecoder, ObservableLookupDecoder
+from qldpc.decoders.custom.lookup import ErrorLookupDecoder, LookupDecoder, ObservableLookupDecoder
 
 
 def test_decoder_selection() -> None:
@@ -246,13 +246,47 @@ def test_deprecated_builders() -> None:
     assert bp_osd_decoder.max_iter == 7
 
 
+def test_deprecated_lookup_builders() -> None:
+    """Deprecated lookup builders build an error lookup decoder, or one that predicts flips."""
+    dem = stim.DetectorErrorModel("error(0.1) D0 L0 L1")
+    syndrome = np.array([1], dtype=int)
+
+    # an explicit predict_observable_flips=False is dropped, and builds an error lookup decoder
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        decoder: Any = deprecated_decoders.get_decoder(
+            dem, with_lookup=True, max_weight=1, predict_observable_flips=False
+        )
+    assert len(caught) == 1  # only get_decoder warns
+    assert type(decoder) is ErrorLookupDecoder
+    assert np.array_equal(decoder.decode(syndrome), [1])
+
+    # predict_observable_flips=True builds a legacy lookup decoder that predicts observable flips
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        decoder = deprecated_decoders.get_decoder_lookup(
+            dem, max_weight=1, predict_observable_flips=True
+        )
+    flag_warnings = [w for w in caught if "predict_observable_flips=True" in str(w.message)]
+    assert len(flag_warnings) == 1
+    assert "build_observable_decoder" in str(flag_warnings[0].message)
+    assert all(warning.filename == __file__ for warning in caught)
+    assert np.array_equal(decoder.decode(syndrome), [1, 1])
+    assert isinstance(decoder, LookupDecoder)
+
+    # Sinter pickles the legacy lookup constructor
+    pickled = pickle.dumps(deprecated_decoders._get_decoder_constructors()["lookup"])
+    constructor = pickle.loads(pickled)  # noqa: S301
+    assert np.array_equal(constructor(dem, max_weight=1).decode(syndrome), [1])
+
+
 def test_deprecated_resolution_functions() -> None:
     """Deprecated resolution functions warn with the call that replaces them for each input."""
     matrix = np.array([[1, 1, 0], [0, 1, 1]])
     dem = stim.DetectorErrorModel("error(0.1) D0 L0\nerror(0.2) D0 D1\nerror(0.1) D1")
 
-    def build_lookup(pcm_or_dem: decoders.PcmOrDem) -> LookupDecoder:
-        return LookupDecoder(pcm_or_dem, max_weight=1)
+    def build_lookup(pcm_or_dem: decoders.PcmOrDem) -> ErrorLookupDecoder:
+        return ErrorLookupDecoder(pcm_or_dem, max_weight=1)
 
     def build_observable_lookup(
         dem: stim.DetectorErrorModel,
@@ -365,7 +399,7 @@ def test_legacy_decoder_migration_messages() -> None:
     """Deprecated keyword arguments of methods warn with the decoder input that replaces them."""
     matrix = np.eye(2, dtype=int)
     expected_messages: list[tuple[dict[str, object], str]] = [
-        ({"decoder_constructor": LookupDecoder}, "for example decoder=LookupDecoder"),
+        ({"decoder_constructor": ErrorLookupDecoder}, "for example decoder=ErrorLookupDecoder"),
         (
             {"with_lookup": True, "predict_observable_flips": True},
             r"ObservableLookupDecoder\(matrix, .*observable_flip_matrix=",
@@ -527,11 +561,15 @@ def test_decode_returns_observables() -> None:
     """Decoders whose decode methods return observable flips are identified, warning for others."""
     dem = stim.DetectorErrorModel("error(0.1) D0 L0")
     with pytest.warns(DeprecationWarning, match="predict_observable_flips=True"):
-        legacy_decoder = LookupDecoder(dem, max_weight=1, predict_observable_flips=True)
-    assert deprecated_decoders.decode_returns_observables(legacy_decoder)
+        legacy_decoders = [
+            LookupDecoder(dem, max_weight=1, predict_observable_flips=True),
+            decoders.custom.WeightedLookupDecoder(dem, max_weight=1, predict_observable_flips=True),
+        ]
+    for legacy_decoder in legacy_decoders:
+        assert deprecated_decoders.decode_returns_observables(legacy_decoder)
 
     # neither classes, nor error decoders, nor objects without the declaration return observables
-    for decoder in [type(legacy_decoder), LookupDecoder(dem, max_weight=1), object()]:
+    for decoder in [type(legacy_decoders[0]), ErrorLookupDecoder(dem, max_weight=1), object()]:
         assert not deprecated_decoders.decode_returns_observables(decoder)
 
     # other objects that declare decode_returns_observables=True use a deprecated convention

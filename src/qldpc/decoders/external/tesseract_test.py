@@ -372,7 +372,9 @@ class _FakeTesseractDecoder:
     def __init__(self, config: _FakeTesseractConfig) -> None:
         self.config = config
         self.dem_arrays = decoders.DetectorErrorModelArrays(config.dem, simplify=False)
-        self.lookup = decoders.custom.LookupDecoder(config.dem, max_weight=config.dem.num_errors)
+        self.lookup = decoders.custom.ErrorLookupDecoder(
+            config.dem, max_weight=config.dem.num_errors
+        )
         self.low_confidence_flag = False
         self.predicted_errors_buffer: list[int] = []
 

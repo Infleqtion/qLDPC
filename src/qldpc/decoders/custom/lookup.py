@@ -36,10 +36,69 @@ _ErrorChannel: TypeAlias = npt.NDArray[np.floating] | Sequence[float] | _ErrorLo
 # lookup decoders
 
 
-class _LookupDecoderBase:
-    """Shared implementation of lookup-table decoders.
+class LookupDecoder:
+    """Base class of lookup-table decoders, which map syndromes to precomputed predictions.
 
-    See help(LookupDecoder) for details.
+    This class exists primarily for type checking: every lookup-table decoder of qLDPC is a
+    LookupDecoder.  To define a lookup-table decoder, subclass ErrorLookupDecoder, which maps
+    syndromes to errors, or ObservableLookupDecoder, which maps syndromes to observable flips (see
+    help(ErrorLookupDecoder)), or a weighted counterpart of either (see
+    help(WeightedLookupDecoder)).
+    """
+
+    num_detectors: int
+    num_observables: int
+    field: type[galois.FieldArray]
+    has_erasure_bit: bool
+    default_correction: npt.NDArray[np.int_]
+    syndrome_mask: npt.NDArray[np.bool_] | None
+
+    def __init__(
+        self, pcm_or_dem: IntegerArray | stim.DetectorErrorModel, max_weight: int, **options: object
+    ) -> None:
+        # DEPRECATED: see qldpc._deprecations
+        from qldpc._deprecations.lookup import initialize_lookup_decoder
+
+        initialize_lookup_decoder(self, pcm_or_dem, max_weight, **options)
+
+    def _save_interface_metadata(
+        self,
+        pcm: IntegerArray,
+        observable_flip_matrix: IntegerArray | None,
+        output_observables: bool,
+    ) -> None:
+        """Record dimensions and the field so prebuilt-decoder compatibility can be checked."""
+        self.num_detectors = pcm.shape[0]
+        self.num_observables = (
+            observable_flip_matrix.shape[0]
+            if output_observables and observable_flip_matrix is not None
+            else 0
+        )
+        self.field = type(pcm) if isinstance(pcm, galois.FieldArray) else galois.GF2
+
+    def _maybe_add_erasure_bit(self, error: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
+        """Append a trivial (zero) erasure bit to an error if this decoder tracks erasure bits."""
+        if not self.has_erasure_bit:
+            return error
+        return with_erasure_bits(error, False)
+
+    def _remove_post_selected_bits(
+        self, syndrome: npt.NDArray[np.int_]
+    ) -> npt.NDArray[np.int_] | None:
+        """Drop post-selected bits from a syndrome, or return None if any of them is nonzero."""
+        syndrome = syndrome.view(np.ndarray)
+        if self.syndrome_mask is None:
+            return syndrome
+        retained_syndrome = syndrome[self.syndrome_mask]
+        if np.count_nonzero(retained_syndrome) != np.count_nonzero(syndrome):
+            return None
+        return retained_syndrome
+
+
+class _PackedLookupDecoder(LookupDecoder):
+    """Shared implementation of lookup decoders that store a packed syndrome-to-prediction table.
+
+    See help(ErrorLookupDecoder) for details.
     """
 
     _outputs_observables = False
@@ -241,33 +300,12 @@ class _LookupDecoderBase:
                 best_log_probabilities[key] = log_probability
                 self._store_prediction(key, error)
 
-    def _save_interface_metadata(
-        self,
-        pcm: IntegerArray,
-        observable_flip_matrix: IntegerArray | None,
-        output_observables: bool,
-    ) -> None:
-        """Record dimensions and the field so prebuilt-decoder compatibility can be checked."""
-        self.num_detectors = pcm.shape[0]
-        self.num_observables = (
-            observable_flip_matrix.shape[0]
-            if output_observables and observable_flip_matrix is not None
-            else 0
-        )
-        self.field = type(pcm) if isinstance(pcm, galois.FieldArray) else galois.GF2
-
     def _store_prediction(self, packed_syndrome: bytes, prediction: npt.NDArray[np.int_]) -> None:
         """Record a prediction for a packed syndrome, appending an erasure bit if needed."""
         prediction = self._maybe_add_erasure_bit(prediction)
         self._packed_syndrome_to_prediction[packed_syndrome] = self._prediction_packer.pack(
             prediction
         )
-
-    def _maybe_add_erasure_bit(self, error: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
-        """Append a trivial (zero) erasure bit to an error if this decoder tracks erasure bits."""
-        if not self.has_erasure_bit:
-            return error
-        return with_erasure_bits(error, False)
 
     def _decode(self, syndrome: npt.NDArray[np.int_]) -> npt.NDArray[np.int_]:
         """Look up the configured error or observable-flip prediction."""
@@ -352,31 +390,8 @@ class _LookupDecoderBase:
             syndromes[:, self.syndrome_mask]
         ), passes_post_selection
 
-    def _remove_post_selected_bits(
-        self, syndrome: npt.NDArray[np.int_]
-    ) -> npt.NDArray[np.int_] | None:
-        """Drop post-selected bits from a syndrome, or return None if any of them is nonzero."""
-        syndrome = syndrome.view(np.ndarray)
-        if self.syndrome_mask is None:
-            return syndrome
-        retained_syndrome = syndrome[self.syndrome_mask]
-        if np.count_nonzero(retained_syndrome) != np.count_nonzero(syndrome):
-            return None
-        return retained_syndrome
 
-    def _get_syndrome_key(self, syndrome: npt.NDArray[np.int_]) -> tuple[int, ...] | None:
-        """Return the retained syndrome key, or None when a post-selected bit is nontrivial."""
-        retained_syndrome = self._remove_post_selected_bits(syndrome)
-        return None if retained_syndrome is None else tuple(retained_syndrome.tolist())
-
-    def _stack_predictions(self, predictions: list[npt.NDArray[np.int_]]) -> npt.NDArray[np.int_]:
-        """Stack predictions, one per row, into a 2D array, even if there are no predictions."""
-        return np.array(predictions, dtype=self.default_correction.dtype).reshape(
-            len(predictions), len(self.default_correction)
-        )
-
-
-class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
+class ErrorLookupDecoder(_PackedLookupDecoder, ErrorDecoder):
     """Decoder based on a lookup table that maps syndromes to errors.
 
     Accepts a parity check matrix (PCM) or detector error model (DEM) for ``pcm_or_dem``.  If
@@ -460,7 +475,6 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
             | None
         ) = None,
         observable_flip_matrix: IntegerArray | None = None,
-        predict_observable_flips: bool = False,  # DEPRECATED: see qldpc._deprecations
         post_select: Collection[int] = (),
         add_erasure_bit: bool | None = None,
         confidence_ratio: float | None = None,
@@ -470,23 +484,6 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
         penalty_func: Callable[[npt.NDArray[np.int_] | Sequence[int]], float] | None = None,
     ) -> None:
         """Initialize an error lookup table."""
-        if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
-            from qldpc._deprecations.lookup import become_legacy_observable_decoder
-
-            become_legacy_observable_decoder(
-                self,
-                pcm_or_dem,
-                max_weight,
-                error_channel=error_channel,
-                observable_flip_matrix=observable_flip_matrix,
-                post_select=post_select,
-                add_erasure_bit=add_erasure_bit,
-                confidence_ratio=confidence_ratio,
-                probability_cutoff=probability_cutoff,
-                symplectic=symplectic,
-                penalty_func=penalty_func,
-            )
-            return
         super().__init__(
             pcm_or_dem,
             max_weight,
@@ -516,12 +513,12 @@ class LookupDecoder(_LookupDecoderBase, ErrorDecoder):
     decode_batch = decode_errors_batch
 
 
-class ObservableLookupDecoder(_LookupDecoderBase):
+class ObservableLookupDecoder(_PackedLookupDecoder):
     """Decoder based on a lookup table that maps syndromes directly to observable flips.
 
-    An ObservableLookupDecoder builds the same lookup table as a LookupDecoder, and accepts the same
-    options (see help(LookupDecoder)).  However, rather than mapping each syndrome to a
-    representative error, an ObservableLookupDecoder maps each syndrome to its most likely
+    An ObservableLookupDecoder builds the same lookup table as an ErrorLookupDecoder, and accepts
+    the same options (see help(ErrorLookupDecoder)).  However, rather than mapping each syndrome to
+    a representative error, an ObservableLookupDecoder maps each syndrome to its most likely
     observable flip, a vector of length ``num_observables`` over the field of the parity check
     matrix.  Decode with the ``.decode_observables`` method.
 
@@ -704,17 +701,30 @@ class _FieldVectorPacker:
 # weighted lookup decoders
 
 
+class WeightedLookupDecoder(LookupDecoder):
+    """Base class of weighted lookup-table decoders, which take a penalty function when decoding.
+
+    This class exists primarily for type checking: every weighted lookup-table decoder of qLDPC is a
+    WeightedLookupDecoder, and thereby a LookupDecoder.  To define a weighted lookup-table decoder,
+    subclass WeightedErrorLookupDecoder, which maps syndromes to errors, or
+    WeightedObservableLookupDecoder, which maps syndromes to observable flips (see
+    help(WeightedErrorLookupDecoder)).
+    """
+
+
 # defined before the classes below, whose method signatures use it as a default argument
 def _hamming_weight(vec: npt.NDArray[np.int_]) -> int:
     """The number of nonzero entries of a vector, which is the default lookup-decoding penalty."""
     return int(np.count_nonzero(vec))
 
 
-class _WeightedLookupDecoderBase(_LookupDecoderBase):
-    """Shared implementation of weighted lookup-table decoders.
+class _CandidateLookupDecoder(WeightedLookupDecoder):
+    """Shared implementation of weighted lookup decoders, which store candidate errors by syndrome.
 
-    See help(WeightedLookupDecoder) for details.
+    See help(WeightedErrorLookupDecoder) for details.
     """
+
+    _outputs_observables = False
 
     def __init__(
         self,
@@ -797,19 +807,31 @@ class _WeightedLookupDecoderBase(_LookupDecoderBase):
             )[1]
         return output.copy()
 
+    def _get_syndrome_key(self, syndrome: npt.NDArray[np.int_]) -> tuple[int, ...] | None:
+        """Return the retained syndrome key, or None when a post-selected bit is nontrivial."""
+        retained_syndrome = self._remove_post_selected_bits(syndrome)
+        return None if retained_syndrome is None else tuple(retained_syndrome.tolist())
 
-class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
+    def _stack_predictions(self, predictions: list[npt.NDArray[np.int_]]) -> npt.NDArray[np.int_]:
+        """Stack predictions, one per row, into a 2D array, even if there are no predictions."""
+        return np.array(predictions, dtype=self.default_correction.dtype).reshape(
+            len(predictions), len(self.default_correction)
+        )
+
+
+class WeightedErrorLookupDecoder(_CandidateLookupDecoder, ErrorDecoder):
     """Lookup-table decoder that maps syndromes to errors, with a penalty function chosen later.
 
-    A WeightedLookupDecoder is a LookupDecoder that, when initialized, records *all* errors of
-    ``weight <= max_weight`` that are consistent with each syndrome.  The WeightedLookupDecoder then
+    A WeightedErrorLookupDecoder, when initialized, records *all* errors of ``weight <=
+    max_weight`` that are consistent with each syndrome.  The WeightedErrorLookupDecoder then
     minimizes a penalty function that is provided to the ``.decode`` method.  A
-    WeightedLookupDecoder can thereby be initialized once, and subsequently asked to decode with
-    different penalty functions.  The default penalty function is the Hamming weight of an error.
+    WeightedErrorLookupDecoder can thereby be initialized once, and subsequently asked to decode
+    with different penalty functions.  The default penalty function is the Hamming weight of an
+    error.
 
     The ``pcm_or_dem``, ``max_weight``, ``observable_flip_matrix``, ``post_select``,
-    ``add_erasure_bit``, and ``symplectic`` options behave as they do for a LookupDecoder; see
-    help(LookupDecoder).
+    ``add_erasure_bit``, and ``symplectic`` options behave as they do for an ErrorLookupDecoder;
+    see help(ErrorLookupDecoder).
     """
 
     def __init__(
@@ -818,24 +840,10 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         max_weight: int,
         *,
         observable_flip_matrix: IntegerArray | None = None,
-        predict_observable_flips: bool = False,  # DEPRECATED: see qldpc._deprecations
         post_select: Collection[int] = (),
         add_erasure_bit: bool = False,
         symplectic: bool = False,
     ) -> None:
-        if predict_observable_flips:  # DEPRECATED: see qldpc._deprecations
-            from qldpc._deprecations.lookup import become_legacy_observable_decoder
-
-            become_legacy_observable_decoder(
-                self,
-                pcm_or_dem,
-                max_weight,
-                observable_flip_matrix=observable_flip_matrix,
-                post_select=post_select,
-                add_erasure_bit=add_erasure_bit,
-                symplectic=symplectic,
-            )
-            return
         super().__init__(
             pcm_or_dem,
             max_weight,
@@ -874,14 +882,14 @@ class WeightedLookupDecoder(_WeightedLookupDecoderBase, LookupDecoder):
         return self.decode_errors(syndrome, penalty_func)
 
 
-class WeightedObservableLookupDecoder(_WeightedLookupDecoderBase):
+class WeightedObservableLookupDecoder(_CandidateLookupDecoder):
     """Weighted lookup-table decoder that maps syndromes to observable flips.
 
-    A WeightedObservableLookupDecoder records the same candidate errors as a WeightedLookupDecoder
-    (see help(WeightedLookupDecoder)).  Its ``.decode_observables`` method selects the candidate
-    error that minimizes a provided penalty function, and returns the observable flip that this
-    error induces.  A WeightedObservableLookupDecoder is built from a detector error model, or from
-    a parity check matrix together with an ``observable_flip_matrix``.
+    A WeightedObservableLookupDecoder records the same candidate errors as a
+    WeightedErrorLookupDecoder (see help(WeightedErrorLookupDecoder)).  Its ``.decode_observables``
+    method selects the candidate error that minimizes a provided penalty function, and returns the
+    observable flip that this error induces.  A WeightedObservableLookupDecoder is built from a
+    detector error model, or from a parity check matrix together with an ``observable_flip_matrix``.
     """
 
     _outputs_observables = True
@@ -967,10 +975,10 @@ def _error_weight(error: npt.NDArray[np.int_], symplectic: bool) -> int:
 @_erasure_bit_support("lookup", supported=True)
 def _get_decoder_lookup(
     pcm_or_dem: IntegerArray | stim.DetectorErrorModel, **decoder_args: object
-) -> LookupDecoder:
+) -> ErrorLookupDecoder:
     """Build a lookup-table decoder; see ``decoders.lookup`` for its options."""
     # the typed signature of the specification helper, not this builder, checks the options
-    return LookupDecoder(pcm_or_dem, **decoder_args)  # type: ignore[arg-type]
+    return ErrorLookupDecoder(pcm_or_dem, **decoder_args)  # type: ignore[arg-type]
 
 
 def _get_observable_decoder_lookup(
@@ -985,8 +993,7 @@ lookup = decoder_spec(
     "lookup",
     _get_decoder_lookup,
     _get_observable_decoder_lookup,
-    signature_source=LookupDecoder,
-    exclude=frozenset({"predict_observable_flips"}),  # DEPRECATED: see qldpc._deprecations
+    signature_source=ErrorLookupDecoder,
     doc="""Configure a bounded-weight lookup-table decoder.
 
 Args:
@@ -1008,12 +1015,12 @@ Args:
 
 Returns:
     A decoder specification.  ``build(pcm_or_dem)`` returns a
-    :class:`~qldpc.decoders.custom.lookup.LookupDecoder` that infers an error.
+    :class:`~qldpc.decoders.custom.lookup.ErrorLookupDecoder` that infers an error.
     ``build_observable_decoder(dem)`` returns an
     :class:`~qldpc.decoders.custom.lookup.ObservableLookupDecoder` that predicts observable
     flips natively for a binary DEM.
 
-See :class:`~qldpc.decoders.custom.lookup.LookupDecoder` for error-channel and field
+See :class:`~qldpc.decoders.custom.lookup.ErrorLookupDecoder` for error-channel and field
 conventions, and :class:`~qldpc.decoders.custom.lookup.ObservableLookupDecoder` for the
 observable output contract.
 """,

@@ -196,7 +196,7 @@ def test_code_capacity_decoder_from_error_decoder() -> None:
         syndrome_matrix, observable_matrix, decoders.lookup(max_weight=1)
     )
     assert isinstance(decoder.decoder, _observable_decoders.ErrorsToFieldObservablesDecoder)
-    assert isinstance(decoder.decoder.error_decoder, decoders.custom.LookupDecoder)
+    assert isinstance(decoder.decoder.error_decoder, decoders.custom.ErrorLookupDecoder)
 
     # None represents an identity observable map without materializing a dense identity matrix
     decoder = _code_capacity.get_code_capacity_decoder(
@@ -372,7 +372,7 @@ def test_code_capacity_prefers_most_likely_observable_class() -> None:
         syndrome_matrix,
         weighted_observables,
         decoders.from_matrix(
-            lambda matrix: decoders.custom.LookupDecoder(
+            lambda matrix: decoders.custom.ErrorLookupDecoder(
                 matrix, max_weight=1, error_channel=[0.003, 0.002, 0.002]
             )
         ),
@@ -678,7 +678,9 @@ def test_code_capacity_decoder_reuse() -> None:
     projected = _code_capacity.get_code_capacity_decoder(
         syndrome_matrix,
         observables_a,
-        decoders.from_matrix(lambda matrix: decoders.custom.LookupDecoder(matrix, max_weight=1)),
+        decoders.from_matrix(
+            lambda matrix: decoders.custom.ErrorLookupDecoder(matrix, max_weight=1)
+        ),
     )
     reused_decoder = projected.reuse_for(syndrome_matrix, observables_b)
     assert reused_decoder is not None

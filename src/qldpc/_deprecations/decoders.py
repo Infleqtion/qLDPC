@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     )
     from qldpc.decoders.custom.guf import GUFDecoder
     from qldpc.decoders.custom.ilp import ILPDecoder
-    from qldpc.decoders.custom.lookup import LookupDecoder
+    from qldpc.decoders.custom.lookup import ErrorLookupDecoder
     from qldpc.decoders.external.relay_bp import RelayBPDecoder
     from qldpc.decoders.protocols import BatchErrorDecoder, ErrorDecoder, ObservableDecoder
 
@@ -197,10 +197,12 @@ def get_decoder_ilp(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> ILPDecoder:
     return cast("ILPDecoder", _get_decoder_constructors()["ILP"](pcm_or_dem, **decoder_args))
 
 
-def get_decoder_lookup(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> LookupDecoder:
+def get_decoder_lookup(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> ErrorLookupDecoder:
     """Build a lookup decoder."""
     _warn_deprecated_builder("get_decoder_lookup", "lookup")
-    return cast("LookupDecoder", _get_decoder_constructors()["lookup"](pcm_or_dem, **decoder_args))
+    return cast(
+        "ErrorLookupDecoder", _get_decoder_constructors()["lookup"](pcm_or_dem, **decoder_args)
+    )
 
 
 def get_decoder_mwpm(pcm_or_dem: PcmOrDem, **decoder_args: Any) -> BatchErrorDecoder:
@@ -474,7 +476,6 @@ def _get_decoder_constructors() -> dict[str, Callable[..., ErrorDecoder]]:
     """
     from qldpc.decoders.custom.guf import _get_decoder_guf
     from qldpc.decoders.custom.ilp import _get_decoder_ilp
-    from qldpc.decoders.custom.lookup import _get_decoder_lookup
     from qldpc.decoders.external.ldpc import (
         _get_decoder_bf,
         _get_decoder_bp_lsd,
@@ -491,7 +492,7 @@ def _get_decoder_constructors() -> dict[str, Callable[..., ErrorDecoder]]:
         "ILP": _get_decoder_ilp,
         "MWPM": functools.partial(_call_with_flat_backend_options, _get_decoder_mwpm),
         "RBP": RelayBPDecoder,
-        "lookup": _get_decoder_lookup,
+        "lookup": _get_legacy_decoder_lookup,
     }
 
 
@@ -512,6 +513,20 @@ def _call_with_flat_backend_options(
     if backend_options:
         decoder_args["backend_options"] = backend_options
     return builder(pcm_or_dem, **decoder_args)
+
+
+def _get_legacy_decoder_lookup(pcm_or_dem: PcmOrDem, /, **decoder_args: Any) -> ErrorDecoder:
+    """Build a lookup decoder, accepting the deprecated predict_observable_flips option.
+
+    A truthy predict_observable_flips builds the decoder that LookupDecoder(...,
+    predict_observable_flips=True) builds, which warns, and a falsy one is dropped.
+    """
+    from qldpc.decoders.custom.lookup import LookupDecoder, _get_decoder_lookup
+
+    if decoder_args.get("predict_observable_flips"):
+        return cast("ErrorDecoder", LookupDecoder(pcm_or_dem, **decoder_args))
+    decoder_args.pop("predict_observable_flips", None)
+    return _get_decoder_lookup(pcm_or_dem, **decoder_args)
 
 
 def _get_legacy_decoder(pcm_or_dem: PcmOrDem, decoder_args: Mapping[str, object]) -> Any:
@@ -662,16 +677,11 @@ def decode_returns_observables(decoder: object, *, warn: bool = True) -> bool:
             passes False if a later check of the same decoder warns, so that each use of the decoder
             warns once.
     """
-    from qldpc.decoders.custom.lookup import LookupDecoder
-
     from .lookup import LegacyObservableLookupDecoder, LegacyWeightedObservableLookupDecoder
 
+    # reading the deprecated attributes of a legacy lookup decoder would warn
     if isinstance(decoder, (LegacyObservableLookupDecoder, LegacyWeightedObservableLookupDecoder)):
         return True
-    # only a subclass of LookupDecoder that is built with predict_observable_flips=True keeps its
-    # class and returns observable flips, and reading its deprecated attributes would warn
-    if isinstance(decoder, LookupDecoder):
-        return decoder._outputs_observables
     if isinstance(decoder, type) or not getattr(decoder, "decode_returns_observables", False):
         return False
     if warn:

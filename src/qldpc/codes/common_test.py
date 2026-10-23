@@ -359,7 +359,7 @@ def test_classical_capacity_with_observable_decoders() -> None:
         nonbinary_code, decoder=nonbinary_lookup, **kwargs
     ) == _get_capacity_counts(
         nonbinary_code,
-        decoder=decoders.custom.LookupDecoder(nonbinary_code.matrix, max_weight=1),
+        decoder=decoders.custom.ErrorLookupDecoder(nonbinary_code.matrix, max_weight=1),
         **kwargs,
     )
 
@@ -1479,7 +1479,7 @@ def test_deprecated_decoder_kwargs_warning_location() -> None:
 
     def build_tagged_decoder(matrix: npt.NDArray[np.int_], tag: str) -> decoders.ErrorDecoder:
         received_tags.append(tag)
-        return decoders.custom.LookupDecoder(matrix, max_weight=1)
+        return decoders.custom.ErrorLookupDecoder(matrix, max_weight=1)
 
     with pytest.warns(DeprecationWarning):
         codes.SurfaceCode(2).get_logical_error_rate_func(
@@ -1530,7 +1530,7 @@ def test_deprecated_decoder_kwargs() -> None:
 
     def build_decoder(matrix: galois.FieldArray, tag: str) -> decoders.ErrorDecoder:
         built_for.append((tag, matrix.shape))
-        return decoders.custom.LookupDecoder(matrix, max_weight=3)
+        return decoders.custom.ErrorLookupDecoder(matrix, max_weight=3)
 
     classical_code = codes.HammingCode(3)
     classical_code.forget_distance()
@@ -1549,7 +1549,7 @@ def test_deprecated_decoder_kwargs() -> None:
 def test_prebuilt_decoders_rejected_for_internal_matrices() -> None:
     """A prebuilt decoder cannot decode a matrix that a method constructs internally."""
     code = codes.SurfaceCode(3)
-    decoder = decoders.custom.LookupDecoder(
+    decoder = decoders.custom.ErrorLookupDecoder(
         code.get_stabilizer_ops(Pauli.Z, canonicalized=False), max_weight=2
     )
     code.forget_distance()
@@ -1576,7 +1576,7 @@ def test_prebuilt_decoders_rejected_for_internal_matrices() -> None:
     # a classical code accepts a prebuilt decoder for its parity check matrix only when bounding the
     # distance to a vector, which decodes syndromes of that parity check matrix
     classical_code = codes.HammingCode(3)
-    classical_decoder = decoders.custom.LookupDecoder(classical_code.matrix, max_weight=1)
+    classical_decoder = decoders.custom.ErrorLookupDecoder(classical_code.matrix, max_weight=1)
     vector = np.zeros(len(classical_code), dtype=int)
     vector[0] = 1
     assert classical_code.get_distance_bound(vector=vector, decoder=classical_decoder) == 1
@@ -2038,7 +2038,7 @@ def test_css_capacity_with_observable_decoders() -> None:
 
     def build_error_decoder(matrix: galois.FieldArray) -> decoders.ErrorDecoder:
         matrices.append(matrix)
-        return decoders.custom.LookupDecoder(matrix, max_weight=1)
+        return decoders.custom.ErrorLookupDecoder(matrix, max_weight=1)
 
     def build_observable_decoder(dem: stim.DetectorErrorModel) -> decoders.ObservableDecoder:
         models.append(dem)

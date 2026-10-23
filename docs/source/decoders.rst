@@ -148,7 +148,7 @@ Use a built-in error-decoding specification or a custom error-decoder factory th
 
 The :doc:`adding a decoder guide <adding_decoders>` covers custom decoder contracts, optional batch and erasure support, and tested examples.
 The generated :doc:`API reference <autoapi/index>` documents concrete backend classes and low-level adapters.
-Import backend classes from ``qldpc.decoders.custom`` or ``qldpc.decoders.external``, as in ``from qldpc.decoders.custom import LookupDecoder``, and compiled Sinter decoders from ``qldpc.decoders.sinter``.
+Import backend classes from ``qldpc.decoders.custom`` or ``qldpc.decoders.external``, as in ``from qldpc.decoders.custom import ErrorLookupDecoder``, and compiled Sinter decoders from ``qldpc.decoders.sinter``.
 
 Backend limitations
 -------------------
