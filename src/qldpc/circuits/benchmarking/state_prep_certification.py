@@ -28,16 +28,22 @@ error with syndrome ``s``.  The certificate proves ``mu(S f) <= |f|`` for every 
 - If the distinct nonzero flag columns are linearly independent, an accepted pattern uses each flag
   column an even number of times.  The minimal flagged patterns are then pairs of faults with equal
   flags, for any rank and any budget.
+- If every fault alone leaves an error that is equivalent to one of weight at most one, then
+  subadditivity gives ``mu(S f) <= |f|`` for every pattern, so no pattern needs checking.
 
-Two complete searches enumerate the remaining minimal patterns.  Brouwer--Zimmermann (BZ) coverage
+Two complete searches enumerate the remaining minimal patterns, one size at a time from two faults
+up.  Brouwer--Zimmermann (BZ) coverage
 visits every vector in the kernel of ``P`` up to a weight bound, whatever test is applied to it
 afterwards, and a rank check then discards the non-minimal ones.  Independent-prefix search builds
 sets of independent columns in increasing order.  Sorted by index, a minimal pattern is an
 independent prefix plus a last column whose flags equal the XOR of the prefix's flags, and every
 such pair is a minimal pattern.  Requiring the closing column to have the largest index lists each
 minimal pattern once, and a prefix that already contains a dependency never extends to one.  A cost
-heuristic chooses between the two searches and affects speed only, not the result.  One shared exact
-oracle, ``PauliCosetSearch``, computes ``mu`` for every pattern.
+heuristic chooses between the two searches and affects speed only, not the result.  A violating
+pattern with the fewest faults is minimal, since otherwise one of the minimal patterns that it
+splits into would violate the bound with fewer faults.  Checking sizes in increasing order therefore
+finds such a pattern first.  One shared exact oracle, ``PauliCosetSearch``, computes ``mu`` for
+every pattern.
 """
 
 from __future__ import annotations
@@ -50,6 +56,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
+import numpy.typing as npt
 import stim
 
 from qldpc.codes.distance._bounded_weight_search import BoundedKernelSearch, PauliCosetSearch
@@ -125,8 +132,8 @@ def certify_state_prep_spread(
     Returns:
         A certificate with the decision, the DEM, and the weight that was used.  A failure comes
         with a counterexample: a pattern that passes post-selection, and a proved lower bound on
-        the weight of the output error that exceeds the number of faults.  Fault indices count the
-        error instructions of the returned DEM.
+        the weight of the output error that exceeds the number of faults.  No violating pattern has
+        fewer faults.  Fault indices count the error instructions of the returned DEM.
 
     Raises:
         ValueError: For invalid inputs, an output that is not one definite pure state,
@@ -159,9 +166,10 @@ def certify_state_prep_spread(
     resolved_css_weight = _is_css_state(matrix) if css_weight is None else css_weight
     dem, flags, syndromes = _get_fault_maps(circuit, stabilizers, qubits, selected)
 
-    oracle = PauliCosetSearch(matrix, metric="css" if resolved_css_weight else "pauli")
     statistics = StatePrepSpreadStatistics(mechanisms=len(flags))
-    counterexample = _certify_maps(flags, syndromes, oracle, int(max_faults), statistics)
+    counterexample = _certify_maps(
+        flags, syndromes, matrix, resolved_css_weight, int(max_faults), statistics
+    )
     return StatePrepSpreadCertificate(
         counterexample is None,
         int(max_faults),
@@ -188,7 +196,7 @@ class StatePrepSpreadCounterexample:
     of any equivalent error, and it exceeds the number of faults.  ``output_pauli`` is one Pauli
     with that syndrome, written as a Stim string over the output qubits in the caller's order.  It
     is not necessarily the lightest such Pauli or the error that the faults actually cause.  The set
-    need not be the smallest violating one.
+    has the fewest faults of any violating set.
     """
 
     fault_indices: tuple[int, ...]
@@ -213,7 +221,11 @@ class StatePrepSpreadStatistics:
     """GF(2) rank of the selected rejection flags."""
 
     effective_budget: int = 0
-    """Fault budget capped at ``flag_rank + 1``, or 2 when searching independent flag types."""
+    """Largest pattern size searched.
+
+    This is the fault budget capped at ``flag_rank + 1``, at 2 for independent flag types, and at 1
+    when no single fault has output weight above one.
+    """
 
     search_method: Literal["singletons", "brouwer_zimmermann", "independent_prefix"] = "singletons"
     """Flagged-pattern search, or ``singletons`` if no flagged patterns are searched."""
@@ -222,11 +234,11 @@ class StatePrepSpreadStatistics:
     """Flag-free singletons plus search-dependent work, not all fault combinations.
 
     BZ counts coefficient supports; prefix search counts attempted extensions (including dependent
-    ones) and emitted closing supports.
+    ones) and emitted closing supports.  Both accumulate over the sizes searched.
     """
 
     minimal_candidates: int = 0
-    """Minimal accepted patterns checked for output weight."""
+    """Minimal accepted patterns checked for output weight, counting repeats."""
 
 
 @dataclass(frozen=True)
@@ -331,7 +343,8 @@ def _validate_indices(
 def _certify_maps(
     flags: Sequence[int],
     syndromes: Sequence[int],
-    oracle: PauliCosetSearch,
+    stabilizers: npt.ArrayLike,
+    css_weight: bool,
     budget: int,
     statistics: StatePrepSpreadStatistics,
 ) -> StatePrepSpreadCounterexample | None:
@@ -345,43 +358,56 @@ def _certify_maps(
     }
     statistics.flag_rank = _binary_rank([flag for flag, _ in representatives])
 
-    # A minimal accepted support has nullity one, hence at most rank(P)+1 mechanisms.
-    statistics.effective_budget = min(budget, statistics.flag_rank + 1)
-    return _search_minimal_patterns(representatives, oracle, statistics)
+    # A minimal accepted support has nullity one, hence at most rank(P)+1 mechanisms.  Independent
+    # flag types require even multiplicities: only equal-flag pairs are minimal.
+    limit = min(budget, statistics.flag_rank + 1)
+    independent = len({flag for flag, _ in representatives if flag}) == statistics.flag_rank
+    statistics.effective_budget = min(limit, 2) if independent else limit
+
+    # No pattern is checked against a weight above the effective budget.
+    oracle = PauliCosetSearch(
+        stabilizers,
+        metric="css" if css_weight else "pauli",
+        max_weight=statistics.effective_budget,
+    )
+    return _search_minimal_patterns(representatives, oracle, independent, statistics)
 
 
 def _search_minimal_patterns(
     representatives: dict[tuple[int, int], int],
     oracle: PauliCosetSearch,
+    independent: bool,
     statistics: StatePrepSpreadStatistics,
 ) -> StatePrepSpreadCounterexample | None:
-    """Check flag-free singletons, then the remaining minimal dependencies."""
-    remaining: list[tuple[int, int, int]] = []
+    """Check minimal patterns by increasing size, so that any violation has the fewest faults."""
+    flagged: list[tuple[int, int, int]] = []
 
-    # A flag-free mechanism is minimal by itself and cannot belong to a larger minimal support.
+    # A flag-free mechanism is minimal by itself and cannot belong to a larger minimal pattern.
     for (flag, syndrome), original in representatives.items():
-        if flag == 0:
+        if flag:
+            flagged.append((flag, syndrome, original))
+        else:
             statistics.generated += 1
             failure = _check_fault_pattern((original,), syndrome, oracle, statistics)
             if failure is not None:
                 return failure
-        else:
-            remaining.append((flag, syndrome, original))
     limit = statistics.effective_budget
-    if limit < 2 or not remaining:
+    if limit < 2 or not flagged:
         return None
 
-    # Independent flag types require even multiplicities: only equal-flag pairs are minimal.
-    if len({flag for flag, _, _ in remaining}) == statistics.flag_rank:
-        limit = statistics.effective_budget = 2
-    elif not _use_prefix_search(len(remaining), statistics.flag_rank, limit):
-        return _search_bz_patterns(remaining, limit, oracle, statistics)
+    # By subadditivity, patterns of faults that each have weight at most one meet the bound.
+    if all(oracle.decide(syndrome, 1).within_bound for _, syndrome, _ in flagged):
+        statistics.effective_budget = 1
+        return None
 
-    statistics.search_method = "independent_prefix"
-    for indices, syndrome in _iter_minimal_patterns(remaining, limit, statistics):
-        failure = _check_fault_pattern(indices, syndrome, oracle, statistics)
-        if failure is not None:
-            return failure
+    use_prefix = independent or _use_prefix_search(len(flagged), statistics.flag_rank, limit)
+    statistics.search_method = "independent_prefix" if use_prefix else "brouwer_zimmermann"
+    iterate = _iter_minimal_patterns if use_prefix else _iter_kernel_patterns
+    for size in range(2, limit + 1):
+        for indices, syndrome in iterate(flagged, size, statistics):
+            failure = _check_fault_pattern(indices, syndrome, oracle, statistics)
+            if failure is not None:
+                return failure
     return None
 
 
@@ -430,14 +456,16 @@ def _use_prefix_search(num_columns: int, rank: int, budget: int) -> bool:
     )
 
 
-def _search_bz_patterns(
+def _iter_kernel_patterns(
     mechanisms: Sequence[tuple[int, int, int]],
-    budget: int,
-    oracle: PauliCosetSearch,
+    size: int,
     statistics: StatePrepSpreadStatistics,
-) -> StatePrepSpreadCounterexample | None:
-    """Enumerate the bounded rejection kernel with BZ and check minimal supports."""
-    statistics.search_method = "brouwer_zimmermann"
+) -> Iterator[tuple[tuple[int, ...], int]]:
+    """Yield the minimal patterns of a given size from BZ coverage of the rejection kernel.
+
+    Each pattern is a tuple of original DEM indices and the XOR of the syndromes of its columns.  A
+    pattern that several information sets reach is yielded once for each of them.
+    """
     checks = np.array(
         [
             [(flag >> jj) & 1 for flag, _, _ in mechanisms]
@@ -445,33 +473,30 @@ def _search_bz_patterns(
         ],
         dtype=np.uint8,
     )
-    outer = BoundedKernelSearch(checks, budget)
-    try:
-        for word in outer.words():
-            support = tuple(jj for jj in range(len(mechanisms)) if (word >> jj) & 1)
+    outer = BoundedKernelSearch(checks, size)
+    counted = 0
+    for word in outer.words():
+        support = tuple(jj for jj in range(len(mechanisms)) if (word >> jj) & 1)
 
-            # Nullity one excludes BZ words that split into smaller accepted patterns.
-            if _binary_rank([mechanisms[jj][0] for jj in support]) != len(support) - 1:
-                continue
-            syndrome = 0
-            for jj in support:
-                syndrome ^= mechanisms[jj][1]
-            indices = tuple(mechanisms[jj][2] for jj in support)
-            failure = _check_fault_pattern(indices, syndrome, oracle, statistics)
-            if failure is not None:
-                return failure
-    finally:
-        # Count work even when a witness ends iteration early.
-        statistics.generated += outer.generated
-    return None
+        # Smaller words were checked at smaller sizes.  Nullity one excludes words that split into
+        # smaller accepted patterns.
+        if len(support) != size or _binary_rank([mechanisms[jj][0] for jj in support]) != size - 1:
+            continue
+        syndrome = 0
+        for jj in support:
+            syndrome ^= mechanisms[jj][1]
+        statistics.generated += outer.generated - counted
+        counted = outer.generated
+        yield tuple(mechanisms[jj][2] for jj in support), syndrome
+    statistics.generated += outer.generated - counted
 
 
 def _iter_minimal_patterns(
     mechanisms: Sequence[tuple[int, int, int]],
-    budget: int,
+    size: int,
     statistics: StatePrepSpreadStatistics,
 ) -> Iterator[tuple[tuple[int, ...], int]]:
-    """Yield minimal patterns of nonzero-flag (flag, syndrome, original-index) columns.
+    """Yield minimal patterns of a given size of nonzero-flag (flag, syndrome, original) columns.
 
     Prefixes are independent and increase in internal, not original DEM, order.  The largest
     internal index uniquely closes the pattern; carrying XORs avoids reconstructing full words.
@@ -487,13 +512,12 @@ def _iter_minimal_patterns(
         syndrome: int,
         basis: tuple[int, ...],
     ) -> Iterator[tuple[tuple[int, ...], int]]:
-        if support:
+        if len(support) == size - 1:
             matches = groups.get(flag_sum, [])
             for position in range(bisect_left(matches, start), len(matches)):
                 _, closing_syndrome, original = mechanisms[matches[position]]
                 statistics.generated += 1
                 yield support + (original,), syndrome ^ closing_syndrome
-        if len(support) >= budget - 1:
             return
         for index in range(start, len(mechanisms)):
             statistics.generated += 1

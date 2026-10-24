@@ -185,7 +185,7 @@ It considers every set of up to ``max_faults`` faults that triggers none of the 
 For each such set, the error left on the output must be equivalent to an error whose weight is at most the number of faults.
 Errors that differ by a stabilizer of the prepared state count as equivalent.
 Weight is physical Pauli weight or CSS weight (the larger of the X weight and the Z weight), chosen automatically for the prepared state unless you set ``css_weight=``.
-The check is exact, and a failure comes with a concrete set of faults.
+The check is exact, and a failure comes with a concrete violating set of faults that is as small as possible.
 Only the prepared state is certified, not the circuits that use it next.
 The :doc:`fault-distance notebook <examples/logical_error_rates/8_certifying_fault_distance>` shows examples.
 

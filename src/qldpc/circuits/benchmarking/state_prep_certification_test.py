@@ -32,8 +32,8 @@ def _pack_pauli(pauli: str) -> int:
     )
 
 
-def _exhaustive(flags: Sequence[int], syndromes: Sequence[int], budget: int) -> bool:
-    """Whether every accepted pattern on the |0...0> state satisfies the spread bound."""
+def _smallest_violation(flags: Sequence[int], syndromes: Sequence[int], budget: int) -> int | None:
+    """Fewest faults in an accepted pattern that violates the spread bound on the |0...0> state."""
     for size in range(1, min(budget, len(flags)) + 1):
         for support in itertools.combinations(range(len(flags)), size):
             flag = syndrome = 0
@@ -41,8 +41,8 @@ def _exhaustive(flags: Sequence[int], syndromes: Sequence[int], budget: int) -> 
                 flag ^= flags[jj]
                 syndrome ^= syndromes[jj]
             if flag == 0 and syndrome.bit_count() > size:
-                return False
-    return True
+                return size
+    return None
 
 
 def _certify_map(
@@ -52,15 +52,19 @@ def _certify_map(
     num_qubits: int,
     statistics: circuits.StatePrepSpreadStatistics | None = None,
 ) -> circuits.StatePrepSpreadCounterexample | None:
-    """Certify a flag/syndrome map on |0...0> and check any witness against the map."""
+    """Certify a flag/syndrome map on |0...0> and check the result against brute force."""
     failure = state_prep_certification._certify_maps(
         flags,
         syndromes,
-        PauliCosetSearch(_z_state(num_qubits)),
+        _z_state(num_qubits),
+        False,
         budget,
         statistics or circuits.StatePrepSpreadStatistics(),
     )
+    smallest = _smallest_violation(flags, syndromes, budget)
+    assert (failure is None) == (smallest is None)
     if failure is not None:
+        assert failure.fault_count == smallest
         flag = syndrome = 0
         for index in failure.fault_indices:
             flag ^= flags[index]
@@ -135,9 +139,7 @@ def test_certify_maps_matches_exhaustive_search(pytestconfig: pytest.Config) -> 
     for n, flag_array, syndrome_array, budgets in maps:
         flags, syndromes = list(map(int, flag_array)), list(map(int, syndrome_array))
         for budget in budgets:
-            failure = _certify_map(flags, syndromes, budget, n)
-            assert (failure is None) == _exhaustive(flags, syndromes, budget)
-            outcomes[failure is None] += 1
+            outcomes[_certify_map(flags, syndromes, budget, n) is None] += 1
     assert all(outcomes.values())
 
 
@@ -159,63 +161,106 @@ def test_hand_derived_dependency_cases() -> None:
         assert (failure is None) == certified
 
 
+def test_faults_of_weight_at_most_one_certify_every_budget() -> None:
+    """Without a fault that spreads on its own, no pattern can exceed its fault count."""
+    flags = [3, 5, 6, 9, 10, 12, 1, 2, 4, 8, 7, 11]
+    syndromes = [1, 2, 4, 8, 0, 1, 2, 4, 8, 0, 1, 2]
+    statistics = circuits.StatePrepSpreadStatistics()
+    assert _certify_map(flags, syndromes, 30, 4, statistics) is None
+    assert statistics.effective_budget == 1 and statistics.minimal_candidates == 0
+
+    # One fault of weight three brings back the search, and it fails with the equal-flag fault.
+    statistics = circuits.StatePrepSpreadStatistics()
+    failure = _certify_map(flags + [3], syndromes + [14], 13, 4, statistics)
+    assert failure is not None and failure.fault_count == 2
+    assert statistics.effective_budget > 1
+
+
+def test_failures_report_the_fewest_faults() -> None:
+    """A violation of two faults is reported although one of three faults is also present."""
+    # Columns 0-2 form an accepted triple of weight four, and columns 3 and 4 an accepted pair of
+    # weight three.  The fillers add flags 8 to 56, whose accepted patterns have weight at most
+    # three, and make the independent-prefix search the cheaper one.
+    flags, syndromes = [1, 2, 3, 4, 4], [1, 2, 12, 1, 6]
+    fillers = list(itertools.product(range(8, 64, 8), (0, 1, 2, 4, 8, 16, 32)))
+    methods = set()
+    for extra in ([], fillers):
+        statistics = circuits.StatePrepSpreadStatistics()
+        failure = _certify_map(
+            flags + [flag for flag, _ in extra],
+            syndromes + [syndrome for _, syndrome in extra],
+            3,
+            6,
+            statistics,
+        )
+        assert failure is not None
+        assert failure.fault_count == 2 and set(failure.fault_indices) == {3, 4}
+        methods.add(statistics.search_method)
+    assert methods == {"brouwer_zimmermann", "independent_prefix"}
+
+
 def test_independent_flag_types_need_only_equal_flag_pairs() -> None:
     """For independent flag columns, only equal-flag pairs matter, at any column count."""
     outcomes = set()
     # Flags 3, 5, 8, 16, and 2**130 are independent; three copies exceed twice the flag rank.
     for copies in (2, 3):
         flags = [flag for flag in (3, 5, 8, 16, 1 << 130) for _ in range(copies)]
-        passing = [1, 2, 4] * 5
+        passing = [3, 5, 6] * 5  # each pair has weight two
         failing = [3, 12, 0] * 5
         for syndromes in (passing[: len(flags)], failing[: len(flags)]):
             for budget in (2, 3, 30):
                 statistics = circuits.StatePrepSpreadStatistics()
                 failure = _certify_map(flags, syndromes, budget, 4, statistics)
-                assert (failure is None) == _exhaustive(flags, syndromes, budget)
                 assert statistics.effective_budget == 2  # only pairs of equal flags matter
                 outcomes.add(failure is None)
     assert outcomes == {True, False}
 
 
 def test_minimal_patterns_match_exhaustive_enumeration(pytestconfig: pytest.Config) -> None:
-    """Each minimal accepted pattern is produced once, with original indices and its syndrome."""
+    """Both complete searches yield every minimal accepted pattern of a given size."""
     rng = np.random.default_rng(pytestconfig.getoption("randomly_seed"))
-    for width in range(10):
+    for width in range(1, 10):
         for flag_bits in range(1, 5):
             flags = list(map(int, rng.integers(1, 1 << flag_bits, size=width)))
             syndromes = list(map(int, rng.integers(16, size=width)))
             originals = list(map(int, rng.permutation(np.arange(width) * 7 + 100)))
             mechanisms = list(zip(flags, syndromes, originals, strict=True))
-            for budget in range(1, 6):
-                expected: dict[tuple[int, ...], int] = {}
-                accepted: list[int] = []
-                for size in range(1, min(width, budget) + 1):
-                    for support in itertools.combinations(range(width), size):
-                        flag = syndrome = 0
-                        for jj in support:
-                            flag ^= flags[jj]
-                            syndrome ^= syndromes[jj]
-                        word = sum(1 << jj for jj in support)
-                        if flag == 0:
-                            if not any(previous & word == previous for previous in accepted):
-                                expected[tuple(originals[jj] for jj in support)] = syndrome
-                            accepted.append(word)
-                actual = list(
-                    state_prep_certification._iter_minimal_patterns(
-                        mechanisms, budget, circuits.StatePrepSpreadStatistics()
-                    )
+            expected: dict[int, dict[tuple[int, ...], int]] = {}
+            accepted: list[int] = []
+            for size in range(1, 6):
+                expected[size] = {}
+                for support in itertools.combinations(range(width), size):
+                    flag = syndrome = 0
+                    for jj in support:
+                        flag ^= flags[jj]
+                        syndrome ^= syndromes[jj]
+                    word = sum(1 << jj for jj in support)
+                    if flag == 0:
+                        if not any(previous & word == previous for previous in accepted):
+                            expected[size][tuple(originals[jj] for jj in support)] = syndrome
+                        accepted.append(word)
+            for size in range(2, 6):
+                statistics = circuits.StatePrepSpreadStatistics()
+                prefix = list(
+                    state_prep_certification._iter_minimal_patterns(mechanisms, size, statistics)
                 )
-                assert len(actual) == len(expected)
-                assert dict(actual) == expected
+                assert len(prefix) == len(expected[size])
+                assert dict(prefix) == expected[size]
+                # Kernel coverage may reach a word from more than one information set.
+                kernel = state_prep_certification._iter_kernel_patterns(
+                    mechanisms, size, statistics
+                )
+                assert dict(kernel) == expected[size]
 
 
 def test_minimal_patterns_with_flags_wider_than_a_machine_word() -> None:
     """Flag columns of 80 and 130 bits combine correctly."""
     mechanisms = [(1 << 80, 1, 90), (1 << 130, 2, 10), ((1 << 80) ^ (1 << 130), 4, 50)]
-    patterns = state_prep_certification._iter_minimal_patterns(
-        mechanisms, 3, circuits.StatePrepSpreadStatistics()
-    )
-    assert list(patterns) == [((90, 10, 50), 7)]
+    statistics = circuits.StatePrepSpreadStatistics()
+    prefix = state_prep_certification._iter_minimal_patterns(mechanisms, 3, statistics)
+    assert list(prefix) == [((90, 10, 50), 7)]
+    kernel = state_prep_certification._iter_kernel_patterns(mechanisms, 3, statistics)
+    assert set(kernel) == {((90, 10, 50), 7)}
 
 
 def test_flagged_circuit_with_permuted_signed_outputs() -> None:

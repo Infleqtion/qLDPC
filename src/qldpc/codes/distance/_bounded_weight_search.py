@@ -10,7 +10,7 @@ from __future__ import annotations
 import itertools
 import math
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal
 
 import numpy as np
@@ -131,6 +131,9 @@ class PauliCosetSearch:
         stabilizers: An independent commuting binary ``n x 2n`` matrix in ``[X|Z]`` order.
         metric: ``"pauli"`` counts physical support; ``"css"`` counts ``max(|x|, |z|)`` in the
             physical frame, jointly over one representative even for non-CSS states.
+        max_weight: The largest threshold that ``decide`` will be asked about, which only guides the
+            choice of search bases; larger thresholds are still decided exactly.  Defaults to the
+            number of qubits.
         cache_size: Maximum cached syndrome decisions; at least one.
         batch_size: Maximum coefficient supports per packed affine BZ batch.
 
@@ -139,7 +142,8 @@ class PauliCosetSearch:
     ``[X|Z]``, whose Hamming weight is at most twice ``max(|x|, |z|)``.
 
     Zero each affine offset on its basis pivots so pivot coordinates equal coefficient bits.  The
-    disjoint-set bound of :class:`BoundedKernelSearch` then applies from coefficient weight zero.
+    information-set bound of the distance search then applies from coefficient weight zero, with
+    overlapping bases when they certify the largest threshold with less work.
     A negative decision requires both visited weights and the unseen bound to exceed the threshold.
     For minimum visited weight ``v`` and unseen Hamming bound ``L``, the global metric bound is
     ``min(v, ceil(L / 2))``; exhaustion gives the exact visited minimum.  An unseen-word bound alone
@@ -160,6 +164,7 @@ class PauliCosetSearch:
         stabilizers: npt.ArrayLike,
         *,
         metric: Literal["pauli", "css"] = "pauli",
+        max_weight: int | None = None,
         cache_size: int = 4096,
         batch_size: int = 4096,
     ) -> None:
@@ -176,8 +181,10 @@ class PauliCosetSearch:
         _, labels, pivots = row_reduce_binary(checks, np.eye(n, dtype=np.uint8))
         if len(pivots) != n or np.any((checks @ matrix.T) % 2):
             raise ValueError("Stabilizers must be independent and commute")
-        if cache_size < 1 or batch_size < 1:
-            raise ValueError("cache_size and batch_size must be positive")
+        if cache_size < 1 or batch_size < 1 or (max_weight is not None and max_weight < 0):
+            raise ValueError(
+                "cache_size and batch_size must be positive, and max_weight nonnegative"
+            )
         assert labels is not None
         inverse = np.zeros((n, 2 * n), dtype=np.uint8)
         inverse[:, pivots] = labels.T
@@ -194,13 +201,10 @@ class PauliCosetSearch:
         )
         # Lazy bases hold packed generators, integer rows, and pivots.
         self._bases: list[tuple[npt.NDArray[np.uint64], tuple[int, ...], tuple[int, ...]]] = []
-        self.ranks: tuple[int, ...] = ()
+        self._certificate = _information_sets.Certificate(n, ())
+        self._target = n if max_weight is None else min(max_weight, n)
         self.cache_size = cache_size
         self.batch_size = batch_size
-        self.cache_hits = 0
-        self.generated = 0
-        self.preparations = 0
-        self.coefficient_depth = 0
         self._cache: dict[int, PauliWeightDecision] = {}
         self._singles = {0: 0}
         self._x_singles = {0: 0}
@@ -226,7 +230,6 @@ class PauliCosetSearch:
         if known is not None:
             upper = self._weight(known.representative)
             if upper <= max_weight or known.lower_bound > max_weight:
-                self.cache_hits += 1
                 return PauliWeightDecision(
                     upper <= max_weight, known.representative, known.lower_bound
                 )
@@ -288,12 +291,16 @@ class PauliCosetSearch:
         )
 
     def _prepare_bases(self) -> None:
-        """Pack embedded-stabilizer information sets at most once."""
+        """Choose and pack search bases that certify the target weight quickly, at most once."""
         if self._bases:
             return
-        for generators, _, rank, pivots in _information_sets.get_information_set_generators(
-            self._embedded, None
-        ):
+        # An embedded Hamming weight above twice the target bounds the metric weight above it.
+        family = _information_sets.prepare_family(
+            self._embedded, None, upper_bound=2 * self._target + 1
+        )
+        # Weights in a coset need not share the parity of its basis, so keep no weight divisor.
+        self._certificate = replace(family.certificate, weight_divisor=1)
+        for generators, _, _, pivots in family.information_sets:
             self._bases.append(
                 (
                     pack_bits(generators),
@@ -301,8 +308,6 @@ class PauliCosetSearch:
                     tuple(map(int, pivots)),
                 )
             )
-            self.ranks += (rank,)
-        self.preparations += 1
 
     def _embed(self, pauli: int) -> int:
         """Embed a Pauli for Hamming-weight bounds."""
@@ -346,7 +351,6 @@ class PauliCosetSearch:
                 )
                 for supports in supports_iter:
                     candidates = np.bitwise_xor.reduce(packed[supports], axis=1) ^ offset
-                    self.generated += len(supports)
                     weights = self._candidate_weights(candidates)
                     good = np.flatnonzero(weights <= threshold)
                     if len(good):
@@ -359,8 +363,7 @@ class PauliCosetSearch:
                         visited_min = batch_min
                         word = _packed_row_int(candidates[int(weights.argmin())])
                         best_pauli = word & ((1 << (2 * n)) - 1)
-            self.coefficient_depth = max(self.coefficient_depth, depth)
-            unseen_hamming = _information_sets.Certificate(n, self.ranks).lower_bound(depth)
+            unseen_hamming = self._certificate.lower_bound(depth)
             # Either metric is at least half of the embedded Hamming weight.
             unseen_lower = (unseen_hamming + 1) // 2
             if depth == n:

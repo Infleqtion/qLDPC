@@ -102,6 +102,44 @@ def _ghz_blocks(num_blocks: int) -> tuple[npt.NDArray[np.uint8], int]:
     return matrix, syndrome
 
 
+def _repeated_block_state(block: Sequence[str], num_blocks: int) -> npt.NDArray[np.uint8]:
+    """Stabilizer matrix of independent copies of a block state with the given generators."""
+    size = len(block[0])
+    generators = [
+        stim.PauliString("_" * (size * index) + local + "_" * (size * (num_blocks - index - 1)))
+        for index in range(num_blocks)
+        for local in block
+    ]
+    return np.array([np.concatenate(gg.to_numpy()) for gg in generators], dtype=np.uint8)
+
+
+def _block_minimum(
+    block: Sequence[str], local_syndromes: Sequence[Sequence[int]], metric: Metric
+) -> int:
+    """Minimum weight of an error on independent blocks with the given per-block syndromes.
+
+    The syndrome bits of a block are the commutation with its generators, in order.  Every Pauli on
+    one block is listed, and the blocks are combined by dynamic programming.
+    """
+    size = len(block[0])
+    stabilizers = [stim.PauliString(local) for local in block]
+    options: dict[tuple[int, ...], list[tuple[int, int, int]]] = {}
+    for paulis in itertools.product("_XYZ", repeat=size):
+        error = stim.PauliString("".join(paulis))
+        syndrome = tuple(int(not error.commutes(ss)) for ss in stabilizers)
+        x_weight = sum(pp in "XY" for pp in paulis)
+        z_weight = sum(pp in "YZ" for pp in paulis)
+        options.setdefault(syndrome, []).append((x_weight, z_weight, size - paulis.count("_")))
+    if metric == "pauli":
+        return sum(
+            min(support for _, _, support in options[tuple(local)]) for local in local_syndromes
+        )
+    totals = {(0, 0)}
+    for local in local_syndromes:
+        totals = {(a + x, b + z) for a, b in totals for x, z, _ in options[tuple(local)]}
+    return min(max(a, b) for a, b in totals)
+
+
 def _kernel_words(checks: npt.NDArray[np.uint8], max_weight: int) -> set[int]:
     """Nonzero words of weight at most ``max_weight`` in the kernel of ``checks``."""
     width = checks.shape[1]
@@ -278,6 +316,47 @@ def test_wide_states_span_several_packed_words(metric: Metric) -> None:
 
 
 @pytest.mark.parametrize("metric", ["pauli", "css"])
+@pytest.mark.parametrize(
+    "block, num_blocks", [(("XXX", "Z_Z", "_ZZ"), 6), (("XXXX", "ZZ__", "_ZZ_", "__ZZ"), 5)]
+)
+def test_decisions_are_exact_whatever_the_expected_threshold(
+    block: tuple[str, ...], num_blocks: int, metric: Metric, pytestconfig: pytest.Config
+) -> None:
+    """GHZ blocks match a per-block minimum for any ``max_weight``, including lower queries.
+
+    An oracle aimed at weight four may search from several overlapping bases, and one aimed at
+    weight two from fewer; both must decide thresholds up to five exactly.  The four-qubit blocks
+    have stabilizers of even weight, whose cosets can have odd weight.
+    """
+    rng = np.random.default_rng(pytestconfig.getoption("randomly_seed"))
+    matrix = _repeated_block_state(block, num_blocks)
+    oracles = [PauliCosetSearch(matrix, metric=metric, max_weight=hint) for hint in (2, 4)]
+    for _ in range(8):
+        local = rng.integers(2, size=(num_blocks, len(block)))
+        syndrome = sum(int(bit) << jj for jj, bit in enumerate(local.flatten()))
+        minimum = _block_minimum(block, local.tolist(), metric)
+        for threshold in range(1, 6):
+            for oracle in oracles:
+                decision = oracle.decide(syndrome, threshold)
+                assert decision.within_bound == (minimum <= threshold)
+                assert decision.lower_bound <= minimum
+                if not decision.within_bound:
+                    assert decision.lower_bound > threshold
+
+
+@pytest.mark.parametrize("metric", ["pauli", "css"])
+def test_bounds_for_wide_states_with_a_threshold_hint(metric: Metric) -> None:
+    """A syndrome that touches four of eleven GHZ blocks needs weight four, even beyond 64 bits."""
+    matrix, syndrome = _ghz_blocks(11)
+    four_blocks = syndrome & ((1 << 12) - 1)
+    oracle = PauliCosetSearch(matrix, metric=metric, max_weight=3)
+    below = oracle.decide(four_blocks, 3)
+    assert not below.within_bound and below.lower_bound == 4
+    found = oracle.decide(four_blocks, 4)
+    assert found.within_bound and oracle.syndrome(found.representative) == four_blocks
+
+
+@pytest.mark.parametrize("metric", ["pauli", "css"])
 def test_candidate_weights_above_one_byte_are_exact(metric: Metric) -> None:
     """Weights above 255 must not wrap around in a one-byte sum."""
     n = 257
@@ -303,6 +382,8 @@ def test_invalid_arguments_are_rejected() -> None:
         PauliCosetSearch([[1, 0]], cache_size=0)
     with pytest.raises(ValueError):
         PauliCosetSearch([[1, 0]], batch_size=0)
+    with pytest.raises(ValueError):
+        PauliCosetSearch([[1, 0]], max_weight=-1)
     with pytest.raises(ValueError):
         PauliCosetSearch([[1, 0]], metric=cast(Metric, "invalid"))
     oracle = PauliCosetSearch([[1, 0]])
